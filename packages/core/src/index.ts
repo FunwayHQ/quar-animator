@@ -6,6 +6,7 @@
 export * from './math';
 export * from './SceneGraph';
 export * from './Camera';
+export * from './rendering';
 
 // Re-export types for convenience
 export type {
