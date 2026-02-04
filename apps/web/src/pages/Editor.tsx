@@ -11,8 +11,8 @@ export function Editor() {
     <div className={styles.editor}>
       <MenuBar />
       <div className={styles.main}>
-        <Toolbar />
         <div className={styles.workspace}>
+          <Toolbar />
           <div className={styles.canvasArea}>
             <Canvas />
           </div>
