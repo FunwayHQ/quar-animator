@@ -1,28 +1,15 @@
-import '@testing-library/jest-dom';
-import { cleanup } from '@testing-library/react';
-import { afterEach, vi } from 'vitest';
-
-// Cleanup after each test
-afterEach(() => {
-  cleanup();
-});
-
-// Mock ResizeObserver
-global.ResizeObserver = vi.fn().mockImplementation(() => ({
-  observe: vi.fn(),
-  unobserve: vi.fn(),
-  disconnect: vi.fn(),
-}));
+import { vi } from 'vitest';
 
 /**
- * Create a mock WebGL2RenderingContext
+ * Mock WebGL2RenderingContext for testing
+ * Provides a minimal implementation sufficient for testing WebGLRenderer and Grid
  */
-function createMockWebGL2Context() {
-  const mockProgram = {} as WebGLProgram;
-  const mockShader = {} as WebGLShader;
-  const mockBuffer = {} as WebGLBuffer;
-  const mockVAO = {} as WebGLVertexArrayObject;
-  const mockUniformLocation = {} as WebGLUniformLocation;
+export function createMockWebGL2Context(): WebGL2RenderingContext {
+  const mockProgram = { __isProgram: true } as unknown as WebGLProgram;
+  const mockShader = { __isShader: true } as unknown as WebGLShader;
+  const mockBuffer = { __isBuffer: true } as unknown as WebGLBuffer;
+  const mockVAO = { __isVAO: true } as unknown as WebGLVertexArrayObject;
+  const mockUniformLocation = { __isUniform: true } as unknown as WebGLUniformLocation;
 
   return {
     // Constants
@@ -103,43 +90,39 @@ function createMockWebGL2Context() {
     drawArrays: vi.fn(),
     drawElements: vi.fn(),
 
-    // Canvas reference (will be set per-canvas)
-    canvas: null,
-  };
+    // Canvas reference
+    canvas: document.createElement('canvas'),
+  } as unknown as WebGL2RenderingContext;
 }
 
-// Mock canvas context (handles both 2D and WebGL2)
-HTMLCanvasElement.prototype.getContext = vi.fn().mockImplementation(function (
-  this: HTMLCanvasElement,
-  contextType: string
-) {
-  if (contextType === 'webgl2') {
-    const gl = createMockWebGL2Context();
-    gl.canvas = this;
-    return gl;
-  }
+/**
+ * Create a mock canvas element with WebGL2 support
+ */
+export function createMockCanvas(): HTMLCanvasElement {
+  const canvas = document.createElement('canvas');
+  const mockGL = createMockWebGL2Context();
 
-  // Return 2D context mock
-  return {
-    fillStyle: '',
-    strokeStyle: '',
-    lineWidth: 1,
-    font: '',
-    textAlign: '',
-    fillRect: vi.fn(),
-    strokeRect: vi.fn(),
-    clearRect: vi.fn(),
-    beginPath: vi.fn(),
-    moveTo: vi.fn(),
-    lineTo: vi.fn(),
-    stroke: vi.fn(),
-    fill: vi.fn(),
-    fillText: vi.fn(),
-    measureText: vi.fn().mockReturnValue({ width: 0 }),
-    scale: vi.fn(),
-    translate: vi.fn(),
-    rotate: vi.fn(),
-    save: vi.fn(),
-    restore: vi.fn(),
-  };
+  // Override getContext to return our mock
+  canvas.getContext = vi.fn().mockImplementation((contextType: string) => {
+    if (contextType === 'webgl2') {
+      return mockGL;
+    }
+    return null;
+  });
+
+  // Mock style object
+  Object.defineProperty(canvas, 'style', {
+    value: {
+      width: '',
+      height: '',
+    },
+    writable: true,
+  });
+
+  return canvas;
+}
+
+// Global setup for WebGL mocking
+beforeEach(() => {
+  // Reset any global state if needed
 });

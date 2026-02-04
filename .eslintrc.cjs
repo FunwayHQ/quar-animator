@@ -22,9 +22,13 @@ module.exports = {
     'node_modules',
     '.eslintrc.cjs',
     'vite.config.ts',
+    'vitest.config.ts',
     '*.config.js',
     '*.config.cjs',
     'storybook-static',
+    '**/*.test.ts',
+    '**/*.test.tsx',
+    '**/test/setup.ts',
   ],
   parser: '@typescript-eslint/parser',
   parserOptions: {
