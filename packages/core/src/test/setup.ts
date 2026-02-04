@@ -1,4 +1,8 @@
 import { vi } from 'vitest';
+import { SceneGraph } from '../SceneGraph';
+import { Camera } from '../Camera';
+import type { Fill, Stroke } from '@quar/types';
+import type { ToolContext } from '../tools/BaseTool';
 
 /**
  * Mock WebGL2RenderingContext for testing
@@ -126,3 +130,79 @@ export function createMockCanvas(): HTMLCanvasElement {
 beforeEach(() => {
   // Reset any global state if needed
 });
+
+/**
+ * Canvas pointer event interface for tool testing
+ */
+export interface CanvasPointerEvent {
+  worldPosition: { x: number; y: number };
+  screenPosition: { x: number; y: number };
+  button: number;
+  buttons: number;
+  shiftKey: boolean;
+  ctrlKey: boolean;
+  altKey: boolean;
+  metaKey: boolean;
+  pressure: number;
+}
+
+/**
+ * Create a mock canvas pointer event for tool testing
+ */
+export function createMockPointerEvent(overrides: Partial<CanvasPointerEvent> = {}): CanvasPointerEvent {
+  return {
+    worldPosition: { x: 0, y: 0 },
+    screenPosition: { x: 0, y: 0 },
+    button: 0,
+    buttons: 1,
+    shiftKey: false,
+    ctrlKey: false,
+    altKey: false,
+    metaKey: false,
+    pressure: 0.5,
+    ...overrides,
+  };
+}
+
+/**
+ * Default fill for testing
+ */
+export const mockDefaultFill: Fill = {
+  type: 'solid',
+  color: { r: 100, g: 149, b: 237, a: 1 },
+  opacity: 1,
+};
+
+/**
+ * Default stroke for testing
+ */
+export const mockDefaultStroke: Stroke = {
+  color: { r: 0, g: 0, b: 0, a: 1 },
+  width: 2,
+  opacity: 1,
+  cap: 'round',
+  join: 'round',
+};
+
+/**
+ * Create a mock tool context for tool testing
+ */
+export function createMockToolContext(): ToolContext {
+  const selectedIds = new Set<string>();
+  let idCounter = 0;
+
+  return {
+    sceneGraph: new SceneGraph(),
+    camera: new Camera(),
+    getSelectedIds: () => selectedIds,
+    setSelectedIds: (ids: string[]) => {
+      selectedIds.clear();
+      ids.forEach(id => selectedIds.add(id));
+    },
+    addToSelection: (id: string) => selectedIds.add(id),
+    clearSelection: () => selectedIds.clear(),
+    defaultFill: mockDefaultFill,
+    defaultStroke: mockDefaultStroke,
+    generateId: () => `node-${++idCounter}`,
+  };
+}

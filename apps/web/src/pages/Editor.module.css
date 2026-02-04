@@ -25,15 +25,66 @@
   flex: 1;
   display: flex;
   overflow: hidden;
-  background-color: var(--color-bg-secondary);
+  background-color: var(--color-bg-canvas);
+  position: relative;
+}
+
+/* Canvas frame/border effect */
+.canvasArea::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  box-shadow:
+    inset 0 1px 0 var(--color-border-subtle),
+    inset 1px 0 0 var(--color-border-subtle),
+    inset -1px 0 0 var(--color-border-subtle);
+}
+
+/* Subtle vignette on canvas */
+.canvasArea::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  background: radial-gradient(
+    ellipse at center,
+    transparent 50%,
+    rgba(0, 0, 0, 0.15) 100%
+  );
 }
 
 .rightPanel {
   display: flex;
   flex-direction: column;
-  width: 280px;
+  width: 260px;
   min-width: 200px;
-  max-width: 400px;
-  border-left: 1px solid var(--color-border-default);
-  background-color: var(--color-bg-primary);
+  max-width: 360px;
+  border-left: 1px solid var(--color-border-subtle);
+  background: linear-gradient(
+    270deg,
+    var(--color-bg-secondary) 0%,
+    rgba(17, 17, 19, 0.98) 100%
+  );
+  position: relative;
+}
+
+/* Inner highlight */
+.rightPanel::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 1px;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.04),
+    transparent 15%,
+    transparent 85%,
+    rgba(255, 255, 255, 0.04)
+  );
+  pointer-events: none;
 }

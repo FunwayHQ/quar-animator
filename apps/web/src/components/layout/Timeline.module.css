@@ -2,25 +2,49 @@
   display: flex;
   flex-direction: column;
   height: 200px;
-  min-height: 100px;
+  min-height: 120px;
   max-height: 400px;
-  background-color: var(--color-bg-primary);
-  border-top: 1px solid var(--color-border-default);
+  background: linear-gradient(
+    180deg,
+    var(--color-bg-secondary) 0%,
+    var(--color-bg-primary) 100%
+  );
+  border-top: 1px solid var(--color-border-subtle);
+  position: relative;
+}
+
+/* Top highlight line */
+.timeline::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.04) 20%,
+    rgba(255, 255, 255, 0.04) 80%,
+    transparent
+  );
+  pointer-events: none;
 }
 
 .controls {
   display: flex;
   align-items: center;
-  height: 36px;
-  padding: 0 var(--space-sm);
-  gap: var(--space-md);
-  border-bottom: 1px solid var(--color-border-default);
+  height: 40px;
+  padding: 0 var(--space-md);
+  gap: var(--space-lg);
+  border-bottom: 1px solid var(--color-border-subtle);
+  background: rgba(255, 255, 255, 0.01);
 }
 
 .transportControls {
   display: flex;
   align-items: center;
-  gap: var(--space-xs);
+  gap: 4px;
 }
 
 .controlButton {
@@ -29,50 +53,90 @@
   justify-content: center;
   width: 28px;
   height: 28px;
-  color: var(--color-text-secondary);
+  color: var(--color-text-tertiary);
   border-radius: var(--radius-sm);
   transition: all var(--duration-fast) var(--easing-default);
 }
 
 .controlButton:hover {
-  background-color: var(--color-bg-hover);
-  color: var(--color-text-primary);
+  background: var(--color-bg-hover);
+  color: var(--color-text-secondary);
+}
+
+.controlButton:active {
+  transform: scale(0.95);
+}
+
+.controlButton svg {
+  width: 14px;
+  height: 14px;
+  stroke-width: 1.75;
 }
 
 .playButton {
-  width: 32px;
-  height: 32px;
-  background-color: var(--color-bg-tertiary);
+  width: 34px;
+  height: 34px;
+  background: linear-gradient(
+    135deg,
+    var(--color-bg-elevated) 0%,
+    var(--color-bg-tertiary) 100%
+  );
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-md);
+  color: var(--color-text-secondary);
+  box-shadow: var(--shadow-sm);
 }
 
 .playButton:hover {
-  background-color: var(--color-accent-primary);
+  background: linear-gradient(
+    135deg,
+    var(--color-accent-primary) 0%,
+    var(--color-accent-primary-active) 100%
+  );
+  border-color: var(--color-accent-primary);
+  color: var(--color-bg-primary);
+  box-shadow: 0 2px 12px var(--color-accent-primary-glow);
+}
+
+.playButton:active {
+  transform: scale(0.96);
+}
+
+.playButton svg {
+  width: 16px;
+  height: 16px;
+  stroke-width: 2;
 }
 
 .timeDisplay {
   display: flex;
   align-items: center;
-  gap: var(--space-xs);
+  gap: 6px;
   font-family: var(--font-family-mono);
   font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  padding: 4px 10px;
+  background: var(--color-bg-tertiary);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border-subtle);
 }
 
 .currentTime {
-  color: var(--color-text-primary);
+  color: var(--color-accent-primary);
 }
 
 .separator {
-  color: var(--color-text-tertiary);
+  color: var(--color-text-disabled);
 }
 
 .totalTime {
-  color: var(--color-text-secondary);
+  color: var(--color-text-tertiary);
 }
 
 .options {
   margin-left: auto;
   display: flex;
-  gap: var(--space-xs);
+  gap: 4px;
 }
 
 .optionButton {
@@ -81,14 +145,28 @@
   justify-content: center;
   width: 28px;
   height: 28px;
-  color: var(--color-text-tertiary);
+  color: var(--color-text-disabled);
   border-radius: var(--radius-sm);
   transition: all var(--duration-fast) var(--easing-default);
 }
 
 .optionButton:hover {
-  background-color: var(--color-bg-hover);
-  color: var(--color-text-primary);
+  background: var(--color-bg-hover);
+  color: var(--color-text-tertiary);
+}
+
+.optionButton.active {
+  color: var(--color-accent-primary);
+}
+
+.optionButton.active:hover {
+  background: rgba(168, 85, 247, 0.1);
+}
+
+.optionButton svg {
+  width: 15px;
+  height: 15px;
+  stroke-width: 1.75;
 }
 
 .timelineArea {
@@ -100,21 +178,30 @@
 .layerLabels {
   width: 140px;
   flex-shrink: 0;
-  border-right: 1px solid var(--color-border-default);
+  border-right: 1px solid var(--color-border-subtle);
   overflow-y: auto;
-  padding-top: 24px; /* Align with ruler */
+  padding-top: 28px; /* Align with ruler */
+  background: rgba(0, 0, 0, 0.15);
 }
 
 .layerLabel {
-  height: 24px;
-  padding: 0 var(--space-sm);
+  height: 26px;
+  padding: 0 var(--space-md);
   font-size: var(--font-size-xs);
-  color: var(--color-text-secondary);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-tertiary);
   display: flex;
   align-items: center;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  transition: all var(--duration-fast);
+  cursor: pointer;
+}
+
+.layerLabel:hover {
+  background: var(--color-bg-hover);
+  color: var(--color-text-secondary);
 }
 
 .tracksArea {
@@ -126,9 +213,13 @@
 }
 
 .ruler {
-  height: 24px;
-  background-color: var(--color-bg-secondary);
-  border-bottom: 1px solid var(--color-border-default);
+  height: 28px;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.02) 0%,
+    transparent 100%
+  );
+  border-bottom: 1px solid var(--color-border-subtle);
   position: relative;
   cursor: pointer;
   flex-shrink: 0;
@@ -138,16 +229,17 @@
   position: absolute;
   top: 0;
   height: 100%;
-  border-left: 1px solid var(--color-border-default);
+  border-left: 1px solid var(--color-border-subtle);
 }
 
 .rulerLabel {
   position: absolute;
-  top: 4px;
-  left: 4px;
-  font-size: var(--font-size-xs);
-  color: var(--color-text-tertiary);
+  top: 8px;
+  left: 6px;
+  font-size: var(--font-size-2xs);
   font-family: var(--font-family-mono);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-disabled);
 }
 
 .playhead {
@@ -155,19 +247,37 @@
   top: 0;
   width: 0;
   height: 100%;
-  border-left: 2px solid var(--color-timeline-playhead);
   pointer-events: none;
+  z-index: 10;
 }
 
+/* Playhead head */
 .playhead::before {
   content: '';
   position: absolute;
-  top: 0;
-  left: -6px;
-  width: 10px;
-  height: 10px;
-  background-color: var(--color-timeline-playhead);
+  top: 2px;
+  left: -7px;
+  width: 14px;
+  height: 14px;
+  background: linear-gradient(
+    180deg,
+    var(--color-timeline-playhead) 0%,
+    #dc2626 100%
+  );
   clip-path: polygon(50% 100%, 0 0, 100% 0);
+  box-shadow: 0 2px 6px rgba(248, 113, 113, 0.4);
+}
+
+/* Playhead line in ruler */
+.playhead::after {
+  content: '';
+  position: absolute;
+  top: 16px;
+  left: -1px;
+  width: 2px;
+  height: 12px;
+  background: var(--color-timeline-playhead);
+  border-radius: 0 0 1px 1px;
 }
 
 .tracks {
@@ -177,37 +287,79 @@
 }
 
 .track {
-  height: 24px;
+  height: 26px;
   position: relative;
   border-bottom: 1px solid var(--color-border-subtle);
+  transition: background var(--duration-fast);
 }
 
 .track:hover {
-  background-color: var(--color-bg-hover);
+  background: var(--color-bg-hover);
 }
 
 .keyframe {
   position: absolute;
   top: 50%;
-  width: 10px;
-  height: 10px;
-  background-color: var(--color-timeline-keyframe);
+  width: 12px;
+  height: 12px;
+  background: linear-gradient(
+    135deg,
+    var(--color-timeline-keyframe) 0%,
+    var(--color-accent-primary-active) 100%
+  );
   transform: translate(-50%, -50%) rotate(45deg);
   cursor: pointer;
-  transition: all var(--duration-fast) var(--easing-default);
+  transition: all var(--duration-fast) var(--easing-spring);
+  box-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  border-radius: 2px;
 }
 
 .keyframe:hover {
-  background-color: var(--color-timeline-keyframe-selected);
+  background: linear-gradient(
+    135deg,
+    var(--color-timeline-keyframe-selected) 0%,
+    var(--color-timeline-keyframe) 100%
+  );
   transform: translate(-50%, -50%) rotate(45deg) scale(1.2);
+  box-shadow:
+    0 2px 8px var(--color-timeline-keyframe-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+.keyframe.selected {
+  background: var(--color-timeline-keyframe-selected);
+  box-shadow:
+    0 0 0 2px var(--color-bg-primary),
+    0 0 0 4px var(--color-timeline-keyframe),
+    0 2px 8px var(--color-timeline-keyframe-glow);
 }
 
 .playheadLine {
   position: absolute;
   top: 0;
   bottom: 0;
-  width: 0;
-  border-left: 2px solid var(--color-timeline-playhead);
+  width: 2px;
+  background: var(--color-timeline-playhead);
   pointer-events: none;
-  z-index: 10;
+  z-index: 5;
+  transform: translateX(-1px);
+  box-shadow: 0 0 8px rgba(248, 113, 113, 0.3);
+}
+
+/* Subtle glow effect */
+.playheadLine::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -3px;
+  width: 8px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(248, 113, 113, 0.15),
+    transparent
+  );
 }

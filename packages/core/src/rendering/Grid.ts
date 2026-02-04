@@ -216,15 +216,14 @@ export class Grid {
     // This keeps lines roughly 50-200 screen pixels apart
 
     let spacing = baseSpacing;
-    const screenSpacing = spacing * zoom;
 
-    // Scale up if lines too close
-    while (screenSpacing * spacing / baseSpacing < 50) {
+    // Scale up if lines too close (screen spacing < 50px)
+    while (spacing * zoom < 50) {
       spacing *= 2;
     }
 
-    // Scale down if lines too far
-    while (screenSpacing * spacing / baseSpacing > 200) {
+    // Scale down if lines too far (screen spacing > 200px)
+    while (spacing * zoom > 200) {
       spacing /= 2;
     }
 

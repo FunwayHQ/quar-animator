@@ -7,6 +7,8 @@ export * from './math';
 export * from './SceneGraph';
 export * from './Camera';
 export * from './rendering';
+export * from './path';
+export * from './tools';
 
 // Re-export types for convenience
 export type {

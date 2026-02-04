@@ -11,26 +11,61 @@
   cursor: crosshair;
 }
 
+.canvas:focus {
+  outline: none;
+}
+
 .statusBar {
   position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
+  bottom: var(--space-md);
+  left: var(--space-md);
+  right: var(--space-md);
   display: flex;
   justify-content: space-between;
-  padding: var(--space-xs) var(--space-sm);
-  background-color: rgba(13, 13, 13, 0.9);
-  border-top: 1px solid var(--color-border-default);
+  align-items: center;
+  padding: 6px var(--space-md);
+  background: var(--color-glass);
+  backdrop-filter: blur(12px) saturate(150%);
+  -webkit-backdrop-filter: blur(12px) saturate(150%);
+  border: 1px solid var(--color-glass-border);
+  border-radius: var(--radius-md);
   font-size: var(--font-size-xs);
   font-family: var(--font-family-mono);
+  font-weight: var(--font-weight-medium);
   color: var(--color-text-tertiary);
+  z-index: 2;
+  box-shadow:
+    var(--shadow-md),
+    inset 0 1px 0 var(--color-glass-highlight);
+  pointer-events: none;
 }
 
 .coordinates {
-  min-width: 120px;
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  min-width: 140px;
+}
+
+/* Coordinate labels */
+.coordinates::before {
+  content: '⌖';
+  font-size: 11px;
+  opacity: 0.5;
 }
 
 .zoom {
-  min-width: 50px;
-  text-align: right;
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  min-width: 60px;
+  justify-content: flex-end;
+  color: var(--color-text-secondary);
+}
+
+/* Zoom icon */
+.zoom::before {
+  content: '⊕';
+  font-size: 10px;
+  opacity: 0.5;
 }

@@ -1,0 +1,547 @@
+/**
+ * Tests for ShapeRenderer
+ */
+
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { ShapeRenderer } from './ShapeRenderer';
+import { WebGLRenderer } from './WebGLRenderer';
+import { SceneGraph, createDefaultTransform } from '../SceneGraph';
+import { mat3 } from '../math';
+import { createMockWebGL2Context } from '../test/setup';
+import type { RectangleNode, EllipseNode, PathNode, Fill, Stroke } from '@quar/types';
+
+// ============================================================================
+// Test Setup
+// ============================================================================
+
+function createMockRenderer(): WebGLRenderer {
+  const canvas = document.createElement('canvas');
+  const mockGL = createMockWebGL2Context();
+
+  canvas.getContext = vi.fn().mockReturnValue(mockGL);
+
+  return new WebGLRenderer({ canvas });
+}
+
+function createDefaultFill(): Fill {
+  return {
+    type: 'solid',
+    color: { r: 100, g: 149, b: 237, a: 1 },
+    opacity: 1,
+  };
+}
+
+function createDefaultStroke(): Stroke {
+  return {
+    color: { r: 0, g: 0, b: 0, a: 1 },
+    width: 2,
+    opacity: 1,
+    cap: 'round',
+    join: 'round',
+  };
+}
+
+function createRectangleNode(id: string, width: number, height: number): RectangleNode {
+  return {
+    id,
+    name: `Rectangle ${id}`,
+    type: 'rectangle',
+    parent: null,
+    children: [],
+    transform: createDefaultTransform(),
+    visible: true,
+    locked: false,
+    opacity: 1,
+    blendMode: 'normal',
+    width,
+    height,
+    cornerRadius: [0, 0, 0, 0],
+    fill: createDefaultFill(),
+    stroke: createDefaultStroke(),
+  };
+}
+
+function createEllipseNode(id: string, radiusX: number, radiusY: number): EllipseNode {
+  return {
+    id,
+    name: `Ellipse ${id}`,
+    type: 'ellipse',
+    parent: null,
+    children: [],
+    transform: createDefaultTransform(),
+    visible: true,
+    locked: false,
+    opacity: 1,
+    blendMode: 'normal',
+    radiusX,
+    radiusY,
+    fill: createDefaultFill(),
+    stroke: createDefaultStroke(),
+  };
+}
+
+function createPathNode(id: string): PathNode {
+  return {
+    id,
+    name: `Path ${id}`,
+    type: 'path',
+    parent: null,
+    children: [],
+    transform: createDefaultTransform(),
+    visible: true,
+    locked: false,
+    opacity: 1,
+    blendMode: 'normal',
+    points: [
+      { position: { x: 0, y: 0 }, handleIn: null, handleOut: null, type: 'corner' },
+      { position: { x: 100, y: 0 }, handleIn: null, handleOut: null, type: 'corner' },
+      { position: { x: 100, y: 100 }, handleIn: null, handleOut: null, type: 'corner' },
+    ],
+    closed: true,
+    fill: createDefaultFill(),
+    stroke: createDefaultStroke(),
+  };
+}
+
+// ============================================================================
+// Tests
+// ============================================================================
+
+describe('ShapeRenderer', () => {
+  let renderer: WebGLRenderer;
+  let shapeRenderer: ShapeRenderer;
+  let sceneGraph: SceneGraph;
+  let gl: WebGL2RenderingContext;
+
+  beforeEach(() => {
+    renderer = createMockRenderer();
+    gl = renderer.context;
+    shapeRenderer = new ShapeRenderer(renderer);
+    sceneGraph = new SceneGraph();
+  });
+
+  // ==========================================================================
+  // Initialization
+  // ==========================================================================
+
+  describe('initialization', () => {
+    it('should create shader program', () => {
+      expect(gl.createProgram).toHaveBeenCalled();
+      expect(gl.createShader).toHaveBeenCalled();
+    });
+
+    it('should compile vertex and fragment shaders', () => {
+      expect(gl.shaderSource).toHaveBeenCalledTimes(2);
+      expect(gl.compileShader).toHaveBeenCalledTimes(2);
+    });
+
+    it('should link shader program', () => {
+      expect(gl.linkProgram).toHaveBeenCalled();
+    });
+
+    it('should create VAO', () => {
+      expect(gl.createVertexArray).toHaveBeenCalled();
+    });
+
+    it('should create vertex buffer', () => {
+      expect(gl.createBuffer).toHaveBeenCalled();
+    });
+
+    it('should set up vertex attributes', () => {
+      expect(gl.enableVertexAttribArray).toHaveBeenCalled();
+      expect(gl.vertexAttribPointer).toHaveBeenCalled();
+    });
+
+    it('should allocate buffer with DYNAMIC_DRAW', () => {
+      expect(gl.bufferData).toHaveBeenCalledWith(
+        gl.ARRAY_BUFFER,
+        expect.any(Number),
+        gl.DYNAMIC_DRAW
+      );
+    });
+
+    it('should get attribute locations', () => {
+      expect(gl.getAttribLocation).toHaveBeenCalled();
+    });
+
+    it('should get uniform locations', () => {
+      expect(gl.getUniformLocation).toHaveBeenCalled();
+    });
+  });
+
+  // ==========================================================================
+  // Render Method
+  // ==========================================================================
+
+  describe('render', () => {
+    it('should use shader program', () => {
+      const vpMatrix = mat3.identity();
+      shapeRenderer.render(sceneGraph, vpMatrix);
+      expect(gl.useProgram).toHaveBeenCalled();
+    });
+
+    it('should bind VAO', () => {
+      const vpMatrix = mat3.identity();
+      shapeRenderer.render(sceneGraph, vpMatrix);
+      expect(gl.bindVertexArray).toHaveBeenCalled();
+    });
+
+    it('should set view-projection uniform', () => {
+      const vpMatrix = mat3.identity();
+      shapeRenderer.render(sceneGraph, vpMatrix);
+      expect(gl.uniformMatrix3fv).toHaveBeenCalled();
+    });
+
+    it('should not draw when scene is empty', () => {
+      const vpMatrix = mat3.identity();
+      vi.clearAllMocks();
+      shapeRenderer.render(sceneGraph, vpMatrix);
+      expect(gl.drawArrays).not.toHaveBeenCalled();
+    });
+
+    it('should unbind VAO after rendering', () => {
+      const vpMatrix = mat3.identity();
+      shapeRenderer.render(sceneGraph, vpMatrix);
+      // Should bind null VAO at end
+      expect(gl.bindVertexArray).toHaveBeenLastCalledWith(null);
+    });
+  });
+
+  // ==========================================================================
+  // Rectangle Rendering
+  // ==========================================================================
+
+  describe('rectangle rendering', () => {
+    it('should render rectangle fill', () => {
+      const rect = createRectangleNode('rect1', 100, 50);
+      sceneGraph.addNode(rect);
+
+      const vpMatrix = mat3.identity();
+      shapeRenderer.render(sceneGraph, vpMatrix);
+
+      expect(gl.drawArrays).toHaveBeenCalled();
+    });
+
+    it('should set model matrix for rectangle', () => {
+      const rect = createRectangleNode('rect1', 100, 50);
+      sceneGraph.addNode(rect);
+
+      const vpMatrix = mat3.identity();
+      shapeRenderer.render(sceneGraph, vpMatrix);
+
+      // Should set model matrix uniform
+      expect(gl.uniformMatrix3fv).toHaveBeenCalled();
+    });
+
+    it('should set fill color uniform', () => {
+      const rect = createRectangleNode('rect1', 100, 50);
+      sceneGraph.addNode(rect);
+
+      const vpMatrix = mat3.identity();
+      shapeRenderer.render(sceneGraph, vpMatrix);
+
+      expect(gl.uniform4fv).toHaveBeenCalled();
+    });
+
+    it('should render rectangle stroke', () => {
+      const rect = createRectangleNode('rect1', 100, 50);
+      sceneGraph.addNode(rect);
+
+      const vpMatrix = mat3.identity();
+      vi.clearAllMocks();
+      shapeRenderer.render(sceneGraph, vpMatrix);
+
+      // Should draw twice: fill + stroke
+      expect(gl.drawArrays).toHaveBeenCalledTimes(2);
+    });
+
+    it('should not render fill when fill is none', () => {
+      const rect = createRectangleNode('rect1', 100, 50);
+      rect.fill = { type: 'none', opacity: 0 };
+      rect.stroke = null;
+      sceneGraph.addNode(rect);
+
+      const vpMatrix = mat3.identity();
+      vi.clearAllMocks();
+      shapeRenderer.render(sceneGraph, vpMatrix);
+
+      expect(gl.drawArrays).not.toHaveBeenCalled();
+    });
+
+    it('should render rectangle with rounded corners', () => {
+      const rect = createRectangleNode('rect1', 100, 50);
+      rect.cornerRadius = [10, 10, 10, 10];
+      sceneGraph.addNode(rect);
+
+      const vpMatrix = mat3.identity();
+      shapeRenderer.render(sceneGraph, vpMatrix);
+
+      expect(gl.drawArrays).toHaveBeenCalled();
+    });
+
+    it('should upload vertices to buffer', () => {
+      const rect = createRectangleNode('rect1', 100, 50);
+      sceneGraph.addNode(rect);
+
+      const vpMatrix = mat3.identity();
+      shapeRenderer.render(sceneGraph, vpMatrix);
+
+      expect(gl.bufferSubData).toHaveBeenCalled();
+    });
+  });
+
+  // ==========================================================================
+  // Ellipse Rendering
+  // ==========================================================================
+
+  describe('ellipse rendering', () => {
+    it('should render ellipse fill', () => {
+      const ellipse = createEllipseNode('ellipse1', 50, 30);
+      sceneGraph.addNode(ellipse);
+
+      const vpMatrix = mat3.identity();
+      shapeRenderer.render(sceneGraph, vpMatrix);
+
+      expect(gl.drawArrays).toHaveBeenCalled();
+    });
+
+    it('should set model matrix for ellipse', () => {
+      const ellipse = createEllipseNode('ellipse1', 50, 30);
+      sceneGraph.addNode(ellipse);
+
+      const vpMatrix = mat3.identity();
+      shapeRenderer.render(sceneGraph, vpMatrix);
+
+      expect(gl.uniformMatrix3fv).toHaveBeenCalled();
+    });
+
+    it('should render ellipse stroke', () => {
+      const ellipse = createEllipseNode('ellipse1', 50, 30);
+      sceneGraph.addNode(ellipse);
+
+      const vpMatrix = mat3.identity();
+      vi.clearAllMocks();
+      shapeRenderer.render(sceneGraph, vpMatrix);
+
+      // Fill + stroke
+      expect(gl.drawArrays).toHaveBeenCalledTimes(2);
+    });
+
+    it('should render circle when radiusX equals radiusY', () => {
+      const circle = createEllipseNode('circle1', 50, 50);
+      sceneGraph.addNode(circle);
+
+      const vpMatrix = mat3.identity();
+      shapeRenderer.render(sceneGraph, vpMatrix);
+
+      expect(gl.drawArrays).toHaveBeenCalled();
+    });
+
+    it('should use TRIANGLE_FAN for fill', () => {
+      const ellipse = createEllipseNode('ellipse1', 50, 30);
+      ellipse.stroke = null;
+      sceneGraph.addNode(ellipse);
+
+      const vpMatrix = mat3.identity();
+      vi.clearAllMocks();
+      shapeRenderer.render(sceneGraph, vpMatrix);
+
+      expect(gl.drawArrays).toHaveBeenCalledWith(
+        gl.TRIANGLE_FAN,
+        expect.any(Number),
+        expect.any(Number)
+      );
+    });
+
+    it('should use LINE_LOOP for stroke', () => {
+      const ellipse = createEllipseNode('ellipse1', 50, 30);
+      ellipse.fill = { type: 'none', opacity: 0 };
+      sceneGraph.addNode(ellipse);
+
+      const vpMatrix = mat3.identity();
+      vi.clearAllMocks();
+      shapeRenderer.render(sceneGraph, vpMatrix);
+
+      expect(gl.drawArrays).toHaveBeenCalledWith(
+        gl.LINE_LOOP,
+        expect.any(Number),
+        expect.any(Number)
+      );
+    });
+  });
+
+  // ==========================================================================
+  // Path Rendering
+  // ==========================================================================
+
+  describe('path rendering', () => {
+    it('should render closed path fill', () => {
+      const path = createPathNode('path1');
+      sceneGraph.addNode(path);
+
+      const vpMatrix = mat3.identity();
+      shapeRenderer.render(sceneGraph, vpMatrix);
+
+      expect(gl.drawArrays).toHaveBeenCalled();
+    });
+
+    it('should not render fill for open path', () => {
+      const path = createPathNode('path1');
+      path.closed = false;
+      path.fill = null;
+      sceneGraph.addNode(path);
+
+      const vpMatrix = mat3.identity();
+      vi.clearAllMocks();
+      shapeRenderer.render(sceneGraph, vpMatrix);
+
+      // Only stroke, no fill
+      expect(gl.drawArrays).toHaveBeenCalledTimes(1);
+    });
+
+    it('should render path stroke', () => {
+      const path = createPathNode('path1');
+      path.fill = null;
+      sceneGraph.addNode(path);
+
+      const vpMatrix = mat3.identity();
+      vi.clearAllMocks();
+      shapeRenderer.render(sceneGraph, vpMatrix);
+
+      expect(gl.drawArrays).toHaveBeenCalled();
+    });
+
+    it('should use LINE_STRIP for open path stroke', () => {
+      const path = createPathNode('path1');
+      path.closed = false;
+      path.fill = null;
+      sceneGraph.addNode(path);
+
+      const vpMatrix = mat3.identity();
+      vi.clearAllMocks();
+      shapeRenderer.render(sceneGraph, vpMatrix);
+
+      expect(gl.drawArrays).toHaveBeenCalledWith(
+        gl.LINE_STRIP,
+        expect.any(Number),
+        expect.any(Number)
+      );
+    });
+
+    it('should not render path with fewer than 2 points', () => {
+      const path = createPathNode('path1');
+      path.points = [{ position: { x: 0, y: 0 }, handleIn: null, handleOut: null, type: 'corner' }];
+      sceneGraph.addNode(path);
+
+      const vpMatrix = mat3.identity();
+      vi.clearAllMocks();
+      shapeRenderer.render(sceneGraph, vpMatrix);
+
+      expect(gl.drawArrays).not.toHaveBeenCalled();
+    });
+
+    it('should render curved path', () => {
+      const path = createPathNode('path1');
+      path.points = [
+        { position: { x: 0, y: 0 }, handleIn: null, handleOut: { x: 50, y: 0 }, type: 'smooth' },
+        { position: { x: 100, y: 0 }, handleIn: { x: -50, y: 0 }, handleOut: null, type: 'smooth' },
+      ];
+      path.closed = false;
+      sceneGraph.addNode(path);
+
+      const vpMatrix = mat3.identity();
+      shapeRenderer.render(sceneGraph, vpMatrix);
+
+      expect(gl.drawArrays).toHaveBeenCalled();
+    });
+  });
+
+  // ==========================================================================
+  // Transform
+  // ==========================================================================
+
+  describe('transform handling', () => {
+    it('should apply world transform to shapes', () => {
+      const rect = createRectangleNode('rect1', 100, 50);
+      rect.transform.position = { x: 200, y: 100 };
+      sceneGraph.addNode(rect);
+
+      const vpMatrix = mat3.identity();
+      shapeRenderer.render(sceneGraph, vpMatrix);
+
+      // Should set model matrix with translation
+      expect(gl.uniformMatrix3fv).toHaveBeenCalled();
+    });
+
+    it('should apply rotation transform', () => {
+      const rect = createRectangleNode('rect1', 100, 50);
+      rect.transform.rotation = 45;
+      sceneGraph.addNode(rect);
+
+      const vpMatrix = mat3.identity();
+      shapeRenderer.render(sceneGraph, vpMatrix);
+
+      expect(gl.uniformMatrix3fv).toHaveBeenCalled();
+    });
+
+    it('should apply scale transform', () => {
+      const rect = createRectangleNode('rect1', 100, 50);
+      rect.transform.scale = { x: 2, y: 0.5 };
+      sceneGraph.addNode(rect);
+
+      const vpMatrix = mat3.identity();
+      shapeRenderer.render(sceneGraph, vpMatrix);
+
+      expect(gl.uniformMatrix3fv).toHaveBeenCalled();
+    });
+  });
+
+  // ==========================================================================
+  // Visibility
+  // ==========================================================================
+
+  describe('visibility handling', () => {
+    it('should not render invisible shapes', () => {
+      const rect = createRectangleNode('rect1', 100, 50);
+      rect.visible = false;
+      sceneGraph.addNode(rect);
+
+      const vpMatrix = mat3.identity();
+      vi.clearAllMocks();
+      shapeRenderer.render(sceneGraph, vpMatrix);
+
+      // Should not draw
+      expect(gl.drawArrays).not.toHaveBeenCalled();
+    });
+
+    it('should render multiple visible shapes', () => {
+      const rect1 = createRectangleNode('rect1', 100, 50);
+      const rect2 = createRectangleNode('rect2', 80, 40);
+      sceneGraph.addNode(rect1);
+      sceneGraph.addNode(rect2);
+
+      const vpMatrix = mat3.identity();
+      vi.clearAllMocks();
+      shapeRenderer.render(sceneGraph, vpMatrix);
+
+      // Should draw 4 times: 2 fills + 2 strokes
+      expect(gl.drawArrays).toHaveBeenCalledTimes(4);
+    });
+  });
+
+  // ==========================================================================
+  // Dispose
+  // ==========================================================================
+
+  describe('dispose', () => {
+    it('should delete vertex buffer', () => {
+      shapeRenderer.dispose();
+      expect(gl.deleteBuffer).toHaveBeenCalled();
+    });
+
+    it('should delete VAO', () => {
+      shapeRenderer.dispose();
+      expect(gl.deleteVertexArray).toHaveBeenCalled();
+    });
+  });
+});

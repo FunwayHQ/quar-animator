@@ -1,41 +1,150 @@
 .toolbar {
   display: flex;
   flex-direction: column;
-  width: 48px;
-  background-color: var(--color-bg-primary);
-  border-right: 1px solid var(--color-border-default);
+  width: 52px;
+  background: linear-gradient(
+    90deg,
+    var(--color-bg-secondary) 0%,
+    rgba(17, 17, 19, 0.95) 100%
+  );
+  border-right: 1px solid var(--color-border-subtle);
   padding: var(--space-sm);
+  position: relative;
+}
+
+/* Subtle inner shadow */
+.toolbar::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 1px;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.04),
+    transparent 20%,
+    transparent 80%,
+    rgba(255, 255, 255, 0.04)
+  );
+  pointer-events: none;
 }
 
 .toolGroup {
   display: flex;
   flex-direction: column;
-  gap: var(--space-xs);
+  gap: 3px;
+  padding: var(--space-xs) 0;
+}
+
+/* Section divider */
+.toolGroup + .toolGroup {
+  border-top: 1px solid var(--color-border-subtle);
+  margin-top: var(--space-xs);
+  padding-top: var(--space-sm);
 }
 
 .toolButton {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
-  color: var(--color-text-secondary);
+  width: 36px;
+  height: 36px;
+  color: var(--color-text-tertiary);
   border-radius: var(--radius-md);
   transition: all var(--duration-fast) var(--easing-default);
+  position: relative;
+  overflow: hidden;
 }
 
+/* Hover state */
 .toolButton:hover {
-  background-color: var(--color-bg-hover);
-  color: var(--color-text-primary);
+  background: var(--color-bg-hover);
+  color: var(--color-text-secondary);
+  transform: translateY(-1px);
 }
 
+.toolButton:hover::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.04) 0%,
+    transparent 50%
+  );
+  pointer-events: none;
+}
+
+/* Active (pressed) state */
+.toolButton:active {
+  transform: scale(0.95);
+}
+
+/* Selected tool state */
 .toolButton.active {
-  background-color: var(--color-accent-primary);
-  color: var(--color-text-primary);
+  background: linear-gradient(
+    135deg,
+    var(--color-accent-primary) 0%,
+    var(--color-accent-primary-active) 100%
+  );
+  color: var(--color-bg-primary);
+  box-shadow:
+    0 2px 8px var(--color-accent-primary-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.toolButton.active:hover {
+  background: linear-gradient(
+    135deg,
+    var(--color-accent-primary-hover) 0%,
+    var(--color-accent-primary) 100%
+  );
+  transform: translateY(-1px);
+}
+
+/* Active indicator dot */
+.toolButton.active::after {
+  content: '';
+  position: absolute;
+  bottom: 4px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 4px;
+  height: 4px;
+  background: var(--color-bg-primary);
+  border-radius: var(--radius-full);
+  opacity: 0.6;
+}
+
+/* Icon styling */
+.toolButton svg {
+  width: 18px;
+  height: 18px;
+  stroke-width: 1.75;
+  transition: transform var(--duration-fast);
+}
+
+.toolButton:hover svg {
+  transform: scale(1.05);
+}
+
+.toolButton.active svg {
+  stroke-width: 2;
 }
 
 .separator {
   height: 1px;
-  background-color: var(--color-border-default);
-  margin: var(--space-sm) 0;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--color-border-default),
+    transparent
+  );
+  margin: var(--space-sm) var(--space-xs);
+}
+
+/* Tooltip enhancement via title - consider custom tooltip */
+.toolButton[title] {
+  cursor: pointer;
 }

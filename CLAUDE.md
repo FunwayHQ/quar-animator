@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Quar Animator is a free, open-source, web-native 2D animation platform designed to fill the gap left by Adobe Animate's discontinuation. It's part of the QUAR Suite (alongside Quar Editor for 3D and Quar Vector for 2D illustration).
 
-**Current Status**: Sprint 3 Complete. Canvas foundation with WebGL 2 rendering in `@quar/core`.
+**Current Status**: Sprint 4 in progress. Core tool system implemented with comprehensive test coverage. Canvas foundation with WebGL 2 rendering in `@quar/core`. Modern violet/bordeaux design system.
 
 ## Sprint Progress
 
@@ -46,15 +46,40 @@ Quar Animator is a free, open-source, web-native 2D animation platform designed 
 - [x] Coordinate system utilities (vec2, mat3, rect in @quar/core/math)
 - [x] Canvas interactions (middle-click/space pan, wheel zoom, keyboard shortcuts)
 - [x] SceneGraph for hierarchical node management with events
-- [x] Test coverage: 367 tests (core: 221, ui: 89, web: 57)
+- [x] Test coverage: 310 tests (core: 221, ui: 89)
 
-### Next: Sprint 4 - Vector Drawing Foundation
+**Current test coverage**: ~440+ tests (core: 350+, ui: 89)
 
-- Path data structures (Bezier curves, path commands)
-- Basic shape tools (rectangle, ellipse, line)
-- Pen tool for custom paths
-- Selection tool with transform handles
-- Fill and stroke properties
+### Sprint 3.5: Bug Fixes & UI Refresh ✅ COMPLETE
+
+- [x] **Grid bug fix**: Fixed missing horizontal lines (Camera.getVisibleBounds Y-coordinate handling)
+- [x] **Grid bug fix**: Fixed adaptive spacing calculation in Grid.calculateAdaptiveSpacing
+- [x] **UI Refresh**: Modern "Neo-Industrial Studio" aesthetic
+  - Violet (#A855F7) primary accent with bordeaux secondary
+  - DM Sans font for UI, IBM Plex Mono for numbers
+  - Subtle gradients, glass effects, noise texture overlay
+  - Floating status bar with backdrop blur
+  - Refined micro-interactions and hover states
+  - Improved visual hierarchy across all panels
+
+### Sprint 4: Vector Drawing Foundation 🔄 IN PROGRESS
+
+#### Completed:
+- [x] **Phase 1.1**: Zustand editor store (`apps/web/src/stores/editorStore.ts`) - 28 tests
+- [x] **Phase 1.2**: Bezier utilities (`packages/core/src/path/bezier.ts`) - 53 tests
+- [x] **Phase 1.3**: Path utilities (`packages/core/src/path/pathUtils.ts`) - 57 tests
+- [x] **Phase 2**: ShapeRenderer (`packages/core/src/rendering/ShapeRenderer.ts`) - 40 tests
+- [x] **Phase 3**: Tool System - 130 tests total
+  - BaseTool abstract class
+  - RectangleTool (shift for square, alt for center-origin)
+  - EllipseTool (shift for circle, alt for center-origin)
+  - PenTool (corner/smooth points, bezier handles, path closure)
+  - SelectionTool (click/marquee selection, move, nudge, delete)
+  - ToolManager (tool switching, keyboard shortcuts V/R/O/P)
+
+#### Remaining:
+- [ ] **Phase 4**: Selection infrastructure (SelectionManager, TransformHandles, SelectionOverlay)
+- [ ] **Phase 5**: UI Integration (connect Toolbar to Zustand, integrate tools into Canvas)
 
 ## Development Commands
 

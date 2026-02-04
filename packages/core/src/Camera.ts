@@ -333,11 +333,17 @@ export class Camera {
       y: this._viewportHeight,
     });
 
+    // Ensure positive width and height (world Y may be flipped)
+    const minX = Math.min(topLeft.x, bottomRight.x);
+    const maxX = Math.max(topLeft.x, bottomRight.x);
+    const minY = Math.min(topLeft.y, bottomRight.y);
+    const maxY = Math.max(topLeft.y, bottomRight.y);
+
     return {
-      x: topLeft.x,
-      y: topLeft.y,
-      width: bottomRight.x - topLeft.x,
-      height: bottomRight.y - topLeft.y,
+      x: minX,
+      y: minY,
+      width: maxX - minX,
+      height: maxY - minY,
     };
   }
 
