@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Quar Animator is a free, open-source, web-native 2D animation platform designed to fill the gap left by Adobe Animate's discontinuation. It's part of the QUAR Suite (alongside Quar Editor for 3D and Quar Vector for 2D illustration).
 
-**Current Status**: Sprint 2 Complete. Design system established with core UI components in `@quar/ui`.
+**Current Status**: Sprint 3 Complete. Canvas foundation with WebGL 2 rendering in `@quar/core`.
 
 ## Sprint Progress
 
@@ -35,12 +35,21 @@ Quar Animator is a free, open-source, web-native 2D animation platform designed 
 - [x] Dark theme implementation
 - [x] Storybook stories for all components
 
-### Next: Sprint 3 - Canvas Foundation
-- WebGL 2 context initialization
-- Camera system (zoom, pan)
-- Grid rendering
-- Canvas resize handling
-- Coordinate system utilities
+### Sprint 3: Canvas Foundation ✅ COMPLETE
+- [x] WebGL 2 context initialization (WebGLRenderer with state caching, context loss handling)
+- [x] Camera system (zoom, pan, fit bounds, screen/world coordinate transforms)
+- [x] Grid rendering (infinite adaptive grid that scales with zoom)
+- [x] Canvas resize handling (ResizeObserver integration)
+- [x] Coordinate system utilities (vec2, mat3, rect in @quar/core/math)
+- [x] Canvas interactions (middle-click/space pan, wheel zoom, keyboard shortcuts)
+- [x] Test coverage: 216 tests (core: 70, ui: 89, web: 57)
+
+### Next: Sprint 4 - Vector Drawing Foundation
+- Path data structures (Bezier curves, path commands)
+- Basic shape tools (rectangle, ellipse, line)
+- Pen tool for custom paths
+- Selection tool with transform handles
+- Fill and stroke properties
 
 ## Development Commands
 
