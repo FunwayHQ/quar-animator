@@ -1,0 +1,126 @@
+.panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  overflow: hidden;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-sm) var(--space-md);
+  border-bottom: 1px solid var(--color-border-default);
+}
+
+.title {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.headerActions {
+  display: flex;
+  gap: var(--space-xs);
+}
+
+.headerButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  color: var(--color-text-secondary);
+  border-radius: var(--radius-sm);
+  transition: all var(--duration-fast) var(--easing-default);
+}
+
+.headerButton:hover {
+  background-color: var(--color-bg-hover);
+  color: var(--color-text-primary);
+}
+
+.content {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.layerRow {
+  display: flex;
+  align-items: center;
+  height: 28px;
+  padding-right: var(--space-sm);
+  gap: var(--space-xs);
+  cursor: pointer;
+  transition: background-color var(--duration-fast) var(--easing-default);
+}
+
+.layerRow:hover {
+  background-color: var(--color-bg-hover);
+}
+
+.layerRow.selected {
+  background-color: var(--color-accent-primary);
+}
+
+.expandButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  color: var(--color-text-tertiary);
+  transition: transform var(--duration-fast) var(--easing-default);
+}
+
+.expandButton:hover {
+  color: var(--color-text-primary);
+}
+
+.layerIcon {
+  font-size: var(--font-size-xs);
+  width: 16px;
+  text-align: center;
+}
+
+.layerName {
+  flex: 1;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.layerActions {
+  display: flex;
+  gap: var(--space-xs);
+  opacity: 0;
+  transition: opacity var(--duration-fast) var(--easing-default);
+}
+
+.layerRow:hover .layerActions {
+  opacity: 1;
+}
+
+.actionButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  color: var(--color-text-secondary);
+  border-radius: var(--radius-sm);
+}
+
+.actionButton:hover {
+  color: var(--color-text-primary);
+}
+
+.actionButton.inactive {
+  color: var(--color-text-disabled);
+}
+
+.actionButton.active {
+  color: var(--color-accent-warning);
+}

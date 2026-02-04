@@ -1,0 +1,29 @@
+# Dependencies
+node_modules
+pnpm-lock.yaml
+
+# Build outputs
+dist
+build
+.next
+.nuxt
+out
+
+# Cache
+.cache
+.turbo
+*.tsbuildinfo
+
+# IDE
+.idea
+.vscode
+
+# Storybook
+storybook-static
+
+# Coverage
+coverage
+
+# Generated files
+*.min.js
+*.min.css

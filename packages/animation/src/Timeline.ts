@@ -1,0 +1,327 @@
+/**
+ * Timeline management for Quar Animator
+ */
+
+import type {
+  Timeline,
+  PropertyTrack,
+  Keyframe,
+  Marker,
+  EasingFunction,
+} from '@quar/types';
+import { applyEasing } from './Easing';
+
+// ============================================================================
+// ID Generation
+// ============================================================================
+
+let idCounter = 0;
+
+export function generateId(prefix = 'id'): string {
+  return `${prefix}_${Date.now()}_${++idCounter}`;
+}
+
+// ============================================================================
+// Timeline Factory
+// ============================================================================
+
+export function createTimeline(options: Partial<Timeline> = {}): Timeline {
+  return {
+    id: options.id ?? generateId('timeline'),
+    name: options.name ?? 'Main Timeline',
+    duration: options.duration ?? 300, // 10 seconds at 30fps
+    frameRate: options.frameRate ?? 30,
+    tracks: options.tracks ?? [],
+    markers: options.markers ?? [],
+  };
+}
+
+// ============================================================================
+// Track Operations
+// ============================================================================
+
+export function createTrack<T>(
+  nodeId: string,
+  property: string,
+  keyframes: Keyframe<T>[] = []
+): PropertyTrack<T> {
+  return {
+    id: generateId('track'),
+    nodeId,
+    property,
+    keyframes,
+  };
+}
+
+export function findTrack<T>(
+  timeline: Timeline,
+  nodeId: string,
+  property: string
+): PropertyTrack<T> | undefined {
+  return timeline.tracks.find(
+    (t) => t.nodeId === nodeId && t.property === property
+  ) as PropertyTrack<T> | undefined;
+}
+
+export function getOrCreateTrack<T>(
+  timeline: Timeline,
+  nodeId: string,
+  property: string
+): PropertyTrack<T> {
+  let track = findTrack<T>(timeline, nodeId, property);
+
+  if (!track) {
+    track = createTrack<T>(nodeId, property);
+    timeline.tracks.push(track as PropertyTrack);
+  }
+
+  return track;
+}
+
+// ============================================================================
+// Keyframe Operations
+// ============================================================================
+
+export function createKeyframe<T>(
+  time: number,
+  value: T,
+  easing: EasingFunction = 'linear'
+): Keyframe<T> {
+  return {
+    id: generateId('kf'),
+    time,
+    value,
+    easing,
+  };
+}
+
+export function addKeyframe<T>(
+  track: PropertyTrack<T>,
+  time: number,
+  value: T,
+  easing: EasingFunction = 'linear'
+): Keyframe<T> {
+  // Check if keyframe exists at this time
+  const existingIndex = track.keyframes.findIndex((kf) => kf.time === time);
+
+  const keyframe = createKeyframe(time, value, easing);
+
+  if (existingIndex !== -1) {
+    // Update existing keyframe
+    track.keyframes[existingIndex] = keyframe;
+  } else {
+    // Insert in sorted order
+    const insertIndex = track.keyframes.findIndex((kf) => kf.time > time);
+    if (insertIndex === -1) {
+      track.keyframes.push(keyframe);
+    } else {
+      track.keyframes.splice(insertIndex, 0, keyframe);
+    }
+  }
+
+  return keyframe;
+}
+
+export function removeKeyframe<T>(
+  track: PropertyTrack<T>,
+  keyframeId: string
+): boolean {
+  const index = track.keyframes.findIndex((kf) => kf.id === keyframeId);
+  if (index === -1) return false;
+
+  track.keyframes.splice(index, 1);
+  return true;
+}
+
+export function moveKeyframe<T>(
+  track: PropertyTrack<T>,
+  keyframeId: string,
+  newTime: number
+): boolean {
+  const keyframe = track.keyframes.find((kf) => kf.id === keyframeId);
+  if (!keyframe) return false;
+
+  // Remove and re-insert to maintain sorted order
+  removeKeyframe(track, keyframeId);
+  keyframe.time = newTime;
+
+  const insertIndex = track.keyframes.findIndex((kf) => kf.time > newTime);
+  if (insertIndex === -1) {
+    track.keyframes.push(keyframe);
+  } else {
+    track.keyframes.splice(insertIndex, 0, keyframe);
+  }
+
+  return true;
+}
+
+// ============================================================================
+// Interpolation
+// ============================================================================
+
+export function findSurroundingKeyframes<T>(
+  track: PropertyTrack<T>,
+  time: number
+): [Keyframe<T> | null, Keyframe<T> | null] {
+  const keyframes = track.keyframes;
+
+  if (keyframes.length === 0) {
+    return [null, null];
+  }
+
+  // Find the keyframe just before or at the current time
+  let beforeIndex = -1;
+  for (let i = keyframes.length - 1; i >= 0; i--) {
+    if (keyframes[i].time <= time) {
+      beforeIndex = i;
+      break;
+    }
+  }
+
+  const before = beforeIndex >= 0 ? keyframes[beforeIndex] : null;
+  const after =
+    beforeIndex < keyframes.length - 1 ? keyframes[beforeIndex + 1] : null;
+
+  return [before, after];
+}
+
+export function interpolateValue<T>(
+  track: PropertyTrack<T>,
+  time: number,
+  interpolator: (a: T, b: T, t: number) => T
+): T | undefined {
+  const [before, after] = findSurroundingKeyframes(track, time);
+
+  if (!before && !after) {
+    return undefined;
+  }
+
+  if (!before) {
+    return after!.value;
+  }
+
+  if (!after || before.time === after.time) {
+    return before.value;
+  }
+
+  // Calculate normalized time between keyframes
+  const localT = (time - before.time) / (after.time - before.time);
+
+  // Apply easing
+  const easedT = applyEasing(localT, before.easing);
+
+  // Interpolate
+  return interpolator(before.value, after.value, easedT);
+}
+
+// ============================================================================
+// Common Interpolators
+// ============================================================================
+
+export const interpolators = {
+  number: (a: number, b: number, t: number): number => {
+    return a + (b - a) * t;
+  },
+
+  vector2: (
+    a: { x: number; y: number },
+    b: { x: number; y: number },
+    t: number
+  ): { x: number; y: number } => {
+    return {
+      x: a.x + (b.x - a.x) * t,
+      y: a.y + (b.y - a.y) * t,
+    };
+  },
+
+  color: (
+    a: { r: number; g: number; b: number; a: number },
+    b: { r: number; g: number; b: number; a: number },
+    t: number
+  ): { r: number; g: number; b: number; a: number } => {
+    return {
+      r: Math.round(a.r + (b.r - a.r) * t),
+      g: Math.round(a.g + (b.g - a.g) * t),
+      b: Math.round(a.b + (b.b - a.b) * t),
+      a: a.a + (b.a - a.a) * t,
+    };
+  },
+
+  // Discrete - no interpolation, just snap to value
+  discrete: <T>(a: T, _b: T, _t: number): T => {
+    return a;
+  },
+};
+
+// ============================================================================
+// Marker Operations
+// ============================================================================
+
+export function addMarker(
+  timeline: Timeline,
+  time: number,
+  name: string,
+  color: string = '#FF6B6B'
+): Marker {
+  const marker: Marker = {
+    id: generateId('marker'),
+    time,
+    name,
+    color,
+  };
+
+  timeline.markers.push(marker);
+  timeline.markers.sort((a, b) => a.time - b.time);
+
+  return marker;
+}
+
+export function removeMarker(timeline: Timeline, markerId: string): boolean {
+  const index = timeline.markers.findIndex((m) => m.id === markerId);
+  if (index === -1) return false;
+
+  timeline.markers.splice(index, 1);
+  return true;
+}
+
+// ============================================================================
+// Timeline Utilities
+// ============================================================================
+
+export function getTracksByNode(
+  timeline: Timeline,
+  nodeId: string
+): PropertyTrack[] {
+  return timeline.tracks.filter((t) => t.nodeId === nodeId);
+}
+
+export function getKeyframeCount(timeline: Timeline): number {
+  return timeline.tracks.reduce((sum, track) => sum + track.keyframes.length, 0);
+}
+
+export function getAnimatedNodes(timeline: Timeline): Set<string> {
+  const nodes = new Set<string>();
+  for (const track of timeline.tracks) {
+    if (track.keyframes.length > 0) {
+      nodes.add(track.nodeId);
+    }
+  }
+  return nodes;
+}
+
+export function frameToTime(frame: number, frameRate: number): number {
+  return frame / frameRate;
+}
+
+export function timeToFrame(time: number, frameRate: number): number {
+  return Math.round(time * frameRate);
+}
+
+export function formatTimecode(frame: number, frameRate: number): string {
+  const totalSeconds = frame / frameRate;
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = Math.floor(totalSeconds % 60);
+  const frames = frame % frameRate;
+
+  return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}:${frames.toString().padStart(2, '0')}`;
+}

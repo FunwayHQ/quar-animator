@@ -1,0 +1,56 @@
+{
+  "name": "quar-animator",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Free, open-source, web-native 2D animation platform",
+  "keywords": ["animation", "2d", "vector", "lottie", "rigging", "webgl"],
+  "license": "MIT",
+  "author": "QUAR Team",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/FunwayHQ/quar-animator.git"
+  },
+  "scripts": {
+    "dev": "pnpm --filter @quar/web dev",
+    "build": "pnpm -r build",
+    "lint": "eslint . --ext .ts,.tsx",
+    "lint:fix": "eslint . --ext .ts,.tsx --fix",
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md,css}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md,css}\"",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "storybook": "pnpm --filter @quar/ui storybook",
+    "build:storybook": "pnpm --filter @quar/ui build-storybook",
+    "clean": "pnpm -r clean && rimraf node_modules",
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@typescript-eslint/eslint-plugin": "^6.19.0",
+    "@typescript-eslint/parser": "^6.19.0",
+    "eslint": "^8.56.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-jsx-a11y": "^6.8.0",
+    "eslint-plugin-react": "^7.33.2",
+    "eslint-plugin-react-hooks": "^4.6.0",
+    "husky": "^9.0.0",
+    "lint-staged": "^15.2.0",
+    "prettier": "^3.2.0",
+    "rimraf": "^5.0.5",
+    "typescript": "^5.3.3"
+  },
+  "packageManager": "pnpm@8.14.0",
+  "engines": {
+    "node": ">=18.0.0",
+    "pnpm": ">=8.0.0"
+  },
+  "lint-staged": {
+    "*.{ts,tsx}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{js,jsx,json,md,css}": [
+      "prettier --write"
+    ]
+  }
+}

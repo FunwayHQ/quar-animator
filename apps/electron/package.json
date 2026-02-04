@@ -1,0 +1,21 @@
+{
+  "name": "@quar/electron",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Quar Animator desktop application (Electron)",
+  "main": "src/main.ts",
+  "scripts": {
+    "dev": "electron .",
+    "build": "electron-builder",
+    "typecheck": "tsc --noEmit",
+    "clean": "rimraf dist release"
+  },
+  "dependencies": {
+    "@quar/web": "workspace:*"
+  },
+  "devDependencies": {
+    "electron": "^28.1.0",
+    "electron-builder": "^24.9.1",
+    "typescript": "workspace:*"
+  }
+}

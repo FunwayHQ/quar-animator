@@ -1,0 +1,23 @@
+{
+  "name": "@quar/rigging",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Bones, IK, and weight painting for Quar Animator",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "build": "tsup src/index.ts --format esm,cjs --dts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest",
+    "clean": "rimraf dist"
+  },
+  "dependencies": {
+    "@quar/types": "workspace:*",
+    "@quar/core": "workspace:*"
+  },
+  "devDependencies": {
+    "tsup": "^8.0.1",
+    "typescript": "workspace:*",
+    "vitest": "^1.2.0"
+  }
+}

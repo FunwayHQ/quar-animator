@@ -1,0 +1,52 @@
+.menuBar {
+  display: flex;
+  align-items: center;
+  height: 40px;
+  padding: 0 var(--space-sm);
+  background-color: var(--color-bg-primary);
+  border-bottom: 1px solid var(--color-border-default);
+  gap: var(--space-md);
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.logoText {
+  font-size: var(--font-size-md);
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.menus {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.menuItem {
+  padding: var(--space-xs) var(--space-sm);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  border-radius: var(--radius-sm);
+  transition: all var(--duration-fast) var(--easing-default);
+}
+
+.menuItem:hover {
+  background-color: var(--color-bg-hover);
+  color: var(--color-text-primary);
+}
+
+.actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+}
+
+.projectName {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-tertiary);
+}

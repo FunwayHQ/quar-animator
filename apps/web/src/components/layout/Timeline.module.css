@@ -1,0 +1,213 @@
+.timeline {
+  display: flex;
+  flex-direction: column;
+  height: 200px;
+  min-height: 100px;
+  max-height: 400px;
+  background-color: var(--color-bg-primary);
+  border-top: 1px solid var(--color-border-default);
+}
+
+.controls {
+  display: flex;
+  align-items: center;
+  height: 36px;
+  padding: 0 var(--space-sm);
+  gap: var(--space-md);
+  border-bottom: 1px solid var(--color-border-default);
+}
+
+.transportControls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.controlButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  color: var(--color-text-secondary);
+  border-radius: var(--radius-sm);
+  transition: all var(--duration-fast) var(--easing-default);
+}
+
+.controlButton:hover {
+  background-color: var(--color-bg-hover);
+  color: var(--color-text-primary);
+}
+
+.playButton {
+  width: 32px;
+  height: 32px;
+  background-color: var(--color-bg-tertiary);
+}
+
+.playButton:hover {
+  background-color: var(--color-accent-primary);
+}
+
+.timeDisplay {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-sm);
+}
+
+.currentTime {
+  color: var(--color-text-primary);
+}
+
+.separator {
+  color: var(--color-text-tertiary);
+}
+
+.totalTime {
+  color: var(--color-text-secondary);
+}
+
+.options {
+  margin-left: auto;
+  display: flex;
+  gap: var(--space-xs);
+}
+
+.optionButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  color: var(--color-text-tertiary);
+  border-radius: var(--radius-sm);
+  transition: all var(--duration-fast) var(--easing-default);
+}
+
+.optionButton:hover {
+  background-color: var(--color-bg-hover);
+  color: var(--color-text-primary);
+}
+
+.timelineArea {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+.layerLabels {
+  width: 140px;
+  flex-shrink: 0;
+  border-right: 1px solid var(--color-border-default);
+  overflow-y: auto;
+  padding-top: 24px; /* Align with ruler */
+}
+
+.layerLabel {
+  height: 24px;
+  padding: 0 var(--space-sm);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  display: flex;
+  align-items: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tracksArea {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow-x: auto;
+  position: relative;
+}
+
+.ruler {
+  height: 24px;
+  background-color: var(--color-bg-secondary);
+  border-bottom: 1px solid var(--color-border-default);
+  position: relative;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.rulerMark {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  border-left: 1px solid var(--color-border-default);
+}
+
+.rulerLabel {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-tertiary);
+  font-family: var(--font-family-mono);
+}
+
+.playhead {
+  position: absolute;
+  top: 0;
+  width: 0;
+  height: 100%;
+  border-left: 2px solid var(--color-timeline-playhead);
+  pointer-events: none;
+}
+
+.playhead::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -6px;
+  width: 10px;
+  height: 10px;
+  background-color: var(--color-timeline-playhead);
+  clip-path: polygon(50% 100%, 0 0, 100% 0);
+}
+
+.tracks {
+  flex: 1;
+  position: relative;
+  overflow-y: auto;
+}
+
+.track {
+  height: 24px;
+  position: relative;
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.track:hover {
+  background-color: var(--color-bg-hover);
+}
+
+.keyframe {
+  position: absolute;
+  top: 50%;
+  width: 10px;
+  height: 10px;
+  background-color: var(--color-timeline-keyframe);
+  transform: translate(-50%, -50%) rotate(45deg);
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--easing-default);
+}
+
+.keyframe:hover {
+  background-color: var(--color-timeline-keyframe-selected);
+  transform: translate(-50%, -50%) rotate(45deg) scale(1.2);
+}
+
+.playheadLine {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 0;
+  border-left: 2px solid var(--color-timeline-playhead);
+  pointer-events: none;
+  z-index: 10;
+}
