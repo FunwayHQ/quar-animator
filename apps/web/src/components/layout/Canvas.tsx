@@ -147,6 +147,32 @@ export function Canvas() {
           scaleY,
           polygonNode.innerRadius
         );
+      } else if (node.type === 'path') {
+        const pathNode = node as any;
+        if (pathNode.points && pathNode.points.length > 0) {
+          let pathMinX = Infinity;
+          let pathMinY = Infinity;
+          let pathMaxX = -Infinity;
+          let pathMaxY = -Infinity;
+
+          for (const p of pathNode.points) {
+            pathMinX = Math.min(pathMinX, p.position.x);
+            pathMinY = Math.min(pathMinY, p.position.y);
+            pathMaxX = Math.max(pathMaxX, p.position.x);
+            pathMaxY = Math.max(pathMaxY, p.position.y);
+          }
+
+          // Calculate width/height with minimum size for very thin paths
+          const pathWidth = Math.max(pathMaxX - pathMinX, 1);
+          const pathHeight = Math.max(pathMaxY - pathMinY, 1);
+
+          nodeBounds = {
+            x: pathMinX + pos.x,
+            y: pathMinY + pos.y,
+            width: pathWidth,
+            height: pathHeight,
+          };
+        }
       }
 
       if (nodeBounds) {

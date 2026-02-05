@@ -42,6 +42,15 @@ export class PenTool extends BaseTool {
       this.previewNode = this.createPathNode([]);
     }
 
+    // Alt+click on existing point to convert point type
+    if (event.altKey && this.currentPath.length > 0) {
+      const hitIndex = this.hitTestCurrentPathPoint(worldPos);
+      if (hitIndex !== -1) {
+        this.convertPointType(hitIndex);
+        return;
+      }
+    }
+
     // Check if clicking near the first point to close the path
     if (this.currentPath.length > 2) {
       const firstPoint = this.currentPath[0].position;
@@ -91,7 +100,7 @@ export class PenTool extends BaseTool {
     }
   }
 
-  onPointerUp(event: CanvasPointerEvent): void {
+  onPointerUp(_event: CanvasPointerEvent): void {
     this.isDraggingHandle = false;
   }
 
@@ -195,6 +204,87 @@ export class PenTool extends BaseTool {
     if (this.previewNode) {
       this.previewNode.points = [...this.currentPath];
     }
+  }
+
+  /**
+   * Hit test points in the current path being drawn
+   * @returns Index of hit point, or -1 if no hit
+   */
+  private hitTestCurrentPathPoint(worldPos: Vector2): number {
+    const hitRadius = 10 / this.context.camera.zoom;
+
+    for (let i = 0; i < this.currentPath.length; i++) {
+      const point = this.currentPath[i];
+      const distance = vec2.distance(worldPos, point.position);
+      if (distance < hitRadius) {
+        return i;
+      }
+    }
+
+    return -1;
+  }
+
+  /**
+   * Convert point type between corner and smooth
+   * - If smooth/symmetric: convert to corner (remove handles)
+   * - If corner: convert to smooth (add default handles)
+   */
+  private convertPointType(pointIndex: number): void {
+    const point = this.currentPath[pointIndex];
+    if (!point) return;
+
+    if (point.type === 'corner') {
+      // Convert to smooth with default handles
+      const defaultHandleLength = 30;
+
+      // Calculate handle direction based on neighboring points
+      let direction: Vector2 = { x: 1, y: 0 };
+
+      if (this.currentPath.length > 1) {
+        const prevPoint = this.currentPath[pointIndex - 1];
+        const nextPoint = this.currentPath[pointIndex + 1];
+
+        if (prevPoint && nextPoint) {
+          // Direction from prev to next
+          const toNext = vec2.subtract(nextPoint.position, prevPoint.position);
+          const len = vec2.length(toNext);
+          if (len > 0) {
+            direction = { x: toNext.x / len, y: toNext.y / len };
+          }
+        } else if (prevPoint) {
+          // Direction from prev to this
+          const toPrev = vec2.subtract(point.position, prevPoint.position);
+          const len = vec2.length(toPrev);
+          if (len > 0) {
+            direction = { x: toPrev.x / len, y: toPrev.y / len };
+          }
+        } else if (nextPoint) {
+          // Direction from this to next
+          const toNext = vec2.subtract(nextPoint.position, point.position);
+          const len = vec2.length(toNext);
+          if (len > 0) {
+            direction = { x: toNext.x / len, y: toNext.y / len };
+          }
+        }
+      }
+
+      point.handleOut = {
+        x: direction.x * defaultHandleLength,
+        y: direction.y * defaultHandleLength,
+      };
+      point.handleIn = {
+        x: -direction.x * defaultHandleLength,
+        y: -direction.y * defaultHandleLength,
+      };
+      point.type = 'smooth';
+    } else {
+      // Convert to corner (remove handles)
+      point.handleIn = null;
+      point.handleOut = null;
+      point.type = 'corner';
+    }
+
+    this.updatePreviewNode();
   }
 
   private createPathNode(points: PathPoint[], closed: boolean = false): PathNode {

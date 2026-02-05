@@ -4,6 +4,7 @@
 
 export * from './BaseTool';
 export * from './SelectionTool';
+export * from './DirectSelectionTool';
 export * from './RectangleTool';
 export * from './EllipseTool';
 export * from './PolygonTool';

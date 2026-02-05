@@ -6,6 +6,7 @@
 import type { ToolType, CanvasPointerEvent, Fill, Stroke } from '@quar/types';
 import { BaseTool, type ToolContext } from './BaseTool';
 import { SelectionTool } from './SelectionTool';
+import { DirectSelectionTool } from './DirectSelectionTool';
 import { RectangleTool } from './RectangleTool';
 import { EllipseTool } from './EllipseTool';
 import { PolygonTool } from './PolygonTool';
@@ -47,6 +48,7 @@ export class ToolManager {
 
     // Initialize tools
     this.tools.set('selection', new SelectionTool(context));
+    this.tools.set('direct-selection', new DirectSelectionTool(context));
     this.tools.set('rectangle', new RectangleTool(context));
     this.tools.set('ellipse', new EllipseTool(context));
     this.tools.set('polygon', new PolygonTool(context));
@@ -215,6 +217,8 @@ export class ToolManager {
     const shortcuts: Record<string, ToolType> = {
       v: 'selection',
       V: 'selection',
+      a: 'direct-selection',
+      A: 'direct-selection',
       r: 'rectangle',
       R: 'rectangle',
       o: 'ellipse',
