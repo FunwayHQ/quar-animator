@@ -99,8 +99,10 @@ module.exports = {
       // until build system generates declaration files for cross-package resolution
       files: [
         'apps/web/src/hooks/**/*.ts',
+        'apps/web/src/stores/**/*.ts',
         'apps/web/src/components/canvas/**/*.tsx',
         'apps/web/src/components/layout/Canvas.tsx',
+        'apps/web/src/components/layout/Toolbar.tsx',
       ],
       rules: {
         '@typescript-eslint/no-unsafe-assignment': 'off',

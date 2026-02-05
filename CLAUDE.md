@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Quar Animator is a free, open-source, web-native 2D animation platform designed to fill the gap left by Adobe Animate's discontinuation. It's part of the QUAR Suite (alongside Quar Editor for 3D and Quar Vector for 2D illustration).
 
-**Current Status**: Sprint 4 complete. Full vector drawing foundation with tools, selection, and UI integration. Canvas foundation with WebGL 2 rendering in `@quar/core`. Modern violet/bordeaux design system.
+**Current Status**: Sprint 5 in progress. Polygon tool implemented with comprehensive tests. Full vector drawing foundation with tools, selection, and UI integration. Canvas foundation with WebGL 2 rendering in `@quar/core`. Modern violet/bordeaux design system.
 
 ## Sprint Progress
 
@@ -48,7 +48,7 @@ Quar Animator is a free, open-source, web-native 2D animation platform designed 
 - [x] SceneGraph for hierarchical node management with events
 - [x] Test coverage: 310 tests (core: 221, ui: 89)
 
-**Current test coverage**: ~682 tests (core: 540, web: 142)
+**Current test coverage**: ~853 tests (core: 622, ui: 89, web: 142)
 
 ### Sprint 3.5: Bug Fixes & UI Refresh ✅ COMPLETE
 
@@ -85,6 +85,26 @@ Quar Animator is a free, open-source, web-native 2D animation platform designed 
   - SelectionOverlay component (SVG overlay for bounds and handles)
   - Canvas.tsx integration (tools, shapes, selection rendering)
   - Toolbar.tsx connected to EditorStore
+
+### Sprint 5: Drawing Tools - Shapes 🔄 IN PROGRESS
+
+- [x] PolygonTool implementation - 55 tests
+  - Regular polygons (3-12 sides: triangle, pentagon, hexagon, etc.)
+  - Star shapes with configurable inner radius ratio (0.1-0.9)
+  - Drag-to-create with bounding box inscription
+  - Alt key for draw-from-center mode
+  - Escape to cancel drawing
+  - Automatic selection after creation
+- [x] ShapeRenderer polygon support - 13 tests
+  - Renders both regular polygons and star shapes
+  - Fill and stroke rendering
+  - Uses createPolygonPath/createStarPath from pathUtils
+- [x] ToolManager polygon integration - 3 tests
+  - 'U' keyboard shortcut for polygon tool
+  - Tool registration and switching
+- [x] Toolbar polygon button with icon
+- [ ] Tool cursor feedback enhancements
+- [ ] Properties panel integration for shape creation
 
 ## Development Commands
 

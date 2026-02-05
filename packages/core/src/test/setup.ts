@@ -144,12 +144,15 @@ export interface CanvasPointerEvent {
   altKey: boolean;
   metaKey: boolean;
   pressure: number;
+  timestamp: number;
 }
 
 /**
  * Create a mock canvas pointer event for tool testing
  */
-export function createMockPointerEvent(overrides: Partial<CanvasPointerEvent> = {}): CanvasPointerEvent {
+export function createMockPointerEvent(
+  overrides: Partial<CanvasPointerEvent> = {}
+): CanvasPointerEvent {
   return {
     worldPosition: { x: 0, y: 0 },
     screenPosition: { x: 0, y: 0 },
@@ -160,6 +163,7 @@ export function createMockPointerEvent(overrides: Partial<CanvasPointerEvent> = 
     altKey: false,
     metaKey: false,
     pressure: 0.5,
+    timestamp: Date.now(),
     ...overrides,
   };
 }
@@ -197,7 +201,7 @@ export function createMockToolContext(): ToolContext {
     getSelectedIds: () => selectedIds,
     setSelectedIds: (ids: string[]) => {
       selectedIds.clear();
-      ids.forEach(id => selectedIds.add(id));
+      ids.forEach((id) => selectedIds.add(id));
     },
     addToSelection: (id: string) => selectedIds.add(id),
     clearSelection: () => selectedIds.clear(),

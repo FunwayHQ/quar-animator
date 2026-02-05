@@ -8,6 +8,7 @@ import { BaseTool, type ToolContext } from './BaseTool';
 import { SelectionTool } from './SelectionTool';
 import { RectangleTool } from './RectangleTool';
 import { EllipseTool } from './EllipseTool';
+import { PolygonTool } from './PolygonTool';
 import { PenTool } from './PenTool';
 import type { SceneGraph } from '../SceneGraph';
 import type { Camera } from '../Camera';
@@ -48,6 +49,7 @@ export class ToolManager {
     this.tools.set('selection', new SelectionTool(context));
     this.tools.set('rectangle', new RectangleTool(context));
     this.tools.set('ellipse', new EllipseTool(context));
+    this.tools.set('polygon', new PolygonTool(context));
     this.tools.set('pen', new PenTool(context));
 
     // Set default tool
@@ -211,6 +213,8 @@ export class ToolManager {
       R: 'rectangle',
       o: 'ellipse',
       O: 'ellipse',
+      u: 'polygon',
+      U: 'polygon',
       p: 'pen',
       P: 'pen',
     };

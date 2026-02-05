@@ -108,9 +108,13 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 // Selector Hooks
 // ============================================================================
 
-export const useActiveTool = () => useEditorStore((state) => state.activeTool);
-export const useSetActiveTool = () => useEditorStore((state) => state.setActiveTool);
-export const useSelectedNodeIds = () => useEditorStore((state) => state.selectedNodeIds);
-export const useDefaultFill = () => useEditorStore((state) => state.defaultFill);
-export const useDefaultStroke = () => useEditorStore((state) => state.defaultStroke);
-export const useIsDrawing = () => useEditorStore((state) => state.isDrawing);
+export const useActiveTool = (): ToolType =>
+  useEditorStore((state: EditorStore) => state.activeTool);
+export const useSetActiveTool = (): ((tool: ToolType) => void) =>
+  useEditorStore((state: EditorStore) => state.setActiveTool);
+export const useSelectedNodeIds = (): Set<string> =>
+  useEditorStore((state: EditorStore) => state.selectedNodeIds);
+export const useDefaultFill = (): Fill => useEditorStore((state: EditorStore) => state.defaultFill);
+export const useDefaultStroke = (): Stroke =>
+  useEditorStore((state: EditorStore) => state.defaultStroke);
+export const useIsDrawing = (): boolean => useEditorStore((state: EditorStore) => state.isDrawing);

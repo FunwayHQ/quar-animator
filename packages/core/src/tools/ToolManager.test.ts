@@ -17,7 +17,7 @@ function createToolManagerOptions(): ToolManagerOptions {
     getSelectedIds: () => selectedIds,
     setSelectedIds: (ids: string[]) => {
       selectedIds.clear();
-      ids.forEach(id => selectedIds.add(id));
+      ids.forEach((id) => selectedIds.add(id));
     },
     addToSelection: (id: string) => selectedIds.add(id),
     clearSelection: () => selectedIds.clear(),
@@ -84,6 +84,12 @@ describe('ToolManager', () => {
     it('should switch to pen tool', () => {
       manager.setActiveTool('pen');
       expect(manager.getActiveToolType()).toBe('pen');
+      expect(manager.getCursor()).toBe('crosshair');
+    });
+
+    it('should switch to polygon tool', () => {
+      manager.setActiveTool('polygon');
+      expect(manager.getActiveToolType()).toBe('polygon');
       expect(manager.getCursor()).toBe('crosshair');
     });
 
@@ -205,6 +211,11 @@ describe('ToolManager', () => {
       expect(manager.getActiveToolType()).toBe('pen');
     });
 
+    it('should switch to polygon tool on U', () => {
+      manager.handleKeyDown({ key: 'u' } as KeyboardEvent);
+      expect(manager.getActiveToolType()).toBe('polygon');
+    });
+
     it('should handle uppercase shortcuts', () => {
       manager.handleKeyDown({ key: 'R' } as KeyboardEvent);
       expect(manager.getActiveToolType()).toBe('rectangle');
@@ -254,6 +265,12 @@ describe('ToolManager', () => {
       expect(rectangleTool?.type).toBe('rectangle');
     });
 
+    it('should return polygon tool by type', () => {
+      const polygonTool = manager.getTool('polygon');
+      expect(polygonTool).not.toBeUndefined();
+      expect(polygonTool?.type).toBe('polygon');
+    });
+
     it('should return undefined for unknown tool', () => {
       const tool = manager.getTool('unknown' as any);
       expect(tool).toBeUndefined();
@@ -269,24 +286,32 @@ describe('ToolManager', () => {
       manager.setActiveTool('rectangle');
 
       // Create first rectangle
-      manager.handlePointerDown(createMockPointerEvent({
-        worldPosition: { x: 0, y: 0 },
-        button: 0,
-      }));
-      manager.handlePointerUp(createMockPointerEvent({
-        worldPosition: { x: 100, y: 100 },
-        button: 0,
-      }));
+      manager.handlePointerDown(
+        createMockPointerEvent({
+          worldPosition: { x: 0, y: 0 },
+          button: 0,
+        })
+      );
+      manager.handlePointerUp(
+        createMockPointerEvent({
+          worldPosition: { x: 100, y: 100 },
+          button: 0,
+        })
+      );
 
       // Create second rectangle
-      manager.handlePointerDown(createMockPointerEvent({
-        worldPosition: { x: 200, y: 0 },
-        button: 0,
-      }));
-      manager.handlePointerUp(createMockPointerEvent({
-        worldPosition: { x: 300, y: 100 },
-        button: 0,
-      }));
+      manager.handlePointerDown(
+        createMockPointerEvent({
+          worldPosition: { x: 200, y: 0 },
+          button: 0,
+        })
+      );
+      manager.handlePointerUp(
+        createMockPointerEvent({
+          worldPosition: { x: 300, y: 100 },
+          button: 0,
+        })
+      );
 
       const nodes = Array.from(options.sceneGraph.getNodes());
       expect(nodes.length).toBe(2);

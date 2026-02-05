@@ -8,7 +8,7 @@ import { WebGLRenderer } from './WebGLRenderer';
 import { SceneGraph, createDefaultTransform } from '../SceneGraph';
 import { mat3 } from '../math';
 import { createMockWebGL2Context } from '../test/setup';
-import type { RectangleNode, EllipseNode, PathNode, Fill, Stroke } from '@quar/types';
+import type { RectangleNode, EllipseNode, PolygonNode, PathNode, Fill, Stroke } from '@quar/types';
 
 // ============================================================================
 // Test Setup
@@ -101,6 +101,36 @@ function createPathNode(id: string): PathNode {
     fill: createDefaultFill(),
     stroke: createDefaultStroke(),
   };
+}
+
+function createPolygonNode(
+  id: string,
+  sides: number,
+  radius: number,
+  innerRadius?: number
+): PolygonNode {
+  const node: PolygonNode = {
+    id,
+    name: innerRadius !== undefined ? `Star ${id}` : `Polygon ${id}`,
+    type: 'polygon',
+    parent: null,
+    children: [],
+    transform: createDefaultTransform(),
+    visible: true,
+    locked: false,
+    opacity: 1,
+    blendMode: 'normal',
+    sides,
+    radius,
+    fill: createDefaultFill(),
+    stroke: createDefaultStroke(),
+  };
+
+  if (innerRadius !== undefined) {
+    node.innerRadius = innerRadius;
+  }
+
+  return node;
 }
 
 // ============================================================================
@@ -367,6 +397,162 @@ describe('ShapeRenderer', () => {
         expect.any(Number),
         expect.any(Number)
       );
+    });
+  });
+
+  // ==========================================================================
+  // Polygon Rendering
+  // ==========================================================================
+
+  describe('polygon rendering', () => {
+    it('should render polygon fill', () => {
+      const polygon = createPolygonNode('poly1', 6, 50);
+      sceneGraph.addNode(polygon);
+
+      const vpMatrix = mat3.identity();
+      shapeRenderer.render(sceneGraph, vpMatrix);
+
+      expect(gl.drawArrays).toHaveBeenCalled();
+    });
+
+    it('should set model matrix for polygon', () => {
+      const polygon = createPolygonNode('poly1', 5, 50);
+      sceneGraph.addNode(polygon);
+
+      const vpMatrix = mat3.identity();
+      shapeRenderer.render(sceneGraph, vpMatrix);
+
+      expect(gl.uniformMatrix3fv).toHaveBeenCalled();
+    });
+
+    it('should render polygon stroke', () => {
+      const polygon = createPolygonNode('poly1', 6, 50);
+      sceneGraph.addNode(polygon);
+
+      const vpMatrix = mat3.identity();
+      vi.clearAllMocks();
+      shapeRenderer.render(sceneGraph, vpMatrix);
+
+      // Fill + stroke
+      expect(gl.drawArrays).toHaveBeenCalledTimes(2);
+    });
+
+    it('should render triangle (3 sides)', () => {
+      const triangle = createPolygonNode('tri1', 3, 50);
+      sceneGraph.addNode(triangle);
+
+      const vpMatrix = mat3.identity();
+      shapeRenderer.render(sceneGraph, vpMatrix);
+
+      expect(gl.drawArrays).toHaveBeenCalled();
+    });
+
+    it('should render pentagon (5 sides)', () => {
+      const pentagon = createPolygonNode('pent1', 5, 50);
+      sceneGraph.addNode(pentagon);
+
+      const vpMatrix = mat3.identity();
+      shapeRenderer.render(sceneGraph, vpMatrix);
+
+      expect(gl.drawArrays).toHaveBeenCalled();
+    });
+
+    it('should render hexagon (6 sides)', () => {
+      const hexagon = createPolygonNode('hex1', 6, 50);
+      sceneGraph.addNode(hexagon);
+
+      const vpMatrix = mat3.identity();
+      shapeRenderer.render(sceneGraph, vpMatrix);
+
+      expect(gl.drawArrays).toHaveBeenCalled();
+    });
+
+    it('should render star shape with inner radius', () => {
+      const star = createPolygonNode('star1', 5, 50, 25);
+      sceneGraph.addNode(star);
+
+      const vpMatrix = mat3.identity();
+      shapeRenderer.render(sceneGraph, vpMatrix);
+
+      expect(gl.drawArrays).toHaveBeenCalled();
+    });
+
+    it('should render 6-pointed star', () => {
+      const star = createPolygonNode('star1', 6, 50, 25);
+      sceneGraph.addNode(star);
+
+      const vpMatrix = mat3.identity();
+      shapeRenderer.render(sceneGraph, vpMatrix);
+
+      expect(gl.drawArrays).toHaveBeenCalled();
+    });
+
+    it('should use TRIANGLE_FAN for polygon fill', () => {
+      const polygon = createPolygonNode('poly1', 6, 50);
+      polygon.stroke = null;
+      sceneGraph.addNode(polygon);
+
+      const vpMatrix = mat3.identity();
+      vi.clearAllMocks();
+      shapeRenderer.render(sceneGraph, vpMatrix);
+
+      expect(gl.drawArrays).toHaveBeenCalledWith(
+        gl.TRIANGLE_FAN,
+        expect.any(Number),
+        expect.any(Number)
+      );
+    });
+
+    it('should use LINE_LOOP for polygon stroke', () => {
+      const polygon = createPolygonNode('poly1', 6, 50);
+      polygon.fill = { type: 'none', opacity: 0 };
+      sceneGraph.addNode(polygon);
+
+      const vpMatrix = mat3.identity();
+      vi.clearAllMocks();
+      shapeRenderer.render(sceneGraph, vpMatrix);
+
+      expect(gl.drawArrays).toHaveBeenCalledWith(
+        gl.LINE_LOOP,
+        expect.any(Number),
+        expect.any(Number)
+      );
+    });
+
+    it('should not render fill when fill is none', () => {
+      const polygon = createPolygonNode('poly1', 6, 50);
+      polygon.fill = { type: 'none', opacity: 0 };
+      polygon.stroke = null;
+      sceneGraph.addNode(polygon);
+
+      const vpMatrix = mat3.identity();
+      vi.clearAllMocks();
+      shapeRenderer.render(sceneGraph, vpMatrix);
+
+      expect(gl.drawArrays).not.toHaveBeenCalled();
+    });
+
+    it('should apply position transform to polygon', () => {
+      const polygon = createPolygonNode('poly1', 6, 50);
+      polygon.transform.position = { x: 100, y: 200 };
+      sceneGraph.addNode(polygon);
+
+      const vpMatrix = mat3.identity();
+      shapeRenderer.render(sceneGraph, vpMatrix);
+
+      expect(gl.uniformMatrix3fv).toHaveBeenCalled();
+    });
+
+    it('should not render invisible polygon', () => {
+      const polygon = createPolygonNode('poly1', 6, 50);
+      polygon.visible = false;
+      sceneGraph.addNode(polygon);
+
+      const vpMatrix = mat3.identity();
+      vi.clearAllMocks();
+      shapeRenderer.render(sceneGraph, vpMatrix);
+
+      expect(gl.drawArrays).not.toHaveBeenCalled();
     });
   });
 

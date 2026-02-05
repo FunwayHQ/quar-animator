@@ -7,6 +7,7 @@ import type {
   Matrix3,
   RectangleNode,
   EllipseNode,
+  PolygonNode,
   PathNode,
   Node,
   Fill,
@@ -20,6 +21,8 @@ import {
   tessellatePathToVertices,
   createRectanglePath,
   createEllipsePath,
+  createPolygonPath,
+  createStarPath,
 } from '../path/pathUtils';
 
 // ============================================================================
@@ -153,6 +156,9 @@ export class ShapeRenderer {
         case 'ellipse':
           this.renderEllipse(node, worldTransform);
           break;
+        case 'polygon':
+          this.renderPolygon(node, worldTransform);
+          break;
         case 'path':
           this.renderPath(node, worldTransform);
           break;
@@ -195,6 +201,9 @@ export class ShapeRenderer {
         break;
       case 'ellipse':
         this.renderEllipse(node, worldMatrix);
+        break;
+      case 'polygon':
+        this.renderPolygon(node, worldMatrix);
         break;
       case 'path':
         this.renderPath(node, worldMatrix);
@@ -251,6 +260,37 @@ export class ShapeRenderer {
 
     // Tessellate to vertices with fine tolerance for smooth curves
     const tessellated = tessellatePathToVertices(pathPoints, true, 0.5);
+
+    // Set model matrix
+    gl.uniformMatrix3fv(this.program.uniforms.u_model, false, mat3.toFloat32Array(worldMatrix));
+
+    // Render fill
+    if (node.fill && node.fill.type !== 'none') {
+      this.renderFill(tessellated, node.fill);
+    }
+
+    // Render stroke
+    if (node.stroke && node.stroke.width > 0) {
+      this.renderStroke(tessellated, node.stroke, true);
+    }
+  }
+
+  /**
+   * Render a single polygon or star
+   */
+  renderPolygon(node: PolygonNode, worldMatrix: Matrix3): void {
+    if (!this.program) return;
+
+    const gl = this.renderer.context;
+
+    // Generate polygon or star path
+    const pathPoints =
+      node.innerRadius !== undefined
+        ? createStarPath(0, 0, node.radius, node.innerRadius, node.sides)
+        : createPolygonPath(0, 0, node.radius, node.sides);
+
+    // Tessellate to vertices
+    const tessellated = tessellatePathToVertices(pathPoints, true, 1.0);
 
     // Set model matrix
     gl.uniformMatrix3fv(this.program.uniforms.u_model, false, mat3.toFloat32Array(worldMatrix));
