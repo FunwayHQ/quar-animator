@@ -12,12 +12,7 @@ import { DEFAULT_SELECTION_CONFIG } from './types';
 // Test Helpers
 // ============================================================================
 
-function createTestBounds(
-  x: number,
-  y: number,
-  width: number,
-  height: number
-): SelectionBounds {
+function createTestBounds(x: number, y: number, width: number, height: number): SelectionBounds {
   return {
     rect: { x, y, width, height },
     center: { x: x + width / 2, y: y + height / 2 },
@@ -141,16 +136,17 @@ describe('TransformHandles', () => {
       const bounds = createTestBounds(0, 0, 100, 100);
       const result = handles.getHandles(bounds, camera);
 
+      // Note: World coordinates use Y-up, so visual cursors are swapped
       const cursorMap: Record<HandlePosition, string> = {
-        'top-left': 'nwse-resize',
-        'top': 'ns-resize',
-        'top-right': 'nesw-resize',
-        'right': 'ew-resize',
-        'bottom-right': 'nwse-resize',
-        'bottom': 'ns-resize',
-        'bottom-left': 'nesw-resize',
-        'left': 'ew-resize',
-        'rotation': 'grab',
+        'top-left': 'nesw-resize', // Visually bottom-left
+        top: 'ns-resize',
+        'top-right': 'nwse-resize', // Visually bottom-right
+        right: 'ew-resize',
+        'bottom-right': 'nesw-resize', // Visually top-right
+        bottom: 'ns-resize',
+        'bottom-left': 'nwse-resize', // Visually top-left
+        left: 'ew-resize',
+        rotation: 'grab',
       };
 
       for (const handle of result) {
@@ -274,14 +270,15 @@ describe('TransformHandles', () => {
 
   describe('getCursor', () => {
     it('should return correct cursor for each position', () => {
+      // Note: World coordinates use Y-up, so visual cursors are swapped
       const expectations: Array<[HandlePosition, string]> = [
-        ['top-left', 'nwse-resize'],
+        ['top-left', 'nesw-resize'], // Visually bottom-left
         ['top', 'ns-resize'],
-        ['top-right', 'nesw-resize'],
+        ['top-right', 'nwse-resize'], // Visually bottom-right
         ['right', 'ew-resize'],
-        ['bottom-right', 'nwse-resize'],
+        ['bottom-right', 'nesw-resize'], // Visually top-right
         ['bottom', 'ns-resize'],
-        ['bottom-left', 'nesw-resize'],
+        ['bottom-left', 'nwse-resize'], // Visually top-left
         ['left', 'ew-resize'],
         ['rotation', 'grab'],
       ];

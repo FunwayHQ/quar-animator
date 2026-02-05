@@ -50,6 +50,12 @@ export class ToolManager {
     this.tools.set('rectangle', new RectangleTool(context));
     this.tools.set('ellipse', new EllipseTool(context));
     this.tools.set('polygon', new PolygonTool(context));
+
+    // Star tool is a PolygonTool with star mode enabled
+    const starTool = new PolygonTool(context);
+    starTool.setStarMode(true);
+    this.tools.set('star', starTool);
+
     this.tools.set('pen', new PenTool(context));
 
     // Set default tool
@@ -215,6 +221,8 @@ export class ToolManager {
       O: 'ellipse',
       u: 'polygon',
       U: 'polygon',
+      s: 'star',
+      S: 'star',
       p: 'pen',
       P: 'pen',
     };

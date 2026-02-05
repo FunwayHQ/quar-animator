@@ -23,10 +23,7 @@ export class SelectionManager {
    * @param sceneGraph The scene graph containing the nodes
    * @returns SelectionBounds or null if no valid selection
    */
-  getSelectionBounds(
-    selectedIds: Set<string>,
-    sceneGraph: SceneGraph
-  ): SelectionBounds | null {
+  getSelectionBounds(selectedIds: Set<string>, sceneGraph: SceneGraph): SelectionBounds | null {
     if (selectedIds.size === 0) {
       return null;
     }
@@ -87,6 +84,17 @@ export class SelectionManager {
           y: pos.y - ellipseNode.radiusY,
           width: ellipseNode.radiusX * 2,
           height: ellipseNode.radiusY * 2,
+        };
+      }
+
+      case 'polygon': {
+        const polygonNode = node as any;
+        // Polygon bounds are based on the outer radius
+        return {
+          x: pos.x - polygonNode.radius,
+          y: pos.y - polygonNode.radius,
+          width: polygonNode.radius * 2,
+          height: polygonNode.radius * 2,
         };
       }
 

@@ -5,12 +5,7 @@
 
 import type { Vector2 } from '@quar/types';
 import type { Camera } from '../Camera';
-import type {
-  HandlePosition,
-  SelectionBounds,
-  SelectionConfig,
-  TransformHandle,
-} from './types';
+import type { HandlePosition, SelectionBounds, SelectionConfig, TransformHandle } from './types';
 import { DEFAULT_SELECTION_CONFIG } from './types';
 import { vec2 } from '../math';
 
@@ -18,16 +13,18 @@ import { vec2 } from '../math';
 // Cursor Mapping
 // ============================================================================
 
+// Note: World coordinates use Y-up, so "top" in code is visually at the bottom
+// The cursor mappings are adjusted for the visual appearance (screen coordinates)
 const HANDLE_CURSORS: Record<HandlePosition, string> = {
-  'top-left': 'nwse-resize',
-  'top': 'ns-resize',
-  'top-right': 'nesw-resize',
-  'right': 'ew-resize',
-  'bottom-right': 'nwse-resize',
-  'bottom': 'ns-resize',
-  'bottom-left': 'nesw-resize',
-  'left': 'ew-resize',
-  'rotation': 'grab',
+  'top-left': 'nesw-resize', // Visually bottom-left
+  top: 'ns-resize',
+  'top-right': 'nwse-resize', // Visually bottom-right
+  right: 'ew-resize',
+  'bottom-right': 'nesw-resize', // Visually top-right
+  bottom: 'ns-resize',
+  'bottom-left': 'nwse-resize', // Visually top-left
+  left: 'ew-resize',
+  rotation: 'grab',
 };
 
 // ============================================================================
@@ -141,11 +138,7 @@ export class TransformHandles {
    * @param camera The camera for coordinate conversion
    * @returns The hit handle position or null
    */
-  hitTest(
-    screenPoint: Vector2,
-    bounds: SelectionBounds,
-    camera: Camera
-  ): HandlePosition | null {
+  hitTest(screenPoint: Vector2, bounds: SelectionBounds, camera: Camera): HandlePosition | null {
     const handles = this.getHandles(bounds, camera);
     const hitRadius = this.config.handleHitRadius;
 

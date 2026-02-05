@@ -7,7 +7,7 @@ import { SelectionTool } from './SelectionTool';
 import type { ToolContext } from './BaseTool';
 import { createMockToolContext, createMockPointerEvent } from '../test/setup';
 import { createDefaultTransform } from '../SceneGraph';
-import type { RectangleNode, EllipseNode } from '@quar/types';
+import type { RectangleNode, EllipseNode, PolygonNode } from '@quar/types';
 
 function createTestRectangle(
   id: string,
@@ -62,6 +62,34 @@ function createTestEllipse(
     radiusX,
     radiusY,
     fill: { type: 'solid', color: { r: 237, g: 100, b: 149, a: 1 }, opacity: 1 },
+    stroke: null,
+  };
+}
+
+function createTestPolygon(
+  id: string,
+  x: number,
+  y: number,
+  radius: number,
+  sides: number = 5
+): PolygonNode {
+  const transform = createDefaultTransform();
+  transform.position = { x, y };
+
+  return {
+    id,
+    name: `Polygon ${id}`,
+    type: 'polygon',
+    parent: null,
+    children: [],
+    transform,
+    visible: true,
+    locked: false,
+    opacity: 1,
+    blendMode: 'normal',
+    radius,
+    sides,
+    fill: { type: 'solid', color: { r: 149, g: 237, b: 100, a: 1 }, opacity: 1 },
     stroke: null,
   };
 }
@@ -228,6 +256,68 @@ describe('SelectionTool', () => {
 
       expect(context.getSelectedIds().size).toBe(1);
       expect(context.getSelectedIds().has('rect2')).toBe(true);
+    });
+
+    it('should select polygon when clicking on it', () => {
+      const polygon = createTestPolygon('polygon1', 100, 100, 50, 5);
+      context.sceneGraph.addNode(polygon);
+
+      tool.onPointerDown(
+        createMockPointerEvent({
+          worldPosition: { x: 100, y: 100 }, // Center of polygon
+          button: 0,
+        })
+      );
+      tool.onPointerUp(
+        createMockPointerEvent({
+          worldPosition: { x: 100, y: 100 },
+          button: 0,
+        })
+      );
+
+      expect(context.getSelectedIds().has('polygon1')).toBe(true);
+    });
+
+    it('should select polygon when clicking near edge', () => {
+      const polygon = createTestPolygon('polygon1', 100, 100, 50, 5);
+      context.sceneGraph.addNode(polygon);
+
+      // Click near the edge (within radius)
+      tool.onPointerDown(
+        createMockPointerEvent({
+          worldPosition: { x: 140, y: 100 }, // 40 units from center, within radius of 50
+          button: 0,
+        })
+      );
+      tool.onPointerUp(
+        createMockPointerEvent({
+          worldPosition: { x: 140, y: 100 },
+          button: 0,
+        })
+      );
+
+      expect(context.getSelectedIds().has('polygon1')).toBe(true);
+    });
+
+    it('should not select polygon when clicking outside', () => {
+      const polygon = createTestPolygon('polygon1', 100, 100, 50, 5);
+      context.sceneGraph.addNode(polygon);
+
+      // Click outside the radius
+      tool.onPointerDown(
+        createMockPointerEvent({
+          worldPosition: { x: 200, y: 200 }, // Far outside
+          button: 0,
+        })
+      );
+      tool.onPointerUp(
+        createMockPointerEvent({
+          worldPosition: { x: 200, y: 200 },
+          button: 0,
+        })
+      );
+
+      expect(context.getSelectedIds().size).toBe(0);
     });
   });
 
@@ -952,7 +1042,7 @@ describe('SelectionTool', () => {
       // Default cursor
       expect(tool.getCursor()).toBe('default');
 
-      // Simulate hover over bottom-right handle
+      // Simulate hover over bottom-right handle (visually top-right due to Y-up world coords)
       const handleScreenPos = context.camera.worldToScreen({ x: 150, y: 150 });
       tool.onPointerMove(
         createMockPointerEvent({
@@ -961,8 +1051,8 @@ describe('SelectionTool', () => {
         })
       );
 
-      // Should now have resize cursor
-      expect(tool.getCursor()).toBe('nwse-resize');
+      // Should now have resize cursor (nesw for visual top-right)
+      expect(tool.getCursor()).toBe('nesw-resize');
     });
   });
 });

@@ -96,14 +96,7 @@ export interface Transform {
 // Node Types
 // ============================================================================
 
-export type NodeType =
-  | 'group'
-  | 'rectangle'
-  | 'ellipse'
-  | 'polygon'
-  | 'path'
-  | 'text'
-  | 'image';
+export type NodeType = 'group' | 'rectangle' | 'ellipse' | 'polygon' | 'path' | 'text' | 'image';
 
 export interface BaseNode {
   id: string;
@@ -320,6 +313,7 @@ export type ToolType =
   | 'rectangle'
   | 'ellipse'
   | 'polygon'
+  | 'star'
   | 'pen'
   | 'brush'
   | 'eraser'

@@ -179,6 +179,7 @@ const tools: Array<{ type: ToolType; icon: React.ReactNode; label: string; short
   { type: 'rectangle', icon: icons.rectangle, label: 'Rectangle', shortcut: 'R' },
   { type: 'ellipse', icon: icons.ellipse, label: 'Ellipse', shortcut: 'O' },
   { type: 'polygon', icon: icons.polygon, label: 'Polygon', shortcut: 'U' },
+  { type: 'star', icon: icons.star, label: 'Star', shortcut: 'S' },
   { type: 'pen', icon: icons.pen, label: 'Pen', shortcut: 'P' },
   { type: 'brush', icon: icons.brush, label: 'Brush', shortcut: 'B' },
   { type: 'eraser', icon: icons.eraser, label: 'Eraser', shortcut: 'E' },

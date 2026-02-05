@@ -28,6 +28,7 @@ interface NodeResizeState {
   height?: number;
   radiusX?: number;
   radiusY?: number;
+  radius?: number; // For polygon nodes
 }
 
 // ============================================================================
@@ -349,6 +350,15 @@ export class SelectionTool extends BaseTool {
           height: node.radiusY * 2,
         };
       }
+      case 'polygon': {
+        // Polygon bounds are based on the outer radius
+        return {
+          x: pos.x - node.radius,
+          y: pos.y - node.radius,
+          width: node.radius * 2,
+          height: node.radius * 2,
+        };
+      }
       case 'path': {
         if (node.points.length === 0) return null;
 
@@ -453,6 +463,8 @@ export class SelectionTool extends BaseTool {
       } else if (node.type === 'ellipse') {
         state.radiusX = node.radiusX;
         state.radiusY = node.radiusY;
+      } else if (node.type === 'polygon') {
+        state.radius = node.radius;
       }
 
       states.set(id, state);
@@ -548,6 +560,15 @@ export class SelectionTool extends BaseTool {
           transform: { ...node.transform, position: newPosition },
           radiusX: newRadiusX,
           radiusY: newRadiusY,
+        });
+      } else if (node.type === 'polygon' && initialState.radius !== undefined) {
+        // For polygons, use uniform scale (average of X and Y)
+        const uniformScale = (scaleX + scaleY) / 2;
+        const newRadius = Math.max(1, initialState.radius * uniformScale);
+
+        this.context.sceneGraph.updateNode(id, {
+          transform: { ...node.transform, position: newPosition },
+          radius: newRadius,
         });
       }
     }
