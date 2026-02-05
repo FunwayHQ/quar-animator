@@ -1,27 +1,25 @@
 .toolbar {
   display: flex;
-  flex-direction: column;
-  width: 52px;
-  background: linear-gradient(
-    90deg,
-    var(--color-bg-secondary) 0%,
-    rgba(17, 17, 19, 0.95) 100%
-  );
-  border-right: 1px solid var(--color-border-subtle);
-  padding: var(--space-sm);
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  height: 44px;
+  background: linear-gradient(180deg, var(--color-bg-secondary) 0%, rgba(17, 17, 19, 0.95) 100%);
+  border-bottom: 1px solid var(--color-border-subtle);
+  padding: 0 var(--space-md);
   position: relative;
 }
 
-/* Subtle inner shadow */
+/* Subtle bottom highlight */
 .toolbar::after {
   content: '';
   position: absolute;
-  top: 0;
+  left: 0;
   right: 0;
   bottom: 0;
-  width: 1px;
+  height: 1px;
   background: linear-gradient(
-    180deg,
+    90deg,
     rgba(255, 255, 255, 0.04),
     transparent 20%,
     transparent 80%,
@@ -32,24 +30,24 @@
 
 .toolGroup {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   gap: 3px;
-  padding: var(--space-xs) 0;
+  padding: 0 var(--space-xs);
 }
 
 /* Section divider */
 .toolGroup + .toolGroup {
-  border-top: 1px solid var(--color-border-subtle);
-  margin-top: var(--space-xs);
-  padding-top: var(--space-sm);
+  border-left: 1px solid var(--color-border-subtle);
+  margin-left: var(--space-xs);
+  padding-left: var(--space-sm);
 }
 
 .toolButton {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
+  width: 32px;
+  height: 32px;
   color: var(--color-text-tertiary);
   border-radius: var(--radius-md);
   transition: all var(--duration-fast) var(--easing-default);
@@ -68,11 +66,7 @@
   content: '';
   position: absolute;
   inset: 0;
-  background: linear-gradient(
-    135deg,
-    rgba(255, 255, 255, 0.04) 0%,
-    transparent 50%
-  );
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.04) 0%, transparent 50%);
   pointer-events: none;
 }
 
@@ -107,7 +101,7 @@
 .toolButton.active::after {
   content: '';
   position: absolute;
-  bottom: 4px;
+  bottom: 3px;
   left: 50%;
   transform: translateX(-50%);
   width: 4px;
@@ -134,14 +128,10 @@
 }
 
 .separator {
-  height: 1px;
-  background: linear-gradient(
-    90deg,
-    transparent,
-    var(--color-border-default),
-    transparent
-  );
-  margin: var(--space-sm) var(--space-xs);
+  width: 1px;
+  height: 20px;
+  background: linear-gradient(180deg, transparent, var(--color-border-default), transparent);
+  margin: 0 var(--space-sm);
 }
 
 /* Tooltip enhancement via title - consider custom tooltip */

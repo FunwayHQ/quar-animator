@@ -2,8 +2,8 @@
   display: flex;
   flex-direction: column;
   flex: 1;
-  border-bottom: 1px solid var(--color-border-subtle);
   overflow: hidden;
+  min-height: 0; /* Allow flex child to shrink and enable scrolling */
 }
 
 .header {
@@ -12,11 +12,7 @@
   justify-content: space-between;
   padding: var(--space-md) var(--space-lg);
   border-bottom: 1px solid var(--color-border-subtle);
-  background: linear-gradient(
-    180deg,
-    rgba(255, 255, 255, 0.02) 0%,
-    transparent 100%
-  );
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.02) 0%, transparent 100%);
 }
 
 .title {
@@ -30,7 +26,27 @@
 .content {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: var(--space-md);
+  min-height: 0; /* Allow scrolling within flex container */
+}
+
+/* Custom scrollbar styling */
+.content::-webkit-scrollbar {
+  width: 6px;
+}
+
+.content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.content::-webkit-scrollbar-thumb {
+  background: var(--color-border-default);
+  border-radius: var(--radius-full);
+}
+
+.content::-webkit-scrollbar-thumb:hover {
+  background: var(--color-border-strong);
 }
 
 .section {
@@ -60,16 +76,14 @@
 
 .propertyRow {
   display: flex;
-  align-items: center;
-  gap: var(--space-sm);
+  flex-direction: column;
+  gap: var(--space-xs);
 }
 
 .propertyLabel {
-  width: 56px;
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-xs);
   font-weight: var(--font-weight-medium);
   color: var(--color-text-tertiary);
-  flex-shrink: 0;
 }
 
 .propertyInputs {
@@ -77,12 +91,14 @@
   align-items: center;
   gap: 6px;
   flex: 1;
+  min-width: 0; /* Allow shrinking */
 }
 
 .inputGroup {
   display: flex;
   align-items: center;
   flex: 1;
+  min-width: 0; /* Allow shrinking */
   background: var(--color-bg-tertiary);
   border: 1px solid var(--color-border-subtle);
   border-radius: var(--radius-sm);
@@ -100,12 +116,12 @@
 }
 
 .inputLabel {
-  font-size: var(--font-size-xs);
+  font-size: var(--font-size-2xs);
   font-weight: var(--font-weight-medium);
   color: var(--color-text-disabled);
-  width: 20px;
+  width: 18px;
   text-align: center;
-  padding-left: 6px;
+  padding-left: 4px;
   flex-shrink: 0;
 }
 
@@ -196,7 +212,11 @@
     linear-gradient(45deg, transparent 75%, #333 75%),
     linear-gradient(-45deg, transparent 75%, #333 75%);
   background-size: 8px 8px;
-  background-position: 0 0, 0 4px, 4px -4px, -4px 0px;
+  background-position:
+    0 0,
+    0 4px,
+    4px -4px,
+    -4px 0px;
   z-index: -1;
 }
 
@@ -241,11 +261,7 @@
 
 /* Track fill gradient */
 .slider::-webkit-slider-runnable-track {
-  background: linear-gradient(
-    90deg,
-    var(--color-accent-primary) 0%,
-    var(--color-bg-tertiary) 0%
-  );
+  background: linear-gradient(90deg, var(--color-accent-primary) 0%, var(--color-bg-tertiary) 0%);
   border-radius: var(--radius-full);
 }
 

@@ -10,15 +10,17 @@ export function Editor() {
   return (
     <div className={styles.editor}>
       <MenuBar />
+      <Toolbar />
       <div className={styles.main}>
         <div className={styles.workspace}>
-          <Toolbar />
+          <div className={styles.leftPanel}>
+            <LayerPanel />
+          </div>
           <div className={styles.canvasArea}>
             <Canvas />
           </div>
           <div className={styles.rightPanel}>
             <PropertiesPanel />
-            <LayerPanel />
           </div>
         </div>
         <Timeline />
