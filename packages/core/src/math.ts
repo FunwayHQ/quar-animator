@@ -214,8 +214,6 @@ export const mat3 = {
     anchor: Vector2 = { x: 0, y: 0 }
   ): Matrix3 {
     const rad = rotation * (Math.PI / 180);
-    const cos = Math.cos(rad);
-    const sin = Math.sin(rad);
 
     // Start with identity
     let m = mat3.identity();
