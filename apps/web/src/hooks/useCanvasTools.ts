@@ -3,7 +3,7 @@
  * Manages ToolManager lifecycle and bridges EditorStore with canvas tools
  */
 
-import { useEffect, useRef, useMemo, useCallback, useState } from 'react';
+import { useEffect, useRef, useCallback, useState } from 'react';
 import { ToolManager, SceneGraph, Camera } from '@quar/core';
 import type { CanvasPointerEvent, Node, Vector2 } from '@quar/types';
 import { useEditorStore } from '../stores/editorStore';
@@ -96,18 +96,9 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
 
   // Create stable callbacks for ToolManager options
   const getSelectedIds = useCallback(() => selectedNodeIds, [selectedNodeIds]);
-  const setSelectedIds = useCallback(
-    (ids: string[]) => setSelection(ids),
-    [setSelection]
-  );
-  const addToSelectionCb = useCallback(
-    (id: string) => addToSelection(id),
-    [addToSelection]
-  );
-  const clearSelectionCb = useCallback(
-    () => clearSelection(),
-    [clearSelection]
-  );
+  const setSelectedIds = useCallback((ids: string[]) => setSelection(ids), [setSelection]);
+  const addToSelectionCb = useCallback((id: string) => addToSelection(id), [addToSelection]);
+  const clearSelectionCb = useCallback(() => clearSelection(), [clearSelection]);
   const getDefaultFill = useCallback(() => defaultFill, [defaultFill]);
   const getDefaultStroke = useCallback(() => defaultStroke, [defaultStroke]);
 
@@ -129,7 +120,7 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
     });
 
     toolManagerRef.current = manager;
-    setCursor(manager.getCursor());
+    setCursor(manager.getCursor() as string);
 
     return () => {
       manager.dispose();
@@ -149,7 +140,7 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
   useEffect(() => {
     if (toolManagerRef.current) {
       toolManagerRef.current.setActiveTool(activeTool);
-      setCursor(toolManagerRef.current.getCursor());
+      setCursor(toolManagerRef.current.getCursor() as string);
     }
   }, [activeTool]);
 
@@ -180,6 +171,9 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
       // Update preview
       const preview = toolManagerRef.current.getPreviewNode();
       setPreviewNode(preview);
+
+      // Update cursor (for dynamic cursors like resize handles)
+      setCursor(toolManagerRef.current.getCursor() as string);
     },
     []
   );

@@ -35,9 +35,11 @@ export function Canvas() {
   const gridRef = useRef<Grid | null>(null);
   const cameraRef = useRef<Camera | null>(null);
   const shapeRendererRef = useRef<ShapeRenderer | null>(null);
-  const selectionManagerRef = useRef<SelectionManager | null>(null);
-  const transformHandlesRef = useRef<TransformHandles | null>(null);
   const animationFrameRef = useRef<number>(0);
+
+  // Selection infrastructure (initialized immediately, doesn't depend on WebGL)
+  const selectionManagerRef = useRef<SelectionManager>(new SelectionManager());
+  const transformHandlesRef = useRef<TransformHandles>(new TransformHandles());
 
   // Interaction state
   const isPanningRef = useRef(false);
@@ -48,6 +50,7 @@ export function Canvas() {
   const [zoomPercent, setZoomPercent] = useState(100);
   const [mouseWorldPos, setMouseWorldPos] = useState<Vector2>({ x: 0, y: 0 });
   const [cameraReady, setCameraReady] = useState(false);
+  const [sceneGraphVersion, setSceneGraphVersion] = useState(0);
 
   // Get selection state from store
   const selectedNodeIds = useEditorStore((state) => state.selectedNodeIds);
@@ -65,6 +68,18 @@ export function Canvas() {
     cursor: toolCursor,
   } = useCanvasTools({ camera: cameraReady ? cameraRef.current : null });
 
+  // Subscribe to scene graph changes to update selection bounds
+  useEffect(() => {
+    if (!sceneGraphRef.current) return;
+    const sceneGraph = sceneGraphRef.current;
+
+    const unsubscribe = sceneGraph.on('nodeChanged', () => {
+      setSceneGraphVersion((v) => v + 1);
+    });
+
+    return unsubscribe;
+  }, [sceneGraphRef]);
+
   // Keep preview node in a ref for the render loop (avoids stale closure)
   const previewNodeRef = useRef(previewNode);
   previewNodeRef.current = previewNode;
@@ -80,7 +95,8 @@ export function Canvas() {
   const selectionBounds = useMemo(() => {
     if (!selectionManagerRef.current || !sceneGraphRef.current) return null;
     return selectionManagerRef.current.getSelectionBounds(selectedNodeIds, sceneGraphRef.current);
-  }, [selectedNodeIds, sceneGraphRef]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- sceneGraphVersion triggers recalculation when nodes change
+  }, [selectedNodeIds, sceneGraphRef, sceneGraphVersion]);
 
   const transformHandles = useMemo(() => {
     if (!transformHandlesRef.current || !selectionBounds || !cameraRef.current) return [];
@@ -94,18 +110,27 @@ export function Canvas() {
     const { rect } = selectionBounds;
 
     // Convert world bounds to screen
-    const topLeft = camera.worldToScreen({ x: rect.x, y: rect.y });
-    const bottomRight = camera.worldToScreen({
+    // Note: Y-axis is flipped between world (Y-up) and screen (Y-down) coordinates
+    const p1: Vector2 = camera.worldToScreen({ x: rect.x, y: rect.y });
+    const p2: Vector2 = camera.worldToScreen({
       x: rect.x + rect.width,
       y: rect.y + rect.height,
     });
 
+    // Ensure positive dimensions by taking min/max
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument -- Vector2 type is properly typed
+    const screenX = Math.min(p1.x, p2.x);
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument -- Vector2 type is properly typed
+    const screenY = Math.min(p1.y, p2.y);
+    const screenWidth = Math.abs(p2.x - p1.x);
+    const screenHeight = Math.abs(p2.y - p1.y);
+
     return {
       rect: {
-        x: topLeft.x,
-        y: topLeft.y,
-        width: bottomRight.x - topLeft.x,
-        height: bottomRight.y - topLeft.y,
+        x: screenX,
+        y: screenY,
+        width: screenWidth,
+        height: screenHeight,
       },
       center: camera.worldToScreen(selectionBounds.center),
     };
@@ -148,10 +173,6 @@ export function Canvas() {
       // Initialize shape renderer
       const shapeRenderer = new ShapeRenderer(renderer);
       shapeRendererRef.current = shapeRenderer;
-
-      // Initialize selection infrastructure
-      selectionManagerRef.current = new SelectionManager();
-      transformHandlesRef.current = new TransformHandles();
 
       // Listen to camera changes
       const unsubscribe = camera.on('change', () => {
@@ -218,6 +239,7 @@ export function Canvas() {
     } catch (error) {
       console.error('Failed to initialize WebGL:', error);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- initialization should only run once on mount
   }, []);
 
   // --------------------------------------------------------------------------
@@ -438,6 +460,60 @@ export function Canvas() {
   }, []);
 
   // --------------------------------------------------------------------------
+  // Handle Overlay Interactions
+  // --------------------------------------------------------------------------
+
+  const handleOverlayPointerDown = useCallback(
+    (handle: { position: string; screenPosition: Vector2 }, e: React.PointerEvent) => {
+      const camera = cameraRef.current;
+      const canvas = canvasRef.current;
+      if (!camera || !canvas) return;
+
+      e.stopPropagation();
+      e.preventDefault();
+
+      // Use the handle's screen position directly
+      const screenPos = handle.screenPosition;
+      const worldPos = camera.screenToWorld(screenPos);
+
+      // Pass to tool system
+      toolPointerDown(screenPos, worldPos, e);
+
+      // Set up global event handlers for drag operation
+      // This ensures we capture mouse events even when cursor moves off the handle
+      const handleGlobalMove = (moveEvent: PointerEvent) => {
+        if (!camera || !canvas) return;
+        const rect = canvas.getBoundingClientRect();
+        const moveScreenPos: Vector2 = {
+          x: moveEvent.clientX - rect.left,
+          y: moveEvent.clientY - rect.top,
+        };
+        const moveWorldPos = camera.screenToWorld(moveScreenPos);
+        toolPointerMove(moveScreenPos, moveWorldPos, moveEvent as unknown as React.PointerEvent);
+      };
+
+      const handleGlobalUp = (upEvent: PointerEvent) => {
+        if (!camera || !canvas) return;
+        const rect = canvas.getBoundingClientRect();
+        const upScreenPos: Vector2 = {
+          x: upEvent.clientX - rect.left,
+          y: upEvent.clientY - rect.top,
+        };
+        const upWorldPos = camera.screenToWorld(upScreenPos);
+        toolPointerUp(upScreenPos, upWorldPos, upEvent as unknown as React.PointerEvent);
+
+        // Clean up global handlers
+        document.removeEventListener('pointermove', handleGlobalMove);
+        document.removeEventListener('pointerup', handleGlobalUp);
+      };
+
+      document.addEventListener('pointermove', handleGlobalMove);
+      document.addEventListener('pointerup', handleGlobalUp);
+    },
+    [toolPointerDown, toolPointerMove, toolPointerUp]
+  );
+
+  // --------------------------------------------------------------------------
   // Render
   // --------------------------------------------------------------------------
 
@@ -457,7 +533,11 @@ export function Canvas() {
         onContextMenu={handleContextMenu}
         style={{ cursor: toolCursor }}
       />
-      <SelectionOverlay bounds={screenBounds} handles={transformHandles} />
+      <SelectionOverlay
+        bounds={screenBounds}
+        handles={transformHandles}
+        onHandlePointerDown={handleOverlayPointerDown}
+      />
       <div className={styles.statusBar}>
         <span className={styles.coordinates}>
           X: {mouseWorldPos.x.toFixed(1)} Y: {mouseWorldPos.y.toFixed(1)}

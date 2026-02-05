@@ -12,35 +12,35 @@
 
 .selectionBounds {
   fill: none;
-  stroke: var(--color-primary);
-  stroke-width: 1;
-  stroke-dasharray: 4 4;
+  stroke: #3b82f6;
+  stroke-width: 1.5;
+  stroke-dasharray: 5 5;
 }
 
 .handle {
-  fill: var(--color-surface);
-  stroke: var(--color-primary);
+  fill: white;
+  stroke: #3b82f6;
   stroke-width: 1.5;
   pointer-events: auto;
 }
 
 .handle:hover {
-  fill: var(--color-primary-light);
+  fill: #dbeafe;
 }
 
 .rotationHandle {
-  fill: var(--color-surface);
-  stroke: var(--color-primary);
+  fill: white;
+  stroke: #3b82f6;
   stroke-width: 1.5;
   pointer-events: auto;
 }
 
 .rotationHandle:hover {
-  fill: var(--color-primary-light);
+  fill: #dbeafe;
 }
 
 .rotationLine {
-  stroke: var(--color-primary);
+  stroke: #3b82f6;
   stroke-width: 1;
-  stroke-dasharray: 2 2;
+  stroke-dasharray: 3 3;
 }

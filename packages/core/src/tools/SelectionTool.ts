@@ -1,17 +1,34 @@
 /**
  * Selection Tool for Quar Animator
- * Selects and moves shapes
+ * Selects, moves, and resizes shapes
  */
 
 import type { CanvasPointerEvent, Node, Vector2, Rect } from '@quar/types';
 import { BaseTool, type ToolContext } from './BaseTool';
 import { vec2, rect } from '../math';
+import { SelectionManager } from '../selection/SelectionManager';
+import { TransformHandles } from '../selection/TransformHandles';
+import type { HandlePosition, SelectionBounds } from '../selection/types';
 
 // ============================================================================
 // Types
 // ============================================================================
 
-type SelectionMode = 'idle' | 'selecting' | 'moving' | 'marquee';
+type SelectionMode = 'idle' | 'selecting' | 'moving' | 'marquee' | 'resizing';
+
+interface ResizeState {
+  handle: HandlePosition;
+  initialBounds: SelectionBounds;
+  initialNodeStates: Map<string, NodeResizeState>;
+}
+
+interface NodeResizeState {
+  position: Vector2;
+  width?: number;
+  height?: number;
+  radiusX?: number;
+  radiusY?: number;
+}
 
 // ============================================================================
 // SelectionTool Class
@@ -26,8 +43,23 @@ export class SelectionTool extends BaseTool {
   private marqueeRect: Rect | null = null;
   private moveStartPositions: Map<string, Vector2> = new Map();
 
+  // Resize infrastructure
+  private selectionManager: SelectionManager;
+  private transformHandles: TransformHandles;
+  private resizeState: ResizeState | null = null;
+  private currentCursor: string = 'default';
+
   constructor(context: ToolContext) {
     super(context);
+    this.selectionManager = new SelectionManager();
+    this.transformHandles = new TransformHandles();
+  }
+
+  /**
+   * Get the current cursor (may change based on handle hover)
+   */
+  getCursor(): string {
+    return this.currentCursor;
   }
 
   // --------------------------------------------------------------------------
@@ -39,8 +71,31 @@ export class SelectionTool extends BaseTool {
     if (event.button !== 0) return;
 
     const worldPos = { ...event.worldPosition };
+    const screenPos = { ...event.screenPosition };
     this.startPoint = worldPos;
     this.state.startWorldPos = worldPos;
+
+    // First, check if clicking on a transform handle (if there's a selection)
+    const selectedIds = this.context.getSelectedIds();
+    if (selectedIds.size > 0) {
+      const bounds = this.selectionManager.getSelectionBounds(selectedIds, this.context.sceneGraph);
+
+      if (bounds) {
+        const hitHandle = this.transformHandles.hitTest(screenPos, bounds, this.context.camera);
+
+        if (hitHandle && hitHandle !== 'rotation') {
+          // Start resize operation
+          this.mode = 'resizing';
+          this.state.isDragging = true;
+          this.resizeState = {
+            handle: hitHandle,
+            initialBounds: bounds,
+            initialNodeStates: this.captureNodeStates(selectedIds),
+          };
+          return;
+        }
+      }
+    }
 
     // Hit test to find node under cursor
     const hitNode = this.hitTest(worldPos);
@@ -92,10 +147,20 @@ export class SelectionTool extends BaseTool {
   }
 
   onPointerMove(event: CanvasPointerEvent): void {
+    // Update cursor based on handle hover when not dragging
+    if (!this.state.isDragging) {
+      this.updateCursorForHover(event.screenPosition);
+    }
+
     if (!this.state.isDragging || !this.startPoint) return;
 
     const worldPos = { ...event.worldPosition };
     this.state.currentWorldPos = worldPos;
+
+    if (this.mode === 'resizing' && this.resizeState) {
+      this.performResize(worldPos, event.shiftKey);
+      return;
+    }
 
     if (this.mode === 'moving') {
       // Move selected nodes
@@ -120,7 +185,10 @@ export class SelectionTool extends BaseTool {
   }
 
   onPointerUp(event: CanvasPointerEvent): void {
-    if (this.mode === 'marquee' && this.startPoint) {
+    if (this.mode === 'resizing') {
+      // Resize completed - state already updated
+      this.resizeState = null;
+    } else if (this.mode === 'marquee' && this.startPoint) {
       // Update marquee rect with final position
       this.marqueeRect = rect.fromPoints(this.startPoint, event.worldPosition);
 
@@ -144,6 +212,7 @@ export class SelectionTool extends BaseTool {
     this.marqueeRect = null;
     this.moveStartPositions.clear();
     this.state.isDragging = false;
+    this.currentCursor = 'default';
   }
 
   // --------------------------------------------------------------------------
@@ -201,7 +270,7 @@ export class SelectionTool extends BaseTool {
       case 'ArrowUp':
       case 'ArrowDown':
       case 'ArrowLeft':
-      case 'ArrowRight':
+      case 'ArrowRight': {
         // Nudge selected nodes
         event.preventDefault();
         const nudgeAmount = event.shiftKey ? 10 : 1;
@@ -220,6 +289,7 @@ export class SelectionTool extends BaseTool {
           }
         }
         break;
+      }
     }
   }
 
@@ -262,35 +332,32 @@ export class SelectionTool extends BaseTool {
 
     switch (node.type) {
       case 'rectangle': {
-        const rectNode = node as any;
-        const halfWidth = rectNode.width / 2;
-        const halfHeight = rectNode.height / 2;
+        const halfWidth = node.width / 2;
+        const halfHeight = node.height / 2;
         return {
           x: pos.x - halfWidth,
           y: pos.y - halfHeight,
-          width: rectNode.width,
-          height: rectNode.height,
+          width: node.width,
+          height: node.height,
         };
       }
       case 'ellipse': {
-        const ellipseNode = node as any;
         return {
-          x: pos.x - ellipseNode.radiusX,
-          y: pos.y - ellipseNode.radiusY,
-          width: ellipseNode.radiusX * 2,
-          height: ellipseNode.radiusY * 2,
+          x: pos.x - node.radiusX,
+          y: pos.y - node.radiusY,
+          width: node.radiusX * 2,
+          height: node.radiusY * 2,
         };
       }
       case 'path': {
-        const pathNode = node as any;
-        if (pathNode.points.length === 0) return null;
+        if (node.points.length === 0) return null;
 
-        let minX = Infinity,
-          minY = Infinity,
-          maxX = -Infinity,
-          maxY = -Infinity;
+        let minX = Infinity;
+        let minY = Infinity;
+        let maxX = -Infinity;
+        let maxY = -Infinity;
 
-        for (const p of pathNode.points) {
+        for (const p of node.points) {
           minX = Math.min(minX, p.position.x);
           minY = Math.min(minY, p.position.y);
           maxX = Math.max(maxX, p.position.x);
@@ -360,5 +427,218 @@ export class SelectionTool extends BaseTool {
       default:
         return { x: 0, y: 0 };
     }
+  }
+
+  // --------------------------------------------------------------------------
+  // Resize Helpers
+  // --------------------------------------------------------------------------
+
+  /**
+   * Capture initial state of nodes for resize operation
+   */
+  private captureNodeStates(selectedIds: Set<string>): Map<string, NodeResizeState> {
+    const states = new Map<string, NodeResizeState>();
+
+    for (const id of selectedIds) {
+      const node = this.context.sceneGraph.getNode(id);
+      if (!node) continue;
+
+      const state: NodeResizeState = {
+        position: { ...node.transform.position },
+      };
+
+      if (node.type === 'rectangle') {
+        state.width = node.width;
+        state.height = node.height;
+      } else if (node.type === 'ellipse') {
+        state.radiusX = node.radiusX;
+        state.radiusY = node.radiusY;
+      }
+
+      states.set(id, state);
+    }
+
+    return states;
+  }
+
+  /**
+   * Update cursor based on handle hover
+   */
+  private updateCursorForHover(screenPos: Vector2): void {
+    const selectedIds = this.context.getSelectedIds();
+    if (selectedIds.size === 0) {
+      this.currentCursor = 'default';
+      return;
+    }
+
+    const bounds = this.selectionManager.getSelectionBounds(selectedIds, this.context.sceneGraph);
+
+    if (!bounds) {
+      this.currentCursor = 'default';
+      return;
+    }
+
+    const hitHandle = this.transformHandles.hitTest(screenPos, bounds, this.context.camera);
+
+    if (hitHandle) {
+      this.currentCursor = this.transformHandles.getCursor(hitHandle);
+    } else {
+      this.currentCursor = 'default';
+    }
+  }
+
+  /**
+   * Perform resize operation based on current drag position
+   */
+  private performResize(worldPos: Vector2, constrained: boolean): void {
+    if (!this.resizeState || !this.startPoint) return;
+
+    const { handle, initialBounds, initialNodeStates } = this.resizeState;
+    const delta = vec2.subtract(worldPos, this.startPoint);
+
+    // Calculate new bounds based on handle position
+    const newBounds = this.calculateNewBounds(initialBounds.rect, handle, delta, constrained);
+
+    // Calculate scale factors
+    const scaleX = initialBounds.rect.width > 0 ? newBounds.width / initialBounds.rect.width : 1;
+    const scaleY = initialBounds.rect.height > 0 ? newBounds.height / initialBounds.rect.height : 1;
+
+    // Apply to each selected node
+    for (const [id, initialState] of initialNodeStates) {
+      const node = this.context.sceneGraph.getNode(id);
+      if (!node) continue;
+
+      // Calculate new position relative to new bounds
+      const relX =
+        initialBounds.rect.width > 0
+          ? (initialState.position.x - initialBounds.rect.x) / initialBounds.rect.width
+          : 0;
+      const relY =
+        initialBounds.rect.height > 0
+          ? (initialState.position.y - initialBounds.rect.y) / initialBounds.rect.height
+          : 0;
+
+      const newPosition = {
+        x: newBounds.x + relX * newBounds.width,
+        y: newBounds.y + relY * newBounds.height,
+      };
+
+      if (
+        node.type === 'rectangle' &&
+        initialState.width !== undefined &&
+        initialState.height !== undefined
+      ) {
+        const newWidth = Math.max(1, initialState.width * scaleX);
+        const newHeight = Math.max(1, initialState.height * scaleY);
+
+        this.context.sceneGraph.updateNode(id, {
+          transform: { ...node.transform, position: newPosition },
+          width: newWidth,
+          height: newHeight,
+        });
+      } else if (
+        node.type === 'ellipse' &&
+        initialState.radiusX !== undefined &&
+        initialState.radiusY !== undefined
+      ) {
+        const newRadiusX = Math.max(1, initialState.radiusX * scaleX);
+        const newRadiusY = Math.max(1, initialState.radiusY * scaleY);
+
+        this.context.sceneGraph.updateNode(id, {
+          transform: { ...node.transform, position: newPosition },
+          radiusX: newRadiusX,
+          radiusY: newRadiusY,
+        });
+      }
+    }
+  }
+
+  /**
+   * Calculate new bounds based on handle drag
+   */
+  private calculateNewBounds(
+    initial: Rect,
+    handle: HandlePosition,
+    delta: Vector2,
+    constrained: boolean
+  ): Rect {
+    let { x, y, width, height } = initial;
+
+    // Apply delta based on which handle is being dragged
+    switch (handle) {
+      case 'top-left':
+        x += delta.x;
+        y += delta.y;
+        width -= delta.x;
+        height -= delta.y;
+        break;
+      case 'top':
+        y += delta.y;
+        height -= delta.y;
+        break;
+      case 'top-right':
+        y += delta.y;
+        width += delta.x;
+        height -= delta.y;
+        break;
+      case 'right':
+        width += delta.x;
+        break;
+      case 'bottom-right':
+        width += delta.x;
+        height += delta.y;
+        break;
+      case 'bottom':
+        height += delta.y;
+        break;
+      case 'bottom-left':
+        x += delta.x;
+        width -= delta.x;
+        height += delta.y;
+        break;
+      case 'left':
+        x += delta.x;
+        width -= delta.x;
+        break;
+    }
+
+    // Apply constraint (maintain aspect ratio)
+    if (constrained) {
+      const initialAspect = initial.width / initial.height;
+      const currentAspect = width / height;
+
+      if (currentAspect > initialAspect) {
+        // Width is larger proportionally, adjust height
+        const newHeight = width / initialAspect;
+        if (handle.includes('top')) {
+          y -= newHeight - height;
+        }
+        height = newHeight;
+      } else {
+        // Height is larger proportionally, adjust width
+        const newWidth = height * initialAspect;
+        if (handle.includes('left')) {
+          x -= newWidth - width;
+        }
+        width = newWidth;
+      }
+    }
+
+    // Ensure minimum size
+    const minSize = 1;
+    if (width < minSize) {
+      if (handle.includes('left')) {
+        x = initial.x + initial.width - minSize;
+      }
+      width = minSize;
+    }
+    if (height < minSize) {
+      if (handle.includes('top')) {
+        y = initial.y + initial.height - minSize;
+      }
+      height = minSize;
+    }
+
+    return { x, y, width, height };
   }
 }

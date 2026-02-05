@@ -43,6 +43,12 @@ export function SelectionOverlay({
   }
 
   const { rect } = bounds;
+
+  // Ensure valid dimensions (SVG doesn't accept negative values)
+  if (rect.width <= 0 || rect.height <= 0) {
+    return null;
+  }
+
   const halfHandle = handleSize / 2;
 
   // Find rotation handle and its corresponding top-center handle

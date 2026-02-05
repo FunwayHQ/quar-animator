@@ -102,9 +102,18 @@ export class ToolManager {
 
   /**
    * Get the cursor for the current tool
+   * Calls the tool's getCursor() method if available for dynamic cursors
    */
   getCursor(): string {
-    return this.activeTool?.cursor ?? 'default';
+    if (this.activeTool) {
+      // Check for dynamic getCursor method (e.g., SelectionTool)
+      const tool = this.activeTool as BaseTool & { getCursor?: () => string };
+      if (typeof tool.getCursor === 'function') {
+        return tool.getCursor();
+      }
+      return this.activeTool.cursor;
+    }
+    return 'default';
   }
 
   // --------------------------------------------------------------------------
