@@ -281,8 +281,9 @@ describe('ShapeRenderer', () => {
       vi.clearAllMocks();
       shapeRenderer.render(sceneGraph, vpMatrix);
 
-      // Should draw twice: fill + stroke
-      expect(gl.drawArrays).toHaveBeenCalledTimes(2);
+      // Fill uses drawElements, stroke uses drawArrays
+      expect(gl.drawElements).toHaveBeenCalledTimes(1); // fill
+      expect(gl.drawArrays).toHaveBeenCalledTimes(1); // stroke
     });
 
     it('should not render fill when fill is none', () => {
@@ -295,7 +296,9 @@ describe('ShapeRenderer', () => {
       vi.clearAllMocks();
       shapeRenderer.render(sceneGraph, vpMatrix);
 
+      // No fill (none type), no stroke (null)
       expect(gl.drawArrays).not.toHaveBeenCalled();
+      expect(gl.drawElements).not.toHaveBeenCalled();
     });
 
     it('should render rectangle with rounded corners', () => {
@@ -306,7 +309,8 @@ describe('ShapeRenderer', () => {
       const vpMatrix = mat3.identity();
       shapeRenderer.render(sceneGraph, vpMatrix);
 
-      expect(gl.drawArrays).toHaveBeenCalled();
+      // Fill uses drawElements
+      expect(gl.drawElements).toHaveBeenCalled();
     });
 
     it('should upload vertices to buffer', () => {
@@ -353,8 +357,9 @@ describe('ShapeRenderer', () => {
       vi.clearAllMocks();
       shapeRenderer.render(sceneGraph, vpMatrix);
 
-      // Fill + stroke
-      expect(gl.drawArrays).toHaveBeenCalledTimes(2);
+      // Fill uses drawElements, stroke uses drawArrays
+      expect(gl.drawElements).toHaveBeenCalledTimes(1); // fill
+      expect(gl.drawArrays).toHaveBeenCalledTimes(1); // stroke
     });
 
     it('should render circle when radiusX equals radiusY', () => {
@@ -364,10 +369,11 @@ describe('ShapeRenderer', () => {
       const vpMatrix = mat3.identity();
       shapeRenderer.render(sceneGraph, vpMatrix);
 
-      expect(gl.drawArrays).toHaveBeenCalled();
+      // Fill uses drawElements
+      expect(gl.drawElements).toHaveBeenCalled();
     });
 
-    it('should use TRIANGLE_FAN for fill', () => {
+    it('should use triangulated fill', () => {
       const ellipse = createEllipseNode('ellipse1', 50, 30);
       ellipse.stroke = null;
       sceneGraph.addNode(ellipse);
@@ -376,9 +382,11 @@ describe('ShapeRenderer', () => {
       vi.clearAllMocks();
       shapeRenderer.render(sceneGraph, vpMatrix);
 
-      expect(gl.drawArrays).toHaveBeenCalledWith(
-        gl.TRIANGLE_FAN,
+      // Fill uses drawElements with TRIANGULAR indices (earcut triangulation)
+      expect(gl.drawElements).toHaveBeenCalledWith(
+        gl.TRIANGLES,
         expect.any(Number),
+        gl.UNSIGNED_SHORT,
         expect.any(Number)
       );
     });
@@ -433,8 +441,9 @@ describe('ShapeRenderer', () => {
       vi.clearAllMocks();
       shapeRenderer.render(sceneGraph, vpMatrix);
 
-      // Fill + stroke
-      expect(gl.drawArrays).toHaveBeenCalledTimes(2);
+      // Fill uses drawElements, stroke uses drawArrays
+      expect(gl.drawElements).toHaveBeenCalledTimes(1); // fill
+      expect(gl.drawArrays).toHaveBeenCalledTimes(1); // stroke
     });
 
     it('should render triangle (3 sides)', () => {
@@ -444,7 +453,8 @@ describe('ShapeRenderer', () => {
       const vpMatrix = mat3.identity();
       shapeRenderer.render(sceneGraph, vpMatrix);
 
-      expect(gl.drawArrays).toHaveBeenCalled();
+      // Fill uses drawElements
+      expect(gl.drawElements).toHaveBeenCalled();
     });
 
     it('should render pentagon (5 sides)', () => {
@@ -454,7 +464,8 @@ describe('ShapeRenderer', () => {
       const vpMatrix = mat3.identity();
       shapeRenderer.render(sceneGraph, vpMatrix);
 
-      expect(gl.drawArrays).toHaveBeenCalled();
+      // Fill uses drawElements
+      expect(gl.drawElements).toHaveBeenCalled();
     });
 
     it('should render hexagon (6 sides)', () => {
@@ -464,7 +475,8 @@ describe('ShapeRenderer', () => {
       const vpMatrix = mat3.identity();
       shapeRenderer.render(sceneGraph, vpMatrix);
 
-      expect(gl.drawArrays).toHaveBeenCalled();
+      // Fill uses drawElements
+      expect(gl.drawElements).toHaveBeenCalled();
     });
 
     it('should render star shape with inner radius', () => {
@@ -474,7 +486,8 @@ describe('ShapeRenderer', () => {
       const vpMatrix = mat3.identity();
       shapeRenderer.render(sceneGraph, vpMatrix);
 
-      expect(gl.drawArrays).toHaveBeenCalled();
+      // Fill uses drawElements
+      expect(gl.drawElements).toHaveBeenCalled();
     });
 
     it('should render 6-pointed star', () => {
@@ -484,10 +497,11 @@ describe('ShapeRenderer', () => {
       const vpMatrix = mat3.identity();
       shapeRenderer.render(sceneGraph, vpMatrix);
 
-      expect(gl.drawArrays).toHaveBeenCalled();
+      // Fill uses drawElements
+      expect(gl.drawElements).toHaveBeenCalled();
     });
 
-    it('should use TRIANGLE_FAN for polygon fill', () => {
+    it('should use triangulated fill for polygon', () => {
       const polygon = createPolygonNode('poly1', 6, 50);
       polygon.stroke = null;
       sceneGraph.addNode(polygon);
@@ -496,9 +510,11 @@ describe('ShapeRenderer', () => {
       vi.clearAllMocks();
       shapeRenderer.render(sceneGraph, vpMatrix);
 
-      expect(gl.drawArrays).toHaveBeenCalledWith(
-        gl.TRIANGLE_FAN,
+      // Fill uses drawElements with TRIANGLES (earcut triangulation)
+      expect(gl.drawElements).toHaveBeenCalledWith(
+        gl.TRIANGLES,
         expect.any(Number),
+        gl.UNSIGNED_SHORT,
         expect.any(Number)
       );
     });
@@ -696,8 +712,9 @@ describe('ShapeRenderer', () => {
       vi.clearAllMocks();
       shapeRenderer.render(sceneGraph, vpMatrix);
 
-      // Should not draw
+      // Should not draw (neither fills nor strokes)
       expect(gl.drawArrays).not.toHaveBeenCalled();
+      expect(gl.drawElements).not.toHaveBeenCalled();
     });
 
     it('should render multiple visible shapes', () => {
@@ -710,8 +727,10 @@ describe('ShapeRenderer', () => {
       vi.clearAllMocks();
       shapeRenderer.render(sceneGraph, vpMatrix);
 
-      // Should draw 4 times: 2 fills + 2 strokes
-      expect(gl.drawArrays).toHaveBeenCalledTimes(4);
+      // Should draw fills using drawElements (2 fills, one per shape)
+      // and strokes using drawArrays (2 strokes, one per shape)
+      expect(gl.drawElements).toHaveBeenCalledTimes(2); // 2 fills
+      expect(gl.drawArrays).toHaveBeenCalledTimes(2); // 2 strokes
     });
   });
 

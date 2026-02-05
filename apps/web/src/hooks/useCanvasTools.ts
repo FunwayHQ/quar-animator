@@ -106,13 +106,24 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
   const defaultStroke = useEditorStore((state) => state.defaultStroke);
   const setIsDrawing = useEditorStore((state) => state.setIsDrawing);
 
-  // Create stable callbacks for ToolManager options
-  const getSelectedIds = useCallback(() => selectedNodeIds, [selectedNodeIds]);
+  // Keep state values in refs for stable callbacks
+  // This prevents ToolManager from being recreated on every state change
+  const selectedNodeIdsRef = useRef(selectedNodeIds);
+  selectedNodeIdsRef.current = selectedNodeIds;
+  const defaultFillRef = useRef(defaultFill);
+  defaultFillRef.current = defaultFill;
+  const defaultStrokeRef = useRef(defaultStroke);
+  defaultStrokeRef.current = defaultStroke;
+  const activeToolRef = useRef(activeTool);
+  activeToolRef.current = activeTool;
+
+  // Create stable callbacks for ToolManager options (using refs, no dependencies)
+  const getSelectedIds = useCallback(() => selectedNodeIdsRef.current, []);
   const setSelectedIds = useCallback((ids: string[]) => setSelection(ids), [setSelection]);
   const addToSelectionCb = useCallback((id: string) => addToSelection(id), [addToSelection]);
   const clearSelectionCb = useCallback(() => clearSelection(), [clearSelection]);
-  const getDefaultFill = useCallback(() => defaultFill, [defaultFill]);
-  const getDefaultStroke = useCallback(() => defaultStroke, [defaultStroke]);
+  const getDefaultFill = useCallback(() => defaultFillRef.current, []);
+  const getDefaultStroke = useCallback(() => defaultStrokeRef.current, []);
 
   // Initialize ToolManager when camera is available
   useEffect(() => {
@@ -131,6 +142,9 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
       getDefaultStroke,
     });
 
+    // Set the active tool from EditorStore (ToolManager defaults to 'selection')
+    manager.setActiveTool(activeToolRef.current);
+
     toolManagerRef.current = manager;
     setCursor(manager.getCursor() as string);
 
@@ -138,6 +152,7 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
       manager.dispose();
       toolManagerRef.current = null;
     };
+    // Callbacks are now stable (use refs), so only camera triggers recreation
   }, [
     camera,
     getSelectedIds,
@@ -229,15 +244,25 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
     [setIsDrawing, syncPenToolState]
   );
 
-  const handleKeyDown = useCallback((event: React.KeyboardEvent) => {
-    if (!toolManagerRef.current) return;
-    toolManagerRef.current.handleKeyDown(event.nativeEvent);
-  }, []);
+  const handleKeyDown = useCallback(
+    (event: React.KeyboardEvent) => {
+      if (!toolManagerRef.current) return;
+      toolManagerRef.current.handleKeyDown(event.nativeEvent);
+      // Sync PenTool state after key events (Enter/Escape can finalize/cancel path)
+      syncPenToolState();
+    },
+    [syncPenToolState]
+  );
 
-  const handleKeyUp = useCallback((event: React.KeyboardEvent) => {
-    if (!toolManagerRef.current) return;
-    toolManagerRef.current.handleKeyUp(event.nativeEvent);
-  }, []);
+  const handleKeyUp = useCallback(
+    (event: React.KeyboardEvent) => {
+      if (!toolManagerRef.current) return;
+      toolManagerRef.current.handleKeyUp(event.nativeEvent);
+      // Sync PenTool state after key events
+      syncPenToolState();
+    },
+    [syncPenToolState]
+  );
 
   // Callbacks for PenTool handle/point manipulation
   const startPenHandleDrag = useCallback((pointIndex: number, handleType: 'in' | 'out') => {
