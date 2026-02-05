@@ -17,6 +17,8 @@ export interface SelectionOverlayProps {
   handles: TransformHandle[];
   /** Size of transform handles in pixels */
   handleSize?: number;
+  /** Rotation angle in degrees */
+  rotation?: number;
   /** Callback when a handle is clicked/dragged */
   onHandlePointerDown?: (handle: TransformHandle, event: React.PointerEvent) => void;
 }
@@ -36,13 +38,14 @@ export function SelectionOverlay({
   bounds,
   handles,
   handleSize = DEFAULT_HANDLE_SIZE,
+  rotation = 0,
   onHandlePointerDown,
 }: SelectionOverlayProps) {
   if (!bounds) {
     return null;
   }
 
-  const { rect } = bounds;
+  const { rect, center } = bounds;
 
   // Ensure valid dimensions (SVG doesn't accept negative values)
   if (rect.width <= 0 || rect.height <= 0) {
@@ -55,59 +58,66 @@ export function SelectionOverlay({
   const rotationHandle = handles.find((h) => h.position === 'rotation');
   const topHandle = handles.find((h) => h.position === 'top');
 
+  // Calculate the transform for rotation around the center
+  // Note: In screen coordinates, Y is inverted, so we negate the rotation
+  const rotationTransform =
+    rotation !== 0 ? `rotate(${-rotation} ${center.x} ${center.y})` : undefined;
+
   return (
     <svg className={styles.overlay} data-testid="selection-overlay">
-      {/* Selection bounds rectangle (dashed) */}
-      <rect
-        className={styles.selectionBounds}
-        x={rect.x}
-        y={rect.y}
-        width={rect.width}
-        height={rect.height}
-        data-testid="selection-bounds"
-      />
-
-      {/* Line connecting rotation handle to selection */}
-      {rotationHandle && topHandle && (
-        <line
-          className={styles.rotationLine}
-          x1={topHandle.screenPosition.x}
-          y1={topHandle.screenPosition.y}
-          x2={rotationHandle.screenPosition.x}
-          y2={rotationHandle.screenPosition.y}
-          data-testid="rotation-line"
+      <g transform={rotationTransform}>
+        {/* Selection bounds rectangle (dashed) */}
+        <rect
+          className={styles.selectionBounds}
+          x={rect.x}
+          y={rect.y}
+          width={rect.width}
+          height={rect.height}
+          data-testid="selection-bounds"
         />
-      )}
 
-      {/* Resize handles (squares at corners and edge midpoints) */}
-      {handles
-        .filter((handle) => handle.position !== 'rotation')
-        .map((handle) => (
-          <rect
-            key={handle.position}
-            className={styles.handle}
-            x={handle.screenPosition.x - halfHandle}
-            y={handle.screenPosition.y - halfHandle}
-            width={handleSize}
-            height={handleSize}
-            style={{ cursor: handle.cursor }}
-            onPointerDown={(e) => onHandlePointerDown?.(handle, e)}
-            data-testid={`handle-${handle.position}`}
+        {/* Line connecting rotation handle to selection */}
+        {rotationHandle && topHandle && (
+          <line
+            className={styles.rotationLine}
+            x1={topHandle.screenPosition.x}
+            y1={topHandle.screenPosition.y}
+            x2={rotationHandle.screenPosition.x}
+            y2={rotationHandle.screenPosition.y}
+            data-testid="rotation-line"
           />
-        ))}
+        )}
 
-      {/* Rotation handle (circle above selection) */}
-      {rotationHandle && (
-        <circle
-          className={styles.rotationHandle}
-          cx={rotationHandle.screenPosition.x}
-          cy={rotationHandle.screenPosition.y}
-          r={ROTATION_HANDLE_RADIUS}
-          style={{ cursor: rotationHandle.cursor }}
-          onPointerDown={(e) => onHandlePointerDown?.(rotationHandle, e)}
-          data-testid="handle-rotation"
-        />
-      )}
+        {/* Resize handles (squares at corners and edge midpoints) */}
+        {handles
+          .filter((handle) => handle.position !== 'rotation')
+          .map((handle) => (
+            <rect
+              key={handle.position}
+              className={styles.handle}
+              x={handle.screenPosition.x - halfHandle}
+              y={handle.screenPosition.y - halfHandle}
+              width={handleSize}
+              height={handleSize}
+              style={{ cursor: handle.cursor }}
+              onPointerDown={(e) => onHandlePointerDown?.(handle, e)}
+              data-testid={`handle-${handle.position}`}
+            />
+          ))}
+
+        {/* Rotation handle (circle above selection) */}
+        {rotationHandle && (
+          <circle
+            className={styles.rotationHandle}
+            cx={rotationHandle.screenPosition.x}
+            cy={rotationHandle.screenPosition.y}
+            r={ROTATION_HANDLE_RADIUS}
+            style={{ cursor: rotationHandle.cursor }}
+            onPointerDown={(e) => onHandlePointerDown?.(rotationHandle, e)}
+            data-testid="handle-rotation"
+          />
+        )}
+      </g>
     </svg>
   );
 }

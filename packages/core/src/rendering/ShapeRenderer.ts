@@ -297,13 +297,34 @@ export class ShapeRenderer {
 
     // Render fill
     if (node.fill && node.fill.type !== 'none') {
-      this.renderFill(tessellated, node.fill);
+      if (node.innerRadius !== undefined) {
+        // Stars are concave - need to triangulate from center
+        // Create vertices with center point first for proper triangle fan
+        const starVertices = this.createStarFillVertices(tessellated);
+        this.renderFill(starVertices, node.fill);
+      } else {
+        // Regular polygons are convex - triangle fan works fine
+        this.renderFill(tessellated, node.fill);
+      }
     }
 
     // Render stroke
     if (node.stroke && node.stroke.width > 0) {
       this.renderStroke(tessellated, node.stroke, true);
     }
+  }
+
+  /**
+   * Create vertices for star fill with center point first
+   * This allows proper triangle fan rendering for concave star shapes
+   */
+  private createStarFillVertices(perimeterVertices: Float32Array): Float32Array {
+    // Add center point (0,0) as first vertex, then all perimeter vertices
+    const result = new Float32Array(2 + perimeterVertices.length);
+    result[0] = 0; // center x
+    result[1] = 0; // center y
+    result.set(perimeterVertices, 2);
+    return result;
   }
 
   /**

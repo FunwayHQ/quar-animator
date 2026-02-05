@@ -6,6 +6,7 @@ import {
   ShapeRenderer,
   SelectionManager,
   TransformHandles,
+  getPolygonBounds,
 } from '@quar/core';
 import type { Vector2 } from '@quar/types';
 import { useCanvasTools } from '../../hooks/useCanvasTools';
@@ -38,7 +39,7 @@ export function Canvas() {
   const animationFrameRef = useRef<number>(0);
 
   // Selection infrastructure (initialized immediately, doesn't depend on WebGL)
-  const selectionManagerRef = useRef<SelectionManager>(new SelectionManager());
+  const _selectionManagerRef = useRef<SelectionManager>(new SelectionManager());
   const transformHandlesRef = useRef<TransformHandles>(new TransformHandles());
 
   // Interaction state
@@ -73,11 +74,18 @@ export function Canvas() {
     if (!sceneGraphRef.current) return;
     const sceneGraph = sceneGraphRef.current;
 
-    const unsubscribe = sceneGraph.on('nodeChanged', () => {
-      setSceneGraphVersion((v) => v + 1);
-    });
+    const incrementVersion = () => setSceneGraphVersion((v) => v + 1);
 
-    return unsubscribe;
+    // Subscribe to all scene graph events that affect selection bounds
+    const unsubscribeChanged = sceneGraph.on('nodeChanged', incrementVersion);
+    const unsubscribeAdded = sceneGraph.on('nodeAdded', incrementVersion);
+    const unsubscribeRemoved = sceneGraph.on('nodeRemoved', incrementVersion);
+
+    return () => {
+      unsubscribeChanged();
+      unsubscribeAdded();
+      unsubscribeRemoved();
+    };
   }, [sceneGraphRef]);
 
   // Keep preview node in a ref for the render loop (avoids stale closure)
@@ -91,10 +99,72 @@ export function Canvas() {
   // Enable tool shortcuts
   useToolShortcuts();
 
-  // Selection bounds and handles
+  // Selection bounds and handles - direct calculation to avoid caching issues
   const selectionBounds = useMemo(() => {
-    if (!selectionManagerRef.current || !sceneGraphRef.current) return null;
-    return selectionManagerRef.current.getSelectionBounds(selectedNodeIds, sceneGraphRef.current);
+    if (!sceneGraphRef.current || selectedNodeIds.size === 0) return null;
+
+    // Calculate bounds directly for all node types
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    let hasValidBounds = false;
+
+    for (const id of selectedNodeIds) {
+      const node = sceneGraphRef.current.getNode(id);
+      if (!node || !node.visible) continue;
+
+      const pos = node.transform.position;
+      let nodeBounds: { x: number; y: number; width: number; height: number } | null = null;
+
+      if (node.type === 'rectangle') {
+        const rectNode = node as any;
+        nodeBounds = {
+          x: pos.x - rectNode.width / 2,
+          y: pos.y - rectNode.height / 2,
+          width: rectNode.width,
+          height: rectNode.height,
+        };
+      } else if (node.type === 'ellipse') {
+        const ellipseNode = node as any;
+        nodeBounds = {
+          x: pos.x - ellipseNode.radiusX,
+          y: pos.y - ellipseNode.radiusY,
+          width: ellipseNode.radiusX * 2,
+          height: ellipseNode.radiusY * 2,
+        };
+      } else if (node.type === 'polygon') {
+        const polygonNode = node as any;
+        const scaleX = node.transform.scale?.x ?? 1;
+        const scaleY = node.transform.scale?.y ?? 1;
+        // Use precise bounds from actual vertex positions
+        nodeBounds = getPolygonBounds(
+          pos.x,
+          pos.y,
+          polygonNode.radius,
+          polygonNode.sides,
+          scaleX,
+          scaleY,
+          polygonNode.innerRadius
+        );
+      }
+
+      if (nodeBounds) {
+        minX = Math.min(minX, nodeBounds.x);
+        minY = Math.min(minY, nodeBounds.y);
+        maxX = Math.max(maxX, nodeBounds.x + nodeBounds.width);
+        maxY = Math.max(maxY, nodeBounds.y + nodeBounds.height);
+        hasValidBounds = true;
+      }
+    }
+
+    if (!hasValidBounds) return null;
+
+    const rect = { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
+    return {
+      rect,
+      center: { x: minX + (maxX - minX) / 2, y: minY + (maxY - minY) / 2 },
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- sceneGraphVersion triggers recalculation when nodes change
   }, [selectedNodeIds, sceneGraphRef, sceneGraphVersion]);
 
@@ -102,6 +172,17 @@ export function Canvas() {
     if (!transformHandlesRef.current || !selectionBounds || !cameraRef.current) return [];
     return transformHandlesRef.current.getHandles(selectionBounds, cameraRef.current);
   }, [selectionBounds]);
+
+  // Get the rotation of the selected node(s)
+  // For single selection, use the node's rotation
+  // For multiple selection, use 0 (no rotation applied to bounds)
+  const selectionRotation = useMemo(() => {
+    if (!sceneGraphRef.current || selectedNodeIds.size !== 1) return 0;
+    const nodeId = [...selectedNodeIds][0];
+    const node = sceneGraphRef.current.getNode(nodeId);
+    return node?.transform.rotation ?? 0;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- sceneGraphVersion triggers recalculation
+  }, [selectedNodeIds, sceneGraphRef, sceneGraphVersion]);
 
   // Convert selection bounds to screen coordinates for overlay
   const screenBounds = useMemo(() => {
@@ -536,6 +617,7 @@ export function Canvas() {
       <SelectionOverlay
         bounds={screenBounds}
         handles={transformHandles}
+        rotation={selectionRotation}
         onHandlePointerDown={handleOverlayPointerDown}
       />
       <div className={styles.statusBar}>

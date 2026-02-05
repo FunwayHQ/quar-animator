@@ -15,12 +15,18 @@ import { getPolygonBounds } from '../path/pathUtils';
 // Types
 // ============================================================================
 
-type SelectionMode = 'idle' | 'selecting' | 'moving' | 'marquee' | 'resizing';
+type SelectionMode = 'idle' | 'selecting' | 'moving' | 'marquee' | 'resizing' | 'rotating';
 
 interface ResizeState {
   handle: HandlePosition;
   initialBounds: SelectionBounds;
   initialNodeStates: Map<string, NodeResizeState>;
+}
+
+interface RotationState {
+  initialBounds: SelectionBounds;
+  initialAngle: number; // Angle from center to start point (radians)
+  initialRotations: Map<string, number>; // Initial rotation of each node
 }
 
 interface NodeResizeState {
@@ -46,10 +52,11 @@ export class SelectionTool extends BaseTool {
   private marqueeRect: Rect | null = null;
   private moveStartPositions: Map<string, Vector2> = new Map();
 
-  // Resize infrastructure
+  // Resize/rotation infrastructure
   private selectionManager: SelectionManager;
   private transformHandles: TransformHandles;
   private resizeState: ResizeState | null = null;
+  private rotationState: RotationState | null = null;
   private currentCursor: string = 'default';
 
   constructor(context: ToolContext) {
@@ -86,7 +93,33 @@ export class SelectionTool extends BaseTool {
       if (bounds) {
         const hitHandle = this.transformHandles.hitTest(screenPos, bounds, this.context.camera);
 
-        if (hitHandle && hitHandle !== 'rotation') {
+        if (hitHandle === 'rotation') {
+          // Start rotation operation
+          this.mode = 'rotating';
+          this.state.isDragging = true;
+
+          // Calculate initial angle from center to mouse
+          const initialAngle = Math.atan2(
+            worldPos.y - bounds.center.y,
+            worldPos.x - bounds.center.x
+          );
+
+          // Capture initial rotations of all selected nodes
+          const initialRotations = new Map<string, number>();
+          for (const id of selectedIds) {
+            const node = this.context.sceneGraph.getNode(id);
+            if (node) {
+              initialRotations.set(id, node.transform.rotation);
+            }
+          }
+
+          this.rotationState = {
+            initialBounds: bounds,
+            initialAngle,
+            initialRotations,
+          };
+          return;
+        } else if (hitHandle) {
           // Start resize operation
           this.mode = 'resizing';
           this.state.isDragging = true;
@@ -165,6 +198,11 @@ export class SelectionTool extends BaseTool {
       return;
     }
 
+    if (this.mode === 'rotating' && this.rotationState) {
+      this.performRotation(worldPos, event.shiftKey);
+      return;
+    }
+
     if (this.mode === 'moving') {
       // Move selected nodes
       const delta = vec2.subtract(worldPos, this.startPoint);
@@ -191,6 +229,9 @@ export class SelectionTool extends BaseTool {
     if (this.mode === 'resizing') {
       // Resize completed - state already updated
       this.resizeState = null;
+    } else if (this.mode === 'rotating') {
+      // Rotation completed - state already updated
+      this.rotationState = null;
     } else if (this.mode === 'marquee' && this.startPoint) {
       // Update marquee rect with final position
       this.marqueeRect = rect.fromPoints(this.startPoint, event.worldPosition);
@@ -587,6 +628,44 @@ export class SelectionTool extends BaseTool {
           },
         });
       }
+    }
+  }
+
+  /**
+   * Perform rotation operation based on current drag position
+   */
+  private performRotation(worldPos: Vector2, constrained: boolean): void {
+    if (!this.rotationState) return;
+
+    const { initialBounds, initialAngle, initialRotations } = this.rotationState;
+
+    // Calculate current angle from center to mouse
+    const currentAngle = Math.atan2(
+      worldPos.y - initialBounds.center.y,
+      worldPos.x - initialBounds.center.x
+    );
+
+    // Calculate rotation delta (radians to degrees)
+    let deltaRotation = (currentAngle - initialAngle) * (180 / Math.PI);
+
+    // Constrain to 15-degree increments when shift is held
+    if (constrained) {
+      deltaRotation = Math.round(deltaRotation / 15) * 15;
+    }
+
+    // Apply rotation to each selected node
+    for (const [id, initialRotation] of initialRotations) {
+      const node = this.context.sceneGraph.getNode(id);
+      if (!node) continue;
+
+      const newRotation = initialRotation + deltaRotation;
+
+      this.context.sceneGraph.updateNode(id, {
+        transform: {
+          ...node.transform,
+          rotation: newRotation,
+        },
+      });
     }
   }
 
