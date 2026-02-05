@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Quar Animator is a free, open-source, web-native 2D animation platform designed to fill the gap left by Adobe Animate's discontinuation. It's part of the QUAR Suite (alongside Quar Editor for 3D and Quar Vector for 2D illustration).
 
-**Current Status**: Sprint 4 in progress. Core tool system implemented with comprehensive test coverage. Canvas foundation with WebGL 2 rendering in `@quar/core`. Modern violet/bordeaux design system.
+**Current Status**: Sprint 4 complete. Full vector drawing foundation with tools, selection, and UI integration. Canvas foundation with WebGL 2 rendering in `@quar/core`. Modern violet/bordeaux design system.
 
 ## Sprint Progress
 
@@ -48,7 +48,7 @@ Quar Animator is a free, open-source, web-native 2D animation platform designed 
 - [x] SceneGraph for hierarchical node management with events
 - [x] Test coverage: 310 tests (core: 221, ui: 89)
 
-**Current test coverage**: ~440+ tests (core: 350+, ui: 89)
+**Current test coverage**: ~682 tests (core: 540, web: 142)
 
 ### Sprint 3.5: Bug Fixes & UI Refresh ✅ COMPLETE
 
@@ -62,9 +62,8 @@ Quar Animator is a free, open-source, web-native 2D animation platform designed 
   - Refined micro-interactions and hover states
   - Improved visual hierarchy across all panels
 
-### Sprint 4: Vector Drawing Foundation 🔄 IN PROGRESS
+### Sprint 4: Vector Drawing Foundation ✅ COMPLETE
 
-#### Completed:
 - [x] **Phase 1.1**: Zustand editor store (`apps/web/src/stores/editorStore.ts`) - 28 tests
 - [x] **Phase 1.2**: Bezier utilities (`packages/core/src/path/bezier.ts`) - 53 tests
 - [x] **Phase 1.3**: Path utilities (`packages/core/src/path/pathUtils.ts`) - 57 tests
@@ -76,10 +75,16 @@ Quar Animator is a free, open-source, web-native 2D animation platform designed 
   - PenTool (corner/smooth points, bezier handles, path closure)
   - SelectionTool (click/marquee selection, move, nudge, delete)
   - ToolManager (tool switching, keyboard shortcuts V/R/O/P)
-
-#### Remaining:
-- [ ] **Phase 4**: Selection infrastructure (SelectionManager, TransformHandles, SelectionOverlay)
-- [ ] **Phase 5**: UI Integration (connect Toolbar to Zustand, integrate tools into Canvas)
+- [x] **Phase 4**: Selection Infrastructure - 39 tests
+  - SelectionManager (bounds calculation for selected nodes)
+  - TransformHandles (handle positions, hit testing, cursors)
+  - Selection types (HandlePosition, SelectionBounds, SelectionConfig)
+- [x] **Phase 5**: UI Integration - 57 tests
+  - useToolShortcuts hook (V/R/O/P shortcuts, input focus handling)
+  - useCanvasTools hook (ToolManager lifecycle, store bridge)
+  - SelectionOverlay component (SVG overlay for bounds and handles)
+  - Canvas.tsx integration (tools, shapes, selection rendering)
+  - Toolbar.tsx connected to EditorStore
 
 ## Development Commands
 

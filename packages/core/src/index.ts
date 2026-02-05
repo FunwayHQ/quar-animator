@@ -9,6 +9,7 @@ export * from './Camera';
 export * from './rendering';
 export * from './path';
 export * from './tools';
+export * from './selection';
 
 // Re-export types for convenience
 export type {

@@ -1,5 +1,5 @@
-import { useState } from 'react';
 import type { ToolType } from '@quar/types';
+import { useActiveTool, useSetActiveTool } from '../../stores/editorStore';
 import styles from './Toolbar.module.css';
 
 interface ToolButtonProps {
@@ -94,7 +94,8 @@ const tools: Array<{ type: ToolType; icon: React.ReactNode; label: string; short
 ];
 
 export function Toolbar() {
-  const [activeTool, setActiveTool] = useState<ToolType>('selection');
+  const activeTool = useActiveTool();
+  const setActiveTool = useSetActiveTool();
 
   return (
     <aside className={styles.toolbar}>
