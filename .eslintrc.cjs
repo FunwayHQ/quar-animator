@@ -100,10 +100,13 @@ module.exports = {
       files: [
         'apps/web/src/hooks/**/*.ts',
         'apps/web/src/components/canvas/**/*.tsx',
+        'apps/web/src/components/layout/Canvas.tsx',
       ],
       rules: {
         '@typescript-eslint/no-unsafe-assignment': 'off',
         '@typescript-eslint/no-unsafe-member-access': 'off',
+        '@typescript-eslint/no-unsafe-call': 'off',
+        '@typescript-eslint/no-unsafe-return': 'off',
         '@typescript-eslint/no-redundant-type-constituents': 'off',
       },
     },

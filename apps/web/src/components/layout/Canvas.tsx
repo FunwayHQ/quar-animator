@@ -54,7 +54,7 @@ export function Canvas() {
 
   // Initialize tools hook
   const {
-    toolManagerRef,
+    toolManagerRef: _toolManagerRef,
     sceneGraphRef,
     handlePointerDown: toolPointerDown,
     handlePointerMove: toolPointerMove,
@@ -65,21 +65,25 @@ export function Canvas() {
     cursor: toolCursor,
   } = useCanvasTools({ camera: cameraReady ? cameraRef.current : null });
 
+  // Keep preview node in a ref for the render loop (avoids stale closure)
+  const previewNodeRef = useRef(previewNode);
+  previewNodeRef.current = previewNode;
+
+  // Keep selectedNodeIds in a ref for the render loop (avoids stale closure)
+  const selectedNodeIdsRef = useRef(selectedNodeIds);
+  selectedNodeIdsRef.current = selectedNodeIds;
+
   // Enable tool shortcuts
   useToolShortcuts();
 
   // Selection bounds and handles
   const selectionBounds = useMemo(() => {
     if (!selectionManagerRef.current || !sceneGraphRef.current) return null;
-    return selectionManagerRef.current.getSelectionBounds(
-      selectedNodeIds,
-      sceneGraphRef.current
-    );
+    return selectionManagerRef.current.getSelectionBounds(selectedNodeIds, sceneGraphRef.current);
   }, [selectedNodeIds, sceneGraphRef]);
 
   const transformHandles = useMemo(() => {
-    if (!transformHandlesRef.current || !selectionBounds || !cameraRef.current)
-      return [];
+    if (!transformHandlesRef.current || !selectionBounds || !cameraRef.current) return [];
     return transformHandlesRef.current.getHandles(selectionBounds, cameraRef.current);
   }, [selectionBounds]);
 
@@ -187,15 +191,13 @@ export function Canvas() {
           shapeRenderer.render(
             sceneGraphRef.current,
             viewProjectionMatrix,
-            selectedNodeIds
+            selectedNodeIdsRef.current
           );
         }
 
         // Render preview node (if drawing)
-        if (previewNode && shapeRenderer) {
-          const previewSceneGraph = sceneGraphRef.current;
-          // The preview node is already in the tool's scene graph during drawing
-          // We render the entire scene graph which includes the preview
+        if (previewNodeRef.current && shapeRenderer) {
+          shapeRenderer.renderNode(previewNodeRef.current, viewProjectionMatrix);
         }
 
         animationFrameRef.current = requestAnimationFrame(render);
@@ -296,11 +298,7 @@ export function Canvas() {
       }
 
       // Pass to tool system
-      toolPointerMove(
-        positions.screenPos,
-        positions.worldPos,
-        e as unknown as React.PointerEvent
-      );
+      toolPointerMove(positions.screenPos, positions.worldPos, e as unknown as React.PointerEvent);
 
       // Update cursor based on state
       if (!isPanningRef.current && !isSpaceHeldRef.current) {
@@ -324,11 +322,7 @@ export function Canvas() {
       // Pass to tool system
       const positions = getCanvasPositions(e);
       if (positions) {
-        toolPointerUp(
-          positions.screenPos,
-          positions.worldPos,
-          e as unknown as React.PointerEvent
-        );
+        toolPointerUp(positions.screenPos, positions.worldPos, e as unknown as React.PointerEvent);
       }
     },
     [getCanvasPositions, toolPointerUp, toolCursor]

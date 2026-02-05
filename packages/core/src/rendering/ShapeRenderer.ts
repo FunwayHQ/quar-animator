@@ -3,11 +3,24 @@
  * Renders rectangles, ellipses, and paths using WebGL 2
  */
 
-import type { Matrix3, RectangleNode, EllipseNode, PathNode, Node, Fill, Stroke, Color } from '@quar/types';
+import type {
+  Matrix3,
+  RectangleNode,
+  EllipseNode,
+  PathNode,
+  Node,
+  Fill,
+  Stroke,
+  Color,
+} from '@quar/types';
 import { WebGLRenderer, type ShaderProgram } from './WebGLRenderer';
 import { SceneGraph } from '../SceneGraph';
 import { mat3 } from '../math';
-import { tessellatePathToVertices, createRectanglePath, createEllipsePath } from '../path/pathUtils';
+import {
+  tessellatePathToVertices,
+  createRectanglePath,
+  createEllipsePath,
+} from '../path/pathUtils';
 
 // ============================================================================
 // Shaders
@@ -44,7 +57,7 @@ void main() {
 // Configuration
 // ============================================================================
 
-const DEFAULT_ELLIPSE_SEGMENTS = 64;
+const _DEFAULT_ELLIPSE_SEGMENTS = 64;
 const MAX_VERTICES = 10000;
 
 // ============================================================================
@@ -96,14 +109,7 @@ export class ShapeRenderer {
 
     if (this.program) {
       gl.enableVertexAttribArray(this.program.attributes.a_position);
-      gl.vertexAttribPointer(
-        this.program.attributes.a_position,
-        2,
-        gl.FLOAT,
-        false,
-        0,
-        0
-      );
+      gl.vertexAttribPointer(this.program.attributes.a_position, 2, gl.FLOAT, false, 0, 0);
     }
 
     this.renderer.bindVAO(null);
@@ -119,7 +125,7 @@ export class ShapeRenderer {
   render(
     sceneGraph: SceneGraph,
     viewProjectionMatrix: Matrix3,
-    selectedIds: Set<string> = new Set()
+    _selectedIds: Set<string> = new Set()
   ): void {
     if (!this.program || !this.vao) return;
 
@@ -142,16 +148,58 @@ export class ShapeRenderer {
 
       switch (node.type) {
         case 'rectangle':
-          this.renderRectangle(node as RectangleNode, worldTransform);
+          this.renderRectangle(node, worldTransform);
           break;
         case 'ellipse':
-          this.renderEllipse(node as EllipseNode, worldTransform);
+          this.renderEllipse(node, worldTransform);
           break;
         case 'path':
-          this.renderPath(node as PathNode, worldTransform);
+          this.renderPath(node, worldTransform);
           break;
       }
     });
+
+    this.renderer.bindVAO(null);
+  }
+
+  /**
+   * Render a single node (used for preview during drawing)
+   */
+  renderNode(node: Node, viewProjectionMatrix: Matrix3): void {
+    if (!this.program || !this.vao || !node.visible) return;
+
+    const gl = this.renderer.context;
+
+    // Set up shader program
+    this.renderer.useProgram(this.program);
+    this.renderer.bindVAO(this.vao);
+
+    // Set view-projection matrix
+    gl.uniformMatrix3fv(
+      this.program.uniforms.u_viewProjection,
+      false,
+      mat3.toFloat32Array(viewProjectionMatrix)
+    );
+
+    // Create world matrix from node transform
+    const worldMatrix = mat3.compose(
+      node.transform.position,
+      node.transform.rotation,
+      node.transform.scale,
+      node.transform.anchor
+    );
+
+    switch (node.type) {
+      case 'rectangle':
+        this.renderRectangle(node, worldMatrix);
+        break;
+      case 'ellipse':
+        this.renderEllipse(node, worldMatrix);
+        break;
+      case 'path':
+        this.renderPath(node, worldMatrix);
+        break;
+    }
 
     this.renderer.bindVAO(null);
   }
@@ -177,11 +225,7 @@ export class ShapeRenderer {
     const tessellated = tessellatePathToVertices(pathPoints, true, 1.0);
 
     // Set model matrix
-    gl.uniformMatrix3fv(
-      this.program.uniforms.u_model,
-      false,
-      mat3.toFloat32Array(worldMatrix)
-    );
+    gl.uniformMatrix3fv(this.program.uniforms.u_model, false, mat3.toFloat32Array(worldMatrix));
 
     // Render fill
     if (node.fill && node.fill.type !== 'none') {
@@ -209,11 +253,7 @@ export class ShapeRenderer {
     const tessellated = tessellatePathToVertices(pathPoints, true, 0.5);
 
     // Set model matrix
-    gl.uniformMatrix3fv(
-      this.program.uniforms.u_model,
-      false,
-      mat3.toFloat32Array(worldMatrix)
-    );
+    gl.uniformMatrix3fv(this.program.uniforms.u_model, false, mat3.toFloat32Array(worldMatrix));
 
     // Render fill
     if (node.fill && node.fill.type !== 'none') {
@@ -238,11 +278,7 @@ export class ShapeRenderer {
     const tessellated = tessellatePathToVertices(node.points, node.closed, 1.0);
 
     // Set model matrix
-    gl.uniformMatrix3fv(
-      this.program.uniforms.u_model,
-      false,
-      mat3.toFloat32Array(worldMatrix)
-    );
+    gl.uniformMatrix3fv(this.program.uniforms.u_model, false, mat3.toFloat32Array(worldMatrix));
 
     // Render fill (only for closed paths)
     if (node.closed && node.fill && node.fill.type !== 'none') {
@@ -319,12 +355,7 @@ export class ShapeRenderer {
   }
 
   private colorToFloat32Array(color: Color, opacity: number): Float32Array {
-    return new Float32Array([
-      color.r / 255,
-      color.g / 255,
-      color.b / 255,
-      color.a * opacity,
-    ]);
+    return new Float32Array([color.r / 255, color.g / 255, color.b / 255, color.a * opacity]);
   }
 
   // --------------------------------------------------------------------------
