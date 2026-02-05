@@ -188,7 +188,8 @@ export function Canvas() {
   const transformHandles = useMemo(() => {
     if (!transformHandlesRef.current || !selectionBounds || !cameraRef.current) return [];
     return transformHandlesRef.current.getHandles(selectionBounds, cameraRef.current);
-  }, [selectionBounds]);
+    // zoomPercent triggers recalculation when camera zoom changes
+  }, [selectionBounds, zoomPercent]);
 
   // Get the rotation of the selected node(s)
   // For single selection, use the node's rotation
@@ -232,7 +233,8 @@ export function Canvas() {
       },
       center: camera.worldToScreen(selectionBounds.center),
     };
-  }, [selectionBounds]);
+    // zoomPercent triggers recalculation when camera zoom changes
+  }, [selectionBounds, zoomPercent]);
 
   // --------------------------------------------------------------------------
   // Initialization
