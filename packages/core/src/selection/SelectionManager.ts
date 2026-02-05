@@ -89,12 +89,16 @@ export class SelectionManager {
 
       case 'polygon': {
         const polygonNode = node as any;
-        // Polygon bounds are based on the outer radius
+        // Polygon bounds account for transform scale
+        const scaleX = transform.scale?.x ?? 1;
+        const scaleY = transform.scale?.y ?? 1;
+        const scaledRadiusX = polygonNode.radius * scaleX;
+        const scaledRadiusY = polygonNode.radius * scaleY;
         return {
-          x: pos.x - polygonNode.radius,
-          y: pos.y - polygonNode.radius,
-          width: polygonNode.radius * 2,
-          height: polygonNode.radius * 2,
+          x: pos.x - scaledRadiusX,
+          y: pos.y - scaledRadiusY,
+          width: scaledRadiusX * 2,
+          height: scaledRadiusY * 2,
         };
       }
 

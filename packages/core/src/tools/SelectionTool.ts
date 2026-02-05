@@ -29,6 +29,7 @@ interface NodeResizeState {
   radiusX?: number;
   radiusY?: number;
   radius?: number; // For polygon nodes
+  scale?: Vector2; // For polygon non-uniform scaling
 }
 
 // ============================================================================
@@ -351,12 +352,16 @@ export class SelectionTool extends BaseTool {
         };
       }
       case 'polygon': {
-        // Polygon bounds are based on the outer radius
+        // Polygon bounds account for transform scale
+        const scaleX = transform.scale?.x ?? 1;
+        const scaleY = transform.scale?.y ?? 1;
+        const scaledRadiusX = node.radius * scaleX;
+        const scaledRadiusY = node.radius * scaleY;
         return {
-          x: pos.x - node.radius,
-          y: pos.y - node.radius,
-          width: node.radius * 2,
-          height: node.radius * 2,
+          x: pos.x - scaledRadiusX,
+          y: pos.y - scaledRadiusY,
+          width: scaledRadiusX * 2,
+          height: scaledRadiusY * 2,
         };
       }
       case 'path': {
@@ -465,6 +470,7 @@ export class SelectionTool extends BaseTool {
         state.radiusY = node.radiusY;
       } else if (node.type === 'polygon') {
         state.radius = node.radius;
+        state.scale = { ...node.transform.scale };
       }
 
       states.set(id, state);
@@ -561,14 +567,22 @@ export class SelectionTool extends BaseTool {
           radiusX: newRadiusX,
           radiusY: newRadiusY,
         });
-      } else if (node.type === 'polygon' && initialState.radius !== undefined) {
-        // For polygons, use uniform scale (average of X and Y)
-        const uniformScale = (scaleX + scaleY) / 2;
-        const newRadius = Math.max(1, initialState.radius * uniformScale);
+      } else if (
+        node.type === 'polygon' &&
+        initialState.radius !== undefined &&
+        initialState.scale !== undefined
+      ) {
+        // For polygons, apply non-uniform scaling via transform scale
+        // This allows stretching/squishing the polygon
+        const newScaleX = Math.max(0.01, initialState.scale.x * scaleX);
+        const newScaleY = Math.max(0.01, initialState.scale.y * scaleY);
 
         this.context.sceneGraph.updateNode(id, {
-          transform: { ...node.transform, position: newPosition },
-          radius: newRadius,
+          transform: {
+            ...node.transform,
+            position: newPosition,
+            scale: { x: newScaleX, y: newScaleY },
+          },
         });
       }
     }
