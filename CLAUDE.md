@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Quar Animator is a free, open-source, web-native 2D animation platform designed to fill the gap left by Adobe Animate's discontinuation. It's part of the QUAR Suite (alongside Quar Editor for 3D and Quar Vector for 2D illustration).
 
-**Current Status**: Sprint 5 in progress. Polygon tool implemented with comprehensive tests. Full vector drawing foundation with tools, selection, and UI integration. Canvas foundation with WebGL 2 rendering in `@quar/core`. Modern violet/bordeaux design system.
+**Current Status**: Sprint 5 complete. Full vector drawing tools (Rectangle, Ellipse, Polygon/Star) with comprehensive test coverage. Selection infrastructure with transform handles. Canvas foundation with WebGL 2 rendering. Modern violet/bordeaux design system.
 
 ## Sprint Progress
 
@@ -48,7 +48,7 @@ Quar Animator is a free, open-source, web-native 2D animation platform designed 
 - [x] SceneGraph for hierarchical node management with events
 - [x] Test coverage: 310 tests (core: 221, ui: 89)
 
-**Current test coverage**: ~853 tests (core: 622, ui: 89, web: 142)
+**Test coverage milestone**: 622 core tests, 89 UI tests
 
 ### Sprint 3.5: Bug Fixes & UI Refresh ✅ COMPLETE
 
@@ -86,7 +86,7 @@ Quar Animator is a free, open-source, web-native 2D animation platform designed 
   - Canvas.tsx integration (tools, shapes, selection rendering)
   - Toolbar.tsx connected to EditorStore
 
-### Sprint 5: Drawing Tools - Shapes 🔄 IN PROGRESS
+### Sprint 5: Drawing Tools - Shapes ✅ COMPLETE
 
 - [x] PolygonTool implementation - 55 tests
   - Regular polygons (3-12 sides: triangle, pentagon, hexagon, etc.)
@@ -103,8 +103,8 @@ Quar Animator is a free, open-source, web-native 2D animation platform designed 
   - 'U' keyboard shortcut for polygon tool
   - Tool registration and switching
 - [x] Toolbar polygon button with icon
-- [ ] Tool cursor feedback enhancements
-- [ ] Properties panel integration for shape creation
+
+**Total test coverage**: ~622 core tests, 89 UI tests
 
 ## Development Commands
 
