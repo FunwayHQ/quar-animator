@@ -1,0 +1,44 @@
+/* PenToolOverlay Styles */
+
+.overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  overflow: visible;
+}
+
+.handleLine {
+  stroke: var(--color-accent-primary, #a855f7);
+  stroke-width: 1;
+  stroke-opacity: 0.8;
+  pointer-events: none;
+}
+
+.handle {
+  fill: white;
+  stroke: var(--color-accent-primary, #a855f7);
+  stroke-width: 1.5;
+  pointer-events: auto;
+  cursor: crosshair;
+  transition: fill 0.1s ease;
+}
+
+.handle:hover {
+  fill: var(--color-accent-primary, #a855f7);
+}
+
+.point {
+  fill: white;
+  stroke: var(--color-accent-primary, #a855f7);
+  stroke-width: 1.5;
+  pointer-events: auto;
+  cursor: move;
+  transition: fill 0.1s ease;
+}
+
+.point:hover {
+  fill: var(--color-accent-primary, #a855f7);
+}

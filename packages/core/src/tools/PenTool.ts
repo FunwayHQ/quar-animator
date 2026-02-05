@@ -12,6 +12,15 @@ import { vec2 } from '../math';
 // PenTool Class
 // ============================================================================
 
+// Handle drag mode types
+type HandleDragMode = 'none' | 'new-point' | 'existing-handle';
+
+interface HandleDragState {
+  mode: HandleDragMode;
+  pointIndex: number;
+  handleType: 'in' | 'out';
+}
+
 export class PenTool extends BaseTool {
   readonly type = 'pen' as const;
   readonly cursor = 'crosshair';
@@ -20,6 +29,13 @@ export class PenTool extends BaseTool {
   private isDrawing: boolean = false;
   private isDraggingHandle: boolean = false;
   private previewNode: PathNode | null = null;
+
+  // Handle manipulation state
+  private handleDragState: HandleDragState = {
+    mode: 'none',
+    pointIndex: -1,
+    handleType: 'out',
+  };
 
   constructor(context: ToolContext) {
     super(context);
@@ -85,23 +101,68 @@ export class PenTool extends BaseTool {
     this.state.currentWorldPos = worldPos;
 
     if (this.isDraggingHandle && this.currentPath.length > 0) {
-      // Update handle of the last point
-      const lastPoint = this.currentPath[this.currentPath.length - 1];
-      const handleOut = vec2.subtract(worldPos, lastPoint.position);
+      if (this.handleDragState.mode === 'existing-handle') {
+        // Dragging an existing handle
+        this.updateExistingHandle(worldPos);
+      } else {
+        // Creating a new point - update handle of the last point
+        const lastPoint = this.currentPath[this.currentPath.length - 1];
+        const handleOut = vec2.subtract(worldPos, lastPoint.position);
 
-      // Check if the handle has significant length
-      if (vec2.length(handleOut) > 1) {
-        lastPoint.handleOut = handleOut;
-        lastPoint.handleIn = { x: -handleOut.x, y: -handleOut.y };
-        lastPoint.type = 'smooth';
+        // Check if the handle has significant length
+        if (vec2.length(handleOut) > 1) {
+          lastPoint.handleOut = handleOut;
+          lastPoint.handleIn = { x: -handleOut.x, y: -handleOut.y };
+          lastPoint.type = 'smooth';
+        }
       }
 
       this.updatePreviewNode();
     }
   }
 
+  /**
+   * Update an existing handle position during drag
+   */
+  private updateExistingHandle(worldPos: Vector2): void {
+    const { pointIndex, handleType } = this.handleDragState;
+    const point = this.currentPath[pointIndex];
+    if (!point) return;
+
+    const handleOffset = vec2.subtract(worldPos, point.position);
+
+    if (handleType === 'out') {
+      point.handleOut = handleOffset;
+      // For smooth points, update the opposite handle
+      if (point.type === 'smooth' || point.type === 'symmetric') {
+        const length =
+          point.type === 'symmetric' && point.handleIn
+            ? vec2.length(handleOffset)
+            : point.handleIn
+              ? vec2.length(point.handleIn)
+              : vec2.length(handleOffset);
+        const direction = vec2.normalize({ x: -handleOffset.x, y: -handleOffset.y });
+        point.handleIn = vec2.multiply(direction, length);
+      }
+    } else {
+      point.handleIn = handleOffset;
+      // For smooth points, update the opposite handle
+      if (point.type === 'smooth' || point.type === 'symmetric') {
+        const length =
+          point.type === 'symmetric' && point.handleOut
+            ? vec2.length(handleOffset)
+            : point.handleOut
+              ? vec2.length(point.handleOut)
+              : vec2.length(handleOffset);
+        const direction = vec2.normalize({ x: -handleOffset.x, y: -handleOffset.y });
+        point.handleOut = vec2.multiply(direction, length);
+      }
+    }
+  }
+
   onPointerUp(_event: CanvasPointerEvent): void {
     this.isDraggingHandle = false;
+    this.handleDragState = { mode: 'none', pointIndex: -1, handleType: 'out' };
   }
 
   // --------------------------------------------------------------------------
@@ -163,6 +224,57 @@ export class PenTool extends BaseTool {
    */
   getCurrentPath(): PathPoint[] {
     return [...this.currentPath];
+  }
+
+  /**
+   * Start dragging an existing handle (called from UI overlay)
+   */
+  startHandleDrag(pointIndex: number, handleType: 'in' | 'out'): void {
+    if (!this.isDrawing || pointIndex < 0 || pointIndex >= this.currentPath.length) return;
+
+    this.isDraggingHandle = true;
+    this.handleDragState = {
+      mode: 'existing-handle',
+      pointIndex,
+      handleType,
+    };
+  }
+
+  /**
+   * Start dragging an existing point (called from UI overlay)
+   * Returns true if the path was closed, false otherwise
+   */
+  startPointDrag(pointIndex: number): boolean {
+    if (!this.isDrawing || pointIndex < 0 || pointIndex >= this.currentPath.length) return false;
+
+    // Check if clicking on the first point to close the path
+    if (pointIndex === 0 && this.currentPath.length > 2) {
+      this.finalizePath(true);
+      return true; // Path was closed
+    }
+
+    // For other points, clicking adjusts the handleOut
+    // This allows re-adjusting handles of previously placed points
+    this.isDraggingHandle = true;
+    this.handleDragState = {
+      mode: 'existing-handle',
+      pointIndex,
+      handleType: 'out',
+    };
+    return false;
+  }
+
+  /**
+   * Move an existing point to a new position (called from UI overlay)
+   */
+  movePoint(pointIndex: number, worldPos: Vector2): void {
+    if (!this.isDrawing || pointIndex < 0 || pointIndex >= this.currentPath.length) return;
+
+    const point = this.currentPath[pointIndex];
+    if (point) {
+      point.position = { ...worldPos };
+      this.updatePreviewNode();
+    }
   }
 
   // --------------------------------------------------------------------------

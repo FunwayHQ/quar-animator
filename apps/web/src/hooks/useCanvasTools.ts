@@ -4,8 +4,8 @@
  */
 
 import { useEffect, useRef, useCallback, useState } from 'react';
-import { ToolManager, SceneGraph, Camera } from '@quar/core';
-import type { CanvasPointerEvent, Node, Vector2 } from '@quar/types';
+import { ToolManager, SceneGraph, Camera, PenTool } from '@quar/core';
+import type { CanvasPointerEvent, Node, PathPoint, Vector2 } from '@quar/types';
 import { useEditorStore } from '../stores/editorStore';
 
 // ============================================================================
@@ -35,6 +35,14 @@ export interface UseCanvasToolsReturn {
   previewNode: Node | null;
   /** Current cursor for active tool */
   cursor: string;
+  /** Current path points when using PenTool */
+  penToolPath: PathPoint[];
+  /** Whether PenTool is currently drawing */
+  isPenToolDrawing: boolean;
+  /** Start dragging a handle in PenTool */
+  startPenHandleDrag: (pointIndex: number, handleType: 'in' | 'out') => void;
+  /** Start dragging a point in PenTool. Returns true if path was closed. */
+  startPenPointDrag: (pointIndex: number) => boolean;
 }
 
 // ============================================================================
@@ -83,6 +91,10 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
   // Track preview node for rendering
   const [previewNode, setPreviewNode] = useState<Node | null>(null);
   const [cursor, setCursor] = useState<string>('default');
+
+  // Track PenTool state for overlay
+  const [penToolPath, setPenToolPath] = useState<PathPoint[]>([]);
+  const [isPenToolDrawing, setIsPenToolDrawing] = useState(false);
 
   // Get store methods and state
   const activeTool = useEditorStore((state) => state.activeTool);
@@ -144,6 +156,21 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
     }
   }, [activeTool]);
 
+  // Sync PenTool path state for overlay
+  const syncPenToolState = useCallback(() => {
+    if (!toolManagerRef.current) return;
+
+    const activeTool = toolManagerRef.current.getActiveTool();
+    if (activeTool?.type === 'pen') {
+      const penTool = activeTool as PenTool;
+      setPenToolPath(penTool.getCurrentPath());
+      setIsPenToolDrawing(penTool.isCurrentlyDrawing());
+    } else {
+      setPenToolPath([]);
+      setIsPenToolDrawing(false);
+    }
+  }, []);
+
   // Event handlers
   const handlePointerDown = useCallback(
     (screenPos: Vector2, worldPos: Vector2, event: React.PointerEvent) => {
@@ -157,8 +184,11 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
       // Update preview
       const preview = toolManagerRef.current.getPreviewNode();
       setPreviewNode(preview);
+
+      // Sync PenTool state for overlay
+      syncPenToolState();
     },
-    [setIsDrawing]
+    [setIsDrawing, syncPenToolState]
   );
 
   const handlePointerMove = useCallback(
@@ -174,8 +204,11 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
 
       // Update cursor (for dynamic cursors like resize handles)
       setCursor(toolManagerRef.current.getCursor() as string);
+
+      // Sync PenTool state for overlay during handle drag
+      syncPenToolState();
     },
-    []
+    [syncPenToolState]
   );
 
   const handlePointerUp = useCallback(
@@ -189,8 +222,11 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
 
       // Clear preview
       setPreviewNode(null);
+
+      // Sync PenTool state for overlay
+      syncPenToolState();
     },
-    [setIsDrawing]
+    [setIsDrawing, syncPenToolState]
   );
 
   const handleKeyDown = useCallback((event: React.KeyboardEvent) => {
@@ -203,6 +239,36 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
     toolManagerRef.current.handleKeyUp(event.nativeEvent);
   }, []);
 
+  // Callbacks for PenTool handle/point manipulation
+  const startPenHandleDrag = useCallback((pointIndex: number, handleType: 'in' | 'out') => {
+    if (!toolManagerRef.current) return;
+
+    const activeTool = toolManagerRef.current.getActiveTool();
+    if (activeTool?.type === 'pen') {
+      const penTool = activeTool as PenTool;
+      penTool.startHandleDrag(pointIndex, handleType);
+    }
+  }, []);
+
+  const startPenPointDrag = useCallback(
+    (pointIndex: number): boolean => {
+      if (!toolManagerRef.current) return false;
+
+      const activeTool = toolManagerRef.current.getActiveTool();
+      if (activeTool?.type === 'pen') {
+        const penTool = activeTool as PenTool;
+        const pathClosed = penTool.startPointDrag(pointIndex);
+        if (pathClosed) {
+          // Path was closed, sync the state
+          syncPenToolState();
+        }
+        return pathClosed;
+      }
+      return false;
+    },
+    [syncPenToolState]
+  );
+
   return {
     toolManagerRef,
     sceneGraphRef,
@@ -213,5 +279,9 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
     handleKeyUp,
     previewNode,
     cursor,
+    penToolPath,
+    isPenToolDrawing,
+    startPenHandleDrag,
+    startPenPointDrag,
   };
 }

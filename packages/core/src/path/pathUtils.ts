@@ -110,8 +110,8 @@ export function getPathBounds(points: PathPoint[], closed: boolean): Rect | null
   return {
     x: minX,
     y: minY,
-    width: maxX - minX,
-    height: maxY - minY,
+    width: Math.max(maxX - minX, 1),
+    height: Math.max(maxY - minY, 1),
   };
 }
 

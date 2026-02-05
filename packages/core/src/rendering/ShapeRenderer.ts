@@ -24,6 +24,7 @@ import {
   createPolygonPath,
   createStarPath,
 } from '../path/pathUtils';
+import earcut from 'earcut';
 
 // ============================================================================
 // Shaders
@@ -72,13 +73,16 @@ export class ShapeRenderer {
   private program: ShaderProgram | null = null;
   private vao: WebGLVertexArrayObject | null = null;
   private vertexBuffer: WebGLBuffer | null = null;
+  private indexBuffer: WebGLBuffer | null = null;
 
   // Pre-allocated arrays to avoid GC
   private vertices: Float32Array;
+  private indices: Uint16Array;
 
   constructor(renderer: WebGLRenderer) {
     this.renderer = renderer;
     this.vertices = new Float32Array(MAX_VERTICES * 2);
+    this.indices = new Uint16Array(MAX_VERTICES * 3); // Triangulated indices
 
     this.initializeShaders();
     this.initializeBuffers();
@@ -109,6 +113,11 @@ export class ShapeRenderer {
     this.vertexBuffer = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
     gl.bufferData(gl.ARRAY_BUFFER, this.vertices.byteLength, gl.DYNAMIC_DRAW);
+
+    // Create index buffer
+    this.indexBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indexBuffer);
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, this.indices.byteLength, gl.DYNAMIC_DRAW);
 
     if (this.program) {
       gl.enableVertexAttribArray(this.program.attributes.a_position);
@@ -295,36 +304,15 @@ export class ShapeRenderer {
     // Set model matrix
     gl.uniformMatrix3fv(this.program.uniforms.u_model, false, mat3.toFloat32Array(worldMatrix));
 
-    // Render fill
+    // Render fill - earcut handles both convex and concave shapes
     if (node.fill && node.fill.type !== 'none') {
-      if (node.innerRadius !== undefined) {
-        // Stars are concave - need to triangulate from center
-        // Create vertices with center point first for proper triangle fan
-        const starVertices = this.createStarFillVertices(tessellated);
-        this.renderFill(starVertices, node.fill);
-      } else {
-        // Regular polygons are convex - triangle fan works fine
-        this.renderFill(tessellated, node.fill);
-      }
+      this.renderFill(tessellated, node.fill);
     }
 
     // Render stroke
     if (node.stroke && node.stroke.width > 0) {
       this.renderStroke(tessellated, node.stroke, true);
     }
-  }
-
-  /**
-   * Create vertices for star fill with center point first
-   * This allows proper triangle fan rendering for concave star shapes
-   */
-  private createStarFillVertices(perimeterVertices: Float32Array): Float32Array {
-    // Add center point (0,0) as first vertex, then all perimeter vertices
-    const result = new Float32Array(2 + perimeterVertices.length);
-    result[0] = 0; // center x
-    result[1] = 0; // center y
-    result.set(perimeterVertices, 2);
-    return result;
   }
 
   /**
@@ -353,7 +341,8 @@ export class ShapeRenderer {
   }
 
   /**
-   * Render filled polygon using triangle fan
+   * Render filled polygon using earcut triangulation
+   * This handles both convex and concave shapes correctly
    */
   private renderFill(vertices: Float32Array, fill: Fill): void {
     if (!this.program) return;
@@ -368,12 +357,26 @@ export class ShapeRenderer {
     gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
     gl.bufferSubData(gl.ARRAY_BUFFER, 0, vertices);
 
-    // Draw as triangle fan (for convex shapes)
-    // For complex shapes, we'd need triangulation
     const numVertices = vertices.length / 2;
-    if (numVertices >= 3) {
+    if (numVertices < 3) return;
+
+    // Use earcut for triangulation - handles both convex and concave polygons
+    // earcut expects a flat array of coordinates [x0, y0, x1, y1, ...]
+    const indices = earcut(Array.from(vertices.subarray(0, numVertices * 2)));
+
+    if (indices.length === 0) {
+      // Fallback to triangle fan if earcut fails (shouldn't happen for valid polygons)
       gl.drawArrays(gl.TRIANGLE_FAN, 0, numVertices);
+      return;
     }
+
+    // Upload indices
+    const indicesArray = new Uint16Array(indices);
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indexBuffer);
+    gl.bufferSubData(gl.ELEMENT_ARRAY_BUFFER, 0, indicesArray);
+
+    // Draw using indexed triangles
+    gl.drawElements(gl.TRIANGLES, indices.length, gl.UNSIGNED_SHORT, 0);
   }
 
   /**
@@ -428,6 +431,9 @@ export class ShapeRenderer {
 
     if (this.vertexBuffer) {
       gl.deleteBuffer(this.vertexBuffer);
+    }
+    if (this.indexBuffer) {
+      gl.deleteBuffer(this.indexBuffer);
     }
     if (this.vao) {
       gl.deleteVertexArray(this.vao);

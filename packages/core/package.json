@@ -12,9 +12,11 @@
     "clean": "rimraf dist"
   },
   "dependencies": {
-    "@quar/types": "workspace:*"
+    "@quar/types": "workspace:*",
+    "earcut": "^3.0.2"
   },
   "devDependencies": {
+    "@types/earcut": "^3.0.0",
     "tsup": "^8.0.1",
     "typescript": "^5.3.3",
     "vitest": "^1.2.0"

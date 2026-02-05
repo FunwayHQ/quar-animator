@@ -9,7 +9,7 @@ import { vec2, rect } from '../math';
 import { SelectionManager } from '../selection/SelectionManager';
 import { TransformHandles } from '../selection/TransformHandles';
 import type { HandlePosition, SelectionBounds } from '../selection/types';
-import { getPolygonBounds } from '../path/pathUtils';
+import { getPolygonBounds, getPathBounds } from '../path/pathUtils';
 
 // ============================================================================
 // Types
@@ -364,6 +364,18 @@ export class SelectionTool extends BaseTool {
     const bounds = this.getNodeBounds(node);
     if (!bounds) return false;
 
+    // For paths, expand the bounds by a hit tolerance to make thin paths easier to select
+    if (node.type === 'path') {
+      const hitTolerance = 8 / this.context.camera.zoom; // 8 screen pixels
+      const expandedBounds = {
+        x: bounds.x - hitTolerance,
+        y: bounds.y - hitTolerance,
+        width: Math.max(bounds.width, hitTolerance * 2) + hitTolerance * 2,
+        height: Math.max(bounds.height, hitTolerance * 2) + hitTolerance * 2,
+      };
+      return rect.contains(expandedBounds, point);
+    }
+
     return rect.contains(bounds, point);
   }
 
@@ -408,25 +420,14 @@ export class SelectionTool extends BaseTool {
         );
       }
       case 'path': {
-        if (node.points.length === 0) return null;
-
-        let minX = Infinity;
-        let minY = Infinity;
-        let maxX = -Infinity;
-        let maxY = -Infinity;
-
-        for (const p of node.points) {
-          minX = Math.min(minX, p.position.x);
-          minY = Math.min(minY, p.position.y);
-          maxX = Math.max(maxX, p.position.x);
-          maxY = Math.max(maxY, p.position.y);
-        }
+        const pathBounds = getPathBounds(node.points, node.closed);
+        if (!pathBounds) return null;
 
         return {
-          x: minX + pos.x,
-          y: minY + pos.y,
-          width: maxX - minX,
-          height: maxY - minY,
+          x: pathBounds.x + pos.x,
+          y: pathBounds.y + pos.y,
+          width: pathBounds.width,
+          height: pathBounds.height,
         };
       }
       default:
@@ -439,10 +440,23 @@ export class SelectionTool extends BaseTool {
    */
   private getNodesInRect(selectionRect: Rect): Node[] {
     const result: Node[] = [];
+    const hitTolerance = 8 / this.context.camera.zoom; // 8 screen pixels
 
     this.context.sceneGraph.traverseVisible((node) => {
-      const bounds = this.getNodeBounds(node);
-      if (bounds && rect.intersects(selectionRect, bounds)) {
+      let bounds = this.getNodeBounds(node);
+      if (!bounds) return;
+
+      // For paths, expand bounds to make thin paths easier to marquee select
+      if (node.type === 'path') {
+        bounds = {
+          x: bounds.x - hitTolerance,
+          y: bounds.y - hitTolerance,
+          width: Math.max(bounds.width, hitTolerance * 2) + hitTolerance * 2,
+          height: Math.max(bounds.height, hitTolerance * 2) + hitTolerance * 2,
+        };
+      }
+
+      if (rect.intersects(selectionRect, bounds)) {
         result.push(node);
       }
     });

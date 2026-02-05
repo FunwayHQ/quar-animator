@@ -7,12 +7,14 @@ import {
   SelectionManager,
   TransformHandles,
   getPolygonBounds,
+  getPathBounds,
 } from '@quar/core';
 import type { Vector2 } from '@quar/types';
 import { useCanvasTools } from '../../hooks/useCanvasTools';
 import { useToolShortcuts } from '../../hooks/useToolShortcuts';
 import { useEditorStore } from '../../stores/editorStore';
 import { SelectionOverlay } from '../canvas/SelectionOverlay';
+import { PenToolOverlay } from '../canvas/PenToolOverlay';
 import styles from './Canvas.module.css';
 
 // ============================================================================
@@ -67,6 +69,10 @@ export function Canvas() {
     handleKeyUp: toolKeyUp,
     previewNode,
     cursor: toolCursor,
+    penToolPath,
+    isPenToolDrawing,
+    startPenHandleDrag,
+    startPenPointDrag,
   } = useCanvasTools({ camera: cameraReady ? cameraRef.current : null });
 
   // Subscribe to scene graph changes to update selection bounds
@@ -149,28 +155,13 @@ export function Canvas() {
         );
       } else if (node.type === 'path') {
         const pathNode = node as any;
-        if (pathNode.points && pathNode.points.length > 0) {
-          let pathMinX = Infinity;
-          let pathMinY = Infinity;
-          let pathMaxX = -Infinity;
-          let pathMaxY = -Infinity;
-
-          for (const p of pathNode.points) {
-            pathMinX = Math.min(pathMinX, p.position.x);
-            pathMinY = Math.min(pathMinY, p.position.y);
-            pathMaxX = Math.max(pathMaxX, p.position.x);
-            pathMaxY = Math.max(pathMaxY, p.position.y);
-          }
-
-          // Calculate width/height with minimum size for very thin paths
-          const pathWidth = Math.max(pathMaxX - pathMinX, 1);
-          const pathHeight = Math.max(pathMaxY - pathMinY, 1);
-
+        const pathBounds = getPathBounds(pathNode.points, pathNode.closed);
+        if (pathBounds) {
           nodeBounds = {
-            x: pathMinX + pos.x,
-            y: pathMinY + pos.y,
-            width: pathWidth,
-            height: pathHeight,
+            x: pathBounds.x + pos.x,
+            y: pathBounds.y + pos.y,
+            width: pathBounds.width,
+            height: pathBounds.height,
           };
         }
       }
@@ -621,6 +612,102 @@ export function Canvas() {
   );
 
   // --------------------------------------------------------------------------
+  // PenTool Overlay Handlers
+  // --------------------------------------------------------------------------
+
+  const handlePenHandlePointerDown = useCallback(
+    (pointIndex: number, handleType: 'in' | 'out', e: React.PointerEvent) => {
+      e.stopPropagation();
+      e.preventDefault();
+
+      // Start dragging the handle
+      startPenHandleDrag(pointIndex, handleType);
+
+      const camera = cameraRef.current;
+      const canvas = canvasRef.current;
+      if (!camera || !canvas) return;
+
+      // Set up global event handlers for drag operation
+      const handleGlobalMove = (moveEvent: PointerEvent) => {
+        if (!camera || !canvas) return;
+        const rect = canvas.getBoundingClientRect();
+        const moveScreenPos: Vector2 = {
+          x: moveEvent.clientX - rect.left,
+          y: moveEvent.clientY - rect.top,
+        };
+        const moveWorldPos = camera.screenToWorld(moveScreenPos);
+        toolPointerMove(moveScreenPos, moveWorldPos, moveEvent as unknown as React.PointerEvent);
+      };
+
+      const handleGlobalUp = (upEvent: PointerEvent) => {
+        if (!camera || !canvas) return;
+        const rect = canvas.getBoundingClientRect();
+        const upScreenPos: Vector2 = {
+          x: upEvent.clientX - rect.left,
+          y: upEvent.clientY - rect.top,
+        };
+        const upWorldPos = camera.screenToWorld(upScreenPos);
+        toolPointerUp(upScreenPos, upWorldPos, upEvent as unknown as React.PointerEvent);
+
+        document.removeEventListener('pointermove', handleGlobalMove);
+        document.removeEventListener('pointerup', handleGlobalUp);
+      };
+
+      document.addEventListener('pointermove', handleGlobalMove);
+      document.addEventListener('pointerup', handleGlobalUp);
+    },
+    [startPenHandleDrag, toolPointerMove, toolPointerUp]
+  );
+
+  const handlePenPointPointerDown = useCallback(
+    (pointIndex: number, e: React.PointerEvent) => {
+      e.stopPropagation();
+      e.preventDefault();
+
+      // Start dragging the point - returns true if path was closed
+      const pathClosed = startPenPointDrag(pointIndex);
+      if (pathClosed) {
+        // Path was closed, no need for drag handlers
+        return;
+      }
+
+      const camera = cameraRef.current;
+      const canvas = canvasRef.current;
+      if (!camera || !canvas) return;
+
+      // Set up global event handlers for drag operation
+      const handleGlobalMove = (moveEvent: PointerEvent) => {
+        if (!camera || !canvas) return;
+        const rect = canvas.getBoundingClientRect();
+        const moveScreenPos: Vector2 = {
+          x: moveEvent.clientX - rect.left,
+          y: moveEvent.clientY - rect.top,
+        };
+        const moveWorldPos = camera.screenToWorld(moveScreenPos);
+        toolPointerMove(moveScreenPos, moveWorldPos, moveEvent as unknown as React.PointerEvent);
+      };
+
+      const handleGlobalUp = (upEvent: PointerEvent) => {
+        if (!camera || !canvas) return;
+        const rect = canvas.getBoundingClientRect();
+        const upScreenPos: Vector2 = {
+          x: upEvent.clientX - rect.left,
+          y: upEvent.clientY - rect.top,
+        };
+        const upWorldPos = camera.screenToWorld(upScreenPos);
+        toolPointerUp(upScreenPos, upWorldPos, upEvent as unknown as React.PointerEvent);
+
+        document.removeEventListener('pointermove', handleGlobalMove);
+        document.removeEventListener('pointerup', handleGlobalUp);
+      };
+
+      document.addEventListener('pointermove', handleGlobalMove);
+      document.addEventListener('pointerup', handleGlobalUp);
+    },
+    [startPenPointDrag, toolPointerMove, toolPointerUp]
+  );
+
+  // --------------------------------------------------------------------------
   // Render
   // --------------------------------------------------------------------------
 
@@ -646,6 +733,14 @@ export function Canvas() {
         rotation={selectionRotation}
         onHandlePointerDown={handleOverlayPointerDown}
       />
+      {isPenToolDrawing && (
+        <PenToolOverlay
+          points={penToolPath}
+          camera={cameraRef.current}
+          onHandlePointerDown={handlePenHandlePointerDown}
+          onPointPointerDown={handlePenPointPointerDown}
+        />
+      )}
       <div className={styles.statusBar}>
         <span className={styles.coordinates}>
           X: {mouseWorldPos.x.toFixed(1)} Y: {mouseWorldPos.y.toFixed(1)}

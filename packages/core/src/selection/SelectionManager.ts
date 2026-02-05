@@ -7,7 +7,7 @@ import type { Node, Rect } from '@quar/types';
 import type { SceneGraph } from '../SceneGraph';
 import type { SelectionBounds } from './types';
 import { rect } from '../math';
-import { getPolygonBounds } from '../path/pathUtils';
+import { getPolygonBounds, getPathBounds } from '../path/pathUtils';
 
 // ============================================================================
 // SelectionManager Class
@@ -107,27 +107,14 @@ export class SelectionManager {
 
       case 'path': {
         const pathNode = node as any;
-        if (!pathNode.points || pathNode.points.length === 0) {
-          return null;
-        }
-
-        let minX = Infinity;
-        let minY = Infinity;
-        let maxX = -Infinity;
-        let maxY = -Infinity;
-
-        for (const p of pathNode.points) {
-          minX = Math.min(minX, p.position.x);
-          minY = Math.min(minY, p.position.y);
-          maxX = Math.max(maxX, p.position.x);
-          maxY = Math.max(maxY, p.position.y);
-        }
+        const pathBounds = getPathBounds(pathNode.points, pathNode.closed);
+        if (!pathBounds) return null;
 
         return {
-          x: minX + pos.x,
-          y: minY + pos.y,
-          width: maxX - minX,
-          height: maxY - minY,
+          x: pathBounds.x + pos.x,
+          y: pathBounds.y + pos.y,
+          width: pathBounds.width,
+          height: pathBounds.height,
         };
       }
 
