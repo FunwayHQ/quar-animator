@@ -393,7 +393,7 @@ export class BrushTool extends BaseTool {
     return pathPoints;
   }
 
-  private createPathNode(points: PathPoint[], closed: boolean): PathNode {
+  private createPathNode(points: PathPoint[], _closed: boolean): PathNode {
     const transform = createDefaultTransform();
     transform.position = { x: 0, y: 0 };
     transform.anchor = { x: 0, y: 0 };
@@ -411,6 +411,10 @@ export class BrushTool extends BaseTool {
 
     const strokeWidth = this.options.size * avgPressure;
 
+    // Generate a closed outline path for the brush stroke
+    // This creates a filled shape since WebGL line width is limited to 1px
+    const outlinePoints = this.generateStrokeOutline(points, strokeWidth);
+
     return {
       id: this.context.generateId(),
       name: 'Brush Stroke',
@@ -422,19 +426,94 @@ export class BrushTool extends BaseTool {
       locked: false,
       opacity: 1,
       blendMode: 'normal',
-      points: points.map((p) => ({
-        ...p,
-        position: { ...p.position },
-        handleIn: p.handleIn ? { ...p.handleIn } : null,
-        handleOut: p.handleOut ? { ...p.handleOut } : null,
-      })),
-      closed,
-      fill: null, // Brush strokes don't have fill
-      stroke: {
-        ...this.context.defaultStroke,
-        width: strokeWidth,
+      points: outlinePoints,
+      closed: true, // Closed path for fill rendering
+      fill: {
+        type: 'solid',
+        color: this.context.defaultStroke.color,
+        opacity: this.context.defaultStroke.opacity,
       },
+      stroke: null, // No stroke needed, using fill
     };
+  }
+
+  /**
+   * Generate outline points for a stroke path
+   * Creates a closed shape by offsetting the path on both sides
+   */
+  private generateStrokeOutline(points: PathPoint[], width: number): PathPoint[] {
+    if (points.length < 2) return points;
+
+    const halfWidth = Math.max(width / 2, 1); // Ensure minimum width
+    const leftSide: PathPoint[] = [];
+    const rightSide: PathPoint[] = [];
+
+    for (let i = 0; i < points.length; i++) {
+      const curr = points[i].position;
+      const prev = i > 0 ? points[i - 1].position : null;
+      const next = i < points.length - 1 ? points[i + 1].position : null;
+
+      // Calculate direction vector
+      let dx = 0;
+      let dy = 0;
+
+      if (prev && next) {
+        // Middle point: use direction from prev to next
+        dx = next.x - prev.x;
+        dy = next.y - prev.y;
+      } else if (next) {
+        // First point: use direction to next
+        dx = next.x - curr.x;
+        dy = next.y - curr.y;
+      } else if (prev) {
+        // Last point: use direction from prev
+        dx = curr.x - prev.x;
+        dy = curr.y - prev.y;
+      }
+
+      // Normalize and get perpendicular
+      const len = Math.sqrt(dx * dx + dy * dy);
+      if (len < 0.001) {
+        // Skip degenerate points
+        continue;
+      }
+
+      const perpX = -dy / len;
+      const perpY = dx / len;
+
+      // Create offset points with validated coordinates
+      const leftX = curr.x + perpX * halfWidth;
+      const leftY = curr.y + perpY * halfWidth;
+      const rightX = curr.x - perpX * halfWidth;
+      const rightY = curr.y - perpY * halfWidth;
+
+      // Only add valid points
+      if (isFinite(leftX) && isFinite(leftY)) {
+        leftSide.push({
+          position: { x: leftX, y: leftY },
+          handleIn: null,
+          handleOut: null,
+          type: 'corner',
+        });
+      }
+
+      if (isFinite(rightX) && isFinite(rightY)) {
+        rightSide.push({
+          position: { x: rightX, y: rightY },
+          handleIn: null,
+          handleOut: null,
+          type: 'corner',
+        });
+      }
+    }
+
+    // Need at least 3 points to form a closed shape
+    if (leftSide.length < 1 || rightSide.length < 1) {
+      return points; // Fall back to original points
+    }
+
+    // Combine: left side forward, then right side backward to form closed outline
+    return [...leftSide, ...rightSide.reverse()];
   }
 
   // --------------------------------------------------------------------------

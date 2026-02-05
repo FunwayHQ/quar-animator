@@ -93,6 +93,7 @@ export function createMockWebGL2Context(): WebGL2RenderingContext {
     // Draw operations
     drawArrays: vi.fn(),
     drawElements: vi.fn(),
+    lineWidth: vi.fn(),
 
     // Canvas reference
     canvas: document.createElement('canvas'),

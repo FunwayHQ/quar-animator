@@ -148,10 +148,11 @@ describe('BrushTool', () => {
 
       const nodes = Array.from(context.sceneGraph.getNodes());
       const path = nodes[0] as any;
-      expect(path.closed).toBe(false);
+      // Brush strokes are now closed outline paths for WebGL fill rendering
+      expect(path.closed).toBe(true);
     });
 
-    it('should have no fill (brush strokes are stroke-only)', () => {
+    it('should use fill rendering (not stroke) for WebGL compatibility', () => {
       const downEvent = createMockPointerEvent({
         worldPosition: { x: 0, y: 0 },
         button: 0,
@@ -171,10 +172,12 @@ describe('BrushTool', () => {
 
       const nodes = Array.from(context.sceneGraph.getNodes());
       const path = nodes[0] as any;
-      expect(path.fill).toBeNull();
+      // Brush strokes use fill for rendering (WebGL lineWidth is limited to 1px)
+      expect(path.fill).not.toBeNull();
+      expect(path.stroke).toBeNull();
     });
 
-    it('should apply stroke with brush size as width', () => {
+    it('should create filled outline path based on brush size', () => {
       tool.setSize(8);
       tool.setOptions({ pressureEnabled: false }); // Disable pressure for predictable width
 
@@ -197,7 +200,10 @@ describe('BrushTool', () => {
 
       const nodes = Array.from(context.sceneGraph.getNodes());
       const path = nodes[0] as any;
-      expect(path.stroke.width).toBe(8);
+      // Brush creates filled closed outline paths
+      expect(path.closed).toBe(true);
+      expect(path.fill).not.toBeNull();
+      expect(path.stroke).toBeNull();
     });
 
     it('should select the new path after creation', () => {
@@ -279,8 +285,10 @@ describe('BrushTool', () => {
 
       const nodes = Array.from(context.sceneGraph.getNodes());
       const path = nodes[0] as any;
-      // With max pressure, should get size * pressureMax
-      expect(path.stroke.width).toBe(10);
+      // With max pressure, should create a filled closed path (no stroke)
+      expect(path.closed).toBe(true);
+      expect(path.fill).not.toBeNull();
+      expect(path.stroke).toBeNull();
     });
 
     it('should ignore pressure when disabled', () => {
@@ -309,8 +317,10 @@ describe('BrushTool', () => {
 
       const nodes = Array.from(context.sceneGraph.getNodes());
       const path = nodes[0] as any;
-      // Should use full size regardless of pressure
-      expect(path.stroke.width).toBe(10);
+      // Should create a filled closed path regardless of pressure
+      expect(path.closed).toBe(true);
+      expect(path.fill).not.toBeNull();
+      expect(path.stroke).toBeNull();
     });
   });
 
@@ -600,8 +610,8 @@ describe('BrushTool', () => {
   // Curve Fitting
   // ==========================================================================
 
-  describe('curve fitting', () => {
-    it('should create smooth points with bezier handles for curved strokes', () => {
+  describe('outline generation', () => {
+    it('should create a closed outline path for curved strokes', () => {
       const points = [
         { x: 0, y: 0 },
         { x: 50, y: 50 },
@@ -631,9 +641,12 @@ describe('BrushTool', () => {
       const nodes = Array.from(context.sceneGraph.getNodes());
       const path = nodes[0] as any;
 
-      // Should have smooth points with handles
-      const hasHandles = path.points.some((p: any) => p.handleIn !== null || p.handleOut !== null);
-      expect(hasHandles).toBe(true);
+      // Should be a closed filled path (outline representation)
+      expect(path.closed).toBe(true);
+      expect(path.fill).not.toBeNull();
+      expect(path.stroke).toBeNull();
+      // Outline paths have more points (left side + right side reversed)
+      expect(path.points.length).toBeGreaterThan(2);
     });
   });
 });

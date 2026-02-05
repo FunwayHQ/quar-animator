@@ -381,6 +381,8 @@ export class ShapeRenderer {
 
   /**
    * Render stroke as line loop or line strip
+   * Note: WebGL lineWidth has limited support (often capped at 1px on most browsers)
+   * For thick strokes, consider implementing stroke tessellation in the future
    */
   private renderStroke(vertices: Float32Array, stroke: Stroke, closed: boolean): void {
     if (!this.program) return;
@@ -390,6 +392,9 @@ export class ShapeRenderer {
     // Set stroke color
     const color = this.getStrokeColor(stroke);
     gl.uniform4fv(this.program.uniforms.u_color, color);
+
+    // Try to set line width (limited support in WebGL, often capped at 1px)
+    gl.lineWidth(stroke.width);
 
     // Upload vertices
     gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
