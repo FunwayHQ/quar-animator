@@ -9,6 +9,7 @@
 ## Overview
 
 This document breaks down the PRD roadmap into actionable sprints with detailed LLM prompts for each sprint. Each sprint includes:
+
 - **Goals**: What we're trying to achieve
 - **Agent Assignments**: Which agents own which tasks
 - **Deliverables**: Concrete outputs
@@ -29,6 +30,7 @@ This document breaks down the PRD roadmap into actionable sprints with detailed 
 | Frontend Designer | Design system setup |
 
 **Deliverables**:
+
 - [ ] Monorepo structure (pnpm workspaces)
 - [ ] TypeScript configuration
 - [ ] ESLint + Prettier setup
@@ -38,6 +40,7 @@ This document breaks down the PRD roadmap into actionable sprints with detailed 
 - [ ] Component library setup (Storybook)
 
 **LLM Prompt**:
+
 ```
 You are setting up the Quar Animator project from scratch. This is a web-native 2D animation tool built with React, TypeScript, WebGL, and WASM.
 
@@ -107,6 +110,7 @@ Output the complete file structure and all configuration files.
 | QA Tester | Component testing in Storybook |
 
 **Deliverables**:
+
 - [ ] Design tokens finalized
 - [ ] Button, Input, Select, Checkbox components
 - [ ] Panel, Toolbar, Tooltip components
@@ -114,7 +118,8 @@ Output the complete file structure and all configuration files.
 - [ ] Dark theme implementation
 
 **LLM Prompt**:
-```
+
+````
 /frontend-design
 
 You are building the design system for Quar Animator, a professional 2D animation tool.
@@ -178,44 +183,51 @@ Create a comprehensive token system in CSS custom properties:
   --shadow-md: ...;
   --shadow-lg: ...;
 }
-```
+````
 
 ## Task 2: Core Components
 
 Create these foundational components with full variants:
 
 ### Button
+
 - Variants: primary, secondary, ghost, danger
 - Sizes: sm, md, lg
 - States: default, hover, active, disabled, loading
 - Icon support (left, right, icon-only)
 
 ### Input
+
 - Types: text, number, color
 - States: default, focus, error, disabled
 - Label and helper text support
 - Numeric input with scrub-to-adjust
 
 ### Panel
+
 - Collapsible with header
 - Resizable edges
 - Dockable indicators
 
 ### Toolbar
+
 - Vertical and horizontal variants
 - Tool button with active state
 - Separator and group support
 
 ### Tooltip
+
 - Positions: top, right, bottom, left
 - Keyboard shortcut display
 - Delay on hover
 
 Create all components with:
+
 - TypeScript interfaces for props
 - Storybook stories with all variants
 - Keyboard accessibility
 - ARIA attributes
+
 ```
 
 ---
@@ -239,11 +251,13 @@ Create all components with:
 
 **LLM Prompt**:
 ```
+
 You are implementing the canvas system for Quar Animator using WebGL 2.
 
 ## Architecture
 
 The canvas system should be structured as:
+
 - `CanvasManager` - High-level canvas management
 - `WebGLRenderer` - WebGL abstraction layer
 - `Camera` - 2D camera with zoom/pan
@@ -275,9 +289,9 @@ Create `packages/core/src/Camera.ts`:
 
 ```typescript
 interface Camera {
-  position: Vector2;      // World position of camera center
-  zoom: number;           // Zoom level (1.0 = 100%)
-  rotation: number;       // Canvas rotation (degrees)
+  position: Vector2; // World position of camera center
+  zoom: number; // Zoom level (1.0 = 100%)
+  rotation: number; // Canvas rotation (degrees)
 
   // Transform methods
   worldToScreen(point: Vector2): Vector2;
@@ -285,7 +299,7 @@ interface Camera {
 
   // Manipulation
   pan(delta: Vector2): void;
-  zoomAt(point: Vector2, factor: number): void;  // Zoom toward point
+  zoomAt(point: Vector2, factor: number): void; // Zoom toward point
   fitBounds(bounds: Rect): void;
 
   // Matrix generation for shaders
@@ -299,6 +313,7 @@ Implement smooth zoom that zooms toward the mouse cursor position.
 ## Task 3: Grid Rendering
 
 Create an infinite grid system:
+
 - Major and minor grid lines
 - Grid spacing adapts to zoom level
 - Render efficiently using instanced lines
@@ -323,6 +338,7 @@ function Canvas({ className }: CanvasProps) {
 ```
 
 Mouse interactions:
+
 - Middle mouse drag or Space+drag: Pan
 - Scroll wheel: Zoom at cursor
 - Ctrl+0: Fit to window
@@ -331,9 +347,10 @@ Mouse interactions:
 ## Task 5: Coordinate Display
 
 Show current mouse coordinates in world space in the status bar.
-Format: "X: 123.4  Y: 567.8" with 1 decimal precision.
+Format: "X: 123.4 Y: 567.8" with 1 decimal precision.
 
 Output complete, working code for all files.
+
 ```
 
 ---
@@ -357,6 +374,7 @@ Output complete, working code for all files.
 
 **LLM Prompt**:
 ```
+
 You are implementing the scene graph and basic shape rendering for Quar Animator.
 
 ## Task 1: Scene Graph Architecture
@@ -383,9 +401,9 @@ interface Node {
 
 interface Transform {
   position: Vector2;
-  rotation: number;      // Degrees
+  rotation: number; // Degrees
   scale: Vector2;
-  anchor: Vector2;       // 0-1 normalized
+  anchor: Vector2; // 0-1 normalized
   skew: Vector2;
 }
 
@@ -393,7 +411,7 @@ interface RectangleNode extends Node {
   type: 'rectangle';
   width: number;
   height: number;
-  cornerRadius: [number, number, number, number];  // Per-corner
+  cornerRadius: [number, number, number, number]; // Per-corner
   fill: Fill | null;
   stroke: Stroke | null;
 }
@@ -408,8 +426,8 @@ interface EllipseNode extends Node {
 
 interface Fill {
   type: 'solid' | 'gradient';
-  color?: string;        // For solid
-  gradient?: Gradient;   // For gradient
+  color?: string; // For solid
+  gradient?: Gradient; // For gradient
   opacity: number;
 }
 
@@ -447,6 +465,7 @@ class SceneGraph {
 Create `packages/core/src/rendering/ShapeRenderer.ts`:
 
 Implement efficient rendering of rectangles and ellipses:
+
 - Generate geometry (triangles) for shapes
 - Support rounded corners on rectangles
 - Support fill and stroke (stroke as separate geometry)
@@ -456,6 +475,7 @@ Implement efficient rendering of rectangles and ellipses:
 ## Task 3: Transform Hierarchy
 
 Implement world transform calculation:
+
 - Cache world transforms
 - Invalidate cache on ancestor change
 - Support all transform properties (position, rotation, scale, anchor, skew)
@@ -475,7 +495,7 @@ interface Selection {
 
   // Multi-select
   selectAll(): void;
-  selectRect(bounds: Rect): void;  // Marquee selection
+  selectRect(bounds: Rect): void; // Marquee selection
 
   // Query
   isSelected(id: string): boolean;
@@ -489,12 +509,14 @@ interface Selection {
 Create `apps/web/src/components/LayerPanel.tsx`:
 
 Display scene graph as a hierarchical list:
+
 - Indentation for nesting
 - Visibility toggle (eye icon)
 - Lock toggle (lock icon)
 - Selection highlight
 - Drag to reorder (later sprint)
 - Double-click to rename
+
 ```
 
 ---
@@ -520,6 +542,7 @@ Display scene graph as a hierarchical list:
 
 **LLM Prompt**:
 ```
+
 You are implementing the shape drawing tools for Quar Animator.
 
 ## Tool System Architecture
@@ -555,7 +578,7 @@ interface CanvasPointerEvent {
   shiftKey: boolean;
   altKey: boolean;
   ctrlKey: boolean;
-  pressure: number;        // For stylus
+  pressure: number; // For stylus
 }
 
 class ToolManager {
@@ -573,17 +596,20 @@ class ToolManager {
 Create `packages/core/src/tools/RectangleTool.ts`:
 
 Behavior:
+
 1. Click and drag to create rectangle
 2. Rectangle defined by start and current pointer position
 3. Show preview outline while dragging
 4. On release, create RectangleNode in scene graph
 
 Modifiers:
+
 - **Shift**: Constrain to square (1:1 aspect ratio)
 - **Alt**: Draw from center (start point is center, not corner)
 - **Shift+Alt**: Square from center
 
 Properties Panel Integration:
+
 - After creation, show properties: width, height, corner radius, fill, stroke
 - Numeric inputs should update the shape live
 
@@ -592,6 +618,7 @@ Properties Panel Integration:
 Create `packages/core/src/tools/EllipseTool.ts`:
 
 Same interaction model as rectangle:
+
 - Drag to create ellipse bounded by rectangle
 - Shift: Constrain to circle
 - Alt: Draw from center
@@ -601,12 +628,19 @@ Same interaction model as rectangle:
 Create `packages/core/src/tools/PolygonTool.ts`:
 
 Additional UI:
+
 - Properties panel shows: sides (3-12), inner radius (for stars)
 - Preview updates as properties change during drag
 
 Calculation:
+
 ```typescript
-function generatePolygon(center: Vector2, radius: number, sides: number, innerRadius?: number): Vector2[] {
+function generatePolygon(
+  center: Vector2,
+  radius: number,
+  sides: number,
+  innerRadius?: number
+): Vector2[] {
   // Generate regular polygon vertices
   // If innerRadius provided, create star shape
 }
@@ -615,6 +649,7 @@ function generatePolygon(center: Vector2, radius: number, sides: number, innerRa
 ## Toolbar Integration
 
 Update the toolbar to show shape tools:
+
 - Single-click selects tool
 - Tool options appear in properties panel
 - Active tool is highlighted
@@ -623,11 +658,13 @@ Update the toolbar to show shape tools:
 ## Task: Cursor Feedback
 
 Implement custom cursors:
+
 - Crosshair cursor when tool is active
 - Show "+" icon when Alt is held (draw from center)
 - Cursor changes near canvas edge
 
 Output complete implementation with all tool files.
+
 ```
 
 ---
@@ -652,6 +689,7 @@ Output complete implementation with all tool files.
 
 **LLM Prompt**:
 ```
+
 You are implementing the Pen tool and Bezier path system for Quar Animator.
 
 ## Path Data Structure
@@ -660,9 +698,9 @@ Create `packages/core/src/shapes/Path.ts`:
 
 ```typescript
 interface PathPoint {
-  position: Vector2;           // Anchor point
-  handleIn: Vector2 | null;    // Incoming bezier handle (relative to position)
-  handleOut: Vector2 | null;   // Outgoing bezier handle (relative to position)
+  position: Vector2; // Anchor point
+  handleIn: Vector2 | null; // Incoming bezier handle (relative to position)
+  handleOut: Vector2 | null; // Outgoing bezier handle (relative to position)
   type: 'corner' | 'smooth' | 'symmetric';
 }
 
@@ -676,6 +714,7 @@ interface PathNode extends Node {
 ```
 
 Point types:
+
 - **Corner**: Handles are independent, can be at any angle
 - **Smooth**: Handles are collinear (same line) but can have different lengths
 - **Symmetric**: Handles are collinear and same length
@@ -683,6 +722,7 @@ Point types:
 ## Path Rendering
 
 Implement Bezier curve tessellation:
+
 1. Convert path to series of cubic Bezier segments
 2. Subdivide each segment to line segments (adaptive based on curvature)
 3. Generate fill triangles using ear-clipping or tessellation library
@@ -697,35 +737,42 @@ Create `packages/core/src/tools/PenTool.ts`:
 ### Creating Points
 
 **Click (no drag)**:
+
 - Creates corner point
 - Handles are null
 
 **Click and drag**:
+
 - Creates smooth point
 - Drag direction sets handleOut
 - handleIn is mirror of handleOut
 
 **Click on first point (when path has 2+ points)**:
+
 - Closes the path
 - Finishes path creation
 
 **Enter or Escape**:
+
 - Finishes path (open)
 - Deselects path
 
 ### Modifying While Drawing
 
 **Alt + click on existing point**:
+
 - Converts point type (corner ↔ smooth)
 - If smooth, removes handles
 - If corner, resets to smooth with default handles
 
 **Click on last point**:
+
 - Allows adjusting the last point's handleOut
 
 ### Visual Feedback
 
 While drawing, show:
+
 - Completed segments as solid stroke
 - Current segment preview (last point to cursor) as dashed line
 - Points as small squares
@@ -737,6 +784,7 @@ While drawing, show:
 Create `packages/core/src/tools/DirectSelectTool.ts`:
 
 For editing existing paths:
+
 - Click point to select it
 - Drag point to move it
 - Click and drag handle to adjust curve
@@ -751,11 +799,12 @@ For editing existing paths:
 - While using Pen: Escape to finish, Backspace to undo last point
 
 Implement complete pen tool with all interactions.
+
 ```
 
 ---
 
-### Sprint 7: Drawing Tools - Brush & Eraser
+### Sprint 7: Drawing Tools - Brush & Eraser ✅ COMPLETE
 
 **Goals**: Implement freehand brush and eraser tools.
 
@@ -766,14 +815,22 @@ Implement complete pen tool with all interactions.
 | Frontend Designer | Brush settings UI |
 
 **Deliverables**:
-- [ ] Brush tool with freehand drawing
-- [ ] Ramer-Douglas-Peucker smoothing
-- [ ] Pressure sensitivity support
-- [ ] Eraser tool
-- [ ] Brush size and smoothing settings
+- [x] Brush tool with freehand drawing
+- [x] Ramer-Douglas-Peucker smoothing
+- [x] Pressure sensitivity support
+- [x] Eraser tool
+- [x] Brush size and smoothing settings
+
+**Completion Notes**:
+- BrushTool: 32 tests, filled outline paths for WebGL compatibility
+- EraserTool: 32 tests, stroke mode + point mode
+- Editor store integration with Zustand selector hooks
+- Keyboard shortcuts: B (brush), E (eraser), [ ] (eraser size)
+- Total: 891 tests passing (736 core + 155 web)
 
 **LLM Prompt**:
 ```
+
 You are implementing the brush and eraser tools for Quar Animator.
 
 ## Brush Tool
@@ -783,6 +840,7 @@ Create `packages/core/src/tools/BrushTool.ts`:
 ### Stroke Recording
 
 During drawing:
+
 1. Capture points at pointer events (use pointermove with coalesced events)
 2. Store position, pressure, and timestamp for each point
 3. Build path in real-time for visual feedback
@@ -804,6 +862,7 @@ Epsilon should be adjustable (Smoothing setting: 0-100, maps to epsilon 0.5-10 p
 ### Pressure Sensitivity
 
 Use Pointer Events API `pressure` property:
+
 - Map pressure 0-1 to stroke width multiplier
 - Interpolate pressure between points for smooth width variation
 - Create variable-width stroke geometry
@@ -811,14 +870,14 @@ Use Pointer Events API `pressure` property:
 ```typescript
 interface BrushPoint {
   position: Vector2;
-  pressure: number;  // 0-1
+  pressure: number; // 0-1
   timestamp: number;
 }
 
 function generateVariableWidthStroke(
   points: BrushPoint[],
   baseWidth: number,
-  pressureRange: [number, number]  // min/max multiplier
+  pressureRange: [number, number] // min/max multiplier
 ): Geometry {
   // Generate mesh with width based on pressure
 }
@@ -827,6 +886,7 @@ function generateVariableWidthStroke(
 ### Brush Settings
 
 Properties panel shows:
+
 - Size: 1-100px (slider + numeric input)
 - Smoothing: 0-100 (affects simplification epsilon)
 - Pressure: Toggle on/off
@@ -841,6 +901,7 @@ The eraser removes parts of paths it touches.
 ### Mode 1: Stroke Eraser (default)
 
 Deletes entire strokes that the eraser touches:
+
 1. On pointer move, check collision with paths
 2. If eraser circle intersects any path segment, delete that path
 3. Show eraser as circle cursor with size indicator
@@ -848,6 +909,7 @@ Deletes entire strokes that the eraser touches:
 ### Mode 2: Point Eraser
 
 More precise erasing:
+
 1. Check collision with path points
 2. Delete points that fall within eraser radius
 3. If deleting a point breaks a path, split into multiple paths
@@ -879,6 +941,7 @@ Use a library like paper.js boolean operations or implement Vatti clipping algor
 - ]: Increase brush size
 
 Implement complete brush and eraser tools with all features.
+
 ```
 
 ---
@@ -903,6 +966,7 @@ Implement complete brush and eraser tools with all features.
 
 **LLM Prompt**:
 ```
+
 You are implementing the selection and transform tools for Quar Animator.
 
 ## Selection Tool
@@ -916,6 +980,7 @@ Create `packages/core/src/tools/SelectionTool.ts`:
 3. If nothing found, clear selection
 
 Hit testing:
+
 ```typescript
 function hitTest(point: Vector2, nodes: Node[]): Node | null {
   // Test from top to bottom (reverse render order)
@@ -962,15 +1027,18 @@ When selection exists, show transform handles around bounding box:
 ### Handle Interactions
 
 **Corner handles**:
+
 - Drag to scale from opposite corner
 - Shift: Maintain aspect ratio
 - Alt: Scale from center
 
 **Edge handles**:
+
 - Drag to scale one axis
 - Alt: Scale from center
 
 **Rotation**:
+
 - Handle appears above top-center
 - Drag to rotate around selection center
 - Shift: Snap to 15° increments
@@ -984,6 +1052,7 @@ When selection exists, show transform handles around bounding box:
 ### Transform Origin
 
 Show transform origin (anchor point) as crosshair.
+
 - Can be dragged to new position
 - Double-click to reset to center
 
@@ -1001,6 +1070,7 @@ Transform
 ```
 
 All numeric inputs should:
+
 - Support scrub-to-adjust (drag on label)
 - Support math expressions (e.g., "100+50")
 - Update live as values change
@@ -1008,11 +1078,13 @@ All numeric inputs should:
 ## Multi-Select Transform
 
 When multiple objects selected:
+
 - Show combined bounding box
 - Transform all objects together
 - Maintain relative positions during scale/rotate
 
 Implement complete selection and transform system.
+
 ```
 
 ---
@@ -1036,6 +1108,7 @@ Implement complete selection and transform system.
 
 **LLM Prompt**:
 ```
+
 You are building the timeline component for Quar Animator.
 
 ## Timeline Data Structure
@@ -1045,9 +1118,9 @@ Create `packages/animation/src/Timeline.ts`:
 ```typescript
 interface Timeline {
   id: string;
-  duration: number;        // In frames
-  frameRate: number;       // FPS (default 30)
-  currentTime: number;     // Current frame
+  duration: number; // In frames
+  frameRate: number; // FPS (default 30)
+  currentTime: number; // Current frame
 
   // Layer-based organization
   layers: TimelineLayer[];
@@ -1060,21 +1133,21 @@ interface Timeline {
 }
 
 interface TimelineLayer {
-  nodeId: string;          // Reference to scene graph node
+  nodeId: string; // Reference to scene graph node
   tracks: PropertyTrack[];
   expanded: boolean;
 }
 
 interface PropertyTrack {
-  property: string;        // e.g., "transform.position.x"
+  property: string; // e.g., "transform.position.x"
   keyframes: Keyframe[];
 }
 
 interface Keyframe {
-  time: number;            // Frame number
-  value: any;              // Property value
+  time: number; // Frame number
+  value: any; // Property value
   easing: EasingFunction;
-  tangentIn?: Vector2;     // For graph editor
+  tangentIn?: Vector2; // For graph editor
   tangentOut?: Vector2;
 }
 
@@ -1098,7 +1171,7 @@ class PlaybackController {
 
   play(): void;
   pause(): void;
-  stop(): void;           // Stop and return to start
+  stop(): void; // Stop and return to start
   gotoFrame(frame: number): void;
   gotoTime(seconds: number): void;
 
@@ -1114,6 +1187,7 @@ Use `requestAnimationFrame` for smooth playback. Accumulate time and advance fra
 Create `apps/web/src/components/timeline/Timeline.tsx`:
 
 Layout:
+
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │ [◀][▶][⏹] | 00:00:15 / 00:01:00 | [🔁] | ◀──●──▶ Zoom         │ <- Controls
@@ -1171,6 +1245,7 @@ Layout:
 - Ctrl+Mouse wheel: Zoom timeline
 
 Implement complete timeline component with all features.
+
 ```
 
 ---
@@ -1194,6 +1269,7 @@ Implement complete timeline component with all features.
 
 **LLM Prompt**:
 ```
+
 You are implementing the keyframe system for Quar Animator.
 
 ## Property Binding
@@ -1203,7 +1279,7 @@ Create `packages/animation/src/PropertyBinding.ts`:
 ```typescript
 interface PropertyBinding {
   nodeId: string;
-  property: string;  // Dot-notation path: "transform.position.x"
+  property: string; // Dot-notation path: "transform.position.x"
 
   // Get current value from scene graph
   getValue(): any;
@@ -1262,11 +1338,13 @@ class KeyframeManager {
 ## Auto-Keyframe Mode
 
 When enabled:
+
 1. Any property change during playback or at non-zero time creates/updates keyframe
 2. If keyframe exists at current time, update its value
 3. If no keyframe exists, create new one
 
 When disabled:
+
 - Property changes only affect the current value
 - No keyframes created automatically
 
@@ -1285,25 +1363,25 @@ interface Interpolator<T> {
 
 const interpolators: Record<InterpolationType, Interpolator<any>> = {
   number: {
-    lerp: (a, b, t) => a + (b - a) * t
+    lerp: (a, b, t) => a + (b - a) * t,
   },
   vector2: {
     lerp: (a, b, t) => ({
       x: a.x + (b.x - a.x) * t,
-      y: a.y + (b.y - a.y) * t
-    })
+      y: a.y + (b.y - a.y) * t,
+    }),
   },
   color: {
     lerp: (a, b, t) => {
       // Interpolate in Lab color space for perceptual smoothness
-    }
+    },
   },
   path: {
     lerp: (a, b, t) => {
       // Interpolate path points
       // Handle different point counts via point matching
-    }
-  }
+    },
+  },
 };
 
 function getInterpolatedValue(track: PropertyTrack, time: number): any {
@@ -1328,8 +1406,12 @@ Implement easing library in `packages/animation/src/Easing.ts`:
 ```typescript
 type EasingFunction =
   | 'linear'
-  | 'easeInQuad' | 'easeOutQuad' | 'easeInOutQuad'
-  | 'easeInCubic' | 'easeOutCubic' | 'easeInOutCubic'
+  | 'easeInQuad'
+  | 'easeOutQuad'
+  | 'easeInOutQuad'
+  | 'easeInCubic'
+  | 'easeOutCubic'
+  | 'easeInOutCubic'
   // ... all standard easing functions
   | { type: 'cubicBezier'; points: [number, number, number, number] };
 
@@ -1341,6 +1423,7 @@ function applyEasing(t: number, easing: EasingFunction): number {
 ## Keyframe UI Interactions
 
 In the timeline:
+
 - Click keyframe to select
 - Double-click to edit value in popup
 - Right-click for context menu (delete, copy, ease type)
@@ -1349,6 +1432,7 @@ In the timeline:
 - Box select keyframes
 
 Implement complete keyframe system with all features.
+
 ```
 
 ---
@@ -1372,6 +1456,7 @@ Implement complete keyframe system with all features.
 
 **LLM Prompt**:
 ```
+
 You are building the properties panel for Quar Animator.
 
 ## Properties Panel Architecture
@@ -1421,15 +1506,18 @@ Organize properties into collapsible sections:
 ## Animatable Property Indicators
 
 For each animatable property:
+
 - **No keyframe**: Empty diamond ◇ (click to add keyframe)
 - **Has keyframe at current time**: Filled diamond ◆
 - **Has keyframes, but not at current time**: Half-filled diamond
 
 Click diamond to:
+
 - Add keyframe if none exists
 - Remove keyframe if at current time
 
 Right-click diamond for menu:
+
 - Add Keyframe
 - Remove Keyframe
 - Go to Previous Keyframe
@@ -1441,6 +1529,7 @@ Right-click diamond for menu:
 Create `packages/ui/src/components/NumericInput.tsx`:
 
 Features:
+
 - Scrub-to-adjust: Drag on label to change value
 - Math expressions: Type "100+50" and it evaluates to 150
 - Unit suffix display (px, %, °)
@@ -1466,6 +1555,7 @@ interface NumericInputProps {
 Create `packages/ui/src/components/ColorPicker.tsx`:
 
 Features:
+
 - Saturation/brightness square
 - Hue slider
 - Alpha slider
@@ -1478,6 +1568,7 @@ Features:
 ## Multi-Selection Properties
 
 When multiple nodes selected:
+
 - Show properties common to all selected types
 - Show actual value if all selected have same value
 - Show "Mixed" placeholder if values differ
@@ -1486,12 +1577,14 @@ When multiple nodes selected:
 ## Expression Toggle
 
 Each animatable property can have an expression:
+
 - Click expression icon (fx) to toggle expression mode
 - In expression mode, show text input instead of value
 - Expression evaluated each frame
 - Error indicator if expression is invalid
 
 Implement complete properties panel with all features.
+
 ```
 
 ---
@@ -1516,6 +1609,7 @@ Implement complete properties panel with all features.
 
 **LLM Prompt**:
 ```
+
 You are implementing onion skinning and polishing playback for Quar Animator.
 
 ## Onion Skinning Rendering
@@ -1534,11 +1628,11 @@ class OnionSkinRenderer {
 
   // Settings
   enabled: boolean;
-  beforeCount: number;    // Frames before current (1-5)
-  afterCount: number;     // Frames after current (1-5)
-  beforeColor: string;    // Tint color for past frames
-  afterColor: string;     // Tint color for future frames
-  opacity: number;        // Base opacity (0-1)
+  beforeCount: number; // Frames before current (1-5)
+  afterCount: number; // Frames after current (1-5)
+  beforeColor: string; // Tint color for past frames
+  afterColor: string; // Tint color for future frames
+  opacity: number; // Base opacity (0-1)
   opacityFalloff: number; // How much opacity decreases per frame
 
   render(currentFrame: number): void {
@@ -1605,7 +1699,7 @@ Add onion skin controls to the timeline or view menu:
 class PlaybackController {
   private lastTimestamp: number = 0;
   private accumulator: number = 0;
-  private frameDuration: number;  // 1000 / frameRate
+  private frameDuration: number; // 1000 / frameRate
 
   tick(timestamp: number): void {
     const delta = timestamp - this.lastTimestamp;
@@ -1629,6 +1723,7 @@ class PlaybackController {
 ### Audio Sync
 
 If audio tracks exist:
+
 - Sync playhead to audio time
 - Audio is authoritative for timing
 - Handle audio buffer underruns gracefully
@@ -1644,22 +1739,23 @@ If audio tracks exist:
 
 Ensure these all work smoothly:
 
-| Shortcut | Action |
-|----------|--------|
-| Space | Play/Pause |
-| K | Stop (return to start) |
-| . | Next frame |
-| , | Previous frame |
-| Shift+. | Jump 10 frames forward |
-| Shift+, | Jump 10 frames backward |
-| Home | Go to start |
-| End | Go to end |
-| O | Toggle onion skinning |
-| L | Toggle loop |
+| Shortcut | Action                  |
+| -------- | ----------------------- |
+| Space    | Play/Pause              |
+| K        | Stop (return to start)  |
+| .        | Next frame              |
+| ,        | Previous frame          |
+| Shift+.  | Jump 10 frames forward  |
+| Shift+,  | Jump 10 frames backward |
+| Home     | Go to start             |
+| End      | Go to end               |
+| O        | Toggle onion skinning   |
+| L        | Toggle loop             |
 
 ## Phase 1 Integration Testing
 
 QA Testing checklist:
+
 - [ ] Create shapes with all tools
 - [ ] Move, scale, rotate shapes
 - [ ] Create keyframes at different times
@@ -1671,6 +1767,7 @@ QA Testing checklist:
 - [ ] Test with 1000+ keyframes
 
 Implement onion skinning and playback polish.
+
 ```
 
 ---
@@ -1710,6 +1807,7 @@ At this point, Quar Animator should have:
 
 **LLM Prompt**:
 ```
+
 You are implementing the bone system for Quar Animator.
 
 ## Bone Data Structure
@@ -1726,20 +1824,20 @@ interface Bone {
   children: string[];
 
   // Transform (local space)
-  position: Vector2;      // Position relative to parent
-  rotation: number;       // Rotation in radians
-  scale: Vector2;         // Usually (1, 1)
-  length: number;         // Visual length of bone
+  position: Vector2; // Position relative to parent
+  rotation: number; // Rotation in radians
+  scale: Vector2; // Usually (1, 1)
+  length: number; // Visual length of bone
 
   // Constraints
-  angleMin: number;       // Minimum rotation (radians)
-  angleMax: number;       // Maximum rotation (radians)
-  lengthLocked: boolean;  // Prevent stretching
+  angleMin: number; // Minimum rotation (radians)
+  angleMax: number; // Maximum rotation (radians)
+  lengthLocked: boolean; // Prevent stretching
 
   // IK settings
   ikEnabled: boolean;
   ikTarget: string | null;
-  ikPole: string | null;  // Pole target for elbow/knee direction
+  ikPole: string | null; // Pole target for elbow/knee direction
 
   // Visibility
   visible: boolean;
@@ -1748,7 +1846,7 @@ interface Bone {
 
 class Skeleton {
   bones: Map<string, Bone>;
-  rootBones: string[];    // Bones with no parent
+  rootBones: string[]; // Bones with no parent
 
   // CRUD
   addBone(bone: Bone): void;
@@ -1796,6 +1894,7 @@ Create `packages/rigging/src/tools/BoneTool.ts`:
 Create `packages/rigging/src/rendering/BoneRenderer.ts`:
 
 Visual style options:
+
 1. **Stick**: Simple line with circle at joints
 2. **Octahedral**: 3D-style bone shape (default in many tools)
 3. **Custom**: User-defined shape
@@ -1845,12 +1944,14 @@ function updateBoneTransforms(skeleton: Skeleton): void {
 Create `apps/web/src/components/rigging/BoneHierarchy.tsx`:
 
 Display skeleton as tree:
+
 - Expand/collapse bone children
 - Drag to reparent
 - Right-click for context menu (rename, delete, create child)
 - Show IK chain indicators
 
 Implement complete bone system foundation.
+
 ```
 
 ---
@@ -1873,6 +1974,7 @@ Implement complete bone system foundation.
 
 **LLM Prompt**:
 ```
+
 You are implementing mesh binding and weight painting for Quar Animator.
 
 ## Mesh Data Structure
@@ -1882,23 +1984,23 @@ Create `packages/rigging/src/Mesh.ts`:
 ```typescript
 interface MeshVertex {
   position: Vector2;
-  weights: VertexWeight[];  // Max 4 bone influences
+  weights: VertexWeight[]; // Max 4 bone influences
 }
 
 interface VertexWeight {
   boneId: string;
-  weight: number;           // 0.0 to 1.0
+  weight: number; // 0.0 to 1.0
 }
 
 interface Mesh {
   id: string;
   vertices: MeshVertex[];
-  triangles: number[];      // Indices into vertices (3 per triangle)
-  uvs?: Vector2[];          // For textured meshes
+  triangles: number[]; // Indices into vertices (3 per triangle)
+  uvs?: Vector2[]; // For textured meshes
 
   // Reference to source (optional)
-  sourcePathId?: string;    // If generated from path
-  sourceImageId?: string;   // If generated from image
+  sourcePathId?: string; // If generated from path
+  sourceImageId?: string; // If generated from image
 }
 
 class MeshManager {
@@ -1929,7 +2031,7 @@ class MeshManager {
 ```typescript
 function generateMeshFromPath(path: PathNode, gridSpacing: number = 20): Mesh {
   // 1. Convert path to polygon (sample beziers)
-  const boundary = samplePath(path, 0.5);  // Sample at 0.5px tolerance
+  const boundary = samplePath(path, 0.5); // Sample at 0.5px tolerance
 
   // 2. Generate interior points (grid + boundary offset)
   const interiorPoints = generateGridPoints(boundary, gridSpacing);
@@ -1956,12 +2058,12 @@ Create `packages/rigging/src/tools/WeightPaintTool.ts`:
 
 ### Brush Modes
 
-| Mode | Behavior |
-|------|----------|
-| **Add** | Increase selected bone's weight |
+| Mode         | Behavior                        |
+| ------------ | ------------------------------- |
+| **Add**      | Increase selected bone's weight |
 | **Subtract** | Decrease selected bone's weight |
-| **Smooth** | Average weights with neighbors |
-| **Blur** | Gaussian blur on weight map |
+| **Smooth**   | Average weights with neighbors  |
+| **Blur**     | Gaussian blur on weight map     |
 
 ### Brush Settings
 
@@ -1987,7 +2089,7 @@ function paintWeight(
     if (distance > brushRadius) continue;
 
     // Calculate falloff
-    const falloff = 1 - (distance / brushRadius);
+    const falloff = 1 - distance / brushRadius;
     const influence = falloff * strength;
 
     switch (mode) {
@@ -2005,7 +2107,7 @@ function paintWeight(
         break;
     }
 
-    normalizeWeights(vertex);  // Always sum to 1.0
+    normalizeWeights(vertex); // Always sum to 1.0
   }
 }
 ```
@@ -2015,6 +2117,7 @@ function paintWeight(
 Create `packages/rigging/src/rendering/WeightVisualizer.ts`:
 
 Heat map display:
+
 - Blue (0%) → Cyan → Green → Yellow → Red (100%)
 - Show for selected bone's influence
 - Render as colored triangles over mesh
@@ -2023,11 +2126,11 @@ Heat map display:
 function getWeightColor(weight: number): Color {
   // Interpolate through color stops
   const stops = [
-    { t: 0.0, color: '#0000FF' },   // Blue
-    { t: 0.25, color: '#00FFFF' },  // Cyan
-    { t: 0.5, color: '#00FF00' },   // Green
-    { t: 0.75, color: '#FFFF00' },  // Yellow
-    { t: 1.0, color: '#FF0000' },   // Red
+    { t: 0.0, color: '#0000FF' }, // Blue
+    { t: 0.25, color: '#00FFFF' }, // Cyan
+    { t: 0.5, color: '#00FF00' }, // Green
+    { t: 0.75, color: '#FFFF00' }, // Yellow
+    { t: 1.0, color: '#FF0000' }, // Red
   ];
   return interpolateColorStops(stops, weight);
 }
@@ -2045,7 +2148,6 @@ async function autoRig(mesh: Mesh, skeleton: Skeleton): Promise<void> {
   // 2. Use bounded biharmonic weights algorithm
   // 3. Assign weights based on calculation
   // 4. Normalize weights
-
   // This provides a good starting point for manual refinement
 }
 ```
@@ -2053,6 +2155,7 @@ async function autoRig(mesh: Mesh, skeleton: Skeleton): Promise<void> {
 Note: BBW is computationally expensive. Consider using a WASM implementation or web worker.
 
 Implement complete mesh binding and weight painting system.
+
 ```
 
 ---
@@ -2063,6 +2166,7 @@ Implement complete mesh binding and weight painting system.
 
 **LLM Prompt**:
 ```
+
 You are implementing IK solving and GPU skinning for Quar Animator.
 
 ## FABRIK Algorithm
@@ -2071,11 +2175,11 @@ Create `packages/rigging/src/IKSolver.ts`:
 
 ```typescript
 interface IKChain {
-  bones: string[];        // Bone IDs in order (root to tip)
-  target: Vector2;        // Target position for end effector
-  poleTarget?: Vector2;   // Pole target for elbow/knee direction
-  iterations: number;     // Max iterations (default 10)
-  tolerance: number;      // Distance tolerance (default 0.1)
+  bones: string[]; // Bone IDs in order (root to tip)
+  target: Vector2; // Target position for end effector
+  poleTarget?: Vector2; // Pole target for elbow/knee direction
+  iterations: number; // Max iterations (default 10)
+  tolerance: number; // Distance tolerance (default 0.1)
 }
 
 class FABRIKSolver {
@@ -2193,7 +2297,7 @@ void main() {
 
 ```typescript
 function calculateBoneMatrices(skeleton: Skeleton, bindPose: Map<string, Matrix3>): Float32Array {
-  const matrices = new Float32Array(64 * 9);  // 64 bones × 3x3 matrix
+  const matrices = new Float32Array(64 * 9); // 64 bones × 3x3 matrix
 
   skeleton.bones.forEach((bone, index) => {
     // World transform
@@ -2242,6 +2346,7 @@ class SkinnedMeshRenderer {
 ```
 
 Implement FABRIK IK solver and GPU skinning.
+
 ```
 
 ---
@@ -2252,6 +2357,7 @@ Implement FABRIK IK solver and GPU skinning.
 
 **LLM Prompt**:
 ```
+
 You are implementing the Smart Bones system for Quar Animator.
 
 ## Smart Bones Concept
@@ -2267,13 +2373,13 @@ Create `packages/rigging/src/SmartBone.ts`:
 ```typescript
 interface SmartBoneAction {
   id: string;
-  name: string;              // e.g., "Elbow Bend"
+  name: string; // e.g., "Elbow Bend"
 
   // Driver configuration
   driver: {
     boneId: string;
     property: 'rotation' | 'position.x' | 'position.y' | 'scale.x' | 'scale.y';
-    range: [number, number];  // Driver value range
+    range: [number, number]; // Driver value range
   };
 
   // Driven morph targets
@@ -2286,8 +2392,8 @@ interface SmartBoneAction {
 
 interface MorphTarget {
   meshId: string;
-  vertexOffsets: Vector2[];   // Offset for each vertex
-  weight: number;             // 0.0 to 1.0
+  vertexOffsets: Vector2[]; // Offset for each vertex
+  weight: number; // 0.0 to 1.0
 }
 
 class SmartBoneManager {
@@ -2302,7 +2408,7 @@ class SmartBoneManager {
   stopRecording(actionId: string): void;
 
   // Evaluation
-  evaluateActions(skeleton: Skeleton): Map<string, number>;  // Returns target weights
+  evaluateActions(skeleton: Skeleton): Map<string, number>; // Returns target weights
 }
 ```
 
@@ -2319,10 +2425,10 @@ function createSmartBoneAction(boneId: string): void {
     driver: {
       boneId,
       property: 'rotation',
-      range: [0, Math.PI / 2]  // 0 to 90 degrees
+      range: [0, Math.PI / 2], // 0 to 90 degrees
     },
     targets: [],
-    interpolation: 'linear'
+    interpolation: 'linear',
   };
 
   // 2. Enter isolation mode in timeline
@@ -2336,6 +2442,7 @@ function createSmartBoneAction(boneId: string): void {
 ### 2. Isolation Mode
 
 When editing an action:
+
 - Only the relevant mesh and skeleton are visible
 - Timeline shows only the driver property
 - Canvas shows comparison: rest pose ←→ current
@@ -2365,8 +2472,8 @@ class PointMagnetTool implements Tool {
 
       // Calculate influence based on falloff
       const t = distance / this.radius;
-      const influence = this.falloff === 'linear' ? 1 - t :
-                        this.falloff === 'smooth' ? smoothstep(1 - t) : 1;
+      const influence =
+        this.falloff === 'linear' ? 1 - t : this.falloff === 'smooth' ? smoothstep(1 - t) : 1;
 
       // Move vertex
       vertex.position = vertex.position.add(delta.multiply(influence));
@@ -2382,21 +2489,19 @@ class PointMagnetTool implements Tool {
 ```typescript
 function recordMorphTarget(action: SmartBoneAction, mesh: Mesh): void {
   // 1. Get current vertex positions
-  const currentPositions = mesh.vertices.map(v => v.position.clone());
+  const currentPositions = mesh.vertices.map((v) => v.position.clone());
 
   // 2. Get rest pose positions (stored at action creation)
   const restPositions = action.restPose.get(mesh.id);
 
   // 3. Calculate offsets
-  const offsets = currentPositions.map((pos, i) =>
-    pos.subtract(restPositions[i])
-  );
+  const offsets = currentPositions.map((pos, i) => pos.subtract(restPositions[i]));
 
   // 4. Store morph target
   action.targets.push({
     meshId: mesh.id,
     vertexOffsets: offsets,
-    weight: 1.0
+    weight: 1.0,
   });
 }
 ```
@@ -2461,6 +2566,7 @@ function applyMorphTarget(mesh: Mesh, target: MorphTarget, weight: number): void
 ```
 
 Implement complete Smart Bones system.
+
 ```
 
 ---
@@ -2471,6 +2577,7 @@ Implement complete Smart Bones system.
 
 **LLM Prompt**:
 ```
+
 You are implementing Vitruvian Bones and physics integration for Quar Animator.
 
 ## Vitruvian Bones
@@ -2480,6 +2587,7 @@ Handle topology changes where different bone configurations are needed for diffe
 ### Problem Example
 
 A character arm needs:
+
 - **Extended pose**: Shoulder → Upper Arm → Forearm → Hand (4 bones)
 - **Foreshortened pose**: Shoulder → Hand (2 bones, arm bent toward camera)
 
@@ -2488,19 +2596,19 @@ A character arm needs:
 ```typescript
 interface BoneGroup {
   id: string;
-  name: string;              // e.g., "Extended Arm", "Foreshortened Arm"
-  bones: string[];           // Bone IDs in this group
+  name: string; // e.g., "Extended Arm", "Foreshortened Arm"
+  bones: string[]; // Bone IDs in this group
   meshBindings: MeshBinding[]; // Which meshes use this configuration
 }
 
 interface MeshBinding {
   meshId: string;
-  weights: Map<number, VertexWeight[]>;  // Per-vertex weights for this group
+  weights: Map<number, VertexWeight[]>; // Per-vertex weights for this group
 }
 
 interface VitruvianSystem {
   groups: BoneGroup[];
-  activeGroup: string;       // Currently visible group
+  activeGroup: string; // Currently visible group
 
   // Keyframeable
   setActiveGroup(groupId: string, time?: number): void;
@@ -2511,8 +2619,8 @@ interface VitruvianSystem {
 
 ```typescript
 function switchBoneGroup(system: VitruvianSystem, groupId: string): void {
-  const prevGroup = system.groups.find(g => g.id === system.activeGroup);
-  const nextGroup = system.groups.find(g => g.id === groupId);
+  const prevGroup = system.groups.find((g) => g.id === system.activeGroup);
+  const nextGroup = system.groups.find((g) => g.id === groupId);
 
   // 1. Hide bones from previous group
   for (const boneId of prevGroup.bones) {
@@ -2529,7 +2637,7 @@ function switchBoneGroup(system: VitruvianSystem, groupId: string): void {
 
   // 3. Update mesh bindings
   for (const mesh of meshes) {
-    const binding = nextGroup.meshBindings.find(b => b.meshId === mesh.id);
+    const binding = nextGroup.meshBindings.find((b) => b.meshId === mesh.id);
     if (binding) {
       mesh.activeWeights = binding.weights;
     }
@@ -2542,6 +2650,7 @@ function switchBoneGroup(system: VitruvianSystem, groupId: string): void {
 ### Keyframing Groups
 
 Bone group can be keyframed:
+
 - At frame 10: "Extended Arm" active
 - At frame 11: "Foreshortened Arm" active
 - Instant switch (no interpolation)
@@ -2577,15 +2686,15 @@ Tag bone chains for physics simulation (hair, cloth, tail):
 ```typescript
 interface DynamicChain {
   id: string;
-  bones: string[];           // Bone IDs in chain
+  bones: string[]; // Bone IDs in chain
   settings: PhysicsSettings;
 }
 
 interface PhysicsSettings {
-  gravity: number;           // Gravity multiplier (0 = no gravity)
-  stiffness: number;         // How much chain resists bending (0-1)
-  damping: number;           // How quickly motion settles (0-1)
-  windInfluence: number;     // How much wind affects chain (0-1)
+  gravity: number; // Gravity multiplier (0 = no gravity)
+  stiffness: number; // How much chain resists bending (0-1)
+  damping: number; // How quickly motion settles (0-1)
+  windInfluence: number; // How much wind affects chain (0-1)
 }
 ```
 
@@ -2600,13 +2709,11 @@ function createPhysicsChain(skeleton: Skeleton, chain: DynamicChain): void {
     const bone = skeleton.getBone(bones[i]);
 
     // First bone is kinematic (driven by animation)
-    const bodyType = i === 0 ?
-      RAPIER.RigidBodyType.KinematicPositionBased :
-      RAPIER.RigidBodyType.Dynamic;
+    const bodyType =
+      i === 0 ? RAPIER.RigidBodyType.KinematicPositionBased : RAPIER.RigidBodyType.Dynamic;
 
     const body = world.createRigidBody(
-      RAPIER.RigidBodyDesc.new(bodyType)
-        .setTranslation(bone.worldPosition.x, bone.worldPosition.y)
+      RAPIER.RigidBodyDesc.new(bodyType).setTranslation(bone.worldPosition.x, bone.worldPosition.y)
     );
 
     // Add collider (capsule shape along bone)
@@ -2622,8 +2729,8 @@ function createPhysicsChain(skeleton: Skeleton, chain: DynamicChain): void {
     const childBody = bodies.get(bones[i]);
 
     const jointParams = RAPIER.JointData.revolute(
-      { x: 0, y: 0 },  // Anchor on parent
-      { x: 0, y: 0 }   // Anchor on child
+      { x: 0, y: 0 }, // Anchor on parent
+      { x: 0, y: 0 } // Anchor on child
     );
 
     // Apply stiffness
@@ -2646,7 +2753,7 @@ function updatePhysics(deltaTime: number): void {
     const body = bodies.get(rootBone.id);
     body.setNextKinematicTranslation({
       x: rootBone.worldPosition.x,
-      y: rootBone.worldPosition.y
+      y: rootBone.worldPosition.y,
     });
   }
 
@@ -2655,10 +2762,13 @@ function updatePhysics(deltaTime: number): void {
     for (const chain of dynamicChains) {
       for (const boneId of chain.bones.slice(1)) {
         const body = bodies.get(boneId);
-        body.applyForce({
-          x: windForce.x * chain.settings.windInfluence,
-          y: windForce.y * chain.settings.windInfluence
-        }, true);
+        body.applyForce(
+          {
+            x: windForce.x * chain.settings.windInfluence,
+            y: windForce.y * chain.settings.windInfluence,
+          },
+          true
+        );
       }
     }
   }
@@ -2701,6 +2811,7 @@ function updatePhysics(deltaTime: number): void {
 ```
 
 Implement Vitruvian Bones and physics integration.
+
 ```
 
 ---
@@ -2774,3 +2885,4 @@ Update this document as sprints complete:
 ---
 
 *This sprint plan is a living document. Update as the project evolves.*
+```
