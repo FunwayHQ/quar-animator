@@ -7,6 +7,7 @@ import type { Node, Rect } from '@quar/types';
 import type { SceneGraph } from '../SceneGraph';
 import type { SelectionBounds } from './types';
 import { rect } from '../math';
+import { getPolygonBounds } from '../path/pathUtils';
 
 // ============================================================================
 // SelectionManager Class
@@ -89,17 +90,19 @@ export class SelectionManager {
 
       case 'polygon': {
         const polygonNode = node as any;
-        // Polygon bounds account for transform scale
+        // Calculate precise bounds from actual polygon vertices
         const scaleX = transform.scale?.x ?? 1;
         const scaleY = transform.scale?.y ?? 1;
-        const scaledRadiusX = polygonNode.radius * scaleX;
-        const scaledRadiusY = polygonNode.radius * scaleY;
-        return {
-          x: pos.x - scaledRadiusX,
-          y: pos.y - scaledRadiusY,
-          width: scaledRadiusX * 2,
-          height: scaledRadiusY * 2,
-        };
+        const bounds = getPolygonBounds(
+          pos.x,
+          pos.y,
+          polygonNode.radius,
+          polygonNode.sides,
+          scaleX,
+          scaleY,
+          polygonNode.innerRadius
+        );
+        return bounds;
       }
 
       case 'path': {

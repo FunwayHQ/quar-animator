@@ -120,12 +120,8 @@ export function getPathBounds(points: PathPoint[], closed: boolean): Rect | null
  */
 export function getSegmentBounds(p0: PathPoint, p1: PathPoint): Rect {
   // Get absolute handle positions
-  const cp1 = p0.handleOut
-    ? vec2.add(p0.position, p0.handleOut)
-    : p0.position;
-  const cp2 = p1.handleIn
-    ? vec2.add(p1.position, p1.handleIn)
-    : p1.position;
+  const cp1 = p0.handleOut ? vec2.add(p0.position, p0.handleOut) : p0.position;
+  const cp2 = p1.handleIn ? vec2.add(p1.position, p1.handleIn) : p1.position;
 
   return bezier.bounds(p0.position, cp1, cp2, p1.position);
 }
@@ -188,12 +184,8 @@ export function tessellateSegment(
   tolerance: number = 1.0
 ): Vector2[] {
   // Get absolute control point positions
-  const cp1 = p0.handleOut
-    ? vec2.add(p0.position, p0.handleOut)
-    : p0.position;
-  const cp2 = p1.handleIn
-    ? vec2.add(p1.position, p1.handleIn)
-    : p1.position;
+  const cp1 = p0.handleOut ? vec2.add(p0.position, p0.handleOut) : p0.position;
+  const cp2 = p1.handleIn ? vec2.add(p1.position, p1.handleIn) : p1.position;
 
   // If both handles are null (straight line), return just the endpoints
   if (!p0.handleOut && !p1.handleIn) {
@@ -229,14 +221,16 @@ export function tessellatePathToPoints(
  * Reverse the direction of a path
  */
 export function reversePath(points: PathPoint[]): PathPoint[] {
-  return points.map((point, index, arr) => {
-    const newPoint = clonePathPoint(point);
-    // Swap handles
-    const tempHandle = newPoint.handleIn;
-    newPoint.handleIn = newPoint.handleOut;
-    newPoint.handleOut = tempHandle;
-    return newPoint;
-  }).reverse();
+  return points
+    .map((point) => {
+      const newPoint = clonePathPoint(point);
+      // Swap handles
+      const tempHandle = newPoint.handleIn;
+      newPoint.handleIn = newPoint.handleOut;
+      newPoint.handleOut = tempHandle;
+      return newPoint;
+    })
+    .reverse();
 }
 
 /**
@@ -261,12 +255,8 @@ export function getPathLength(points: PathPoint[], closed: boolean): number {
  * Calculate the length of a single segment
  */
 export function getSegmentLength(p0: PathPoint, p1: PathPoint): number {
-  const cp1 = p0.handleOut
-    ? vec2.add(p0.position, p0.handleOut)
-    : p0.position;
-  const cp2 = p1.handleIn
-    ? vec2.add(p1.position, p1.handleIn)
-    : p1.position;
+  const cp1 = p0.handleOut ? vec2.add(p0.position, p0.handleOut) : p0.position;
+  const cp2 = p1.handleIn ? vec2.add(p1.position, p1.handleIn) : p1.position;
 
   return bezier.cubicLength(p0.position, cp1, cp2, p1.position);
 }
@@ -274,11 +264,7 @@ export function getSegmentLength(p0: PathPoint, p1: PathPoint): number {
 /**
  * Get a point on the path at a given t (0-1)
  */
-export function getPointOnPath(
-  points: PathPoint[],
-  closed: boolean,
-  t: number
-): Vector2 | null {
+export function getPointOnPath(points: PathPoint[], closed: boolean, t: number): Vector2 | null {
   if (points.length === 0) return null;
   if (points.length === 1) return vec2.clone(points[0].position);
 
@@ -289,21 +275,14 @@ export function getPointOnPath(
   t = Math.max(0, Math.min(1, t));
 
   // Find which segment t falls into
-  const segmentIndex = Math.min(
-    Math.floor(t * totalSegments),
-    totalSegments - 1
-  );
-  const segmentT = (t * totalSegments) - segmentIndex;
+  const segmentIndex = Math.min(Math.floor(t * totalSegments), totalSegments - 1);
+  const segmentT = t * totalSegments - segmentIndex;
 
   const p0 = points[segmentIndex];
   const p1 = points[(segmentIndex + 1) % points.length];
 
-  const cp1 = p0.handleOut
-    ? vec2.add(p0.position, p0.handleOut)
-    : p0.position;
-  const cp2 = p1.handleIn
-    ? vec2.add(p1.position, p1.handleIn)
-    : p1.position;
+  const cp1 = p0.handleOut ? vec2.add(p0.position, p0.handleOut) : p0.position;
+  const cp2 = p1.handleIn ? vec2.add(p1.position, p1.handleIn) : p1.position;
 
   return bezier.cubicPoint(p0.position, cp1, cp2, p1.position, segmentT);
 }
@@ -311,11 +290,7 @@ export function getPointOnPath(
 /**
  * Get the tangent direction at a point on the path
  */
-export function getTangentOnPath(
-  points: PathPoint[],
-  closed: boolean,
-  t: number
-): Vector2 | null {
+export function getTangentOnPath(points: PathPoint[], closed: boolean, t: number): Vector2 | null {
   if (points.length < 2) return null;
 
   const segmentCount = closed ? points.length : points.length - 1;
@@ -323,21 +298,14 @@ export function getTangentOnPath(
 
   t = Math.max(0, Math.min(1, t));
 
-  const segmentIndex = Math.min(
-    Math.floor(t * totalSegments),
-    totalSegments - 1
-  );
-  const segmentT = (t * totalSegments) - segmentIndex;
+  const segmentIndex = Math.min(Math.floor(t * totalSegments), totalSegments - 1);
+  const segmentT = t * totalSegments - segmentIndex;
 
   const p0 = points[segmentIndex];
   const p1 = points[(segmentIndex + 1) % points.length];
 
-  const cp1 = p0.handleOut
-    ? vec2.add(p0.position, p0.handleOut)
-    : p0.position;
-  const cp2 = p1.handleIn
-    ? vec2.add(p1.position, p1.handleIn)
-    : p1.position;
+  const cp1 = p0.handleOut ? vec2.add(p0.position, p0.handleOut) : p0.position;
+  const cp2 = p1.handleIn ? vec2.add(p1.position, p1.handleIn) : p1.position;
 
   const derivative = bezier.cubicDerivative(p0.position, cp1, cp2, p1.position, segmentT);
   return vec2.normalize(derivative);
@@ -374,12 +342,8 @@ export function getNearestPointOnPath(
     const p0 = points[i];
     const p1 = points[(i + 1) % points.length];
 
-    const cp1 = p0.handleOut
-      ? vec2.add(p0.position, p0.handleOut)
-      : p0.position;
-    const cp2 = p1.handleIn
-      ? vec2.add(p1.position, p1.handleIn)
-      : p1.position;
+    const cp1 = p0.handleOut ? vec2.add(p0.position, p0.handleOut) : p0.position;
+    const cp2 = p1.handleIn ? vec2.add(p1.position, p1.handleIn) : p1.position;
 
     const result = bezier.nearestPoint(p0.position, cp1, cp2, p1.position, queryPoint);
 
@@ -505,12 +469,7 @@ export function createRectanglePath(
 /**
  * Create an ellipse path
  */
-export function createEllipsePath(
-  cx: number,
-  cy: number,
-  rx: number,
-  ry: number
-): PathPoint[] {
+export function createEllipsePath(cx: number, cy: number, rx: number, ry: number): PathPoint[] {
   const kappa = 0.5522847498;
 
   return [
@@ -601,4 +560,58 @@ export function createStarPath(
   }
 
   return pathPoints;
+}
+
+/**
+ * Calculate the precise bounding box of a regular polygon
+ * Based on actual vertex positions, not the circumscribed circle
+ */
+export function getPolygonBounds(
+  cx: number,
+  cy: number,
+  radius: number,
+  sides: number,
+  scaleX: number = 1,
+  scaleY: number = 1,
+  innerRadius?: number
+): Rect {
+  const startAngle = -Math.PI / 2;
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+
+  if (innerRadius !== undefined) {
+    // Star shape - check both outer and inner vertices
+    const angleStep = Math.PI / sides;
+    for (let i = 0; i < sides * 2; i++) {
+      const angle = startAngle + i * angleStep;
+      const r = i % 2 === 0 ? radius : innerRadius;
+      const x = cx + Math.cos(angle) * r * scaleX;
+      const y = cy + Math.sin(angle) * r * scaleY;
+      minX = Math.min(minX, x);
+      minY = Math.min(minY, y);
+      maxX = Math.max(maxX, x);
+      maxY = Math.max(maxY, y);
+    }
+  } else {
+    // Regular polygon
+    const angleStep = (Math.PI * 2) / sides;
+    for (let i = 0; i < sides; i++) {
+      const angle = startAngle + i * angleStep;
+      const x = cx + Math.cos(angle) * radius * scaleX;
+      const y = cy + Math.sin(angle) * radius * scaleY;
+      minX = Math.min(minX, x);
+      minY = Math.min(minY, y);
+      maxX = Math.max(maxX, x);
+      maxY = Math.max(maxY, y);
+    }
+  }
+
+  return {
+    x: minX,
+    y: minY,
+    width: maxX - minX,
+    height: maxY - minY,
+  };
 }

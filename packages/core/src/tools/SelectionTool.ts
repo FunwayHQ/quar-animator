@@ -9,6 +9,7 @@ import { vec2, rect } from '../math';
 import { SelectionManager } from '../selection/SelectionManager';
 import { TransformHandles } from '../selection/TransformHandles';
 import type { HandlePosition, SelectionBounds } from '../selection/types';
+import { getPolygonBounds } from '../path/pathUtils';
 
 // ============================================================================
 // Types
@@ -352,17 +353,18 @@ export class SelectionTool extends BaseTool {
         };
       }
       case 'polygon': {
-        // Polygon bounds account for transform scale
+        // Calculate precise bounds from actual polygon vertices
         const scaleX = transform.scale?.x ?? 1;
         const scaleY = transform.scale?.y ?? 1;
-        const scaledRadiusX = node.radius * scaleX;
-        const scaledRadiusY = node.radius * scaleY;
-        return {
-          x: pos.x - scaledRadiusX,
-          y: pos.y - scaledRadiusY,
-          width: scaledRadiusX * 2,
-          height: scaledRadiusY * 2,
-        };
+        return getPolygonBounds(
+          pos.x,
+          pos.y,
+          node.radius,
+          node.sides,
+          scaleX,
+          scaleY,
+          node.innerRadius
+        );
       }
       case 'path': {
         if (node.points.length === 0) return null;
