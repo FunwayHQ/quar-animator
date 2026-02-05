@@ -7,6 +7,12 @@ import { create } from 'zustand';
 import type { ToolType, Fill, Stroke, Color } from '@quar/types';
 
 // ============================================================================
+// Eraser Mode Type (matches EraserTool)
+// ============================================================================
+
+export type EraserMode = 'stroke' | 'point';
+
+// ============================================================================
 // Default Values
 // ============================================================================
 
@@ -56,6 +62,18 @@ export interface EditorStore {
   // Canvas state
   isDrawing: boolean;
   setIsDrawing: (isDrawing: boolean) => void;
+
+  // Brush tool settings
+  brushSize: number;
+  brushSmoothing: number;
+  setBrushSize: (size: number) => void;
+  setBrushSmoothing: (smoothing: number) => void;
+
+  // Eraser tool settings
+  eraserSize: number;
+  eraserMode: EraserMode;
+  setEraserSize: (size: number) => void;
+  setEraserMode: (mode: EraserMode) => void;
 }
 
 // ============================================================================
@@ -102,6 +120,19 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   // Canvas state
   isDrawing: false,
   setIsDrawing: (isDrawing: boolean) => set({ isDrawing }),
+
+  // Brush tool settings
+  brushSize: 5,
+  brushSmoothing: 50,
+  setBrushSize: (size: number) => set({ brushSize: Math.max(1, Math.min(100, size)) }),
+  setBrushSmoothing: (smoothing: number) =>
+    set({ brushSmoothing: Math.max(0, Math.min(100, smoothing)) }),
+
+  // Eraser tool settings
+  eraserSize: 10,
+  eraserMode: 'stroke',
+  setEraserSize: (size: number) => set({ eraserSize: Math.max(1, Math.min(100, size)) }),
+  setEraserMode: (mode: EraserMode) => set({ eraserMode: mode }),
 }));
 
 // ============================================================================
@@ -118,3 +149,21 @@ export const useDefaultFill = (): Fill => useEditorStore((state: EditorStore) =>
 export const useDefaultStroke = (): Stroke =>
   useEditorStore((state: EditorStore) => state.defaultStroke);
 export const useIsDrawing = (): boolean => useEditorStore((state: EditorStore) => state.isDrawing);
+
+// Brush tool selectors
+export const useBrushSize = (): number => useEditorStore((state: EditorStore) => state.brushSize);
+export const useBrushSmoothing = (): number =>
+  useEditorStore((state: EditorStore) => state.brushSmoothing);
+export const useSetBrushSize = (): ((size: number) => void) =>
+  useEditorStore((state: EditorStore) => state.setBrushSize);
+export const useSetBrushSmoothing = (): ((smoothing: number) => void) =>
+  useEditorStore((state: EditorStore) => state.setBrushSmoothing);
+
+// Eraser tool selectors
+export const useEraserSize = (): number => useEditorStore((state: EditorStore) => state.eraserSize);
+export const useEraserMode = (): EraserMode =>
+  useEditorStore((state: EditorStore) => state.eraserMode);
+export const useSetEraserSize = (): ((size: number) => void) =>
+  useEditorStore((state: EditorStore) => state.setEraserSize);
+export const useSetEraserMode = (): ((mode: EraserMode) => void) =>
+  useEditorStore((state: EditorStore) => state.setEraserMode);

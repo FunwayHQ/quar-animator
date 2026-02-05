@@ -11,6 +11,8 @@ import { RectangleTool } from './RectangleTool';
 import { EllipseTool } from './EllipseTool';
 import { PolygonTool } from './PolygonTool';
 import { PenTool } from './PenTool';
+import { BrushTool } from './BrushTool';
+import { EraserTool } from './EraserTool';
 import type { SceneGraph } from '../SceneGraph';
 import type { Camera } from '../Camera';
 
@@ -59,6 +61,8 @@ export class ToolManager {
     this.tools.set('star', starTool);
 
     this.tools.set('pen', new PenTool(context));
+    this.tools.set('brush', new BrushTool(context));
+    this.tools.set('eraser', new EraserTool(context));
 
     // Set default tool
     this.setActiveTool('selection');
@@ -229,6 +233,10 @@ export class ToolManager {
       S: 'star',
       p: 'pen',
       P: 'pen',
+      b: 'brush',
+      B: 'brush',
+      e: 'eraser',
+      E: 'eraser',
     };
 
     return shortcuts[key] ?? null;

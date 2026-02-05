@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Quar Animator is a free, open-source, web-native 2D animation platform designed to fill the gap left by Adobe Animate's discontinuation. It's part of the QUAR Suite (alongside Quar Editor for 3D and Quar Vector for 2D illustration).
 
-**Current Status**: Sprint 5 complete. Full vector drawing tools (Rectangle, Ellipse, Polygon/Star) with comprehensive test coverage. Selection infrastructure with transform handles. Canvas foundation with WebGL 2 rendering. Modern violet/bordeaux design system.
+**Current Status**: Sprint 7 complete. Full drawing toolkit with Brush and Eraser tools. Direct selection for path editing. Vector drawing tools (Rectangle, Ellipse, Polygon/Star, Pen). Selection infrastructure with transform handles. Canvas foundation with WebGL 2 rendering. Modern violet/bordeaux design system.
 
 ## Sprint Progress
 
@@ -105,6 +105,47 @@ Quar Animator is a free, open-source, web-native 2D animation platform designed 
 - [x] Toolbar polygon button with icon
 
 **Total test coverage**: ~622 core tests, 89 UI tests
+
+### Sprint 6: Path Editing - Direct Selection ✅ COMPLETE
+
+- [x] DirectSelectionTool implementation - 36 tests
+  - Select individual path points and bezier handles
+  - Multi-select with Shift+Click
+  - Drag points to reposition
+  - Drag handles to adjust curves
+  - Handle symmetry for smooth points
+  - Delete key removes selected points
+  - Alt+Click converts point type (corner ↔ smooth)
+- [x] PenTool enhancements
+  - Visible control lines/handles during drawing
+  - Click first point to close path
+- [x] Path selection improvements
+  - Precise bounds using bezier curve extrema
+  - `bezier.bounds()` for accurate hit testing
+- [x] 'A' keyboard shortcut for direct selection tool
+
+### Sprint 7: Brush & Eraser Tools ✅ COMPLETE
+
+- [x] BrushTool implementation - 32 tests
+  - Freehand drawing with smooth strokes
+  - Ramer-Douglas-Peucker path simplification
+  - Bezier curve fitting for natural curves
+  - Pressure sensitivity support (stylus)
+  - Configurable size (1-100) and smoothing (0-100)
+  - Preview while drawing
+- [x] EraserTool implementation - 32 tests
+  - Stroke mode: delete entire paths on contact
+  - Point mode: delete individual path points
+  - Configurable eraser size (1-100)
+  - [ ] / ] keys to adjust size
+  - Bounds-based quick rejection for performance
+- [x] Editor store integration - 13 tests
+  - brushSize, brushSmoothing settings
+  - eraserSize, eraserMode settings
+  - Selector hooks for React components
+- [x] Tool registration with 'B' and 'E' shortcuts
+
+**Total test coverage**: 736 core tests, 155 UI tests (891 total)
 
 ## Development Commands
 

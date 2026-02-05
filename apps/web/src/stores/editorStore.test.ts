@@ -14,6 +14,10 @@ describe('EditorStore', () => {
       defaultFill: DEFAULT_FILL,
       defaultStroke: DEFAULT_STROKE,
       isDrawing: false,
+      brushSize: 5,
+      brushSmoothing: 50,
+      eraserSize: 10,
+      eraserMode: 'stroke',
     });
   });
 
@@ -50,6 +54,18 @@ describe('EditorStore', () => {
     it('should not be in drawing mode initially', () => {
       const state = useEditorStore.getState();
       expect(state.isDrawing).toBe(false);
+    });
+
+    it('should have default brush settings', () => {
+      const state = useEditorStore.getState();
+      expect(state.brushSize).toBe(5);
+      expect(state.brushSmoothing).toBe(50);
+    });
+
+    it('should have default eraser settings', () => {
+      const state = useEditorStore.getState();
+      expect(state.eraserSize).toBe(10);
+      expect(state.eraserMode).toBe('stroke');
     });
   });
 
@@ -281,6 +297,89 @@ describe('EditorStore', () => {
       setIsDrawing(true);
       setIsDrawing(false);
       expect(useEditorStore.getState().isDrawing).toBe(false);
+    });
+  });
+
+  // ==========================================================================
+  // Brush Settings
+  // ==========================================================================
+
+  describe('brush settings', () => {
+    it('should set brush size', () => {
+      const { setBrushSize } = useEditorStore.getState();
+      setBrushSize(20);
+      expect(useEditorStore.getState().brushSize).toBe(20);
+    });
+
+    it('should clamp brush size to minimum of 1', () => {
+      const { setBrushSize } = useEditorStore.getState();
+      setBrushSize(0);
+      expect(useEditorStore.getState().brushSize).toBe(1);
+      setBrushSize(-5);
+      expect(useEditorStore.getState().brushSize).toBe(1);
+    });
+
+    it('should clamp brush size to maximum of 100', () => {
+      const { setBrushSize } = useEditorStore.getState();
+      setBrushSize(150);
+      expect(useEditorStore.getState().brushSize).toBe(100);
+    });
+
+    it('should set brush smoothing', () => {
+      const { setBrushSmoothing } = useEditorStore.getState();
+      setBrushSmoothing(75);
+      expect(useEditorStore.getState().brushSmoothing).toBe(75);
+    });
+
+    it('should clamp brush smoothing to minimum of 0', () => {
+      const { setBrushSmoothing } = useEditorStore.getState();
+      setBrushSmoothing(-10);
+      expect(useEditorStore.getState().brushSmoothing).toBe(0);
+    });
+
+    it('should clamp brush smoothing to maximum of 100', () => {
+      const { setBrushSmoothing } = useEditorStore.getState();
+      setBrushSmoothing(150);
+      expect(useEditorStore.getState().brushSmoothing).toBe(100);
+    });
+  });
+
+  // ==========================================================================
+  // Eraser Settings
+  // ==========================================================================
+
+  describe('eraser settings', () => {
+    it('should set eraser size', () => {
+      const { setEraserSize } = useEditorStore.getState();
+      setEraserSize(25);
+      expect(useEditorStore.getState().eraserSize).toBe(25);
+    });
+
+    it('should clamp eraser size to minimum of 1', () => {
+      const { setEraserSize } = useEditorStore.getState();
+      setEraserSize(0);
+      expect(useEditorStore.getState().eraserSize).toBe(1);
+      setEraserSize(-10);
+      expect(useEditorStore.getState().eraserSize).toBe(1);
+    });
+
+    it('should clamp eraser size to maximum of 100', () => {
+      const { setEraserSize } = useEditorStore.getState();
+      setEraserSize(200);
+      expect(useEditorStore.getState().eraserSize).toBe(100);
+    });
+
+    it('should set eraser mode to stroke', () => {
+      const { setEraserMode } = useEditorStore.getState();
+      setEraserMode('point');
+      setEraserMode('stroke');
+      expect(useEditorStore.getState().eraserMode).toBe('stroke');
+    });
+
+    it('should set eraser mode to point', () => {
+      const { setEraserMode } = useEditorStore.getState();
+      setEraserMode('point');
+      expect(useEditorStore.getState().eraserMode).toBe('point');
     });
   });
 });
