@@ -107,6 +107,7 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
   const defaultFill = useEditorStore((state) => state.defaultFill);
   const defaultStroke = useEditorStore((state) => state.defaultStroke);
   const setIsDrawing = useEditorStore((state) => state.setIsDrawing);
+  const setActiveTool = useEditorStore((state) => state.setActiveTool);
 
   // Keep state values in refs for stable callbacks
   // This prevents ToolManager from being recreated on every state change
@@ -142,6 +143,10 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
       clearSelection: clearSelectionCb,
       getDefaultFill,
       getDefaultStroke,
+      onToolChange: (tool) => {
+        setActiveTool(tool);
+        setCursor((toolManagerRef.current?.getCursor() as string) ?? 'default');
+      },
     });
 
     // Set the active tool from EditorStore (ToolManager defaults to 'selection')
@@ -157,6 +162,7 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
     // Callbacks are now stable (use refs), so only camera triggers recreation
   }, [
     camera,
+    setActiveTool,
     getSelectedIds,
     setSelectedIds,
     addToSelectionCb,

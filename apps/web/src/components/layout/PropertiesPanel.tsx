@@ -390,7 +390,7 @@ export function PropertiesPanel() {
               <div className={styles.propertyInputs}>
                 <div
                   className={styles.colorSwatch}
-                  style={{ backgroundColor: fillHex }}
+                  style={{ '--swatch-color': fillHex } as React.CSSProperties}
                   onClick={() => fillPickerRef.current?.click()}
                   data-testid="fill-swatch"
                 />
@@ -418,7 +418,7 @@ export function PropertiesPanel() {
               <div className={styles.propertyInputs}>
                 <div
                   className={styles.colorSwatch}
-                  style={{ backgroundColor: strokeHex }}
+                  style={{ '--swatch-color': strokeHex } as React.CSSProperties}
                   onClick={() => strokePickerRef.current?.click()}
                   data-testid="stroke-swatch"
                 />

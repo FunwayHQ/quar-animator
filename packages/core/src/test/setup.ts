@@ -209,5 +209,6 @@ export function createMockToolContext(): ToolContext {
     defaultFill: mockDefaultFill,
     defaultStroke: mockDefaultStroke,
     generateId: () => `node-${++idCounter}`,
+    setActiveTool: () => {},
   };
 }

@@ -4,11 +4,7 @@
   height: 200px;
   min-height: 120px;
   max-height: 400px;
-  background: linear-gradient(
-    180deg,
-    var(--color-bg-secondary) 0%,
-    var(--color-bg-primary) 100%
-  );
+  background: linear-gradient(180deg, var(--color-bg-secondary) 0%, var(--color-bg-primary) 100%);
   border-top: 1px solid var(--color-border-subtle);
   position: relative;
 }
@@ -76,11 +72,7 @@
 .playButton {
   width: 34px;
   height: 34px;
-  background: linear-gradient(
-    135deg,
-    var(--color-bg-elevated) 0%,
-    var(--color-bg-tertiary) 100%
-  );
+  background: linear-gradient(135deg, var(--color-bg-elevated) 0%, var(--color-bg-tertiary) 100%);
   border: 1px solid var(--color-border-default);
   border-radius: var(--radius-md);
   color: var(--color-text-secondary);
@@ -214,11 +206,7 @@
 
 .ruler {
   height: 28px;
-  background: linear-gradient(
-    180deg,
-    rgba(255, 255, 255, 0.02) 0%,
-    transparent 100%
-  );
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.02) 0%, transparent 100%);
   border-bottom: 1px solid var(--color-border-subtle);
   position: relative;
   cursor: pointer;
@@ -259,11 +247,7 @@
   left: -7px;
   width: 14px;
   height: 14px;
-  background: linear-gradient(
-    180deg,
-    var(--color-timeline-playhead) 0%,
-    #dc2626 100%
-  );
+  background: linear-gradient(180deg, var(--color-timeline-playhead) 0%, #dc2626 100%);
   clip-path: polygon(50% 100%, 0 0, 100% 0);
   box-shadow: 0 2px 6px rgba(248, 113, 113, 0.4);
 }
@@ -356,10 +340,52 @@
   bottom: 0;
   left: -3px;
   width: 8px;
-  background: linear-gradient(
-    90deg,
-    transparent,
-    rgba(248, 113, 113, 0.15),
-    transparent
-  );
+  background: linear-gradient(90deg, transparent, rgba(248, 113, 113, 0.15), transparent);
+}
+
+/* ============================================================================
+   Collapsed Timeline
+   ============================================================================ */
+
+.timelineCollapsed {
+  height: 36px;
+  min-height: 36px;
+  max-height: 36px;
+  flex-direction: row;
+  align-items: center;
+}
+
+.collapsedControls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: 0 var(--space-md);
+  width: 100%;
+  height: 100%;
+}
+
+.expandButton,
+.collapseButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  color: var(--color-text-disabled);
+  border-radius: var(--radius-sm);
+  transition: all var(--duration-fast) var(--easing-default);
+  flex-shrink: 0;
+}
+
+.expandButton:hover,
+.collapseButton:hover {
+  background: var(--color-bg-hover);
+  color: var(--color-text-secondary);
+}
+
+.expandButton svg,
+.collapseButton svg {
+  width: 14px;
+  height: 14px;
+  stroke-width: 2;
 }

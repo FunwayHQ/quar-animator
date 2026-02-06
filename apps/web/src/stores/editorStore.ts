@@ -78,6 +78,21 @@ export interface EditorStore {
   // Aspect ratio lock
   aspectRatioLocked: boolean;
   toggleAspectRatioLock: () => void;
+
+  // Timeline state
+  currentFrame: number;
+  isPlaying: boolean;
+  isLooping: boolean;
+  timelineDuration: number;
+  frameRate: number;
+  timelineExpanded: boolean;
+  setCurrentFrame: (frame: number) => void;
+  setIsPlaying: (playing: boolean) => void;
+  setIsLooping: (looping: boolean) => void;
+  setTimelineDuration: (duration: number) => void;
+  setFrameRate: (rate: number) => void;
+  setTimelineExpanded: (expanded: boolean) => void;
+  toggleTimelineExpanded: () => void;
 }
 
 // ============================================================================
@@ -141,6 +156,25 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   // Aspect ratio lock
   aspectRatioLocked: false,
   toggleAspectRatioLock: () => set((state) => ({ aspectRatioLocked: !state.aspectRatioLocked })),
+
+  // Timeline state
+  currentFrame: 0,
+  isPlaying: false,
+  isLooping: false,
+  timelineDuration: 300,
+  frameRate: 30,
+  timelineExpanded: true,
+  setCurrentFrame: (frame: number) =>
+    set((state) => ({
+      currentFrame: Math.max(0, Math.min(state.timelineDuration - 1, Math.round(frame))),
+    })),
+  setIsPlaying: (playing: boolean) => set({ isPlaying: playing }),
+  setIsLooping: (looping: boolean) => set({ isLooping: looping }),
+  setTimelineDuration: (duration: number) =>
+    set({ timelineDuration: Math.max(1, Math.round(duration)) }),
+  setFrameRate: (rate: number) => set({ frameRate: Math.max(1, Math.min(120, Math.round(rate))) }),
+  setTimelineExpanded: (expanded: boolean) => set({ timelineExpanded: expanded }),
+  toggleTimelineExpanded: () => set((state) => ({ timelineExpanded: !state.timelineExpanded })),
 }));
 
 // ============================================================================
@@ -181,3 +215,22 @@ export const useAspectRatioLocked = (): boolean =>
   useEditorStore((state: EditorStore) => state.aspectRatioLocked);
 export const useToggleAspectRatioLock = (): (() => void) =>
   useEditorStore((state: EditorStore) => state.toggleAspectRatioLock);
+
+// Timeline selectors
+export const useCurrentFrame = (): number =>
+  useEditorStore((state: EditorStore) => state.currentFrame);
+export const useIsPlaying = (): boolean => useEditorStore((state: EditorStore) => state.isPlaying);
+export const useIsLooping = (): boolean => useEditorStore((state: EditorStore) => state.isLooping);
+export const useTimelineDuration = (): number =>
+  useEditorStore((state: EditorStore) => state.timelineDuration);
+export const useFrameRate = (): number => useEditorStore((state: EditorStore) => state.frameRate);
+export const useTimelineExpanded = (): boolean =>
+  useEditorStore((state: EditorStore) => state.timelineExpanded);
+export const useSetCurrentFrame = (): ((frame: number) => void) =>
+  useEditorStore((state: EditorStore) => state.setCurrentFrame);
+export const useSetIsPlaying = (): ((playing: boolean) => void) =>
+  useEditorStore((state: EditorStore) => state.setIsPlaying);
+export const useSetIsLooping = (): ((looping: boolean) => void) =>
+  useEditorStore((state: EditorStore) => state.setIsLooping);
+export const useToggleTimelineExpanded = (): (() => void) =>
+  useEditorStore((state: EditorStore) => state.toggleTimelineExpanded);

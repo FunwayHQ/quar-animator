@@ -35,12 +35,7 @@ export class EllipseTool extends BaseTool {
     this.state.startWorldPos = { ...event.worldPosition };
 
     // Create preview node
-    this.previewNode = this.createEllipseNode(
-      event.worldPosition.x,
-      event.worldPosition.y,
-      0,
-      0
-    );
+    this.previewNode = this.createEllipseNode(event.worldPosition.x, event.worldPosition.y, 0, 0);
   }
 
   onPointerMove(event: CanvasPointerEvent): void {
@@ -77,19 +72,20 @@ export class EllipseTool extends BaseTool {
     );
 
     // Only create if meets minimum size
-    if (ellipse.radiusX >= this.getMinimumSize() / 2 && ellipse.radiusY >= this.getMinimumSize() / 2) {
-      const node = this.createEllipseNode(
-        ellipse.cx,
-        ellipse.cy,
-        ellipse.radiusX,
-        ellipse.radiusY
-      );
+    if (
+      ellipse.radiusX >= this.getMinimumSize() / 2 &&
+      ellipse.radiusY >= this.getMinimumSize() / 2
+    ) {
+      const node = this.createEllipseNode(ellipse.cx, ellipse.cy, ellipse.radiusX, ellipse.radiusY);
 
       // Add to scene graph
       this.context.sceneGraph.addNode(node);
 
       // Select the new node
       this.context.setSelectedIds([node.id]);
+
+      // Switch to selection tool
+      this.context.setActiveTool('selection');
     }
 
     // Reset state
@@ -158,12 +154,7 @@ export class EllipseTool extends BaseTool {
     };
   }
 
-  private createEllipseNode(
-    cx: number,
-    cy: number,
-    radiusX: number,
-    radiusY: number
-  ): EllipseNode {
+  private createEllipseNode(cx: number, cy: number, radiusX: number, radiusY: number): EllipseNode {
     const transform = createDefaultTransform();
     transform.position = { x: cx, y: cy };
     transform.anchor = { x: 0.5, y: 0.5 };

@@ -19,6 +19,12 @@ describe('EditorStore', () => {
       eraserSize: 10,
       eraserMode: 'stroke',
       aspectRatioLocked: false,
+      currentFrame: 0,
+      isPlaying: false,
+      isLooping: false,
+      timelineDuration: 300,
+      frameRate: 30,
+      timelineExpanded: true,
     });
   });
 
@@ -415,6 +421,125 @@ describe('EditorStore', () => {
       expect(useEditorStore.getState().aspectRatioLocked).toBe(false);
       toggleAspectRatioLock();
       expect(useEditorStore.getState().aspectRatioLocked).toBe(true);
+    });
+  });
+
+  // ==========================================================================
+  // Timeline State
+  // ==========================================================================
+
+  describe('timeline state', () => {
+    it('should have default timeline values', () => {
+      const state = useEditorStore.getState();
+      expect(state.currentFrame).toBe(0);
+      expect(state.isPlaying).toBe(false);
+      expect(state.isLooping).toBe(false);
+      expect(state.timelineDuration).toBe(300);
+      expect(state.frameRate).toBe(30);
+      expect(state.timelineExpanded).toBe(true);
+    });
+
+    it('should set current frame', () => {
+      const { setCurrentFrame } = useEditorStore.getState();
+      setCurrentFrame(50);
+      expect(useEditorStore.getState().currentFrame).toBe(50);
+    });
+
+    it('should clamp current frame to min 0', () => {
+      const { setCurrentFrame } = useEditorStore.getState();
+      setCurrentFrame(-10);
+      expect(useEditorStore.getState().currentFrame).toBe(0);
+    });
+
+    it('should clamp current frame to max duration - 1', () => {
+      const { setCurrentFrame } = useEditorStore.getState();
+      setCurrentFrame(500);
+      expect(useEditorStore.getState().currentFrame).toBe(299);
+    });
+
+    it('should round fractional frames', () => {
+      const { setCurrentFrame } = useEditorStore.getState();
+      setCurrentFrame(10.7);
+      expect(useEditorStore.getState().currentFrame).toBe(11);
+    });
+
+    it('should set isPlaying', () => {
+      const { setIsPlaying } = useEditorStore.getState();
+      setIsPlaying(true);
+      expect(useEditorStore.getState().isPlaying).toBe(true);
+      setIsPlaying(false);
+      expect(useEditorStore.getState().isPlaying).toBe(false);
+    });
+
+    it('should set isLooping', () => {
+      const { setIsLooping } = useEditorStore.getState();
+      setIsLooping(true);
+      expect(useEditorStore.getState().isLooping).toBe(true);
+    });
+
+    it('should set timeline duration with min 1', () => {
+      const { setTimelineDuration } = useEditorStore.getState();
+      setTimelineDuration(600);
+      expect(useEditorStore.getState().timelineDuration).toBe(600);
+      setTimelineDuration(0);
+      expect(useEditorStore.getState().timelineDuration).toBe(1);
+    });
+
+    it('should set frame rate with clamping', () => {
+      const { setFrameRate } = useEditorStore.getState();
+      setFrameRate(60);
+      expect(useEditorStore.getState().frameRate).toBe(60);
+      setFrameRate(0);
+      expect(useEditorStore.getState().frameRate).toBe(1);
+      setFrameRate(200);
+      expect(useEditorStore.getState().frameRate).toBe(120);
+    });
+
+    it('should set timeline expanded', () => {
+      const { setTimelineExpanded } = useEditorStore.getState();
+      setTimelineExpanded(false);
+      expect(useEditorStore.getState().timelineExpanded).toBe(false);
+    });
+
+    it('should toggle timeline expanded', () => {
+      const { toggleTimelineExpanded } = useEditorStore.getState();
+      toggleTimelineExpanded();
+      expect(useEditorStore.getState().timelineExpanded).toBe(false);
+      toggleTimelineExpanded();
+      expect(useEditorStore.getState().timelineExpanded).toBe(true);
+    });
+
+    it('should clamp frame when accessing with existing duration', () => {
+      const { setCurrentFrame } = useEditorStore.getState();
+      // Duration is 300, so max frame is 299
+      setCurrentFrame(299);
+      expect(useEditorStore.getState().currentFrame).toBe(299);
+      setCurrentFrame(300);
+      expect(useEditorStore.getState().currentFrame).toBe(299);
+    });
+
+    it('should round frame rate', () => {
+      const { setFrameRate } = useEditorStore.getState();
+      setFrameRate(29.7);
+      expect(useEditorStore.getState().frameRate).toBe(30);
+    });
+
+    it('should round timeline duration', () => {
+      const { setTimelineDuration } = useEditorStore.getState();
+      setTimelineDuration(150.8);
+      expect(useEditorStore.getState().timelineDuration).toBe(151);
+    });
+
+    it('should handle negative frame rate', () => {
+      const { setFrameRate } = useEditorStore.getState();
+      setFrameRate(-5);
+      expect(useEditorStore.getState().frameRate).toBe(1);
+    });
+
+    it('should handle negative duration', () => {
+      const { setTimelineDuration } = useEditorStore.getState();
+      setTimelineDuration(-10);
+      expect(useEditorStore.getState().timelineDuration).toBe(1);
     });
   });
 });

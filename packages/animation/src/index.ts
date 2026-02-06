@@ -5,12 +5,8 @@
 
 export * from './Timeline';
 export * from './Easing';
+export { PlaybackController } from './PlaybackController';
+export type { PlaybackOptions } from './PlaybackController';
 
 // Re-export types
-export type {
-  Timeline,
-  PropertyTrack,
-  Keyframe,
-  EasingFunction,
-  Marker,
-} from '@quar/types';
+export type { Timeline, PropertyTrack, Keyframe, EasingFunction, Marker } from '@quar/types';

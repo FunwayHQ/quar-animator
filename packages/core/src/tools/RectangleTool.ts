@@ -35,12 +35,7 @@ export class RectangleTool extends BaseTool {
     this.state.startWorldPos = { ...event.worldPosition };
 
     // Create preview node
-    this.previewNode = this.createRectangleNode(
-      event.worldPosition.x,
-      event.worldPosition.y,
-      0,
-      0
-    );
+    this.previewNode = this.createRectangleNode(event.worldPosition.x, event.worldPosition.y, 0, 0);
   }
 
   onPointerMove(event: CanvasPointerEvent): void {
@@ -57,7 +52,10 @@ export class RectangleTool extends BaseTool {
     );
 
     // Update preview node
-    this.previewNode.transform.position = { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
+    this.previewNode.transform.position = {
+      x: rect.x + rect.width / 2,
+      y: rect.y + rect.height / 2,
+    };
     this.previewNode.width = rect.width;
     this.previewNode.height = rect.height;
   }
@@ -90,6 +88,9 @@ export class RectangleTool extends BaseTool {
 
       // Select the new node
       this.context.setSelectedIds([node.id]);
+
+      // Switch to selection tool
+      this.context.setActiveTool('selection');
     }
 
     // Reset state

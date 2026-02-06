@@ -199,13 +199,7 @@
   transition: all var(--duration-fast);
   position: relative;
   overflow: hidden;
-}
-
-/* Checkerboard for transparency */
-.colorSwatch::before {
-  content: '';
-  position: absolute;
-  inset: 0;
+  /* Checkerboard for transparency */
   background-image:
     linear-gradient(45deg, #333 25%, transparent 25%),
     linear-gradient(-45deg, #333 25%, transparent 25%),
@@ -217,7 +211,15 @@
     0 4px,
     4px -4px,
     -4px 0px;
-  z-index: -1;
+}
+
+/* Color overlay on top of checkerboard */
+.colorSwatch::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-color: var(--swatch-color, transparent);
+  border-radius: inherit;
 }
 
 .colorSwatch:hover {

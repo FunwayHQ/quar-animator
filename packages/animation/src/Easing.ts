@@ -10,8 +10,7 @@ import type { EasingFunction, EasingType } from '@quar/types';
 
 const easeInQuad = (t: number): number => t * t;
 const easeOutQuad = (t: number): number => t * (2 - t);
-const easeInOutQuad = (t: number): number =>
-  t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
+const easeInOutQuad = (t: number): number => (t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t);
 
 const easeInCubic = (t: number): number => t * t * t;
 const easeOutCubic = (t: number): number => --t * t * t + 1;
@@ -32,10 +31,8 @@ const easeInOutQuint = (t: number): number =>
 // Exponential Functions
 // ============================================================================
 
-const easeInExpo = (t: number): number =>
-  t === 0 ? 0 : Math.pow(2, 10 * (t - 1));
-const easeOutExpo = (t: number): number =>
-  t === 1 ? 1 : 1 - Math.pow(2, -10 * t);
+const easeInExpo = (t: number): number => (t === 0 ? 0 : Math.pow(2, 10 * (t - 1)));
+const easeOutExpo = (t: number): number => (t === 1 ? 1 : 1 - Math.pow(2, -10 * t));
 const easeInOutExpo = (t: number): number => {
   if (t === 0) return 0;
   if (t === 1) return 1;
@@ -63,8 +60,7 @@ const c2 = c1 * 1.525;
 const c3 = c1 + 1;
 
 const easeInBack = (t: number): number => c3 * t * t * t - c1 * t * t;
-const easeOutBack = (t: number): number =>
-  1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2);
+const easeOutBack = (t: number): number => 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2);
 const easeInOutBack = (t: number): number =>
   t < 0.5
     ? (Math.pow(2 * t, 2) * ((c2 + 1) * 2 * t - c2)) / 2
@@ -120,31 +116,33 @@ const easeOutBounce = (t: number): number => {
 const easeInBounce = (t: number): number => 1 - easeOutBounce(1 - t);
 
 const easeInOutBounce = (t: number): number =>
-  t < 0.5
-    ? (1 - easeOutBounce(1 - 2 * t)) / 2
-    : (1 + easeOutBounce(2 * t - 1)) / 2;
+  t < 0.5 ? (1 - easeOutBounce(1 - 2 * t)) / 2 : (1 + easeOutBounce(2 * t - 1)) / 2;
 
 // ============================================================================
 // Cubic Bezier
 // ============================================================================
 
-function cubicBezier(
-  x1: number,
-  y1: number,
-  x2: number,
-  y2: number
-): (t: number) => number {
+function cubicBezier(x1: number, y1: number, x2: number, y2: number): (t: number) => number {
+  // Coefficients for x(t) = at^3 + bt^2 + ct where a,b,c derived from control points
+  const ax = 1 - 3 * x2 + 3 * x1;
+  const bx = 3 * x2 - 6 * x1;
+  const cx = 3 * x1;
+
+  const ay = 1 - 3 * y2 + 3 * y1;
+  const by = 3 * y2 - 6 * y1;
+  const cy = 3 * y1;
+
   // Newton-Raphson iteration for finding t given x
   const sampleCurveX = (t: number): number => {
-    return ((1 - 3 * x2 + 3 * x1) * t + (3 * x2 - 6 * x1)) * t + 3 * x1;
+    return ((ax * t + bx) * t + cx) * t;
   };
 
   const sampleCurveY = (t: number): number => {
-    return ((1 - 3 * y2 + 3 * y1) * t + (3 * y2 - 6 * y1)) * t + 3 * y1;
+    return ((ay * t + by) * t + cy) * t;
   };
 
   const sampleCurveDerivativeX = (t: number): number => {
-    return (3 - 9 * x2 + 9 * x1) * t * t + (6 * x2 - 12 * x1) * t + 3 * x1;
+    return (3 * ax * t + 2 * bx) * t + cx;
   };
 
   const solveCurveX = (x: number): number => {
@@ -232,9 +230,7 @@ export function getEasingTypes(): EasingType[] {
 /**
  * Get easing function by name
  */
-export function getEasingFunction(
-  easing: EasingFunction
-): (t: number) => number {
+export function getEasingFunction(easing: EasingFunction): (t: number) => number {
   if (typeof easing === 'string') {
     return easingFunctions[easing] ?? ((t) => t);
   }
@@ -250,12 +246,7 @@ export function getEasingFunction(
 /**
  * Create a cubic bezier easing function
  */
-export function createCubicBezier(
-  x1: number,
-  y1: number,
-  x2: number,
-  y2: number
-): EasingFunction {
+export function createCubicBezier(x1: number, y1: number, x2: number, y2: number): EasingFunction {
   return {
     type: 'cubicBezier',
     points: [x1, y1, x2, y2],

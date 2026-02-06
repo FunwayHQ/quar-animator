@@ -106,6 +106,8 @@ module.exports = {
         'apps/web/src/components/layout/Toolbar.tsx',
         'apps/web/src/components/layout/LayerPanel.tsx',
         'apps/web/src/components/layout/PropertiesPanel.tsx',
+        'apps/web/src/components/layout/Timeline.tsx',
+        'packages/animation/src/**/*.ts',
         'packages/core/src/selection/SelectionManager.ts',
       ],
       rules: {

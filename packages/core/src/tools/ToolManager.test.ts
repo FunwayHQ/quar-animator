@@ -299,6 +299,9 @@ describe('ToolManager', () => {
         })
       );
 
+      // Re-select rectangle tool (auto-switched to selection after first shape)
+      manager.setActiveTool('rectangle');
+
       // Create second rectangle
       manager.handlePointerDown(
         createMockPointerEvent({

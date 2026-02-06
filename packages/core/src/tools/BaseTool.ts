@@ -21,6 +21,7 @@ export interface ToolContext {
   defaultFill: Fill;
   defaultStroke: Stroke;
   generateId: () => string;
+  setActiveTool: (tool: ToolType) => void;
 }
 
 export interface ToolState {

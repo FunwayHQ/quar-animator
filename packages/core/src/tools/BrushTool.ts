@@ -292,6 +292,9 @@ export class BrushTool extends BaseTool {
     // Select the new node
     this.context.setSelectedIds([node.id]);
 
+    // Switch to selection tool
+    this.context.setActiveTool('selection');
+
     // Reset state
     this.resetBrushState();
   }

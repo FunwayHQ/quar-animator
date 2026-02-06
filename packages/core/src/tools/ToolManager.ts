@@ -29,6 +29,7 @@ export interface ToolManagerOptions {
   clearSelection: () => void;
   getDefaultFill: () => Fill;
   getDefaultStroke: () => Stroke;
+  onToolChange?: (tool: ToolType) => void;
 }
 
 // ============================================================================
@@ -76,6 +77,8 @@ export class ToolManager {
    * Set the active tool by type
    */
   setActiveTool(type: ToolType): void {
+    if (type === this.activeToolType && this.activeTool !== null) return;
+
     const tool = this.tools.get(type);
     if (!tool) {
       console.warn(`Tool "${type}" not found`);
@@ -91,6 +94,9 @@ export class ToolManager {
     this.activeTool = tool;
     this.activeToolType = type;
     this.activeTool.onActivate?.();
+
+    // Notify listener (e.g., to sync EditorStore)
+    this.options.onToolChange?.(type);
   }
 
   /**
@@ -210,6 +216,7 @@ export class ToolManager {
         return options.getDefaultStroke();
       },
       generateId: this.generateId.bind(this),
+      setActiveTool: (tool: ToolType) => this.setActiveTool(tool),
     };
   }
 

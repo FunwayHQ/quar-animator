@@ -1,11 +1,43 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { render, screen } from '../../test/utils';
 import userEvent from '@testing-library/user-event';
 import { Timeline } from './Timeline';
+import { SceneGraphProvider } from '../../contexts/SceneGraphContext';
+import { useEditorStore } from '../../stores/editorStore';
+import { DEFAULT_FILL, DEFAULT_STROKE } from '../../stores/editorStore';
+
+function renderTimeline() {
+  return render(
+    <SceneGraphProvider>
+      <Timeline />
+    </SceneGraphProvider>
+  );
+}
 
 describe('Timeline', () => {
+  beforeEach(() => {
+    useEditorStore.setState({
+      activeTool: 'selection',
+      selectedNodeIds: new Set<string>(),
+      defaultFill: DEFAULT_FILL,
+      defaultStroke: DEFAULT_STROKE,
+      isDrawing: false,
+      brushSize: 5,
+      brushSmoothing: 50,
+      eraserSize: 10,
+      eraserMode: 'stroke',
+      aspectRatioLocked: false,
+      currentFrame: 0,
+      isPlaying: false,
+      isLooping: false,
+      timelineDuration: 300,
+      frameRate: 30,
+      timelineExpanded: true,
+    });
+  });
+
   it('renders transport controls', () => {
-    render(<Timeline />);
+    renderTimeline();
 
     expect(screen.getByTitle('Go to start (Home)')).toBeInTheDocument();
     expect(screen.getByTitle('Previous frame (,)')).toBeInTheDocument();
@@ -15,14 +47,14 @@ describe('Timeline', () => {
   });
 
   it('renders option buttons', () => {
-    render(<Timeline />);
+    renderTimeline();
 
     expect(screen.getByTitle('Toggle loop (L)')).toBeInTheDocument();
     expect(screen.getByTitle('Toggle onion skinning (O)')).toBeInTheDocument();
   });
 
   it('displays time in correct format', () => {
-    render(<Timeline />);
+    renderTimeline();
 
     // Initial time should be 00:00:00
     expect(screen.getByText('00:00:00')).toBeInTheDocument();
@@ -31,18 +63,14 @@ describe('Timeline', () => {
     expect(screen.getByText('00:10:00')).toBeInTheDocument();
   });
 
-  it('displays layer labels', () => {
-    render(<Timeline />);
+  it('displays "No layers" when scene graph is empty', () => {
+    renderTimeline();
 
-    expect(screen.getByText('Character')).toBeInTheDocument();
-    expect(screen.getByText('├ Position')).toBeInTheDocument();
-    expect(screen.getByText('├ Scale')).toBeInTheDocument();
-    expect(screen.getByText('└ Rotation')).toBeInTheDocument();
-    expect(screen.getByText('Background')).toBeInTheDocument();
+    expect(screen.getByText('No layers')).toBeInTheDocument();
   });
 
   it('displays ruler marks', () => {
-    render(<Timeline />);
+    renderTimeline();
 
     // Should display frame numbers
     expect(screen.getByText('0')).toBeInTheDocument();
@@ -51,86 +79,114 @@ describe('Timeline', () => {
     expect(screen.getByText('90')).toBeInTheDocument();
   });
 
-  it('toggles play/pause icon when clicked', async () => {
+  it('toggles play state when play button clicked', async () => {
     const user = userEvent.setup();
-    render(<Timeline />);
+    renderTimeline();
 
     const playButton = screen.getByTitle('Play/Pause (Space)');
-
-    // Initially shows play icon (triangle)
-    // Click to play
     await user.click(playButton);
 
-    // Button should still be there (icon changes internally)
-    expect(playButton).toBeInTheDocument();
+    expect(useEditorStore.getState().isPlaying).toBe(true);
   });
 
   it('navigates to start when go to start is clicked', async () => {
     const user = userEvent.setup();
-    render(<Timeline />);
+    useEditorStore.setState({ currentFrame: 50 });
+    renderTimeline();
 
-    // First move to a different frame
-    const nextButton = screen.getByTitle('Next frame (.)');
-    await user.click(nextButton);
-    await user.click(nextButton);
-    await user.click(nextButton);
-
-    // Now go to start
     const goToStartButton = screen.getByTitle('Go to start (Home)');
     await user.click(goToStartButton);
 
-    // Time should be back at 00:00:00
-    expect(screen.getByText('00:00:00')).toBeInTheDocument();
+    expect(useEditorStore.getState().currentFrame).toBe(0);
   });
 
   it('steps forward one frame', async () => {
     const user = userEvent.setup();
-    render(<Timeline />);
+    renderTimeline();
 
     const nextButton = screen.getByTitle('Next frame (.)');
     await user.click(nextButton);
 
+    expect(useEditorStore.getState().currentFrame).toBe(1);
     // Time should now be 00:00:01 (1 frame at 30fps)
     expect(screen.getByText('00:00:01')).toBeInTheDocument();
   });
 
   it('steps backward one frame', async () => {
     const user = userEvent.setup();
-    render(<Timeline />);
+    useEditorStore.setState({ currentFrame: 2 });
+    renderTimeline();
 
-    // First step forward
-    const nextButton = screen.getByTitle('Next frame (.)');
-    await user.click(nextButton);
-    await user.click(nextButton);
-
-    // Now step backward
     const prevButton = screen.getByTitle('Previous frame (,)');
     await user.click(prevButton);
 
-    // Time should be 00:00:01
-    expect(screen.getByText('00:00:01')).toBeInTheDocument();
+    expect(useEditorStore.getState().currentFrame).toBe(1);
   });
 
   it('navigates to end when go to end is clicked', async () => {
     const user = userEvent.setup();
-    render(<Timeline />);
+    renderTimeline();
 
     const goToEndButton = screen.getByTitle('Go to end (End)');
     await user.click(goToEndButton);
 
-    // Time should be 00:10:00 (300 frames at 30fps)
-    expect(screen.getAllByText('00:10:00').length).toBe(2); // Current time and total time match
+    expect(useEditorStore.getState().currentFrame).toBe(299);
   });
 
   it('does not go below frame 0', async () => {
     const user = userEvent.setup();
-    render(<Timeline />);
+    renderTimeline();
 
-    // Try to go backward at frame 0
     const prevButton = screen.getByTitle('Previous frame (,)');
     await user.click(prevButton);
 
-    // Should still be at 00:00:00
-    expect(screen.getByText('00:00:00')).toBeInTheDocument();
+    expect(useEditorStore.getState().currentFrame).toBe(0);
+  });
+
+  // ============================================================================
+  // Collapsed mode
+  // ============================================================================
+
+  describe('collapsed mode', () => {
+    it('renders collapsed bar when timelineExpanded is false', () => {
+      useEditorStore.setState({ timelineExpanded: false });
+      renderTimeline();
+
+      expect(screen.getByTitle('Expand timeline')).toBeInTheDocument();
+      expect(screen.getByTitle('Play/Pause (Space)')).toBeInTheDocument();
+      expect(screen.getByText('00:00:00')).toBeInTheDocument();
+    });
+
+    it('does not render transport controls in collapsed mode', () => {
+      useEditorStore.setState({ timelineExpanded: false });
+      renderTimeline();
+
+      expect(screen.queryByTitle('Go to start (Home)')).not.toBeInTheDocument();
+      expect(screen.queryByTitle('Go to end (End)')).not.toBeInTheDocument();
+    });
+
+    it('toggles to expanded when expand button clicked', async () => {
+      const user = userEvent.setup();
+      useEditorStore.setState({ timelineExpanded: false });
+      renderTimeline();
+
+      await user.click(screen.getByTitle('Expand timeline'));
+      expect(useEditorStore.getState().timelineExpanded).toBe(true);
+    });
+
+    it('toggles to collapsed when collapse button clicked', async () => {
+      const user = userEvent.setup();
+      renderTimeline();
+
+      await user.click(screen.getByTitle('Collapse timeline'));
+      expect(useEditorStore.getState().timelineExpanded).toBe(false);
+    });
+
+    it('shows loop toggle in collapsed mode', () => {
+      useEditorStore.setState({ timelineExpanded: false });
+      renderTimeline();
+
+      expect(screen.getByTitle('Toggle loop (L)')).toBeInTheDocument();
+    });
   });
 });
