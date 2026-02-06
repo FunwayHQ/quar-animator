@@ -4,7 +4,7 @@
  */
 
 import type { ToolType, CanvasPointerEvent, Fill, Stroke } from '@quar/types';
-import { BaseTool, type ToolContext } from './BaseTool';
+import { BaseTool, type ToolContext, type TransformType } from './BaseTool';
 import { SelectionTool } from './SelectionTool';
 import { DirectSelectionTool } from './DirectSelectionTool';
 import { RectangleTool } from './RectangleTool';
@@ -30,6 +30,7 @@ export interface ToolManagerOptions {
   getDefaultFill: () => Fill;
   getDefaultStroke: () => Stroke;
   onToolChange?: (tool: ToolType) => void;
+  onTransformComplete?: (nodeIds: Set<string>, type: TransformType) => void;
 }
 
 // ============================================================================
@@ -217,6 +218,7 @@ export class ToolManager {
       },
       generateId: this.generateId.bind(this),
       setActiveTool: (tool: ToolType) => this.setActiveTool(tool),
+      onTransformComplete: options.onTransformComplete,
     };
   }
 

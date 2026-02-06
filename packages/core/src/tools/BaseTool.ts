@@ -11,6 +11,8 @@ import type { Camera } from '../Camera';
 // Types
 // ============================================================================
 
+export type TransformType = 'move' | 'resize' | 'rotate';
+
 export interface ToolContext {
   sceneGraph: SceneGraph;
   camera: Camera;
@@ -22,6 +24,7 @@ export interface ToolContext {
   defaultStroke: Stroke;
   generateId: () => string;
   setActiveTool: (tool: ToolType) => void;
+  onTransformComplete?: (nodeIds: Set<string>, type: TransformType) => void;
 }
 
 export interface ToolState {

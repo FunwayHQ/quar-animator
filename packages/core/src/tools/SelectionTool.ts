@@ -226,11 +226,18 @@ export class SelectionTool extends BaseTool {
   }
 
   onPointerUp(event: CanvasPointerEvent): void {
-    if (this.mode === 'resizing') {
+    const selectedIds = this.context.getSelectedIds();
+
+    if (this.mode === 'moving' && this.moveStartPositions.size > 0) {
+      // Move completed - notify for auto-keyframe
+      this.context.onTransformComplete?.(selectedIds, 'move');
+    } else if (this.mode === 'resizing') {
       // Resize completed - state already updated
+      this.context.onTransformComplete?.(selectedIds, 'resize');
       this.resizeState = null;
     } else if (this.mode === 'rotating') {
       // Rotation completed - state already updated
+      this.context.onTransformComplete?.(selectedIds, 'rotate');
       this.rotationState = null;
     } else if (this.mode === 'marquee' && this.startPoint) {
       // Update marquee rect with final position

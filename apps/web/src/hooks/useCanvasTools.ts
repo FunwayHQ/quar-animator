@@ -5,6 +5,7 @@
 
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { ToolManager, SceneGraph, Camera, PenTool } from '@quar/core';
+import type { TransformType } from '@quar/core';
 import type { CanvasPointerEvent, Node, PathPoint, Vector2 } from '@quar/types';
 import { useEditorStore } from '../stores/editorStore';
 
@@ -109,6 +110,11 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
   const setIsDrawing = useEditorStore((state) => state.setIsDrawing);
   const setActiveTool = useEditorStore((state) => state.setActiveTool);
 
+  // Auto-keyframe store actions
+  const autoKeyframeRef = useRef(useEditorStore.getState().autoKeyframe);
+  const addKeyframeAtFrameRef = useRef(useEditorStore.getState().addKeyframeAtFrame);
+  const currentFrameRef = useRef(useEditorStore.getState().currentFrame);
+
   // Keep state values in refs for stable callbacks
   // This prevents ToolManager from being recreated on every state change
   const selectedNodeIdsRef = useRef(selectedNodeIds);
@@ -120,6 +126,15 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
   const activeToolRef = useRef(activeTool);
   activeToolRef.current = activeTool;
 
+  // Subscribe to store to keep auto-keyframe refs fresh
+  useEffect(() => {
+    return useEditorStore.subscribe((state) => {
+      autoKeyframeRef.current = state.autoKeyframe;
+      addKeyframeAtFrameRef.current = state.addKeyframeAtFrame;
+      currentFrameRef.current = state.currentFrame;
+    });
+  }, []);
+
   // Create stable callbacks for ToolManager options (using refs, no dependencies)
   const getSelectedIds = useCallback(() => selectedNodeIdsRef.current, []);
   const setSelectedIds = useCallback((ids: string[]) => setSelection(ids), [setSelection]);
@@ -127,6 +142,42 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
   const clearSelectionCb = useCallback(() => clearSelection(), [clearSelection]);
   const getDefaultFill = useCallback(() => defaultFillRef.current, []);
   const getDefaultStroke = useCallback(() => defaultStrokeRef.current, []);
+
+  // Auto-keyframe callback for canvas transform operations (move/resize/rotate)
+  const onTransformComplete = useCallback((nodeIds: Set<string>, type: TransformType) => {
+    if (!autoKeyframeRef.current) return;
+
+    const frame = currentFrameRef.current;
+    const sg = sceneGraphRef.current;
+    const addKf = addKeyframeAtFrameRef.current;
+
+    for (const nodeId of nodeIds) {
+      const node = sg.getNode(nodeId);
+      if (!node) continue;
+
+      if (type === 'move') {
+        addKf(nodeId, 'transform.position.x', frame, node.transform.position.x);
+        addKf(nodeId, 'transform.position.y', frame, node.transform.position.y);
+      } else if (type === 'resize') {
+        // Position may change during resize (e.g. top-left handle drag)
+        addKf(nodeId, 'transform.position.x', frame, node.transform.position.x);
+        addKf(nodeId, 'transform.position.y', frame, node.transform.position.y);
+
+        if (node.type === 'rectangle') {
+          addKf(nodeId, 'width', frame, node.width);
+          addKf(nodeId, 'height', frame, node.height);
+        } else if (node.type === 'ellipse') {
+          addKf(nodeId, 'radiusX', frame, node.radiusX);
+          addKf(nodeId, 'radiusY', frame, node.radiusY);
+        } else if (node.type === 'polygon') {
+          addKf(nodeId, 'transform.scale.x', frame, node.transform.scale.x);
+          addKf(nodeId, 'transform.scale.y', frame, node.transform.scale.y);
+        }
+      } else if (type === 'rotate') {
+        addKf(nodeId, 'transform.rotation', frame, node.transform.rotation);
+      }
+    }
+  }, []);
 
   // Initialize ToolManager when camera is available
   useEffect(() => {
@@ -147,6 +198,7 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
         setActiveTool(tool);
         setCursor((toolManagerRef.current?.getCursor() as string) ?? 'default');
       },
+      onTransformComplete,
     });
 
     // Set the active tool from EditorStore (ToolManager defaults to 'selection')
@@ -169,6 +221,7 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
     clearSelectionCb,
     getDefaultFill,
     getDefaultStroke,
+    onTransformComplete,
   ]);
 
   // Sync active tool with ToolManager when it changes
