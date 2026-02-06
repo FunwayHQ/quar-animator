@@ -1,7 +1,9 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import type { Node } from '@quar/types';
 import { useSceneGraph } from '../../contexts/SceneGraphContext';
 import { useEditorStore } from '../../stores/editorStore';
+import { ContextMenu } from '../common/ContextMenu';
+import type { ContextMenuEntry } from '../common/ContextMenu';
 import styles from './LayerPanel.module.css';
 
 // ============================================================================
@@ -24,6 +26,54 @@ function nodeTypeIcon(type: string): string {
 }
 
 // ============================================================================
+// InlineRenameInput Component
+// ============================================================================
+
+function InlineRenameInput({
+  initialName,
+  onCommit,
+}: {
+  initialName: string;
+  onCommit: (name: string) => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [value, setValue] = useState(initialName);
+
+  useEffect(() => {
+    inputRef.current?.focus();
+    inputRef.current?.select();
+  }, []);
+
+  const commit = useCallback(() => {
+    const trimmed = value.trim();
+    onCommit(trimmed || initialName);
+  }, [value, initialName, onCommit]);
+
+  return (
+    <input
+      ref={inputRef}
+      className={styles.renameInput}
+      value={value}
+      onChange={(e) => setValue(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          commit();
+        }
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          onCommit(initialName);
+        }
+        e.stopPropagation();
+      }}
+      onClick={(e) => e.stopPropagation()}
+      data-testid="layer-rename-input"
+    />
+  );
+}
+
+// ============================================================================
 // LayerRow Component
 // ============================================================================
 
@@ -31,28 +81,36 @@ interface LayerRowProps {
   node: Node;
   depth: number;
   selected: boolean;
+  isRenaming: boolean;
   onSelect: (id: string, shiftKey: boolean) => void;
   onToggleVisibility: (id: string) => void;
   onToggleLock: (id: string) => void;
+  onContextMenu: (id: string, e: React.MouseEvent) => void;
+  onRenameCommit: (id: string, name: string) => void;
 }
 
 function LayerRow({
   node,
   depth,
   selected,
+  isRenaming,
   onSelect,
   onToggleVisibility,
   onToggleLock,
+  onContextMenu,
+  onRenameCommit,
 }: LayerRowProps) {
   const [expanded, setExpanded] = useState(true);
   const hasChildren = node.children && node.children.length > 0;
 
   return (
     <>
+      {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- layer rows use click for selection, keyboard handled at panel level */}
       <div
         className={`${styles.layerRow} ${selected ? styles.selected : ''}`}
         style={{ paddingLeft: `${12 + depth * 16}px` }}
         onClick={(e) => onSelect(node.id, e.shiftKey)}
+        onContextMenu={(e) => onContextMenu(node.id, e)}
         data-testid={`layer-row-${node.id}`}
       >
         {hasChildren && (
@@ -75,7 +133,14 @@ function LayerRow({
           </button>
         )}
         <span className={styles.layerIcon}>{nodeTypeIcon(node.type)}</span>
-        <span className={styles.layerName}>{node.name}</span>
+        {isRenaming ? (
+          <InlineRenameInput
+            initialName={node.name}
+            onCommit={(name) => onRenameCommit(node.id, name)}
+          />
+        ) : (
+          <span className={styles.layerName}>{node.name}</span>
+        )}
         <div className={styles.layerActions}>
           <button
             className={`${styles.actionButton} ${!node.visible ? styles.inactive : ''}`}
@@ -129,6 +194,9 @@ function LayerRow({
             onSelect={onSelect}
             onToggleVisibility={onToggleVisibility}
             onToggleLock={onToggleLock}
+            onContextMenu={onContextMenu}
+            isRenaming={false}
+            onRenameCommit={onRenameCommit}
           />
         ))}
     </>
@@ -142,12 +210,18 @@ function LayerRowById({
   onSelect,
   onToggleVisibility,
   onToggleLock,
+  onContextMenu,
+  isRenaming,
+  onRenameCommit,
 }: {
   nodeId: string;
   depth: number;
   onSelect: (id: string, shiftKey: boolean) => void;
   onToggleVisibility: (id: string) => void;
   onToggleLock: (id: string) => void;
+  onContextMenu: (id: string, e: React.MouseEvent) => void;
+  isRenaming: boolean;
+  onRenameCommit: (id: string, name: string) => void;
 }) {
   const sceneGraph = useSceneGraph();
   const selectedNodeIds = useEditorStore((state) => state.selectedNodeIds);
@@ -159,9 +233,12 @@ function LayerRowById({
       node={node}
       depth={depth}
       selected={selectedNodeIds.has(node.id)}
+      isRenaming={isRenaming}
       onSelect={onSelect}
       onToggleVisibility={onToggleVisibility}
       onToggleLock={onToggleLock}
+      onContextMenu={onContextMenu}
+      onRenameCommit={onRenameCommit}
     />
   );
 }
@@ -175,9 +252,15 @@ export function LayerPanel() {
   const selectedNodeIds = useEditorStore((state) => state.selectedNodeIds);
   const setSelection = useEditorStore((state) => state.setSelection);
   const addToSelection = useEditorStore((state) => state.addToSelection);
+  const duplicateSelection = useEditorStore((state) => state.duplicateSelection);
+  const deleteSelection = useEditorStore((state) => state.deleteSelection);
 
   // Track scene graph version to re-render when nodes change
   const [, setVersion] = useState(0);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; nodeId: string } | null>(
+    null
+  );
+  const [renamingNodeId, setRenamingNodeId] = useState<string | null>(null);
 
   useEffect(() => {
     const increment = () => setVersion((v) => v + 1);
@@ -226,6 +309,72 @@ export function LayerPanel() {
     [sceneGraph]
   );
 
+  const handleContextMenu = useCallback(
+    (nodeId: string, e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      // Select the node if not already selected
+      if (!selectedNodeIds.has(nodeId)) {
+        setSelection([nodeId]);
+      }
+      setContextMenu({ x: e.clientX, y: e.clientY, nodeId });
+    },
+    [selectedNodeIds, setSelection]
+  );
+
+  const handleRenameCommit = useCallback(
+    (id: string, name: string) => {
+      sceneGraph.updateNode(id, { name });
+      setRenamingNodeId(null);
+    },
+    [sceneGraph]
+  );
+
+  const contextMenuItems = useCallback((): ContextMenuEntry[] => {
+    if (!contextMenu) return [];
+    const nodeId = contextMenu.nodeId;
+    const node = sceneGraph.getNode(nodeId);
+    if (!node) return [];
+
+    return [
+      {
+        id: 'rename',
+        label: 'Rename',
+        onClick: () => setRenamingNodeId(nodeId),
+      },
+      {
+        id: 'duplicate',
+        label: 'Duplicate',
+        onClick: () => duplicateSelection(sceneGraph),
+      },
+      {
+        id: 'delete',
+        label: 'Delete',
+        shortcut: 'Del',
+        danger: true,
+        onClick: () => deleteSelection(sceneGraph),
+      },
+      { type: 'separator' },
+      {
+        id: 'toggle-visibility',
+        label: node.visible ? 'Hide' : 'Show',
+        onClick: () => handleToggleVisibility(nodeId),
+      },
+      {
+        id: 'toggle-lock',
+        label: node.locked ? 'Unlock' : 'Lock',
+        onClick: () => handleToggleLock(nodeId),
+      },
+    ];
+  }, [
+    contextMenu,
+    sceneGraph,
+    duplicateSelection,
+    deleteSelection,
+    handleToggleVisibility,
+    handleToggleLock,
+  ]);
+
   return (
     <div className={styles.panel}>
       <div className={styles.header}>
@@ -243,13 +392,24 @@ export function LayerPanel() {
               node={node}
               depth={0}
               selected={selectedNodeIds.has(node.id)}
+              isRenaming={renamingNodeId === node.id}
               onSelect={handleSelect}
               onToggleVisibility={handleToggleVisibility}
               onToggleLock={handleToggleLock}
+              onContextMenu={handleContextMenu}
+              onRenameCommit={handleRenameCommit}
             />
           ))
         )}
       </div>
+      {contextMenu && (
+        <ContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          items={contextMenuItems()}
+          onClose={() => setContextMenu(null)}
+        />
+      )}
     </div>
   );
 }

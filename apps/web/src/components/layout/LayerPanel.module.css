@@ -245,3 +245,18 @@
   border-radius: var(--radius-full);
   box-shadow: 0 0 8px var(--color-accent-primary-glow);
 }
+
+/* Inline rename input */
+.renameInput {
+  flex: 1;
+  height: 22px;
+  padding: 0 4px;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-primary);
+  background: var(--color-bg-active);
+  border: 1px solid var(--color-accent-primary);
+  border-radius: var(--radius-xs);
+  outline: none;
+  min-width: 0;
+}

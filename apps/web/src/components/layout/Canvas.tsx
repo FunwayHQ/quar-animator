@@ -16,6 +16,8 @@ import { useEditorStore } from '../../stores/editorStore';
 import { useSceneGraph } from '../../contexts/SceneGraphContext';
 import { SelectionOverlay } from '../canvas/SelectionOverlay';
 import { PenToolOverlay } from '../canvas/PenToolOverlay';
+import { ContextMenu } from '../common/ContextMenu';
+import type { ContextMenuEntry } from '../common/ContextMenu';
 import styles from './Canvas.module.css';
 
 // ============================================================================
@@ -58,9 +60,16 @@ export function Canvas() {
   const [mouseWorldPos, setMouseWorldPos] = useState<Vector2>({ x: 0, y: 0 });
   const [cameraReady, setCameraReady] = useState(false);
   const [sceneGraphVersion, setSceneGraphVersion] = useState(0);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
 
   // Get selection state from store
   const selectedNodeIds = useEditorStore((state) => state.selectedNodeIds);
+  const clipboard = useEditorStore((state) => state.clipboard);
+  const copySelection = useEditorStore((state) => state.copySelection);
+  const pasteClipboard = useEditorStore((state) => state.pasteClipboard);
+  const duplicateSelection = useEditorStore((state) => state.duplicateSelection);
+  const deleteSelection = useEditorStore((state) => state.deleteSelection);
+  const selectAll = useEditorStore((state) => state.selectAll);
 
   // Get shared SceneGraph from context
   const sceneGraph = useSceneGraph();
@@ -501,6 +510,10 @@ export function Canvas() {
       const canvas = canvasRef.current;
       if (!camera || !canvas) return;
 
+      // Skip clipboard shortcuts if active element is an input
+      const tag = (document.activeElement as HTMLElement)?.tagName;
+      const isInput = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
+
       // Space for pan mode
       if (e.code === 'Space' && !isSpaceHeldRef.current) {
         e.preventDefault();
@@ -512,37 +525,73 @@ export function Canvas() {
       }
 
       // Ctrl+0: Fit to window (reset zoom and position)
-      if (e.code === 'Digit0' && e.ctrlKey) {
+      if (e.code === 'Digit0' && (e.ctrlKey || e.metaKey)) {
         e.preventDefault();
         camera.reset();
         return;
       }
 
       // Ctrl+1: Zoom to 100%
-      if (e.code === 'Digit1' && e.ctrlKey) {
+      if (e.code === 'Digit1' && (e.ctrlKey || e.metaKey)) {
         e.preventDefault();
         camera.zoomTo(1);
         return;
       }
 
       // Ctrl+Plus: Zoom in
-      if ((e.code === 'Equal' || e.code === 'NumpadAdd') && e.ctrlKey) {
+      if ((e.code === 'Equal' || e.code === 'NumpadAdd') && (e.ctrlKey || e.metaKey)) {
         e.preventDefault();
         camera.zoomTo(camera.zoom * 1.25);
         return;
       }
 
       // Ctrl+Minus: Zoom out
-      if ((e.code === 'Minus' || e.code === 'NumpadSubtract') && e.ctrlKey) {
+      if ((e.code === 'Minus' || e.code === 'NumpadSubtract') && (e.ctrlKey || e.metaKey)) {
         e.preventDefault();
         camera.zoomTo(camera.zoom * 0.8);
+        return;
+      }
+
+      // Clipboard shortcuts (skip if active element is an input)
+      if (!isInput && (e.ctrlKey || e.metaKey)) {
+        if (e.key === 'c') {
+          copySelection(sceneGraph);
+          return;
+        }
+        if (e.key === 'v') {
+          pasteClipboard(sceneGraph);
+          return;
+        }
+        if (e.key === 'd') {
+          e.preventDefault();
+          duplicateSelection(sceneGraph);
+          return;
+        }
+        if (e.key === 'a') {
+          e.preventDefault();
+          selectAll(sceneGraph);
+          return;
+        }
+      }
+
+      // Delete/Backspace: delete selection (skip if input)
+      if (!isInput && (e.key === 'Delete' || e.key === 'Backspace')) {
+        deleteSelection(sceneGraph);
         return;
       }
 
       // Pass to tool system
       toolKeyDown(e);
     },
-    [toolKeyDown]
+    [
+      toolKeyDown,
+      sceneGraph,
+      copySelection,
+      pasteClipboard,
+      duplicateSelection,
+      deleteSelection,
+      selectAll,
+    ]
   );
 
   const handleKeyUp = useCallback(
@@ -563,12 +612,84 @@ export function Canvas() {
   );
 
   // --------------------------------------------------------------------------
-  // Context Menu (prevent right-click menu)
+  // Context Menu
   // --------------------------------------------------------------------------
 
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
+    setContextMenu({ x: e.clientX, y: e.clientY });
   }, []);
+
+  const contextMenuItems = useMemo((): ContextMenuEntry[] => {
+    const hasSelection = selectedNodeIds.size > 0;
+
+    if (hasSelection) {
+      return [
+        { id: 'copy', label: 'Copy', shortcut: 'Ctrl+C', onClick: () => copySelection(sceneGraph) },
+        {
+          id: 'duplicate',
+          label: 'Duplicate',
+          shortcut: 'Ctrl+D',
+          onClick: () => duplicateSelection(sceneGraph),
+        },
+        { type: 'separator' },
+        {
+          id: 'toggle-visibility',
+          label: 'Show/Hide',
+          onClick: () => {
+            for (const id of selectedNodeIds) {
+              const node = sceneGraph.getNode(id);
+              if (node) sceneGraph.updateNode(id, { visible: !node.visible });
+            }
+          },
+        },
+        {
+          id: 'toggle-lock',
+          label: 'Lock/Unlock',
+          onClick: () => {
+            for (const id of selectedNodeIds) {
+              const node = sceneGraph.getNode(id);
+              if (node) sceneGraph.updateNode(id, { locked: !node.locked });
+            }
+          },
+        },
+        { type: 'separator' },
+        {
+          id: 'delete',
+          label: 'Delete',
+          shortcut: 'Del',
+          danger: true,
+          onClick: () => deleteSelection(sceneGraph),
+        },
+      ];
+    }
+
+    return [
+      {
+        id: 'paste',
+        label: 'Paste',
+        shortcut: 'Ctrl+V',
+        disabled: !clipboard || clipboard.length === 0,
+        onClick: () => pasteClipboard(sceneGraph),
+      },
+      { type: 'separator' },
+      {
+        id: 'select-all',
+        label: 'Select All',
+        shortcut: 'Ctrl+A',
+        onClick: () => selectAll(sceneGraph),
+      },
+    ];
+  }, [
+    selectedNodeIds,
+    clipboard,
+    sceneGraph,
+    copySelection,
+    duplicateSelection,
+    pasteClipboard,
+    deleteSelection,
+    selectAll,
+  ]);
 
   // --------------------------------------------------------------------------
   // Global Drag Listener Helper
@@ -724,6 +845,14 @@ export function Canvas() {
         </span>
         <span className={styles.zoom}>{zoomPercent}%</span>
       </div>
+      {contextMenu && (
+        <ContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          items={contextMenuItems}
+          onClose={() => setContextMenu(null)}
+        />
+      )}
     </div>
   );
 }

@@ -4,7 +4,19 @@
  */
 
 import { create } from 'zustand';
-import type { ToolType, Fill, Stroke, Color } from '@quar/types';
+import type { ToolType, Fill, Stroke, Color, Node } from '@quar/types';
+
+// ============================================================================
+// SceneGraph Interface (subset used by store operations)
+// ============================================================================
+
+interface SceneGraphLike {
+  getNode(id: string): Node | undefined;
+  getRootNodes(): Node[];
+  addNode(node: Node, parentId?: string): void;
+  removeNode(id: string): void;
+  getDescendants(id: string): Node[];
+}
 
 // ============================================================================
 // Eraser Mode Type (matches EraserTool)
@@ -78,6 +90,14 @@ export interface EditorStore {
   // Aspect ratio lock
   aspectRatioLocked: boolean;
   toggleAspectRatioLock: () => void;
+
+  // Clipboard & node operations
+  clipboard: Node[] | null;
+  copySelection: (sceneGraph: SceneGraphLike) => void;
+  pasteClipboard: (sceneGraph: SceneGraphLike) => void;
+  duplicateSelection: (sceneGraph: SceneGraphLike) => void;
+  deleteSelection: (sceneGraph: SceneGraphLike) => void;
+  selectAll: (sceneGraph: SceneGraphLike) => void;
 
   // Timeline state
   currentFrame: number;
@@ -157,6 +177,66 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   aspectRatioLocked: false,
   toggleAspectRatioLock: () => set((state) => ({ aspectRatioLocked: !state.aspectRatioLocked })),
 
+  // Clipboard & node operations
+  clipboard: null,
+  copySelection: (sceneGraph: SceneGraphLike) => {
+    const { selectedNodeIds } = get();
+    if (selectedNodeIds.size === 0) return;
+    const clones: Node[] = [];
+    for (const id of selectedNodeIds) {
+      const node = sceneGraph.getNode(id);
+      if (node) clones.push(structuredClone(node));
+    }
+    if (clones.length > 0) set({ clipboard: clones });
+  },
+  pasteClipboard: (sceneGraph: SceneGraphLike) => {
+    const { clipboard } = get();
+    if (!clipboard || clipboard.length === 0) return;
+    const newIds: string[] = [];
+    for (const original of clipboard) {
+      const newNode = structuredClone(original);
+      newNode.id = `node_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      newNode.parent = null;
+      newNode.children = [];
+      // Offset position
+      newNode.transform = {
+        ...newNode.transform,
+        position: {
+          x: newNode.transform.position.x + 20,
+          y: newNode.transform.position.y - 20,
+        },
+      };
+      sceneGraph.addNode(newNode);
+      newIds.push(newNode.id);
+    }
+    set({ selectedNodeIds: new Set(newIds) });
+  },
+  duplicateSelection: (sceneGraph: SceneGraphLike) => {
+    const { copySelection, pasteClipboard } = get();
+    copySelection(sceneGraph);
+    pasteClipboard(sceneGraph);
+  },
+  deleteSelection: (sceneGraph: SceneGraphLike) => {
+    const { selectedNodeIds } = get();
+    if (selectedNodeIds.size === 0) return;
+    for (const id of selectedNodeIds) {
+      sceneGraph.removeNode(id);
+    }
+    set({ selectedNodeIds: new Set<string>() });
+  },
+  selectAll: (sceneGraph: SceneGraphLike) => {
+    const allIds: string[] = [];
+    const rootNodes = sceneGraph.getRootNodes();
+    for (const node of rootNodes) {
+      allIds.push(node.id);
+      const descendants = sceneGraph.getDescendants(node.id);
+      for (const desc of descendants) {
+        allIds.push(desc.id);
+      }
+    }
+    set({ selectedNodeIds: new Set(allIds) });
+  },
+
   // Timeline state
   currentFrame: 0,
   isPlaying: false,
@@ -215,6 +295,20 @@ export const useAspectRatioLocked = (): boolean =>
   useEditorStore((state: EditorStore) => state.aspectRatioLocked);
 export const useToggleAspectRatioLock = (): (() => void) =>
   useEditorStore((state: EditorStore) => state.toggleAspectRatioLock);
+
+// Clipboard selectors
+export const useClipboard = (): Node[] | null =>
+  useEditorStore((state: EditorStore) => state.clipboard);
+export const useCopySelection = (): ((sceneGraph: SceneGraphLike) => void) =>
+  useEditorStore((state: EditorStore) => state.copySelection);
+export const usePasteClipboard = (): ((sceneGraph: SceneGraphLike) => void) =>
+  useEditorStore((state: EditorStore) => state.pasteClipboard);
+export const useDuplicateSelection = (): ((sceneGraph: SceneGraphLike) => void) =>
+  useEditorStore((state: EditorStore) => state.duplicateSelection);
+export const useDeleteSelection = (): ((sceneGraph: SceneGraphLike) => void) =>
+  useEditorStore((state: EditorStore) => state.deleteSelection);
+export const useSelectAll = (): ((sceneGraph: SceneGraphLike) => void) =>
+  useEditorStore((state: EditorStore) => state.selectAll);
 
 // Timeline selectors
 export const useCurrentFrame = (): number =>

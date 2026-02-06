@@ -2,7 +2,7 @@
  * Tests for Editor Store
  */
 
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { useEditorStore, DEFAULT_FILL, DEFAULT_STROKE } from './editorStore';
 
 describe('EditorStore', () => {
@@ -19,6 +19,7 @@ describe('EditorStore', () => {
       eraserSize: 10,
       eraserMode: 'stroke',
       aspectRatioLocked: false,
+      clipboard: null,
       currentFrame: 0,
       isPlaying: false,
       isLooping: false,
@@ -540,6 +541,175 @@ describe('EditorStore', () => {
       const { setTimelineDuration } = useEditorStore.getState();
       setTimelineDuration(-10);
       expect(useEditorStore.getState().timelineDuration).toBe(1);
+    });
+  });
+
+  // ==========================================================================
+  // Clipboard & Node Operations
+  // ==========================================================================
+
+  describe('clipboard & node operations', () => {
+    function createMockSceneGraph() {
+      const nodes = new Map<string, any>();
+      return {
+        getNode: (id: string) => nodes.get(id),
+        getRootNodes: () => [...nodes.values()].filter((n) => !n.parent),
+        addNode: vi.fn((node: any) => {
+          nodes.set(node.id, node);
+        }),
+        removeNode: vi.fn((id: string) => {
+          nodes.delete(id);
+        }),
+        getDescendants: () => [],
+        _addTestNode: (node: any) => {
+          nodes.set(node.id, node);
+        },
+      };
+    }
+
+    function makeTestNode(id: string, x = 0, y = 0) {
+      return {
+        id,
+        name: id,
+        type: 'rectangle' as const,
+        parent: null,
+        children: [],
+        transform: {
+          position: { x, y },
+          rotation: 0,
+          scale: { x: 1, y: 1 },
+          anchor: { x: 0.5, y: 0.5 },
+          skew: { x: 0, y: 0 },
+        },
+        visible: true,
+        locked: false,
+        opacity: 1,
+        blendMode: 'normal' as const,
+        width: 100,
+        height: 100,
+        cornerRadius: [0, 0, 0, 0] as [number, number, number, number],
+        fill: null,
+        stroke: null,
+      };
+    }
+
+    it('copySelection stores clones of selected nodes', () => {
+      const sg = createMockSceneGraph();
+      sg._addTestNode(makeTestNode('rect1', 50, 50));
+      useEditorStore.setState({ selectedNodeIds: new Set(['rect1']) });
+
+      const { copySelection } = useEditorStore.getState();
+      copySelection(sg);
+
+      const { clipboard } = useEditorStore.getState();
+      expect(clipboard).toHaveLength(1);
+      expect(clipboard![0].id).toBe('rect1');
+    });
+
+    it('copySelection with no selection does nothing', () => {
+      const sg = createMockSceneGraph();
+      const { copySelection } = useEditorStore.getState();
+      copySelection(sg);
+
+      expect(useEditorStore.getState().clipboard).toBeNull();
+    });
+
+    it('pasteClipboard creates new nodes with new IDs', () => {
+      const sg = createMockSceneGraph();
+      const original = makeTestNode('rect1', 50, 50);
+      useEditorStore.setState({ clipboard: [original] });
+
+      const { pasteClipboard } = useEditorStore.getState();
+      pasteClipboard(sg);
+
+      expect(sg.addNode).toHaveBeenCalledOnce();
+      const addedNode = sg.addNode.mock.calls[0][0];
+      expect(addedNode.id).not.toBe('rect1');
+    });
+
+    it('pasteClipboard offsets position', () => {
+      const sg = createMockSceneGraph();
+      const original = makeTestNode('rect1', 50, 50);
+      useEditorStore.setState({ clipboard: [original] });
+
+      const { pasteClipboard } = useEditorStore.getState();
+      pasteClipboard(sg);
+
+      const addedNode = sg.addNode.mock.calls[0][0];
+      expect(addedNode.transform.position.x).toBe(70);
+      expect(addedNode.transform.position.y).toBe(30);
+    });
+
+    it('pasteClipboard selects pasted nodes', () => {
+      const sg = createMockSceneGraph();
+      const original = makeTestNode('rect1', 50, 50);
+      useEditorStore.setState({ clipboard: [original] });
+
+      const { pasteClipboard } = useEditorStore.getState();
+      pasteClipboard(sg);
+
+      const { selectedNodeIds } = useEditorStore.getState();
+      expect(selectedNodeIds.size).toBe(1);
+      expect([...selectedNodeIds][0]).not.toBe('rect1');
+    });
+
+    it('pasteClipboard with empty clipboard does nothing', () => {
+      const sg = createMockSceneGraph();
+      const { pasteClipboard } = useEditorStore.getState();
+      pasteClipboard(sg);
+
+      expect(sg.addNode).not.toHaveBeenCalled();
+    });
+
+    it('duplicateSelection copies and pastes', () => {
+      const sg = createMockSceneGraph();
+      sg._addTestNode(makeTestNode('rect1', 10, 20));
+      useEditorStore.setState({ selectedNodeIds: new Set(['rect1']) });
+
+      const { duplicateSelection } = useEditorStore.getState();
+      duplicateSelection(sg);
+
+      expect(sg.addNode).toHaveBeenCalledOnce();
+      const addedNode = sg.addNode.mock.calls[0][0];
+      expect(addedNode.id).not.toBe('rect1');
+      expect(addedNode.transform.position.x).toBe(30);
+    });
+
+    it('deleteSelection removes nodes and clears selection', () => {
+      const sg = createMockSceneGraph();
+      sg._addTestNode(makeTestNode('rect1'));
+      sg._addTestNode(makeTestNode('rect2'));
+      useEditorStore.setState({ selectedNodeIds: new Set(['rect1', 'rect2']) });
+
+      const { deleteSelection } = useEditorStore.getState();
+      deleteSelection(sg);
+
+      expect(sg.removeNode).toHaveBeenCalledTimes(2);
+      expect(useEditorStore.getState().selectedNodeIds.size).toBe(0);
+    });
+
+    it('deleteSelection with no selection does nothing', () => {
+      const sg = createMockSceneGraph();
+      const { deleteSelection } = useEditorStore.getState();
+      deleteSelection(sg);
+
+      expect(sg.removeNode).not.toHaveBeenCalled();
+    });
+
+    it('selectAll selects all nodes', () => {
+      const sg = createMockSceneGraph();
+      sg._addTestNode(makeTestNode('rect1'));
+      sg._addTestNode(makeTestNode('rect2'));
+      sg._addTestNode(makeTestNode('rect3'));
+
+      const { selectAll } = useEditorStore.getState();
+      selectAll(sg);
+
+      const { selectedNodeIds } = useEditorStore.getState();
+      expect(selectedNodeIds.size).toBe(3);
+      expect(selectedNodeIds.has('rect1')).toBe(true);
+      expect(selectedNodeIds.has('rect2')).toBe(true);
+      expect(selectedNodeIds.has('rect3')).toBe(true);
     });
   });
 });

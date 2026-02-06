@@ -3,6 +3,8 @@ import { useSceneGraph } from '../../contexts/SceneGraphContext';
 import { useEditorStore } from '../../stores/editorStore';
 import { formatTimecode } from '@quar/animation';
 import type { Node } from '@quar/types';
+import { ContextMenu } from '../common/ContextMenu';
+import type { ContextMenuEntry } from '../common/ContextMenu';
 import styles from './Timeline.module.css';
 
 export function Timeline() {
@@ -19,6 +21,9 @@ export function Timeline() {
   const toggleTimelineExpanded = useEditorStore((s) => s.toggleTimelineExpanded);
 
   const rulerRef = useRef<HTMLDivElement>(null);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; frame: number } | null>(
+    null
+  );
 
   // Track scene graph changes for layer labels
   const [nodes, setNodes] = useState<Node[]>([]);
@@ -75,6 +80,49 @@ export function Timeline() {
     const frame = Math.round((i / 10) * duration);
     return { index: i, frame };
   });
+
+  const handleTimelineContextMenu = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      const ruler = rulerRef.current;
+      if (!ruler) return;
+      const rect = ruler.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const frame = Math.max(0, Math.min(duration - 1, Math.round((x / rect.width) * duration)));
+      setContextMenu({ x: e.clientX, y: e.clientY, frame });
+    },
+    [duration]
+  );
+
+  const timelineContextMenuItems = useCallback((): ContextMenuEntry[] => {
+    if (!contextMenu) return [];
+    return [
+      {
+        id: 'go-to-frame',
+        label: `Go To Frame ${contextMenu.frame}`,
+        onClick: () => setCurrentFrame(contextMenu.frame),
+      },
+      { type: 'separator' },
+      {
+        id: 'go-to-start',
+        label: 'Go To Start',
+        shortcut: 'Home',
+        onClick: () => {
+          setCurrentFrame(0);
+          setIsPlaying(false);
+        },
+      },
+      {
+        id: 'go-to-end',
+        label: 'Go To End',
+        shortcut: 'End',
+        onClick: () => {
+          setCurrentFrame(duration - 1);
+          setIsPlaying(false);
+        },
+      },
+    ];
+  }, [contextMenu, duration, setCurrentFrame, setIsPlaying]);
 
   // ============================================================
   // Collapsed mode: thin bar
@@ -339,10 +387,12 @@ export function Timeline() {
         {/* Tracks Area */}
         <div className={styles.tracksArea}>
           {/* Ruler */}
+          {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events -- keyboard navigation handled by useTimelineShortcuts hook */}
           <div
             className={styles.ruler}
             ref={rulerRef}
             onClick={handleRulerClick}
+            onContextMenu={handleTimelineContextMenu}
             role="slider"
             aria-valuenow={currentFrame}
             aria-valuemin={0}
@@ -378,6 +428,14 @@ export function Timeline() {
           </div>
         </div>
       </div>
+      {contextMenu && (
+        <ContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          items={timelineContextMenuItems()}
+          onClose={() => setContextMenu(null)}
+        />
+      )}
     </div>
   );
 }
