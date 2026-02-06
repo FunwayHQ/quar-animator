@@ -642,4 +642,35 @@ describe('PenTool', () => {
       expect(path[0].type).toBe('corner');
     });
   });
+
+  // ==========================================================================
+  // Degenerate Path Validation
+  // ==========================================================================
+
+  describe('degenerate path validation', () => {
+    it('should not create a node when all points are at the same location', () => {
+      // Click multiple times at the same position
+      for (let i = 0; i < 4; i++) {
+        tool.onPointerDown(
+          createMockPointerEvent({
+            worldPosition: { x: 100, y: 100 },
+            button: 0,
+          })
+        );
+        tool.onPointerUp(
+          createMockPointerEvent({
+            worldPosition: { x: 100, y: 100 },
+          })
+        );
+      }
+
+      // Try to finalize with Enter
+      tool.onKeyDown(new KeyboardEvent('keydown', { key: 'Enter' }));
+
+      // No node should be added since bounding box is < 0.1
+      const nodes = Array.from(context.sceneGraph.getNodes());
+      expect(nodes.length).toBe(0);
+      expect(tool.isCurrentlyDrawing()).toBe(false);
+    });
+  });
 });

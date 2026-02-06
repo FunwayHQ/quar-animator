@@ -688,5 +688,36 @@ describe('WebGLRenderer', () => {
       expect(renderer.getProgram('test')).toBeUndefined();
       expect(renderer.getBuffer('buf')).toBeUndefined();
     });
+
+    // X1-3: Event listener cleanup
+    it('removes context loss event listeners on dispose', () => {
+      const removeListenerSpy = vi.spyOn(canvas, 'removeEventListener');
+      const renderer = new WebGLRenderer({ canvas });
+
+      renderer.dispose();
+
+      // Should have removed both webglcontextlost and webglcontextrestored listeners
+      const removedEvents = removeListenerSpy.mock.calls.map((c) => c[0]);
+      expect(removedEvents).toContain('webglcontextlost');
+      expect(removedEvents).toContain('webglcontextrestored');
+    });
+
+    it('does not fire context lost handler after dispose', () => {
+      const renderer = new WebGLRenderer({ canvas });
+      const handler = vi.fn();
+      renderer.setContextLostHandler(handler);
+
+      renderer.dispose();
+
+      // Simulate context loss after dispose - handler should not fire because
+      // the listener was removed with the correct bound reference
+      const event = new Event('webglcontextlost');
+      Object.defineProperty(event, 'preventDefault', { value: vi.fn() });
+      canvas.dispatchEvent(event);
+
+      // If the bound reference fix works, this should NOT be called
+      // (The old code would have failed to remove because .bind() creates a new reference)
+      expect(handler).not.toHaveBeenCalled();
+    });
   });
 });

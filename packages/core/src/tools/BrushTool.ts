@@ -448,6 +448,10 @@ export class BrushTool extends BaseTool {
     const leftSide: PathPoint[] = [];
     const rightSide: PathPoint[] = [];
 
+    // Track last valid perpendicular for degenerate points
+    let lastPerpX = 0;
+    let lastPerpY = 1;
+
     for (let i = 0; i < points.length; i++) {
       const curr = points[i].position;
       const prev = i > 0 ? points[i - 1].position : null;
@@ -473,13 +477,19 @@ export class BrushTool extends BaseTool {
 
       // Normalize and get perpendicular
       const len = Math.sqrt(dx * dx + dy * dy);
-      if (len < 0.001) {
-        // Skip degenerate points
-        continue;
-      }
+      let perpX: number;
+      let perpY: number;
 
-      const perpX = -dy / len;
-      const perpY = dx / len;
+      if (len < 0.001) {
+        // Degenerate point: reuse last valid perpendicular
+        perpX = lastPerpX;
+        perpY = lastPerpY;
+      } else {
+        perpX = -dy / len;
+        perpY = dx / len;
+        lastPerpX = perpX;
+        lastPerpY = perpY;
+      }
 
       // Create offset points with validated coordinates
       const leftX = curr.x + perpX * halfWidth;

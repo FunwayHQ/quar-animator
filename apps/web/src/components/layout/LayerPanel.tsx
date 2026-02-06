@@ -1,54 +1,61 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import type { Node } from '@quar/types';
+import { useSceneGraph } from '../../contexts/SceneGraphContext';
+import { useEditorStore } from '../../stores/editorStore';
 import styles from './LayerPanel.module.css';
 
-interface Layer {
-  id: string;
-  name: string;
-  type: 'group' | 'shape' | 'path' | 'text';
-  visible: boolean;
-  locked: boolean;
-  children?: Layer[];
-  expanded?: boolean;
+// ============================================================================
+// Helper: map node type to display icon
+// ============================================================================
+
+function nodeTypeIcon(type: string): string {
+  switch (type) {
+    case 'group':
+      return '\u{1F4C1}'; // folder
+    case 'rectangle':
+    case 'ellipse':
+    case 'polygon':
+      return '\u25FC'; // filled square
+    case 'path':
+      return '\u2669'; // path-like symbol
+    default:
+      return '\u25FC';
+  }
 }
 
-const sampleLayers: Layer[] = [
-  {
-    id: '1',
-    name: 'Character',
-    type: 'group',
-    visible: true,
-    locked: false,
-    expanded: true,
-    children: [
-      { id: '1-1', name: 'Head', type: 'group', visible: true, locked: false },
-      { id: '1-2', name: 'Body', type: 'shape', visible: true, locked: false },
-      { id: '1-3', name: 'Arms', type: 'group', visible: true, locked: false },
-    ],
-  },
-  { id: '2', name: 'Background', type: 'shape', visible: true, locked: true },
-  { id: '3', name: 'Title', type: 'text', visible: true, locked: false },
-];
+// ============================================================================
+// LayerRow Component
+// ============================================================================
 
 interface LayerRowProps {
-  layer: Layer;
+  node: Node;
   depth: number;
   selected: boolean;
-  onSelect: (id: string) => void;
+  onSelect: (id: string, shiftKey: boolean) => void;
   onToggleVisibility: (id: string) => void;
   onToggleLock: (id: string) => void;
 }
 
-function LayerRow({ layer, depth, selected, onSelect, onToggleVisibility, onToggleLock }: LayerRowProps) {
-  const [expanded, setExpanded] = useState(layer.expanded ?? false);
+function LayerRow({
+  node,
+  depth,
+  selected,
+  onSelect,
+  onToggleVisibility,
+  onToggleLock,
+}: LayerRowProps) {
+  const [expanded, setExpanded] = useState(true);
+  const hasChildren = node.children && node.children.length > 0;
 
   return (
     <>
       <div
         className={`${styles.layerRow} ${selected ? styles.selected : ''}`}
         style={{ paddingLeft: `${12 + depth * 16}px` }}
-        onClick={() => onSelect(layer.id)}
+        onClick={(e) => onSelect(node.id, e.shiftKey)}
+        data-testid={`layer-row-${node.id}`}
       >
-        {layer.children && (
+        {hasChildren && (
           <button
             className={styles.expandButton}
             onClick={(e) => {
@@ -67,33 +74,45 @@ function LayerRow({ layer, depth, selected, onSelect, onToggleVisibility, onTogg
             </svg>
           </button>
         )}
-        <span className={styles.layerIcon}>
-          {layer.type === 'group' ? '📁' : layer.type === 'text' ? 'T' : '◼'}
-        </span>
-        <span className={styles.layerName}>{layer.name}</span>
+        <span className={styles.layerIcon}>{nodeTypeIcon(node.type)}</span>
+        <span className={styles.layerName}>{node.name}</span>
         <div className={styles.layerActions}>
           <button
-            className={`${styles.actionButton} ${!layer.visible ? styles.inactive : ''}`}
+            className={`${styles.actionButton} ${!node.visible ? styles.inactive : ''}`}
             onClick={(e) => {
               e.stopPropagation();
-              onToggleVisibility(layer.id);
+              onToggleVisibility(node.id);
             }}
             title="Toggle visibility"
           >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+            >
               <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
               <circle cx="12" cy="12" r="3" />
             </svg>
           </button>
           <button
-            className={`${styles.actionButton} ${layer.locked ? styles.active : ''}`}
+            className={`${styles.actionButton} ${node.locked ? styles.active : ''}`}
             onClick={(e) => {
               e.stopPropagation();
-              onToggleLock(layer.id);
+              onToggleLock(node.id);
             }}
             title="Toggle lock"
           >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+            >
               <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
               <path d="M7 11V7a5 5 0 0 1 10 0v4" />
             </svg>
@@ -101,12 +120,12 @@ function LayerRow({ layer, depth, selected, onSelect, onToggleVisibility, onTogg
         </div>
       </div>
       {expanded &&
-        layer.children?.map((child) => (
-          <LayerRow
-            key={child.id}
-            layer={child}
+        hasChildren &&
+        node.children.map((childId) => (
+          <LayerRowById
+            key={childId}
+            nodeId={childId}
             depth={depth + 1}
-            selected={selected}
             onSelect={onSelect}
             onToggleVisibility={onToggleVisibility}
             onToggleLock={onToggleLock}
@@ -116,56 +135,120 @@ function LayerRow({ layer, depth, selected, onSelect, onToggleVisibility, onTogg
   );
 }
 
+// Wrapper that resolves a child node by ID from SceneGraph
+function LayerRowById({
+  nodeId,
+  depth,
+  onSelect,
+  onToggleVisibility,
+  onToggleLock,
+}: {
+  nodeId: string;
+  depth: number;
+  onSelect: (id: string, shiftKey: boolean) => void;
+  onToggleVisibility: (id: string) => void;
+  onToggleLock: (id: string) => void;
+}) {
+  const sceneGraph = useSceneGraph();
+  const selectedNodeIds = useEditorStore((state) => state.selectedNodeIds);
+  const node = sceneGraph.getNode(nodeId);
+  if (!node) return null;
+
+  return (
+    <LayerRow
+      node={node}
+      depth={depth}
+      selected={selectedNodeIds.has(node.id)}
+      onSelect={onSelect}
+      onToggleVisibility={onToggleVisibility}
+      onToggleLock={onToggleLock}
+    />
+  );
+}
+
+// ============================================================================
+// LayerPanel Component
+// ============================================================================
+
 export function LayerPanel() {
-  const [layers, setLayers] = useState(sampleLayers);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const sceneGraph = useSceneGraph();
+  const selectedNodeIds = useEditorStore((state) => state.selectedNodeIds);
+  const setSelection = useEditorStore((state) => state.setSelection);
+  const addToSelection = useEditorStore((state) => state.addToSelection);
 
-  const handleToggleVisibility = (id: string) => {
-    setLayers((prev) =>
-      prev.map((layer) =>
-        layer.id === id ? { ...layer, visible: !layer.visible } : layer
-      )
-    );
-  };
+  // Track scene graph version to re-render when nodes change
+  const [, setVersion] = useState(0);
 
-  const handleToggleLock = (id: string) => {
-    setLayers((prev) =>
-      prev.map((layer) =>
-        layer.id === id ? { ...layer, locked: !layer.locked } : layer
-      )
-    );
-  };
+  useEffect(() => {
+    const increment = () => setVersion((v) => v + 1);
+    const unsub1 = sceneGraph.on('nodeAdded', increment);
+    const unsub2 = sceneGraph.on('nodeRemoved', increment);
+    const unsub3 = sceneGraph.on('nodeChanged', increment);
+    const unsub4 = sceneGraph.on('nodeMoved', increment);
+    return () => {
+      unsub1();
+      unsub2();
+      unsub3();
+      unsub4();
+    };
+  }, [sceneGraph]);
+
+  const rootNodes = sceneGraph.getRootNodes();
+
+  const handleSelect = useCallback(
+    (id: string, shiftKey: boolean) => {
+      if (shiftKey) {
+        addToSelection(id);
+      } else {
+        setSelection([id]);
+      }
+    },
+    [setSelection, addToSelection]
+  );
+
+  const handleToggleVisibility = useCallback(
+    (id: string) => {
+      const node = sceneGraph.getNode(id);
+      if (node) {
+        sceneGraph.updateNode(id, { visible: !node.visible });
+      }
+    },
+    [sceneGraph]
+  );
+
+  const handleToggleLock = useCallback(
+    (id: string) => {
+      const node = sceneGraph.getNode(id);
+      if (node) {
+        sceneGraph.updateNode(id, { locked: !node.locked });
+      }
+    },
+    [sceneGraph]
+  );
 
   return (
     <div className={styles.panel}>
       <div className={styles.header}>
         <h3 className={styles.title}>Layers</h3>
-        <div className={styles.headerActions}>
-          <button className={styles.headerButton} title="Add layer">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <line x1="12" y1="5" x2="12" y2="19" />
-              <line x1="5" y1="12" x2="19" y2="12" />
-            </svg>
-          </button>
-          <button className={styles.headerButton} title="Add group">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
-            </svg>
-          </button>
-        </div>
       </div>
       <div className={styles.content}>
-        {layers.map((layer) => (
-          <LayerRow
-            key={layer.id}
-            layer={layer}
-            depth={0}
-            selected={selectedId === layer.id}
-            onSelect={setSelectedId}
-            onToggleVisibility={handleToggleVisibility}
-            onToggleLock={handleToggleLock}
-          />
-        ))}
+        {rootNodes.length === 0 ? (
+          <div className={styles.emptyState} data-testid="layer-empty">
+            No layers yet
+          </div>
+        ) : (
+          rootNodes.map((node) => (
+            <LayerRow
+              key={node.id}
+              node={node}
+              depth={0}
+              selected={selectedNodeIds.has(node.id)}
+              onSelect={handleSelect}
+              onToggleVisibility={handleToggleVisibility}
+              onToggleLock={handleToggleLock}
+            />
+          ))
+        )}
       </div>
     </div>
   );

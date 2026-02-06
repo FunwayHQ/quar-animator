@@ -249,7 +249,8 @@ describe('ShapeRenderer', () => {
       const vpMatrix = mat3.identity();
       shapeRenderer.render(sceneGraph, vpMatrix);
 
-      expect(gl.drawArrays).toHaveBeenCalled();
+      // Fill uses earcut triangulation via drawElements
+      expect(gl.drawElements).toHaveBeenCalled();
     });
 
     it('should set model matrix for rectangle', () => {
@@ -281,9 +282,9 @@ describe('ShapeRenderer', () => {
       vi.clearAllMocks();
       shapeRenderer.render(sceneGraph, vpMatrix);
 
-      // Fill uses drawElements, stroke uses drawArrays
-      expect(gl.drawElements).toHaveBeenCalledTimes(1); // fill
-      expect(gl.drawArrays).toHaveBeenCalledTimes(1); // stroke
+      // Both fill and stroke use drawElements (filled outline triangulation)
+      expect(gl.drawElements).toHaveBeenCalledTimes(2); // fill + stroke
+      expect(gl.drawArrays).not.toHaveBeenCalled();
     });
 
     it('should not render fill when fill is none', () => {
@@ -336,7 +337,8 @@ describe('ShapeRenderer', () => {
       const vpMatrix = mat3.identity();
       shapeRenderer.render(sceneGraph, vpMatrix);
 
-      expect(gl.drawArrays).toHaveBeenCalled();
+      // Fill uses earcut triangulation via drawElements
+      expect(gl.drawElements).toHaveBeenCalled();
     });
 
     it('should set model matrix for ellipse', () => {
@@ -357,9 +359,9 @@ describe('ShapeRenderer', () => {
       vi.clearAllMocks();
       shapeRenderer.render(sceneGraph, vpMatrix);
 
-      // Fill uses drawElements, stroke uses drawArrays
-      expect(gl.drawElements).toHaveBeenCalledTimes(1); // fill
-      expect(gl.drawArrays).toHaveBeenCalledTimes(1); // stroke
+      // Both fill and stroke use drawElements (filled outline triangulation)
+      expect(gl.drawElements).toHaveBeenCalledTimes(2); // fill + stroke
+      expect(gl.drawArrays).not.toHaveBeenCalled();
     });
 
     it('should render circle when radiusX equals radiusY', () => {
@@ -391,7 +393,7 @@ describe('ShapeRenderer', () => {
       );
     });
 
-    it('should use LINE_LOOP for stroke', () => {
+    it('should use filled outline for stroke', () => {
       const ellipse = createEllipseNode('ellipse1', 50, 30);
       ellipse.fill = { type: 'none', opacity: 0 };
       sceneGraph.addNode(ellipse);
@@ -400,9 +402,11 @@ describe('ShapeRenderer', () => {
       vi.clearAllMocks();
       shapeRenderer.render(sceneGraph, vpMatrix);
 
-      expect(gl.drawArrays).toHaveBeenCalledWith(
-        gl.LINE_LOOP,
+      // Stroke rendered as filled outline polygon via drawElements
+      expect(gl.drawElements).toHaveBeenCalledWith(
+        gl.TRIANGLES,
         expect.any(Number),
+        gl.UNSIGNED_SHORT,
         expect.any(Number)
       );
     });
@@ -420,7 +424,8 @@ describe('ShapeRenderer', () => {
       const vpMatrix = mat3.identity();
       shapeRenderer.render(sceneGraph, vpMatrix);
 
-      expect(gl.drawArrays).toHaveBeenCalled();
+      // Fill uses earcut triangulation via drawElements
+      expect(gl.drawElements).toHaveBeenCalled();
     });
 
     it('should set model matrix for polygon', () => {
@@ -441,9 +446,9 @@ describe('ShapeRenderer', () => {
       vi.clearAllMocks();
       shapeRenderer.render(sceneGraph, vpMatrix);
 
-      // Fill uses drawElements, stroke uses drawArrays
-      expect(gl.drawElements).toHaveBeenCalledTimes(1); // fill
-      expect(gl.drawArrays).toHaveBeenCalledTimes(1); // stroke
+      // Both fill and stroke use drawElements (filled outline triangulation)
+      expect(gl.drawElements).toHaveBeenCalledTimes(2); // fill + stroke
+      expect(gl.drawArrays).not.toHaveBeenCalled();
     });
 
     it('should render triangle (3 sides)', () => {
@@ -519,7 +524,7 @@ describe('ShapeRenderer', () => {
       );
     });
 
-    it('should use LINE_LOOP for polygon stroke', () => {
+    it('should use filled outline for polygon stroke', () => {
       const polygon = createPolygonNode('poly1', 6, 50);
       polygon.fill = { type: 'none', opacity: 0 };
       sceneGraph.addNode(polygon);
@@ -528,9 +533,11 @@ describe('ShapeRenderer', () => {
       vi.clearAllMocks();
       shapeRenderer.render(sceneGraph, vpMatrix);
 
-      expect(gl.drawArrays).toHaveBeenCalledWith(
-        gl.LINE_LOOP,
+      // Stroke rendered as filled outline polygon via drawElements
+      expect(gl.drawElements).toHaveBeenCalledWith(
+        gl.TRIANGLES,
         expect.any(Number),
+        gl.UNSIGNED_SHORT,
         expect.any(Number)
       );
     });
@@ -546,6 +553,7 @@ describe('ShapeRenderer', () => {
       shapeRenderer.render(sceneGraph, vpMatrix);
 
       expect(gl.drawArrays).not.toHaveBeenCalled();
+      expect(gl.drawElements).not.toHaveBeenCalled();
     });
 
     it('should apply position transform to polygon', () => {
@@ -569,6 +577,7 @@ describe('ShapeRenderer', () => {
       shapeRenderer.render(sceneGraph, vpMatrix);
 
       expect(gl.drawArrays).not.toHaveBeenCalled();
+      expect(gl.drawElements).not.toHaveBeenCalled();
     });
   });
 
@@ -584,7 +593,8 @@ describe('ShapeRenderer', () => {
       const vpMatrix = mat3.identity();
       shapeRenderer.render(sceneGraph, vpMatrix);
 
-      expect(gl.drawArrays).toHaveBeenCalled();
+      // Fill uses earcut triangulation via drawElements
+      expect(gl.drawElements).toHaveBeenCalled();
     });
 
     it('should not render fill for open path', () => {
@@ -597,8 +607,9 @@ describe('ShapeRenderer', () => {
       vi.clearAllMocks();
       shapeRenderer.render(sceneGraph, vpMatrix);
 
-      // Only stroke, no fill
-      expect(gl.drawArrays).toHaveBeenCalledTimes(1);
+      // Only stroke (as filled outline), no fill
+      expect(gl.drawElements).toHaveBeenCalledTimes(1);
+      expect(gl.drawArrays).not.toHaveBeenCalled();
     });
 
     it('should render path stroke', () => {
@@ -610,10 +621,11 @@ describe('ShapeRenderer', () => {
       vi.clearAllMocks();
       shapeRenderer.render(sceneGraph, vpMatrix);
 
-      expect(gl.drawArrays).toHaveBeenCalled();
+      // Stroke rendered as filled outline via drawElements
+      expect(gl.drawElements).toHaveBeenCalled();
     });
 
-    it('should use LINE_STRIP for open path stroke', () => {
+    it('should use filled outline for open path stroke', () => {
       const path = createPathNode('path1');
       path.closed = false;
       path.fill = null;
@@ -623,9 +635,11 @@ describe('ShapeRenderer', () => {
       vi.clearAllMocks();
       shapeRenderer.render(sceneGraph, vpMatrix);
 
-      expect(gl.drawArrays).toHaveBeenCalledWith(
-        gl.LINE_STRIP,
+      // Stroke rendered as filled outline polygon via drawElements
+      expect(gl.drawElements).toHaveBeenCalledWith(
+        gl.TRIANGLES,
         expect.any(Number),
+        gl.UNSIGNED_SHORT,
         expect.any(Number)
       );
     });
@@ -640,6 +654,7 @@ describe('ShapeRenderer', () => {
       shapeRenderer.render(sceneGraph, vpMatrix);
 
       expect(gl.drawArrays).not.toHaveBeenCalled();
+      expect(gl.drawElements).not.toHaveBeenCalled();
     });
 
     it('should render curved path', () => {
@@ -654,7 +669,8 @@ describe('ShapeRenderer', () => {
       const vpMatrix = mat3.identity();
       shapeRenderer.render(sceneGraph, vpMatrix);
 
-      expect(gl.drawArrays).toHaveBeenCalled();
+      // Stroke rendered as filled outline via drawElements
+      expect(gl.drawElements).toHaveBeenCalled();
     });
   });
 
@@ -727,10 +743,9 @@ describe('ShapeRenderer', () => {
       vi.clearAllMocks();
       shapeRenderer.render(sceneGraph, vpMatrix);
 
-      // Should draw fills using drawElements (2 fills, one per shape)
-      // and strokes using drawArrays (2 strokes, one per shape)
-      expect(gl.drawElements).toHaveBeenCalledTimes(2); // 2 fills
-      expect(gl.drawArrays).toHaveBeenCalledTimes(2); // 2 strokes
+      // Both fill and stroke use drawElements (2 shapes x 2 passes = 4)
+      expect(gl.drawElements).toHaveBeenCalledTimes(4); // 2 fills + 2 strokes
+      expect(gl.drawArrays).not.toHaveBeenCalled();
     });
   });
 

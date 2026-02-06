@@ -3,13 +3,7 @@
  * Manages the hierarchical structure of nodes in the document
  */
 
-import type {
-  Node,
-  GroupNode,
-  Transform,
-  Vector2,
-  Matrix3,
-} from '@quar/types';
+import type { Node, GroupNode, Transform, Vector2, Matrix3 } from '@quar/types';
 import { mat3 } from './math';
 
 // ============================================================================
@@ -133,6 +127,13 @@ export class SceneGraph {
   moveNode(id: string, newParentId: string | null, index?: number): void {
     const node = this.nodes.get(id);
     if (!node) return;
+
+    // Prevent circular references: cannot move a node into its own subtree
+    if (newParentId && this.isAncestorOf(id, newParentId)) {
+      throw new Error(
+        `Cannot move node "${id}" to descendant "${newParentId}": would create circular reference`
+      );
+    }
 
     const previousParentId = node.parent;
 
@@ -266,6 +267,21 @@ export class SceneGraph {
     return descendants;
   }
 
+  /**
+   * Check if ancestorId is an ancestor of nodeId (or is the node itself).
+   * Used to prevent circular references when moving nodes.
+   */
+  private isAncestorOf(ancestorId: string, nodeId: string): boolean {
+    let currentId: string | null = nodeId;
+    while (currentId) {
+      if (currentId === ancestorId) return true;
+      const current = this.nodes.get(currentId);
+      if (!current) break;
+      currentId = current.parent;
+    }
+    return false;
+  }
+
   // --------------------------------------------------------------------------
   // Transform Operations
   // --------------------------------------------------------------------------
@@ -297,12 +313,7 @@ export class SceneGraph {
   }
 
   private computeLocalMatrix(transform: Transform): Matrix3 {
-    return mat3.compose(
-      transform.position,
-      transform.rotation,
-      transform.scale,
-      transform.anchor
-    );
+    return mat3.compose(transform.position, transform.rotation, transform.scale, transform.anchor);
   }
 
   private invalidateWorldTransform(id: string): void {

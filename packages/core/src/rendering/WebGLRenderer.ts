@@ -3,8 +3,6 @@
  * Handles WebGL context initialization, state management, and rendering
  */
 
-import type { Vector2 } from '@quar/types';
-
 // ============================================================================
 // Types & Interfaces
 // ============================================================================
@@ -55,6 +53,10 @@ export class WebGLRenderer {
   private onContextLost: (() => void) | null = null;
   private onContextRestored: (() => void) | null = null;
 
+  // Bound event handlers (stored for proper removeEventListener)
+  private boundHandleContextLost: (e: Event) => void;
+  private boundHandleContextRestored: (e: Event) => void;
+
   constructor(options: WebGLRendererOptions) {
     this.canvas = options.canvas;
 
@@ -72,9 +74,11 @@ export class WebGLRenderer {
     }
     this.gl = gl;
 
-    // Set up context loss handlers
-    this.canvas.addEventListener('webglcontextlost', this.handleContextLost.bind(this));
-    this.canvas.addEventListener('webglcontextrestored', this.handleContextRestored.bind(this));
+    // Set up context loss handlers (store bound refs for proper cleanup)
+    this.boundHandleContextLost = this.handleContextLost.bind(this);
+    this.boundHandleContextRestored = this.handleContextRestored.bind(this);
+    this.canvas.addEventListener('webglcontextlost', this.boundHandleContextLost);
+    this.canvas.addEventListener('webglcontextrestored', this.boundHandleContextRestored);
 
     // Initialize default state
     this.initializeState();
@@ -352,11 +356,7 @@ export class WebGLRenderer {
   /**
    * Set a uniform value with automatic type detection
    */
-  setUniform(
-    program: ShaderProgram,
-    name: string,
-    value: number | number[] | Float32Array
-  ): void {
+  setUniform(program: ShaderProgram, name: string, value: number | number[] | Float32Array): void {
     const { gl } = this;
     const location = program.uniforms[name];
     if (!location) return;
@@ -409,8 +409,8 @@ export class WebGLRenderer {
     }
     this.buffers.clear();
 
-    // Remove event listeners
-    this.canvas.removeEventListener('webglcontextlost', this.handleContextLost.bind(this));
-    this.canvas.removeEventListener('webglcontextrestored', this.handleContextRestored.bind(this));
+    // Remove event listeners (using stored bound refs)
+    this.canvas.removeEventListener('webglcontextlost', this.boundHandleContextLost);
+    this.canvas.removeEventListener('webglcontextrestored', this.boundHandleContextRestored);
   }
 }

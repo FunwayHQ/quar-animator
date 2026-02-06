@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Quar Animator is a free, open-source, web-native 2D animation platform designed to fill the gap left by Adobe Animate's discontinuation. It's part of the QUAR Suite (alongside Quar Editor for 3D and Quar Vector for 2D illustration).
 
-**Current Status**: Sprint 7 complete. Full drawing toolkit with Brush and Eraser tools. Direct selection for path editing. Vector drawing tools (Rectangle, Ellipse, Polygon/Star, Pen). Selection infrastructure with transform handles. Canvas foundation with WebGL 2 rendering. Modern violet/bordeaux design system.
+**Current Status**: Sprints X1-X3 (code review) complete. Full drawing toolkit with Brush and Eraser tools. Direct selection for path editing. Vector drawing tools (Rectangle, Ellipse, Polygon/Star, Pen). Selection infrastructure with transform handles. Canvas foundation with WebGL 2 rendering. LayerPanel and PropertiesPanel wired to SceneGraph. ErrorBoundary for resilience. Modern violet/bordeaux design system.
 
 ## Sprint Progress
 
@@ -146,6 +146,36 @@ Quar Animator is a free, open-source, web-native 2D animation platform designed 
 - [x] Tool registration with 'B' and 'E' shortcuts
 
 **Total test coverage**: 736 core tests, 155 UI tests (891 total)
+
+### Sprint X1: Code Review - Math & Core Fixes ✅ COMPLETE
+
+- [x] Math guard clauses (`clamp`, `lerp`, `inverseLerp` handle NaN/edge cases)
+- [x] DirectSelectionTool Y-coordinate bug fix
+- [x] WebGL event listener cleanup on context loss
+- [x] Canvas drag state cleanup on pointer leave
+- [x] SceneGraph circular reference protection (`MAX_DEPTH = 100`)
+- [x] SelectionTool escape key cancels in-progress operations
+
+### Sprint X2: Code Review - UI Wiring & Components ✅ COMPLETE
+
+- [x] Stroke outlines for all shape tools (Rectangle, Ellipse, Polygon/Star)
+- [x] LayerPanel wired to SceneGraph (real nodes, selection highlighting, click-to-select)
+- [x] PropertiesPanel wired to selection (position, size, rotation, fill, stroke, opacity)
+- [x] ErrorBoundary component with recovery
+- [x] Type-only import refactors across codebase
+
+### Sprint X3: Code Review - Performance & Quality ✅ COMPLETE
+
+- [x] Remove unnecessary `Array.from()` in ShapeRenderer (earcut accepts ArrayLike)
+- [x] EraserTool immutability fix (use `updateNode()` instead of direct mutation)
+- [x] BrushTool degenerate point handling (reuse last valid perpendicular)
+- [x] PenTool degenerate path validation (discard zero-area paths)
+- [x] Extract `forEachSegment()` and `getAbsoluteControlPoints()` helpers in pathUtils
+- [x] Named constants replacing magic numbers (Grid, ShapeRenderer)
+- [x] GPU resource nullification after deletion (Grid, ShapeRenderer)
+- [x] CI coverage reporting with `@vitest/coverage-v8`
+
+**Total test coverage**: 767 core tests, 158 UI tests (925 total)
 
 ## Development Commands
 

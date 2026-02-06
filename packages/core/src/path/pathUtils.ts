@@ -68,6 +68,41 @@ export function clonePathPoint(point: PathPoint): PathPoint {
 }
 
 // ============================================================================
+// Shared Helpers
+// ============================================================================
+
+/**
+ * Iterate over each segment in a path, calling the callback with the
+ * start point, end point, and segment index.
+ */
+export function forEachSegment(
+  points: PathPoint[],
+  closed: boolean,
+  callback: (p0: PathPoint, p1: PathPoint, index: number) => void
+): void {
+  const segmentCount = closed ? points.length : points.length - 1;
+  for (let i = 0; i < segmentCount; i++) {
+    callback(points[i], points[(i + 1) % points.length], i);
+  }
+}
+
+/**
+ * Compute the absolute control point positions for a bezier segment
+ * between two PathPoints. Handles are stored as offsets from their anchor;
+ * this returns absolute positions, falling back to the anchor when a handle
+ * is null (straight line).
+ */
+export function getAbsoluteControlPoints(
+  p0: PathPoint,
+  p1: PathPoint
+): { cp1: Vector2; cp2: Vector2 } {
+  return {
+    cp1: p0.handleOut ? vec2.add(p0.position, p0.handleOut) : p0.position,
+    cp2: p1.handleIn ? vec2.add(p1.position, p1.handleIn) : p1.position,
+  };
+}
+
+// ============================================================================
 // Path Bounds
 // ============================================================================
 
@@ -90,22 +125,13 @@ export function getPathBounds(points: PathPoint[], closed: boolean): Rect | null
   let minY = Infinity;
   let maxY = -Infinity;
 
-  const updateBounds = (rect: Rect) => {
-    minX = Math.min(minX, rect.x);
-    maxX = Math.max(maxX, rect.x + rect.width);
-    minY = Math.min(minY, rect.y);
-    maxY = Math.max(maxY, rect.y + rect.height);
-  };
-
-  const segmentCount = closed ? points.length : points.length - 1;
-
-  for (let i = 0; i < segmentCount; i++) {
-    const p0 = points[i];
-    const p1 = points[(i + 1) % points.length];
-
-    const segmentBounds = getSegmentBounds(p0, p1);
-    updateBounds(segmentBounds);
-  }
+  forEachSegment(points, closed, (p0, p1) => {
+    const sb = getSegmentBounds(p0, p1);
+    minX = Math.min(minX, sb.x);
+    maxX = Math.max(maxX, sb.x + sb.width);
+    minY = Math.min(minY, sb.y);
+    maxY = Math.max(maxY, sb.y + sb.height);
+  });
 
   return {
     x: minX,
@@ -119,10 +145,7 @@ export function getPathBounds(points: PathPoint[], closed: boolean): Rect | null
  * Calculate bounds for a single path segment between two points
  */
 export function getSegmentBounds(p0: PathPoint, p1: PathPoint): Rect {
-  // Get absolute handle positions
-  const cp1 = p0.handleOut ? vec2.add(p0.position, p0.handleOut) : p0.position;
-  const cp2 = p1.handleIn ? vec2.add(p1.position, p1.handleIn) : p1.position;
-
+  const { cp1, cp2 } = getAbsoluteControlPoints(p0, p1);
   return bezier.bounds(p0.position, cp1, cp2, p1.position);
 }
 
@@ -145,19 +168,16 @@ export function tessellatePathToVertices(
   }
 
   const vertices: number[] = [];
-  const segmentCount = closed ? points.length : points.length - 1;
 
-  for (let i = 0; i < segmentCount; i++) {
-    const p0 = points[i];
-    const p1 = points[(i + 1) % points.length];
+  forEachSegment(points, closed, (p0, p1, index) => {
     const segmentPoints = tessellateSegment(p0, p1, tolerance);
 
     // Add segment points (skip first point for subsequent segments to avoid duplicates)
-    const startIndex = i === 0 ? 0 : 1;
+    const startIndex = index === 0 ? 0 : 1;
     for (let j = startIndex; j < segmentPoints.length; j++) {
       vertices.push(segmentPoints[j].x, segmentPoints[j].y);
     }
-  }
+  });
 
   // Close the path if needed
   if (closed && vertices.length >= 4) {
@@ -183,15 +203,12 @@ export function tessellateSegment(
   p1: PathPoint,
   tolerance: number = 1.0
 ): Vector2[] {
-  // Get absolute control point positions
-  const cp1 = p0.handleOut ? vec2.add(p0.position, p0.handleOut) : p0.position;
-  const cp2 = p1.handleIn ? vec2.add(p1.position, p1.handleIn) : p1.position;
-
   // If both handles are null (straight line), return just the endpoints
   if (!p0.handleOut && !p1.handleIn) {
     return [vec2.clone(p0.position), vec2.clone(p1.position)];
   }
 
+  const { cp1, cp2 } = getAbsoluteControlPoints(p0, p1);
   return bezier.tessellate(p0.position, cp1, cp2, p1.position, tolerance);
 }
 
@@ -240,13 +257,9 @@ export function getPathLength(points: PathPoint[], closed: boolean): number {
   if (points.length < 2) return 0;
 
   let totalLength = 0;
-  const segmentCount = closed ? points.length : points.length - 1;
-
-  for (let i = 0; i < segmentCount; i++) {
-    const p0 = points[i];
-    const p1 = points[(i + 1) % points.length];
+  forEachSegment(points, closed, (p0, p1) => {
     totalLength += getSegmentLength(p0, p1);
-  }
+  });
 
   return totalLength;
 }
@@ -255,9 +268,7 @@ export function getPathLength(points: PathPoint[], closed: boolean): number {
  * Calculate the length of a single segment
  */
 export function getSegmentLength(p0: PathPoint, p1: PathPoint): number {
-  const cp1 = p0.handleOut ? vec2.add(p0.position, p0.handleOut) : p0.position;
-  const cp2 = p1.handleIn ? vec2.add(p1.position, p1.handleIn) : p1.position;
-
+  const { cp1, cp2 } = getAbsoluteControlPoints(p0, p1);
   return bezier.cubicLength(p0.position, cp1, cp2, p1.position);
 }
 
@@ -280,9 +291,7 @@ export function getPointOnPath(points: PathPoint[], closed: boolean, t: number):
 
   const p0 = points[segmentIndex];
   const p1 = points[(segmentIndex + 1) % points.length];
-
-  const cp1 = p0.handleOut ? vec2.add(p0.position, p0.handleOut) : p0.position;
-  const cp2 = p1.handleIn ? vec2.add(p1.position, p1.handleIn) : p1.position;
+  const { cp1, cp2 } = getAbsoluteControlPoints(p0, p1);
 
   return bezier.cubicPoint(p0.position, cp1, cp2, p1.position, segmentT);
 }
@@ -303,9 +312,7 @@ export function getTangentOnPath(points: PathPoint[], closed: boolean, t: number
 
   const p0 = points[segmentIndex];
   const p1 = points[(segmentIndex + 1) % points.length];
-
-  const cp1 = p0.handleOut ? vec2.add(p0.position, p0.handleOut) : p0.position;
-  const cp2 = p1.handleIn ? vec2.add(p1.position, p1.handleIn) : p1.position;
+  const { cp1, cp2 } = getAbsoluteControlPoints(p0, p1);
 
   const derivative = bezier.cubicDerivative(p0.position, cp1, cp2, p1.position, segmentT);
   return vec2.normalize(derivative);
@@ -338,13 +345,8 @@ export function getNearestPointOnPath(
 
   const segmentCount = closed ? points.length : points.length - 1;
 
-  for (let i = 0; i < segmentCount; i++) {
-    const p0 = points[i];
-    const p1 = points[(i + 1) % points.length];
-
-    const cp1 = p0.handleOut ? vec2.add(p0.position, p0.handleOut) : p0.position;
-    const cp2 = p1.handleIn ? vec2.add(p1.position, p1.handleIn) : p1.position;
-
+  forEachSegment(points, closed, (p0, p1, i) => {
+    const { cp1, cp2 } = getAbsoluteControlPoints(p0, p1);
     const result = bezier.nearestPoint(p0.position, cp1, cp2, p1.position, queryPoint);
 
     if (result.distance < bestResult.distance) {
@@ -355,7 +357,7 @@ export function getNearestPointOnPath(
         segmentIndex: i,
       };
     }
-  }
+  });
 
   return bestResult;
 }
@@ -566,6 +568,104 @@ export function createStarPath(
  * Calculate the precise bounding box of a regular polygon
  * Based on actual vertex positions, not the circumscribed circle
  */
+// ============================================================================
+// Stroke Outline Generation
+// ============================================================================
+
+/**
+ * Generate stroke outline vertices from a path's tessellated vertices.
+ * Expands each point perpendicular to the path direction by half the stroke width,
+ * creating a closed polygon that can be filled to render the stroke.
+ * This works around WebGL's lineWidth limitation (capped at 1px on most browsers).
+ *
+ * @param vertices Flat array of [x0, y0, x1, y1, ...] tessellated path vertices
+ * @param numVertices Number of vertices (vertices.length / 2)
+ * @param width Stroke width in world units
+ * @param closed Whether the source path is closed
+ * @returns Flat Float32Array of outline vertices forming a closed polygon
+ */
+export function generateStrokeOutlineVertices(
+  vertices: Float32Array,
+  numVertices: number,
+  width: number,
+  closed: boolean
+): Float32Array {
+  if (numVertices < 2) return new Float32Array(0);
+
+  const halfWidth = Math.max(width / 2, 0.5);
+  const leftSide: number[] = [];
+  const rightSide: number[] = [];
+
+  let lastPerpX = 0;
+  let lastPerpY = 1; // Default perpendicular direction
+
+  for (let i = 0; i < numVertices; i++) {
+    const cx = vertices[i * 2];
+    const cy = vertices[i * 2 + 1];
+
+    // Calculate direction vector based on neighbors
+    let dx = 0;
+    let dy = 0;
+
+    const prevIdx = i > 0 ? i - 1 : closed ? numVertices - 1 : -1;
+    const nextIdx = i < numVertices - 1 ? i + 1 : closed ? 0 : -1;
+
+    if (prevIdx >= 0 && nextIdx >= 0) {
+      // Middle point (or closed path point): average direction from prev to next
+      dx = vertices[nextIdx * 2] - vertices[prevIdx * 2];
+      dy = vertices[nextIdx * 2 + 1] - vertices[prevIdx * 2 + 1];
+    } else if (nextIdx >= 0) {
+      // First point: direction toward next
+      dx = vertices[nextIdx * 2] - cx;
+      dy = vertices[nextIdx * 2 + 1] - cy;
+    } else if (prevIdx >= 0) {
+      // Last point: direction from prev
+      dx = cx - vertices[prevIdx * 2];
+      dy = cy - vertices[prevIdx * 2 + 1];
+    }
+
+    const len = Math.sqrt(dx * dx + dy * dy);
+    let perpX: number;
+    let perpY: number;
+
+    if (len < 0.001) {
+      // Degenerate: reuse last valid perpendicular
+      perpX = lastPerpX;
+      perpY = lastPerpY;
+    } else {
+      perpX = -dy / len;
+      perpY = dx / len;
+      lastPerpX = perpX;
+      lastPerpY = perpY;
+    }
+
+    leftSide.push(cx + perpX * halfWidth, cy + perpY * halfWidth);
+    rightSide.push(cx - perpX * halfWidth, cy - perpY * halfWidth);
+  }
+
+  // Combine: left side forward + right side reversed = closed polygon
+  const totalCoords = leftSide.length + rightSide.length;
+  const outline = new Float32Array(totalCoords);
+  // Copy left side
+  for (let i = 0; i < leftSide.length; i++) {
+    outline[i] = leftSide[i];
+  }
+  // Copy right side in reverse order
+  const rightCount = rightSide.length / 2;
+  for (let i = 0; i < rightCount; i++) {
+    const srcIdx = (rightCount - 1 - i) * 2;
+    const dstIdx = leftSide.length + i * 2;
+    outline[dstIdx] = rightSide[srcIdx];
+    outline[dstIdx + 1] = rightSide[srcIdx + 1];
+  }
+
+  return outline;
+}
+
+// ============================================================================
+// Polygon Bounds
+// ============================================================================
+
 export function getPolygonBounds(
   cx: number,
   cy: number,

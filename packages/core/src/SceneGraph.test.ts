@@ -250,6 +250,43 @@ describe('SceneGraph', () => {
 
       expect(() => sceneGraph.moveNode('child', 'nonexistent')).toThrow('not found');
     });
+
+    // X1-5: Circular reference prevention
+    it('throws error when moving node into its own child', () => {
+      const parent = createGroupNode('parent', 'Parent');
+      const child = createGroupNode('child', 'Child');
+
+      sceneGraph.addNode(parent);
+      sceneGraph.addNode(child, 'parent');
+
+      expect(() => sceneGraph.moveNode('parent', 'child')).toThrow('circular reference');
+    });
+
+    it('throws error when moving node into its own grandchild', () => {
+      const grandparent = createGroupNode('grandparent', 'Grandparent');
+      const parent = createGroupNode('parent', 'Parent');
+      const child = createGroupNode('child', 'Child');
+
+      sceneGraph.addNode(grandparent);
+      sceneGraph.addNode(parent, 'grandparent');
+      sceneGraph.addNode(child, 'parent');
+
+      expect(() => sceneGraph.moveNode('grandparent', 'child')).toThrow('circular reference');
+    });
+
+    it('does not throw when moving node to a non-descendant', () => {
+      const parent1 = createGroupNode('parent1', 'Parent 1');
+      const parent2 = createGroupNode('parent2', 'Parent 2');
+      const child = createGroupNode('child', 'Child');
+
+      sceneGraph.addNode(parent1);
+      sceneGraph.addNode(parent2);
+      sceneGraph.addNode(child, 'parent1');
+
+      // Moving child to parent2 (not a descendant) should work fine
+      expect(() => sceneGraph.moveNode('child', 'parent2')).not.toThrow();
+      expect(child.parent).toBe('parent2');
+    });
   });
 
   describe('updateNode', () => {

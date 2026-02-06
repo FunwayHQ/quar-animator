@@ -478,7 +478,7 @@ export class DirectSelectionTool extends BaseTool {
     // Interpolate position
     const newPos = {
       x: p1World.x + (p2World.x - p1World.x) * hit.t,
-      y: p2World.y + (p2World.y - p1World.y) * hit.t,
+      y: p1World.y + (p2World.y - p1World.y) * hit.t,
     };
 
     // Convert back to local coordinates

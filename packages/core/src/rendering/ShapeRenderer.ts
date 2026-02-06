@@ -23,6 +23,7 @@ import {
   createEllipsePath,
   createPolygonPath,
   createStarPath,
+  generateStrokeOutlineVertices,
 } from '../path/pathUtils';
 import earcut from 'earcut';
 
@@ -63,6 +64,8 @@ void main() {
 
 const _DEFAULT_ELLIPSE_SEGMENTS = 64;
 const MAX_VERTICES = 10000;
+const DEFAULT_TESSELLATION_TOLERANCE = 1.0;
+const ELLIPSE_TESSELLATION_TOLERANCE = 0.5;
 
 // ============================================================================
 // ShapeRenderer Class
@@ -240,7 +243,7 @@ export class ShapeRenderer {
     );
 
     // Tessellate to vertices
-    const tessellated = tessellatePathToVertices(pathPoints, true, 1.0);
+    const tessellated = tessellatePathToVertices(pathPoints, true, DEFAULT_TESSELLATION_TOLERANCE);
 
     // Set model matrix
     gl.uniformMatrix3fv(this.program.uniforms.u_model, false, mat3.toFloat32Array(worldMatrix));
@@ -268,7 +271,7 @@ export class ShapeRenderer {
     const pathPoints = createEllipsePath(0, 0, node.radiusX, node.radiusY);
 
     // Tessellate to vertices with fine tolerance for smooth curves
-    const tessellated = tessellatePathToVertices(pathPoints, true, 0.5);
+    const tessellated = tessellatePathToVertices(pathPoints, true, ELLIPSE_TESSELLATION_TOLERANCE);
 
     // Set model matrix
     gl.uniformMatrix3fv(this.program.uniforms.u_model, false, mat3.toFloat32Array(worldMatrix));
@@ -299,7 +302,7 @@ export class ShapeRenderer {
         : createPolygonPath(0, 0, node.radius, node.sides);
 
     // Tessellate to vertices
-    const tessellated = tessellatePathToVertices(pathPoints, true, 1.0);
+    const tessellated = tessellatePathToVertices(pathPoints, true, DEFAULT_TESSELLATION_TOLERANCE);
 
     // Set model matrix
     gl.uniformMatrix3fv(this.program.uniforms.u_model, false, mat3.toFloat32Array(worldMatrix));
@@ -324,7 +327,11 @@ export class ShapeRenderer {
     const gl = this.renderer.context;
 
     // Tessellate path
-    const tessellated = tessellatePathToVertices(node.points, node.closed, 1.0);
+    const tessellated = tessellatePathToVertices(
+      node.points,
+      node.closed,
+      DEFAULT_TESSELLATION_TOLERANCE
+    );
 
     // Set model matrix
     gl.uniformMatrix3fv(this.program.uniforms.u_model, false, mat3.toFloat32Array(worldMatrix));
@@ -362,7 +369,7 @@ export class ShapeRenderer {
 
     // Use earcut for triangulation - handles both convex and concave polygons
     // earcut expects a flat array of coordinates [x0, y0, x1, y1, ...]
-    const indices = earcut(Array.from(vertices.subarray(0, numVertices * 2)));
+    const indices = earcut(vertices.subarray(0, numVertices * 2));
 
     if (indices.length === 0) {
       // Fallback to triangle fan if earcut fails (shouldn't happen for valid polygons)
@@ -380,31 +387,45 @@ export class ShapeRenderer {
   }
 
   /**
-   * Render stroke as line loop or line strip
-   * Note: WebGL lineWidth has limited support (often capped at 1px on most browsers)
-   * For thick strokes, consider implementing stroke tessellation in the future
+   * Render stroke as a filled outline polygon.
+   * WebGL lineWidth is capped at 1px on most browsers, so we expand the stroke
+   * into a filled polygon using perpendicular offsets and earcut triangulation.
    */
   private renderStroke(vertices: Float32Array, stroke: Stroke, closed: boolean): void {
     if (!this.program) return;
 
     const gl = this.renderer.context;
+    const numVertices = vertices.length / 2;
+    if (numVertices < 2) return;
+
+    // Generate stroke outline as a filled polygon
+    const outlineVertices = generateStrokeOutlineVertices(
+      vertices,
+      numVertices,
+      stroke.width,
+      closed
+    );
+    const outlineCount = outlineVertices.length / 2;
+    if (outlineCount < 3) return;
 
     // Set stroke color
     const color = this.getStrokeColor(stroke);
     gl.uniform4fv(this.program.uniforms.u_color, color);
 
-    // Try to set line width (limited support in WebGL, often capped at 1px)
-    gl.lineWidth(stroke.width);
-
-    // Upload vertices
+    // Upload outline vertices
     gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
-    gl.bufferSubData(gl.ARRAY_BUFFER, 0, vertices);
+    gl.bufferSubData(gl.ARRAY_BUFFER, 0, outlineVertices);
 
-    // Draw as line loop (closed) or line strip (open)
-    const numVertices = vertices.length / 2;
-    if (numVertices >= 2) {
-      gl.drawArrays(closed ? gl.LINE_LOOP : gl.LINE_STRIP, 0, numVertices);
-    }
+    // Triangulate the outline polygon
+    const indices = earcut(outlineVertices);
+    if (indices.length === 0) return;
+
+    // Upload indices and draw
+    const indicesArray = new Uint16Array(indices);
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indexBuffer);
+    gl.bufferSubData(gl.ELEMENT_ARRAY_BUFFER, 0, indicesArray);
+
+    gl.drawElements(gl.TRIANGLES, indices.length, gl.UNSIGNED_SHORT, 0);
   }
 
   // --------------------------------------------------------------------------
@@ -436,12 +457,15 @@ export class ShapeRenderer {
 
     if (this.vertexBuffer) {
       gl.deleteBuffer(this.vertexBuffer);
+      this.vertexBuffer = null;
     }
     if (this.indexBuffer) {
       gl.deleteBuffer(this.indexBuffer);
+      this.indexBuffer = null;
     }
     if (this.vao) {
       gl.deleteVertexArray(this.vao);
+      this.vao = null;
     }
   }
 }

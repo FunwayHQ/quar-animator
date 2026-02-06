@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { vec2, mat3, rect, clamp, lerp, degToRad, radToDeg } from './math';
+import { vec2, mat3, rect, clamp, lerp, inverseLerp, degToRad, radToDeg, EPSILON } from './math';
 
 describe('vec2', () => {
   describe('create', () => {
@@ -271,6 +271,70 @@ describe('rect', () => {
       const r = rect.create(0, 0, 100, 50);
       expect(rect.center(r)).toEqual({ x: 50, y: 25 });
     });
+  });
+});
+
+// ============================================================================
+// X1-1: EPSILON and division-by-zero guard tests
+// ============================================================================
+
+describe('EPSILON constant', () => {
+  it('should be exported and positive', () => {
+    expect(EPSILON).toBeDefined();
+    expect(EPSILON).toBeGreaterThan(0);
+    expect(EPSILON).toBe(1e-10);
+  });
+});
+
+describe('vec2 division-by-zero guards', () => {
+  it('throws on divide by zero', () => {
+    expect(() => vec2.divide({ x: 10, y: 20 }, 0)).toThrow('Division by zero');
+  });
+
+  it('throws on divide by near-zero value', () => {
+    expect(() => vec2.divide({ x: 10, y: 20 }, 1e-12)).toThrow('Division by zero');
+  });
+
+  it('allows divide by small but non-zero value', () => {
+    const result = vec2.divide({ x: 10, y: 20 }, 0.001);
+    expect(result.x).toBeCloseTo(10000);
+    expect(result.y).toBeCloseTo(20000);
+  });
+
+  it('normalize returns zero for near-zero vector', () => {
+    const result = vec2.normalize({ x: 1e-12, y: 1e-12 });
+    expect(result).toEqual({ x: 0, y: 0 });
+  });
+});
+
+describe('mat3 singular matrix guards', () => {
+  it('invert returns null for near-singular matrix', () => {
+    const m = { a: 1e-12, b: 0, c: 0, d: 1e-12, tx: 10, ty: 20 };
+    expect(mat3.invert(m)).toBeNull();
+  });
+
+  it('decompose handles zero-scale matrix gracefully', () => {
+    const m = { a: 0, b: 0, c: 0, d: 1, tx: 5, ty: 10 };
+    const result = mat3.decompose(m);
+    expect(result.position).toEqual({ x: 5, y: 10 });
+    expect(result.scale.x).toBe(0);
+    expect(result.rotation).toBe(0);
+  });
+});
+
+describe('inverseLerp guards', () => {
+  it('returns 0 for equal range endpoints', () => {
+    expect(inverseLerp(5, 5, 5)).toBe(0);
+  });
+
+  it('returns 0 for near-equal range endpoints', () => {
+    expect(inverseLerp(5, 5 + 1e-12, 5)).toBe(0);
+  });
+
+  it('returns correct value for valid range', () => {
+    expect(inverseLerp(0, 100, 50)).toBeCloseTo(0.5);
+    expect(inverseLerp(0, 100, 0)).toBeCloseTo(0);
+    expect(inverseLerp(0, 100, 100)).toBeCloseTo(1);
   });
 });
 

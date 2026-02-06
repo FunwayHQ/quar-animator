@@ -219,14 +219,10 @@ export class EraserTool extends BaseTool {
 
     // Update paths with remaining points
     for (const [nodeId, updatedNode] of pathsToUpdate) {
-      // Get current node and update its points
-      const node = this.context.sceneGraph.getNode(nodeId) as PathNode;
-      if (node) {
-        node.points = updatedNode.points;
-        node.closed = updatedNode.closed;
-        // Trigger scene graph update
-        this.context.sceneGraph.updateNode(nodeId, { points: node.points, closed: node.closed });
-      }
+      this.context.sceneGraph.updateNode(nodeId, {
+        points: updatedNode.points,
+        closed: updatedNode.closed,
+      });
     }
 
     // Clear selection if any erased nodes were affected

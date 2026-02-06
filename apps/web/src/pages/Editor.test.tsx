@@ -55,31 +55,17 @@ describe('Editor Page', () => {
     });
   });
 
-  it('renders properties panel with transform section', () => {
+  it('renders properties panel with empty state when nothing selected', () => {
     render(<Editor />);
 
-    expect(screen.getByText('Transform')).toBeInTheDocument();
-    expect(screen.getByText('Position')).toBeInTheDocument();
-    expect(screen.getByText('Size')).toBeInTheDocument();
-    expect(screen.getByText('Rotation')).toBeInTheDocument();
+    expect(screen.getByText('Select an object to view properties')).toBeInTheDocument();
   });
 
-  it('renders properties panel with appearance section', () => {
+  it('renders layers panel with empty state', () => {
     render(<Editor />);
 
-    expect(screen.getByText('Appearance')).toBeInTheDocument();
-    expect(screen.getByText('Fill')).toBeInTheDocument();
-    expect(screen.getByText('Stroke')).toBeInTheDocument();
-    expect(screen.getByText('Opacity')).toBeInTheDocument();
-  });
-
-  it('renders layers panel with sample layers', () => {
-    render(<Editor />);
-
-    // Use getAllByText since "Character" and "Background" appear in both Layers and Timeline
-    expect(screen.getAllByText('Character').length).toBeGreaterThanOrEqual(1);
-    expect(screen.getAllByText('Background').length).toBeGreaterThanOrEqual(1);
-    expect(screen.getByText('Title')).toBeInTheDocument();
+    // LayerPanel shows empty state when no shapes have been drawn
+    expect(screen.getByText('No layers yet')).toBeInTheDocument();
   });
 
   it('renders timeline with playback controls', () => {

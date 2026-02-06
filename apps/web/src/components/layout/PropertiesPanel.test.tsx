@@ -1,84 +1,220 @@
-import { describe, it, expect } from 'vitest';
-import { render, screen } from '../../test/utils';
+import { describe, it, expect, beforeEach } from 'vitest';
+import { render, screen, act } from '../../test/utils';
+import { SceneGraphProvider, useSceneGraph } from '../../contexts/SceneGraphContext';
+import { createDefaultTransform } from '@quar/core';
+import type { SceneGraph } from '@quar/core';
+import type { RectangleNode } from '@quar/types';
 import { PropertiesPanel } from './PropertiesPanel';
+import { useEditorStore } from '../../stores/editorStore';
+import type { ReactNode } from 'react';
+
+// ============================================================================
+// Test Helpers
+// ============================================================================
+
+function SceneGraphCapture({ onCapture }: { onCapture: (sg: SceneGraph) => void }) {
+  const sg = useSceneGraph();
+  onCapture(sg);
+  return null;
+}
+
+function renderWithProvider(ui: ReactNode) {
+  return render(<SceneGraphProvider>{ui}</SceneGraphProvider>);
+}
+
+function createTestRect(id: string, name: string): RectangleNode {
+  return {
+    id,
+    name,
+    type: 'rectangle',
+    parent: null,
+    children: [],
+    transform: { ...createDefaultTransform(), position: { x: 150, y: 200 }, rotation: 45 },
+    visible: true,
+    locked: false,
+    opacity: 0.8,
+    blendMode: 'normal',
+    width: 100,
+    height: 50,
+    cornerRadius: [0, 0, 0, 0],
+    fill: { type: 'solid', color: { r: 100, g: 149, b: 237, a: 1 }, opacity: 1 },
+    stroke: {
+      color: { r: 255, g: 0, b: 0, a: 1 },
+      width: 2,
+      opacity: 1,
+      cap: 'round',
+      join: 'round',
+    },
+  };
+}
+
+// ============================================================================
+// Tests
+// ============================================================================
 
 describe('PropertiesPanel', () => {
+  beforeEach(() => {
+    useEditorStore.getState().clearSelection();
+  });
+
   it('renders the panel title', () => {
-    render(<PropertiesPanel />);
+    renderWithProvider(<PropertiesPanel />);
     expect(screen.getByRole('heading', { name: 'Properties' })).toBeInTheDocument();
   });
 
-  it('renders Transform section with all properties', () => {
-    render(<PropertiesPanel />);
+  it('shows empty state when nothing is selected', () => {
+    renderWithProvider(<PropertiesPanel />);
+    expect(screen.getByText('Select an object to view properties')).toBeInTheDocument();
+  });
 
-    // Section title
+  it('shows transform section when node is selected', () => {
+    let sg: SceneGraph | null = null;
+
+    render(
+      <SceneGraphProvider>
+        <SceneGraphCapture onCapture={(s) => (sg = s)} />
+        <PropertiesPanel />
+      </SceneGraphProvider>
+    );
+
+    act(() => {
+      sg!.addNode(createTestRect('rect1', 'Rectangle 1'));
+      useEditorStore.getState().setSelection(['rect1']);
+    });
+
     expect(screen.getByText('Transform')).toBeInTheDocument();
-
-    // Property labels
     expect(screen.getByText('Position')).toBeInTheDocument();
     expect(screen.getByText('Size')).toBeInTheDocument();
     expect(screen.getByText('Rotation')).toBeInTheDocument();
   });
 
-  it('renders Position inputs with X and Y', () => {
-    render(<PropertiesPanel />);
+  it('displays actual node position values', () => {
+    let sg: SceneGraph | null = null;
 
-    expect(screen.getByText('X')).toBeInTheDocument();
-    expect(screen.getByText('Y')).toBeInTheDocument();
+    render(
+      <SceneGraphProvider>
+        <SceneGraphCapture onCapture={(s) => (sg = s)} />
+        <PropertiesPanel />
+      </SceneGraphProvider>
+    );
 
-    // Check for default position values
-    const positionInputs = screen.getAllByDisplayValue('0');
-    expect(positionInputs.length).toBeGreaterThanOrEqual(2);
+    act(() => {
+      sg!.addNode(createTestRect('rect1', 'Rectangle 1'));
+      useEditorStore.getState().setSelection(['rect1']);
+    });
+
+    // Position is 150, 200
+    expect(screen.getByDisplayValue('150')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('200')).toBeInTheDocument();
   });
 
-  it('renders Size inputs with W and H', () => {
-    render(<PropertiesPanel />);
+  it('displays actual node size', () => {
+    let sg: SceneGraph | null = null;
 
-    expect(screen.getByText('W')).toBeInTheDocument();
-    expect(screen.getByText('H')).toBeInTheDocument();
+    render(
+      <SceneGraphProvider>
+        <SceneGraphCapture onCapture={(s) => (sg = s)} />
+        <PropertiesPanel />
+      </SceneGraphProvider>
+    );
 
-    // Check for default size values (W=100, H=100, plus opacity slider also has 100)
-    const sizeInputs = screen.getAllByDisplayValue('100');
-    expect(sizeInputs.length).toBeGreaterThanOrEqual(2);
+    act(() => {
+      sg!.addNode(createTestRect('rect1', 'Rectangle 1'));
+      useEditorStore.getState().setSelection(['rect1']);
+    });
+
+    // Width 100, Height 50
+    expect(screen.getByDisplayValue('100')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('50')).toBeInTheDocument();
   });
 
-  it('renders Rotation input with degree symbol', () => {
-    render(<PropertiesPanel />);
+  it('displays rotation with degree symbol', () => {
+    let sg: SceneGraph | null = null;
 
-    const rotationInput = screen.getByDisplayValue('0°');
-    expect(rotationInput).toBeInTheDocument();
+    render(
+      <SceneGraphProvider>
+        <SceneGraphCapture onCapture={(s) => (sg = s)} />
+        <PropertiesPanel />
+      </SceneGraphProvider>
+    );
+
+    act(() => {
+      sg!.addNode(createTestRect('rect1', 'Rectangle 1'));
+      useEditorStore.getState().setSelection(['rect1']);
+    });
+
+    expect(screen.getByDisplayValue('45\u00B0')).toBeInTheDocument();
   });
 
-  it('renders Appearance section with Fill, Stroke, and Opacity', () => {
-    render(<PropertiesPanel />);
+  it('displays appearance section with fill and stroke colors', () => {
+    let sg: SceneGraph | null = null;
 
-    // Section title
+    render(
+      <SceneGraphProvider>
+        <SceneGraphCapture onCapture={(s) => (sg = s)} />
+        <PropertiesPanel />
+      </SceneGraphProvider>
+    );
+
+    act(() => {
+      sg!.addNode(createTestRect('rect1', 'Rectangle 1'));
+      useEditorStore.getState().setSelection(['rect1']);
+    });
+
     expect(screen.getByText('Appearance')).toBeInTheDocument();
-
-    // Property labels
     expect(screen.getByText('Fill')).toBeInTheDocument();
     expect(screen.getByText('Stroke')).toBeInTheDocument();
     expect(screen.getByText('Opacity')).toBeInTheDocument();
+
+    // Fill color: rgb(100, 149, 237) = #6495ED
+    expect(screen.getByDisplayValue('#6495ED')).toBeInTheDocument();
+    // Stroke color: rgb(255, 0, 0) = #FF0000
+    expect(screen.getByDisplayValue('#FF0000')).toBeInTheDocument();
   });
 
-  it('renders color inputs with default values', () => {
-    render(<PropertiesPanel />);
+  it('displays opacity from node', () => {
+    let sg: SceneGraph | null = null;
 
-    expect(screen.getByDisplayValue('#3B82F6')).toBeInTheDocument();
-    expect(screen.getByDisplayValue('#1E40AF')).toBeInTheDocument();
-  });
+    render(
+      <SceneGraphProvider>
+        <SceneGraphCapture onCapture={(s) => (sg = s)} />
+        <PropertiesPanel />
+      </SceneGraphProvider>
+    );
 
-  it('renders opacity slider with 100% default', () => {
-    render(<PropertiesPanel />);
+    act(() => {
+      sg!.addNode(createTestRect('rect1', 'Rectangle 1'));
+      useEditorStore.getState().setSelection(['rect1']);
+    });
 
+    // Opacity is 0.8 = 80%
     const slider = screen.getByRole('slider');
-    expect(slider).toHaveValue('100');
-
-    expect(screen.getByDisplayValue('100%')).toBeInTheDocument();
+    expect(slider).toHaveValue('80');
+    expect(screen.getByDisplayValue('80%')).toBeInTheDocument();
   });
 
-  it('renders empty state message', () => {
-    render(<PropertiesPanel />);
+  it('hides properties when selection is cleared', () => {
+    let sg: SceneGraph | null = null;
+
+    render(
+      <SceneGraphProvider>
+        <SceneGraphCapture onCapture={(s) => (sg = s)} />
+        <PropertiesPanel />
+      </SceneGraphProvider>
+    );
+
+    act(() => {
+      sg!.addNode(createTestRect('rect1', 'Rectangle 1'));
+      useEditorStore.getState().setSelection(['rect1']);
+    });
+
+    expect(screen.getByText('Transform')).toBeInTheDocument();
+
+    act(() => {
+      useEditorStore.getState().clearSelection();
+    });
+
     expect(screen.getByText('Select an object to view properties')).toBeInTheDocument();
+    expect(screen.queryByText('Transform')).not.toBeInTheDocument();
   });
 });

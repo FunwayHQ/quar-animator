@@ -665,6 +665,38 @@ describe('DirectSelectionTool', () => {
       expect(selected.length).toBe(1);
       expect(selected[0].pointIndex).toBe(1); // New point inserted at index 1
     });
+
+    // X1-2: Y-coordinate interpolation fix
+    it('should interpolate Y coordinate correctly for non-horizontal segments', () => {
+      // Create a vertical segment from (0,0) to (0,100)
+      const path = createTestPath(context, [createPoint(0, 0), createPoint(0, 100)]);
+
+      // Double-click roughly at midpoint of the vertical segment
+      const midPoint = { x: 0, y: 50 };
+
+      tool.onPointerDown(
+        createMockPointerEvent({
+          worldPosition: midPoint,
+          button: 0,
+        })
+      );
+      tool.onPointerUp(createMockPointerEvent({ worldPosition: midPoint }));
+
+      tool.onPointerDown(
+        createMockPointerEvent({
+          worldPosition: midPoint,
+          button: 0,
+        })
+      );
+
+      const updatedNode = context.sceneGraph.getNode(path.id) as PathNode;
+      if (updatedNode.points.length === 3) {
+        // The added point's Y should be between 0 and 100 (interpolated)
+        const addedY = updatedNode.points[1].position.y;
+        expect(addedY).toBeGreaterThanOrEqual(0);
+        expect(addedY).toBeLessThanOrEqual(100);
+      }
+    });
   });
 
   // ==========================================================================

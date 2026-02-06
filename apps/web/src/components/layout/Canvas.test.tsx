@@ -1,27 +1,36 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '../../test/utils';
+import { SceneGraphProvider } from '../../contexts/SceneGraphContext';
 import { Canvas } from './Canvas';
+
+function renderCanvas() {
+  return render(
+    <SceneGraphProvider>
+      <Canvas />
+    </SceneGraphProvider>
+  );
+}
 
 describe('Canvas', () => {
   it('renders the canvas element', () => {
-    render(<Canvas />);
+    renderCanvas();
     const canvas = document.querySelector('canvas');
     expect(canvas).toBeInTheDocument();
   });
 
   it('displays coordinate display', () => {
-    render(<Canvas />);
+    renderCanvas();
     expect(screen.getByText(/X:/)).toBeInTheDocument();
     expect(screen.getByText(/Y:/)).toBeInTheDocument();
   });
 
   it('displays zoom level', () => {
-    render(<Canvas />);
+    renderCanvas();
     expect(screen.getByText('100%')).toBeInTheDocument();
   });
 
   it('updates coordinates on mouse move', () => {
-    render(<Canvas />);
+    renderCanvas();
     const canvas = document.querySelector('canvas');
 
     if (canvas) {
@@ -48,14 +57,14 @@ describe('Canvas', () => {
   });
 
   it('has crosshair cursor style', () => {
-    render(<Canvas />);
+    renderCanvas();
     const canvas = document.querySelector('canvas');
     // The canvas should have cursor styling applied via CSS module
     expect(canvas).toBeInTheDocument();
   });
 
   it('renders within a container div', () => {
-    render(<Canvas />);
+    renderCanvas();
     const canvas = document.querySelector('canvas');
     expect(canvas?.parentElement).toBeInTheDocument();
   });

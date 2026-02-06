@@ -265,8 +265,8 @@
   border-radius: var(--radius-full);
 }
 
-.emptyState {
-  display: none;
+.emptyStateVisible {
+  display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;

@@ -3,7 +3,7 @@
  * Calculates bounding boxes for selected nodes
  */
 
-import type { Node, Rect } from '@quar/types';
+import type { Node, Rect, RectangleNode, EllipseNode, PolygonNode, PathNode } from '@quar/types';
 import type { SceneGraph } from '../SceneGraph';
 import type { SelectionBounds } from './types';
 import { rect } from '../math';
@@ -67,7 +67,7 @@ export class SelectionManager {
 
     switch (node.type) {
       case 'rectangle': {
-        const rectNode = node as any;
+        const rectNode = node;
         const halfWidth = rectNode.width / 2;
         const halfHeight = rectNode.height / 2;
         return {
@@ -79,7 +79,7 @@ export class SelectionManager {
       }
 
       case 'ellipse': {
-        const ellipseNode = node as any;
+        const ellipseNode = node;
         return {
           x: pos.x - ellipseNode.radiusX,
           y: pos.y - ellipseNode.radiusY,
@@ -89,7 +89,7 @@ export class SelectionManager {
       }
 
       case 'polygon': {
-        const polygonNode = node as any;
+        const polygonNode = node;
         // Calculate precise bounds from actual polygon vertices
         const scaleX = transform.scale?.x ?? 1;
         const scaleY = transform.scale?.y ?? 1;
@@ -106,7 +106,7 @@ export class SelectionManager {
       }
 
       case 'path': {
-        const pathNode = node as any;
+        const pathNode = node;
         const pathBounds = getPathBounds(pathNode.points, pathNode.closed);
         if (!pathBounds) return null;
 

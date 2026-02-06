@@ -6,7 +6,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useCanvasTools } from './useCanvasTools';
 import { useEditorStore, DEFAULT_FILL, DEFAULT_STROKE } from '../stores/editorStore';
-import { Camera } from '@quar/core';
+import { Camera, SceneGraph } from '@quar/core';
 import type React from 'react';
 
 // ============================================================================
@@ -37,7 +37,10 @@ function createMockPointerEvent(overrides: Partial<React.PointerEvent> = {}): Re
   } as React.PointerEvent;
 }
 
-function createMockKeyboardEvent(key: string, overrides: Partial<React.KeyboardEvent> = {}): React.KeyboardEvent {
+function createMockKeyboardEvent(
+  key: string,
+  overrides: Partial<React.KeyboardEvent> = {}
+): React.KeyboardEvent {
   return {
     key,
     code: key,
@@ -56,11 +59,13 @@ function createMockKeyboardEvent(key: string, overrides: Partial<React.KeyboardE
 
 describe('useCanvasTools', () => {
   let camera: Camera;
+  let sceneGraph: SceneGraph;
 
   beforeEach(() => {
     resetStore();
     camera = new Camera();
     camera.setViewport(800, 600);
+    sceneGraph = new SceneGraph();
   });
 
   // ==========================================================================
@@ -69,31 +74,31 @@ describe('useCanvasTools', () => {
 
   describe('initialization', () => {
     it('should initialize with null toolManager when camera is null', () => {
-      const { result } = renderHook(() => useCanvasTools({ camera: null }));
+      const { result } = renderHook(() => useCanvasTools({ camera: null, sceneGraph }));
 
       expect(result.current.toolManagerRef.current).toBeNull();
     });
 
     it('should initialize toolManager when camera is provided', () => {
-      const { result } = renderHook(() => useCanvasTools({ camera }));
+      const { result } = renderHook(() => useCanvasTools({ camera, sceneGraph }));
 
       expect(result.current.toolManagerRef.current).not.toBeNull();
     });
 
     it('should initialize sceneGraph', () => {
-      const { result } = renderHook(() => useCanvasTools({ camera }));
+      const { result } = renderHook(() => useCanvasTools({ camera, sceneGraph }));
 
       expect(result.current.sceneGraphRef.current).toBeDefined();
     });
 
     it('should return default cursor', () => {
-      const { result } = renderHook(() => useCanvasTools({ camera }));
+      const { result } = renderHook(() => useCanvasTools({ camera, sceneGraph }));
 
       expect(result.current.cursor).toBe('default');
     });
 
     it('should have null previewNode initially', () => {
-      const { result } = renderHook(() => useCanvasTools({ camera }));
+      const { result } = renderHook(() => useCanvasTools({ camera, sceneGraph }));
 
       expect(result.current.previewNode).toBeNull();
     });
@@ -105,7 +110,7 @@ describe('useCanvasTools', () => {
 
   describe('tool synchronization', () => {
     it('should sync active tool from store', () => {
-      const { result } = renderHook(() => useCanvasTools({ camera }));
+      const { result } = renderHook(() => useCanvasTools({ camera, sceneGraph }));
 
       act(() => {
         useEditorStore.getState().setActiveTool('rectangle');
@@ -115,7 +120,7 @@ describe('useCanvasTools', () => {
     });
 
     it('should update cursor when tool changes', () => {
-      const { result } = renderHook(() => useCanvasTools({ camera }));
+      const { result } = renderHook(() => useCanvasTools({ camera, sceneGraph }));
 
       act(() => {
         useEditorStore.getState().setActiveTool('rectangle');
@@ -125,7 +130,7 @@ describe('useCanvasTools', () => {
     });
 
     it('should sync pen tool', () => {
-      const { result } = renderHook(() => useCanvasTools({ camera }));
+      const { result } = renderHook(() => useCanvasTools({ camera, sceneGraph }));
 
       act(() => {
         useEditorStore.getState().setActiveTool('pen');
@@ -141,7 +146,7 @@ describe('useCanvasTools', () => {
 
   describe('pointer events', () => {
     it('should handle pointer down', () => {
-      const { result } = renderHook(() => useCanvasTools({ camera }));
+      const { result } = renderHook(() => useCanvasTools({ camera, sceneGraph }));
 
       act(() => {
         result.current.handlePointerDown(
@@ -155,7 +160,7 @@ describe('useCanvasTools', () => {
     });
 
     it('should handle pointer up', () => {
-      const { result } = renderHook(() => useCanvasTools({ camera }));
+      const { result } = renderHook(() => useCanvasTools({ camera, sceneGraph }));
 
       act(() => {
         result.current.handlePointerDown(
@@ -177,7 +182,7 @@ describe('useCanvasTools', () => {
     });
 
     it('should handle pointer move without error', () => {
-      const { result } = renderHook(() => useCanvasTools({ camera }));
+      const { result } = renderHook(() => useCanvasTools({ camera, sceneGraph }));
 
       expect(() => {
         act(() => {
@@ -191,7 +196,7 @@ describe('useCanvasTools', () => {
     });
 
     it('should create preview node when drawing rectangle', () => {
-      const { result } = renderHook(() => useCanvasTools({ camera }));
+      const { result } = renderHook(() => useCanvasTools({ camera, sceneGraph }));
 
       act(() => {
         useEditorStore.getState().setActiveTool('rectangle');
@@ -218,7 +223,7 @@ describe('useCanvasTools', () => {
     });
 
     it('should clear preview node on pointer up', () => {
-      const { result } = renderHook(() => useCanvasTools({ camera }));
+      const { result } = renderHook(() => useCanvasTools({ camera, sceneGraph }));
 
       act(() => {
         useEditorStore.getState().setActiveTool('rectangle');
@@ -258,7 +263,7 @@ describe('useCanvasTools', () => {
 
   describe('keyboard events', () => {
     it('should handle key down without error', () => {
-      const { result } = renderHook(() => useCanvasTools({ camera }));
+      const { result } = renderHook(() => useCanvasTools({ camera, sceneGraph }));
 
       expect(() => {
         act(() => {
@@ -268,7 +273,7 @@ describe('useCanvasTools', () => {
     });
 
     it('should handle key up without error', () => {
-      const { result } = renderHook(() => useCanvasTools({ camera }));
+      const { result } = renderHook(() => useCanvasTools({ camera, sceneGraph }));
 
       expect(() => {
         act(() => {
@@ -284,7 +289,7 @@ describe('useCanvasTools', () => {
 
   describe('cleanup', () => {
     it('should dispose toolManager on unmount', () => {
-      const { result, unmount } = renderHook(() => useCanvasTools({ camera }));
+      const { result, unmount } = renderHook(() => useCanvasTools({ camera, sceneGraph }));
       const manager = result.current.toolManagerRef.current;
       const disposeSpy = vi.spyOn(manager!, 'dispose');
 
@@ -294,7 +299,7 @@ describe('useCanvasTools', () => {
     });
 
     it('should set toolManagerRef to null on unmount', () => {
-      const { result, unmount } = renderHook(() => useCanvasTools({ camera }));
+      const { result, unmount } = renderHook(() => useCanvasTools({ camera, sceneGraph }));
 
       unmount();
 
@@ -310,7 +315,7 @@ describe('useCanvasTools', () => {
 
   describe('no camera', () => {
     it('should not throw when handling events without camera', () => {
-      const { result } = renderHook(() => useCanvasTools({ camera: null }));
+      const { result } = renderHook(() => useCanvasTools({ camera: null, sceneGraph }));
 
       expect(() => {
         act(() => {
@@ -324,7 +329,7 @@ describe('useCanvasTools', () => {
     });
 
     it('should not throw on key events without camera', () => {
-      const { result } = renderHook(() => useCanvasTools({ camera: null }));
+      const { result } = renderHook(() => useCanvasTools({ camera: null, sceneGraph }));
 
       expect(() => {
         act(() => {
@@ -340,7 +345,7 @@ describe('useCanvasTools', () => {
 
   describe('sceneGraph access', () => {
     it('should allow adding nodes to sceneGraph', () => {
-      const { result } = renderHook(() => useCanvasTools({ camera }));
+      const { result } = renderHook(() => useCanvasTools({ camera, sceneGraph }));
 
       act(() => {
         useEditorStore.getState().setActiveTool('rectangle');

@@ -4,6 +4,11 @@
 
 import type { Vector2, Rect, Matrix3 } from '@quar/types';
 
+/**
+ * Standard epsilon for floating-point comparisons throughout the math module.
+ */
+export const EPSILON = 1e-10;
+
 // ============================================================================
 // Vector2 Operations
 // ============================================================================
@@ -30,6 +35,9 @@ export const vec2 = {
   },
 
   divide(v: Vector2, scalar: number): Vector2 {
+    if (Math.abs(scalar) < EPSILON) {
+      throw new Error('Division by zero in vec2.divide');
+    }
     return { x: v.x / scalar, y: v.y / scalar };
   },
 
@@ -51,7 +59,7 @@ export const vec2 = {
 
   normalize(v: Vector2): Vector2 {
     const len = vec2.length(v);
-    if (len === 0) return { x: 0, y: 0 };
+    if (len < EPSILON) return { x: 0, y: 0 };
     return { x: v.x / len, y: v.y / len };
   },
 
@@ -159,7 +167,7 @@ export const mat3 = {
 
   invert(m: Matrix3): Matrix3 | null {
     const det = m.a * m.d - m.b * m.c;
-    if (det === 0) return null;
+    if (Math.abs(det) < EPSILON) return null;
 
     const invDet = 1 / det;
     return {
@@ -192,6 +200,16 @@ export const mat3 = {
 
     const scaleX = Math.sqrt(a * a + b * b);
     const scaleY = Math.sqrt(c * c + d * d);
+
+    // Guard against zero scale
+    if (scaleX < EPSILON) {
+      return {
+        position: { x: m.tx, y: m.ty },
+        rotation: 0,
+        scale: { x: 0, y: scaleY },
+        skew: { x: 0, y: 0 },
+      };
+    }
 
     // Normalize
     const na = a / scaleX;
@@ -308,7 +326,9 @@ export function lerp(a: number, b: number, t: number): number {
 }
 
 export function inverseLerp(a: number, b: number, value: number): number {
-  return (value - a) / (b - a);
+  const range = b - a;
+  if (Math.abs(range) < EPSILON) return 0;
+  return (value - a) / range;
 }
 
 export function remap(

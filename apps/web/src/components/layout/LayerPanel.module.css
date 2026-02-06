@@ -218,6 +218,15 @@
   background: rgba(251, 191, 36, 0.15);
 }
 
+.emptyState {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-xl);
+  color: var(--color-text-disabled);
+  font-size: var(--font-size-sm);
+}
+
 /* Drag indicator */
 .layerRow.dragging {
   opacity: 0.5;

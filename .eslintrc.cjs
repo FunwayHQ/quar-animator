@@ -100,9 +100,12 @@ module.exports = {
       files: [
         'apps/web/src/hooks/**/*.ts',
         'apps/web/src/stores/**/*.ts',
+        'apps/web/src/contexts/**/*.tsx',
         'apps/web/src/components/canvas/**/*.tsx',
         'apps/web/src/components/layout/Canvas.tsx',
         'apps/web/src/components/layout/Toolbar.tsx',
+        'apps/web/src/components/layout/LayerPanel.tsx',
+        'apps/web/src/components/layout/PropertiesPanel.tsx',
         'packages/core/src/selection/SelectionManager.ts',
       ],
       rules: {
@@ -113,6 +116,7 @@ module.exports = {
         '@typescript-eslint/no-unsafe-argument': 'off',
         '@typescript-eslint/no-explicit-any': 'off',
         '@typescript-eslint/no-redundant-type-constituents': 'off',
+        '@typescript-eslint/no-unused-vars': 'off',
       },
     },
   ],

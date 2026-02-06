@@ -8,6 +8,8 @@ import {
   createSmoothPoint,
   createSymmetricPoint,
   clonePathPoint,
+  forEachSegment,
+  getAbsoluteControlPoints,
   getPathBounds,
   getSegmentBounds,
   tessellatePathToVertices,
@@ -23,6 +25,7 @@ import {
   createEllipsePath,
   createPolygonPath,
   createStarPath,
+  generateStrokeOutlineVertices,
 } from './pathUtils';
 import type { PathPoint } from '@quar/types';
 
@@ -61,11 +64,7 @@ describe('PathPoint Creation', () => {
     });
 
     it('should accept custom handleIn', () => {
-      const point = createSmoothPoint(
-        { x: 100, y: 100 },
-        { x: 50, y: 0 },
-        { x: -30, y: 10 }
-      );
+      const point = createSmoothPoint({ x: 100, y: 100 }, { x: 50, y: 0 }, { x: -30, y: 10 });
       expect(point.handleIn).toEqual({ x: -30, y: 10 });
     });
   });
@@ -113,10 +112,7 @@ describe('Path Bounds', () => {
     });
 
     it('should calculate bounds for straight line path', () => {
-      const points = [
-        createCornerPoint({ x: 0, y: 0 }),
-        createCornerPoint({ x: 100, y: 100 }),
-      ];
+      const points = [createCornerPoint({ x: 0, y: 0 }), createCornerPoint({ x: 100, y: 100 })];
       const bounds = getPathBounds(points, false);
       expect(bounds?.x).toBe(0);
       expect(bounds?.y).toBe(0);
@@ -183,10 +179,7 @@ describe('Path Tessellation', () => {
     });
 
     it('should tessellate straight line path', () => {
-      const points = [
-        createCornerPoint({ x: 0, y: 0 }),
-        createCornerPoint({ x: 100, y: 100 }),
-      ];
+      const points = [createCornerPoint({ x: 0, y: 0 }), createCornerPoint({ x: 100, y: 100 })];
       const vertices = tessellatePathToVertices(points, false);
       expect(vertices.length).toBeGreaterThanOrEqual(4);
       // First point
@@ -212,10 +205,7 @@ describe('Path Tessellation', () => {
     });
 
     it('should produce more vertices for curved paths', () => {
-      const straight = [
-        createCornerPoint({ x: 0, y: 0 }),
-        createCornerPoint({ x: 100, y: 0 }),
-      ];
+      const straight = [createCornerPoint({ x: 0, y: 0 }), createCornerPoint({ x: 100, y: 0 })];
       const curved = [
         createSmoothPoint({ x: 0, y: 0 }, { x: 0, y: 50 }),
         createSmoothPoint({ x: 100, y: 0 }, { x: 0, y: -50 }),
@@ -228,10 +218,7 @@ describe('Path Tessellation', () => {
 
   describe('tessellatePathToPoints', () => {
     it('should return Vector2 array', () => {
-      const points = [
-        createCornerPoint({ x: 0, y: 0 }),
-        createCornerPoint({ x: 100, y: 100 }),
-      ];
+      const points = [createCornerPoint({ x: 0, y: 0 }), createCornerPoint({ x: 100, y: 100 })];
       const result = tessellatePathToPoints(points, false);
       expect(result.length).toBeGreaterThanOrEqual(2);
       expect(result[0]).toHaveProperty('x');
@@ -270,19 +257,14 @@ describe('Path Operations', () => {
     });
 
     it('should swap handles', () => {
-      const points = [
-        createSmoothPoint({ x: 0, y: 0 }, { x: 50, y: 0 }, { x: -25, y: 0 }),
-      ];
+      const points = [createSmoothPoint({ x: 0, y: 0 }, { x: 50, y: 0 }, { x: -25, y: 0 })];
       const reversed = reversePath(points);
       expect(reversed[0].handleIn).toEqual({ x: 50, y: 0 });
       expect(reversed[0].handleOut).toEqual({ x: -25, y: 0 });
     });
 
     it('should not modify original path', () => {
-      const points = [
-        createCornerPoint({ x: 0, y: 0 }),
-        createCornerPoint({ x: 100, y: 0 }),
-      ];
+      const points = [createCornerPoint({ x: 0, y: 0 }), createCornerPoint({ x: 100, y: 0 })];
       const reversed = reversePath(points);
       expect(points[0].position).toEqual({ x: 0, y: 0 });
     });
@@ -299,10 +281,7 @@ describe('Path Operations', () => {
     });
 
     it('should calculate straight line length', () => {
-      const points = [
-        createCornerPoint({ x: 0, y: 0 }),
-        createCornerPoint({ x: 100, y: 0 }),
-      ];
+      const points = [createCornerPoint({ x: 0, y: 0 }), createCornerPoint({ x: 100, y: 0 })];
       const length = getPathLength(points, false);
       expect(length).toBeCloseTo(100, 0);
     });
@@ -331,30 +310,21 @@ describe('Path Operations', () => {
     });
 
     it('should return start point at t=0', () => {
-      const points = [
-        createCornerPoint({ x: 0, y: 0 }),
-        createCornerPoint({ x: 100, y: 100 }),
-      ];
+      const points = [createCornerPoint({ x: 0, y: 0 }), createCornerPoint({ x: 100, y: 100 })];
       const result = getPointOnPath(points, false, 0);
       expect(result?.x).toBeCloseTo(0);
       expect(result?.y).toBeCloseTo(0);
     });
 
     it('should return end point at t=1', () => {
-      const points = [
-        createCornerPoint({ x: 0, y: 0 }),
-        createCornerPoint({ x: 100, y: 100 }),
-      ];
+      const points = [createCornerPoint({ x: 0, y: 0 }), createCornerPoint({ x: 100, y: 100 })];
       const result = getPointOnPath(points, false, 1);
       expect(result?.x).toBeCloseTo(100);
       expect(result?.y).toBeCloseTo(100);
     });
 
     it('should return midpoint at t=0.5 for straight line', () => {
-      const points = [
-        createCornerPoint({ x: 0, y: 0 }),
-        createCornerPoint({ x: 100, y: 0 }),
-      ];
+      const points = [createCornerPoint({ x: 0, y: 0 }), createCornerPoint({ x: 100, y: 0 })];
       const result = getPointOnPath(points, false, 0.5);
       expect(result?.x).toBeCloseTo(50);
       expect(result?.y).toBeCloseTo(0);
@@ -368,10 +338,7 @@ describe('Path Operations', () => {
     });
 
     it('should return normalized tangent', () => {
-      const points = [
-        createCornerPoint({ x: 0, y: 0 }),
-        createCornerPoint({ x: 100, y: 0 }),
-      ];
+      const points = [createCornerPoint({ x: 0, y: 0 }), createCornerPoint({ x: 100, y: 0 })];
       const tangent = getTangentOnPath(points, false, 0.5);
       expect(tangent).not.toBeNull();
       const length = Math.sqrt(tangent!.x ** 2 + tangent!.y ** 2);
@@ -379,10 +346,7 @@ describe('Path Operations', () => {
     });
 
     it('should point in direction of path', () => {
-      const points = [
-        createCornerPoint({ x: 0, y: 0 }),
-        createCornerPoint({ x: 100, y: 0 }),
-      ];
+      const points = [createCornerPoint({ x: 0, y: 0 }), createCornerPoint({ x: 100, y: 0 })];
       const tangent = getTangentOnPath(points, false, 0.5);
       expect(tangent?.x).toBeGreaterThan(0);
       expect(tangent?.y).toBeCloseTo(0);
@@ -401,10 +365,7 @@ describe('Path Operations', () => {
     });
 
     it('should find nearest point on line', () => {
-      const points = [
-        createCornerPoint({ x: 0, y: 0 }),
-        createCornerPoint({ x: 100, y: 0 }),
-      ];
+      const points = [createCornerPoint({ x: 0, y: 0 }), createCornerPoint({ x: 100, y: 0 })];
       const result = getNearestPointOnPath(points, false, { x: 50, y: 10 });
       expect(result?.point.x).toBeCloseTo(50);
       expect(result?.point.y).toBeCloseTo(0);
@@ -528,9 +489,7 @@ describe('Shape Generators', () => {
     it('should alternate between outer and inner radius', () => {
       const points = createStarPath(0, 0, 100, 50, 4);
       for (let i = 0; i < points.length; i++) {
-        const dist = Math.sqrt(
-          points[i].position.x ** 2 + points[i].position.y ** 2
-        );
+        const dist = Math.sqrt(points[i].position.x ** 2 + points[i].position.y ** 2);
         const expectedRadius = i % 2 === 0 ? 100 : 50;
         expect(dist).toBeCloseTo(expectedRadius);
       }
@@ -540,5 +499,163 @@ describe('Shape Generators', () => {
       const points = createStarPath(0, 0, 50, 25, 2);
       expect(points.length).toBe(6); // 3 outer + 3 inner
     });
+  });
+});
+
+// ============================================================================
+// X2-1: Stroke Outline Generation
+// ============================================================================
+
+describe('generateStrokeOutlineVertices', () => {
+  it('returns empty array for fewer than 2 vertices', () => {
+    const vertices = new Float32Array([10, 20]);
+    const result = generateStrokeOutlineVertices(vertices, 1, 4, false);
+    expect(result.length).toBe(0);
+  });
+
+  it('generates outline for a horizontal 2-point segment', () => {
+    // Horizontal line from (0,0) to (100,0), stroke width 10
+    const vertices = new Float32Array([0, 0, 100, 0]);
+    const result = generateStrokeOutlineVertices(vertices, 2, 10, false);
+
+    // Should have 4 points (2 left + 2 right) = 8 coordinates
+    expect(result.length).toBe(8);
+
+    // Left side should be offset Y+5, right side Y-5
+    // Point 0 (left of start): (0, 5)
+    expect(result[0]).toBeCloseTo(0);
+    expect(result[1]).toBeCloseTo(5);
+    // Point 1 (left of end): (100, 5)
+    expect(result[2]).toBeCloseTo(100);
+    expect(result[3]).toBeCloseTo(5);
+    // Point 2 (right of end, reversed): (100, -5)
+    expect(result[4]).toBeCloseTo(100);
+    expect(result[5]).toBeCloseTo(-5);
+    // Point 3 (right of start, reversed): (0, -5)
+    expect(result[6]).toBeCloseTo(0);
+    expect(result[7]).toBeCloseTo(-5);
+  });
+
+  it('generates outline for a vertical segment', () => {
+    // Vertical line from (0,0) to (0,100), stroke width 6
+    const vertices = new Float32Array([0, 0, 0, 100]);
+    const result = generateStrokeOutlineVertices(vertices, 2, 6, false);
+
+    expect(result.length).toBe(8);
+
+    // For vertical line going down (+Y), perpendicular is (-1, 0)
+    // Left side offset X-3, right side offset X+3
+    expect(result[0]).toBeCloseTo(-3); // left start X
+    expect(result[2]).toBeCloseTo(-3); // left end X
+    expect(result[4]).toBeCloseTo(3); // right end X (reversed)
+    expect(result[6]).toBeCloseTo(3); // right start X (reversed)
+  });
+
+  it('generates outline for multiple points', () => {
+    // L-shaped path: (0,0) -> (100,0) -> (100,100)
+    const vertices = new Float32Array([0, 0, 100, 0, 100, 100]);
+    const result = generateStrokeOutlineVertices(vertices, 3, 4, false);
+
+    // 3 points * 2 sides = 6 points = 12 coordinates
+    expect(result.length).toBe(12);
+
+    // All coordinates should be finite
+    for (let i = 0; i < result.length; i++) {
+      expect(isFinite(result[i])).toBe(true);
+    }
+  });
+
+  it('handles closed paths', () => {
+    // Triangle: (0,0) -> (100,0) -> (50,100)
+    const vertices = new Float32Array([0, 0, 100, 0, 50, 100]);
+    const result = generateStrokeOutlineVertices(vertices, 3, 2, true);
+
+    // 3 points * 2 sides = 6 points = 12 coordinates
+    expect(result.length).toBe(12);
+
+    // All coordinates should be finite
+    for (let i = 0; i < result.length; i++) {
+      expect(isFinite(result[i])).toBe(true);
+    }
+  });
+
+  it('handles degenerate (duplicate) points gracefully', () => {
+    // Path with a duplicate point: (0,0) -> (50,0) -> (50,0) -> (100,0)
+    const vertices = new Float32Array([0, 0, 50, 0, 50, 0, 100, 0]);
+    const result = generateStrokeOutlineVertices(vertices, 4, 4, false);
+
+    // Should still generate valid outline (8 points = 16 coords)
+    expect(result.length).toBe(16);
+
+    // All coordinates should be finite (no NaN from degenerate direction)
+    for (let i = 0; i < result.length; i++) {
+      expect(isFinite(result[i])).toBe(true);
+    }
+  });
+
+  it('enforces minimum half-width of 0.5', () => {
+    const vertices = new Float32Array([0, 0, 100, 0]);
+    const result = generateStrokeOutlineVertices(vertices, 2, 0.1, false);
+
+    // With minimum half-width of 0.5, left side Y should be 0.5
+    expect(result[1]).toBeCloseTo(0.5);
+    expect(result[7]).toBeCloseTo(-0.5);
+  });
+});
+
+// ============================================================================
+// Shared Helpers
+// ============================================================================
+
+describe('forEachSegment', () => {
+  it('iterates over open path segments', () => {
+    const points = [
+      createCornerPoint({ x: 0, y: 0 }),
+      createCornerPoint({ x: 10, y: 0 }),
+      createCornerPoint({ x: 20, y: 0 }),
+    ];
+    const indices: number[] = [];
+    forEachSegment(points, false, (_p0, _p1, i) => indices.push(i));
+    expect(indices).toEqual([0, 1]);
+  });
+
+  it('iterates over closed path segments including closing segment', () => {
+    const points = [
+      createCornerPoint({ x: 0, y: 0 }),
+      createCornerPoint({ x: 10, y: 0 }),
+      createCornerPoint({ x: 10, y: 10 }),
+    ];
+    const indices: number[] = [];
+    forEachSegment(points, true, (_p0, _p1, i) => indices.push(i));
+    expect(indices).toEqual([0, 1, 2]);
+  });
+
+  it('provides correct p0 and p1 for each segment', () => {
+    const points = [
+      createCornerPoint({ x: 0, y: 0 }),
+      createCornerPoint({ x: 10, y: 0 }),
+      createCornerPoint({ x: 20, y: 0 }),
+    ];
+    const starts: number[] = [];
+    forEachSegment(points, false, (p0, _p1) => starts.push(p0.position.x));
+    expect(starts).toEqual([0, 10]);
+  });
+});
+
+describe('getAbsoluteControlPoints', () => {
+  it('returns anchor positions when handles are null', () => {
+    const p0 = createCornerPoint({ x: 0, y: 0 });
+    const p1 = createCornerPoint({ x: 100, y: 0 });
+    const { cp1, cp2 } = getAbsoluteControlPoints(p0, p1);
+    expect(cp1).toEqual({ x: 0, y: 0 });
+    expect(cp2).toEqual({ x: 100, y: 0 });
+  });
+
+  it('returns absolute positions from handle offsets', () => {
+    const p0 = createSmoothPoint({ x: 0, y: 0 }, { x: 30, y: 0 });
+    const p1 = createSmoothPoint({ x: 100, y: 0 }, { x: 30, y: 0 }, { x: -30, y: 0 });
+    const { cp1, cp2 } = getAbsoluteControlPoints(p0, p1);
+    expect(cp1).toEqual({ x: 30, y: 0 });
+    expect(cp2).toEqual({ x: 70, y: 0 });
   });
 });

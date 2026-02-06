@@ -278,7 +278,7 @@ export class SelectionTool extends BaseTool {
 
       case 'Escape':
         // Cancel current operation or clear selection
-        if (this.state.isDragging) {
+        if (this.mode === 'moving' && this.state.isDragging) {
           // Revert move
           for (const [id, startPos] of this.moveStartPositions) {
             const node = this.context.sceneGraph.getNode(id);
@@ -294,6 +294,52 @@ export class SelectionTool extends BaseTool {
           this.mode = 'idle';
           this.state.isDragging = false;
           this.moveStartPositions.clear();
+        } else if (this.mode === 'resizing' && this.resizeState) {
+          // Revert resize to initial node states
+          for (const [id, initialState] of this.resizeState.initialNodeStates) {
+            const node = this.context.sceneGraph.getNode(id);
+            if (!node) continue;
+
+            const updates: Record<string, unknown> = {
+              transform: {
+                ...node.transform,
+                position: initialState.position,
+                ...(initialState.scale ? { scale: initialState.scale } : {}),
+              },
+            };
+            if (initialState.width !== undefined) updates.width = initialState.width;
+            if (initialState.height !== undefined) updates.height = initialState.height;
+            if (initialState.radiusX !== undefined) updates.radiusX = initialState.radiusX;
+            if (initialState.radiusY !== undefined) updates.radiusY = initialState.radiusY;
+            if (initialState.radius !== undefined) updates.radius = initialState.radius;
+
+            this.context.sceneGraph.updateNode(id, updates as Partial<Node>);
+          }
+          this.resizeState = null;
+          this.mode = 'idle';
+          this.state.isDragging = false;
+        } else if (this.mode === 'rotating' && this.rotationState) {
+          // Revert rotation to initial rotations
+          for (const [id, initialRotation] of this.rotationState.initialRotations) {
+            const node = this.context.sceneGraph.getNode(id);
+            if (node) {
+              this.context.sceneGraph.updateNode(id, {
+                transform: {
+                  ...node.transform,
+                  rotation: initialRotation,
+                },
+              });
+            }
+          }
+          this.rotationState = null;
+          this.mode = 'idle';
+          this.state.isDragging = false;
+        } else if (this.mode === 'marquee') {
+          // Cancel marquee selection
+          this.marqueeRect = null;
+          this.startPoint = null;
+          this.mode = 'idle';
+          this.state.isDragging = false;
         } else {
           this.context.clearSelection();
         }

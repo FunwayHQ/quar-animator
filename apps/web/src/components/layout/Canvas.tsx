@@ -13,6 +13,7 @@ import type { Vector2 } from '@quar/types';
 import { useCanvasTools } from '../../hooks/useCanvasTools';
 import { useToolShortcuts } from '../../hooks/useToolShortcuts';
 import { useEditorStore } from '../../stores/editorStore';
+import { useSceneGraph } from '../../contexts/SceneGraphContext';
 import { SelectionOverlay } from '../canvas/SelectionOverlay';
 import { PenToolOverlay } from '../canvas/PenToolOverlay';
 import styles from './Canvas.module.css';
@@ -49,6 +50,9 @@ export function Canvas() {
   const isSpaceHeldRef = useRef(false);
   const lastMousePosRef = useRef<Vector2>({ x: 0, y: 0 });
 
+  // Track active drag listener cleanup to prevent leaks on unmount
+  const activeDragCleanupRef = useRef<(() => void) | null>(null);
+
   // UI state (for display)
   const [zoomPercent, setZoomPercent] = useState(100);
   const [mouseWorldPos, setMouseWorldPos] = useState<Vector2>({ x: 0, y: 0 });
@@ -57,6 +61,9 @@ export function Canvas() {
 
   // Get selection state from store
   const selectedNodeIds = useEditorStore((state) => state.selectedNodeIds);
+
+  // Get shared SceneGraph from context
+  const sceneGraph = useSceneGraph();
 
   // Initialize tools hook
   const {
@@ -73,7 +80,7 @@ export function Canvas() {
     isPenToolDrawing,
     startPenHandleDrag,
     startPenPointDrag,
-  } = useCanvasTools({ camera: cameraReady ? cameraRef.current : null });
+  } = useCanvasTools({ camera: cameraReady ? cameraRef.current : null, sceneGraph });
 
   // Subscribe to scene graph changes to update selection bounds
   useEffect(() => {
@@ -328,6 +335,10 @@ export function Canvas() {
 
       // Cleanup
       return () => {
+        // Clean up any active drag listeners
+        activeDragCleanupRef.current?.();
+        activeDragCleanupRef.current = null;
+
         cancelAnimationFrame(animationFrameRef.current);
         resizeObserver.disconnect();
         unsubscribe();
@@ -560,14 +571,66 @@ export function Canvas() {
   }, []);
 
   // --------------------------------------------------------------------------
+  // Global Drag Listener Helper
+  // --------------------------------------------------------------------------
+
+  /**
+   * Sets up global pointermove/pointerup listeners for drag operations that
+   * start on SVG overlay elements (selection handles, pen tool points/handles).
+   * Returns a cleanup function; also stores it in activeDragCleanupRef so
+   * unmount cleanup can remove stale listeners.
+   */
+  const setupGlobalDragListeners = useCallback(() => {
+    const camera = cameraRef.current;
+    const canvas = canvasRef.current;
+    if (!camera || !canvas) return;
+
+    const handleGlobalMove = (moveEvent: PointerEvent) => {
+      const rect = canvas.getBoundingClientRect();
+      const moveScreenPos: Vector2 = {
+        x: moveEvent.clientX - rect.left,
+        y: moveEvent.clientY - rect.top,
+      };
+      const moveWorldPos = camera.screenToWorld(moveScreenPos);
+      toolPointerMove(moveScreenPos, moveWorldPos, moveEvent as unknown as React.PointerEvent);
+    };
+
+    const handleGlobalUp = (upEvent: PointerEvent) => {
+      const rect = canvas.getBoundingClientRect();
+      const upScreenPos: Vector2 = {
+        x: upEvent.clientX - rect.left,
+        y: upEvent.clientY - rect.top,
+      };
+      const upWorldPos = camera.screenToWorld(upScreenPos);
+      toolPointerUp(upScreenPos, upWorldPos, upEvent as unknown as React.PointerEvent);
+
+      cleanup();
+    };
+
+    const cleanup = () => {
+      document.removeEventListener('pointermove', handleGlobalMove);
+      document.removeEventListener('pointerup', handleGlobalUp);
+      if (activeDragCleanupRef.current === cleanup) {
+        activeDragCleanupRef.current = null;
+      }
+    };
+
+    // Remove any previous drag listeners before adding new ones
+    activeDragCleanupRef.current?.();
+    activeDragCleanupRef.current = cleanup;
+
+    document.addEventListener('pointermove', handleGlobalMove);
+    document.addEventListener('pointerup', handleGlobalUp);
+  }, [toolPointerMove, toolPointerUp]);
+
+  // --------------------------------------------------------------------------
   // Handle Overlay Interactions
   // --------------------------------------------------------------------------
 
   const handleOverlayPointerDown = useCallback(
     (handle: { position: string; screenPosition: Vector2 }, e: React.PointerEvent) => {
       const camera = cameraRef.current;
-      const canvas = canvasRef.current;
-      if (!camera || !canvas) return;
+      if (!camera) return;
 
       e.stopPropagation();
       e.preventDefault();
@@ -580,37 +643,9 @@ export function Canvas() {
       toolPointerDown(screenPos, worldPos, e);
 
       // Set up global event handlers for drag operation
-      // This ensures we capture mouse events even when cursor moves off the handle
-      const handleGlobalMove = (moveEvent: PointerEvent) => {
-        if (!camera || !canvas) return;
-        const rect = canvas.getBoundingClientRect();
-        const moveScreenPos: Vector2 = {
-          x: moveEvent.clientX - rect.left,
-          y: moveEvent.clientY - rect.top,
-        };
-        const moveWorldPos = camera.screenToWorld(moveScreenPos);
-        toolPointerMove(moveScreenPos, moveWorldPos, moveEvent as unknown as React.PointerEvent);
-      };
-
-      const handleGlobalUp = (upEvent: PointerEvent) => {
-        if (!camera || !canvas) return;
-        const rect = canvas.getBoundingClientRect();
-        const upScreenPos: Vector2 = {
-          x: upEvent.clientX - rect.left,
-          y: upEvent.clientY - rect.top,
-        };
-        const upWorldPos = camera.screenToWorld(upScreenPos);
-        toolPointerUp(upScreenPos, upWorldPos, upEvent as unknown as React.PointerEvent);
-
-        // Clean up global handlers
-        document.removeEventListener('pointermove', handleGlobalMove);
-        document.removeEventListener('pointerup', handleGlobalUp);
-      };
-
-      document.addEventListener('pointermove', handleGlobalMove);
-      document.addEventListener('pointerup', handleGlobalUp);
+      setupGlobalDragListeners();
     },
-    [toolPointerDown, toolPointerMove, toolPointerUp]
+    [toolPointerDown, setupGlobalDragListeners]
   );
 
   // --------------------------------------------------------------------------
@@ -625,40 +660,10 @@ export function Canvas() {
       // Start dragging the handle
       startPenHandleDrag(pointIndex, handleType);
 
-      const camera = cameraRef.current;
-      const canvas = canvasRef.current;
-      if (!camera || !canvas) return;
-
       // Set up global event handlers for drag operation
-      const handleGlobalMove = (moveEvent: PointerEvent) => {
-        if (!camera || !canvas) return;
-        const rect = canvas.getBoundingClientRect();
-        const moveScreenPos: Vector2 = {
-          x: moveEvent.clientX - rect.left,
-          y: moveEvent.clientY - rect.top,
-        };
-        const moveWorldPos = camera.screenToWorld(moveScreenPos);
-        toolPointerMove(moveScreenPos, moveWorldPos, moveEvent as unknown as React.PointerEvent);
-      };
-
-      const handleGlobalUp = (upEvent: PointerEvent) => {
-        if (!camera || !canvas) return;
-        const rect = canvas.getBoundingClientRect();
-        const upScreenPos: Vector2 = {
-          x: upEvent.clientX - rect.left,
-          y: upEvent.clientY - rect.top,
-        };
-        const upWorldPos = camera.screenToWorld(upScreenPos);
-        toolPointerUp(upScreenPos, upWorldPos, upEvent as unknown as React.PointerEvent);
-
-        document.removeEventListener('pointermove', handleGlobalMove);
-        document.removeEventListener('pointerup', handleGlobalUp);
-      };
-
-      document.addEventListener('pointermove', handleGlobalMove);
-      document.addEventListener('pointerup', handleGlobalUp);
+      setupGlobalDragListeners();
     },
-    [startPenHandleDrag, toolPointerMove, toolPointerUp]
+    [startPenHandleDrag, setupGlobalDragListeners]
   );
 
   const handlePenPointPointerDown = useCallback(
@@ -673,40 +678,10 @@ export function Canvas() {
         return;
       }
 
-      const camera = cameraRef.current;
-      const canvas = canvasRef.current;
-      if (!camera || !canvas) return;
-
       // Set up global event handlers for drag operation
-      const handleGlobalMove = (moveEvent: PointerEvent) => {
-        if (!camera || !canvas) return;
-        const rect = canvas.getBoundingClientRect();
-        const moveScreenPos: Vector2 = {
-          x: moveEvent.clientX - rect.left,
-          y: moveEvent.clientY - rect.top,
-        };
-        const moveWorldPos = camera.screenToWorld(moveScreenPos);
-        toolPointerMove(moveScreenPos, moveWorldPos, moveEvent as unknown as React.PointerEvent);
-      };
-
-      const handleGlobalUp = (upEvent: PointerEvent) => {
-        if (!camera || !canvas) return;
-        const rect = canvas.getBoundingClientRect();
-        const upScreenPos: Vector2 = {
-          x: upEvent.clientX - rect.left,
-          y: upEvent.clientY - rect.top,
-        };
-        const upWorldPos = camera.screenToWorld(upScreenPos);
-        toolPointerUp(upScreenPos, upWorldPos, upEvent as unknown as React.PointerEvent);
-
-        document.removeEventListener('pointermove', handleGlobalMove);
-        document.removeEventListener('pointerup', handleGlobalUp);
-      };
-
-      document.addEventListener('pointermove', handleGlobalMove);
-      document.addEventListener('pointerup', handleGlobalUp);
+      setupGlobalDragListeners();
     },
-    [startPenPointDrag, toolPointerMove, toolPointerUp]
+    [startPenPointDrag, setupGlobalDragListeners]
   );
 
   // --------------------------------------------------------------------------

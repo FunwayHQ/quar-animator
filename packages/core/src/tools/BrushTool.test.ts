@@ -648,5 +648,35 @@ describe('BrushTool', () => {
       // Outline paths have more points (left side + right side reversed)
       expect(path.points.length).toBeGreaterThan(2);
     });
+
+    it('should handle duplicate consecutive points without crashing', () => {
+      // Set low minimum distance and no smoothing to capture all points
+      tool.setOptions({ smoothing: 0 });
+
+      const downEvent = createMockPointerEvent({
+        worldPosition: { x: 100, y: 100 },
+        button: 0,
+        pressure: 0.5,
+      });
+      tool.onPointerDown(downEvent);
+
+      // Move to create stroke (points at same location shouldn't crash)
+      const moveEvent1 = createMockPointerEvent({
+        worldPosition: { x: 200, y: 100 },
+        pressure: 0.5,
+      });
+      tool.onPointerMove(moveEvent1);
+
+      const upEvent = createMockPointerEvent({
+        worldPosition: { x: 200, y: 100 },
+        button: 0,
+        pressure: 0.5,
+      });
+      tool.onPointerUp(upEvent);
+
+      // Should not throw - node was created successfully
+      const nodes = Array.from(context.sceneGraph.getNodes());
+      expect(nodes.length).toBeGreaterThanOrEqual(1);
+    });
   });
 });

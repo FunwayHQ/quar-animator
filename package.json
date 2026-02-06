@@ -3,7 +3,14 @@
   "version": "0.1.0",
   "private": true,
   "description": "Free, open-source, web-native 2D animation platform",
-  "keywords": ["animation", "2d", "vector", "lottie", "rigging", "webgl"],
+  "keywords": [
+    "animation",
+    "2d",
+    "vector",
+    "lottie",
+    "rigging",
+    "webgl"
+  ],
   "license": "MIT",
   "author": "QUAR Team",
   "repository": {
@@ -28,6 +35,7 @@
     "@types/node": "^20.11.0",
     "@typescript-eslint/eslint-plugin": "^6.19.0",
     "@typescript-eslint/parser": "^6.19.0",
+    "@vitest/coverage-v8": "^4.0.18",
     "eslint": "^8.56.0",
     "eslint-config-prettier": "^9.1.0",
     "eslint-plugin-jsx-a11y": "^6.8.0",

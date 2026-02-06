@@ -287,6 +287,22 @@ export class PenTool extends BaseTool {
       return;
     }
 
+    // Check for degenerate path (all points at essentially the same location)
+    let minX = Infinity,
+      maxX = -Infinity,
+      minY = Infinity,
+      maxY = -Infinity;
+    for (const p of this.currentPath) {
+      if (p.position.x < minX) minX = p.position.x;
+      if (p.position.x > maxX) maxX = p.position.x;
+      if (p.position.y < minY) minY = p.position.y;
+      if (p.position.y > maxY) maxY = p.position.y;
+    }
+    if (maxX - minX < 0.1 && maxY - minY < 0.1) {
+      this.cancelPath();
+      return;
+    }
+
     // Create final path node
     const node = this.createPathNode(this.currentPath, closed);
 

@@ -26,6 +26,9 @@ export interface GridConfig {
   lineWidth: number;
 }
 
+const MIN_SCREEN_SPACING = 50;
+const MAX_SCREEN_SPACING = 200;
+
 const DEFAULT_CONFIG: GridConfig = {
   majorSpacing: 100,
   minorDivisions: 5, // 5 minor lines = 20px minor spacing at majorSpacing 100
@@ -124,14 +127,7 @@ export class Grid {
 
     if (this.program) {
       gl.enableVertexAttribArray(this.program.attributes.a_position);
-      gl.vertexAttribPointer(
-        this.program.attributes.a_position,
-        2,
-        gl.FLOAT,
-        false,
-        0,
-        0
-      );
+      gl.vertexAttribPointer(this.program.attributes.a_position, 2, gl.FLOAT, false, 0, 0);
     }
 
     // Create color buffer
@@ -141,14 +137,7 @@ export class Grid {
 
     if (this.program) {
       gl.enableVertexAttribArray(this.program.attributes.a_color);
-      gl.vertexAttribPointer(
-        this.program.attributes.a_color,
-        4,
-        gl.FLOAT,
-        false,
-        0,
-        0
-      );
+      gl.vertexAttribPointer(this.program.attributes.a_color, 4, gl.FLOAT, false, 0, 0);
     }
 
     this.renderer.bindVAO(null);
@@ -213,17 +202,17 @@ export class Grid {
   private calculateAdaptiveSpacing(baseSpacing: number, zoom: number): number {
     // At zoom < 0.5, double the spacing
     // At zoom > 2, halve the spacing
-    // This keeps lines roughly 50-200 screen pixels apart
+    // This keeps lines roughly MIN_SCREEN_SPACING-MAX_SCREEN_SPACING screen pixels apart
 
     let spacing = baseSpacing;
 
-    // Scale up if lines too close (screen spacing < 50px)
-    while (spacing * zoom < 50) {
+    // Scale up if lines too close
+    while (spacing * zoom < MIN_SCREEN_SPACING) {
       spacing *= 2;
     }
 
-    // Scale down if lines too far (screen spacing > 200px)
-    while (spacing * zoom > 200) {
+    // Scale down if lines too far
+    while (spacing * zoom > MAX_SCREEN_SPACING) {
       spacing /= 2;
     }
 
@@ -233,11 +222,7 @@ export class Grid {
   /**
    * Generate grid lines within visible bounds
    */
-  private generateGridLines(
-    bounds: Rect,
-    majorSpacing: number,
-    minorSpacing: number
-  ): number {
+  private generateGridLines(bounds: Rect, majorSpacing: number, minorSpacing: number): number {
     const { minorColor, majorColor, axisColor } = this.config;
 
     let vertexIndex = 0;
@@ -331,12 +316,15 @@ export class Grid {
 
     if (this.vertexBuffer) {
       gl.deleteBuffer(this.vertexBuffer);
+      this.vertexBuffer = null;
     }
     if (this.colorBuffer) {
       gl.deleteBuffer(this.colorBuffer);
+      this.colorBuffer = null;
     }
     if (this.vao) {
       gl.deleteVertexArray(this.vao);
+      this.vao = null;
     }
   }
 }

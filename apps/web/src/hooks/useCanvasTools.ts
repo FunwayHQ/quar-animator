@@ -14,6 +14,7 @@ import { useEditorStore } from '../stores/editorStore';
 
 export interface UseCanvasToolsOptions {
   camera: Camera | null;
+  sceneGraph: SceneGraph;
 }
 
 export interface UseCanvasToolsReturn {
@@ -82,10 +83,11 @@ function createCanvasPointerEvent(
  * @returns Tool management handlers and state
  */
 export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsReturn {
-  const { camera } = options;
+  const { camera, sceneGraph } = options;
 
-  // Create stable references for SceneGraph and ToolManager
-  const sceneGraphRef = useRef<SceneGraph>(new SceneGraph());
+  // Use the externally-provided SceneGraph
+  const sceneGraphRef = useRef<SceneGraph>(sceneGraph);
+  sceneGraphRef.current = sceneGraph;
   const toolManagerRef = useRef<ToolManager | null>(null);
 
   // Track preview node for rendering

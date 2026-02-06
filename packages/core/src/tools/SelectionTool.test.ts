@@ -613,6 +613,31 @@ describe('SelectionTool', () => {
       // Should be reverted
       expect(context.sceneGraph.getNode('rect1')?.transform.position.x).toBe(50);
     });
+
+    // X1-6: Escape cancels marquee selection
+    it('should cancel marquee selection on Escape', () => {
+      // Click on empty space to start marquee
+      tool.onPointerDown(
+        createMockPointerEvent({
+          worldPosition: { x: 500, y: 500 },
+          button: 0,
+        })
+      );
+
+      // Drag to form marquee
+      tool.onPointerMove(
+        createMockPointerEvent({
+          worldPosition: { x: 600, y: 600 },
+        })
+      );
+
+      expect(tool.getMode()).toBe('marquee');
+
+      // Escape should cancel marquee
+      tool.onKeyDown({ key: 'Escape' } as KeyboardEvent);
+
+      expect(tool.getMode()).toBe('idle');
+    });
   });
 
   // ==========================================================================
