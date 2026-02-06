@@ -226,6 +226,15 @@
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
+.hiddenColorPicker {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+
 .slider {
   flex: 1;
   height: 4px;
@@ -263,6 +272,37 @@
 .slider::-webkit-slider-runnable-track {
   background: linear-gradient(90deg, var(--color-accent-primary) 0%, var(--color-bg-tertiary) 0%);
   border-radius: var(--radius-full);
+}
+
+.lockButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  background: transparent;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-disabled);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all var(--duration-fast);
+}
+
+.lockButton:hover {
+  border-color: var(--color-border-default);
+  color: var(--color-text-tertiary);
+}
+
+.lockButtonActive {
+  color: var(--color-accent-primary);
+  border-color: var(--color-accent-primary);
+}
+
+.lockButtonActive:hover {
+  color: var(--color-accent-primary);
+  border-color: var(--color-accent-primary);
 }
 
 .emptyStateVisible {

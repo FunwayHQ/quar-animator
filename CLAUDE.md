@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Quar Animator is a free, open-source, web-native 2D animation platform designed to fill the gap left by Adobe Animate's discontinuation. It's part of the QUAR Suite (alongside Quar Editor for 3D and Quar Vector for 2D illustration).
 
-**Current Status**: Sprints X1-X3 (code review) complete. Full drawing toolkit with Brush and Eraser tools. Direct selection for path editing. Vector drawing tools (Rectangle, Ellipse, Polygon/Star, Pen). Selection infrastructure with transform handles. Canvas foundation with WebGL 2 rendering. LayerPanel and PropertiesPanel wired to SceneGraph. ErrorBoundary for resilience. Modern violet/bordeaux design system.
+**Current Status**: Sprint 8 (Selection & Transform Enhancements) complete. Editable size W/H, fill/stroke color editing, alt center-origin resize, aspect ratio lock, scrub-to-adjust labels. Full drawing toolkit with Brush and Eraser tools. Direct selection for path editing. Vector drawing tools (Rectangle, Ellipse, Polygon/Star, Pen). Selection infrastructure with transform handles. Canvas foundation with WebGL 2 rendering. LayerPanel and PropertiesPanel wired to SceneGraph. ErrorBoundary for resilience. Modern violet/bordeaux design system.
 
 ## Sprint Progress
 
@@ -176,6 +176,35 @@ Quar Animator is a free, open-source, web-native 2D animation platform designed 
 - [x] CI coverage reporting with `@vitest/coverage-v8`
 
 **Total test coverage**: 767 core tests, 158 UI tests (925 total)
+
+### Sprint 8: Selection & Transform Enhancements ✅ COMPLETE
+
+- [x] Editable Size W/H in PropertiesPanel - 6 tests
+  - Rectangle: sets width/height directly
+  - Ellipse: sets radiusX/radiusY (value / 2)
+  - Polygon: adjusts transform.scale relative to base radius
+  - Path nodes remain read-only
+  - Validates: rejects NaN, zero, negative values
+- [x] Fill/Stroke color editing - 7 tests
+  - Hex text input editing with `hexToColor` parser
+  - Hidden `<input type="color">` behind color swatches
+  - Click swatch opens native color picker
+  - Preserves existing fill opacity and stroke properties
+- [x] Alt key for center-origin resize - 3 tests
+  - Doubles size delta symmetrically around original center
+  - Combines with Shift for constrained center-origin resize
+  - Center position stays fixed during alt-resize
+- [x] Aspect ratio lock toggle - 7 tests
+  - `aspectRatioLocked` boolean + `toggleAspectRatioLock` in editor store
+  - Lucide Lock/Unlock icon button between W and H inputs
+  - When locked: changing W auto-computes H (and vice versa)
+- [x] Scrub-to-adjust labels (ScrubLabel component) - 4 tests
+  - Reusable component: click-drag on label to scrub value
+  - Props: label, value, onChange, sensitivity, min, max
+  - CSS cursor `ew-resize` during drag
+  - Replaces static labels for X, Y, W, H in PropertiesPanel
+
+**Total test coverage**: 770 core tests, 182 UI tests (952 total)
 
 ## Development Commands
 

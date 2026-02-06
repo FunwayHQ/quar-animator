@@ -194,7 +194,7 @@ export class SelectionTool extends BaseTool {
     this.state.currentWorldPos = worldPos;
 
     if (this.mode === 'resizing' && this.resizeState) {
-      this.performResize(worldPos, event.shiftKey);
+      this.performResize(worldPos, event.shiftKey, event.altKey);
       return;
     }
 
@@ -611,14 +611,24 @@ export class SelectionTool extends BaseTool {
   /**
    * Perform resize operation based on current drag position
    */
-  private performResize(worldPos: Vector2, constrained: boolean): void {
+  private performResize(
+    worldPos: Vector2,
+    constrained: boolean,
+    fromCenter: boolean = false
+  ): void {
     if (!this.resizeState || !this.startPoint) return;
 
     const { handle, initialBounds, initialNodeStates } = this.resizeState;
     const delta = vec2.subtract(worldPos, this.startPoint);
 
     // Calculate new bounds based on handle position
-    const newBounds = this.calculateNewBounds(initialBounds.rect, handle, delta, constrained);
+    const newBounds = this.calculateNewBounds(
+      initialBounds.rect,
+      handle,
+      delta,
+      constrained,
+      fromCenter
+    );
 
     // Calculate scale factors
     const scaleX = initialBounds.rect.width > 0 ? newBounds.width / initialBounds.rect.width : 1;
@@ -736,7 +746,8 @@ export class SelectionTool extends BaseTool {
     initial: Rect,
     handle: HandlePosition,
     delta: Vector2,
-    constrained: boolean
+    constrained: boolean,
+    fromCenter: boolean = false
   ): Rect {
     let { x, y, width, height } = initial;
 
@@ -800,16 +811,34 @@ export class SelectionTool extends BaseTool {
       }
     }
 
+    // Alt key: resize from center (double the delta symmetrically)
+    if (fromCenter) {
+      const centerX = initial.x + initial.width / 2;
+      const centerY = initial.y + initial.height / 2;
+      const dw = width - initial.width;
+      const dh = height - initial.height;
+      width = initial.width + dw * 2;
+      height = initial.height + dh * 2;
+      x = centerX - width / 2;
+      y = centerY - height / 2;
+    }
+
     // Ensure minimum size
     const minSize = 1;
     if (width < minSize) {
-      if (handle.includes('left')) {
+      if (fromCenter) {
+        const centerX = initial.x + initial.width / 2;
+        x = centerX - minSize / 2;
+      } else if (handle.includes('left')) {
         x = initial.x + initial.width - minSize;
       }
       width = minSize;
     }
     if (height < minSize) {
-      if (handle.includes('top')) {
+      if (fromCenter) {
+        const centerY = initial.y + initial.height / 2;
+        y = centerY - minSize / 2;
+      } else if (handle.includes('top')) {
         y = initial.y + initial.height - minSize;
       }
       height = minSize;

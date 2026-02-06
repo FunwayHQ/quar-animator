@@ -74,6 +74,10 @@ export interface EditorStore {
   eraserMode: EraserMode;
   setEraserSize: (size: number) => void;
   setEraserMode: (mode: EraserMode) => void;
+
+  // Aspect ratio lock
+  aspectRatioLocked: boolean;
+  toggleAspectRatioLock: () => void;
 }
 
 // ============================================================================
@@ -133,6 +137,10 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   eraserMode: 'stroke',
   setEraserSize: (size: number) => set({ eraserSize: Math.max(1, Math.min(100, size)) }),
   setEraserMode: (mode: EraserMode) => set({ eraserMode: mode }),
+
+  // Aspect ratio lock
+  aspectRatioLocked: false,
+  toggleAspectRatioLock: () => set((state) => ({ aspectRatioLocked: !state.aspectRatioLocked })),
 }));
 
 // ============================================================================
@@ -167,3 +175,9 @@ export const useSetEraserSize = (): ((size: number) => void) =>
   useEditorStore((state: EditorStore) => state.setEraserSize);
 export const useSetEraserMode = (): ((mode: EraserMode) => void) =>
   useEditorStore((state: EditorStore) => state.setEraserMode);
+
+// Aspect ratio lock selectors
+export const useAspectRatioLocked = (): boolean =>
+  useEditorStore((state: EditorStore) => state.aspectRatioLocked);
+export const useToggleAspectRatioLock = (): (() => void) =>
+  useEditorStore((state: EditorStore) => state.toggleAspectRatioLock);

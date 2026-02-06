@@ -1082,6 +1082,143 @@ describe('SelectionTool', () => {
   });
 
   // ==========================================================================
+  // Alt (Center-Origin) Resize
+  // ==========================================================================
+
+  describe('center-origin resize (alt key)', () => {
+    it('should resize symmetrically from center with alt key', () => {
+      // Rectangle at (100, 100), size 100x100
+      // Bounds: x=50, y=50, width=100, height=100
+      const rect = createTestRectangle('rect1', 100, 100, 100, 100);
+      context.sceneGraph.addNode(rect);
+      context.setSelectedIds(['rect1']);
+
+      // Bottom-right corner at (150, 150)
+      const startScreenPos = context.camera.worldToScreen({ x: 150, y: 150 });
+      const startWorldPos = { x: 150, y: 150 };
+
+      tool.onPointerDown(
+        createMockPointerEvent({
+          worldPosition: startWorldPos,
+          screenPosition: startScreenPos,
+          button: 0,
+        })
+      );
+
+      expect(tool.getMode()).toBe('resizing');
+
+      // Drag right by 25 with alt key (should double to 50 total expansion)
+      const endWorldPos = { x: 175, y: 175 };
+      tool.onPointerMove(
+        createMockPointerEvent({
+          worldPosition: endWorldPos,
+          screenPosition: context.camera.worldToScreen(endWorldPos),
+          altKey: true,
+        })
+      );
+
+      tool.onPointerUp(
+        createMockPointerEvent({
+          worldPosition: endWorldPos,
+          screenPosition: context.camera.worldToScreen(endWorldPos),
+          altKey: true,
+          button: 0,
+        })
+      );
+
+      const resizedRect = context.sceneGraph.getNode('rect1') as RectangleNode;
+      // With alt key: delta of 25 in each direction is doubled to 50
+      // New size: 100 + 50 = 150 x 150
+      expect(resizedRect.width).toBe(150);
+      expect(resizedRect.height).toBe(150);
+    });
+
+    it('should keep center position fixed during alt-resize', () => {
+      const rect = createTestRectangle('rect1', 100, 100, 100, 100);
+      context.sceneGraph.addNode(rect);
+      context.setSelectedIds(['rect1']);
+
+      const startScreenPos = context.camera.worldToScreen({ x: 150, y: 150 });
+      const startWorldPos = { x: 150, y: 150 };
+
+      tool.onPointerDown(
+        createMockPointerEvent({
+          worldPosition: startWorldPos,
+          screenPosition: startScreenPos,
+          button: 0,
+        })
+      );
+
+      const endWorldPos = { x: 175, y: 175 };
+      tool.onPointerMove(
+        createMockPointerEvent({
+          worldPosition: endWorldPos,
+          screenPosition: context.camera.worldToScreen(endWorldPos),
+          altKey: true,
+        })
+      );
+
+      tool.onPointerUp(
+        createMockPointerEvent({
+          worldPosition: endWorldPos,
+          screenPosition: context.camera.worldToScreen(endWorldPos),
+          altKey: true,
+          button: 0,
+        })
+      );
+
+      const resizedRect = context.sceneGraph.getNode('rect1') as RectangleNode;
+      // Center should remain at (100, 100) - the original center
+      // Position = center of the node
+      expect(resizedRect.transform.position.x).toBe(100);
+      expect(resizedRect.transform.position.y).toBe(100);
+    });
+
+    it('should combine alt+shift for constrained center-origin resize', () => {
+      // Rectangle at (100, 100), size 100x100
+      const rect = createTestRectangle('rect1', 100, 100, 100, 100);
+      context.sceneGraph.addNode(rect);
+      context.setSelectedIds(['rect1']);
+
+      const startScreenPos = context.camera.worldToScreen({ x: 150, y: 150 });
+      const startWorldPos = { x: 150, y: 150 };
+
+      tool.onPointerDown(
+        createMockPointerEvent({
+          worldPosition: startWorldPos,
+          screenPosition: startScreenPos,
+          button: 0,
+        })
+      );
+
+      // Drag asymmetrically with both shift + alt
+      const endWorldPos = { x: 200, y: 170 };
+      tool.onPointerMove(
+        createMockPointerEvent({
+          worldPosition: endWorldPos,
+          screenPosition: context.camera.worldToScreen(endWorldPos),
+          shiftKey: true,
+          altKey: true,
+        })
+      );
+
+      tool.onPointerUp(
+        createMockPointerEvent({
+          worldPosition: endWorldPos,
+          screenPosition: context.camera.worldToScreen(endWorldPos),
+          shiftKey: true,
+          altKey: true,
+          button: 0,
+        })
+      );
+
+      const resizedRect = context.sceneGraph.getNode('rect1') as RectangleNode;
+      // With shift, aspect ratio preserved (1:1 for this rect)
+      expect(resizedRect.width).toBe(resizedRect.height);
+    });
+  });
+
+  // ==========================================================================
   // Rotating Nodes
   // ==========================================================================
 

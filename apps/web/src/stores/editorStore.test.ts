@@ -18,6 +18,7 @@ describe('EditorStore', () => {
       brushSmoothing: 50,
       eraserSize: 10,
       eraserMode: 'stroke',
+      aspectRatioLocked: false,
     });
   });
 
@@ -66,6 +67,11 @@ describe('EditorStore', () => {
       const state = useEditorStore.getState();
       expect(state.eraserSize).toBe(10);
       expect(state.eraserMode).toBe('stroke');
+    });
+
+    it('should have aspect ratio unlocked by default', () => {
+      const state = useEditorStore.getState();
+      expect(state.aspectRatioLocked).toBe(false);
     });
   });
 
@@ -380,6 +386,35 @@ describe('EditorStore', () => {
       const { setEraserMode } = useEditorStore.getState();
       setEraserMode('point');
       expect(useEditorStore.getState().eraserMode).toBe('point');
+    });
+  });
+
+  // ==========================================================================
+  // Aspect Ratio Lock
+  // ==========================================================================
+
+  describe('aspect ratio lock', () => {
+    it('should toggle aspect ratio lock on', () => {
+      const { toggleAspectRatioLock } = useEditorStore.getState();
+      toggleAspectRatioLock();
+      expect(useEditorStore.getState().aspectRatioLocked).toBe(true);
+    });
+
+    it('should toggle aspect ratio lock off', () => {
+      const { toggleAspectRatioLock } = useEditorStore.getState();
+      toggleAspectRatioLock(); // on
+      toggleAspectRatioLock(); // off
+      expect(useEditorStore.getState().aspectRatioLocked).toBe(false);
+    });
+
+    it('should toggle back and forth', () => {
+      const { toggleAspectRatioLock } = useEditorStore.getState();
+      toggleAspectRatioLock();
+      expect(useEditorStore.getState().aspectRatioLocked).toBe(true);
+      toggleAspectRatioLock();
+      expect(useEditorStore.getState().aspectRatioLocked).toBe(false);
+      toggleAspectRatioLock();
+      expect(useEditorStore.getState().aspectRatioLocked).toBe(true);
     });
   });
 });

@@ -1,0 +1,20 @@
+.scrubLabel {
+  font-size: var(--font-size-2xs);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-disabled);
+  width: 18px;
+  text-align: center;
+  padding-left: 4px;
+  flex-shrink: 0;
+  cursor: ew-resize;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.scrubLabel:hover {
+  color: var(--color-text-tertiary);
+}
+
+.scrubbing {
+  color: var(--color-accent-primary);
+}
