@@ -4,24 +4,37 @@
  */
 
 import { useEffect, useRef, useCallback } from 'react';
-import { PlaybackController } from '@quar/animation';
+import { PlaybackController, evaluateNodeAtFrame, applyAnimatedValues } from '@quar/animation';
 import { useEditorStore } from '../stores/editorStore';
+import { useSceneGraph } from '../contexts/SceneGraphContext';
 
 export function usePlayback() {
   const controllerRef = useRef<PlaybackController | null>(null);
+  const sceneGraph = useSceneGraph();
+  const sceneGraphRef = useRef(sceneGraph);
+  sceneGraphRef.current = sceneGraph;
 
-  // Use refs for store values to avoid recreating controller on every change
-  const storeRef = useRef(useEditorStore.getState());
-  useEffect(() => {
-    return useEditorStore.subscribe((state) => {
-      storeRef.current = state;
-    });
+  // Apply animated values from timeline to scene graph nodes
+  const applyAnimations = useCallback((frame: number) => {
+    const sg = sceneGraphRef.current;
+    const { timeline } = useEditorStore.getState();
+    if (!timeline.tracks || timeline.tracks.length === 0) return;
+    const rootNodes = sg.getRootNodes();
+    for (const node of rootNodes) {
+      const values = evaluateNodeAtFrame(timeline, node.id, frame);
+      if (values.size > 0) {
+        const updated = applyAnimatedValues(node, values);
+        if (updated !== node) {
+          sg.updateNode(node.id, updated);
+        }
+      }
+    }
   }, []);
 
-  // Create controller once
-  if (!controllerRef.current) {
+  // Create controller + subscribe in one effect for StrictMode compatibility
+  useEffect(() => {
     const state = useEditorStore.getState();
-    controllerRef.current = new PlaybackController({
+    const ctrl = new PlaybackController({
       duration: state.timelineDuration,
       frameRate: state.frameRate,
       looping: state.isLooping,
@@ -29,33 +42,29 @@ export function usePlayback() {
         useEditorStore.getState().setCurrentFrame(frame);
       },
     });
-  }
+    controllerRef.current = ctrl;
 
-  // Sync store changes → controller
-  useEffect(() => {
-    return useEditorStore.subscribe((state, prevState) => {
-      const ctrl = controllerRef.current;
-      if (!ctrl) return;
-
-      if (state.timelineDuration !== prevState.timelineDuration) {
-        ctrl.setDuration(state.timelineDuration);
+    const unsub = useEditorStore.subscribe((curr, prev) => {
+      if (curr.timelineDuration !== prev.timelineDuration) {
+        ctrl.setDuration(curr.timelineDuration);
       }
-      if (state.frameRate !== prevState.frameRate) {
-        ctrl.setFrameRate(state.frameRate);
+      if (curr.frameRate !== prev.frameRate) {
+        ctrl.setFrameRate(curr.frameRate);
       }
-      if (state.isLooping !== prevState.isLooping) {
-        ctrl.setLooping(state.isLooping);
+      if (curr.isLooping !== prev.isLooping) {
+        ctrl.setLooping(curr.isLooping);
+      }
+      if (curr.currentFrame !== prev.currentFrame) {
+        applyAnimations(curr.currentFrame);
       }
     });
-  }, []);
 
-  // Dispose on unmount
-  useEffect(() => {
     return () => {
-      controllerRef.current?.dispose();
+      unsub();
+      ctrl.dispose();
       controllerRef.current = null;
     };
-  }, []);
+  }, [applyAnimations]);
 
   const play = useCallback(() => {
     controllerRef.current?.play();

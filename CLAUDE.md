@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Quar Animator is a free, open-source, web-native 2D animation platform designed to fill the gap left by Adobe Animate's discontinuation. It's part of the QUAR Suite (alongside Quar Editor for 3D and Quar Vector for 2D illustration).
 
-**Current Status**: Context menus and clipboard operations complete. Right-click context menus on Canvas, LayerPanel, and Timeline. Clipboard operations (copy/paste/duplicate/delete/select all) with keyboard shortcuts. Inline layer rename. Sprint 9 (Timeline Foundation) complete. Full drawing toolkit with Brush and Eraser tools. Direct selection for path editing. Vector drawing tools (Rectangle, Ellipse, Polygon/Star, Pen). Selection infrastructure with transform handles. Canvas foundation with WebGL 2 rendering. LayerPanel and PropertiesPanel wired to SceneGraph. ErrorBoundary for resilience. Modern violet/bordeaux design system.
+**Current Status**: Sprint 10 (Keyframe System) complete. PropertyBinding for dot-notation property access, KeyframeManager with clipboard support, keyframe CRUD in editor store, Timeline UI with keyframe rendering/interaction/context menu, auto-keyframe mode (K shortcut), playback evaluates animated values. Context menus and clipboard operations. Full drawing toolkit with Brush and Eraser tools. Direct selection for path editing. Vector drawing tools (Rectangle, Ellipse, Polygon/Star, Pen). Selection infrastructure with transform handles. Canvas foundation with WebGL 2 rendering. LayerPanel and PropertiesPanel wired to SceneGraph. ErrorBoundary for resilience. Modern violet/bordeaux design system.
 
 ## Sprint Progress
 
@@ -274,6 +274,43 @@ Quar Animator is a free, open-source, web-native 2D animation platform designed 
   - Skipped when focus is in input/textarea/select elements
 
 **Total test coverage**: 770 core tests, 195 animation tests, 244 web tests (1209 total)
+
+### Sprint 10: Keyframe System ✅ COMPLETE
+
+- [x] PropertyBinding system - 30 tests
+  - `getProperty`/`setProperty` for dot-notation nested property access (immutable)
+  - `getAnimatableProperties` returns available properties per node type
+  - `detectInterpolationType` for number/vector2/color/discrete
+  - `getInterpolator` for type-appropriate interpolation functions
+  - `evaluateTrack`/`evaluateNodeAtFrame`/`applyAnimatedValues` for animation evaluation
+- [x] KeyframeManager class - 28 tests
+  - CRUD operations wrapping Timeline.ts functions
+  - Clipboard support (copy/paste with relative time offsets)
+  - Batch operations (moveKeyframes, removeKeyframes)
+  - Query methods (getKeyframeAt, getKeyframesInRange, getAllKeyframesForNode)
+  - Auto-cleanup of empty tracks when last keyframe removed
+- [x] Editor store keyframe state - 12 tests
+  - `timeline`, `autoKeyframe`, `selectedKeyframeIds`, `keyframeClipboard` state
+  - Full keyframe CRUD: add, remove, move, set easing
+  - Keyframe selection: select, add, clear
+  - Clipboard: copy/paste keyframes
+- [x] Timeline UI keyframe rendering & interaction
+  - Diamond-shaped keyframe markers on tracks
+  - Click-to-select (Shift for multi-select)
+  - Drag-to-move keyframes via pointer events
+  - Auto-keyframe toggle button in controls
+  - Context menu on keyframes: easing presets (8 options), copy, delete
+  - Paste keyframes option in ruler context menu
+- [x] Auto-keyframe mode in PropertiesPanel
+  - All property change handlers (position, rotation, size, fill, stroke, opacity) auto-create keyframes
+  - Respects node-type-specific property paths (width/height, radiusX/Y, scale)
+- [x] Playback evaluates animated values
+  - `usePlayback` subscribes to currentFrame changes, evaluates timeline, applies to scene graph
+  - Works for both playback and manual scrubbing
+- [x] K keyboard shortcut for auto-keyframe toggle
+- [x] ContextMenu UX fixes: auto-focus for Escape key, right-click overlay closes menu
+
+**Total test coverage**: 770 core tests, 253 animation tests, 256 web tests (1279 total)
 
 ## Development Commands
 

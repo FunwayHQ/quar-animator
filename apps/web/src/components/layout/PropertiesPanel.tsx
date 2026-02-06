@@ -79,6 +79,9 @@ export function PropertiesPanel() {
   const selectedNodeIds = useEditorStore((state) => state.selectedNodeIds);
   const aspectRatioLocked = useEditorStore((state) => state.aspectRatioLocked);
   const toggleAspectRatioLock = useEditorStore((state) => state.toggleAspectRatioLock);
+  const autoKeyframe = useEditorStore((state) => state.autoKeyframe);
+  const currentFrame = useEditorStore((state) => state.currentFrame);
+  const addKeyframeAtFrame = useEditorStore((state) => state.addKeyframeAtFrame);
 
   // Re-render on SceneGraph changes
   const [, setVersion] = useState(0);
@@ -108,8 +111,11 @@ export function PropertiesPanel() {
           },
         },
       });
+      if (autoKeyframe) {
+        addKeyframeAtFrame(selectedId, `transform.position.${axis}`, currentFrame, num);
+      }
     },
-    [selectedId, sceneGraph]
+    [selectedId, sceneGraph, autoKeyframe, currentFrame, addKeyframeAtFrame]
   );
 
   const handleRotationChange = useCallback(
@@ -123,8 +129,11 @@ export function PropertiesPanel() {
       sceneGraph.updateNode(selectedId, {
         transform: { ...currentNode.transform, rotation: num },
       });
+      if (autoKeyframe) {
+        addKeyframeAtFrame(selectedId, 'transform.rotation', currentFrame, num);
+      }
     },
-    [selectedId, sceneGraph]
+    [selectedId, sceneGraph, autoKeyframe, currentFrame, addKeyframeAtFrame]
   );
 
   const applySize = useCallback(
@@ -132,20 +141,34 @@ export function PropertiesPanel() {
       if (!selectedId) return;
       if (nodeToUpdate.type === 'rectangle') {
         sceneGraph.updateNode(selectedId, { width: w, height: h });
+        if (autoKeyframe) {
+          addKeyframeAtFrame(selectedId, 'width', currentFrame, w);
+          addKeyframeAtFrame(selectedId, 'height', currentFrame, h);
+        }
       } else if (nodeToUpdate.type === 'ellipse') {
         sceneGraph.updateNode(selectedId, { radiusX: w / 2, radiusY: h / 2 });
+        if (autoKeyframe) {
+          addKeyframeAtFrame(selectedId, 'radiusX', currentFrame, w / 2);
+          addKeyframeAtFrame(selectedId, 'radiusY', currentFrame, h / 2);
+        }
       } else if (nodeToUpdate.type === 'polygon') {
         const polygon = nodeToUpdate as PolygonNode;
         const baseSize = polygon.radius * 2;
+        const scaleX = w / baseSize;
+        const scaleY = h / baseSize;
         sceneGraph.updateNode(selectedId, {
           transform: {
             ...nodeToUpdate.transform,
-            scale: { x: w / baseSize, y: h / baseSize },
+            scale: { x: scaleX, y: scaleY },
           },
         });
+        if (autoKeyframe) {
+          addKeyframeAtFrame(selectedId, 'transform.scale.x', currentFrame, scaleX);
+          addKeyframeAtFrame(selectedId, 'transform.scale.y', currentFrame, scaleY);
+        }
       }
     },
-    [selectedId, sceneGraph]
+    [selectedId, sceneGraph, autoKeyframe, currentFrame, addKeyframeAtFrame]
   );
 
   const handleSizeChange = useCallback(
@@ -190,8 +213,11 @@ export function PropertiesPanel() {
       sceneGraph.updateNode(selectedId, {
         fill: { type: 'solid', color, opacity: currentFill?.opacity ?? 1 },
       } as Partial<Node>);
+      if (autoKeyframe) {
+        addKeyframeAtFrame(selectedId, 'fill.color', currentFrame, color);
+      }
     },
-    [selectedId, sceneGraph]
+    [selectedId, sceneGraph, autoKeyframe, currentFrame, addKeyframeAtFrame]
   );
 
   const handleStrokeChange = useCallback(
@@ -215,8 +241,11 @@ export function PropertiesPanel() {
           stroke: { color, width: 2, opacity: 1, cap: 'round', join: 'round' },
         } as Partial<Node>);
       }
+      if (autoKeyframe) {
+        addKeyframeAtFrame(selectedId, 'stroke.color', currentFrame, color);
+      }
     },
-    [selectedId, sceneGraph]
+    [selectedId, sceneGraph, autoKeyframe, currentFrame, addKeyframeAtFrame]
   );
 
   const handleOpacityChange = useCallback(
@@ -225,11 +254,13 @@ export function PropertiesPanel() {
       const cleaned = value.replace('%', '');
       const num = parseFloat(cleaned);
       if (isNaN(num)) return;
-      sceneGraph.updateNode(selectedId, {
-        opacity: Math.max(0, Math.min(1, num / 100)),
-      });
+      const clamped = Math.max(0, Math.min(1, num / 100));
+      sceneGraph.updateNode(selectedId, { opacity: clamped });
+      if (autoKeyframe) {
+        addKeyframeAtFrame(selectedId, 'opacity', currentFrame, clamped);
+      }
     },
-    [selectedId, sceneGraph]
+    [selectedId, sceneGraph, autoKeyframe, currentFrame, addKeyframeAtFrame]
   );
 
   const handleOpacitySlider = useCallback(
@@ -237,11 +268,13 @@ export function PropertiesPanel() {
       if (!selectedId) return;
       const num = parseInt(value, 10);
       if (isNaN(num)) return;
-      sceneGraph.updateNode(selectedId, {
-        opacity: num / 100,
-      });
+      const opacity = num / 100;
+      sceneGraph.updateNode(selectedId, { opacity });
+      if (autoKeyframe) {
+        addKeyframeAtFrame(selectedId, 'opacity', currentFrame, opacity);
+      }
     },
-    [selectedId, sceneGraph]
+    [selectedId, sceneGraph, autoKeyframe, currentFrame, addKeyframeAtFrame]
   );
 
   // Refs for hidden color pickers

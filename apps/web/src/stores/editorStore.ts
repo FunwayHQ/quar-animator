@@ -4,7 +4,9 @@
  */
 
 import { create } from 'zustand';
-import type { ToolType, Fill, Stroke, Color, Node } from '@quar/types';
+import type { ToolType, Fill, Stroke, Color, Node, Timeline, EasingFunction } from '@quar/types';
+import type { KeyframeClipboard } from '@quar/animation';
+import { createTimeline, KeyframeManager } from '@quar/animation';
 
 // ============================================================================
 // SceneGraph Interface (subset used by store operations)
@@ -113,6 +115,37 @@ export interface EditorStore {
   setFrameRate: (rate: number) => void;
   setTimelineExpanded: (expanded: boolean) => void;
   toggleTimelineExpanded: () => void;
+
+  // Keyframe state
+  timeline: Timeline;
+  autoKeyframe: boolean;
+  selectedKeyframeIds: Set<string>;
+  keyframeClipboard: KeyframeClipboard | null;
+  toggleAutoKeyframe: () => void;
+  selectKeyframe: (id: string) => void;
+  addKeyframeToSelection: (id: string) => void;
+  clearKeyframeSelection: () => void;
+  setSelectedKeyframeIds: (ids: string[]) => void;
+  addKeyframeAtFrame: (
+    nodeId: string,
+    property: string,
+    frame: number,
+    value: unknown,
+    easing?: EasingFunction
+  ) => void;
+  removeSelectedKeyframes: (keyframeMap: Map<string, { nodeId: string; property: string }>) => void;
+  setKeyframeEasing: (
+    nodeId: string,
+    property: string,
+    keyframeId: string,
+    easing: EasingFunction
+  ) => void;
+  copySelectedKeyframes: (keyframeMap: Map<string, { nodeId: string; property: string }>) => void;
+  pasteKeyframes: (nodeId: string, frame: number) => void;
+  moveSelectedKeyframes: (
+    keyframeMap: Map<string, { nodeId: string; property: string }>,
+    deltaFrames: number
+  ) => void;
 }
 
 // ============================================================================
@@ -255,6 +288,99 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   setFrameRate: (rate: number) => set({ frameRate: Math.max(1, Math.min(120, Math.round(rate))) }),
   setTimelineExpanded: (expanded: boolean) => set({ timelineExpanded: expanded }),
   toggleTimelineExpanded: () => set((state) => ({ timelineExpanded: !state.timelineExpanded })),
+
+  // Keyframe state
+  timeline: createTimeline({ duration: 300, frameRate: 30 }),
+  autoKeyframe: false,
+  selectedKeyframeIds: new Set<string>(),
+  keyframeClipboard: null,
+  toggleAutoKeyframe: () => set((state) => ({ autoKeyframe: !state.autoKeyframe })),
+  selectKeyframe: (id: string) => set({ selectedKeyframeIds: new Set([id]) }),
+  addKeyframeToSelection: (id: string) =>
+    set((state) => ({
+      selectedKeyframeIds: new Set([...state.selectedKeyframeIds, id]),
+    })),
+  clearKeyframeSelection: () => set({ selectedKeyframeIds: new Set<string>() }),
+  setSelectedKeyframeIds: (ids: string[]) => set({ selectedKeyframeIds: new Set(ids) }),
+  addKeyframeAtFrame: (
+    nodeId: string,
+    property: string,
+    frame: number,
+    value: unknown,
+    easing: EasingFunction = 'linear'
+  ) => {
+    const { timeline } = get();
+    const mgr = new KeyframeManager(timeline);
+    mgr.addKeyframe(nodeId, property, frame, value, easing);
+    // Trigger re-render by creating a new timeline reference
+    set({ timeline: { ...timeline } });
+  },
+  removeSelectedKeyframes: (keyframeMap: Map<string, { nodeId: string; property: string }>) => {
+    const { timeline, selectedKeyframeIds } = get();
+    if (selectedKeyframeIds.size === 0) return;
+    const mgr = new KeyframeManager(timeline);
+    const toRemove: Array<{ nodeId: string; property: string; keyframeId: string }> = [];
+    for (const kfId of selectedKeyframeIds) {
+      const info = keyframeMap.get(kfId);
+      if (info) {
+        toRemove.push({ nodeId: info.nodeId, property: info.property, keyframeId: kfId });
+      }
+    }
+    mgr.removeKeyframes(toRemove);
+    set({ timeline: { ...timeline }, selectedKeyframeIds: new Set<string>() });
+  },
+  setKeyframeEasing: (
+    nodeId: string,
+    property: string,
+    keyframeId: string,
+    easing: EasingFunction
+  ) => {
+    const { timeline } = get();
+    const mgr = new KeyframeManager(timeline);
+    mgr.setKeyframeEasing(nodeId, property, keyframeId, easing);
+    set({ timeline: { ...timeline } });
+  },
+  copySelectedKeyframes: (keyframeMap: Map<string, { nodeId: string; property: string }>) => {
+    const { timeline, selectedKeyframeIds } = get();
+    if (selectedKeyframeIds.size === 0) return;
+    const mgr = new KeyframeManager(timeline);
+    const entries: Array<{ nodeId: string; property: string; keyframeId: string }> = [];
+    for (const kfId of selectedKeyframeIds) {
+      const info = keyframeMap.get(kfId);
+      if (info) {
+        entries.push({ nodeId: info.nodeId, property: info.property, keyframeId: kfId });
+      }
+    }
+    const clipboard = mgr.copyKeyframes(entries);
+    if (clipboard) set({ keyframeClipboard: clipboard });
+  },
+  pasteKeyframes: (nodeId: string, frame: number) => {
+    const { timeline, keyframeClipboard } = get();
+    if (!keyframeClipboard) return;
+    const mgr = new KeyframeManager(timeline);
+    const pasted = mgr.pasteKeyframes(keyframeClipboard, nodeId, frame);
+    set({
+      timeline: { ...timeline },
+      selectedKeyframeIds: new Set(pasted.map((kf) => kf.id)),
+    });
+  },
+  moveSelectedKeyframes: (
+    keyframeMap: Map<string, { nodeId: string; property: string }>,
+    deltaFrames: number
+  ) => {
+    const { timeline, selectedKeyframeIds } = get();
+    if (selectedKeyframeIds.size === 0) return;
+    const mgr = new KeyframeManager(timeline);
+    const entries: Array<{ nodeId: string; property: string; keyframeId: string }> = [];
+    for (const kfId of selectedKeyframeIds) {
+      const info = keyframeMap.get(kfId);
+      if (info) {
+        entries.push({ nodeId: info.nodeId, property: info.property, keyframeId: kfId });
+      }
+    }
+    mgr.moveKeyframes(entries, deltaFrames);
+    set({ timeline: { ...timeline } });
+  },
 }));
 
 // ============================================================================
@@ -328,3 +454,12 @@ export const useSetIsLooping = (): ((looping: boolean) => void) =>
   useEditorStore((state: EditorStore) => state.setIsLooping);
 export const useToggleTimelineExpanded = (): (() => void) =>
   useEditorStore((state: EditorStore) => state.toggleTimelineExpanded);
+
+// Keyframe selectors
+export const useTimeline = (): Timeline => useEditorStore((state: EditorStore) => state.timeline);
+export const useAutoKeyframe = (): boolean =>
+  useEditorStore((state: EditorStore) => state.autoKeyframe);
+export const useToggleAutoKeyframe = (): (() => void) =>
+  useEditorStore((state: EditorStore) => state.toggleAutoKeyframe);
+export const useSelectedKeyframeIds = (): Set<string> =>
+  useEditorStore((state: EditorStore) => state.selectedKeyframeIds);

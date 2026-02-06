@@ -4,8 +4,10 @@
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
+import type { ReactNode } from 'react';
 import { usePlayback } from './usePlayback';
 import { useEditorStore, DEFAULT_FILL, DEFAULT_STROKE } from '../stores/editorStore';
+import { SceneGraphProvider } from '../contexts/SceneGraphContext';
 
 // Mock PlaybackController to avoid rAF issues in tests
 vi.mock('@quar/animation', async () => {
@@ -85,6 +87,10 @@ vi.mock('@quar/animation', async () => {
   };
 });
 
+function wrapper({ children }: { children: ReactNode }) {
+  return SceneGraphProvider({ children });
+}
+
 describe('usePlayback', () => {
   beforeEach(() => {
     useEditorStore.setState({
@@ -108,7 +114,7 @@ describe('usePlayback', () => {
   });
 
   it('should return playback control functions', () => {
-    const { result } = renderHook(() => usePlayback());
+    const { result } = renderHook(() => usePlayback(), { wrapper });
     expect(result.current.play).toBeDefined();
     expect(result.current.pause).toBeDefined();
     expect(result.current.togglePlay).toBeDefined();
@@ -121,20 +127,20 @@ describe('usePlayback', () => {
   });
 
   it('play should set isPlaying in store', () => {
-    const { result } = renderHook(() => usePlayback());
+    const { result } = renderHook(() => usePlayback(), { wrapper });
     act(() => result.current.play());
     expect(useEditorStore.getState().isPlaying).toBe(true);
   });
 
   it('pause should clear isPlaying in store', () => {
-    const { result } = renderHook(() => usePlayback());
+    const { result } = renderHook(() => usePlayback(), { wrapper });
     act(() => result.current.play());
     act(() => result.current.pause());
     expect(useEditorStore.getState().isPlaying).toBe(false);
   });
 
   it('togglePlay should toggle isPlaying state', () => {
-    const { result } = renderHook(() => usePlayback());
+    const { result } = renderHook(() => usePlayback(), { wrapper });
     act(() => result.current.togglePlay());
     expect(useEditorStore.getState().isPlaying).toBe(true);
     act(() => result.current.togglePlay());
@@ -142,7 +148,7 @@ describe('usePlayback', () => {
   });
 
   it('stop should pause and go to frame 0', () => {
-    const { result } = renderHook(() => usePlayback());
+    const { result } = renderHook(() => usePlayback(), { wrapper });
     act(() => result.current.play());
     act(() => result.current.stop());
     expect(useEditorStore.getState().isPlaying).toBe(false);
@@ -150,46 +156,46 @@ describe('usePlayback', () => {
   });
 
   it('goToFrame should update store frame', () => {
-    const { result } = renderHook(() => usePlayback());
+    const { result } = renderHook(() => usePlayback(), { wrapper });
     act(() => result.current.goToFrame(50));
     expect(useEditorStore.getState().currentFrame).toBe(50);
   });
 
   it('nextFrame should advance frame', () => {
-    const { result } = renderHook(() => usePlayback());
+    const { result } = renderHook(() => usePlayback(), { wrapper });
     act(() => result.current.nextFrame());
     expect(useEditorStore.getState().currentFrame).toBe(1);
   });
 
   it('prevFrame should go back one frame', () => {
     useEditorStore.setState({ currentFrame: 5 });
-    const { result } = renderHook(() => usePlayback());
+    const { result } = renderHook(() => usePlayback(), { wrapper });
     // The mock starts at 0, so prevFrame from 0 stays at 0
     act(() => result.current.prevFrame());
     expect(useEditorStore.getState().currentFrame).toBe(0);
   });
 
   it('goToStart should set frame to 0', () => {
-    const { result } = renderHook(() => usePlayback());
+    const { result } = renderHook(() => usePlayback(), { wrapper });
     act(() => result.current.goToFrame(100));
     act(() => result.current.goToStart());
     expect(useEditorStore.getState().currentFrame).toBe(0);
   });
 
   it('goToEnd should set frame to duration - 1', () => {
-    const { result } = renderHook(() => usePlayback());
+    const { result } = renderHook(() => usePlayback(), { wrapper });
     act(() => result.current.goToEnd());
     expect(useEditorStore.getState().currentFrame).toBe(299);
   });
 
   it('should dispose controller on unmount', () => {
-    const { unmount } = renderHook(() => usePlayback());
+    const { unmount } = renderHook(() => usePlayback(), { wrapper });
     unmount();
     // If no error thrown, dispose was called successfully
   });
 
   it('should sync duration changes to controller', () => {
-    renderHook(() => usePlayback());
+    renderHook(() => usePlayback(), { wrapper });
     act(() => {
       useEditorStore.getState().setTimelineDuration(600);
     });

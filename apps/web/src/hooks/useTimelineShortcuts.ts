@@ -74,6 +74,13 @@ export function useTimelineShortcuts(callbacks: TimelineShortcutCallbacks) {
           event.preventDefault();
           useEditorStore.getState().setIsLooping(!state.isLooping);
           break;
+
+        case 'k':
+        case 'K':
+          // Toggle auto-keyframe
+          event.preventDefault();
+          useEditorStore.getState().toggleAutoKeyframe();
+          break;
       }
     },
     [callbacks]

@@ -67,7 +67,7 @@ export function ContextMenu({ x, y, items, onClose }: ContextMenuProps) {
     return { left, top };
   }, [x, y]);
 
-  // Apply position after mount
+  // Apply position after mount and auto-focus for keyboard navigation
   useEffect(() => {
     const menu = menuRef.current;
     if (!menu) return;
@@ -75,6 +75,7 @@ export function ContextMenu({ x, y, items, onClose }: ContextMenuProps) {
     const { left, top } = getPosition();
     menu.style.left = `${left}px`;
     menu.style.top = `${top}px`;
+    menu.focus();
   }, [getPosition]);
 
   // Get navigable (non-separator, non-disabled) item indices
@@ -157,7 +158,15 @@ export function ContextMenu({ x, y, items, onClose }: ContextMenuProps) {
   return createPortal(
     <>
       {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- overlay dismisses menu on click, Escape handled by menu */}
-      <div className={styles.overlay} onClick={onClose} data-testid="context-menu-overlay" />
+      <div
+        className={styles.overlay}
+        onClick={onClose}
+        onContextMenu={(e) => {
+          e.preventDefault();
+          onClose();
+        }}
+        data-testid="context-menu-overlay"
+      />
       <div
         ref={menuRef}
         className={styles.menu}

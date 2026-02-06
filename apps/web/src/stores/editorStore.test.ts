@@ -4,6 +4,7 @@
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { useEditorStore, DEFAULT_FILL, DEFAULT_STROKE } from './editorStore';
+import { createTimeline } from '@quar/animation';
 
 describe('EditorStore', () => {
   // Reset store before each test
@@ -26,6 +27,10 @@ describe('EditorStore', () => {
       timelineDuration: 300,
       frameRate: 30,
       timelineExpanded: true,
+      timeline: createTimeline({ duration: 300, frameRate: 30 }),
+      autoKeyframe: false,
+      selectedKeyframeIds: new Set<string>(),
+      keyframeClipboard: null,
     });
   });
 
@@ -710,6 +715,144 @@ describe('EditorStore', () => {
       expect(selectedNodeIds.has('rect1')).toBe(true);
       expect(selectedNodeIds.has('rect2')).toBe(true);
       expect(selectedNodeIds.has('rect3')).toBe(true);
+    });
+  });
+
+  // ==========================================================================
+  // Keyframe State
+  // ==========================================================================
+
+  describe('keyframe state', () => {
+    it('should have default keyframe state', () => {
+      const state = useEditorStore.getState();
+      expect(state.autoKeyframe).toBe(false);
+      expect(state.selectedKeyframeIds.size).toBe(0);
+      expect(state.keyframeClipboard).toBeNull();
+      expect(state.timeline).toBeDefined();
+      expect(state.timeline.tracks.length).toBe(0);
+    });
+
+    it('should toggle auto-keyframe', () => {
+      const { toggleAutoKeyframe } = useEditorStore.getState();
+      toggleAutoKeyframe();
+      expect(useEditorStore.getState().autoKeyframe).toBe(true);
+      toggleAutoKeyframe();
+      expect(useEditorStore.getState().autoKeyframe).toBe(false);
+    });
+
+    it('should select a keyframe', () => {
+      const { selectKeyframe } = useEditorStore.getState();
+      selectKeyframe('kf1');
+      expect(useEditorStore.getState().selectedKeyframeIds.has('kf1')).toBe(true);
+      expect(useEditorStore.getState().selectedKeyframeIds.size).toBe(1);
+    });
+
+    it('should add keyframe to selection', () => {
+      const { selectKeyframe, addKeyframeToSelection } = useEditorStore.getState();
+      selectKeyframe('kf1');
+      addKeyframeToSelection('kf2');
+      const ids = useEditorStore.getState().selectedKeyframeIds;
+      expect(ids.size).toBe(2);
+      expect(ids.has('kf1')).toBe(true);
+      expect(ids.has('kf2')).toBe(true);
+    });
+
+    it('should clear keyframe selection', () => {
+      const { selectKeyframe, clearKeyframeSelection } = useEditorStore.getState();
+      selectKeyframe('kf1');
+      clearKeyframeSelection();
+      expect(useEditorStore.getState().selectedKeyframeIds.size).toBe(0);
+    });
+
+    it('should add keyframe at frame', () => {
+      const { addKeyframeAtFrame } = useEditorStore.getState();
+      addKeyframeAtFrame('node1', 'opacity', 10, 0.5);
+      const { timeline } = useEditorStore.getState();
+      expect(timeline.tracks.length).toBe(1);
+      expect(timeline.tracks[0].nodeId).toBe('node1');
+      expect(timeline.tracks[0].property).toBe('opacity');
+      expect(timeline.tracks[0].keyframes.length).toBe(1);
+      expect(timeline.tracks[0].keyframes[0].time).toBe(10);
+      expect(timeline.tracks[0].keyframes[0].value).toBe(0.5);
+    });
+
+    it('should add multiple keyframes to same track', () => {
+      const { addKeyframeAtFrame } = useEditorStore.getState();
+      addKeyframeAtFrame('node1', 'opacity', 0, 1);
+      addKeyframeAtFrame('node1', 'opacity', 30, 0);
+      const { timeline } = useEditorStore.getState();
+      expect(timeline.tracks.length).toBe(1);
+      expect(timeline.tracks[0].keyframes.length).toBe(2);
+    });
+
+    it('should remove selected keyframes', () => {
+      const { addKeyframeAtFrame, removeSelectedKeyframes } = useEditorStore.getState();
+      addKeyframeAtFrame('node1', 'opacity', 0, 1);
+      const kfId = useEditorStore.getState().timeline.tracks[0].keyframes[0].id;
+      useEditorStore.setState({ selectedKeyframeIds: new Set([kfId]) });
+
+      const map = new Map([[kfId, { nodeId: 'node1', property: 'opacity' }]]);
+      removeSelectedKeyframes(map);
+
+      const { timeline, selectedKeyframeIds } = useEditorStore.getState();
+      expect(timeline.tracks.length).toBe(0);
+      expect(selectedKeyframeIds.size).toBe(0);
+    });
+
+    it('should set keyframe easing', () => {
+      const { addKeyframeAtFrame, setKeyframeEasing } = useEditorStore.getState();
+      addKeyframeAtFrame('node1', 'opacity', 0, 1);
+      const kfId = useEditorStore.getState().timeline.tracks[0].keyframes[0].id;
+
+      setKeyframeEasing('node1', 'opacity', kfId, 'easeInOutCubic');
+      expect(useEditorStore.getState().timeline.tracks[0].keyframes[0].easing).toBe(
+        'easeInOutCubic'
+      );
+    });
+
+    it('should copy and paste keyframes', () => {
+      const { addKeyframeAtFrame, copySelectedKeyframes, pasteKeyframes } =
+        useEditorStore.getState();
+      addKeyframeAtFrame('node1', 'opacity', 0, 1);
+      addKeyframeAtFrame('node1', 'opacity', 10, 0.5);
+      const kfs = useEditorStore.getState().timeline.tracks[0].keyframes;
+      useEditorStore.setState({ selectedKeyframeIds: new Set([kfs[0].id, kfs[1].id]) });
+
+      const map = new Map([
+        [kfs[0].id, { nodeId: 'node1', property: 'opacity' }],
+        [kfs[1].id, { nodeId: 'node1', property: 'opacity' }],
+      ]);
+      copySelectedKeyframes(map);
+      expect(useEditorStore.getState().keyframeClipboard).not.toBeNull();
+
+      pasteKeyframes('node2', 50);
+      const { timeline } = useEditorStore.getState();
+      // Should now have tracks for node1 and node2
+      const node2Tracks = timeline.tracks.filter((t) => t.nodeId === 'node2');
+      expect(node2Tracks.length).toBe(1);
+      expect(node2Tracks[0].keyframes.length).toBe(2);
+      expect(node2Tracks[0].keyframes[0].time).toBe(50);
+      expect(node2Tracks[0].keyframes[1].time).toBe(60);
+    });
+
+    it('should move selected keyframes', () => {
+      const { addKeyframeAtFrame, moveSelectedKeyframes } = useEditorStore.getState();
+      addKeyframeAtFrame('node1', 'opacity', 10, 1);
+      const kfId = useEditorStore.getState().timeline.tracks[0].keyframes[0].id;
+      useEditorStore.setState({ selectedKeyframeIds: new Set([kfId]) });
+
+      const map = new Map([[kfId, { nodeId: 'node1', property: 'opacity' }]]);
+      moveSelectedKeyframes(map, 5);
+
+      expect(useEditorStore.getState().timeline.tracks[0].keyframes[0].time).toBe(15);
+    });
+
+    it('should add keyframe with custom easing', () => {
+      const { addKeyframeAtFrame } = useEditorStore.getState();
+      addKeyframeAtFrame('node1', 'opacity', 0, 1, 'easeInOutCubic');
+      expect(useEditorStore.getState().timeline.tracks[0].keyframes[0].easing).toBe(
+        'easeInOutCubic'
+      );
     });
   });
 });
