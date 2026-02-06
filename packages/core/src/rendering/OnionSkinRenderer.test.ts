@@ -117,14 +117,15 @@ describe('OnionSkinRenderer', () => {
 
     const calls = (shapeRenderer.renderGhostNode as ReturnType<typeof vi.fn>).mock.calls;
     // 3 calls: frame 7 (distance 3), frame 8 (distance 2), frame 9 (distance 1)
-    // Opacity for distance i = opacity * (1 - falloff)^i
-    // i=3: 1.0 * 0.5^3 = 0.125
-    // i=2: 1.0 * 0.5^2 = 0.25
-    // i=1: 1.0 * 0.5^1 = 0.5
+    // Opacity for distance i = opacity * (1 - falloff)^(i-1)
+    // Closest ghost (i=1) gets full base opacity, falloff only applies to more distant ghosts
+    // i=3: 1.0 * 0.5^2 = 0.25
+    // i=2: 1.0 * 0.5^1 = 0.5
+    // i=1: 1.0 * 0.5^0 = 1.0
     const alphas = calls.map((c: unknown[]) => c[2] as number);
-    expect(alphas[0]).toBeCloseTo(0.125); // furthest
-    expect(alphas[1]).toBeCloseTo(0.25);
-    expect(alphas[2]).toBeCloseTo(0.5); // closest
+    expect(alphas[0]).toBeCloseTo(0.25); // furthest
+    expect(alphas[1]).toBeCloseTo(0.5);
+    expect(alphas[2]).toBeCloseTo(1.0); // closest - full base opacity
   });
 
   it('skips frames before 0 (no negative frames)', () => {

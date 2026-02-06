@@ -25,11 +25,11 @@ export interface OnionSkinSettings {
 
 export const DEFAULT_ONION_SKIN_SETTINGS: OnionSkinSettings = {
   enabled: false,
-  beforeCount: 2,
-  afterCount: 2,
+  beforeCount: 3,
+  afterCount: 3,
   beforeColor: '#FF6B6B',
   afterColor: '#4ECDC4',
-  opacity: 0.5,
+  opacity: 0.6,
   opacityFalloff: 0.3,
   showDuringPlayback: false,
 };
@@ -79,11 +79,13 @@ export class OnionSkinRenderer {
     const beforeColorRgb = hexToRgbNormalized(settings.beforeColor);
     const afterColorRgb = hexToRgbNormalized(settings.afterColor);
 
-    // Render before frames (furthest first, so closest overlaps)
+    // Render before frames (furthest first, so closest overlaps on top)
     for (let i = settings.beforeCount; i >= 1; i--) {
       const frame = currentFrame - i;
       if (frame < 0) continue;
-      const frameOpacity = settings.opacity * Math.pow(1 - settings.opacityFalloff, i);
+      // Use (i-1) so closest ghost (i=1) gets full base opacity,
+      // and falloff only reduces more distant ghosts
+      const frameOpacity = settings.opacity * Math.pow(1 - settings.opacityFalloff, i - 1);
       const nodes = getNodesAtFrame(frame);
       for (const node of nodes) {
         this.shapeRenderer.renderGhostNode(
@@ -95,10 +97,10 @@ export class OnionSkinRenderer {
       }
     }
 
-    // Render after frames (furthest first, so closest overlaps)
+    // Render after frames (furthest first, so closest overlaps on top)
     for (let i = settings.afterCount; i >= 1; i--) {
       const frame = currentFrame + i;
-      const frameOpacity = settings.opacity * Math.pow(1 - settings.opacityFalloff, i);
+      const frameOpacity = settings.opacity * Math.pow(1 - settings.opacityFalloff, i - 1);
       const nodes = getNodesAtFrame(frame);
       for (const node of nodes) {
         this.shapeRenderer.renderGhostNode(node, viewProjectionMatrix, frameOpacity, afterColorRgb);

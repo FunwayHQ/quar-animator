@@ -343,7 +343,10 @@ export function Canvas() {
             const getNodesAtFrame = (f: number) => {
               return sg.getRootNodes().map((node) => {
                 const values = evaluateNodeAtFrame(tl, node.id, f);
-                return values.size > 0 ? applyAnimatedValues(node, values) : node;
+                if (values.size > 0) {
+                  return applyAnimatedValues(node, values);
+                }
+                return node;
               });
             };
             onionSkinRenderer.render(onionSkin, frame, getNodesAtFrame, viewProjectionMatrix);

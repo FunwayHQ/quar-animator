@@ -60,13 +60,14 @@ describe('OnionSkinPanel', () => {
     const inc = screen.getByTestId('before-count-inc');
     const dec = screen.getByTestId('before-count-dec');
 
-    expect(useEditorStore.getState().onionSkin.beforeCount).toBe(2);
+    const initialCount = DEFAULT_ONION_SKIN_SETTINGS.beforeCount;
+    expect(useEditorStore.getState().onionSkin.beforeCount).toBe(initialCount);
 
     fireEvent.click(inc);
-    expect(useEditorStore.getState().onionSkin.beforeCount).toBe(3);
+    expect(useEditorStore.getState().onionSkin.beforeCount).toBe(initialCount + 1);
 
     fireEvent.click(dec);
-    expect(useEditorStore.getState().onionSkin.beforeCount).toBe(2);
+    expect(useEditorStore.getState().onionSkin.beforeCount).toBe(initialCount);
   });
 
   it('opacity slider updates store', () => {
