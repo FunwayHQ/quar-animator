@@ -7,6 +7,8 @@ import { create } from 'zustand';
 import type { ToolType, Fill, Stroke, Color, Node, Timeline, EasingFunction } from '@quar/types';
 import type { KeyframeClipboard } from '@quar/animation';
 import { createTimeline, KeyframeManager } from '@quar/animation';
+import { DEFAULT_ONION_SKIN_SETTINGS } from '@quar/core';
+import type { OnionSkinSettings } from '@quar/core';
 
 // ============================================================================
 // SceneGraph Interface (subset used by store operations)
@@ -147,6 +149,18 @@ export interface EditorStore {
     deltaFrames: number
   ) => void;
   removeKeyframeAtFrame: (nodeId: string, property: string, frame: number) => void;
+
+  // Onion skin
+  onionSkin: OnionSkinSettings;
+  setOnionSkinEnabled: (enabled: boolean) => void;
+  toggleOnionSkin: () => void;
+  setOnionSkinBeforeCount: (count: number) => void;
+  setOnionSkinAfterCount: (count: number) => void;
+  setOnionSkinBeforeColor: (color: string) => void;
+  setOnionSkinAfterColor: (color: string) => void;
+  setOnionSkinOpacity: (opacity: number) => void;
+  setOnionSkinFalloff: (falloff: number) => void;
+  setOnionSkinShowDuringPlayback: (show: boolean) => void;
 }
 
 // ============================================================================
@@ -390,6 +404,35 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     mgr.removeKeyframe(nodeId, property, kf.id);
     set({ timeline: { ...timeline } });
   },
+
+  // Onion skin
+  onionSkin: { ...DEFAULT_ONION_SKIN_SETTINGS },
+  setOnionSkinEnabled: (enabled: boolean) =>
+    set((state) => ({ onionSkin: { ...state.onionSkin, enabled } })),
+  toggleOnionSkin: () =>
+    set((state) => ({ onionSkin: { ...state.onionSkin, enabled: !state.onionSkin.enabled } })),
+  setOnionSkinBeforeCount: (count: number) =>
+    set((state) => ({
+      onionSkin: { ...state.onionSkin, beforeCount: Math.max(1, Math.min(5, Math.round(count))) },
+    })),
+  setOnionSkinAfterCount: (count: number) =>
+    set((state) => ({
+      onionSkin: { ...state.onionSkin, afterCount: Math.max(1, Math.min(5, Math.round(count))) },
+    })),
+  setOnionSkinBeforeColor: (color: string) =>
+    set((state) => ({ onionSkin: { ...state.onionSkin, beforeColor: color } })),
+  setOnionSkinAfterColor: (color: string) =>
+    set((state) => ({ onionSkin: { ...state.onionSkin, afterColor: color } })),
+  setOnionSkinOpacity: (opacity: number) =>
+    set((state) => ({
+      onionSkin: { ...state.onionSkin, opacity: Math.max(0, Math.min(1, opacity)) },
+    })),
+  setOnionSkinFalloff: (falloff: number) =>
+    set((state) => ({
+      onionSkin: { ...state.onionSkin, opacityFalloff: Math.max(0, Math.min(1, falloff)) },
+    })),
+  setOnionSkinShowDuringPlayback: (show: boolean) =>
+    set((state) => ({ onionSkin: { ...state.onionSkin, showDuringPlayback: show } })),
 }));
 
 // ============================================================================
@@ -472,3 +515,9 @@ export const useToggleAutoKeyframe = (): (() => void) =>
   useEditorStore((state: EditorStore) => state.toggleAutoKeyframe);
 export const useSelectedKeyframeIds = (): Set<string> =>
   useEditorStore((state: EditorStore) => state.selectedKeyframeIds);
+
+// Onion skin selectors
+export const useOnionSkin = (): OnionSkinSettings =>
+  useEditorStore((state: EditorStore) => state.onionSkin);
+export const useToggleOnionSkin = (): (() => void) =>
+  useEditorStore((state: EditorStore) => state.toggleOnionSkin);

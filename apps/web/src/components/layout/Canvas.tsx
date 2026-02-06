@@ -4,12 +4,14 @@ import {
   WebGLRenderer,
   Grid,
   ShapeRenderer,
+  OnionSkinRenderer,
   SelectionManager,
   TransformHandles,
   getPolygonBounds,
   getPathBounds,
 } from '@quar/core';
 import type { Vector2 } from '@quar/types';
+import { evaluateNodeAtFrame, applyAnimatedValues } from '@quar/animation';
 import { useCanvasTools } from '../../hooks/useCanvasTools';
 import { useToolShortcuts } from '../../hooks/useToolShortcuts';
 import { useEditorStore } from '../../stores/editorStore';
@@ -41,6 +43,7 @@ export function Canvas() {
   const gridRef = useRef<Grid | null>(null);
   const cameraRef = useRef<Camera | null>(null);
   const shapeRendererRef = useRef<ShapeRenderer | null>(null);
+  const onionSkinRendererRef = useRef<OnionSkinRenderer | null>(null);
   const animationFrameRef = useRef<number>(0);
 
   // Selection infrastructure (initialized immediately, doesn't depend on WebGL)
@@ -290,6 +293,10 @@ export function Canvas() {
       const shapeRenderer = new ShapeRenderer(renderer);
       shapeRendererRef.current = shapeRenderer;
 
+      // Initialize onion skin renderer
+      const onionSkinRenderer = new OnionSkinRenderer(shapeRenderer);
+      onionSkinRendererRef.current = onionSkinRenderer;
+
       // Listen to camera changes
       const unsubscribe = camera.on('change', () => {
         setZoomPercent(Math.round(camera.zoom * 100));
@@ -322,6 +329,26 @@ export function Canvas() {
 
         // Render grid
         grid.render(viewProjectionMatrix, visibleBounds, camera.zoom);
+
+        // Render onion skin ghost frames (before current frame shapes)
+        if (sceneGraphRef.current && onionSkinRenderer) {
+          const {
+            onionSkin,
+            isPlaying: playing,
+            timeline: tl,
+            currentFrame: frame,
+          } = useEditorStore.getState();
+          if (onionSkin.enabled && (!playing || onionSkin.showDuringPlayback)) {
+            const sg = sceneGraphRef.current;
+            const getNodesAtFrame = (f: number) => {
+              return sg.getRootNodes().map((node) => {
+                const values = evaluateNodeAtFrame(tl, node.id, f);
+                return values.size > 0 ? applyAnimatedValues(node, values) : node;
+              });
+            };
+            onionSkinRenderer.render(onionSkin, frame, getNodesAtFrame, viewProjectionMatrix);
+          }
+        }
 
         // Render shapes from scene graph
         if (sceneGraphRef.current && shapeRenderer) {

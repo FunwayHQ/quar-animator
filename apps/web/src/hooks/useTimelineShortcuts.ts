@@ -17,7 +17,7 @@ interface TimelineShortcutCallbacks {
 export function useTimelineShortcuts(callbacks: TimelineShortcutCallbacks) {
   const handleKeyDown = useCallback(
     (event: KeyboardEvent) => {
-      // Ignore when modifier keys are pressed (except for Space which we handle specially)
+      // Ignore when ctrl/alt/meta keys are pressed (except Shift which we handle)
       if (event.ctrlKey || event.altKey || event.metaKey) {
         return;
       }
@@ -32,6 +32,32 @@ export function useTimelineShortcuts(callbacks: TimelineShortcutCallbacks) {
       }
 
       const state = useEditorStore.getState();
+
+      // Shift-modified shortcuts
+      if (event.shiftKey) {
+        if (event.key === '<' || event.key === ',') {
+          // Shift+, : jump 10 frames backward
+          if (!state.isPlaying) {
+            event.preventDefault();
+            state.setCurrentFrame(state.currentFrame - 10);
+          }
+          return;
+        }
+        if (event.key === '>' || event.key === '.') {
+          // Shift+. : jump 10 frames forward
+          if (!state.isPlaying) {
+            event.preventDefault();
+            state.setCurrentFrame(state.currentFrame + 10);
+          }
+          return;
+        }
+        if (event.key === 'O' || event.key === 'o') {
+          // Shift+O : toggle onion skinning
+          event.preventDefault();
+          useEditorStore.getState().toggleOnionSkin();
+          return;
+        }
+      }
 
       switch (event.key) {
         case ' ':

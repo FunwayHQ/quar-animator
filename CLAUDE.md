@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Quar Animator is a free, open-source, web-native 2D animation platform designed to fill the gap left by Adobe Animate's discontinuation. It's part of the QUAR Suite (alongside Quar Editor for 3D and Quar Vector for 2D illustration).
 
-**Current Status**: Sprint 10 (Keyframe System) complete. PropertyBinding for dot-notation property access, KeyframeManager with clipboard support, keyframe CRUD in editor store, Timeline UI with keyframe rendering/interaction/context menu, auto-keyframe mode (K shortcut), playback evaluates animated values. Context menus and clipboard operations. Full drawing toolkit with Brush and Eraser tools. Direct selection for path editing. Vector drawing tools (Rectangle, Ellipse, Polygon/Star, Pen). Selection infrastructure with transform handles. Canvas foundation with WebGL 2 rendering. LayerPanel and PropertiesPanel wired to SceneGraph. ErrorBoundary for resilience. Modern violet/bordeaux design system.
+**Current Status**: Sprint 12 (Onion Skinning & Playback Polish) complete. Onion skin ghost frame rendering with configurable before/after colors, opacity falloff, and frame counts. ShapeRenderer ghost rendering with tint/alpha blending. OnionSkinPanel settings UI. Shift+O toggle, Shift+,/. for 10-frame jumps. Sprint 11 added per-property keyframe indicators and Rotation ScrubLabel. Sprint 10 added PropertyBinding, KeyframeManager, keyframe CRUD, Timeline UI keyframe rendering/interaction, auto-keyframe mode, playback evaluation. Full drawing toolkit, context menus, clipboard operations. Canvas foundation with WebGL 2 rendering. Modern violet/bordeaux design system.
 
 ## Sprint Progress
 
@@ -312,6 +312,55 @@ Quar Animator is a free, open-source, web-native 2D animation platform designed 
 
 **Total test coverage**: 770 core tests, 253 animation tests, 256 web tests (1279 total)
 
+### Sprint 11: Properties Panel Keyframe Indicators ✅ COMPLETE
+
+- [x] KeyframeIndicator component - 5 tests
+  - Diamond icon with 3 states: none (empty), active (filled), inactive (half-filled)
+  - Click toggles keyframe at current frame (add/remove)
+  - Integrates with getKeyframeState helper
+- [x] getKeyframeState helper - 4 tests
+  - Returns 'none' | 'active' | 'inactive' based on track/frame state
+  - removeKeyframeAtFrame store action for keyframe removal
+- [x] Per-property keyframe indicators in PropertiesPanel
+  - Position, Size, Rotation, Opacity all have keyframe indicators
+  - Indicators update reactively based on current frame and timeline state
+- [x] Rotation ScrubLabel in PropertiesPanel
+  - Drag-to-scrub rotation value with degree symbol display
+
+**Total test coverage**: 770 core tests, 253 animation tests, 274 web tests (1297 total)
+
+### Sprint 12: Onion Skinning & Playback Polish ✅ COMPLETE
+
+- [x] ShapeRenderer ghost rendering - 4 tests
+  - `renderGhostNode` renders nodes with tint color and alpha override
+  - `applyTintAndAlpha` blends 50% tint mix and multiplies alpha
+  - Per-shape override methods (rectangle, ellipse, polygon, path)
+  - `renderFillWithColor` / `renderStrokeWithColor` for color bypass
+- [x] OnionSkinRenderer class - 5 tests
+  - Renders before frames (red tint) and after frames (teal tint)
+  - Configurable frame count (1-5), opacity, and falloff
+  - Furthest frames rendered first so closest overlaps
+  - Skips negative frame indices
+  - `getNodesAtFrame` callback keeps renderer decoupled from animation
+- [x] Editor store onion skin state - 4 tests
+  - Full OnionSkinSettings with getters/setters and clamping
+  - `toggleOnionSkin`, `setOnionSkinEnabled`, count/color/opacity/falloff setters
+- [x] Canvas integration
+  - Ghost frames rendered before current frame shapes in render loop
+  - Evaluates timeline at ghost frame numbers via `evaluateNodeAtFrame`
+  - Respects `showDuringPlayback` setting
+- [x] OnionSkinPanel UI - 4 tests
+  - Popover from timeline onion skin button (click opens, right-click quick-toggles)
+  - Enable toggle, before/after count steppers with color swatches
+  - Opacity and falloff sliders, show-during-playback checkbox
+- [x] Keyboard shortcuts - 3 tests
+  - Shift+O: toggle onion skinning
+  - Shift+,: jump 10 frames backward
+  - Shift+.: jump 10 frames forward
+  - Tool shortcuts (useToolShortcuts) now skip when Shift is held to avoid conflicts
+
+**Total test coverage**: 779 core tests, 253 animation tests, 285 web tests (1317 total)
+
 ## Development Commands
 
 ```bash
@@ -388,5 +437,5 @@ Priority order:
 
 - **Progressive Disclosure**: Simple interface revealing complexity as needed
 - **QUAR Family Consistency**: Shared patterns across suite
-- **Keyboard-First**: Comprehensive shortcuts (V=Selection, P=Pen, B=Brush, Space=Play)
+- **Keyboard-First**: Comprehensive shortcuts (V=Selection, P=Pen, B=Brush, Space=Play, Shift+O=Onion Skin)
 - **Dark Mode Default**: For extended sessions

@@ -6,6 +6,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { renderHook } from '@testing-library/react';
 import { useTimelineShortcuts } from './useTimelineShortcuts';
 import { useEditorStore, DEFAULT_FILL, DEFAULT_STROKE } from '../stores/editorStore';
+import { DEFAULT_ONION_SKIN_SETTINGS } from '@quar/core';
 
 function createCallbacks() {
   return {
@@ -45,6 +46,7 @@ describe('useTimelineShortcuts', () => {
       timelineDuration: 300,
       frameRate: 30,
       timelineExpanded: true,
+      onionSkin: { ...DEFAULT_ONION_SKIN_SETTINGS },
     });
   });
 
@@ -123,5 +125,34 @@ describe('useTimelineShortcuts', () => {
 
     pressKey('l');
     expect(useEditorStore.getState().isLooping).toBe(false);
+  });
+
+  it('Shift+O should toggle onion skin in store', () => {
+    const callbacks = createCallbacks();
+    renderHook(() => useTimelineShortcuts(callbacks));
+
+    expect(useEditorStore.getState().onionSkin.enabled).toBe(false);
+    pressKey('O', { shiftKey: true });
+    expect(useEditorStore.getState().onionSkin.enabled).toBe(true);
+    pressKey('O', { shiftKey: true });
+    expect(useEditorStore.getState().onionSkin.enabled).toBe(false);
+  });
+
+  it('Shift+. should jump 10 frames forward', () => {
+    useEditorStore.setState({ currentFrame: 20 });
+    const callbacks = createCallbacks();
+    renderHook(() => useTimelineShortcuts(callbacks));
+
+    pressKey('>', { shiftKey: true });
+    expect(useEditorStore.getState().currentFrame).toBe(30);
+  });
+
+  it('Shift+, should jump 10 frames backward', () => {
+    useEditorStore.setState({ currentFrame: 20 });
+    const callbacks = createCallbacks();
+    renderHook(() => useTimelineShortcuts(callbacks));
+
+    pressKey('<', { shiftKey: true });
+    expect(useEditorStore.getState().currentFrame).toBe(10);
   });
 });

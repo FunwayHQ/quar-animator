@@ -429,6 +429,258 @@ export class ShapeRenderer {
   }
 
   // --------------------------------------------------------------------------
+  // Ghost Rendering (for onion skinning)
+  // --------------------------------------------------------------------------
+
+  /**
+   * Render a single node as a ghost frame with tint color and alpha override.
+   * Used by OnionSkinRenderer for onion skinning.
+   */
+  renderGhostNode(
+    node: Node,
+    viewProjectionMatrix: Matrix3,
+    alpha: number,
+    tintColor: [number, number, number]
+  ): void {
+    if (!this.program || !this.vao || !node.visible) return;
+
+    const gl = this.renderer.context;
+
+    // Set up shader program
+    this.renderer.useProgram(this.program);
+    this.renderer.bindVAO(this.vao);
+
+    // Set view-projection matrix
+    gl.uniformMatrix3fv(
+      this.program.uniforms.u_viewProjection,
+      false,
+      mat3.toFloat32Array(viewProjectionMatrix)
+    );
+
+    // Create world matrix from node transform
+    const worldMatrix = mat3.compose(
+      node.transform.position,
+      node.transform.rotation,
+      node.transform.scale,
+      node.transform.anchor
+    );
+
+    const colorOverride = { tint: tintColor, alpha };
+
+    switch (node.type) {
+      case 'rectangle':
+        this.renderRectangleWithOverride(node, worldMatrix, colorOverride);
+        break;
+      case 'ellipse':
+        this.renderEllipseWithOverride(node, worldMatrix, colorOverride);
+        break;
+      case 'polygon':
+        this.renderPolygonWithOverride(node, worldMatrix, colorOverride);
+        break;
+      case 'path':
+        this.renderPathWithOverride(node, worldMatrix, colorOverride);
+        break;
+    }
+
+    this.renderer.bindVAO(null);
+  }
+
+  /**
+   * Apply tint color (50% mix) and multiply alpha.
+   */
+  applyTintAndAlpha(
+    color: Float32Array,
+    tint: [number, number, number],
+    alpha: number
+  ): Float32Array {
+    const mix = 0.5;
+    return new Float32Array([
+      color[0] * (1 - mix) + tint[0] * mix,
+      color[1] * (1 - mix) + tint[1] * mix,
+      color[2] * (1 - mix) + tint[2] * mix,
+      color[3] * alpha,
+    ]);
+  }
+
+  private renderRectangleWithOverride(
+    node: RectangleNode,
+    worldMatrix: Matrix3,
+    colorOverride: { tint: [number, number, number]; alpha: number }
+  ): void {
+    if (!this.program) return;
+    const gl = this.renderer.context;
+    const pathPoints = createRectanglePath(
+      -node.width * node.transform.anchor.x,
+      -node.height * node.transform.anchor.y,
+      node.width,
+      node.height,
+      node.cornerRadius
+    );
+    const tessellated = tessellatePathToVertices(pathPoints, true, DEFAULT_TESSELLATION_TOLERANCE);
+    gl.uniformMatrix3fv(this.program.uniforms.u_model, false, mat3.toFloat32Array(worldMatrix));
+    if (node.fill && node.fill.type !== 'none') {
+      const color = this.applyTintAndAlpha(
+        this.getFillColor(node.fill),
+        colorOverride.tint,
+        colorOverride.alpha
+      );
+      this.renderFillWithColor(tessellated, color);
+    }
+    if (node.stroke && node.stroke.width > 0) {
+      const color = this.applyTintAndAlpha(
+        this.getStrokeColor(node.stroke),
+        colorOverride.tint,
+        colorOverride.alpha
+      );
+      this.renderStrokeWithColor(tessellated, node.stroke, true, color);
+    }
+  }
+
+  private renderEllipseWithOverride(
+    node: EllipseNode,
+    worldMatrix: Matrix3,
+    colorOverride: { tint: [number, number, number]; alpha: number }
+  ): void {
+    if (!this.program) return;
+    const gl = this.renderer.context;
+    const pathPoints = createEllipsePath(0, 0, node.radiusX, node.radiusY);
+    const tessellated = tessellatePathToVertices(pathPoints, true, ELLIPSE_TESSELLATION_TOLERANCE);
+    gl.uniformMatrix3fv(this.program.uniforms.u_model, false, mat3.toFloat32Array(worldMatrix));
+    if (node.fill && node.fill.type !== 'none') {
+      const color = this.applyTintAndAlpha(
+        this.getFillColor(node.fill),
+        colorOverride.tint,
+        colorOverride.alpha
+      );
+      this.renderFillWithColor(tessellated, color);
+    }
+    if (node.stroke && node.stroke.width > 0) {
+      const color = this.applyTintAndAlpha(
+        this.getStrokeColor(node.stroke),
+        colorOverride.tint,
+        colorOverride.alpha
+      );
+      this.renderStrokeWithColor(tessellated, node.stroke, true, color);
+    }
+  }
+
+  private renderPolygonWithOverride(
+    node: PolygonNode,
+    worldMatrix: Matrix3,
+    colorOverride: { tint: [number, number, number]; alpha: number }
+  ): void {
+    if (!this.program) return;
+    const gl = this.renderer.context;
+    const pathPoints =
+      node.innerRadius !== undefined
+        ? createStarPath(0, 0, node.radius, node.innerRadius, node.sides)
+        : createPolygonPath(0, 0, node.radius, node.sides);
+    const tessellated = tessellatePathToVertices(pathPoints, true, DEFAULT_TESSELLATION_TOLERANCE);
+    gl.uniformMatrix3fv(this.program.uniforms.u_model, false, mat3.toFloat32Array(worldMatrix));
+    if (node.fill && node.fill.type !== 'none') {
+      const color = this.applyTintAndAlpha(
+        this.getFillColor(node.fill),
+        colorOverride.tint,
+        colorOverride.alpha
+      );
+      this.renderFillWithColor(tessellated, color);
+    }
+    if (node.stroke && node.stroke.width > 0) {
+      const color = this.applyTintAndAlpha(
+        this.getStrokeColor(node.stroke),
+        colorOverride.tint,
+        colorOverride.alpha
+      );
+      this.renderStrokeWithColor(tessellated, node.stroke, true, color);
+    }
+  }
+
+  private renderPathWithOverride(
+    node: PathNode,
+    worldMatrix: Matrix3,
+    colorOverride: { tint: [number, number, number]; alpha: number }
+  ): void {
+    if (!this.program || node.points.length < 2) return;
+    const gl = this.renderer.context;
+    const tessellated = tessellatePathToVertices(
+      node.points,
+      node.closed,
+      DEFAULT_TESSELLATION_TOLERANCE
+    );
+    gl.uniformMatrix3fv(this.program.uniforms.u_model, false, mat3.toFloat32Array(worldMatrix));
+    if (node.closed && node.fill && node.fill.type !== 'none') {
+      const color = this.applyTintAndAlpha(
+        this.getFillColor(node.fill),
+        colorOverride.tint,
+        colorOverride.alpha
+      );
+      this.renderFillWithColor(tessellated, color);
+    }
+    if (node.stroke && node.stroke.width > 0) {
+      const color = this.applyTintAndAlpha(
+        this.getStrokeColor(node.stroke),
+        colorOverride.tint,
+        colorOverride.alpha
+      );
+      this.renderStrokeWithColor(tessellated, node.stroke, node.closed, color);
+    }
+  }
+
+  /**
+   * Render fill with explicit color (bypassing getFillColor)
+   */
+  private renderFillWithColor(vertices: Float32Array, color: Float32Array): void {
+    if (!this.program) return;
+    const gl = this.renderer.context;
+    gl.uniform4fv(this.program.uniforms.u_color, color);
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
+    gl.bufferSubData(gl.ARRAY_BUFFER, 0, vertices);
+    const numVertices = vertices.length / 2;
+    if (numVertices < 3) return;
+    const indices = earcut(vertices.subarray(0, numVertices * 2));
+    if (indices.length === 0) {
+      gl.drawArrays(gl.TRIANGLE_FAN, 0, numVertices);
+      return;
+    }
+    const indicesArray = new Uint16Array(indices);
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indexBuffer);
+    gl.bufferSubData(gl.ELEMENT_ARRAY_BUFFER, 0, indicesArray);
+    gl.drawElements(gl.TRIANGLES, indices.length, gl.UNSIGNED_SHORT, 0);
+  }
+
+  /**
+   * Render stroke with explicit color (bypassing getStrokeColor)
+   */
+  private renderStrokeWithColor(
+    vertices: Float32Array,
+    stroke: Stroke,
+    closed: boolean,
+    color: Float32Array
+  ): void {
+    if (!this.program) return;
+    const gl = this.renderer.context;
+    const numVertices = vertices.length / 2;
+    if (numVertices < 2) return;
+    const outlineVertices = generateStrokeOutlineVertices(
+      vertices,
+      numVertices,
+      stroke.width,
+      closed
+    );
+    const outlineCount = outlineVertices.length / 2;
+    if (outlineCount < 3) return;
+    gl.uniform4fv(this.program.uniforms.u_color, color);
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
+    gl.bufferSubData(gl.ARRAY_BUFFER, 0, outlineVertices);
+    const indices = earcut(outlineVertices);
+    if (indices.length === 0) return;
+    const indicesArray = new Uint16Array(indices);
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indexBuffer);
+    gl.bufferSubData(gl.ELEMENT_ARRAY_BUFFER, 0, indicesArray);
+    gl.drawElements(gl.TRIANGLES, indices.length, gl.UNSIGNED_SHORT, 0);
+  }
+
+  // --------------------------------------------------------------------------
   // Color Utilities
   // --------------------------------------------------------------------------
 

@@ -750,6 +750,59 @@ describe('ShapeRenderer', () => {
   });
 
   // ==========================================================================
+  // Ghost Rendering (onion skinning)
+  // ==========================================================================
+
+  describe('ghost rendering', () => {
+    it('renderGhostNode should render a rectangle without error', () => {
+      const rect = createRectangleNode('rect1', 100, 50);
+      const vpMatrix = mat3.identity();
+      vi.clearAllMocks();
+
+      // Should not throw
+      shapeRenderer.renderGhostNode(rect, vpMatrix, 0.5, [1, 0, 0]);
+
+      // Should have drawn (fill + stroke)
+      expect(gl.drawElements).toHaveBeenCalled();
+    });
+
+    it('applyTintAndAlpha should blend tint color at 50% mix', () => {
+      const color = new Float32Array([1, 0, 0, 1]); // pure red
+      const tint: [number, number, number] = [0, 0, 1]; // blue tint
+
+      const result = shapeRenderer.applyTintAndAlpha(color, tint, 1.0);
+
+      // 50% mix: r = 1*0.5 + 0*0.5 = 0.5, g = 0, b = 0*0.5 + 1*0.5 = 0.5
+      expect(result[0]).toBeCloseTo(0.5); // r
+      expect(result[1]).toBeCloseTo(0.0); // g
+      expect(result[2]).toBeCloseTo(0.5); // b
+      expect(result[3]).toBeCloseTo(1.0); // a
+    });
+
+    it('applyTintAndAlpha should multiply alpha correctly', () => {
+      const color = new Float32Array([0.5, 0.5, 0.5, 0.8]);
+      const tint: [number, number, number] = [0.5, 0.5, 0.5];
+
+      const result = shapeRenderer.applyTintAndAlpha(color, tint, 0.5);
+
+      // Alpha = 0.8 * 0.5 = 0.4
+      expect(result[3]).toBeCloseTo(0.4);
+    });
+
+    it('renderGhostNode should do nothing for invisible nodes', () => {
+      const rect = createRectangleNode('rect1', 100, 50);
+      rect.visible = false;
+      const vpMatrix = mat3.identity();
+      vi.clearAllMocks();
+
+      shapeRenderer.renderGhostNode(rect, vpMatrix, 0.5, [1, 0, 0]);
+
+      expect(gl.drawArrays).not.toHaveBeenCalled();
+      expect(gl.drawElements).not.toHaveBeenCalled();
+    });
+  });
+
+  // ==========================================================================
   // Dispose
   // ==========================================================================
 

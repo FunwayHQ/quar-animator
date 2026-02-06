@@ -11,7 +11,11 @@ import { useEditorStore, DEFAULT_FILL, DEFAULT_STROKE } from '../stores/editorSt
 // Test Helpers
 // ============================================================================
 
-function dispatchKeyDown(key: string, options: Partial<KeyboardEventInit> = {}, target?: HTMLElement) {
+function dispatchKeyDown(
+  key: string,
+  options: Partial<KeyboardEventInit> = {},
+  target?: HTMLElement
+) {
   const event = new KeyboardEvent('keydown', {
     key,
     bubbles: true,
@@ -155,12 +159,12 @@ describe('useToolShortcuts', () => {
       expect(useEditorStore.getState().activeTool).toBe('selection');
     });
 
-    it('should not ignore when Shift is pressed', () => {
+    it('should ignore when Shift is pressed', () => {
       renderHook(() => useToolShortcuts());
 
       dispatchKeyDown('r', { shiftKey: true });
 
-      expect(useEditorStore.getState().activeTool).toBe('rectangle');
+      expect(useEditorStore.getState().activeTool).toBe('selection');
     });
   });
 
@@ -244,10 +248,7 @@ describe('useToolShortcuts', () => {
       const { unmount } = renderHook(() => useToolShortcuts());
       unmount();
 
-      expect(removeEventListenerSpy).toHaveBeenCalledWith(
-        'keydown',
-        expect.any(Function)
-      );
+      expect(removeEventListenerSpy).toHaveBeenCalledWith('keydown', expect.any(Function));
 
       removeEventListenerSpy.mockRestore();
     });

@@ -5,6 +5,7 @@ import { formatTimecode, getTracksByNode } from '@quar/animation';
 import type { Node, Keyframe, EasingFunction } from '@quar/types';
 import { ContextMenu } from '../common/ContextMenu';
 import type { ContextMenuEntry } from '../common/ContextMenu';
+import { OnionSkinPanel } from '../common/OnionSkinPanel';
 import styles from './Timeline.module.css';
 
 // ============================================================================
@@ -46,6 +47,11 @@ export function Timeline() {
   const copySelectedKeyframes = useEditorStore((s) => s.copySelectedKeyframes);
   const pasteKeyframes = useEditorStore((s) => s.pasteKeyframes);
   const moveSelectedKeyframes = useEditorStore((s) => s.moveSelectedKeyframes);
+
+  const onionSkinEnabled = useEditorStore((s) => s.onionSkin.enabled);
+  const toggleOnionSkin = useEditorStore((s) => s.toggleOnionSkin);
+
+  const [showOnionSkinPanel, setShowOnionSkinPanel] = useState(false);
 
   const rulerRef = useRef<HTMLDivElement>(null);
   const tracksRef = useRef<HTMLDivElement>(null);
@@ -594,20 +600,32 @@ export function Timeline() {
               <path d="M21 13v2a4 4 0 0 1-4 4H3" />
             </svg>
           </button>
-          <button className={styles.optionButton} title="Toggle onion skinning (O)">
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
+          <div style={{ position: 'relative' }}>
+            <button
+              className={`${styles.optionButton} ${onionSkinEnabled ? styles.active : ''}`}
+              title="Toggle onion skinning (Shift+O)"
+              onClick={() => setShowOnionSkinPanel(!showOnionSkinPanel)}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                toggleOnionSkin();
+              }}
+              data-testid="onion-skin-button"
             >
-              <circle cx="12" cy="12" r="10" />
-              <circle cx="12" cy="12" r="6" />
-              <circle cx="12" cy="12" r="2" />
-            </svg>
-          </button>
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              >
+                <circle cx="12" cy="12" r="10" />
+                <circle cx="12" cy="12" r="6" />
+                <circle cx="12" cy="12" r="2" />
+              </svg>
+            </button>
+            {showOnionSkinPanel && <OnionSkinPanel />}
+          </div>
         </div>
       </div>
 

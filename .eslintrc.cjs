@@ -107,6 +107,7 @@ module.exports = {
         'apps/web/src/components/layout/LayerPanel.tsx',
         'apps/web/src/components/layout/PropertiesPanel.tsx',
         'apps/web/src/components/layout/Timeline.tsx',
+        'apps/web/src/components/common/OnionSkinPanel.tsx',
         'packages/animation/src/**/*.ts',
         'packages/core/src/selection/SelectionManager.ts',
       ],

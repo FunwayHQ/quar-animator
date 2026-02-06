@@ -50,7 +50,7 @@ describe('Timeline', () => {
     renderTimeline();
 
     expect(screen.getByTitle('Toggle loop (L)')).toBeInTheDocument();
-    expect(screen.getByTitle('Toggle onion skinning (O)')).toBeInTheDocument();
+    expect(screen.getByTitle('Toggle onion skinning (Shift+O)')).toBeInTheDocument();
   });
 
   it('displays time in correct format', () => {

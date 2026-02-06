@@ -5,6 +5,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { useEditorStore, DEFAULT_FILL, DEFAULT_STROKE } from './editorStore';
 import { createTimeline } from '@quar/animation';
+import { DEFAULT_ONION_SKIN_SETTINGS } from '@quar/core';
 
 describe('EditorStore', () => {
   // Reset store before each test
@@ -31,6 +32,7 @@ describe('EditorStore', () => {
       autoKeyframe: false,
       selectedKeyframeIds: new Set<string>(),
       keyframeClipboard: null,
+      onionSkin: { ...DEFAULT_ONION_SKIN_SETTINGS },
     });
   });
 
@@ -877,6 +879,50 @@ describe('EditorStore', () => {
       const { removeKeyframeAtFrame } = useEditorStore.getState();
       removeKeyframeAtFrame('node1', 'opacity', 0);
       expect(useEditorStore.getState().timeline.tracks.length).toBe(0);
+    });
+  });
+
+  // ==========================================================================
+  // Onion Skin State
+  // ==========================================================================
+
+  describe('onion skin state', () => {
+    it('should have default onion skin settings', () => {
+      const state = useEditorStore.getState();
+      expect(state.onionSkin.enabled).toBe(false);
+      expect(state.onionSkin.beforeCount).toBe(DEFAULT_ONION_SKIN_SETTINGS.beforeCount);
+      expect(state.onionSkin.afterCount).toBe(DEFAULT_ONION_SKIN_SETTINGS.afterCount);
+      expect(state.onionSkin.opacity).toBe(DEFAULT_ONION_SKIN_SETTINGS.opacity);
+      expect(state.onionSkin.beforeColor).toBe(DEFAULT_ONION_SKIN_SETTINGS.beforeColor);
+      expect(state.onionSkin.afterColor).toBe(DEFAULT_ONION_SKIN_SETTINGS.afterColor);
+    });
+
+    it('should toggle onion skin enabled', () => {
+      const { toggleOnionSkin } = useEditorStore.getState();
+      toggleOnionSkin();
+      expect(useEditorStore.getState().onionSkin.enabled).toBe(true);
+      toggleOnionSkin();
+      expect(useEditorStore.getState().onionSkin.enabled).toBe(false);
+    });
+
+    it('should set onion skin before count with clamping', () => {
+      const { setOnionSkinBeforeCount } = useEditorStore.getState();
+      setOnionSkinBeforeCount(3);
+      expect(useEditorStore.getState().onionSkin.beforeCount).toBe(3);
+      setOnionSkinBeforeCount(0);
+      expect(useEditorStore.getState().onionSkin.beforeCount).toBe(1);
+      setOnionSkinBeforeCount(10);
+      expect(useEditorStore.getState().onionSkin.beforeCount).toBe(5);
+    });
+
+    it('should set onion skin opacity with clamping', () => {
+      const { setOnionSkinOpacity } = useEditorStore.getState();
+      setOnionSkinOpacity(0.7);
+      expect(useEditorStore.getState().onionSkin.opacity).toBe(0.7);
+      setOnionSkinOpacity(-0.5);
+      expect(useEditorStore.getState().onionSkin.opacity).toBe(0);
+      setOnionSkinOpacity(2.0);
+      expect(useEditorStore.getState().onionSkin.opacity).toBe(1);
     });
   });
 });

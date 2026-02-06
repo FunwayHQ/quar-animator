@@ -41,7 +41,7 @@ export function useToolShortcuts() {
   const handleKeyDown = useCallback(
     (event: KeyboardEvent) => {
       // Ignore when modifier keys are pressed
-      if (event.ctrlKey || event.altKey || event.metaKey) {
+      if (event.ctrlKey || event.altKey || event.metaKey || event.shiftKey) {
         return;
       }
 
@@ -50,8 +50,7 @@ export function useToolShortcuts() {
       if (target && target.tagName) {
         const tagName = target.tagName.toLowerCase();
         const isEditable =
-          target.isContentEditable ||
-          target.getAttribute?.('contenteditable') === 'true';
+          target.isContentEditable || target.getAttribute?.('contenteditable') === 'true';
         if (tagName === 'input' || tagName === 'textarea' || isEditable) {
           return;
         }
