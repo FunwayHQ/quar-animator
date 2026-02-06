@@ -57,3 +57,7 @@ pkg/
 
 # Storybook
 storybook-static/
+
+# Playwright MCP screenshots
+.playwright-mcp/
+*.png
