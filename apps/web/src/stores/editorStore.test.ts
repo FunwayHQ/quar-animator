@@ -854,5 +854,29 @@ describe('EditorStore', () => {
         'easeInOutCubic'
       );
     });
+
+    it('should remove keyframe at frame', () => {
+      const { addKeyframeAtFrame, removeKeyframeAtFrame } = useEditorStore.getState();
+      addKeyframeAtFrame('node1', 'opacity', 0, 1);
+      addKeyframeAtFrame('node1', 'opacity', 10, 0.5);
+      expect(useEditorStore.getState().timeline.tracks[0].keyframes.length).toBe(2);
+
+      removeKeyframeAtFrame('node1', 'opacity', 0);
+      expect(useEditorStore.getState().timeline.tracks[0].keyframes.length).toBe(1);
+      expect(useEditorStore.getState().timeline.tracks[0].keyframes[0].time).toBe(10);
+    });
+
+    it('should do nothing when removing keyframe at frame with no keyframe', () => {
+      const { addKeyframeAtFrame, removeKeyframeAtFrame } = useEditorStore.getState();
+      addKeyframeAtFrame('node1', 'opacity', 10, 0.5);
+      removeKeyframeAtFrame('node1', 'opacity', 5);
+      expect(useEditorStore.getState().timeline.tracks[0].keyframes.length).toBe(1);
+    });
+
+    it('should do nothing when removing keyframe for nonexistent track', () => {
+      const { removeKeyframeAtFrame } = useEditorStore.getState();
+      removeKeyframeAtFrame('node1', 'opacity', 0);
+      expect(useEditorStore.getState().timeline.tracks.length).toBe(0);
+    });
   });
 });

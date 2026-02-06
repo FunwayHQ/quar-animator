@@ -146,6 +146,7 @@ export interface EditorStore {
     keyframeMap: Map<string, { nodeId: string; property: string }>,
     deltaFrames: number
   ) => void;
+  removeKeyframeAtFrame: (nodeId: string, property: string, frame: number) => void;
 }
 
 // ============================================================================
@@ -379,6 +380,14 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       }
     }
     mgr.moveKeyframes(entries, deltaFrames);
+    set({ timeline: { ...timeline } });
+  },
+  removeKeyframeAtFrame: (nodeId: string, property: string, frame: number) => {
+    const { timeline } = get();
+    const mgr = new KeyframeManager(timeline);
+    const kf = mgr.getKeyframeAt(nodeId, property, frame);
+    if (!kf) return;
+    mgr.removeKeyframe(nodeId, property, kf.id);
     set({ timeline: { ...timeline } });
   },
 }));

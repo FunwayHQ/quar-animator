@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { render, screen, act, fireEvent } from '../../test/utils';
 import { SceneGraphProvider, useSceneGraph } from '../../contexts/SceneGraphContext';
 import { createDefaultTransform } from '@quar/core';
+import { createTimeline } from '@quar/animation';
 import type { SceneGraph } from '@quar/core';
 import type { RectangleNode, EllipseNode, PolygonNode } from '@quar/types';
 import { PropertiesPanel } from './PropertiesPanel';
@@ -569,6 +570,119 @@ describe('PropertiesPanel', () => {
 
       expect(screen.getByTestId('scrub-label-W')).toBeInTheDocument();
       expect(screen.getByTestId('scrub-label-H')).toBeInTheDocument();
+    });
+  });
+
+  // ============================================================================
+  // Sprint 11: Keyframe Indicators
+  // ============================================================================
+
+  describe('keyframe indicators', () => {
+    beforeEach(() => {
+      // Reset timeline between tests
+      useEditorStore.setState({
+        timeline: createTimeline({ duration: 300, frameRate: 30 }),
+        currentFrame: 0,
+      });
+    });
+
+    it('should render keyframe indicator for position X', () => {
+      const sg = renderWithSceneGraph();
+
+      act(() => {
+        sg.addNode(createTestRect('rect1', 'Rectangle 1'));
+        useEditorStore.getState().setSelection(['rect1']);
+      });
+
+      const indicators = screen.getAllByTestId('keyframe-indicator');
+      expect(indicators.length).toBeGreaterThanOrEqual(1);
+    });
+
+    it('should show active when keyframe exists at current frame', () => {
+      const sg = renderWithSceneGraph();
+
+      act(() => {
+        sg.addNode(createTestRect('rect1', 'Rectangle 1'));
+        useEditorStore.getState().setSelection(['rect1']);
+        useEditorStore.getState().addKeyframeAtFrame('rect1', 'transform.position.x', 0, 150);
+      });
+
+      const indicators = screen.getAllByTestId('keyframe-indicator');
+      // First indicator is position X - should be filled (active); JSDOM normalizes hex to rgb
+      expect(indicators[0].style.background).toBe('rgb(245, 166, 35)');
+    });
+
+    it('should show inactive when keyframes exist elsewhere', () => {
+      const sg = renderWithSceneGraph();
+
+      act(() => {
+        sg.addNode(createTestRect('rect1', 'Rectangle 1'));
+        useEditorStore.getState().setSelection(['rect1']);
+        useEditorStore.getState().addKeyframeAtFrame('rect1', 'transform.position.x', 10, 200);
+      });
+
+      const indicators = screen.getAllByTestId('keyframe-indicator');
+      // First indicator should be inactive (accent border, transparent bg)
+      expect(indicators[0].style.background).toBe('transparent');
+      expect(indicators[0].style.border).toContain('var(--color-accent-primary)');
+    });
+
+    it('should show none when no keyframes', () => {
+      const sg = renderWithSceneGraph();
+
+      act(() => {
+        sg.addNode(createTestRect('rect1', 'Rectangle 1'));
+        useEditorStore.getState().setSelection(['rect1']);
+      });
+
+      const indicators = screen.getAllByTestId('keyframe-indicator');
+      // Should be outline-only (none)
+      expect(indicators[0].style.background).toBe('transparent');
+      expect(indicators[0].style.border).toContain('var(--color-text-disabled)');
+    });
+
+    it('should toggle keyframe when indicator is clicked', () => {
+      const sg = renderWithSceneGraph();
+
+      act(() => {
+        sg.addNode(createTestRect('rect1', 'Rectangle 1'));
+        useEditorStore.getState().setSelection(['rect1']);
+      });
+
+      const indicators = screen.getAllByTestId('keyframe-indicator');
+
+      // Click to add keyframe
+      act(() => {
+        fireEvent.click(indicators[0]);
+      });
+
+      expect(useEditorStore.getState().timeline.tracks.length).toBe(1);
+      expect(useEditorStore.getState().timeline.tracks[0].property).toBe('transform.position.x');
+
+      // Click again to remove keyframe
+      act(() => {
+        fireEvent.click(indicators[0]);
+      });
+
+      // Track should be cleaned up (auto-cleanup of empty tracks)
+      expect(useEditorStore.getState().timeline.tracks.length).toBe(0);
+    });
+  });
+
+  // ============================================================================
+  // Sprint 11: Rotation ScrubLabel
+  // ============================================================================
+
+  describe('rotation scrub label', () => {
+    it('should render rotation scrub label R', () => {
+      const sg = renderWithSceneGraph();
+
+      act(() => {
+        sg.addNode(createTestRect('rect1', 'Rectangle 1'));
+        useEditorStore.getState().setSelection(['rect1']);
+      });
+
+      expect(screen.getByTestId('scrub-label-R')).toBeInTheDocument();
     });
   });
 });

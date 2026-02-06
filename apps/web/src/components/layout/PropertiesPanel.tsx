@@ -4,6 +4,8 @@ import { Lock, Unlock } from 'lucide-react';
 import { useSceneGraph } from '../../contexts/SceneGraphContext';
 import { useEditorStore } from '../../stores/editorStore';
 import { ScrubLabel } from '../common/ScrubLabel';
+import { KeyframeIndicator } from '../common/KeyframeIndicator';
+import { getKeyframeState } from '../../hooks/useKeyframeState';
 import styles from './PropertiesPanel.module.css';
 
 // ============================================================================
@@ -54,6 +56,19 @@ function isSizeEditable(node: Node): boolean {
   return node.type === 'rectangle' || node.type === 'ellipse' || node.type === 'polygon';
 }
 
+function getSizePropertyPaths(node: Node): { w: string; h: string } {
+  switch (node.type) {
+    case 'rectangle':
+      return { w: 'width', h: 'height' };
+    case 'ellipse':
+      return { w: 'radiusX', h: 'radiusY' };
+    case 'polygon':
+      return { w: 'transform.scale.x', h: 'transform.scale.y' };
+    default:
+      return { w: 'width', h: 'height' };
+  }
+}
+
 function getFillHex(node: Node): string {
   const fill = (node as { fill?: { type: string; color?: Color } }).fill;
   if (fill && fill.type === 'solid' && fill.color) {
@@ -82,6 +97,8 @@ export function PropertiesPanel() {
   const autoKeyframe = useEditorStore((state) => state.autoKeyframe);
   const currentFrame = useEditorStore((state) => state.currentFrame);
   const addKeyframeAtFrame = useEditorStore((state) => state.addKeyframeAtFrame);
+  const removeKeyframeAtFrame = useEditorStore((state) => state.removeKeyframeAtFrame);
+  const timeline = useEditorStore((state) => state.timeline);
 
   // Re-render on SceneGraph changes
   const [, setVersion] = useState(0);
@@ -302,6 +319,18 @@ export function PropertiesPanel() {
   const fillHex = getFillHex(node);
   const strokeHex = getStrokeHex(node);
   const opacityPercent = Math.round(node.opacity * 100);
+  const sizePaths = getSizePropertyPaths(node);
+
+  // Helper to toggle a keyframe for a given property
+  const toggleKeyframe = (property: string, value: unknown) => {
+    if (!selectedId) return;
+    const state = getKeyframeState(timeline, selectedId, property, currentFrame);
+    if (state === 'active') {
+      removeKeyframeAtFrame(selectedId, property, currentFrame);
+    } else {
+      addKeyframeAtFrame(selectedId, property, currentFrame, value);
+    }
+  };
 
   return (
     <div className={styles.panel}>
@@ -315,9 +344,20 @@ export function PropertiesPanel() {
           </div>
           <div className={styles.sectionContent}>
             <div className={styles.propertyRow}>
-              <label className={styles.propertyLabel} htmlFor="prop-pos-x">
-                Position
-              </label>
+              <div className={styles.propertyHeader}>
+                <label className={styles.propertyLabel} htmlFor="prop-pos-x">
+                  Position
+                </label>
+                <KeyframeIndicator
+                  state={getKeyframeState(
+                    timeline,
+                    selectedId!,
+                    'transform.position.x',
+                    currentFrame
+                  )}
+                  onToggle={() => toggleKeyframe('transform.position.x', pos.x)}
+                />
+              </div>
               <div className={styles.propertyInputs}>
                 <div className={styles.inputGroup}>
                   <ScrubLabel
@@ -349,9 +389,15 @@ export function PropertiesPanel() {
               </div>
             </div>
             <div className={styles.propertyRow}>
-              <label className={styles.propertyLabel} htmlFor="prop-size-w">
-                Size
-              </label>
+              <div className={styles.propertyHeader}>
+                <label className={styles.propertyLabel} htmlFor="prop-size-w">
+                  Size
+                </label>
+                <KeyframeIndicator
+                  state={getKeyframeState(timeline, selectedId!, sizePaths.w, currentFrame)}
+                  onToggle={() => toggleKeyframe(sizePaths.w, size.width)}
+                />
+              </div>
               <div className={styles.propertyInputs}>
                 <div className={styles.inputGroup}>
                   <ScrubLabel
@@ -395,17 +441,38 @@ export function PropertiesPanel() {
               </div>
             </div>
             <div className={styles.propertyRow}>
-              <label className={styles.propertyLabel} htmlFor="prop-rotation">
-                Rotation
-              </label>
-              <div className={styles.propertyInputs}>
-                <input
-                  id="prop-rotation"
-                  type="text"
-                  className={styles.input}
-                  value={`${Math.round(rotation)}\u00B0`}
-                  onChange={(e) => handleRotationChange(e.target.value)}
+              <div className={styles.propertyHeader}>
+                <label className={styles.propertyLabel} htmlFor="prop-rotation">
+                  Rotation
+                </label>
+                <KeyframeIndicator
+                  state={getKeyframeState(
+                    timeline,
+                    selectedId!,
+                    'transform.rotation',
+                    currentFrame
+                  )}
+                  onToggle={() => toggleKeyframe('transform.rotation', rotation)}
                 />
+              </div>
+              <div className={styles.propertyInputs}>
+                <div className={styles.inputGroup}>
+                  <ScrubLabel
+                    label="R"
+                    value={Math.round(rotation)}
+                    onChange={(v) => handleRotationChange(String(v))}
+                    sensitivity={1}
+                    min={-360}
+                    max={360}
+                  />
+                  <input
+                    id="prop-rotation"
+                    type="text"
+                    className={styles.input}
+                    value={`${Math.round(rotation)}\u00B0`}
+                    onChange={(e) => handleRotationChange(e.target.value)}
+                  />
+                </div>
               </div>
             </div>
           </div>
@@ -473,9 +540,15 @@ export function PropertiesPanel() {
               </div>
             </div>
             <div className={styles.propertyRow}>
-              <label className={styles.propertyLabel} htmlFor="prop-opacity">
-                Opacity
-              </label>
+              <div className={styles.propertyHeader}>
+                <label className={styles.propertyLabel} htmlFor="prop-opacity">
+                  Opacity
+                </label>
+                <KeyframeIndicator
+                  state={getKeyframeState(timeline, selectedId!, 'opacity', currentFrame)}
+                  onToggle={() => toggleKeyframe('opacity', node.opacity)}
+                />
+              </div>
               <div className={styles.propertyInputs}>
                 <input
                   id="prop-opacity"

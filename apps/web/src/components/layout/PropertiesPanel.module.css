@@ -80,6 +80,12 @@
   gap: var(--space-xs);
 }
 
+.propertyHeader {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
 .propertyLabel {
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-medium);
