@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Quar Animator is a free, open-source, web-native 2D animation platform designed to fill the gap left by Adobe Animate's discontinuation. It's part of the QUAR Suite (alongside Quar Editor for 3D and Quar Vector for 2D illustration).
 
-**Current Status**: Sprint 8 (Selection & Transform Enhancements) complete. Editable size W/H, fill/stroke color editing, alt center-origin resize, aspect ratio lock, scrub-to-adjust labels. Full drawing toolkit with Brush and Eraser tools. Direct selection for path editing. Vector drawing tools (Rectangle, Ellipse, Polygon/Star, Pen). Selection infrastructure with transform handles. Canvas foundation with WebGL 2 rendering. LayerPanel and PropertiesPanel wired to SceneGraph. ErrorBoundary for resilience. Modern violet/bordeaux design system.
+**Current Status**: Context menus and clipboard operations complete. Right-click context menus on Canvas, LayerPanel, and Timeline. Clipboard operations (copy/paste/duplicate/delete/select all) with keyboard shortcuts. Inline layer rename. Sprint 9 (Timeline Foundation) complete. Full drawing toolkit with Brush and Eraser tools. Direct selection for path editing. Vector drawing tools (Rectangle, Ellipse, Polygon/Star, Pen). Selection infrastructure with transform handles. Canvas foundation with WebGL 2 rendering. LayerPanel and PropertiesPanel wired to SceneGraph. ErrorBoundary for resilience. Modern violet/bordeaux design system.
 
 ## Sprint Progress
 
@@ -205,6 +205,75 @@ Quar Animator is a free, open-source, web-native 2D animation platform designed 
   - Replaces static labels for X, Y, W, H in PropertiesPanel
 
 **Total test coverage**: 770 core tests, 182 UI tests (952 total)
+
+### Sprint 9: Timeline Foundation ✅ COMPLETE
+
+- [x] Easing system (`packages/animation/src/Easing.ts`) - 101 tests
+  - 30 standard easing functions (linear, ease-in/out/inOut for quad, cubic, quart, quint, sine, expo, circ, back, elastic, bounce)
+  - Custom cubic bezier with Newton-Raphson + bisection solver
+  - Step easing (start/end modes)
+  - Spring-based easing with damping/stiffness/mass/velocity
+- [x] Timeline engine (`packages/animation/src/Timeline.ts`) - 61 tests
+  - Keyframe tracks with per-keyframe easing
+  - Value interpolation (number, color, vector2)
+  - Track enable/disable, keyframe CRUD
+  - Serialization/deserialization
+- [x] PlaybackController (`packages/animation/src/PlaybackController.ts`) - 33 tests
+  - requestAnimationFrame-based playback loop
+  - Play/pause/stop/seek, loop modes, speed control
+  - Frame-accurate timing with configurable frame rate
+- [x] Editor store timeline state - 16 tests
+  - currentFrame, isPlaying, isLooping, timelineDuration, frameRate
+  - timelineExpanded toggle for collapsible UI
+- [x] Timeline UI component - 16 tests
+  - Collapsible timeline panel with expand/collapse toggle
+  - Transport controls (play/pause, step forward/back, go to start/end)
+  - Timecode display (MM:SS:FF format)
+  - Ruler with frame markers and playhead
+  - Layer labels synced to SceneGraph
+  - Loop toggle, onion skinning button (placeholder)
+- [x] usePlayback hook - 12 tests
+  - Bridges PlaybackController with editor store
+  - Auto-creates/disposes controller on mount/unmount
+- [x] useTimelineShortcuts hook - 9 tests
+  - Space=play/pause, Home/End=start/end, comma/period=prev/next frame, L=loop
+- [x] Auto-switch to selection tool after shape/path creation
+- [x] Color swatch CSS fix (checkerboard no longer bleeds through solid colors)
+- [x] Cubic bezier Horner form bug fix (quadratic→cubic evaluation)
+
+**Total test coverage**: 770 core tests, 195 animation tests, 224 web tests (1189 total)
+
+### Context Menus & Clipboard Operations ✅ COMPLETE
+
+- [x] Reusable ContextMenu component - 10 tests
+  - Portal rendering to escape overflow clipping
+  - Viewport edge flipping (repositions if near edge)
+  - Keyboard navigation (ArrowUp/Down, Enter to activate, Escape to close)
+  - `role="menu"` / `role="menuitem"` for accessibility
+  - Scale+opacity entrance animation
+  - Separator, disabled, and danger item styling
+- [x] useContextMenu hook for state management
+- [x] Editor store clipboard operations - 10 tests
+  - `copySelection` - deep-clones selected nodes via structuredClone
+  - `pasteClipboard` - creates new nodes with unique IDs, offsets position by (20, -20)
+  - `duplicateSelection` - copy + paste in one operation
+  - `deleteSelection` - removes nodes, clears selection
+  - `selectAll` - selects all root nodes and descendants
+- [x] Canvas context menu
+  - With selection: Copy (Ctrl+C), Duplicate (Ctrl+D), Show/Hide, Lock/Unlock, Delete (Del)
+  - Without selection: Paste (Ctrl+V, disabled if clipboard empty), Select All (Ctrl+A)
+- [x] LayerPanel context menu
+  - Rename (inline text input with auto-focus), Duplicate, Delete
+  - Show/Hide, Lock/Unlock (labels adapt to current state)
+  - Right-click auto-selects the targeted layer
+- [x] Timeline context menu
+  - Go To Frame N (clicked frame), Go To Start (Home), Go To End (End)
+- [x] Keyboard shortcuts
+  - Ctrl+C/V/D/A for copy/paste/duplicate/select all
+  - Delete/Backspace for delete selection
+  - Skipped when focus is in input/textarea/select elements
+
+**Total test coverage**: 770 core tests, 195 animation tests, 244 web tests (1209 total)
 
 ## Development Commands
 
