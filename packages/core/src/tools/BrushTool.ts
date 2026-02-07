@@ -431,12 +431,15 @@ export class BrushTool extends BaseTool {
       blendMode: 'normal',
       points: outlinePoints,
       closed: true, // Closed path for fill rendering
-      fill: {
-        type: 'solid',
-        color: this.context.defaultStroke.color,
-        opacity: this.context.defaultStroke.opacity,
-      },
-      stroke: null, // No stroke needed, using fill
+      fills: [
+        {
+          type: 'solid',
+          color: this.context.defaultStroke.color,
+          opacity: this.context.defaultStroke.opacity,
+          visible: true,
+        },
+      ],
+      strokes: [], // No stroke needed, using fill
     };
   }
 

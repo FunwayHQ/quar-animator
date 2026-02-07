@@ -37,15 +37,18 @@ function makeRectNode(overrides: Partial<RectangleNode> = {}): RectangleNode {
     width: 50,
     height: 30,
     cornerRadius: [0, 0, 0, 0],
-    fill: { type: 'solid', color: { r: 255, g: 0, b: 0, a: 1 }, opacity: 1 },
-    stroke: {
-      color: { r: 0, g: 0, b: 0, a: 1 },
-      width: 2,
-      opacity: 1,
-      cap: 'round',
-      join: 'round',
-      miterLimit: 10,
-    },
+    fills: [{ type: 'solid', color: { r: 255, g: 0, b: 0, a: 1 }, opacity: 1, visible: true }],
+    strokes: [
+      {
+        color: { r: 0, g: 0, b: 0, a: 1 },
+        width: 2,
+        opacity: 1,
+        cap: 'round',
+        join: 'round',
+        miterLimit: 10,
+        visible: true,
+      },
+    ],
     ...overrides,
   };
 }
@@ -69,8 +72,8 @@ describe('getProperty', () => {
   });
 
   it('gets deeply nested property', () => {
-    expect(getProperty(node, 'fill.color.r')).toBe(255);
-    expect(getProperty(node, 'stroke.color.b')).toBe(0);
+    expect(getProperty(node, 'fills.0.color.r')).toBe(255);
+    expect(getProperty(node, 'strokes.0.color.b')).toBe(0);
   });
 
   it('returns undefined for non-existent path', () => {
@@ -108,9 +111,9 @@ describe('setProperty', () => {
 
   it('sets deeply nested property', () => {
     const node = makeRectNode();
-    const updated = setProperty(node, 'fill.color.r', 128);
-    expect((updated as RectangleNode).fill!.color!.r).toBe(128);
-    expect((node as RectangleNode).fill!.color!.r).toBe(255);
+    const updated = setProperty(node, 'fills.0.color.r', 128);
+    expect((updated as RectangleNode).fills[0].color!.r).toBe(128);
+    expect((node as RectangleNode).fills[0].color!.r).toBe(255);
   });
 
   it('preserves sibling properties at each level', () => {
@@ -138,11 +141,11 @@ describe('getAnimatableProperties', () => {
     const props = getAnimatableProperties('rectangle');
     expect(props.some((p) => p.path === 'width')).toBe(true);
     expect(props.some((p) => p.path === 'height')).toBe(true);
-    expect(props.some((p) => p.path === 'fill.color')).toBe(true);
-    expect(props.some((p) => p.path === 'stroke.width')).toBe(true);
-    expect(props.some((p) => p.path === 'fill.gradient.angle')).toBe(true);
-    expect(props.some((p) => p.path === 'fill.gradient.stops.0.color')).toBe(true);
-    expect(props.some((p) => p.path === 'stroke.gradient.angle')).toBe(true);
+    expect(props.some((p) => p.path === 'fills.0.color')).toBe(true);
+    expect(props.some((p) => p.path === 'strokes.0.width')).toBe(true);
+    expect(props.some((p) => p.path === 'fills.0.gradient.angle')).toBe(true);
+    expect(props.some((p) => p.path === 'fills.0.gradient.stops.0.color')).toBe(true);
+    expect(props.some((p) => p.path === 'strokes.0.gradient.angle')).toBe(true);
   });
 
   it('returns ellipse-specific properties', () => {
@@ -163,8 +166,8 @@ describe('getAnimatableProperties', () => {
 
 describe('detectInterpolationType', () => {
   it('detects color properties', () => {
-    expect(detectInterpolationType('fill.color')).toBe('color');
-    expect(detectInterpolationType('stroke.color')).toBe('color');
+    expect(detectInterpolationType('fills.0.color')).toBe('color');
+    expect(detectInterpolationType('strokes.0.color')).toBe('color');
   });
 
   it('detects vector2 properties', () => {
@@ -177,8 +180,8 @@ describe('detectInterpolationType', () => {
     expect(detectInterpolationType('opacity')).toBe('number');
     expect(detectInterpolationType('width')).toBe('number');
     expect(detectInterpolationType('transform.rotation')).toBe('number');
-    expect(detectInterpolationType('fill.opacity')).toBe('number');
-    expect(detectInterpolationType('stroke.width')).toBe('number');
+    expect(detectInterpolationType('fills.0.opacity')).toBe('number');
+    expect(detectInterpolationType('strokes.0.width')).toBe('number');
   });
 
   it('defaults to discrete for unknown properties', () => {
@@ -247,7 +250,7 @@ describe('evaluateTrack', () => {
   });
 
   it('interpolates color keyframes', () => {
-    const track = createTrack('node1', 'fill.color');
+    const track = createTrack('node1', 'fills.0.color');
     addKeyframe(track, 0, { r: 0, g: 0, b: 0, a: 1 });
     addKeyframe(track, 10, { r: 200, g: 100, b: 50, a: 1 });
     const result = evaluateTrack(track, 5) as { r: number; g: number; b: number; a: number };
@@ -328,68 +331,71 @@ describe('gradient property support', () => {
   function makeGradientNode(): RectangleNode {
     return {
       ...makeRectNode(),
-      fill: {
-        type: 'gradient' as const,
-        gradient: {
-          type: 'linear' as const,
-          stops: [
-            { offset: 0, color: { r: 255, g: 0, b: 0, a: 1 } },
-            { offset: 1, color: { r: 0, g: 0, b: 255, a: 1 } },
-          ],
-          angle: 90,
+      fills: [
+        {
+          type: 'gradient' as const,
+          gradient: {
+            type: 'linear' as const,
+            stops: [
+              { offset: 0, color: { r: 255, g: 0, b: 0, a: 1 } },
+              { offset: 1, color: { r: 0, g: 0, b: 255, a: 1 } },
+            ],
+            angle: 90,
+          },
+          opacity: 1,
+          visible: true,
         },
-        opacity: 1,
-      },
+      ],
     };
   }
 
   it('getProperty reads gradient angle', () => {
     const node = makeGradientNode();
-    expect(getProperty(node, 'fill.gradient.angle')).toBe(90);
+    expect(getProperty(node, 'fills.0.gradient.angle')).toBe(90);
   });
 
   it('getProperty reads gradient stop color', () => {
     const node = makeGradientNode();
-    const color = getProperty(node, 'fill.gradient.stops.0.color');
+    const color = getProperty(node, 'fills.0.gradient.stops.0.color');
     expect(color).toEqual({ r: 255, g: 0, b: 0, a: 1 });
   });
 
   it('getProperty reads gradient stop offset', () => {
     const node = makeGradientNode();
-    expect(getProperty(node, 'fill.gradient.stops.1.offset')).toBe(1);
+    expect(getProperty(node, 'fills.0.gradient.stops.1.offset')).toBe(1);
   });
 
   it('setProperty sets gradient angle immutably', () => {
     const node = makeGradientNode();
-    const updated = setProperty(node, 'fill.gradient.angle', 180);
-    expect(getProperty(updated, 'fill.gradient.angle')).toBe(180);
-    expect(getProperty(node, 'fill.gradient.angle')).toBe(90); // original unchanged
+    const updated = setProperty(node, 'fills.0.gradient.angle', 180);
+    expect(getProperty(updated, 'fills.0.gradient.angle')).toBe(180);
+    expect(getProperty(node, 'fills.0.gradient.angle')).toBe(90); // original unchanged
   });
 
   it('detectInterpolationType detects gradient stop color as color', () => {
-    expect(detectInterpolationType('fill.gradient.stops.0.color')).toBe('color');
-    expect(detectInterpolationType('stroke.gradient.stops.1.color')).toBe('color');
+    expect(detectInterpolationType('fills.0.gradient.stops.0.color')).toBe('color');
+    expect(detectInterpolationType('strokes.0.gradient.stops.1.color')).toBe('color');
   });
 
   it('detectInterpolationType detects gradient angle as number', () => {
-    expect(detectInterpolationType('fill.gradient.angle')).toBe('number');
-    expect(detectInterpolationType('stroke.gradient.angle')).toBe('number');
+    expect(detectInterpolationType('fills.0.gradient.angle')).toBe('number');
+    expect(detectInterpolationType('strokes.0.gradient.angle')).toBe('number');
   });
 
   it('detectInterpolationType detects gradient stop offset as number', () => {
-    expect(detectInterpolationType('fill.gradient.stops.0.offset')).toBe('number');
-    expect(detectInterpolationType('fill.gradient.stops.3.offset')).toBe('number');
+    expect(detectInterpolationType('fills.0.gradient.stops.0.offset')).toBe('number');
+    expect(detectInterpolationType('fills.0.gradient.stops.3.offset')).toBe('number');
   });
 
   it('evaluateTrack interpolates gradient angle', () => {
-    const track = createTrack<number>('node1', 'fill.gradient.angle');
+    const track = createTrack<number>('node1', 'fills.0.gradient.angle');
     addKeyframe(track, 0, 0);
     addKeyframe(track, 10, 180);
     expect(evaluateTrack(track, 5)).toBe(90);
   });
 
   it('evaluateTrack interpolates gradient stop color', () => {
-    const track = createTrack('node1', 'fill.gradient.stops.0.color');
+    const track = createTrack('node1', 'fills.0.gradient.stops.0.color');
     addKeyframe(track, 0, { r: 0, g: 0, b: 0, a: 1 });
     addKeyframe(track, 10, { r: 200, g: 100, b: 50, a: 1 });
     const result = evaluateTrack(track, 5) as { r: number; g: number; b: number; a: number };

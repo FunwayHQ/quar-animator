@@ -32,8 +32,8 @@ function createTestPath(
     blendMode: 'normal',
     points,
     closed,
-    fill: null,
-    stroke: context.defaultStroke,
+    fills: [],
+    strokes: [context.defaultStroke],
   };
 
   context.sceneGraph.addNode(node);

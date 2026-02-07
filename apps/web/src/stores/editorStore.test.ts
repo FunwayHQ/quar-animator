@@ -599,8 +599,8 @@ describe('EditorStore', () => {
         width: 100,
         height: 100,
         cornerRadius: [0, 0, 0, 0] as [number, number, number, number],
-        fill: null,
-        stroke: null,
+        fills: [],
+        strokes: [],
       };
     }
 

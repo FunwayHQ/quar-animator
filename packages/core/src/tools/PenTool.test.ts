@@ -393,7 +393,7 @@ describe('PenTool', () => {
 
       const nodes = Array.from(context.sceneGraph.getNodes());
       const path = nodes[0] as any;
-      expect(path.fill).toEqual(context.defaultFill);
+      expect(path.fills[0]).toEqual(context.defaultFill);
     });
 
     it('should not apply fill to open path', () => {
@@ -417,7 +417,7 @@ describe('PenTool', () => {
 
       const nodes = Array.from(context.sceneGraph.getNodes());
       const path = nodes[0] as any;
-      expect(path.fill).toBeNull();
+      expect(path.fills).toHaveLength(0);
     });
 
     it('should always apply stroke', () => {
@@ -441,7 +441,7 @@ describe('PenTool', () => {
 
       const nodes = Array.from(context.sceneGraph.getNodes());
       const path = nodes[0] as any;
-      expect(path.stroke).toEqual(context.defaultStroke);
+      expect(path.strokes[0]).toEqual(context.defaultStroke);
     });
   });
 

@@ -167,7 +167,7 @@ describe('EllipseTool', () => {
 
       const nodes = Array.from(context.sceneGraph.getNodes());
       const ellipse = nodes[0] as any;
-      expect(ellipse.fill).toEqual(context.defaultFill);
+      expect(ellipse.fills[0]).toEqual(context.defaultFill);
     });
 
     it('should apply default stroke', () => {
@@ -185,7 +185,7 @@ describe('EllipseTool', () => {
 
       const nodes = Array.from(context.sceneGraph.getNodes());
       const ellipse = nodes[0] as any;
-      expect(ellipse.stroke).toEqual(context.defaultStroke);
+      expect(ellipse.strokes[0]).toEqual(context.defaultStroke);
     });
   });
 

@@ -178,6 +178,7 @@ export const mockDefaultFill: Fill = {
   type: 'solid',
   color: { r: 100, g: 149, b: 237, a: 1 },
   opacity: 1,
+  visible: true,
 };
 
 /**
@@ -189,6 +190,8 @@ export const mockDefaultStroke: Stroke = {
   opacity: 1,
   cap: 'round',
   join: 'round',
+  visible: true,
+  align: 'center',
 };
 
 /**

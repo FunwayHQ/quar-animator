@@ -28,6 +28,7 @@ function createDefaultFill(): Fill {
     type: 'solid',
     color: { r: 100, g: 149, b: 237, a: 1 },
     opacity: 1,
+    visible: true,
   };
 }
 
@@ -38,6 +39,7 @@ function createDefaultStroke(): Stroke {
     opacity: 1,
     cap: 'round',
     join: 'round',
+    visible: true,
   };
 }
 
@@ -56,8 +58,8 @@ function createRectangleNode(id: string, width: number, height: number): Rectang
     width,
     height,
     cornerRadius: [0, 0, 0, 0],
-    fill: createDefaultFill(),
-    stroke: createDefaultStroke(),
+    fills: [createDefaultFill()],
+    strokes: [createDefaultStroke()],
   };
 }
 
@@ -75,8 +77,8 @@ function createEllipseNode(id: string, radiusX: number, radiusY: number): Ellips
     blendMode: 'normal',
     radiusX,
     radiusY,
-    fill: createDefaultFill(),
-    stroke: createDefaultStroke(),
+    fills: [createDefaultFill()],
+    strokes: [createDefaultStroke()],
   };
 }
 
@@ -98,8 +100,8 @@ function createPathNode(id: string): PathNode {
       { position: { x: 100, y: 100 }, handleIn: null, handleOut: null, type: 'corner' },
     ],
     closed: true,
-    fill: createDefaultFill(),
-    stroke: createDefaultStroke(),
+    fills: [createDefaultFill()],
+    strokes: [createDefaultStroke()],
   };
 }
 
@@ -122,8 +124,8 @@ function createPolygonNode(
     blendMode: 'normal',
     sides,
     radius,
-    fill: createDefaultFill(),
-    stroke: createDefaultStroke(),
+    fills: [createDefaultFill()],
+    strokes: [createDefaultStroke()],
   };
 
   if (innerRadius !== undefined) {
@@ -290,15 +292,15 @@ describe('ShapeRenderer', () => {
 
     it('should not render fill when fill is none', () => {
       const rect = createRectangleNode('rect1', 100, 50);
-      rect.fill = { type: 'none', opacity: 0 };
-      rect.stroke = null;
+      rect.fills = [{ type: 'none', opacity: 0, visible: true }];
+      rect.strokes = [];
       sceneGraph.addNode(rect);
 
       const vpMatrix = mat3.identity();
       vi.clearAllMocks();
       shapeRenderer.render(sceneGraph, vpMatrix);
 
-      // No fill (none type), no stroke (null)
+      // No fill (none type), no stroke (empty)
       expect(gl.drawArrays).not.toHaveBeenCalled();
       expect(gl.drawElements).not.toHaveBeenCalled();
     });
@@ -378,7 +380,7 @@ describe('ShapeRenderer', () => {
 
     it('should use triangulated fill', () => {
       const ellipse = createEllipseNode('ellipse1', 50, 30);
-      ellipse.stroke = null;
+      ellipse.strokes = [];
       sceneGraph.addNode(ellipse);
 
       const vpMatrix = mat3.identity();
@@ -396,7 +398,7 @@ describe('ShapeRenderer', () => {
 
     it('should use filled outline for stroke', () => {
       const ellipse = createEllipseNode('ellipse1', 50, 30);
-      ellipse.fill = { type: 'none', opacity: 0 };
+      ellipse.fills = [{ type: 'none', opacity: 0, visible: true }];
       sceneGraph.addNode(ellipse);
 
       const vpMatrix = mat3.identity();
@@ -509,7 +511,7 @@ describe('ShapeRenderer', () => {
 
     it('should use triangulated fill for polygon', () => {
       const polygon = createPolygonNode('poly1', 6, 50);
-      polygon.stroke = null;
+      polygon.strokes = [];
       sceneGraph.addNode(polygon);
 
       const vpMatrix = mat3.identity();
@@ -527,7 +529,7 @@ describe('ShapeRenderer', () => {
 
     it('should use filled outline for polygon stroke', () => {
       const polygon = createPolygonNode('poly1', 6, 50);
-      polygon.fill = { type: 'none', opacity: 0 };
+      polygon.fills = [{ type: 'none', opacity: 0, visible: true }];
       sceneGraph.addNode(polygon);
 
       const vpMatrix = mat3.identity();
@@ -545,8 +547,8 @@ describe('ShapeRenderer', () => {
 
     it('should not render fill when fill is none', () => {
       const polygon = createPolygonNode('poly1', 6, 50);
-      polygon.fill = { type: 'none', opacity: 0 };
-      polygon.stroke = null;
+      polygon.fills = [{ type: 'none', opacity: 0, visible: true }];
+      polygon.strokes = [];
       sceneGraph.addNode(polygon);
 
       const vpMatrix = mat3.identity();
@@ -601,7 +603,7 @@ describe('ShapeRenderer', () => {
     it('should not render fill for open path', () => {
       const path = createPathNode('path1');
       path.closed = false;
-      path.fill = null;
+      path.fills = [];
       sceneGraph.addNode(path);
 
       const vpMatrix = mat3.identity();
@@ -615,7 +617,7 @@ describe('ShapeRenderer', () => {
 
     it('should render path stroke', () => {
       const path = createPathNode('path1');
-      path.fill = null;
+      path.fills = [];
       sceneGraph.addNode(path);
 
       const vpMatrix = mat3.identity();
@@ -629,7 +631,7 @@ describe('ShapeRenderer', () => {
     it('should use filled outline for open path stroke', () => {
       const path = createPathNode('path1');
       path.closed = false;
-      path.fill = null;
+      path.fills = [];
       sceneGraph.addNode(path);
 
       const vpMatrix = mat3.identity();
@@ -810,18 +812,21 @@ describe('ShapeRenderer', () => {
   describe('gradient rendering', () => {
     it('should render gradient fill using gradient program', () => {
       const rect = createRectangleNode('rect1', 100, 50);
-      rect.fill = {
-        type: 'gradient',
-        gradient: {
-          type: 'linear',
-          stops: [
-            { offset: 0, color: { r: 255, g: 0, b: 0, a: 1 } },
-            { offset: 1, color: { r: 0, g: 0, b: 255, a: 1 } },
-          ],
-          angle: 90,
+      rect.fills = [
+        {
+          type: 'gradient',
+          gradient: {
+            type: 'linear',
+            stops: [
+              { offset: 0, color: { r: 255, g: 0, b: 0, a: 1 } },
+              { offset: 1, color: { r: 0, g: 0, b: 255, a: 1 } },
+            ],
+            angle: 90,
+          },
+          opacity: 1,
+          visible: true,
         },
-        opacity: 1,
-      };
+      ];
       sceneGraph.addNode(rect);
 
       const vpMatrix = mat3.identity();
@@ -836,20 +841,23 @@ describe('ShapeRenderer', () => {
 
     it('should render radial gradient fill', () => {
       const rect = createRectangleNode('rect1', 100, 50);
-      rect.fill = {
-        type: 'gradient',
-        gradient: {
-          type: 'radial',
-          stops: [
-            { offset: 0, color: { r: 255, g: 255, b: 0, a: 1 } },
-            { offset: 1, color: { r: 0, g: 128, b: 0, a: 1 } },
-          ],
-          center: { x: 0.5, y: 0.5 },
-          radius: 0.5,
+      rect.fills = [
+        {
+          type: 'gradient',
+          gradient: {
+            type: 'radial',
+            stops: [
+              { offset: 0, color: { r: 255, g: 255, b: 0, a: 1 } },
+              { offset: 1, color: { r: 0, g: 128, b: 0, a: 1 } },
+            ],
+            center: { x: 0.5, y: 0.5 },
+            radius: 0.5,
+          },
+          opacity: 0.8,
+          visible: true,
         },
-        opacity: 0.8,
-      };
-      rect.stroke = null;
+      ];
+      rect.strokes = [];
       sceneGraph.addNode(rect);
 
       const vpMatrix = mat3.identity();
@@ -862,21 +870,24 @@ describe('ShapeRenderer', () => {
 
     it('should render conic gradient fill', () => {
       const ellipse = createEllipseNode('e1', 50, 50);
-      ellipse.fill = {
-        type: 'gradient',
-        gradient: {
-          type: 'conic',
-          stops: [
-            { offset: 0, color: { r: 255, g: 0, b: 0, a: 1 } },
-            { offset: 0.5, color: { r: 0, g: 255, b: 0, a: 1 } },
-            { offset: 1, color: { r: 0, g: 0, b: 255, a: 1 } },
-          ],
-          center: { x: 0.5, y: 0.5 },
-          angle: 0,
+      ellipse.fills = [
+        {
+          type: 'gradient',
+          gradient: {
+            type: 'conic',
+            stops: [
+              { offset: 0, color: { r: 255, g: 0, b: 0, a: 1 } },
+              { offset: 0.5, color: { r: 0, g: 255, b: 0, a: 1 } },
+              { offset: 1, color: { r: 0, g: 0, b: 255, a: 1 } },
+            ],
+            center: { x: 0.5, y: 0.5 },
+            angle: 0,
+          },
+          opacity: 1,
+          visible: true,
         },
-        opacity: 1,
-      };
-      ellipse.stroke = null;
+      ];
+      ellipse.strokes = [];
       sceneGraph.addNode(ellipse);
 
       const vpMatrix = mat3.identity();
@@ -889,18 +900,20 @@ describe('ShapeRenderer', () => {
 
     it('should render stroke with gradient', () => {
       const rect = createRectangleNode('rect1', 100, 50);
-      rect.fill = { type: 'none', opacity: 0 };
-      rect.stroke = {
-        ...createDefaultStroke(),
-        gradient: {
-          type: 'linear',
-          stops: [
-            { offset: 0, color: { r: 255, g: 0, b: 0, a: 1 } },
-            { offset: 1, color: { r: 0, g: 0, b: 255, a: 1 } },
-          ],
-          angle: 0,
+      rect.fills = [{ type: 'none', opacity: 0, visible: true }];
+      rect.strokes = [
+        {
+          ...createDefaultStroke(),
+          gradient: {
+            type: 'linear',
+            stops: [
+              { offset: 0, color: { r: 255, g: 0, b: 0, a: 1 } },
+              { offset: 1, color: { r: 0, g: 0, b: 255, a: 1 } },
+            ],
+            angle: 0,
+          },
         },
-      };
+      ];
       sceneGraph.addNode(rect);
 
       const vpMatrix = mat3.identity();
@@ -914,19 +927,22 @@ describe('ShapeRenderer', () => {
 
     it('should render gradient fill for polygon', () => {
       const polygon = createPolygonNode('poly1', 6, 50);
-      polygon.fill = {
-        type: 'gradient',
-        gradient: {
-          type: 'linear',
-          stops: [
-            { offset: 0, color: { r: 168, g: 85, b: 247, a: 1 } },
-            { offset: 1, color: { r: 236, g: 72, b: 153, a: 1 } },
-          ],
-          angle: 45,
+      polygon.fills = [
+        {
+          type: 'gradient',
+          gradient: {
+            type: 'linear',
+            stops: [
+              { offset: 0, color: { r: 168, g: 85, b: 247, a: 1 } },
+              { offset: 1, color: { r: 236, g: 72, b: 153, a: 1 } },
+            ],
+            angle: 45,
+          },
+          opacity: 1,
+          visible: true,
         },
-        opacity: 1,
-      };
-      polygon.stroke = null;
+      ];
+      polygon.strokes = [];
       sceneGraph.addNode(polygon);
 
       const vpMatrix = mat3.identity();
@@ -939,19 +955,22 @@ describe('ShapeRenderer', () => {
 
     it('should render gradient fill for path', () => {
       const path = createPathNode('path1');
-      path.fill = {
-        type: 'gradient',
-        gradient: {
-          type: 'linear',
-          stops: [
-            { offset: 0, color: { r: 0, g: 0, b: 0, a: 1 } },
-            { offset: 1, color: { r: 255, g: 255, b: 255, a: 1 } },
-          ],
-          angle: 0,
+      path.fills = [
+        {
+          type: 'gradient',
+          gradient: {
+            type: 'linear',
+            stops: [
+              { offset: 0, color: { r: 0, g: 0, b: 0, a: 1 } },
+              { offset: 1, color: { r: 255, g: 255, b: 255, a: 1 } },
+            ],
+            angle: 0,
+          },
+          opacity: 1,
+          visible: true,
         },
-        opacity: 1,
-      };
-      path.stroke = null;
+      ];
+      path.strokes = [];
       sceneGraph.addNode(path);
 
       const vpMatrix = mat3.identity();
@@ -964,18 +983,21 @@ describe('ShapeRenderer', () => {
 
     it('getFillColor should return first stop color for gradient fills', () => {
       const rect = createRectangleNode('rect1', 100, 50);
-      rect.fill = {
-        type: 'gradient',
-        gradient: {
-          type: 'linear',
-          stops: [
-            { offset: 0, color: { r: 255, g: 0, b: 0, a: 1 } },
-            { offset: 1, color: { r: 0, g: 0, b: 255, a: 1 } },
-          ],
-          angle: 0,
+      rect.fills = [
+        {
+          type: 'gradient',
+          gradient: {
+            type: 'linear',
+            stops: [
+              { offset: 0, color: { r: 255, g: 0, b: 0, a: 1 } },
+              { offset: 1, color: { r: 0, g: 0, b: 255, a: 1 } },
+            ],
+            angle: 0,
+          },
+          opacity: 1,
+          visible: true,
         },
-        opacity: 1,
-      };
+      ];
       const vpMatrix = mat3.identity();
       vi.clearAllMocks();
 

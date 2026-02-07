@@ -438,8 +438,8 @@ export class PenTool extends BaseTool {
       blendMode: 'normal',
       points: points.map((p) => ({ ...p, position: { ...p.position } })),
       closed,
-      fill: closed ? this.context.defaultFill : null,
-      stroke: this.context.defaultStroke,
+      fills: closed ? [this.context.defaultFill] : [],
+      strokes: [this.context.defaultStroke],
     };
   }
 

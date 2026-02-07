@@ -332,7 +332,7 @@ describe('PolygonTool', () => {
 
       const nodes = Array.from(context.sceneGraph.getNodes());
       const polygon = nodes[0] as PolygonNode;
-      expect(polygon.fill).toEqual(context.defaultFill);
+      expect(polygon.fills[0]).toEqual(context.defaultFill);
     });
 
     it('should apply default stroke', () => {
@@ -350,7 +350,7 @@ describe('PolygonTool', () => {
 
       const nodes = Array.from(context.sceneGraph.getNodes());
       const polygon = nodes[0] as PolygonNode;
-      expect(polygon.stroke).toEqual(context.defaultStroke);
+      expect(polygon.strokes[0]).toEqual(context.defaultStroke);
     });
   });
 

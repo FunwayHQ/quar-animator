@@ -172,8 +172,8 @@ export class EllipseTool extends BaseTool {
       blendMode: 'normal',
       radiusX,
       radiusY,
-      fill: this.context.defaultFill,
-      stroke: this.context.defaultStroke,
+      fills: [this.context.defaultFill],
+      strokes: [this.context.defaultStroke],
     };
   }
 }

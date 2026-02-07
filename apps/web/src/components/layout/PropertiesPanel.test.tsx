@@ -38,14 +38,17 @@ function createTestRect(id: string, name: string): RectangleNode {
     width: 100,
     height: 50,
     cornerRadius: [0, 0, 0, 0],
-    fill: { type: 'solid', color: { r: 100, g: 149, b: 237, a: 1 }, opacity: 1 },
-    stroke: {
-      color: { r: 255, g: 0, b: 0, a: 1 },
-      width: 2,
-      opacity: 1,
-      cap: 'round',
-      join: 'round',
-    },
+    fills: [{ type: 'solid', color: { r: 100, g: 149, b: 237, a: 1 }, opacity: 1, visible: true }],
+    strokes: [
+      {
+        color: { r: 255, g: 0, b: 0, a: 1 },
+        width: 2,
+        opacity: 1,
+        cap: 'round',
+        join: 'round',
+        visible: true,
+      },
+    ],
   };
 }
 
@@ -63,8 +66,8 @@ function createTestEllipse(id: string, name: string): EllipseNode {
     blendMode: 'normal',
     radiusX: 60,
     radiusY: 40,
-    fill: { type: 'solid', color: { r: 200, g: 100, b: 50, a: 1 }, opacity: 1 },
-    stroke: null,
+    fills: [{ type: 'solid', color: { r: 200, g: 100, b: 50, a: 1 }, opacity: 1, visible: true }],
+    strokes: [],
   };
 }
 
@@ -82,8 +85,8 @@ function createTestPolygon(id: string, name: string): PolygonNode {
     blendMode: 'normal',
     sides: 5,
     radius: 50,
-    fill: { type: 'solid', color: { r: 50, g: 200, b: 100, a: 1 }, opacity: 1 },
-    stroke: null,
+    fills: [{ type: 'solid', color: { r: 50, g: 200, b: 100, a: 1 }, opacity: 1, visible: true }],
+    strokes: [],
   };
 }
 
@@ -352,9 +355,9 @@ describe('PropertiesPanel', () => {
       });
 
       const updatedNode = sg.getNode('rect1') as RectangleNode;
-      expect(updatedNode.fill?.color.r).toBe(255);
-      expect(updatedNode.fill?.color.g).toBe(0);
-      expect(updatedNode.fill?.color.b).toBe(0);
+      expect(updatedNode.fills[0]?.color.r).toBe(255);
+      expect(updatedNode.fills[0]?.color.g).toBe(0);
+      expect(updatedNode.fills[0]?.color.b).toBe(0);
     });
 
     it('should update stroke color when hex text is changed', () => {
@@ -371,9 +374,9 @@ describe('PropertiesPanel', () => {
       });
 
       const updatedNode = sg.getNode('rect1') as RectangleNode;
-      expect(updatedNode.stroke?.color.r).toBe(0);
-      expect(updatedNode.stroke?.color.g).toBe(255);
-      expect(updatedNode.stroke?.color.b).toBe(0);
+      expect(updatedNode.strokes[0]?.color.r).toBe(0);
+      expect(updatedNode.strokes[0]?.color.g).toBe(255);
+      expect(updatedNode.strokes[0]?.color.b).toBe(0);
     });
 
     it('should not update fill with invalid hex', () => {
@@ -390,7 +393,7 @@ describe('PropertiesPanel', () => {
       });
 
       const updatedNode = sg.getNode('rect1') as RectangleNode;
-      expect(updatedNode.fill?.color.r).toBe(100); // Unchanged
+      expect(updatedNode.fills[0]?.color.r).toBe(100); // Unchanged
     });
 
     it('should have fill color swatch', () => {
@@ -446,7 +449,7 @@ describe('PropertiesPanel', () => {
       });
 
       const updatedNode = sg.getNode('rect1') as RectangleNode;
-      expect(updatedNode.fill?.color.g).toBe(255);
+      expect(updatedNode.fills[0]?.color.g).toBe(255);
     });
   });
 
@@ -574,7 +577,7 @@ describe('PropertiesPanel', () => {
         useEditorStore.getState().setSelection(['rect1']);
       });
 
-      expect(screen.getByTestId('scrub-label-W')).toBeInTheDocument();
+      expect(screen.getAllByTestId('scrub-label-W').length).toBeGreaterThanOrEqual(1);
       expect(screen.getByTestId('scrub-label-H')).toBeInTheDocument();
     });
   });

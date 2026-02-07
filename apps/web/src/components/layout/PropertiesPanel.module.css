@@ -320,3 +320,137 @@
 .emptyState svg {
   opacity: 0.3;
 }
+
+/* Fill/Stroke row wrappers (multi-line layout) */
+.fillRowWrapper,
+.strokeRowWrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 2px 0;
+}
+
+/* Fill / Stroke row */
+.fillStrokeRow {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 0;
+  position: relative;
+}
+
+/* Stroke sub-row for width + alignment controls */
+.strokeSubRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-left: 24px; /* Align with color swatch (past visibility toggle) */
+}
+
+.fillStrokeRow:hover .removeButton {
+  opacity: 1;
+}
+
+.visibilityToggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  color: var(--color-text-tertiary);
+  cursor: pointer;
+  flex-shrink: 0;
+  border-radius: var(--radius-sm);
+  transition: all var(--duration-fast);
+}
+
+.visibilityToggle:hover {
+  color: var(--color-text-primary);
+  background: var(--color-bg-tertiary);
+}
+
+.removeButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  color: var(--color-text-disabled);
+  cursor: pointer;
+  flex-shrink: 0;
+  border-radius: var(--radius-sm);
+  opacity: 0;
+  transition: all var(--duration-fast);
+}
+
+.removeButton:hover {
+  color: var(--color-danger);
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.addButton {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  margin-top: 2px;
+  background: transparent;
+  border: 1px dashed var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-disabled);
+  font-size: var(--font-size-2xs);
+  cursor: pointer;
+  transition: all var(--duration-fast);
+}
+
+.addButton:hover {
+  border-color: var(--color-border-default);
+  color: var(--color-text-tertiary);
+  background: var(--color-bg-tertiary);
+}
+
+/* Stroke alignment toggle */
+.alignToggle {
+  display: flex;
+  flex-shrink: 0;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.alignOption {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  background: var(--color-bg-tertiary);
+  border: none;
+  border-right: 1px solid var(--color-border-subtle);
+  color: var(--color-text-disabled);
+  font-size: 9px;
+  font-weight: var(--font-weight-semibold);
+  cursor: pointer;
+  transition: all var(--duration-fast);
+}
+
+.alignOption:last-child {
+  border-right: none;
+}
+
+.alignOption:hover {
+  color: var(--color-text-tertiary);
+  background: var(--color-bg-secondary);
+}
+
+.alignOptionActive {
+  color: var(--color-accent-primary);
+  background: rgba(168, 85, 247, 0.15);
+}

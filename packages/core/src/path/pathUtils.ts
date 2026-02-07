@@ -709,11 +709,27 @@ export function generateStrokeOutlineVertices(
   vertices: Float32Array,
   numVertices: number,
   width: number,
-  closed: boolean
+  closed: boolean,
+  align: 'center' | 'inside' | 'outside' = 'center'
 ): Float32Array {
   if (numVertices < 2) return new Float32Array(0);
 
   const halfWidth = Math.max(width / 2, 0.5);
+  // Compute per-side offsets based on alignment
+  // Left = outward (positive perpendicular), Right = inward (negative perpendicular)
+  let leftOffset: number;
+  let rightOffset: number;
+  if (align === 'inside') {
+    leftOffset = 0;
+    rightOffset = -Math.max(width, 0.5);
+  } else if (align === 'outside') {
+    leftOffset = Math.max(width, 0.5);
+    rightOffset = 0;
+  } else {
+    leftOffset = halfWidth;
+    rightOffset = -halfWidth;
+  }
+
   const leftSide: number[] = [];
   const rightSide: number[] = [];
 
@@ -760,8 +776,8 @@ export function generateStrokeOutlineVertices(
       lastPerpY = perpY;
     }
 
-    leftSide.push(cx + perpX * halfWidth, cy + perpY * halfWidth);
-    rightSide.push(cx - perpX * halfWidth, cy - perpY * halfWidth);
+    leftSide.push(cx + perpX * leftOffset, cy + perpY * leftOffset);
+    rightSide.push(cx + perpX * rightOffset, cy + perpY * rightOffset);
   }
 
   // Combine: left side forward + right side reversed = closed polygon

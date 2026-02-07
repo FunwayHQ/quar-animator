@@ -76,17 +76,33 @@ export function deserializeProject(
   sceneGraph: SceneGraph,
   applyEditorState: (state: Partial<EditorStateSnapshot & { currentFrame: number }>) => void
 ): void {
-  // Restore scene graph
+  // Restore scene graph (handles fill→fills migration internally)
   sceneGraph.fromJSON(data.sceneGraph);
+
+  // Migrate timeline track property paths from singular to array-indexed
+  const timeline =
+    data.timeline ??
+    createTimeline({
+      duration: data.settings.timelineDuration,
+      frameRate: data.settings.frameRate,
+    });
+
+  if (timeline.tracks) {
+    for (const track of timeline.tracks) {
+      // Migrate fill.* → fills.0.*
+      if (track.property.startsWith('fill.')) {
+        track.property = track.property.replace(/^fill\./, 'fills.0.');
+      }
+      // Migrate stroke.* → strokes.0.*
+      if (track.property.startsWith('stroke.')) {
+        track.property = track.property.replace(/^stroke\./, 'strokes.0.');
+      }
+    }
+  }
 
   // Restore editor state
   applyEditorState({
-    timeline:
-      data.timeline ??
-      createTimeline({
-        duration: data.settings.timelineDuration,
-        frameRate: data.settings.frameRate,
-      }),
+    timeline,
     timelineDuration: data.settings.timelineDuration,
     frameRate: data.settings.frameRate,
     autoKeyframe: data.settings.autoKeyframe,

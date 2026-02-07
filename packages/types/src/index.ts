@@ -67,6 +67,7 @@ export interface Fill {
   color?: Color;
   gradient?: Gradient;
   opacity: number;
+  visible: boolean;
 }
 
 export interface Stroke {
@@ -79,6 +80,8 @@ export interface Stroke {
   dashArray?: number[];
   dashOffset?: number;
   gradient?: Gradient;
+  visible: boolean;
+  align?: 'center' | 'inside' | 'outside';
 }
 
 // ============================================================================
@@ -143,16 +146,16 @@ export interface RectangleNode extends BaseNode {
   width: number;
   height: number;
   cornerRadius: [number, number, number, number];
-  fill: Fill | null;
-  stroke: Stroke | null;
+  fills: Fill[];
+  strokes: Stroke[];
 }
 
 export interface EllipseNode extends BaseNode {
   type: 'ellipse';
   radiusX: number;
   radiusY: number;
-  fill: Fill | null;
-  stroke: Stroke | null;
+  fills: Fill[];
+  strokes: Stroke[];
 }
 
 export interface PolygonNode extends BaseNode {
@@ -161,8 +164,8 @@ export interface PolygonNode extends BaseNode {
   radius: number;
   innerRadius?: number; // For star shapes
   cornerRadius?: number; // Uniform corner rounding for all vertices
-  fill: Fill | null;
-  stroke: Stroke | null;
+  fills: Fill[];
+  strokes: Stroke[];
 }
 
 export interface PathPoint {
@@ -177,8 +180,8 @@ export interface PathNode extends BaseNode {
   type: 'path';
   points: PathPoint[];
   closed: boolean;
-  fill: Fill | null;
-  stroke: Stroke | null;
+  fills: Fill[];
+  strokes: Stroke[];
 }
 
 export interface TextNode extends BaseNode {
@@ -191,8 +194,8 @@ export interface TextNode extends BaseNode {
   textAlign: 'left' | 'center' | 'right';
   lineHeight: number;
   letterSpacing: number;
-  fill: Fill | null;
-  stroke: Stroke | null;
+  fills: Fill[];
+  strokes: Stroke[];
 }
 
 export interface ImageNode extends BaseNode {

@@ -40,8 +40,8 @@ function createTestNode(id: string): Node {
     width: 100,
     height: 100,
     cornerRadius: [0, 0, 0, 0],
-    fill: { type: 'solid', color: { r: 100, g: 149, b: 237, a: 1 }, opacity: 1 },
-    stroke: null,
+    fills: [{ type: 'solid', color: { r: 100, g: 149, b: 237, a: 1 }, opacity: 1, visible: true }],
+    strokes: [],
   } as unknown as Node;
 }
 

@@ -193,9 +193,15 @@ export class ShapeRenderer {
       GRADIENT_FRAGMENT_SHADER,
       ['a_position'],
       [
-        'u_viewProjection', 'u_model',
-        'u_gradientType', 'u_stopCount', 'u_bounds',
-        'u_angle', 'u_center', 'u_radius', 'u_opacity',
+        'u_viewProjection',
+        'u_model',
+        'u_gradientType',
+        'u_stopCount',
+        'u_bounds',
+        'u_angle',
+        'u_center',
+        'u_radius',
+        'u_opacity',
         ...Array.from({ length: MAX_GRADIENT_STOPS }, (_, i) => `u_stops[${i}]`),
         ...Array.from({ length: MAX_GRADIENT_STOPS }, (_, i) => `u_offsets[${i}]`),
       ]
@@ -332,6 +338,60 @@ export class ShapeRenderer {
   }
 
   /**
+   * Render fills and strokes from arrays
+   */
+  private renderFillsAndStrokes(
+    tessellated: Float32Array,
+    fills: Fill[],
+    strokes: Stroke[],
+    closed: boolean,
+    nodeOpacity: number = 1
+  ): void {
+    for (const fill of fills) {
+      if (fill.visible && fill.type !== 'none') {
+        this.renderFill(tessellated, fill, nodeOpacity);
+      }
+    }
+    for (const stroke of strokes) {
+      if (stroke.visible && stroke.width > 0) {
+        this.renderStroke(tessellated, stroke, closed, nodeOpacity);
+      }
+    }
+  }
+
+  /**
+   * Render fills and strokes as ghosts with tint/alpha
+   */
+  private renderFillsAndStrokesGhost(
+    tessellated: Float32Array,
+    fills: Fill[],
+    strokes: Stroke[],
+    closed: boolean,
+    colorOverride: { tint: [number, number, number]; alpha: number }
+  ): void {
+    for (const fill of fills) {
+      if (fill.visible && fill.type !== 'none') {
+        const color = this.applyTintAndAlpha(
+          this.getFillColor(fill),
+          colorOverride.tint,
+          colorOverride.alpha
+        );
+        this.renderFillWithColor(tessellated, color);
+      }
+    }
+    for (const stroke of strokes) {
+      if (stroke.visible && stroke.width > 0) {
+        const color = this.applyTintAndAlpha(
+          this.getStrokeColor(stroke),
+          colorOverride.tint,
+          colorOverride.alpha
+        );
+        this.renderStrokeWithColor(tessellated, stroke, closed, color);
+      }
+    }
+  }
+
+  /**
    * Render a single rectangle
    */
   renderRectangle(node: RectangleNode, worldMatrix: Matrix3): void {
@@ -356,15 +416,7 @@ export class ShapeRenderer {
     this.currentModelMatrix = modelArray;
     gl.uniformMatrix3fv(this.program.uniforms.u_model, false, modelArray);
 
-    // Render fill
-    if (node.fill && node.fill.type !== 'none') {
-      this.renderFill(tessellated, node.fill);
-    }
-
-    // Render stroke
-    if (node.stroke && node.stroke.width > 0) {
-      this.renderStroke(tessellated, node.stroke, true);
-    }
+    this.renderFillsAndStrokes(tessellated, node.fills, node.strokes, true, node.opacity);
   }
 
   /**
@@ -386,15 +438,7 @@ export class ShapeRenderer {
     this.currentModelMatrix = modelArray;
     gl.uniformMatrix3fv(this.program.uniforms.u_model, false, modelArray);
 
-    // Render fill
-    if (node.fill && node.fill.type !== 'none') {
-      this.renderFill(tessellated, node.fill);
-    }
-
-    // Render stroke
-    if (node.stroke && node.stroke.width > 0) {
-      this.renderStroke(tessellated, node.stroke, true);
-    }
+    this.renderFillsAndStrokes(tessellated, node.fills, node.strokes, true, node.opacity);
   }
 
   /**
@@ -408,7 +452,15 @@ export class ShapeRenderer {
     // Generate polygon or star path
     const pathPoints =
       node.innerRadius !== undefined
-        ? createStarPath(0, 0, node.radius, node.innerRadius, node.sides, undefined, node.cornerRadius)
+        ? createStarPath(
+            0,
+            0,
+            node.radius,
+            node.innerRadius,
+            node.sides,
+            undefined,
+            node.cornerRadius
+          )
         : createPolygonPath(0, 0, node.radius, node.sides, undefined, node.cornerRadius);
 
     // Tessellate to vertices
@@ -419,15 +471,7 @@ export class ShapeRenderer {
     this.currentModelMatrix = modelArray;
     gl.uniformMatrix3fv(this.program.uniforms.u_model, false, modelArray);
 
-    // Render fill - earcut handles both convex and concave shapes
-    if (node.fill && node.fill.type !== 'none') {
-      this.renderFill(tessellated, node.fill);
-    }
-
-    // Render stroke
-    if (node.stroke && node.stroke.width > 0) {
-      this.renderStroke(tessellated, node.stroke, true);
-    }
+    this.renderFillsAndStrokes(tessellated, node.fills, node.strokes, true, node.opacity);
   }
 
   /**
@@ -453,24 +497,18 @@ export class ShapeRenderer {
     this.currentModelMatrix = modelArray;
     gl.uniformMatrix3fv(this.program.uniforms.u_model, false, modelArray);
 
-    // Render fill (only for closed paths)
-    if (node.closed && node.fill && node.fill.type !== 'none') {
-      this.renderFill(tessellated, node.fill);
-    }
-
-    // Render stroke
-    if (node.stroke && node.stroke.width > 0) {
-      this.renderStroke(tessellated, node.stroke, node.closed);
-    }
+    // Only render fills for closed paths
+    const fills = node.closed ? node.fills : [];
+    this.renderFillsAndStrokes(tessellated, fills, node.strokes, node.closed, node.opacity);
   }
 
   /**
    * Render filled polygon using earcut triangulation
    * This handles both convex and concave shapes correctly
    */
-  private renderFill(vertices: Float32Array, fill: Fill): void {
+  private renderFill(vertices: Float32Array, fill: Fill, nodeOpacity: number = 1): void {
     if (fill.type === 'gradient' && fill.gradient) {
-      this.renderFillGradient(vertices, fill.gradient, fill.opacity);
+      this.renderFillGradient(vertices, fill.gradient, fill.opacity * nodeOpacity);
       return;
     }
 
@@ -482,7 +520,7 @@ export class ShapeRenderer {
     this.renderer.useProgram(this.program);
 
     // Set fill color
-    const color = this.getFillColor(fill);
+    const color = this.getFillColor(fill, nodeOpacity);
     gl.uniform4fv(this.program.uniforms.u_color, color);
 
     // Upload vertices
@@ -516,7 +554,12 @@ export class ShapeRenderer {
    * WebGL lineWidth is capped at 1px on most browsers, so we expand the stroke
    * into a filled polygon using perpendicular offsets and earcut triangulation.
    */
-  private renderStroke(vertices: Float32Array, stroke: Stroke, closed: boolean): void {
+  private renderStroke(
+    vertices: Float32Array,
+    stroke: Stroke,
+    closed: boolean,
+    nodeOpacity: number = 1
+  ): void {
     const numVertices = vertices.length / 2;
     if (numVertices < 2) return;
 
@@ -525,14 +568,15 @@ export class ShapeRenderer {
       vertices,
       numVertices,
       stroke.width,
-      closed
+      closed,
+      stroke.align ?? 'center'
     );
     const outlineCount = outlineVertices.length / 2;
     if (outlineCount < 3) return;
 
     // Use gradient shader for stroke gradient
     if (stroke.gradient) {
-      this.renderFillGradient(outlineVertices, stroke.gradient, stroke.opacity);
+      this.renderFillGradient(outlineVertices, stroke.gradient, stroke.opacity * nodeOpacity);
       return;
     }
 
@@ -544,7 +588,7 @@ export class ShapeRenderer {
     this.renderer.useProgram(this.program);
 
     // Set stroke color
-    const color = this.getStrokeColor(stroke);
+    const color = this.getStrokeColor(stroke, nodeOpacity);
     gl.uniform4fv(this.program.uniforms.u_color, color);
 
     // Upload outline vertices
@@ -571,11 +615,7 @@ export class ShapeRenderer {
    * Render vertices with a gradient using the gradient shader program.
    * Triangulates, uploads, sets gradient uniforms, and draws.
    */
-  private renderFillGradient(
-    vertices: Float32Array,
-    gradient: Gradient,
-    opacity: number
-  ): void {
+  private renderFillGradient(vertices: Float32Array, gradient: Gradient, opacity: number): void {
     if (!this.gradientProgram) return;
 
     const gl = this.renderer.context;
@@ -587,11 +627,7 @@ export class ShapeRenderer {
 
     // Re-set viewProjection and model on the gradient program
     if (this.currentModelMatrix) {
-      gl.uniformMatrix3fv(
-        this.gradientProgram.uniforms.u_model,
-        false,
-        this.currentModelMatrix
-      );
+      gl.uniformMatrix3fv(this.gradientProgram.uniforms.u_model, false, this.currentModelMatrix);
     }
 
     // Upload gradient uniforms
@@ -648,12 +684,10 @@ export class ShapeRenderer {
       const stopUniform = u[`u_stops[${i}]`];
       const offsetUniform = u[`u_offsets[${i}]`];
       if (stopUniform) {
-        gl.uniform4fv(stopUniform, new Float32Array([
-          s.color.r / 255,
-          s.color.g / 255,
-          s.color.b / 255,
-          s.color.a,
-        ]));
+        gl.uniform4fv(
+          stopUniform,
+          new Float32Array([s.color.r / 255, s.color.g / 255, s.color.b / 255, s.color.a])
+        );
       }
       if (offsetUniform) {
         gl.uniform1f(offsetUniform, s.offset);
@@ -665,10 +699,10 @@ export class ShapeRenderer {
 
     // Gradient-specific params
     gl.uniform1f(u['u_angle'], gradient.angle ?? 0);
-    gl.uniform2fv(u['u_center'], new Float32Array([
-      gradient.center?.x ?? 0.5,
-      gradient.center?.y ?? 0.5,
-    ]));
+    gl.uniform2fv(
+      u['u_center'],
+      new Float32Array([gradient.center?.x ?? 0.5, gradient.center?.y ?? 0.5])
+    );
     gl.uniform1f(u['u_radius'], gradient.radius ?? 0.5);
     gl.uniform1f(u['u_opacity'], opacity);
   }
@@ -763,22 +797,7 @@ export class ShapeRenderer {
     );
     const tessellated = tessellatePathToVertices(pathPoints, true, DEFAULT_TESSELLATION_TOLERANCE);
     gl.uniformMatrix3fv(this.program.uniforms.u_model, false, mat3.toFloat32Array(worldMatrix));
-    if (node.fill && node.fill.type !== 'none') {
-      const color = this.applyTintAndAlpha(
-        this.getFillColor(node.fill),
-        colorOverride.tint,
-        colorOverride.alpha
-      );
-      this.renderFillWithColor(tessellated, color);
-    }
-    if (node.stroke && node.stroke.width > 0) {
-      const color = this.applyTintAndAlpha(
-        this.getStrokeColor(node.stroke),
-        colorOverride.tint,
-        colorOverride.alpha
-      );
-      this.renderStrokeWithColor(tessellated, node.stroke, true, color);
-    }
+    this.renderFillsAndStrokesGhost(tessellated, node.fills, node.strokes, true, colorOverride);
   }
 
   private renderEllipseWithOverride(
@@ -791,22 +810,7 @@ export class ShapeRenderer {
     const pathPoints = createEllipsePath(0, 0, node.radiusX, node.radiusY);
     const tessellated = tessellatePathToVertices(pathPoints, true, ELLIPSE_TESSELLATION_TOLERANCE);
     gl.uniformMatrix3fv(this.program.uniforms.u_model, false, mat3.toFloat32Array(worldMatrix));
-    if (node.fill && node.fill.type !== 'none') {
-      const color = this.applyTintAndAlpha(
-        this.getFillColor(node.fill),
-        colorOverride.tint,
-        colorOverride.alpha
-      );
-      this.renderFillWithColor(tessellated, color);
-    }
-    if (node.stroke && node.stroke.width > 0) {
-      const color = this.applyTintAndAlpha(
-        this.getStrokeColor(node.stroke),
-        colorOverride.tint,
-        colorOverride.alpha
-      );
-      this.renderStrokeWithColor(tessellated, node.stroke, true, color);
-    }
+    this.renderFillsAndStrokesGhost(tessellated, node.fills, node.strokes, true, colorOverride);
   }
 
   private renderPolygonWithOverride(
@@ -818,26 +822,19 @@ export class ShapeRenderer {
     const gl = this.renderer.context;
     const pathPoints =
       node.innerRadius !== undefined
-        ? createStarPath(0, 0, node.radius, node.innerRadius, node.sides, undefined, node.cornerRadius)
+        ? createStarPath(
+            0,
+            0,
+            node.radius,
+            node.innerRadius,
+            node.sides,
+            undefined,
+            node.cornerRadius
+          )
         : createPolygonPath(0, 0, node.radius, node.sides, undefined, node.cornerRadius);
     const tessellated = tessellatePathToVertices(pathPoints, true, DEFAULT_TESSELLATION_TOLERANCE);
     gl.uniformMatrix3fv(this.program.uniforms.u_model, false, mat3.toFloat32Array(worldMatrix));
-    if (node.fill && node.fill.type !== 'none') {
-      const color = this.applyTintAndAlpha(
-        this.getFillColor(node.fill),
-        colorOverride.tint,
-        colorOverride.alpha
-      );
-      this.renderFillWithColor(tessellated, color);
-    }
-    if (node.stroke && node.stroke.width > 0) {
-      const color = this.applyTintAndAlpha(
-        this.getStrokeColor(node.stroke),
-        colorOverride.tint,
-        colorOverride.alpha
-      );
-      this.renderStrokeWithColor(tessellated, node.stroke, true, color);
-    }
+    this.renderFillsAndStrokesGhost(tessellated, node.fills, node.strokes, true, colorOverride);
   }
 
   private renderPathWithOverride(
@@ -854,22 +851,8 @@ export class ShapeRenderer {
       DEFAULT_TESSELLATION_TOLERANCE
     );
     gl.uniformMatrix3fv(this.program.uniforms.u_model, false, mat3.toFloat32Array(worldMatrix));
-    if (node.closed && node.fill && node.fill.type !== 'none') {
-      const color = this.applyTintAndAlpha(
-        this.getFillColor(node.fill),
-        colorOverride.tint,
-        colorOverride.alpha
-      );
-      this.renderFillWithColor(tessellated, color);
-    }
-    if (node.stroke && node.stroke.width > 0) {
-      const color = this.applyTintAndAlpha(
-        this.getStrokeColor(node.stroke),
-        colorOverride.tint,
-        colorOverride.alpha
-      );
-      this.renderStrokeWithColor(tessellated, node.stroke, node.closed, color);
-    }
+    const fills = node.closed ? node.fills : [];
+    this.renderFillsAndStrokesGhost(tessellated, fills, node.strokes, node.closed, colorOverride);
   }
 
   /**
@@ -911,7 +894,8 @@ export class ShapeRenderer {
       vertices,
       numVertices,
       stroke.width,
-      closed
+      closed,
+      stroke.align ?? 'center'
     );
     const outlineCount = outlineVertices.length / 2;
     if (outlineCount < 3) return;
@@ -930,23 +914,32 @@ export class ShapeRenderer {
   // Color Utilities
   // --------------------------------------------------------------------------
 
-  private getFillColor(fill: Fill): Float32Array {
+  private getFillColor(fill: Fill, nodeOpacity: number = 1): Float32Array {
     if (fill.type === 'solid' && fill.color) {
-      return this.colorToFloat32Array(fill.color, fill.opacity);
+      return this.colorToFloat32Array(fill.color, fill.opacity, nodeOpacity);
     }
     if (fill.type === 'gradient' && fill.gradient && fill.gradient.stops.length > 0) {
       // For flat-color contexts (e.g. ghost rendering), use first stop color
-      return this.colorToFloat32Array(fill.gradient.stops[0].color, fill.opacity);
+      return this.colorToFloat32Array(fill.gradient.stops[0].color, fill.opacity, nodeOpacity);
     }
-    return new Float32Array([0.5, 0.5, 0.5, fill.opacity]);
+    return new Float32Array([0.5, 0.5, 0.5, fill.opacity * nodeOpacity]);
   }
 
-  private getStrokeColor(stroke: Stroke): Float32Array {
-    return this.colorToFloat32Array(stroke.color, stroke.opacity);
+  private getStrokeColor(stroke: Stroke, nodeOpacity: number = 1): Float32Array {
+    return this.colorToFloat32Array(stroke.color, stroke.opacity, nodeOpacity);
   }
 
-  private colorToFloat32Array(color: Color, opacity: number): Float32Array {
-    return new Float32Array([color.r / 255, color.g / 255, color.b / 255, color.a * opacity]);
+  private colorToFloat32Array(
+    color: Color,
+    opacity: number,
+    nodeOpacity: number = 1
+  ): Float32Array {
+    return new Float32Array([
+      color.r / 255,
+      color.g / 255,
+      color.b / 255,
+      color.a * opacity * nodeOpacity,
+    ]);
   }
 
   // --------------------------------------------------------------------------

@@ -33,8 +33,8 @@ function createTestRectangle(
     width,
     height,
     cornerRadius: [0, 0, 0, 0],
-    fill: { type: 'solid', color: { r: 100, g: 149, b: 237, a: 1 }, opacity: 1 },
-    stroke: null,
+    fills: [{ type: 'solid', color: { r: 100, g: 149, b: 237, a: 1 }, opacity: 1, visible: true }],
+    strokes: [],
   };
 }
 
@@ -61,8 +61,8 @@ function createTestEllipse(
     blendMode: 'normal',
     radiusX,
     radiusY,
-    fill: { type: 'solid', color: { r: 237, g: 100, b: 149, a: 1 }, opacity: 1 },
-    stroke: null,
+    fills: [{ type: 'solid', color: { r: 237, g: 100, b: 149, a: 1 }, opacity: 1, visible: true }],
+    strokes: [],
   };
 }
 
@@ -89,8 +89,8 @@ function createTestPolygon(
     blendMode: 'normal',
     radius,
     sides,
-    fill: { type: 'solid', color: { r: 149, g: 237, b: 100, a: 1 }, opacity: 1 },
-    stroke: null,
+    fills: [{ type: 'solid', color: { r: 149, g: 237, b: 100, a: 1 }, opacity: 1, visible: true }],
+    strokes: [],
   };
 }
 

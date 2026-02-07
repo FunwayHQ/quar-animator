@@ -36,8 +36,8 @@ describe('EraserTool', () => {
       width,
       height,
       cornerRadius: 0,
-      fill: context.defaultFill,
-      stroke: context.defaultStroke,
+      fills: [context.defaultFill],
+      strokes: [context.defaultStroke],
     };
   }
 
@@ -58,8 +58,8 @@ describe('EraserTool', () => {
       blendMode: 'normal',
       radiusX,
       radiusY,
-      fill: context.defaultFill,
-      stroke: context.defaultStroke,
+      fills: [context.defaultFill],
+      strokes: [context.defaultStroke],
     };
   }
 
@@ -85,8 +85,8 @@ describe('EraserTool', () => {
         type: 'corner' as const,
       })),
       closed: false,
-      fill: null,
-      stroke: context.defaultStroke,
+      fills: [],
+      strokes: [context.defaultStroke],
     };
   }
 

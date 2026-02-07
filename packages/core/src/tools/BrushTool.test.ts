@@ -173,8 +173,8 @@ describe('BrushTool', () => {
       const nodes = Array.from(context.sceneGraph.getNodes());
       const path = nodes[0] as any;
       // Brush strokes use fill for rendering (WebGL lineWidth is limited to 1px)
-      expect(path.fill).not.toBeNull();
-      expect(path.stroke).toBeNull();
+      expect(path.fills.length).toBeGreaterThan(0);
+      expect(path.strokes).toHaveLength(0);
     });
 
     it('should create filled outline path based on brush size', () => {
@@ -202,8 +202,8 @@ describe('BrushTool', () => {
       const path = nodes[0] as any;
       // Brush creates filled closed outline paths
       expect(path.closed).toBe(true);
-      expect(path.fill).not.toBeNull();
-      expect(path.stroke).toBeNull();
+      expect(path.fills.length).toBeGreaterThan(0);
+      expect(path.strokes).toHaveLength(0);
     });
 
     it('should select the new path after creation', () => {
@@ -287,8 +287,8 @@ describe('BrushTool', () => {
       const path = nodes[0] as any;
       // With max pressure, should create a filled closed path (no stroke)
       expect(path.closed).toBe(true);
-      expect(path.fill).not.toBeNull();
-      expect(path.stroke).toBeNull();
+      expect(path.fills.length).toBeGreaterThan(0);
+      expect(path.strokes).toHaveLength(0);
     });
 
     it('should ignore pressure when disabled', () => {
@@ -319,8 +319,8 @@ describe('BrushTool', () => {
       const path = nodes[0] as any;
       // Should create a filled closed path regardless of pressure
       expect(path.closed).toBe(true);
-      expect(path.fill).not.toBeNull();
-      expect(path.stroke).toBeNull();
+      expect(path.fills.length).toBeGreaterThan(0);
+      expect(path.strokes).toHaveLength(0);
     });
   });
 
@@ -643,8 +643,8 @@ describe('BrushTool', () => {
 
       // Should be a closed filled path (outline representation)
       expect(path.closed).toBe(true);
-      expect(path.fill).not.toBeNull();
-      expect(path.stroke).toBeNull();
+      expect(path.fills.length).toBeGreaterThan(0);
+      expect(path.strokes).toHaveLength(0);
       // Outline paths have more points (left side + right side reversed)
       expect(path.points.length).toBeGreaterThan(2);
     });

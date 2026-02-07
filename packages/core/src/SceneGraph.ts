@@ -3,7 +3,7 @@
  * Manages the hierarchical structure of nodes in the document
  */
 
-import type { Node, GroupNode, Transform, Vector2, Matrix3 } from '@quar/types';
+import type { Node, GroupNode, Transform, Vector2, Matrix3, Fill, Stroke } from '@quar/types';
 import { mat3 } from './math';
 
 // ============================================================================
@@ -377,10 +377,57 @@ export class SceneGraph {
     this.worldTransformCache.clear();
 
     for (const node of data.nodes) {
+      // Migrate old fill/stroke singular fields to fills/strokes arrays
+      this.migrateNodeFillsStrokes(node);
       this.nodes.set(node.id, node);
     }
 
     this.rootNodeIds = data.rootNodeIds;
+  }
+
+  /**
+   * Migrate legacy fill/stroke singular fields to fills/strokes arrays.
+   * Also ensures all fills/strokes have the `visible` property.
+   */
+  private migrateNodeFillsStrokes(node: Node): void {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const raw = node as any;
+
+    // Skip nodes that don't have fill/stroke (e.g. GroupNode, ImageNode)
+    if (!('fills' in raw) && !('fill' in raw)) return;
+
+    // Migrate singular fill → fills array
+    if ('fill' in raw && !('fills' in raw)) {
+      raw.fills = raw.fill ? [{ ...raw.fill, visible: raw.fill.visible ?? true }] : [];
+      delete raw.fill;
+    }
+
+    // Migrate singular stroke → strokes array
+    if ('stroke' in raw && !('strokes' in raw)) {
+      raw.strokes = raw.stroke ? [{ ...raw.stroke, visible: raw.stroke.visible ?? true }] : [];
+      delete raw.stroke;
+    }
+
+    // Ensure all fills have visible property
+    if (Array.isArray(raw.fills)) {
+      for (const fill of raw.fills as Fill[]) {
+        if (fill.visible === undefined) {
+          fill.visible = true;
+        }
+      }
+    }
+
+    // Ensure all strokes have visible and align properties
+    if (Array.isArray(raw.strokes)) {
+      for (const stroke of raw.strokes as Stroke[]) {
+        if (stroke.visible === undefined) {
+          stroke.visible = true;
+        }
+        if (stroke.align === undefined) {
+          stroke.align = 'center';
+        }
+      }
+    }
   }
 
   // --------------------------------------------------------------------------

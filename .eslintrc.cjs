@@ -110,6 +110,7 @@ module.exports = {
         'apps/web/src/components/common/OnionSkinPanel.tsx',
         'packages/animation/src/**/*.ts',
         'packages/core/src/selection/SelectionManager.ts',
+        'packages/core/src/SceneGraph.ts',
       ],
       rules: {
         '@typescript-eslint/no-unsafe-assignment': 'off',

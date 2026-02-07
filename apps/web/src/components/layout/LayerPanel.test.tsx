@@ -28,14 +28,17 @@ function createTestRect(id: string, name: string): RectangleNode {
     width: 100,
     height: 50,
     cornerRadius: [0, 0, 0, 0],
-    fill: { type: 'solid', color: { r: 100, g: 149, b: 237, a: 1 }, opacity: 1 },
-    stroke: {
-      color: { r: 0, g: 0, b: 0, a: 1 },
-      width: 2,
-      opacity: 1,
-      cap: 'round',
-      join: 'round',
-    },
+    fills: [{ type: 'solid', color: { r: 100, g: 149, b: 237, a: 1 }, opacity: 1, visible: true }],
+    strokes: [
+      {
+        color: { r: 0, g: 0, b: 0, a: 1 },
+        width: 2,
+        opacity: 1,
+        cap: 'round',
+        join: 'round',
+        visible: true,
+      },
+    ],
   };
 }
 
@@ -53,14 +56,17 @@ function createTestEllipse(id: string, name: string): EllipseNode {
     blendMode: 'normal',
     radiusX: 50,
     radiusY: 30,
-    fill: { type: 'solid', color: { r: 100, g: 149, b: 237, a: 1 }, opacity: 1 },
-    stroke: {
-      color: { r: 0, g: 0, b: 0, a: 1 },
-      width: 2,
-      opacity: 1,
-      cap: 'round',
-      join: 'round',
-    },
+    fills: [{ type: 'solid', color: { r: 100, g: 149, b: 237, a: 1 }, opacity: 1, visible: true }],
+    strokes: [
+      {
+        color: { r: 0, g: 0, b: 0, a: 1 },
+        width: 2,
+        opacity: 1,
+        cap: 'round',
+        join: 'round',
+        visible: true,
+      },
+    ],
   };
 }
 

@@ -35,8 +35,8 @@ function createTestRectangle(
     width,
     height,
     cornerRadius: [0, 0, 0, 0],
-    fill: { type: 'solid', color: { r: 100, g: 149, b: 237, a: 1 }, opacity: 1 },
-    stroke: null,
+    fills: [{ type: 'solid', color: { r: 100, g: 149, b: 237, a: 1 }, opacity: 1, visible: true }],
+    strokes: [],
   };
 }
 
@@ -63,8 +63,8 @@ function createTestEllipse(
     blendMode: 'normal',
     radiusX,
     radiusY,
-    fill: { type: 'solid', color: { r: 100, g: 149, b: 237, a: 1 }, opacity: 1 },
-    stroke: null,
+    fills: [{ type: 'solid', color: { r: 100, g: 149, b: 237, a: 1 }, opacity: 1, visible: true }],
+    strokes: [],
   };
 }
 
@@ -95,8 +95,17 @@ function createTestPath(
       type: 'corner' as const,
     })),
     closed: false,
-    fill: null,
-    stroke: { color: { r: 0, g: 0, b: 0, a: 1 }, width: 2, opacity: 1, cap: 'round', join: 'round' },
+    fills: [],
+    strokes: [
+      {
+        color: { r: 0, g: 0, b: 0, a: 1 },
+        width: 2,
+        opacity: 1,
+        cap: 'round',
+        join: 'round',
+        visible: true,
+      },
+    ],
   };
 }
 

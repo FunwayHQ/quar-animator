@@ -48,10 +48,12 @@ export function setProperty<N extends Node>(node: N, path: string, value: unknow
     const existing = current[parts[i]];
     const cloned =
       typeof existing === 'object' && existing !== null
-        ? { ...(existing as Record<string, unknown>) }
+        ? Array.isArray(existing)
+          ? [...existing]
+          : { ...(existing as Record<string, unknown>) }
         : {};
     current[parts[i]] = cloned;
-    current = cloned;
+    current = cloned as Record<string, unknown>;
   }
   current[parts[parts.length - 1]] = value;
 
@@ -90,25 +92,81 @@ export const COMMON_ANIMATABLE_PROPERTIES: AnimatableProperty[] = [
  * Shape-specific animatable properties (rectangle, ellipse, polygon).
  */
 export const SHAPE_ANIMATABLE_PROPERTIES: AnimatableProperty[] = [
-  { path: 'fill.color', displayName: 'Fill Color', interpolationType: 'color' },
-  { path: 'fill.opacity', displayName: 'Fill Opacity', interpolationType: 'number' },
-  { path: 'fill.gradient.angle', displayName: 'Fill Gradient Angle', interpolationType: 'number' },
-  { path: 'fill.gradient.stops.0.offset', displayName: 'Fill Stop 1 Offset', interpolationType: 'number' },
-  { path: 'fill.gradient.stops.0.color', displayName: 'Fill Stop 1 Color', interpolationType: 'color' },
-  { path: 'fill.gradient.stops.1.offset', displayName: 'Fill Stop 2 Offset', interpolationType: 'number' },
-  { path: 'fill.gradient.stops.1.color', displayName: 'Fill Stop 2 Color', interpolationType: 'color' },
-  { path: 'fill.gradient.stops.2.offset', displayName: 'Fill Stop 3 Offset', interpolationType: 'number' },
-  { path: 'fill.gradient.stops.2.color', displayName: 'Fill Stop 3 Color', interpolationType: 'color' },
-  { path: 'fill.gradient.stops.3.offset', displayName: 'Fill Stop 4 Offset', interpolationType: 'number' },
-  { path: 'fill.gradient.stops.3.color', displayName: 'Fill Stop 4 Color', interpolationType: 'color' },
-  { path: 'stroke.color', displayName: 'Stroke Color', interpolationType: 'color' },
-  { path: 'stroke.width', displayName: 'Stroke Width', interpolationType: 'number' },
-  { path: 'stroke.opacity', displayName: 'Stroke Opacity', interpolationType: 'number' },
-  { path: 'stroke.gradient.angle', displayName: 'Stroke Gradient Angle', interpolationType: 'number' },
-  { path: 'stroke.gradient.stops.0.offset', displayName: 'Stroke Stop 1 Offset', interpolationType: 'number' },
-  { path: 'stroke.gradient.stops.0.color', displayName: 'Stroke Stop 1 Color', interpolationType: 'color' },
-  { path: 'stroke.gradient.stops.1.offset', displayName: 'Stroke Stop 2 Offset', interpolationType: 'number' },
-  { path: 'stroke.gradient.stops.1.color', displayName: 'Stroke Stop 2 Color', interpolationType: 'color' },
+  { path: 'fills.0.color', displayName: 'Fill Color', interpolationType: 'color' },
+  { path: 'fills.0.opacity', displayName: 'Fill Opacity', interpolationType: 'number' },
+  {
+    path: 'fills.0.gradient.angle',
+    displayName: 'Fill Gradient Angle',
+    interpolationType: 'number',
+  },
+  {
+    path: 'fills.0.gradient.stops.0.offset',
+    displayName: 'Fill Stop 1 Offset',
+    interpolationType: 'number',
+  },
+  {
+    path: 'fills.0.gradient.stops.0.color',
+    displayName: 'Fill Stop 1 Color',
+    interpolationType: 'color',
+  },
+  {
+    path: 'fills.0.gradient.stops.1.offset',
+    displayName: 'Fill Stop 2 Offset',
+    interpolationType: 'number',
+  },
+  {
+    path: 'fills.0.gradient.stops.1.color',
+    displayName: 'Fill Stop 2 Color',
+    interpolationType: 'color',
+  },
+  {
+    path: 'fills.0.gradient.stops.2.offset',
+    displayName: 'Fill Stop 3 Offset',
+    interpolationType: 'number',
+  },
+  {
+    path: 'fills.0.gradient.stops.2.color',
+    displayName: 'Fill Stop 3 Color',
+    interpolationType: 'color',
+  },
+  {
+    path: 'fills.0.gradient.stops.3.offset',
+    displayName: 'Fill Stop 4 Offset',
+    interpolationType: 'number',
+  },
+  {
+    path: 'fills.0.gradient.stops.3.color',
+    displayName: 'Fill Stop 4 Color',
+    interpolationType: 'color',
+  },
+  { path: 'strokes.0.color', displayName: 'Stroke Color', interpolationType: 'color' },
+  { path: 'strokes.0.width', displayName: 'Stroke Width', interpolationType: 'number' },
+  { path: 'strokes.0.opacity', displayName: 'Stroke Opacity', interpolationType: 'number' },
+  {
+    path: 'strokes.0.gradient.angle',
+    displayName: 'Stroke Gradient Angle',
+    interpolationType: 'number',
+  },
+  {
+    path: 'strokes.0.gradient.stops.0.offset',
+    displayName: 'Stroke Stop 1 Offset',
+    interpolationType: 'number',
+  },
+  {
+    path: 'strokes.0.gradient.stops.0.color',
+    displayName: 'Stroke Stop 1 Color',
+    interpolationType: 'color',
+  },
+  {
+    path: 'strokes.0.gradient.stops.1.offset',
+    displayName: 'Stroke Stop 2 Offset',
+    interpolationType: 'number',
+  },
+  {
+    path: 'strokes.0.gradient.stops.1.color',
+    displayName: 'Stroke Stop 2 Color',
+    interpolationType: 'color',
+  },
 ];
 
 /**
@@ -192,7 +250,9 @@ export function getInterpolator(
  * Detect interpolation type from a property path.
  */
 export function detectInterpolationType(path: string): InterpolationType {
-  // Color properties (including gradient stop colors)
+  // Color properties (including gradient stop colors, with array index support)
+  if (/^fills\.\d+\.color$/.test(path) || /^strokes\.\d+\.color$/.test(path)) return 'color';
+  // Legacy singular paths
   if (path === 'fill.color' || path === 'stroke.color') return 'color';
   if (/\.gradient\.stops\.\d+\.color$/.test(path)) return 'color';
 
@@ -220,9 +280,6 @@ export function detectInterpolationType(path: string): InterpolationType {
     path === 'radiusY' ||
     path === 'radius' ||
     path === 'transform.rotation' ||
-    path === 'fill.opacity' ||
-    path === 'stroke.width' ||
-    path === 'stroke.opacity' ||
     path === 'fontSize' ||
     path === 'lineHeight' ||
     path === 'letterSpacing' ||
@@ -231,6 +288,14 @@ export function detectInterpolationType(path: string): InterpolationType {
   ) {
     return 'number';
   }
+
+  // Fill/stroke array number properties (opacity, width)
+  if (/^fills\.\d+\.opacity$/.test(path)) return 'number';
+  if (/^strokes\.\d+\.width$/.test(path)) return 'number';
+  if (/^strokes\.\d+\.opacity$/.test(path)) return 'number';
+  // Legacy singular paths
+  if (path === 'fill.opacity' || path === 'stroke.width' || path === 'stroke.opacity')
+    return 'number';
 
   // Gradient number properties (angle, offset, radius)
   if (/\.gradient\.angle$/.test(path)) return 'number';

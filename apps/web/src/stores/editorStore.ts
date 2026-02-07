@@ -40,6 +40,7 @@ export const DEFAULT_FILL: Fill = {
   type: 'solid',
   color: DEFAULT_FILL_COLOR,
   opacity: 1,
+  visible: true,
 };
 
 export const DEFAULT_STROKE: Stroke = {
@@ -49,6 +50,8 @@ export const DEFAULT_STROKE: Stroke = {
   cap: 'round',
   join: 'round',
   miterLimit: 10,
+  visible: true,
+  align: 'center',
 };
 
 // ============================================================================

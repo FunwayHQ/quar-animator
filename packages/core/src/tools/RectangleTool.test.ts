@@ -178,7 +178,7 @@ describe('RectangleTool', () => {
 
       const nodes = Array.from(context.sceneGraph.getNodes());
       const rect = nodes[0] as any;
-      expect(rect.fill).toEqual(context.defaultFill);
+      expect(rect.fills[0]).toEqual(context.defaultFill);
     });
 
     it('should apply default stroke', () => {
@@ -196,7 +196,7 @@ describe('RectangleTool', () => {
 
       const nodes = Array.from(context.sceneGraph.getNodes());
       const rect = nodes[0] as any;
-      expect(rect.stroke).toEqual(context.defaultStroke);
+      expect(rect.strokes[0]).toEqual(context.defaultStroke);
     });
   });
 
