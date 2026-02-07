@@ -350,7 +350,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     const mgr = new KeyframeManager(timeline);
     mgr.addKeyframe(nodeId, property, frame, value, easing);
     // Trigger re-render by creating a new timeline reference
-    set({ timeline: { ...timeline } });
+    set({ timeline: { ...timeline }, isDirty: true });
   },
   removeSelectedKeyframes: (keyframeMap: Map<string, { nodeId: string; property: string }>) => {
     const { timeline, selectedKeyframeIds } = get();
@@ -364,7 +364,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       }
     }
     mgr.removeKeyframes(toRemove);
-    set({ timeline: { ...timeline }, selectedKeyframeIds: new Set<string>() });
+    set({ timeline: { ...timeline }, selectedKeyframeIds: new Set<string>(), isDirty: true });
   },
   setKeyframeEasing: (
     nodeId: string,
@@ -375,7 +375,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     const { timeline } = get();
     const mgr = new KeyframeManager(timeline);
     mgr.setKeyframeEasing(nodeId, property, keyframeId, easing);
-    set({ timeline: { ...timeline } });
+    set({ timeline: { ...timeline }, isDirty: true });
   },
   copySelectedKeyframes: (keyframeMap: Map<string, { nodeId: string; property: string }>) => {
     const { timeline, selectedKeyframeIds } = get();
@@ -416,7 +416,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       }
     }
     mgr.moveKeyframes(entries, deltaFrames);
-    set({ timeline: { ...timeline } });
+    set({ timeline: { ...timeline }, isDirty: true });
   },
   removeKeyframeAtFrame: (nodeId: string, property: string, frame: number) => {
     const { timeline } = get();
@@ -424,7 +424,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     const kf = mgr.getKeyframeAt(nodeId, property, frame);
     if (!kf) return;
     mgr.removeKeyframe(nodeId, property, kf.id);
-    set({ timeline: { ...timeline } });
+    set({ timeline: { ...timeline }, isDirty: true });
   },
 
   // Onion skin

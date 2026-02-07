@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Toolbar } from '../components/layout/Toolbar';
 import { Canvas } from '../components/layout/Canvas';
@@ -13,11 +13,24 @@ import { useTimelineShortcuts } from '../hooks/useTimelineShortcuts';
 import { useProjectActions } from '../hooks/useProjectActions';
 import { useProjectShortcuts } from '../hooks/useProjectShortcuts';
 import { useEditorStore } from '../stores/editorStore';
+import { useSceneGraph } from '../contexts/SceneGraphContext';
 import styles from './Editor.module.css';
 
 function EditorInner() {
   const playback = usePlayback();
   useTimelineShortcuts(playback);
+
+  // Mark project dirty when scene graph changes
+  const sceneGraph = useSceneGraph();
+  useEffect(() => {
+    const markDirty = () => useEditorStore.getState().markDirty();
+    const unsubs = [
+      sceneGraph.on('nodeAdded', markDirty),
+      sceneGraph.on('nodeChanged', markDirty),
+      sceneGraph.on('nodeRemoved', markDirty),
+    ];
+    return () => unsubs.forEach((u) => u());
+  }, [sceneGraph]);
 
   const [searchParams] = useSearchParams();
   const projectId = searchParams.get('project');

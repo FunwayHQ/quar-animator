@@ -10,6 +10,7 @@ export * from './rendering';
 export * from './path';
 export * from './tools';
 export * from './selection';
+export * from './gradient/gradientUtils';
 
 // Re-export types for convenience
 export type {

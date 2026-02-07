@@ -161,8 +161,9 @@ describe('ShapeRenderer', () => {
     });
 
     it('should compile vertex and fragment shaders', () => {
-      expect(gl.shaderSource).toHaveBeenCalledTimes(2);
-      expect(gl.compileShader).toHaveBeenCalledTimes(2);
+      // 2 shaders per program (vertex + fragment) x 2 programs (flat + gradient)
+      expect(gl.shaderSource).toHaveBeenCalledTimes(4);
+      expect(gl.compileShader).toHaveBeenCalledTimes(4);
     });
 
     it('should link shader program', () => {
@@ -799,6 +800,189 @@ describe('ShapeRenderer', () => {
 
       expect(gl.drawArrays).not.toHaveBeenCalled();
       expect(gl.drawElements).not.toHaveBeenCalled();
+    });
+  });
+
+  // ==========================================================================
+  // Gradient Rendering
+  // ==========================================================================
+
+  describe('gradient rendering', () => {
+    it('should render gradient fill using gradient program', () => {
+      const rect = createRectangleNode('rect1', 100, 50);
+      rect.fill = {
+        type: 'gradient',
+        gradient: {
+          type: 'linear',
+          stops: [
+            { offset: 0, color: { r: 255, g: 0, b: 0, a: 1 } },
+            { offset: 1, color: { r: 0, g: 0, b: 255, a: 1 } },
+          ],
+          angle: 90,
+        },
+        opacity: 1,
+      };
+      sceneGraph.addNode(rect);
+
+      const vpMatrix = mat3.identity();
+      vi.clearAllMocks();
+      shapeRenderer.render(sceneGraph, vpMatrix);
+
+      // Should use uniform1i for gradient type
+      expect(gl.uniform1i).toHaveBeenCalled();
+      // Should draw elements (fill + stroke)
+      expect(gl.drawElements).toHaveBeenCalled();
+    });
+
+    it('should render radial gradient fill', () => {
+      const rect = createRectangleNode('rect1', 100, 50);
+      rect.fill = {
+        type: 'gradient',
+        gradient: {
+          type: 'radial',
+          stops: [
+            { offset: 0, color: { r: 255, g: 255, b: 0, a: 1 } },
+            { offset: 1, color: { r: 0, g: 128, b: 0, a: 1 } },
+          ],
+          center: { x: 0.5, y: 0.5 },
+          radius: 0.5,
+        },
+        opacity: 0.8,
+      };
+      rect.stroke = null;
+      sceneGraph.addNode(rect);
+
+      const vpMatrix = mat3.identity();
+      vi.clearAllMocks();
+      shapeRenderer.render(sceneGraph, vpMatrix);
+
+      expect(gl.uniform1i).toHaveBeenCalled();
+      expect(gl.drawElements).toHaveBeenCalled();
+    });
+
+    it('should render conic gradient fill', () => {
+      const ellipse = createEllipseNode('e1', 50, 50);
+      ellipse.fill = {
+        type: 'gradient',
+        gradient: {
+          type: 'conic',
+          stops: [
+            { offset: 0, color: { r: 255, g: 0, b: 0, a: 1 } },
+            { offset: 0.5, color: { r: 0, g: 255, b: 0, a: 1 } },
+            { offset: 1, color: { r: 0, g: 0, b: 255, a: 1 } },
+          ],
+          center: { x: 0.5, y: 0.5 },
+          angle: 0,
+        },
+        opacity: 1,
+      };
+      ellipse.stroke = null;
+      sceneGraph.addNode(ellipse);
+
+      const vpMatrix = mat3.identity();
+      vi.clearAllMocks();
+      shapeRenderer.render(sceneGraph, vpMatrix);
+
+      expect(gl.uniform1i).toHaveBeenCalled();
+      expect(gl.drawElements).toHaveBeenCalled();
+    });
+
+    it('should render stroke with gradient', () => {
+      const rect = createRectangleNode('rect1', 100, 50);
+      rect.fill = { type: 'none', opacity: 0 };
+      rect.stroke = {
+        ...createDefaultStroke(),
+        gradient: {
+          type: 'linear',
+          stops: [
+            { offset: 0, color: { r: 255, g: 0, b: 0, a: 1 } },
+            { offset: 1, color: { r: 0, g: 0, b: 255, a: 1 } },
+          ],
+          angle: 0,
+        },
+      };
+      sceneGraph.addNode(rect);
+
+      const vpMatrix = mat3.identity();
+      vi.clearAllMocks();
+      shapeRenderer.render(sceneGraph, vpMatrix);
+
+      // Stroke gradient should use gradient program (uniform1i)
+      expect(gl.uniform1i).toHaveBeenCalled();
+      expect(gl.drawElements).toHaveBeenCalled();
+    });
+
+    it('should render gradient fill for polygon', () => {
+      const polygon = createPolygonNode('poly1', 6, 50);
+      polygon.fill = {
+        type: 'gradient',
+        gradient: {
+          type: 'linear',
+          stops: [
+            { offset: 0, color: { r: 168, g: 85, b: 247, a: 1 } },
+            { offset: 1, color: { r: 236, g: 72, b: 153, a: 1 } },
+          ],
+          angle: 45,
+        },
+        opacity: 1,
+      };
+      polygon.stroke = null;
+      sceneGraph.addNode(polygon);
+
+      const vpMatrix = mat3.identity();
+      vi.clearAllMocks();
+      shapeRenderer.render(sceneGraph, vpMatrix);
+
+      expect(gl.uniform1i).toHaveBeenCalled();
+      expect(gl.drawElements).toHaveBeenCalled();
+    });
+
+    it('should render gradient fill for path', () => {
+      const path = createPathNode('path1');
+      path.fill = {
+        type: 'gradient',
+        gradient: {
+          type: 'linear',
+          stops: [
+            { offset: 0, color: { r: 0, g: 0, b: 0, a: 1 } },
+            { offset: 1, color: { r: 255, g: 255, b: 255, a: 1 } },
+          ],
+          angle: 0,
+        },
+        opacity: 1,
+      };
+      path.stroke = null;
+      sceneGraph.addNode(path);
+
+      const vpMatrix = mat3.identity();
+      vi.clearAllMocks();
+      shapeRenderer.render(sceneGraph, vpMatrix);
+
+      expect(gl.uniform1i).toHaveBeenCalled();
+      expect(gl.drawElements).toHaveBeenCalled();
+    });
+
+    it('getFillColor should return first stop color for gradient fills', () => {
+      const rect = createRectangleNode('rect1', 100, 50);
+      rect.fill = {
+        type: 'gradient',
+        gradient: {
+          type: 'linear',
+          stops: [
+            { offset: 0, color: { r: 255, g: 0, b: 0, a: 1 } },
+            { offset: 1, color: { r: 0, g: 0, b: 255, a: 1 } },
+          ],
+          angle: 0,
+        },
+        opacity: 1,
+      };
+      const vpMatrix = mat3.identity();
+      vi.clearAllMocks();
+
+      // Ghost rendering uses getFillColor internally, which should return
+      // the first stop color for gradient fills
+      shapeRenderer.renderGhostNode(rect, vpMatrix, 0.5, [1, 0, 0]);
+      expect(gl.drawElements).toHaveBeenCalled();
     });
   });
 

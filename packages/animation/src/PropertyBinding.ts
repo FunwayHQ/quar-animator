@@ -92,9 +92,23 @@ export const COMMON_ANIMATABLE_PROPERTIES: AnimatableProperty[] = [
 export const SHAPE_ANIMATABLE_PROPERTIES: AnimatableProperty[] = [
   { path: 'fill.color', displayName: 'Fill Color', interpolationType: 'color' },
   { path: 'fill.opacity', displayName: 'Fill Opacity', interpolationType: 'number' },
+  { path: 'fill.gradient.angle', displayName: 'Fill Gradient Angle', interpolationType: 'number' },
+  { path: 'fill.gradient.stops.0.offset', displayName: 'Fill Stop 1 Offset', interpolationType: 'number' },
+  { path: 'fill.gradient.stops.0.color', displayName: 'Fill Stop 1 Color', interpolationType: 'color' },
+  { path: 'fill.gradient.stops.1.offset', displayName: 'Fill Stop 2 Offset', interpolationType: 'number' },
+  { path: 'fill.gradient.stops.1.color', displayName: 'Fill Stop 2 Color', interpolationType: 'color' },
+  { path: 'fill.gradient.stops.2.offset', displayName: 'Fill Stop 3 Offset', interpolationType: 'number' },
+  { path: 'fill.gradient.stops.2.color', displayName: 'Fill Stop 3 Color', interpolationType: 'color' },
+  { path: 'fill.gradient.stops.3.offset', displayName: 'Fill Stop 4 Offset', interpolationType: 'number' },
+  { path: 'fill.gradient.stops.3.color', displayName: 'Fill Stop 4 Color', interpolationType: 'color' },
   { path: 'stroke.color', displayName: 'Stroke Color', interpolationType: 'color' },
   { path: 'stroke.width', displayName: 'Stroke Width', interpolationType: 'number' },
   { path: 'stroke.opacity', displayName: 'Stroke Opacity', interpolationType: 'number' },
+  { path: 'stroke.gradient.angle', displayName: 'Stroke Gradient Angle', interpolationType: 'number' },
+  { path: 'stroke.gradient.stops.0.offset', displayName: 'Stroke Stop 1 Offset', interpolationType: 'number' },
+  { path: 'stroke.gradient.stops.0.color', displayName: 'Stroke Stop 1 Color', interpolationType: 'color' },
+  { path: 'stroke.gradient.stops.1.offset', displayName: 'Stroke Stop 2 Offset', interpolationType: 'number' },
+  { path: 'stroke.gradient.stops.1.color', displayName: 'Stroke Stop 2 Color', interpolationType: 'color' },
 ];
 
 /**
@@ -103,6 +117,10 @@ export const SHAPE_ANIMATABLE_PROPERTIES: AnimatableProperty[] = [
 export const RECTANGLE_ANIMATABLE_PROPERTIES: AnimatableProperty[] = [
   { path: 'width', displayName: 'Width', interpolationType: 'number' },
   { path: 'height', displayName: 'Height', interpolationType: 'number' },
+  { path: 'cornerRadius.0', displayName: 'Corner TL', interpolationType: 'number' },
+  { path: 'cornerRadius.1', displayName: 'Corner TR', interpolationType: 'number' },
+  { path: 'cornerRadius.2', displayName: 'Corner BR', interpolationType: 'number' },
+  { path: 'cornerRadius.3', displayName: 'Corner BL', interpolationType: 'number' },
 ];
 
 /**
@@ -118,6 +136,7 @@ export const ELLIPSE_ANIMATABLE_PROPERTIES: AnimatableProperty[] = [
  */
 export const POLYGON_ANIMATABLE_PROPERTIES: AnimatableProperty[] = [
   { path: 'radius', displayName: 'Radius', interpolationType: 'number' },
+  { path: 'cornerRadius', displayName: 'Corner Radius', interpolationType: 'number' },
 ];
 
 /**
@@ -173,8 +192,9 @@ export function getInterpolator(
  * Detect interpolation type from a property path.
  */
 export function detectInterpolationType(path: string): InterpolationType {
-  // Color properties
+  // Color properties (including gradient stop colors)
   if (path === 'fill.color' || path === 'stroke.color') return 'color';
+  if (/\.gradient\.stops\.\d+\.color$/.test(path)) return 'color';
 
   // Vector2 properties
   if (
@@ -205,10 +225,18 @@ export function detectInterpolationType(path: string): InterpolationType {
     path === 'stroke.opacity' ||
     path === 'fontSize' ||
     path === 'lineHeight' ||
-    path === 'letterSpacing'
+    path === 'letterSpacing' ||
+    path === 'cornerRadius' ||
+    path.startsWith('cornerRadius.')
   ) {
     return 'number';
   }
+
+  // Gradient number properties (angle, offset, radius)
+  if (/\.gradient\.angle$/.test(path)) return 'number';
+  if (/\.gradient\.stops\.\d+\.offset$/.test(path)) return 'number';
+  if (/\.gradient\.radius$/.test(path)) return 'number';
+  if (/\.gradient\.center\.[xy]$/.test(path)) return 'number';
 
   return 'discrete';
 }

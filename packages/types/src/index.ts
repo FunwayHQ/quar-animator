@@ -46,10 +46,10 @@ export interface Color {
 }
 
 export interface Gradient {
-  type: 'linear' | 'radial';
+  type: 'linear' | 'radial' | 'conic';
   stops: GradientStop[];
-  angle?: number; // For linear
-  center?: Vector2; // For radial
+  angle?: number; // For linear and conic (startAngle)
+  center?: Vector2; // For radial and conic
   radius?: number; // For radial
 }
 
@@ -78,6 +78,7 @@ export interface Stroke {
   miterLimit?: number;
   dashArray?: number[];
   dashOffset?: number;
+  gradient?: Gradient;
 }
 
 // ============================================================================
@@ -159,6 +160,7 @@ export interface PolygonNode extends BaseNode {
   sides: number;
   radius: number;
   innerRadius?: number; // For star shapes
+  cornerRadius?: number; // Uniform corner rounding for all vertices
   fill: Fill | null;
   stroke: Stroke | null;
 }
@@ -168,6 +170,7 @@ export interface PathPoint {
   handleIn: Vector2 | null;
   handleOut: Vector2 | null;
   type: 'corner' | 'smooth' | 'symmetric';
+  cornerRadius?: number; // Per-vertex rounding (only applies to corner points)
 }
 
 export interface PathNode extends BaseNode {

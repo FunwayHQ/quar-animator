@@ -1,0 +1,228 @@
+/* ============================================================================
+   GradientEditor — Inline gradient bar with stop editing
+   ============================================================================ */
+
+.editor {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+}
+
+/* ---- Fill Type Tabs ---- */
+
+.typeTabs {
+  display: flex;
+  gap: 2px;
+  background: var(--color-bg-tertiary);
+  border-radius: var(--radius-sm);
+  padding: 2px;
+  border: 1px solid var(--color-border-subtle);
+}
+
+.typeTab {
+  flex: 1;
+  height: 22px;
+  font-size: var(--font-size-2xs);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-tertiary);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-xs);
+  cursor: pointer;
+  transition: all var(--duration-fast);
+  letter-spacing: 0.02em;
+}
+
+.typeTab:hover {
+  color: var(--color-text-secondary);
+  background: var(--color-bg-hover);
+}
+
+.typeTabActive {
+  color: var(--color-text-primary);
+  background: var(--color-bg-elevated);
+  box-shadow: var(--shadow-sm);
+}
+
+/* ---- Gradient Bar ---- */
+
+.gradientBar {
+  position: relative;
+  width: 100%;
+  height: 24px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border-default);
+  overflow: visible;
+  cursor: pointer;
+}
+
+.gradientPreview {
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+}
+
+/* ---- Stop Handles ---- */
+
+.stopHandle {
+  position: absolute;
+  bottom: -4px;
+  width: 10px;
+  height: 10px;
+  border: 2px solid #fff;
+  border-radius: 2px;
+  cursor: grab;
+  transform: translateX(-50%) rotate(45deg);
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.3),
+    0 1px 3px rgba(0, 0, 0, 0.5);
+  z-index: 1;
+  transition: box-shadow var(--duration-fast);
+}
+
+.stopHandle:hover {
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.3),
+    0 2px 6px rgba(0, 0, 0, 0.6);
+}
+
+.stopHandleSelected {
+  border-color: var(--color-accent-primary);
+  box-shadow:
+    0 0 0 1px var(--color-accent-primary),
+    0 0 8px var(--color-accent-primary-glow);
+}
+
+/* ---- Gradient Params ---- */
+
+.paramsRow {
+  display: flex;
+  gap: 4px;
+  align-items: stretch;
+}
+
+.paramGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.paramLabel {
+  font-size: 8px;
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-disabled);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  text-align: center;
+  line-height: 1;
+}
+
+.paramInput {
+  height: 24px;
+  padding: 0 4px;
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-xs);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-xs);
+  font-family: var(--font-family-mono);
+  font-weight: var(--font-weight-medium);
+  text-align: center;
+  width: 100%;
+  transition: border-color var(--duration-fast);
+}
+
+.paramInput:hover {
+  border-color: var(--color-border-default);
+}
+
+.paramInput:focus {
+  border-color: var(--color-accent-primary);
+  box-shadow: 0 0 0 1px var(--color-accent-primary-glow);
+}
+
+/* Remove default number spinner arrows */
+.paramInput::-webkit-inner-spin-button,
+.paramInput::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.paramInput[type='number'] {
+  -moz-appearance: textfield;
+}
+
+/* ---- Stop Actions ---- */
+
+.stopActions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.stopColorSwatch {
+  width: 22px;
+  height: 22px;
+  border-radius: var(--radius-xs);
+  border: 1px solid var(--color-border-default);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all var(--duration-fast);
+  position: relative;
+  overflow: hidden;
+  /* Checkerboard */
+  background-image:
+    linear-gradient(45deg, #333 25%, transparent 25%),
+    linear-gradient(-45deg, #333 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #333 75%),
+    linear-gradient(-45deg, transparent 75%, #333 75%);
+  background-size: 6px 6px;
+  background-position:
+    0 0,
+    0 3px,
+    3px -3px,
+    -3px 0px;
+}
+
+.stopColorSwatch::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-color: var(--swatch-color, transparent);
+  border-radius: inherit;
+}
+
+.stopColorSwatch:hover {
+  border-color: var(--color-border-strong);
+  transform: scale(1.08);
+}
+
+.removeStopButton {
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-xs);
+  color: var(--color-text-disabled);
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+  transition: all var(--duration-fast);
+}
+
+.removeStopButton:hover {
+  border-color: var(--color-accent-error);
+  color: var(--color-accent-error);
+  background: rgba(251, 113, 133, 0.08);
+}
+
+.removeStopButton:disabled {
+  opacity: 0.3;
+  pointer-events: none;
+}

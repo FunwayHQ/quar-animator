@@ -363,6 +363,117 @@ export function getNearestPointOnPath(
 }
 
 // ============================================================================
+// Corner Radius
+// ============================================================================
+
+/** Kappa constant for circular arc approximation with cubic bezier */
+const KAPPA = 0.5522847498;
+
+/**
+ * Apply corner radius to corner points in a path, converting sharp corners
+ * into smooth bezier arcs. Each corner point with radius > 0 is replaced by
+ * two smooth points forming a circular arc.
+ *
+ * @param points The path points
+ * @param closed Whether the path is closed
+ * @param defaultRadius Optional uniform radius applied to all corner points
+ *                      (overridden by per-point cornerRadius if set)
+ * @returns New array of PathPoints with corners rounded
+ */
+export function applyCornerRadius(
+  points: PathPoint[],
+  closed: boolean,
+  defaultRadius?: number
+): PathPoint[] {
+  if (points.length < 2) return points.map(clonePathPoint);
+
+  const result: PathPoint[] = [];
+
+  for (let i = 0; i < points.length; i++) {
+    const point = points[i];
+
+    // Only round corner points
+    if (point.type !== 'corner') {
+      result.push(clonePathPoint(point));
+      continue;
+    }
+
+    const radius = point.cornerRadius ?? defaultRadius ?? 0;
+    if (radius <= 0) {
+      result.push(clonePathPoint(point));
+      continue;
+    }
+
+    // For open paths, skip first and last points (only one adjacent edge)
+    if (!closed && (i === 0 || i === points.length - 1)) {
+      result.push(clonePathPoint(point));
+      continue;
+    }
+
+    const prevIdx = (i - 1 + points.length) % points.length;
+    const nextIdx = (i + 1) % points.length;
+    const prev = points[prevIdx];
+    const next = points[nextIdx];
+
+    // Calculate directions and distances to neighbors
+    const toPrev = vec2.subtract(prev.position, point.position);
+    const toNext = vec2.subtract(next.position, point.position);
+    const distPrev = vec2.length(toPrev);
+    const distNext = vec2.length(toNext);
+
+    // Skip degenerate edges (zero length)
+    if (distPrev < 0.001 || distNext < 0.001) {
+      result.push(clonePathPoint(point));
+      continue;
+    }
+
+    // Clamp radius so it doesn't exceed half of either edge
+    const r = Math.min(radius, distPrev / 2, distNext / 2);
+    if (r < 0.001) {
+      result.push(clonePathPoint(point));
+      continue;
+    }
+
+    // Normalize direction vectors
+    const dirPrev = { x: toPrev.x / distPrev, y: toPrev.y / distPrev };
+    const dirNext = { x: toNext.x / distNext, y: toNext.y / distNext };
+
+    // Arc entry point: offset from corner toward prev by r
+    const entryPos = {
+      x: point.position.x + dirPrev.x * r,
+      y: point.position.y + dirPrev.y * r,
+    };
+
+    // Arc exit point: offset from corner toward next by r
+    const exitPos = {
+      x: point.position.x + dirNext.x * r,
+      y: point.position.y + dirNext.y * r,
+    };
+
+    // Handle length for circular arc approximation
+    const handleLen = r * KAPPA;
+
+    // Entry point: handleOut toward corner, no handleIn
+    result.push({
+      position: entryPos,
+      handleIn: null,
+      handleOut: { x: -dirPrev.x * handleLen, y: -dirPrev.y * handleLen },
+      type: 'smooth',
+    });
+
+    // Exit point: handleIn toward corner, no handleOut
+    result.push({
+      position: exitPos,
+      handleIn: { x: -dirNext.x * handleLen, y: -dirNext.y * handleLen },
+      handleOut: null,
+      type: 'smooth',
+    });
+  }
+
+  return result;
+}
+
+// ============================================================================
 // Shape Generators
 // ============================================================================
 
@@ -514,7 +625,8 @@ export function createPolygonPath(
   cy: number,
   radius: number,
   sides: number,
-  startAngle: number = -Math.PI / 2
+  startAngle: number = -Math.PI / 2,
+  cornerRadius?: number
 ): PathPoint[] {
   if (sides < 3) sides = 3;
 
@@ -531,6 +643,10 @@ export function createPolygonPath(
     );
   }
 
+  if (cornerRadius && cornerRadius > 0) {
+    return applyCornerRadius(points, true, cornerRadius);
+  }
+
   return points;
 }
 
@@ -543,7 +659,8 @@ export function createStarPath(
   outerRadius: number,
   innerRadius: number,
   points: number,
-  startAngle: number = -Math.PI / 2
+  startAngle: number = -Math.PI / 2,
+  cornerRadius?: number
 ): PathPoint[] {
   if (points < 3) points = 3;
 
@@ -559,6 +676,10 @@ export function createStarPath(
         y: cy + Math.sin(angle) * radius,
       })
     );
+  }
+
+  if (cornerRadius && cornerRadius > 0) {
+    return applyCornerRadius(pathPoints, true, cornerRadius);
   }
 
   return pathPoints;

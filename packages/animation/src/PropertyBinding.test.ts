@@ -140,6 +140,9 @@ describe('getAnimatableProperties', () => {
     expect(props.some((p) => p.path === 'height')).toBe(true);
     expect(props.some((p) => p.path === 'fill.color')).toBe(true);
     expect(props.some((p) => p.path === 'stroke.width')).toBe(true);
+    expect(props.some((p) => p.path === 'fill.gradient.angle')).toBe(true);
+    expect(props.some((p) => p.path === 'fill.gradient.stops.0.color')).toBe(true);
+    expect(props.some((p) => p.path === 'stroke.gradient.angle')).toBe(true);
   });
 
   it('returns ellipse-specific properties', () => {
@@ -314,5 +317,133 @@ describe('applyAnimatedValues', () => {
     const node = makeRectNode();
     const result = applyAnimatedValues(node, new Map());
     expect(result).toBe(node);
+  });
+});
+
+// ============================================================================
+// Gradient property support
+// ============================================================================
+
+describe('gradient property support', () => {
+  function makeGradientNode(): RectangleNode {
+    return {
+      ...makeRectNode(),
+      fill: {
+        type: 'gradient' as const,
+        gradient: {
+          type: 'linear' as const,
+          stops: [
+            { offset: 0, color: { r: 255, g: 0, b: 0, a: 1 } },
+            { offset: 1, color: { r: 0, g: 0, b: 255, a: 1 } },
+          ],
+          angle: 90,
+        },
+        opacity: 1,
+      },
+    };
+  }
+
+  it('getProperty reads gradient angle', () => {
+    const node = makeGradientNode();
+    expect(getProperty(node, 'fill.gradient.angle')).toBe(90);
+  });
+
+  it('getProperty reads gradient stop color', () => {
+    const node = makeGradientNode();
+    const color = getProperty(node, 'fill.gradient.stops.0.color');
+    expect(color).toEqual({ r: 255, g: 0, b: 0, a: 1 });
+  });
+
+  it('getProperty reads gradient stop offset', () => {
+    const node = makeGradientNode();
+    expect(getProperty(node, 'fill.gradient.stops.1.offset')).toBe(1);
+  });
+
+  it('setProperty sets gradient angle immutably', () => {
+    const node = makeGradientNode();
+    const updated = setProperty(node, 'fill.gradient.angle', 180);
+    expect(getProperty(updated, 'fill.gradient.angle')).toBe(180);
+    expect(getProperty(node, 'fill.gradient.angle')).toBe(90); // original unchanged
+  });
+
+  it('detectInterpolationType detects gradient stop color as color', () => {
+    expect(detectInterpolationType('fill.gradient.stops.0.color')).toBe('color');
+    expect(detectInterpolationType('stroke.gradient.stops.1.color')).toBe('color');
+  });
+
+  it('detectInterpolationType detects gradient angle as number', () => {
+    expect(detectInterpolationType('fill.gradient.angle')).toBe('number');
+    expect(detectInterpolationType('stroke.gradient.angle')).toBe('number');
+  });
+
+  it('detectInterpolationType detects gradient stop offset as number', () => {
+    expect(detectInterpolationType('fill.gradient.stops.0.offset')).toBe('number');
+    expect(detectInterpolationType('fill.gradient.stops.3.offset')).toBe('number');
+  });
+
+  it('evaluateTrack interpolates gradient angle', () => {
+    const track = createTrack<number>('node1', 'fill.gradient.angle');
+    addKeyframe(track, 0, 0);
+    addKeyframe(track, 10, 180);
+    expect(evaluateTrack(track, 5)).toBe(90);
+  });
+
+  it('evaluateTrack interpolates gradient stop color', () => {
+    const track = createTrack('node1', 'fill.gradient.stops.0.color');
+    addKeyframe(track, 0, { r: 0, g: 0, b: 0, a: 1 });
+    addKeyframe(track, 10, { r: 200, g: 100, b: 50, a: 1 });
+    const result = evaluateTrack(track, 5) as { r: number; g: number; b: number; a: number };
+    expect(result.r).toBe(100);
+    expect(result.g).toBe(50);
+    expect(result.b).toBe(25);
+  });
+});
+
+// ============================================================================
+// Corner radius animation support
+// ============================================================================
+
+describe('corner radius animation support', () => {
+  it('getAnimatableProperties includes cornerRadius for rectangles', () => {
+    const props = getAnimatableProperties('rectangle');
+    expect(props.some((p) => p.path === 'cornerRadius.0')).toBe(true);
+    expect(props.some((p) => p.path === 'cornerRadius.1')).toBe(true);
+    expect(props.some((p) => p.path === 'cornerRadius.2')).toBe(true);
+    expect(props.some((p) => p.path === 'cornerRadius.3')).toBe(true);
+  });
+
+  it('getAnimatableProperties includes cornerRadius for polygons', () => {
+    const props = getAnimatableProperties('polygon');
+    expect(props.some((p) => p.path === 'cornerRadius')).toBe(true);
+  });
+
+  it('detectInterpolationType recognizes cornerRadius paths as number', () => {
+    expect(detectInterpolationType('cornerRadius')).toBe('number');
+    expect(detectInterpolationType('cornerRadius.0')).toBe('number');
+    expect(detectInterpolationType('cornerRadius.1')).toBe('number');
+    expect(detectInterpolationType('cornerRadius.2')).toBe('number');
+    expect(detectInterpolationType('cornerRadius.3')).toBe('number');
+  });
+
+  it('getProperty reads cornerRadius array element', () => {
+    const node = makeRectNode({ cornerRadius: [5, 10, 15, 20] });
+    expect(getProperty(node, 'cornerRadius.0')).toBe(5);
+    expect(getProperty(node, 'cornerRadius.1')).toBe(10);
+    expect(getProperty(node, 'cornerRadius.2')).toBe(15);
+    expect(getProperty(node, 'cornerRadius.3')).toBe(20);
+  });
+
+  it('setProperty sets cornerRadius array element immutably', () => {
+    const node = makeRectNode({ cornerRadius: [0, 0, 0, 0] });
+    const updated = setProperty(node, 'cornerRadius.0', 12);
+    expect(getProperty(updated, 'cornerRadius.0')).toBe(12);
+    expect(getProperty(node, 'cornerRadius.0')).toBe(0); // original unchanged
+  });
+
+  it('evaluateTrack interpolates cornerRadius', () => {
+    const track = createTrack<number>('node1', 'cornerRadius.0');
+    addKeyframe(track, 0, 0);
+    addKeyframe(track, 10, 20);
+    expect(evaluateTrack(track, 5)).toBe(10);
   });
 });

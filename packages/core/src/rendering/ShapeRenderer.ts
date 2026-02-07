@@ -13,8 +13,10 @@ import type {
   Fill,
   Stroke,
   Color,
+  Gradient,
 } from '@quar/types';
 import { WebGLRenderer, type ShaderProgram } from './WebGLRenderer';
+import { computeBounds, normalizeGradientStops } from '../gradient/gradientUtils';
 import { SceneGraph } from '../SceneGraph';
 import { mat3 } from '../math';
 import {
@@ -24,6 +26,7 @@ import {
   createPolygonPath,
   createStarPath,
   generateStrokeOutlineVertices,
+  applyCornerRadius,
 } from '../path/pathUtils';
 import earcut from 'earcut';
 
@@ -58,6 +61,81 @@ void main() {
 }
 `;
 
+// Gradient shaders
+const GRADIENT_VERTEX_SHADER = `#version 300 es
+precision highp float;
+
+in vec2 a_position;
+
+uniform mat3 u_viewProjection;
+uniform mat3 u_model;
+
+out vec2 v_localPos;
+
+void main() {
+  v_localPos = a_position;
+  vec3 worldPos = u_model * vec3(a_position, 1.0);
+  vec3 clipPos = u_viewProjection * worldPos;
+  gl_Position = vec4(clipPos.xy, 0.0, 1.0);
+}
+`;
+
+const MAX_GRADIENT_STOPS = 16;
+
+const GRADIENT_FRAGMENT_SHADER = `#version 300 es
+precision highp float;
+
+in vec2 v_localPos;
+
+uniform int u_gradientType;    // 0=linear, 1=radial, 2=conic
+uniform vec4 u_stops[${MAX_GRADIENT_STOPS}];
+uniform float u_offsets[${MAX_GRADIENT_STOPS}];
+uniform int u_stopCount;
+uniform vec4 u_bounds;         // minX, minY, maxX, maxY
+uniform float u_angle;         // linear: angle, conic: startAngle
+uniform vec2 u_center;         // radial/conic center (normalized 0-1)
+uniform float u_radius;        // radial radius (normalized)
+uniform float u_opacity;       // fill/stroke opacity multiplier
+
+out vec4 outColor;
+
+void main() {
+  vec2 size = u_bounds.zw - u_bounds.xy;
+  vec2 npos = size.x > 0.0 && size.y > 0.0
+    ? (v_localPos - u_bounds.xy) / size
+    : vec2(0.5);
+
+  float t;
+  if (u_gradientType == 0) {
+    float rad = u_angle * 3.14159265 / 180.0;
+    vec2 dir = vec2(cos(rad), sin(rad));
+    t = dot(npos - vec2(0.5), dir) + 0.5;
+  } else if (u_gradientType == 1) {
+    t = length(npos - u_center) / max(u_radius, 0.001);
+  } else {
+    vec2 d = npos - u_center;
+    float a = atan(d.y, d.x) + 3.14159265;
+    float startRad = u_angle * 3.14159265 / 180.0;
+    t = mod(a - startRad, 6.28318530) / 6.28318530;
+  }
+  t = clamp(t, 0.0, 1.0);
+
+  vec4 color = u_stops[0];
+  for (int i = 1; i < ${MAX_GRADIENT_STOPS}; i++) {
+    if (i >= u_stopCount) break;
+    if (t <= u_offsets[i]) {
+      float denom = u_offsets[i] - u_offsets[i-1];
+      float st = denom > 0.0 ? (t - u_offsets[i-1]) / denom : 0.0;
+      color = mix(u_stops[i-1], u_stops[i], clamp(st, 0.0, 1.0));
+      break;
+    }
+    if (i == u_stopCount - 1) color = u_stops[i];
+  }
+  color.a *= u_opacity;
+  outColor = color;
+}
+`;
+
 // ============================================================================
 // Configuration
 // ============================================================================
@@ -74,6 +152,7 @@ const ELLIPSE_TESSELLATION_TOLERANCE = 0.5;
 export class ShapeRenderer {
   private renderer: WebGLRenderer;
   private program: ShaderProgram | null = null;
+  private gradientProgram: ShaderProgram | null = null;
   private vao: WebGLVertexArrayObject | null = null;
   private vertexBuffer: WebGLBuffer | null = null;
   private indexBuffer: WebGLBuffer | null = null;
@@ -81,6 +160,10 @@ export class ShapeRenderer {
   // Pre-allocated arrays to avoid GC
   private vertices: Float32Array;
   private indices: Uint16Array;
+
+  // Cached matrices for gradient program switching
+  private currentVPMatrix: Float32Array | null = null;
+  private currentModelMatrix: Float32Array | null = null;
 
   constructor(renderer: WebGLRenderer) {
     this.renderer = renderer;
@@ -102,6 +185,20 @@ export class ShapeRenderer {
       SHAPE_FRAGMENT_SHADER,
       ['a_position'],
       ['u_viewProjection', 'u_model', 'u_color']
+    );
+
+    this.gradientProgram = this.renderer.createShaderProgram(
+      'shape-gradient',
+      GRADIENT_VERTEX_SHADER,
+      GRADIENT_FRAGMENT_SHADER,
+      ['a_position'],
+      [
+        'u_viewProjection', 'u_model',
+        'u_gradientType', 'u_stopCount', 'u_bounds',
+        'u_angle', 'u_center', 'u_radius', 'u_opacity',
+        ...Array.from({ length: MAX_GRADIENT_STOPS }, (_, i) => `u_stops[${i}]`),
+        ...Array.from({ length: MAX_GRADIENT_STOPS }, (_, i) => `u_offsets[${i}]`),
+      ]
     );
   }
 
@@ -151,11 +248,16 @@ export class ShapeRenderer {
     this.renderer.bindVAO(this.vao);
 
     // Set view-projection matrix
-    gl.uniformMatrix3fv(
-      this.program.uniforms.u_viewProjection,
-      false,
-      mat3.toFloat32Array(viewProjectionMatrix)
-    );
+    const vpArray = mat3.toFloat32Array(viewProjectionMatrix);
+    this.currentVPMatrix = vpArray;
+    gl.uniformMatrix3fv(this.program.uniforms.u_viewProjection, false, vpArray);
+
+    // Also set on gradient program if available
+    if (this.gradientProgram) {
+      this.renderer.useProgram(this.gradientProgram);
+      gl.uniformMatrix3fv(this.gradientProgram.uniforms.u_viewProjection, false, vpArray);
+      this.renderer.useProgram(this.program);
+    }
 
     // Traverse and render visible shapes
     sceneGraph.traverseVisible((node) => {
@@ -193,11 +295,15 @@ export class ShapeRenderer {
     this.renderer.bindVAO(this.vao);
 
     // Set view-projection matrix
-    gl.uniformMatrix3fv(
-      this.program.uniforms.u_viewProjection,
-      false,
-      mat3.toFloat32Array(viewProjectionMatrix)
-    );
+    const vpArray = mat3.toFloat32Array(viewProjectionMatrix);
+    this.currentVPMatrix = vpArray;
+    gl.uniformMatrix3fv(this.program.uniforms.u_viewProjection, false, vpArray);
+
+    if (this.gradientProgram) {
+      this.renderer.useProgram(this.gradientProgram);
+      gl.uniformMatrix3fv(this.gradientProgram.uniforms.u_viewProjection, false, vpArray);
+      this.renderer.useProgram(this.program);
+    }
 
     // Create world matrix from node transform
     const worldMatrix = mat3.compose(
@@ -246,7 +352,9 @@ export class ShapeRenderer {
     const tessellated = tessellatePathToVertices(pathPoints, true, DEFAULT_TESSELLATION_TOLERANCE);
 
     // Set model matrix
-    gl.uniformMatrix3fv(this.program.uniforms.u_model, false, mat3.toFloat32Array(worldMatrix));
+    const modelArray = mat3.toFloat32Array(worldMatrix);
+    this.currentModelMatrix = modelArray;
+    gl.uniformMatrix3fv(this.program.uniforms.u_model, false, modelArray);
 
     // Render fill
     if (node.fill && node.fill.type !== 'none') {
@@ -274,7 +382,9 @@ export class ShapeRenderer {
     const tessellated = tessellatePathToVertices(pathPoints, true, ELLIPSE_TESSELLATION_TOLERANCE);
 
     // Set model matrix
-    gl.uniformMatrix3fv(this.program.uniforms.u_model, false, mat3.toFloat32Array(worldMatrix));
+    const modelArray = mat3.toFloat32Array(worldMatrix);
+    this.currentModelMatrix = modelArray;
+    gl.uniformMatrix3fv(this.program.uniforms.u_model, false, modelArray);
 
     // Render fill
     if (node.fill && node.fill.type !== 'none') {
@@ -298,14 +408,16 @@ export class ShapeRenderer {
     // Generate polygon or star path
     const pathPoints =
       node.innerRadius !== undefined
-        ? createStarPath(0, 0, node.radius, node.innerRadius, node.sides)
-        : createPolygonPath(0, 0, node.radius, node.sides);
+        ? createStarPath(0, 0, node.radius, node.innerRadius, node.sides, undefined, node.cornerRadius)
+        : createPolygonPath(0, 0, node.radius, node.sides, undefined, node.cornerRadius);
 
     // Tessellate to vertices
     const tessellated = tessellatePathToVertices(pathPoints, true, DEFAULT_TESSELLATION_TOLERANCE);
 
     // Set model matrix
-    gl.uniformMatrix3fv(this.program.uniforms.u_model, false, mat3.toFloat32Array(worldMatrix));
+    const modelArray = mat3.toFloat32Array(worldMatrix);
+    this.currentModelMatrix = modelArray;
+    gl.uniformMatrix3fv(this.program.uniforms.u_model, false, modelArray);
 
     // Render fill - earcut handles both convex and concave shapes
     if (node.fill && node.fill.type !== 'none') {
@@ -326,15 +438,20 @@ export class ShapeRenderer {
 
     const gl = this.renderer.context;
 
+    // Apply per-vertex corner radius if any points have it
+    const processed = applyCornerRadius(node.points, node.closed);
+
     // Tessellate path
     const tessellated = tessellatePathToVertices(
-      node.points,
+      processed,
       node.closed,
       DEFAULT_TESSELLATION_TOLERANCE
     );
 
     // Set model matrix
-    gl.uniformMatrix3fv(this.program.uniforms.u_model, false, mat3.toFloat32Array(worldMatrix));
+    const modelArray = mat3.toFloat32Array(worldMatrix);
+    this.currentModelMatrix = modelArray;
+    gl.uniformMatrix3fv(this.program.uniforms.u_model, false, modelArray);
 
     // Render fill (only for closed paths)
     if (node.closed && node.fill && node.fill.type !== 'none') {
@@ -352,9 +469,17 @@ export class ShapeRenderer {
    * This handles both convex and concave shapes correctly
    */
   private renderFill(vertices: Float32Array, fill: Fill): void {
+    if (fill.type === 'gradient' && fill.gradient) {
+      this.renderFillGradient(vertices, fill.gradient, fill.opacity);
+      return;
+    }
+
     if (!this.program) return;
 
     const gl = this.renderer.context;
+
+    // Ensure flat-color program is active
+    this.renderer.useProgram(this.program);
 
     // Set fill color
     const color = this.getFillColor(fill);
@@ -392,9 +517,6 @@ export class ShapeRenderer {
    * into a filled polygon using perpendicular offsets and earcut triangulation.
    */
   private renderStroke(vertices: Float32Array, stroke: Stroke, closed: boolean): void {
-    if (!this.program) return;
-
-    const gl = this.renderer.context;
     const numVertices = vertices.length / 2;
     if (numVertices < 2) return;
 
@@ -407,6 +529,19 @@ export class ShapeRenderer {
     );
     const outlineCount = outlineVertices.length / 2;
     if (outlineCount < 3) return;
+
+    // Use gradient shader for stroke gradient
+    if (stroke.gradient) {
+      this.renderFillGradient(outlineVertices, stroke.gradient, stroke.opacity);
+      return;
+    }
+
+    if (!this.program) return;
+
+    const gl = this.renderer.context;
+
+    // Ensure flat-color program is active
+    this.renderer.useProgram(this.program);
 
     // Set stroke color
     const color = this.getStrokeColor(stroke);
@@ -426,6 +561,116 @@ export class ShapeRenderer {
     gl.bufferSubData(gl.ELEMENT_ARRAY_BUFFER, 0, indicesArray);
 
     gl.drawElements(gl.TRIANGLES, indices.length, gl.UNSIGNED_SHORT, 0);
+  }
+
+  // --------------------------------------------------------------------------
+  // Gradient Rendering
+  // --------------------------------------------------------------------------
+
+  /**
+   * Render vertices with a gradient using the gradient shader program.
+   * Triangulates, uploads, sets gradient uniforms, and draws.
+   */
+  private renderFillGradient(
+    vertices: Float32Array,
+    gradient: Gradient,
+    opacity: number
+  ): void {
+    if (!this.gradientProgram) return;
+
+    const gl = this.renderer.context;
+    const numVertices = vertices.length / 2;
+    if (numVertices < 3) return;
+
+    // Switch to gradient program
+    this.renderer.useProgram(this.gradientProgram);
+
+    // Re-set viewProjection and model on the gradient program
+    if (this.currentModelMatrix) {
+      gl.uniformMatrix3fv(
+        this.gradientProgram.uniforms.u_model,
+        false,
+        this.currentModelMatrix
+      );
+    }
+
+    // Upload gradient uniforms
+    this.setGradientUniforms(gradient, computeBounds(vertices), opacity);
+
+    // Upload vertices
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
+    gl.bufferSubData(gl.ARRAY_BUFFER, 0, vertices);
+
+    // Triangulate
+    const indices = earcut(vertices.subarray(0, numVertices * 2));
+    if (indices.length === 0) {
+      gl.drawArrays(gl.TRIANGLE_FAN, 0, numVertices);
+      return;
+    }
+
+    const indicesArray = new Uint16Array(indices);
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indexBuffer);
+    gl.bufferSubData(gl.ELEMENT_ARRAY_BUFFER, 0, indicesArray);
+
+    gl.drawElements(gl.TRIANGLES, indices.length, gl.UNSIGNED_SHORT, 0);
+
+    // Switch back to flat program for subsequent rendering
+    if (this.program) {
+      this.renderer.useProgram(this.program);
+    }
+  }
+
+  /**
+   * Set all gradient-related uniforms on the gradient shader program.
+   */
+  private setGradientUniforms(
+    gradient: Gradient,
+    bounds: [number, number, number, number],
+    opacity: number
+  ): void {
+    if (!this.gradientProgram) return;
+
+    const gl = this.renderer.context;
+    const u = this.gradientProgram.uniforms;
+
+    // Gradient type: 0=linear, 1=radial, 2=conic
+    const typeMap = { linear: 0, radial: 1, conic: 2 } as const;
+    gl.uniform1i(u['u_gradientType'], typeMap[gradient.type] ?? 0);
+
+    // Normalize stops
+    const stops = normalizeGradientStops(gradient.stops);
+    const stopCount = Math.min(stops.length, MAX_GRADIENT_STOPS);
+    gl.uniform1i(u['u_stopCount'], stopCount);
+
+    // Upload individual stop colors and offsets
+    for (let i = 0; i < stopCount; i++) {
+      const s = stops[i];
+      const stopUniform = u[`u_stops[${i}]`];
+      const offsetUniform = u[`u_offsets[${i}]`];
+      if (stopUniform) {
+        gl.uniform4fv(stopUniform, new Float32Array([
+          s.color.r / 255,
+          s.color.g / 255,
+          s.color.b / 255,
+          s.color.a,
+        ]));
+      }
+      if (offsetUniform) {
+        gl.uniform1f(offsetUniform, s.offset);
+      }
+    }
+
+    // Bounds
+    gl.uniform4fv(u['u_bounds'], new Float32Array(bounds));
+
+    // Gradient-specific params
+    gl.uniform1f(u['u_angle'], gradient.angle ?? 0);
+    gl.uniform2fv(u['u_center'], new Float32Array([
+      gradient.center?.x ?? 0.5,
+      gradient.center?.y ?? 0.5,
+    ]));
+    gl.uniform1f(u['u_radius'], gradient.radius ?? 0.5);
+    gl.uniform1f(u['u_opacity'], opacity);
   }
 
   // --------------------------------------------------------------------------
@@ -573,8 +818,8 @@ export class ShapeRenderer {
     const gl = this.renderer.context;
     const pathPoints =
       node.innerRadius !== undefined
-        ? createStarPath(0, 0, node.radius, node.innerRadius, node.sides)
-        : createPolygonPath(0, 0, node.radius, node.sides);
+        ? createStarPath(0, 0, node.radius, node.innerRadius, node.sides, undefined, node.cornerRadius)
+        : createPolygonPath(0, 0, node.radius, node.sides, undefined, node.cornerRadius);
     const tessellated = tessellatePathToVertices(pathPoints, true, DEFAULT_TESSELLATION_TOLERANCE);
     gl.uniformMatrix3fv(this.program.uniforms.u_model, false, mat3.toFloat32Array(worldMatrix));
     if (node.fill && node.fill.type !== 'none') {
@@ -602,8 +847,9 @@ export class ShapeRenderer {
   ): void {
     if (!this.program || node.points.length < 2) return;
     const gl = this.renderer.context;
+    const processed = applyCornerRadius(node.points, node.closed);
     const tessellated = tessellatePathToVertices(
-      node.points,
+      processed,
       node.closed,
       DEFAULT_TESSELLATION_TOLERANCE
     );
@@ -688,7 +934,10 @@ export class ShapeRenderer {
     if (fill.type === 'solid' && fill.color) {
       return this.colorToFloat32Array(fill.color, fill.opacity);
     }
-    // TODO: Support gradient fills
+    if (fill.type === 'gradient' && fill.gradient && fill.gradient.stops.length > 0) {
+      // For flat-color contexts (e.g. ghost rendering), use first stop color
+      return this.colorToFloat32Array(fill.gradient.stops[0].color, fill.opacity);
+    }
     return new Float32Array([0.5, 0.5, 0.5, fill.opacity]);
   }
 

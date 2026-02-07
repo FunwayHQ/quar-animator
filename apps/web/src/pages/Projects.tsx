@@ -3,10 +3,15 @@
  * Displays saved projects as a grid with create/import/delete actions
  */
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Upload, Trash2, Film } from 'lucide-react';
-import { listProjects, deleteProject as dbDelete } from '../services/projectStorage';
+import {
+  listProjects,
+  deleteProject as dbDelete,
+  saveProject as dbSave,
+  loadProject as dbLoad,
+} from '../services/projectStorage';
 import { uploadProjectFile } from '../services/projectSerializer';
 import { useEditorStore } from '../stores/editorStore';
 import type { ProjectListItem } from '../services/projectStorage';
@@ -38,6 +43,9 @@ export function Projects() {
   const [projects, setProjects] = useState<ProjectListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState('');
+  const renameInputRef = useRef<HTMLInputElement>(null);
 
   // Fetch project list on mount
   useEffect(() => {
@@ -98,6 +106,55 @@ export function Projects() {
     },
     [pendingDeleteId]
   );
+
+  const handleRenameStart = useCallback((e: React.MouseEvent, project: ProjectListItem) => {
+    e.stopPropagation();
+    setRenamingId(project.id);
+    setRenameValue(project.name);
+    // Focus will happen via useEffect below
+  }, []);
+
+  const handleRenameCommit = useCallback(async () => {
+    if (!renamingId || !renameValue.trim()) {
+      setRenamingId(null);
+      return;
+    }
+    const newName = renameValue.trim();
+    // Update in IndexedDB: load project data, re-save with new name
+    try {
+      const stored = await dbLoad(renamingId);
+      if (stored) {
+        const data = JSON.parse(stored.data);
+        data.name = newName;
+        await dbSave(renamingId, newName, JSON.stringify(data));
+        setProjects((prev) =>
+          prev.map((p) => (p.id === renamingId ? { ...p, name: newName } : p))
+        );
+      }
+    } catch {
+      // Silently fail rename
+    }
+    setRenamingId(null);
+  }, [renamingId, renameValue]);
+
+  const handleRenameKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === 'Enter') {
+        void handleRenameCommit();
+      } else if (e.key === 'Escape') {
+        setRenamingId(null);
+      }
+    },
+    [handleRenameCommit]
+  );
+
+  // Auto-focus rename input
+  useEffect(() => {
+    if (renamingId && renameInputRef.current) {
+      renameInputRef.current.focus();
+      renameInputRef.current.select();
+    }
+  }, [renamingId]);
 
   const handleImport = useCallback(async () => {
     try {
@@ -195,7 +252,26 @@ export function Projects() {
                   </div>
                   <div className={styles.cardInfo}>
                     <div className={styles.cardMeta}>
-                      <div className={styles.cardName}>{project.name}</div>
+                      {renamingId === project.id ? (
+                        <input
+                          ref={renameInputRef}
+                          className={styles.renameInput}
+                          value={renameValue}
+                          onChange={(e) => setRenameValue(e.target.value)}
+                          onBlur={() => void handleRenameCommit()}
+                          onKeyDown={handleRenameKeyDown}
+                          onClick={(e) => e.stopPropagation()}
+                          data-testid={`rename-input-${project.id}`}
+                        />
+                      ) : (
+                        <div
+                          className={styles.cardName}
+                          onDoubleClick={(e) => handleRenameStart(e, project)}
+                          title="Double-click to rename"
+                        >
+                          {project.name}
+                        </div>
+                      )}
                       <div className={styles.cardDate}>{formatDate(project.updatedAt)}</div>
                     </div>
                     <button

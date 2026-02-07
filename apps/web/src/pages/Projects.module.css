@@ -197,6 +197,21 @@
   margin-top: 1px;
 }
 
+/* ---- Rename Input ---- */
+
+.renameInput {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-primary);
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-accent-primary);
+  border-radius: var(--radius-sm);
+  padding: 1px 4px;
+  width: 100%;
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(168, 85, 247, 0.25);
+}
+
 /* ---- Delete Button ---- */
 
 .deleteButton {

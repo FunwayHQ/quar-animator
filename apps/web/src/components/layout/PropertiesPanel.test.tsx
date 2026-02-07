@@ -415,7 +415,7 @@ describe('PropertiesPanel', () => {
       expect(screen.getByTestId('stroke-swatch')).toBeInTheDocument();
     });
 
-    it('should have hidden color picker for fill', () => {
+    it('should open color picker on fill swatch click', () => {
       const sg = renderWithSceneGraph();
 
       act(() => {
@@ -423,10 +423,15 @@ describe('PropertiesPanel', () => {
         useEditorStore.getState().setSelection(['rect1']);
       });
 
-      expect(screen.getByTestId('fill-color-picker')).toBeInTheDocument();
+      const swatch = screen.getByTestId('fill-swatch');
+      act(() => {
+        fireEvent.click(swatch);
+      });
+
+      expect(screen.getByTestId('color-picker')).toBeInTheDocument();
     });
 
-    it('should update fill when color picker changes', () => {
+    it('should update fill when hex input changes', () => {
       const sg = renderWithSceneGraph();
 
       act(() => {
@@ -434,9 +439,10 @@ describe('PropertiesPanel', () => {
         useEditorStore.getState().setSelection(['rect1']);
       });
 
-      const colorPicker = screen.getByTestId('fill-color-picker');
+      // Fill color is #6495ED
+      const fillInput = screen.getByDisplayValue('#6495ED');
       act(() => {
-        fireEvent.change(colorPicker, { target: { value: '#00ff00' } });
+        fireEvent.change(fillInput, { target: { value: '#00FF00' } });
       });
 
       const updatedNode = sg.getNode('rect1') as RectangleNode;
@@ -683,6 +689,100 @@ describe('PropertiesPanel', () => {
       });
 
       expect(screen.getByTestId('scrub-label-R')).toBeInTheDocument();
+    });
+  });
+
+  // ============================================================================
+  // Corner Radius
+  // ============================================================================
+
+  describe('corner radius', () => {
+    it('should show corner radius section for rectangles', () => {
+      const sg = renderWithSceneGraph();
+
+      act(() => {
+        sg.addNode(createTestRect('rect1', 'Rectangle 1'));
+        useEditorStore.getState().setSelection(['rect1']);
+      });
+
+      expect(screen.getByTestId('corner-radius-section')).toBeInTheDocument();
+      expect(screen.getByText('Corner Radius')).toBeInTheDocument();
+    });
+
+    it('should show corner radius section for polygons', () => {
+      const sg = renderWithSceneGraph();
+
+      act(() => {
+        sg.addNode(createTestPolygon('poly1', 'Polygon 1'));
+        useEditorStore.getState().setSelection(['poly1']);
+      });
+
+      expect(screen.getByTestId('corner-radius-section')).toBeInTheDocument();
+    });
+
+    it('should not show corner radius section for ellipses', () => {
+      const sg = renderWithSceneGraph();
+
+      act(() => {
+        sg.addNode(createTestEllipse('ellipse1', 'Ellipse 1'));
+        useEditorStore.getState().setSelection(['ellipse1']);
+      });
+
+      expect(screen.queryByTestId('corner-radius-section')).not.toBeInTheDocument();
+    });
+
+    it('should update rectangle corner radius', () => {
+      const sg = renderWithSceneGraph();
+
+      act(() => {
+        sg.addNode(createTestRect('rect1', 'Rectangle 1'));
+        useEditorStore.getState().setSelection(['rect1']);
+      });
+
+      const input = screen.getByTestId('corner-radius-input');
+      act(() => {
+        fireEvent.change(input, { target: { value: '15' } });
+      });
+
+      const updatedNode = sg.getNode('rect1') as RectangleNode;
+      expect(updatedNode.cornerRadius).toEqual([15, 15, 15, 15]);
+    });
+
+    it('should toggle corner radius lock and show per-corner inputs', () => {
+      const sg = renderWithSceneGraph();
+
+      act(() => {
+        sg.addNode(createTestRect('rect1', 'Rectangle 1'));
+        useEditorStore.getState().setSelection(['rect1']);
+      });
+
+      const lockBtn = screen.getByTestId('corner-radius-lock');
+      act(() => {
+        fireEvent.click(lockBtn);
+      });
+
+      // Should now show TL, TR, BL, BR scrub labels
+      expect(screen.getByTestId('scrub-label-TL')).toBeInTheDocument();
+      expect(screen.getByTestId('scrub-label-TR')).toBeInTheDocument();
+      expect(screen.getByTestId('scrub-label-BL')).toBeInTheDocument();
+      expect(screen.getByTestId('scrub-label-BR')).toBeInTheDocument();
+    });
+
+    it('should update polygon corner radius', () => {
+      const sg = renderWithSceneGraph();
+
+      act(() => {
+        sg.addNode(createTestPolygon('poly1', 'Polygon 1'));
+        useEditorStore.getState().setSelection(['poly1']);
+      });
+
+      const input = screen.getByTestId('corner-radius-input');
+      act(() => {
+        fireEvent.change(input, { target: { value: '10' } });
+      });
+
+      const updatedNode = sg.getNode('poly1') as PolygonNode;
+      expect(updatedNode.cornerRadius).toBe(10);
     });
   });
 });

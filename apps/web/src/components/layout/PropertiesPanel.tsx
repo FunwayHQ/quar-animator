@@ -1,10 +1,14 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import type { Node, RectangleNode, EllipseNode, PolygonNode, Color } from '@quar/types';
+import type { Node, RectangleNode, EllipseNode, PolygonNode, Color, Gradient, Fill } from '@quar/types';
 import { Lock, Unlock } from 'lucide-react';
 import { useSceneGraph } from '../../contexts/SceneGraphContext';
 import { useEditorStore } from '../../stores/editorStore';
 import { ScrubLabel } from '../common/ScrubLabel';
 import { KeyframeIndicator } from '../common/KeyframeIndicator';
+import { ColorPicker } from '../common/ColorPicker';
+import { GradientEditor } from '../common/GradientEditor';
+import type { FillType } from '../common/GradientEditor';
+import { createDefaultGradient } from '@quar/core';
 import { getKeyframeState } from '../../hooks/useKeyframeState';
 import styles from './PropertiesPanel.module.css';
 
@@ -69,6 +73,20 @@ function getSizePropertyPaths(node: Node): { w: string; h: string } {
   }
 }
 
+function getCornerRadius(node: Node): [number, number, number, number] | number | null {
+  if (node.type === 'rectangle') {
+    return (node as RectangleNode).cornerRadius;
+  }
+  if (node.type === 'polygon') {
+    return (node as PolygonNode).cornerRadius ?? 0;
+  }
+  return null;
+}
+
+function hasCornerRadius(node: Node): boolean {
+  return node.type === 'rectangle' || node.type === 'polygon';
+}
+
 function getFillHex(node: Node): string {
   const fill = (node as { fill?: { type: string; color?: Color } }).fill;
   if (fill && fill.type === 'solid' && fill.color) {
@@ -77,12 +95,45 @@ function getFillHex(node: Node): string {
   return '#000000';
 }
 
+function getFillType(node: Node): FillType {
+  const fill = (node as { fill?: Fill }).fill;
+  if (!fill) return 'solid';
+  if (fill.type === 'gradient' && fill.gradient) {
+    return fill.gradient.type as FillType;
+  }
+  return 'solid';
+}
+
+function getFillGradient(node: Node): Gradient {
+  const fill = (node as { fill?: Fill }).fill;
+  if (fill?.type === 'gradient' && fill.gradient) {
+    return fill.gradient;
+  }
+  return createDefaultGradient('linear');
+}
+
 function getStrokeHex(node: Node): string {
   const stroke = (node as { stroke?: { color: Color } }).stroke;
   if (stroke && stroke.color) {
     return colorToHex(stroke.color);
   }
   return '#000000';
+}
+
+function getStrokeType(node: Node): FillType {
+  const stroke = (node as { stroke?: { gradient?: Gradient } }).stroke;
+  if (stroke?.gradient) {
+    return stroke.gradient.type as FillType;
+  }
+  return 'solid';
+}
+
+function getStrokeGradient(node: Node): Gradient {
+  const stroke = (node as { stroke?: { gradient?: Gradient } }).stroke;
+  if (stroke?.gradient) {
+    return stroke.gradient;
+  }
+  return createDefaultGradient('linear');
 }
 
 // ============================================================================
@@ -294,9 +345,176 @@ export function PropertiesPanel() {
     [selectedId, sceneGraph, autoKeyframe, currentFrame, addKeyframeAtFrame]
   );
 
-  // Refs for hidden color pickers
-  const fillPickerRef = useRef<HTMLInputElement>(null);
-  const strokePickerRef = useRef<HTMLInputElement>(null);
+  // Corner radius state
+  const [cornerRadiusLocked, setCornerRadiusLocked] = useState(true);
+
+  const handleCornerRadiusChange = useCallback(
+    (value: string, corner?: number) => {
+      if (!selectedId) return;
+      const num = parseFloat(value);
+      if (isNaN(num) || num < 0) return;
+      const currentNode = sceneGraph.getNode(selectedId);
+      if (!currentNode) return;
+
+      if (currentNode.type === 'rectangle') {
+        const rect = currentNode as RectangleNode;
+        const newRadius = [...rect.cornerRadius] as [number, number, number, number];
+        if (corner !== undefined) {
+          newRadius[corner] = num;
+        } else {
+          newRadius[0] = num;
+          newRadius[1] = num;
+          newRadius[2] = num;
+          newRadius[3] = num;
+        }
+        sceneGraph.updateNode(selectedId, { cornerRadius: newRadius });
+        if (autoKeyframe) {
+          if (corner !== undefined) {
+            addKeyframeAtFrame(selectedId, `cornerRadius.${corner}`, currentFrame, num);
+          } else {
+            addKeyframeAtFrame(selectedId, 'cornerRadius.0', currentFrame, num);
+            addKeyframeAtFrame(selectedId, 'cornerRadius.1', currentFrame, num);
+            addKeyframeAtFrame(selectedId, 'cornerRadius.2', currentFrame, num);
+            addKeyframeAtFrame(selectedId, 'cornerRadius.3', currentFrame, num);
+          }
+        }
+      } else if (currentNode.type === 'polygon') {
+        sceneGraph.updateNode(selectedId, { cornerRadius: num } as Partial<Node>);
+        if (autoKeyframe) {
+          addKeyframeAtFrame(selectedId, 'cornerRadius', currentFrame, num);
+        }
+      }
+    },
+    [selectedId, sceneGraph, autoKeyframe, currentFrame, addKeyframeAtFrame]
+  );
+
+  // Gradient handlers
+  const handleFillTypeChange = useCallback(
+    (type: FillType) => {
+      if (!selectedId) return;
+      const currentNode = sceneGraph.getNode(selectedId);
+      if (!currentNode) return;
+      const currentFill = (currentNode as { fill?: Fill }).fill;
+
+      if (type === 'solid') {
+        // Switch to solid: use gradient's first stop color or fallback
+        const color = currentFill?.gradient?.stops?.[0]?.color ?? currentFill?.color ?? { r: 128, g: 128, b: 128, a: 1 };
+        sceneGraph.updateNode(selectedId, {
+          fill: { type: 'solid', color, opacity: currentFill?.opacity ?? 1 },
+        } as Partial<Node>);
+      } else {
+        // Switch to gradient: create default gradient of the selected type
+        const gradient = currentFill?.gradient
+          ? { ...currentFill.gradient, type: type as 'linear' | 'radial' | 'conic' }
+          : createDefaultGradient(type as 'linear' | 'radial' | 'conic');
+        sceneGraph.updateNode(selectedId, {
+          fill: { type: 'gradient', gradient, opacity: currentFill?.opacity ?? 1 },
+        } as Partial<Node>);
+      }
+    },
+    [selectedId, sceneGraph]
+  );
+
+  const handleGradientChange = useCallback(
+    (gradient: Gradient) => {
+      if (!selectedId) return;
+      const currentNode = sceneGraph.getNode(selectedId);
+      if (!currentNode) return;
+      const currentFill = (currentNode as { fill?: Fill }).fill;
+      sceneGraph.updateNode(selectedId, {
+        fill: { type: 'gradient', gradient, opacity: currentFill?.opacity ?? 1 },
+      } as Partial<Node>);
+      if (autoKeyframe) {
+        addKeyframeAtFrame(selectedId, 'fill.gradient.angle', currentFrame, gradient.angle ?? 0);
+      }
+    },
+    [selectedId, sceneGraph, autoKeyframe, currentFrame, addKeyframeAtFrame]
+  );
+
+  // Stroke gradient handlers
+  const handleStrokeTypeChange = useCallback(
+    (type: FillType) => {
+      if (!selectedId) return;
+      const currentNode = sceneGraph.getNode(selectedId);
+      if (!currentNode) return;
+      const currentStroke = (currentNode as { stroke?: { color: Color; width: number; opacity: number; cap: string; join: string; gradient?: Gradient } }).stroke;
+      if (!currentStroke) return;
+
+      if (type === 'solid') {
+        // Switch to solid: remove gradient, keep color
+        const color = currentStroke.gradient?.stops?.[0]?.color ?? currentStroke.color;
+        const { gradient: _removed, ...rest } = currentStroke;
+        sceneGraph.updateNode(selectedId, {
+          stroke: { ...rest, color },
+        } as Partial<Node>);
+      } else {
+        // Switch to gradient
+        const gradient = currentStroke.gradient
+          ? { ...currentStroke.gradient, type: type as 'linear' | 'radial' | 'conic' }
+          : createDefaultGradient(type as 'linear' | 'radial' | 'conic');
+        sceneGraph.updateNode(selectedId, {
+          stroke: { ...currentStroke, gradient },
+        } as Partial<Node>);
+      }
+    },
+    [selectedId, sceneGraph]
+  );
+
+  const handleStrokeGradientChange = useCallback(
+    (gradient: Gradient) => {
+      if (!selectedId) return;
+      const currentNode = sceneGraph.getNode(selectedId);
+      if (!currentNode) return;
+      const currentStroke = (currentNode as { stroke?: { color: Color; width: number; opacity: number; cap: string; join: string; gradient?: Gradient } }).stroke;
+      if (!currentStroke) return;
+      sceneGraph.updateNode(selectedId, {
+        stroke: { ...currentStroke, gradient },
+      } as Partial<Node>);
+      if (autoKeyframe) {
+        addKeyframeAtFrame(selectedId, 'stroke.gradient.angle', currentFrame, gradient.angle ?? 0);
+      }
+    },
+    [selectedId, sceneGraph, autoKeyframe, currentFrame, addKeyframeAtFrame]
+  );
+
+  // Color picker popover state
+  const [fillPickerOpen, setFillPickerOpen] = useState(false);
+  const [strokePickerOpen, setStrokePickerOpen] = useState(false);
+  const [pickerAnchor, setPickerAnchor] = useState({ x: 0, y: 0 });
+  const fillSwatchRef = useRef<HTMLDivElement>(null);
+  const strokeSwatchRef = useRef<HTMLDivElement>(null);
+
+  const openFillPicker = useCallback(() => {
+    const el = fillSwatchRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    setPickerAnchor({ x: rect.left, y: rect.bottom + 4 });
+    setFillPickerOpen(true);
+    setStrokePickerOpen(false);
+  }, []);
+
+  const openStrokePicker = useCallback(() => {
+    const el = strokeSwatchRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    setPickerAnchor({ x: rect.left, y: rect.bottom + 4 });
+    setStrokePickerOpen(true);
+    setFillPickerOpen(false);
+  }, []);
+
+  const handleFillPickerChange = useCallback(
+    (c: Color) => {
+      handleFillChange(`#${Math.round(c.r).toString(16).padStart(2, '0')}${Math.round(c.g).toString(16).padStart(2, '0')}${Math.round(c.b).toString(16).padStart(2, '0')}`);
+    },
+    [handleFillChange]
+  );
+
+  const handleStrokePickerChange = useCallback(
+    (c: Color) => {
+      handleStrokeChange(`#${Math.round(c.r).toString(16).padStart(2, '0')}${Math.round(c.g).toString(16).padStart(2, '0')}${Math.round(c.b).toString(16).padStart(2, '0')}`);
+    },
+    [handleStrokeChange]
+  );
 
   if (!node) {
     return (
@@ -317,7 +535,11 @@ export function PropertiesPanel() {
   const rotation = node.transform.rotation;
   const size = getNodeSize(node);
   const fillHex = getFillHex(node);
+  const fillType = getFillType(node);
+  const fillGradient = getFillGradient(node);
   const strokeHex = getStrokeHex(node);
+  const strokeType = getStrokeType(node);
+  const strokeGradient = getStrokeGradient(node);
   const opacityPercent = Math.round(node.opacity * 100);
   const sizePaths = getSizePropertyPaths(node);
 
@@ -440,6 +662,156 @@ export function PropertiesPanel() {
                 </div>
               </div>
             </div>
+            {hasCornerRadius(node) && (() => {
+              const cr = getCornerRadius(node);
+              if (cr === null) return null;
+
+              if (node.type === 'rectangle') {
+                const corners = cr as [number, number, number, number];
+                const uniformValue = Math.round(corners[0]);
+                return (
+                  <div className={styles.propertyRow} data-testid="corner-radius-section">
+                    <div className={styles.propertyHeader}>
+                      <label className={styles.propertyLabel}>Corner Radius</label>
+                      <KeyframeIndicator
+                        state={getKeyframeState(timeline, selectedId!, 'cornerRadius.0', currentFrame)}
+                        onToggle={() => toggleKeyframe('cornerRadius.0', corners[0])}
+                      />
+                    </div>
+                    {cornerRadiusLocked ? (
+                      <div className={styles.propertyInputs}>
+                        <div className={styles.inputGroup}>
+                          <ScrubLabel
+                            label="CR"
+                            value={uniformValue}
+                            onChange={(v) => handleCornerRadiusChange(String(v))}
+                            min={0}
+                          />
+                          <input
+                            type="text"
+                            className={styles.input}
+                            value={uniformValue}
+                            onChange={(e) => handleCornerRadiusChange(e.target.value)}
+                            data-testid="corner-radius-input"
+                          />
+                        </div>
+                        <button
+                          className={`${styles.lockButton} ${styles.lockButtonActive}`}
+                          onClick={() => setCornerRadiusLocked(false)}
+                          title="Unlock per-corner editing"
+                          data-testid="corner-radius-lock"
+                        >
+                          <Lock size={12} />
+                        </button>
+                      </div>
+                    ) : (
+                      <div>
+                        <div className={styles.propertyInputs}>
+                          <div className={styles.inputGroup}>
+                            <ScrubLabel
+                              label="TL"
+                              value={Math.round(corners[0])}
+                              onChange={(v) => handleCornerRadiusChange(String(v), 0)}
+                              min={0}
+                            />
+                            <input
+                              type="text"
+                              className={styles.input}
+                              value={Math.round(corners[0])}
+                              onChange={(e) => handleCornerRadiusChange(e.target.value, 0)}
+                            />
+                          </div>
+                          <div className={styles.inputGroup}>
+                            <ScrubLabel
+                              label="TR"
+                              value={Math.round(corners[1])}
+                              onChange={(v) => handleCornerRadiusChange(String(v), 1)}
+                              min={0}
+                            />
+                            <input
+                              type="text"
+                              className={styles.input}
+                              value={Math.round(corners[1])}
+                              onChange={(e) => handleCornerRadiusChange(e.target.value, 1)}
+                            />
+                          </div>
+                          <button
+                            className={styles.lockButton}
+                            onClick={() => setCornerRadiusLocked(true)}
+                            title="Lock corners together"
+                            data-testid="corner-radius-lock"
+                          >
+                            <Unlock size={12} />
+                          </button>
+                        </div>
+                        <div className={styles.propertyInputs} style={{ marginTop: '4px' }}>
+                          <div className={styles.inputGroup}>
+                            <ScrubLabel
+                              label="BL"
+                              value={Math.round(corners[3])}
+                              onChange={(v) => handleCornerRadiusChange(String(v), 3)}
+                              min={0}
+                            />
+                            <input
+                              type="text"
+                              className={styles.input}
+                              value={Math.round(corners[3])}
+                              onChange={(e) => handleCornerRadiusChange(e.target.value, 3)}
+                            />
+                          </div>
+                          <div className={styles.inputGroup}>
+                            <ScrubLabel
+                              label="BR"
+                              value={Math.round(corners[2])}
+                              onChange={(v) => handleCornerRadiusChange(String(v), 2)}
+                              min={0}
+                            />
+                            <input
+                              type="text"
+                              className={styles.input}
+                              value={Math.round(corners[2])}
+                              onChange={(e) => handleCornerRadiusChange(e.target.value, 2)}
+                            />
+                          </div>
+                          <div style={{ width: '20px', flexShrink: 0 }} />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              }
+
+              // Polygon: single input
+              const polyRadius = cr as number;
+              return (
+                <div className={styles.propertyRow} data-testid="corner-radius-section">
+                  <div className={styles.propertyHeader}>
+                    <label className={styles.propertyLabel}>Corner Radius</label>
+                    <KeyframeIndicator
+                      state={getKeyframeState(timeline, selectedId!, 'cornerRadius', currentFrame)}
+                      onToggle={() => toggleKeyframe('cornerRadius', polyRadius)}
+                    />
+                  </div>
+                  <div className={styles.propertyInputs}>
+                    <div className={styles.inputGroup}>
+                      <ScrubLabel
+                        label="CR"
+                        value={Math.round(polyRadius)}
+                        onChange={(v) => handleCornerRadiusChange(String(v))}
+                        min={0}
+                      />
+                      <input
+                        type="text"
+                        className={styles.input}
+                        value={Math.round(polyRadius)}
+                        onChange={(e) => handleCornerRadiusChange(e.target.value)}
+                        data-testid="corner-radius-input"
+                      />
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
             <div className={styles.propertyRow}>
               <div className={styles.propertyHeader}>
                 <label className={styles.propertyLabel} htmlFor="prop-rotation">
@@ -487,57 +859,96 @@ export function PropertiesPanel() {
               <label className={styles.propertyLabel} htmlFor="prop-fill">
                 Fill
               </label>
-              <div className={styles.propertyInputs}>
-                <div
-                  className={styles.colorSwatch}
-                  style={{ '--swatch-color': fillHex } as React.CSSProperties}
-                  onClick={() => fillPickerRef.current?.click()}
-                  data-testid="fill-swatch"
+              {fillType === 'solid' ? (
+                <div className={styles.propertyInputs}>
+                  <div
+                    ref={fillSwatchRef}
+                    className={styles.colorSwatch}
+                    style={{ '--swatch-color': fillHex } as React.CSSProperties}
+                    onClick={openFillPicker}
+                    data-testid="fill-swatch"
+                  />
+                  <input
+                    id="prop-fill"
+                    type="text"
+                    className={styles.input}
+                    value={fillHex}
+                    onChange={(e) => handleFillChange(e.target.value)}
+                  />
+                  {fillPickerOpen && (
+                    <ColorPicker
+                      color={hexToColor(fillHex) || { r: 0, g: 0, b: 0, a: 1 }}
+                      onChange={handleFillPickerChange}
+                      anchorX={pickerAnchor.x}
+                      anchorY={pickerAnchor.y}
+                      onClose={() => setFillPickerOpen(false)}
+                    />
+                  )}
+                </div>
+              ) : (
+                <GradientEditor
+                  fillType={fillType}
+                  onFillTypeChange={handleFillTypeChange}
+                  gradient={fillGradient}
+                  onChange={handleGradientChange}
                 />
-                <input
-                  ref={fillPickerRef}
-                  type="color"
-                  className={styles.hiddenColorPicker}
-                  value={fillHex}
-                  onChange={(e) => handleFillChange(e.target.value)}
-                  data-testid="fill-color-picker"
+              )}
+              {/* Fill type toggle: shown below the fill controls */}
+              {fillType === 'solid' && (
+                <GradientEditor
+                  fillType="solid"
+                  onFillTypeChange={handleFillTypeChange}
+                  gradient={fillGradient}
+                  onChange={handleGradientChange}
                 />
-                <input
-                  id="prop-fill"
-                  type="text"
-                  className={styles.input}
-                  value={fillHex}
-                  onChange={(e) => handleFillChange(e.target.value)}
-                />
-              </div>
+              )}
             </div>
             <div className={styles.propertyRow}>
               <label className={styles.propertyLabel} htmlFor="prop-stroke">
                 Stroke
               </label>
-              <div className={styles.propertyInputs}>
-                <div
-                  className={styles.colorSwatch}
-                  style={{ '--swatch-color': strokeHex } as React.CSSProperties}
-                  onClick={() => strokePickerRef.current?.click()}
-                  data-testid="stroke-swatch"
+              {strokeType === 'solid' ? (
+                <div className={styles.propertyInputs}>
+                  <div
+                    ref={strokeSwatchRef}
+                    className={styles.colorSwatch}
+                    style={{ '--swatch-color': strokeHex } as React.CSSProperties}
+                    onClick={openStrokePicker}
+                    data-testid="stroke-swatch"
+                  />
+                  <input
+                    id="prop-stroke"
+                    type="text"
+                    className={styles.input}
+                    value={strokeHex}
+                    onChange={(e) => handleStrokeChange(e.target.value)}
+                  />
+                  {strokePickerOpen && (
+                    <ColorPicker
+                      color={hexToColor(strokeHex) || { r: 0, g: 0, b: 0, a: 1 }}
+                      onChange={handleStrokePickerChange}
+                      anchorX={pickerAnchor.x}
+                      anchorY={pickerAnchor.y}
+                      onClose={() => setStrokePickerOpen(false)}
+                    />
+                  )}
+                </div>
+              ) : (
+                <GradientEditor
+                  fillType={strokeType}
+                  onFillTypeChange={handleStrokeTypeChange}
+                  gradient={strokeGradient}
+                  onChange={handleStrokeGradientChange}
                 />
-                <input
-                  ref={strokePickerRef}
-                  type="color"
-                  className={styles.hiddenColorPicker}
-                  value={strokeHex}
-                  onChange={(e) => handleStrokeChange(e.target.value)}
-                  data-testid="stroke-color-picker"
+              )}
+              {strokeType === 'solid' && (
+                <GradientEditor
+                  fillType="solid"
+                  onFillTypeChange={handleStrokeTypeChange}
+                  gradient={strokeGradient}
+                  onChange={handleStrokeGradientChange}
                 />
-                <input
-                  id="prop-stroke"
-                  type="text"
-                  className={styles.input}
-                  value={strokeHex}
-                  onChange={(e) => handleStrokeChange(e.target.value)}
-                />
-              </div>
+              )}
             </div>
             <div className={styles.propertyRow}>
               <div className={styles.propertyHeader}>

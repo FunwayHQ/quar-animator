@@ -26,6 +26,7 @@ import {
   createPolygonPath,
   createStarPath,
   generateStrokeOutlineVertices,
+  applyCornerRadius,
 } from './pathUtils';
 import type { PathPoint } from '@quar/types';
 
@@ -657,5 +658,142 @@ describe('getAbsoluteControlPoints', () => {
     const { cp1, cp2 } = getAbsoluteControlPoints(p0, p1);
     expect(cp1).toEqual({ x: 30, y: 0 });
     expect(cp2).toEqual({ x: 70, y: 0 });
+  });
+});
+
+// ============================================================================
+// Corner Radius
+// ============================================================================
+
+describe('applyCornerRadius', () => {
+  it('passes through points with zero radius', () => {
+    const points = [
+      createCornerPoint({ x: 0, y: 0 }),
+      createCornerPoint({ x: 100, y: 0 }),
+      createCornerPoint({ x: 100, y: 100 }),
+    ];
+    const result = applyCornerRadius(points, true);
+    expect(result.length).toBe(3);
+    expect(result[0].position).toEqual({ x: 0, y: 0 });
+  });
+
+  it('rounds corners of a triangle with defaultRadius', () => {
+    const points = [
+      createCornerPoint({ x: 50, y: 0 }),
+      createCornerPoint({ x: 100, y: 100 }),
+      createCornerPoint({ x: 0, y: 100 }),
+    ];
+    const result = applyCornerRadius(points, true, 10);
+    // Each corner point becomes 2 smooth points = 6 total
+    expect(result.length).toBe(6);
+    // All result points should be smooth type
+    for (const p of result) {
+      expect(p.type).toBe('smooth');
+    }
+  });
+
+  it('rounds corners of a square with defaultRadius', () => {
+    const points = [
+      createCornerPoint({ x: 0, y: 0 }),
+      createCornerPoint({ x: 100, y: 0 }),
+      createCornerPoint({ x: 100, y: 100 }),
+      createCornerPoint({ x: 0, y: 100 }),
+    ];
+    const result = applyCornerRadius(points, true, 10);
+    // 4 corners * 2 = 8 points
+    expect(result.length).toBe(8);
+  });
+
+  it('clamps radius to half edge length', () => {
+    // Very small triangle with large requested radius
+    const points = [
+      createCornerPoint({ x: 0, y: 0 }),
+      createCornerPoint({ x: 10, y: 0 }),
+      createCornerPoint({ x: 5, y: 10 }),
+    ];
+    const result = applyCornerRadius(points, true, 100);
+    // Should still produce valid rounded points (clamped)
+    expect(result.length).toBe(6);
+    // Entry/exit points should be between vertices (not overshooting)
+    for (const p of result) {
+      expect(isFinite(p.position.x)).toBe(true);
+      expect(isFinite(p.position.y)).toBe(true);
+    }
+  });
+
+  it('skips smooth/symmetric points', () => {
+    const points = [
+      createCornerPoint({ x: 0, y: 0 }),
+      createSmoothPoint({ x: 100, y: 0 }, { x: 20, y: 0 }),
+      createCornerPoint({ x: 100, y: 100 }),
+    ];
+    const result = applyCornerRadius(points, true, 10);
+    // Smooth point stays as-is, 2 corner points each become 2 = 4 + 1 = 5
+    expect(result.length).toBe(5);
+    expect(result.find(p => p.type === 'smooth' && p.handleIn !== null && p.handleOut !== null)).toBeTruthy();
+  });
+
+  it('skips first/last points of open paths', () => {
+    const points = [
+      createCornerPoint({ x: 0, y: 0 }),
+      createCornerPoint({ x: 50, y: 0 }),
+      createCornerPoint({ x: 100, y: 0 }),
+    ];
+    const result = applyCornerRadius(points, false, 10);
+    // First and last are open path endpoints, only middle gets rounded
+    // Middle becomes 2 smooth points, first and last stay = 4 total
+    expect(result.length).toBe(4);
+    expect(result[0].type).toBe('corner');
+    expect(result[3].type).toBe('corner');
+  });
+
+  it('handles per-point cornerRadius', () => {
+    const points: PathPoint[] = [
+      { ...createCornerPoint({ x: 0, y: 0 }), cornerRadius: 10 },
+      createCornerPoint({ x: 100, y: 0 }),
+      createCornerPoint({ x: 100, y: 100 }),
+      createCornerPoint({ x: 0, y: 100 }),
+    ];
+    const result = applyCornerRadius(points, true);
+    // Only point 0 has radius, becomes 2 points. Others stay as 3 = total 5
+    expect(result.length).toBe(5);
+  });
+
+  it('handles degenerate zero-length edges', () => {
+    const points = [
+      createCornerPoint({ x: 50, y: 50 }),
+      createCornerPoint({ x: 50, y: 50 }), // Same position
+      createCornerPoint({ x: 100, y: 100 }),
+    ];
+    const result = applyCornerRadius(points, true, 10);
+    // Zero-length edges should be skipped, no NaN
+    for (const p of result) {
+      expect(isFinite(p.position.x)).toBe(true);
+      expect(isFinite(p.position.y)).toBe(true);
+    }
+  });
+
+  it('createPolygonPath applies cornerRadius parameter', () => {
+    const points = createPolygonPath(0, 0, 50, 6, undefined, 10);
+    // 6 corners * 2 = 12 smooth points
+    expect(points.length).toBe(12);
+    expect(points[0].type).toBe('smooth');
+  });
+
+  it('createStarPath applies cornerRadius parameter', () => {
+    const points = createStarPath(0, 0, 50, 25, 5, undefined, 10);
+    // 10 points (5 outer + 5 inner) * 2 = 20 smooth points
+    expect(points.length).toBe(20);
+    expect(points[0].type).toBe('smooth');
+  });
+
+  it('produces tessellatable rounded paths', () => {
+    const points = createPolygonPath(0, 0, 50, 4, undefined, 10);
+    const tessellated = tessellatePathToVertices(points, true);
+    // Should produce valid vertices (more than original due to bezier subdivision)
+    expect(tessellated.length).toBeGreaterThan(8); // More than 4 corner points
+    for (let i = 0; i < tessellated.length; i++) {
+      expect(isFinite(tessellated[i])).toBe(true);
+    }
   });
 });

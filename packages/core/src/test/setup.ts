@@ -36,6 +36,7 @@ export function createMockWebGL2Context(): WebGL2RenderingContext {
     UNSIGNED_SHORT: 5123,
     LINES: 1,
     TRIANGLES: 4,
+    TRIANGLE_FAN: 6,
 
     // State management
     enable: vi.fn(),
@@ -83,6 +84,7 @@ export function createMockWebGL2Context(): WebGL2RenderingContext {
     vertexAttribPointer: vi.fn(),
 
     // Uniform operations
+    uniform1i: vi.fn(),
     uniform1f: vi.fn(),
     uniform2fv: vi.fn(),
     uniform3fv: vi.fn(),
