@@ -56,6 +56,17 @@ export const DEFAULT_STROKE: Stroke = {
 // ============================================================================
 
 export interface EditorStore {
+  // Project state
+  projectId: string | null;
+  projectName: string;
+  isDirty: boolean;
+  projectCreatedAt: string | null;
+  setProjectId: (id: string | null) => void;
+  setProjectName: (name: string) => void;
+  setIsDirty: (dirty: boolean) => void;
+  setProjectCreatedAt: (date: string | null) => void;
+  markDirty: () => void;
+
   // Tool state
   activeTool: ToolType;
   setActiveTool: (tool: ToolType) => void;
@@ -168,6 +179,17 @@ export interface EditorStore {
 // ============================================================================
 
 export const useEditorStore = create<EditorStore>((set, get) => ({
+  // Project state
+  projectId: null,
+  projectName: 'Untitled Project',
+  isDirty: false,
+  projectCreatedAt: null,
+  setProjectId: (id: string | null) => set({ projectId: id }),
+  setProjectName: (name: string) => set({ projectName: name }),
+  setIsDirty: (dirty: boolean) => set({ isDirty: dirty }),
+  setProjectCreatedAt: (date: string | null) => set({ projectCreatedAt: date }),
+  markDirty: () => set({ isDirty: true }),
+
   // Tool state
   activeTool: 'selection',
   setActiveTool: (tool: ToolType) => set({ activeTool: tool }),
@@ -521,3 +543,10 @@ export const useOnionSkin = (): OnionSkinSettings =>
   useEditorStore((state: EditorStore) => state.onionSkin);
 export const useToggleOnionSkin = (): (() => void) =>
   useEditorStore((state: EditorStore) => state.toggleOnionSkin);
+
+// Project selectors
+export const useProjectId = (): string | null =>
+  useEditorStore((state: EditorStore) => state.projectId);
+export const useProjectName = (): string =>
+  useEditorStore((state: EditorStore) => state.projectName);
+export const useIsDirty = (): boolean => useEditorStore((state: EditorStore) => state.isDirty);

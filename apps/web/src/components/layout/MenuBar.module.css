@@ -3,11 +3,7 @@
   align-items: center;
   height: 44px;
   padding: 0 var(--space-md);
-  background: linear-gradient(
-    180deg,
-    rgba(255, 255, 255, 0.03) 0%,
-    transparent 100%
-  );
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.03) 0%, transparent 100%);
   background-color: var(--color-bg-primary);
   border-bottom: 1px solid var(--color-border-subtle);
   gap: var(--space-lg);
@@ -78,6 +74,10 @@
   gap: 2px;
 }
 
+.menuContainer {
+  position: relative;
+}
+
 .menuItem {
   padding: 6px 10px;
   font-size: var(--font-size-sm);
@@ -87,6 +87,9 @@
   transition: all var(--duration-fast) var(--easing-default);
   position: relative;
   letter-spacing: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
 }
 
 .menuItem:hover {
@@ -102,6 +105,7 @@
 /* Active menu indicator */
 .menuItem.active {
   color: var(--color-text-primary);
+  background-color: var(--color-bg-active);
 }
 
 .menuItem.active::after {
@@ -116,6 +120,80 @@
   border-radius: var(--radius-full);
 }
 
+/* ============================================================================
+   Dropdown Menu
+   ============================================================================ */
+
+.dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 4px;
+  min-width: 220px;
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border-default);
+  border-radius: 8px;
+  box-shadow: var(--shadow-xl);
+  padding: 4px 0;
+  z-index: 100;
+  animation: dropdownIn 0.12s var(--easing-default) both;
+}
+
+@keyframes dropdownIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.dropdownItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 28px;
+  padding: 0 12px;
+  cursor: pointer;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  transition:
+    background var(--duration-fast),
+    color var(--duration-fast);
+  outline: none;
+  border: none;
+  background: none;
+  width: 100%;
+  text-align: left;
+}
+
+.dropdownItem:hover {
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
+}
+
+.dropdownLabel {
+  flex: 1;
+}
+
+.dropdownShortcut {
+  font-size: 11px;
+  color: var(--color-text-disabled);
+  margin-left: 16px;
+}
+
+.dropdownSeparator {
+  height: 1px;
+  background: var(--color-border-subtle);
+  margin: 4px 8px;
+}
+
+/* ============================================================================
+   Project Name Display
+   ============================================================================ */
+
 .actions {
   margin-left: auto;
   display: flex;
@@ -123,7 +201,10 @@
   gap: var(--space-md);
 }
 
-.projectName {
+.projectNameDisplay {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-medium);
   color: var(--color-text-tertiary);
@@ -132,10 +213,107 @@
   border-radius: var(--radius-sm);
   border: 1px solid var(--color-border-subtle);
   transition: all var(--duration-fast);
-  cursor: pointer;
 }
 
-.projectName:hover {
-  border-color: var(--color-border-default);
+.dirtyDot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-full);
+  background: var(--color-accent-primary);
+  flex-shrink: 0;
+}
+
+/* ============================================================================
+   Save As Dialog
+   ============================================================================ */
+
+.saveAsOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 500;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(2px);
+}
+
+.saveAsDialog {
+  position: fixed;
+  z-index: 501;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 360px;
+  max-width: 90vw;
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border-default);
+  border-radius: 12px;
+  box-shadow: var(--shadow-xl);
+  padding: 20px;
+  animation: dropdownIn 0.15s var(--easing-default) both;
+}
+
+.saveAsTitle {
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+  margin: 0 0 12px;
+}
+
+.saveAsInput {
+  width: 100%;
+  padding: 8px 12px;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-primary);
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-sm);
+  outline: none;
+  transition: border-color var(--duration-fast);
+  box-sizing: border-box;
+}
+
+.saveAsInput:focus {
+  border-color: var(--color-accent-primary);
+}
+
+.saveAsActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.saveAsCancel,
+.saveAsConfirm {
+  padding: 6px 16px;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  border: none;
+  transition: all var(--duration-fast);
+}
+
+.saveAsCancel {
+  background: var(--color-bg-tertiary);
   color: var(--color-text-secondary);
+}
+
+.saveAsCancel:hover {
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
+}
+
+.saveAsConfirm {
+  background: var(--color-accent-primary);
+  color: white;
+}
+
+.saveAsConfirm:hover {
+  filter: brightness(1.1);
+}
+
+.saveAsConfirm:disabled {
+  opacity: 0.5;
+  cursor: default;
 }

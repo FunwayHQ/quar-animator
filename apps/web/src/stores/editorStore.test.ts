@@ -33,6 +33,10 @@ describe('EditorStore', () => {
       selectedKeyframeIds: new Set<string>(),
       keyframeClipboard: null,
       onionSkin: { ...DEFAULT_ONION_SKIN_SETTINGS },
+      projectId: null,
+      projectName: 'Untitled Project',
+      isDirty: false,
+      projectCreatedAt: null,
     });
   });
 
@@ -923,6 +927,61 @@ describe('EditorStore', () => {
       expect(useEditorStore.getState().onionSkin.opacity).toBe(0);
       setOnionSkinOpacity(2.0);
       expect(useEditorStore.getState().onionSkin.opacity).toBe(1);
+    });
+  });
+
+  // ==========================================================================
+  // Project State
+  // ==========================================================================
+
+  describe('project state', () => {
+    it('should have default project state', () => {
+      const state = useEditorStore.getState();
+      expect(state.projectId).toBeNull();
+      expect(state.projectName).toBe('Untitled Project');
+      expect(state.isDirty).toBe(false);
+      expect(state.projectCreatedAt).toBeNull();
+    });
+
+    it('should set project ID', () => {
+      const { setProjectId } = useEditorStore.getState();
+      setProjectId('proj_123');
+      expect(useEditorStore.getState().projectId).toBe('proj_123');
+    });
+
+    it('should set project name', () => {
+      const { setProjectName } = useEditorStore.getState();
+      setProjectName('My Animation');
+      expect(useEditorStore.getState().projectName).toBe('My Animation');
+    });
+
+    it('should set isDirty', () => {
+      const { setIsDirty } = useEditorStore.getState();
+      setIsDirty(true);
+      expect(useEditorStore.getState().isDirty).toBe(true);
+      setIsDirty(false);
+      expect(useEditorStore.getState().isDirty).toBe(false);
+    });
+
+    it('should markDirty', () => {
+      const { markDirty } = useEditorStore.getState();
+      expect(useEditorStore.getState().isDirty).toBe(false);
+      markDirty();
+      expect(useEditorStore.getState().isDirty).toBe(true);
+    });
+
+    it('should set projectCreatedAt', () => {
+      const { setProjectCreatedAt } = useEditorStore.getState();
+      const date = '2024-01-15T10:00:00.000Z';
+      setProjectCreatedAt(date);
+      expect(useEditorStore.getState().projectCreatedAt).toBe(date);
+    });
+
+    it('should clear project ID to null', () => {
+      const { setProjectId } = useEditorStore.getState();
+      setProjectId('proj_123');
+      setProjectId(null);
+      expect(useEditorStore.getState().projectId).toBeNull();
     });
   });
 });
