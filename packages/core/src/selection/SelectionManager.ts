@@ -3,11 +3,42 @@
  * Calculates bounding boxes for selected nodes
  */
 
-import type { Node, Rect, RectangleNode, EllipseNode, PolygonNode, PathNode } from '@quar/types';
+import type { Node, Rect, Matrix3 } from '@quar/types';
 import type { SceneGraph } from '../SceneGraph';
 import type { SelectionBounds } from './types';
-import { rect } from '../math';
+import { rect, mat3 } from '../math';
 import { getPolygonBounds, getPathBounds } from '../path/pathUtils';
+
+// ============================================================================
+// Helpers
+// ============================================================================
+
+/**
+ * Transform a local-space AABB through a world matrix and return the new AABB.
+ * Transforms all 4 corners, then computes the axis-aligned bounding box.
+ */
+function transformBoundsToWorld(localBounds: Rect, worldMatrix: Matrix3): Rect {
+  const { x, y, width, height } = localBounds;
+  const corners = [
+    mat3.transformPoint(worldMatrix, { x, y }),
+    mat3.transformPoint(worldMatrix, { x: x + width, y }),
+    mat3.transformPoint(worldMatrix, { x: x + width, y: y + height }),
+    mat3.transformPoint(worldMatrix, { x, y: y + height }),
+  ];
+
+  let minX = corners[0].x;
+  let minY = corners[0].y;
+  let maxX = corners[0].x;
+  let maxY = corners[0].y;
+  for (let i = 1; i < 4; i++) {
+    if (corners[i].x < minX) minX = corners[i].x;
+    if (corners[i].y < minY) minY = corners[i].y;
+    if (corners[i].x > maxX) maxX = corners[i].x;
+    if (corners[i].y > maxY) maxY = corners[i].y;
+  }
+
+  return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
+}
 
 // ============================================================================
 // SelectionManager Class
@@ -62,67 +93,93 @@ export class SelectionManager {
    * @returns Rect or null if bounds cannot be calculated
    */
   getNodeBounds(node: Node): Rect | null {
-    const transform = node.transform;
-    const pos = transform.position;
+    const localBounds = this.getLocalBounds(node);
+    if (!localBounds) return null;
 
+    const transform = node.transform;
+    const worldMatrix = mat3.compose(transform.position, transform.rotation, transform.scale);
+
+    return transformBoundsToWorld(localBounds, worldMatrix);
+  }
+
+  /**
+   * Get un-rotated bounds of a node (position + scale, no rotation).
+   * Used for the visual selection overlay which applies rotation separately.
+   */
+  getNodeBoundsUnrotated(node: Node): Rect | null {
+    const transform = node.transform;
+    const localBounds = this.getLocalBounds(node);
+    if (!localBounds) return null;
+
+    // Compose WITHOUT rotation — overlay handles rotation visually
+    const worldMatrix = mat3.compose(transform.position, 0, transform.scale);
+
+    return transformBoundsToWorld(localBounds, worldMatrix);
+  }
+
+  /**
+   * Get selection bounds without rotation (for visual overlay).
+   * For single selection, returns un-rotated bounds + rotation angle.
+   * For multi selection, returns rotation-aware AABB + rotation 0.
+   */
+  getSelectionBoundsForDisplay(
+    selectedIds: Set<string>,
+    sceneGraph: SceneGraph
+  ): { bounds: SelectionBounds; rotation: number } | null {
+    if (selectedIds.size === 0) return null;
+
+    if (selectedIds.size === 1) {
+      const nodeId = [...selectedIds][0];
+      const node = sceneGraph.getNode(nodeId);
+      if (!node || !node.visible) return null;
+
+      const nodeBounds = this.getNodeBoundsUnrotated(node);
+      if (!nodeBounds) return null;
+
+      return {
+        bounds: {
+          rect: nodeBounds,
+          center: rect.center(nodeBounds),
+        },
+        rotation: node.transform.rotation,
+      };
+    }
+
+    // Multi-selection: use AABB (rotation-aware), no visual rotation
+    const bounds = this.getSelectionBounds(selectedIds, sceneGraph);
+    if (!bounds) return null;
+    return { bounds, rotation: 0 };
+  }
+
+  // --------------------------------------------------------------------------
+  // Local Bounds (shared helper)
+  // --------------------------------------------------------------------------
+
+  /**
+   * Get the local-space AABB for a node's geometry (no transform applied).
+   */
+  private getLocalBounds(node: Node): Rect | null {
     switch (node.type) {
       case 'rectangle': {
-        const rectNode = node;
-        const halfWidth = rectNode.width / 2;
-        const halfHeight = rectNode.height / 2;
+        const anchor = node.transform.anchor;
         return {
-          x: pos.x - halfWidth,
-          y: pos.y - halfHeight,
-          width: rectNode.width,
-          height: rectNode.height,
+          x: -node.width * anchor.x,
+          y: -node.height * anchor.y,
+          width: node.width,
+          height: node.height,
         };
       }
-
-      case 'ellipse': {
-        const ellipseNode = node;
+      case 'ellipse':
         return {
-          x: pos.x - ellipseNode.radiusX,
-          y: pos.y - ellipseNode.radiusY,
-          width: ellipseNode.radiusX * 2,
-          height: ellipseNode.radiusY * 2,
+          x: -node.radiusX,
+          y: -node.radiusY,
+          width: node.radiusX * 2,
+          height: node.radiusY * 2,
         };
-      }
-
-      case 'polygon': {
-        const polygonNode = node;
-        // Calculate precise bounds from actual polygon vertices
-        const scaleX = transform.scale?.x ?? 1;
-        const scaleY = transform.scale?.y ?? 1;
-        const bounds = getPolygonBounds(
-          pos.x,
-          pos.y,
-          polygonNode.radius,
-          polygonNode.sides,
-          scaleX,
-          scaleY,
-          polygonNode.innerRadius
-        );
-        return bounds;
-      }
-
-      case 'path': {
-        const pathNode = node;
-        const pathBounds = getPathBounds(pathNode.points, pathNode.closed);
-        if (!pathBounds) return null;
-
-        return {
-          x: pathBounds.x + pos.x,
-          y: pathBounds.y + pos.y,
-          width: pathBounds.width,
-          height: pathBounds.height,
-        };
-      }
-
-      case 'group': {
-        // Groups don't have intrinsic bounds
-        return null;
-      }
-
+      case 'polygon':
+        return getPolygonBounds(0, 0, node.radius, node.sides, 1, 1, node.innerRadius);
+      case 'path':
+        return getPathBounds(node.points, node.closed);
       default:
         return null;
     }

@@ -3,13 +3,39 @@
  * Selects, moves, and resizes shapes
  */
 
-import type { CanvasPointerEvent, Node, Vector2, Rect } from '@quar/types';
+import type { CanvasPointerEvent, Node, Vector2, Rect, Matrix3 } from '@quar/types';
 import { BaseTool, type ToolContext } from './BaseTool';
-import { vec2, rect } from '../math';
+import { vec2, rect, mat3 } from '../math';
 import { SelectionManager } from '../selection/SelectionManager';
 import { TransformHandles } from '../selection/TransformHandles';
 import type { HandlePosition, SelectionBounds } from '../selection/types';
 import { getPolygonBounds, getPathBounds } from '../path/pathUtils';
+
+/**
+ * Transform a local-space AABB through a world matrix and return the new AABB.
+ */
+function transformBoundsToWorld(localBounds: Rect, worldMatrix: Matrix3): Rect {
+  const { x, y, width, height } = localBounds;
+  const corners = [
+    mat3.transformPoint(worldMatrix, { x, y }),
+    mat3.transformPoint(worldMatrix, { x: x + width, y }),
+    mat3.transformPoint(worldMatrix, { x: x + width, y: y + height }),
+    mat3.transformPoint(worldMatrix, { x, y: y + height }),
+  ];
+
+  let minX = corners[0].x;
+  let minY = corners[0].y;
+  let maxX = corners[0].x;
+  let maxY = corners[0].y;
+  for (let i = 1; i < 4; i++) {
+    if (corners[i].x < minX) minX = corners[i].x;
+    if (corners[i].y < minY) minY = corners[i].y;
+    if (corners[i].x > maxX) maxX = corners[i].x;
+    if (corners[i].y > maxY) maxY = corners[i].y;
+  }
+
+  return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
+}
 
 // ============================================================================
 // Types
@@ -88,10 +114,19 @@ export class SelectionTool extends BaseTool {
     // First, check if clicking on a transform handle (if there's a selection)
     const selectedIds = this.context.getSelectedIds();
     if (selectedIds.size > 0) {
-      const bounds = this.selectionManager.getSelectionBounds(selectedIds, this.context.sceneGraph);
+      const displayResult = this.selectionManager.getSelectionBoundsForDisplay(
+        selectedIds,
+        this.context.sceneGraph
+      );
 
-      if (bounds) {
-        const hitHandle = this.transformHandles.hitTest(screenPos, bounds, this.context.camera);
+      if (displayResult) {
+        const { bounds, rotation } = displayResult;
+        const hitHandle = this.transformHandles.hitTest(
+          screenPos,
+          bounds,
+          this.context.camera,
+          rotation
+        );
 
         if (hitHandle === 'rotation') {
           // Start rotation operation
@@ -437,55 +472,49 @@ export class SelectionTool extends BaseTool {
    */
   private getNodeBounds(node: Node): Rect | null {
     const transform = node.transform;
-    const pos = transform.position;
+
+    // Get local-space AABB (geometry centered at local origin)
+    let localBounds: Rect | null = null;
 
     switch (node.type) {
       case 'rectangle': {
-        const halfWidth = node.width / 2;
-        const halfHeight = node.height / 2;
-        return {
-          x: pos.x - halfWidth,
-          y: pos.y - halfHeight,
+        const anchor = transform.anchor;
+        localBounds = {
+          x: -node.width * anchor.x,
+          y: -node.height * anchor.y,
           width: node.width,
           height: node.height,
         };
+        break;
       }
       case 'ellipse': {
-        return {
-          x: pos.x - node.radiusX,
-          y: pos.y - node.radiusY,
+        localBounds = {
+          x: -node.radiusX,
+          y: -node.radiusY,
           width: node.radiusX * 2,
           height: node.radiusY * 2,
         };
+        break;
       }
       case 'polygon': {
-        // Calculate precise bounds from actual polygon vertices
-        const scaleX = transform.scale?.x ?? 1;
-        const scaleY = transform.scale?.y ?? 1;
-        return getPolygonBounds(
-          pos.x,
-          pos.y,
-          node.radius,
-          node.sides,
-          scaleX,
-          scaleY,
-          node.innerRadius
-        );
+        localBounds = getPolygonBounds(0, 0, node.radius, node.sides, 1, 1, node.innerRadius);
+        break;
       }
       case 'path': {
-        const pathBounds = getPathBounds(node.points, node.closed);
-        if (!pathBounds) return null;
-
-        return {
-          x: pathBounds.x + pos.x,
-          y: pathBounds.y + pos.y,
-          width: pathBounds.width,
-          height: pathBounds.height,
-        };
+        localBounds = getPathBounds(node.points, node.closed);
+        break;
       }
       default:
         return null;
     }
+
+    if (!localBounds) return null;
+
+    // Build world matrix for bounds (skip anchor offset since local geometry
+    // already accounts for it via explicit offsets like -width*anchor.x)
+    const worldMatrix = mat3.compose(transform.position, transform.rotation, transform.scale);
+
+    return transformBoundsToWorld(localBounds, worldMatrix);
   }
 
   /**
@@ -599,14 +628,23 @@ export class SelectionTool extends BaseTool {
       return;
     }
 
-    const bounds = this.selectionManager.getSelectionBounds(selectedIds, this.context.sceneGraph);
+    const displayResult = this.selectionManager.getSelectionBoundsForDisplay(
+      selectedIds,
+      this.context.sceneGraph
+    );
 
-    if (!bounds) {
+    if (!displayResult) {
       this.currentCursor = 'default';
       return;
     }
 
-    const hitHandle = this.transformHandles.hitTest(screenPos, bounds, this.context.camera);
+    const { bounds, rotation } = displayResult;
+    const hitHandle = this.transformHandles.hitTest(
+      screenPos,
+      bounds,
+      this.context.camera,
+      rotation
+    );
 
     if (hitHandle) {
       this.currentCursor = this.transformHandles.getCursor(hitHandle);

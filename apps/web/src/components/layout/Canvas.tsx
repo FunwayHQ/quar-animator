@@ -7,8 +7,6 @@ import {
   OnionSkinRenderer,
   SelectionManager,
   TransformHandles,
-  getPolygonBounds,
-  getPathBounds,
 } from '@quar/core';
 import type { Vector2 } from '@quar/types';
 import { evaluateNodeAtFrame, applyAnimatedValues } from '@quar/animation';
@@ -18,6 +16,7 @@ import { useEditorStore } from '../../stores/editorStore';
 import { useSceneGraph } from '../../contexts/SceneGraphContext';
 import { SelectionOverlay } from '../canvas/SelectionOverlay';
 import { PenToolOverlay } from '../canvas/PenToolOverlay';
+import { DirectSelectionOverlay } from '../canvas/DirectSelectionOverlay';
 import { ContextMenu } from '../common/ContextMenu';
 import type { ContextMenuEntry } from '../common/ContextMenu';
 import styles from './Canvas.module.css';
@@ -47,7 +46,7 @@ export function Canvas() {
   const animationFrameRef = useRef<number>(0);
 
   // Selection infrastructure (initialized immediately, doesn't depend on WebGL)
-  const _selectionManagerRef = useRef<SelectionManager>(new SelectionManager());
+  const selectionManagerRef = useRef<SelectionManager>(new SelectionManager());
   const transformHandlesRef = useRef<TransformHandles>(new TransformHandles());
 
   // Interaction state
@@ -92,6 +91,9 @@ export function Canvas() {
     isPenToolDrawing,
     startPenHandleDrag,
     startPenPointDrag,
+    isDirectSelectionActive,
+    directSelectionPoints,
+    directSelectionPathNodes,
   } = useCanvasTools({ camera: cameraReady ? cameraRef.current : null, sceneGraph });
 
   // Subscribe to scene graph changes to update selection bounds
@@ -124,102 +126,25 @@ export function Canvas() {
   // Enable tool shortcuts
   useToolShortcuts();
 
-  // Selection bounds and handles - direct calculation to avoid caching issues
-  const selectionBounds = useMemo(() => {
+  // Selection bounds for display: un-rotated bounds + rotation angle for single selection,
+  // AABB + rotation 0 for multi-selection.
+  const selectionDisplay = useMemo(() => {
     if (!sceneGraphRef.current || selectedNodeIds.size === 0) return null;
-
-    // Calculate bounds directly for all node types
-    let minX = Infinity;
-    let minY = Infinity;
-    let maxX = -Infinity;
-    let maxY = -Infinity;
-    let hasValidBounds = false;
-
-    for (const id of selectedNodeIds) {
-      const node = sceneGraphRef.current.getNode(id);
-      if (!node || !node.visible) continue;
-
-      const pos = node.transform.position;
-      let nodeBounds: { x: number; y: number; width: number; height: number } | null = null;
-
-      if (node.type === 'rectangle') {
-        const rectNode = node as any;
-        nodeBounds = {
-          x: pos.x - rectNode.width / 2,
-          y: pos.y - rectNode.height / 2,
-          width: rectNode.width,
-          height: rectNode.height,
-        };
-      } else if (node.type === 'ellipse') {
-        const ellipseNode = node as any;
-        nodeBounds = {
-          x: pos.x - ellipseNode.radiusX,
-          y: pos.y - ellipseNode.radiusY,
-          width: ellipseNode.radiusX * 2,
-          height: ellipseNode.radiusY * 2,
-        };
-      } else if (node.type === 'polygon') {
-        const polygonNode = node as any;
-        const scaleX = node.transform.scale?.x ?? 1;
-        const scaleY = node.transform.scale?.y ?? 1;
-        // Use precise bounds from actual vertex positions
-        nodeBounds = getPolygonBounds(
-          pos.x,
-          pos.y,
-          polygonNode.radius,
-          polygonNode.sides,
-          scaleX,
-          scaleY,
-          polygonNode.innerRadius
-        );
-      } else if (node.type === 'path') {
-        const pathNode = node as any;
-        const pathBounds = getPathBounds(pathNode.points, pathNode.closed);
-        if (pathBounds) {
-          nodeBounds = {
-            x: pathBounds.x + pos.x,
-            y: pathBounds.y + pos.y,
-            width: pathBounds.width,
-            height: pathBounds.height,
-          };
-        }
-      }
-
-      if (nodeBounds) {
-        minX = Math.min(minX, nodeBounds.x);
-        minY = Math.min(minY, nodeBounds.y);
-        maxX = Math.max(maxX, nodeBounds.x + nodeBounds.width);
-        maxY = Math.max(maxY, nodeBounds.y + nodeBounds.height);
-        hasValidBounds = true;
-      }
-    }
-
-    if (!hasValidBounds) return null;
-
-    const rect = { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
-    return {
-      rect,
-      center: { x: minX + (maxX - minX) / 2, y: minY + (maxY - minY) / 2 },
-    };
+    return selectionManagerRef.current.getSelectionBoundsForDisplay(
+      selectedNodeIds,
+      sceneGraphRef.current
+    );
     // eslint-disable-next-line react-hooks/exhaustive-deps -- sceneGraphVersion triggers recalculation when nodes change
   }, [selectedNodeIds, sceneGraphRef, sceneGraphVersion]);
+
+  const selectionBounds = selectionDisplay?.bounds ?? null;
+  const selectionRotation = selectionDisplay?.rotation ?? 0;
 
   const transformHandles = useMemo(() => {
     if (!transformHandlesRef.current || !selectionBounds || !cameraRef.current) return [];
     return transformHandlesRef.current.getHandles(selectionBounds, cameraRef.current);
     // zoomPercent triggers recalculation when camera zoom changes
   }, [selectionBounds, zoomPercent]);
-
-  // Get the rotation of the selected node(s)
-  // For single selection, use the node's rotation
-  // For multiple selection, use 0 (no rotation applied to bounds)
-  const selectionRotation = useMemo(() => {
-    if (!sceneGraphRef.current || selectedNodeIds.size !== 1) return 0;
-    const nodeId = [...selectedNodeIds][0];
-    const node = sceneGraphRef.current.getNode(nodeId);
-    return node?.transform.rotation ?? 0;
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- sceneGraphVersion triggers recalculation
-  }, [selectedNodeIds, sceneGraphRef, sceneGraphVersion]);
 
   // Convert selection bounds to screen coordinates for overlay
   const screenBounds = useMemo(() => {
@@ -781,13 +706,21 @@ export function Canvas() {
   const handleOverlayPointerDown = useCallback(
     (handle: { position: string; screenPosition: Vector2 }, e: React.PointerEvent) => {
       const camera = cameraRef.current;
-      if (!camera) return;
+      const canvas = canvasRef.current;
+      if (!camera || !canvas) return;
 
       e.stopPropagation();
       e.preventDefault();
 
-      // Use the handle's screen position directly
-      const screenPos = handle.screenPosition;
+      // Use actual mouse position (not handle.screenPosition which is un-rotated).
+      // The overlay applies visual rotation via SVG transform, so the mouse event
+      // position reflects the rotated handle location. The tool's hit test expects
+      // the actual click position so it can inverse-rotate correctly.
+      const canvasRect = canvas.getBoundingClientRect();
+      const screenPos: Vector2 = {
+        x: e.clientX - canvasRect.left,
+        y: e.clientY - canvasRect.top,
+      };
       const worldPos = camera.screenToWorld(screenPos);
 
       // Pass to tool system
@@ -861,6 +794,13 @@ export function Canvas() {
         rotation={selectionRotation}
         onHandlePointerDown={handleOverlayPointerDown}
       />
+      {isDirectSelectionActive && (
+        <DirectSelectionOverlay
+          pathNodes={directSelectionPathNodes}
+          selectedPoints={directSelectionPoints}
+          camera={cameraRef.current}
+        />
+      )}
       {isPenToolDrawing && (
         <PenToolOverlay
           points={penToolPath}

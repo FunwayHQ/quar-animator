@@ -138,12 +138,35 @@ export class TransformHandles {
    * @param camera The camera for coordinate conversion
    * @returns The hit handle position or null
    */
-  hitTest(screenPoint: Vector2, bounds: SelectionBounds, camera: Camera): HandlePosition | null {
+  hitTest(
+    screenPoint: Vector2,
+    bounds: SelectionBounds,
+    camera: Camera,
+    rotation: number = 0
+  ): HandlePosition | null {
     const handles = this.getHandles(bounds, camera);
     const hitRadius = this.config.handleHitRadius;
 
+    // When bounds are un-rotated but visually rotated, inverse-rotate the
+    // test point so it compares correctly against un-rotated handle positions.
+    let testPoint = screenPoint;
+    if (rotation !== 0) {
+      const screenCenter = camera.worldToScreen(bounds.center);
+      // The SVG overlay applies rotate(-rotation) to position handles visually.
+      // To undo this, we apply the inverse: rotate(+rotation) to the click point.
+      const rad = rotation * (Math.PI / 180);
+      const dx = screenPoint.x - screenCenter.x;
+      const dy = screenPoint.y - screenCenter.y;
+      const cos = Math.cos(rad);
+      const sin = Math.sin(rad);
+      testPoint = {
+        x: screenCenter.x + dx * cos - dy * sin,
+        y: screenCenter.y + dx * sin + dy * cos,
+      };
+    }
+
     for (const handle of handles) {
-      const distance = vec2.distance(screenPoint, handle.screenPosition);
+      const distance = vec2.distance(testPoint, handle.screenPosition);
       if (distance <= hitRadius) {
         return handle.position;
       }

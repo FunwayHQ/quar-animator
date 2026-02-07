@@ -1436,13 +1436,27 @@ describe('SelectionTool', () => {
       context.sceneGraph.addNode(rect);
       context.setSelectedIds(['rect1']);
 
-      const rotationHandleWorld = { x: 100, y: 50 - 20 };
-      const rotationHandleScreen = context.camera.worldToScreen(rotationHandleWorld);
+      // Display bounds are un-rotated, but the SVG overlay rotates handles visually.
+      // For the hit test to work, provide the VISUAL (rotated) screen position.
+      // Un-rotated handle: world (100, 30) → screen (500, 270).
+      // SVG applies rotate(-45°) around screen center (500, 200).
+      // Vector (0, 70) rotated by -45°: (70*sin45, 70*cos45) ≈ (49.5, 49.5).
+      // Visual handle screen: (549.5, 249.5).
+      const screenCenter = context.camera.worldToScreen({ x: 100, y: 100 });
+      const unrotatedHandleScreen = context.camera.worldToScreen({ x: 100, y: 30 });
+      const angle = -45 * (Math.PI / 180); // SVG rotate(-rotation)
+      const dx = unrotatedHandleScreen.x - screenCenter.x;
+      const dy = unrotatedHandleScreen.y - screenCenter.y;
+      const rotatedScreenPos = {
+        x: screenCenter.x + dx * Math.cos(angle) - dy * Math.sin(angle),
+        y: screenCenter.y + dx * Math.sin(angle) + dy * Math.cos(angle),
+      };
+      const rotatedWorldPos = context.camera.screenToWorld(rotatedScreenPos);
 
       tool.onPointerDown(
         createMockPointerEvent({
-          worldPosition: rotationHandleWorld,
-          screenPosition: rotationHandleScreen,
+          worldPosition: rotatedWorldPos,
+          screenPosition: rotatedScreenPos,
           button: 0,
         })
       );

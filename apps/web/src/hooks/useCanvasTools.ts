@@ -4,9 +4,9 @@
  */
 
 import { useEffect, useRef, useCallback, useState } from 'react';
-import { ToolManager, SceneGraph, Camera, PenTool } from '@quar/core';
+import { ToolManager, SceneGraph, Camera, PenTool, DirectSelectionTool } from '@quar/core';
 import type { TransformType } from '@quar/core';
-import type { CanvasPointerEvent, Node, PathPoint, Vector2 } from '@quar/types';
+import type { CanvasPointerEvent, Node, PathNode, PathPoint, Vector2 } from '@quar/types';
 import { useEditorStore } from '../stores/editorStore';
 
 // ============================================================================
@@ -45,6 +45,12 @@ export interface UseCanvasToolsReturn {
   startPenHandleDrag: (pointIndex: number, handleType: 'in' | 'out') => void;
   /** Start dragging a point in PenTool. Returns true if path was closed. */
   startPenPointDrag: (pointIndex: number) => boolean;
+  /** Whether DirectSelectionTool is currently active */
+  isDirectSelectionActive: boolean;
+  /** Selected point indices when DirectSelectionTool is active */
+  directSelectionPoints: Array<{ nodeId: string; pointIndex: number }>;
+  /** All visible path nodes (for DirectSelection overlay) */
+  directSelectionPathNodes: PathNode[];
 }
 
 // ============================================================================
@@ -98,6 +104,13 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
   // Track PenTool state for overlay
   const [penToolPath, setPenToolPath] = useState<PathPoint[]>([]);
   const [isPenToolDrawing, setIsPenToolDrawing] = useState(false);
+
+  // Track DirectSelectionTool state for overlay
+  const [isDirectSelectionActive, setIsDirectSelectionActive] = useState(false);
+  const [directSelectionPoints, setDirectSelectionPoints] = useState<
+    Array<{ nodeId: string; pointIndex: number }>
+  >([]);
+  const [directSelectionPathNodes, setDirectSelectionPathNodes] = useState<PathNode[]>([]);
 
   // Get store methods and state
   const activeTool = useEditorStore((state) => state.activeTool);
@@ -224,21 +237,13 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
     onTransformComplete,
   ]);
 
-  // Sync active tool with ToolManager when it changes
-  useEffect(() => {
-    if (toolManagerRef.current) {
-      toolManagerRef.current.setActiveTool(activeTool);
-      setCursor(toolManagerRef.current.getCursor() as string);
-    }
-  }, [activeTool]);
-
   // Sync PenTool path state for overlay
   const syncPenToolState = useCallback(() => {
     if (!toolManagerRef.current) return;
 
-    const activeTool = toolManagerRef.current.getActiveTool();
-    if (activeTool?.type === 'pen') {
-      const penTool = activeTool as PenTool;
+    const tool = toolManagerRef.current.getActiveTool();
+    if (tool?.type === 'pen') {
+      const penTool = tool as PenTool;
       setPenToolPath(penTool.getCurrentPath());
       setIsPenToolDrawing(penTool.isCurrentlyDrawing());
     } else {
@@ -246,6 +251,43 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
       setIsPenToolDrawing(false);
     }
   }, []);
+
+  // Sync DirectSelectionTool state for overlay
+  const syncDirectSelectionState = useCallback(() => {
+    if (!toolManagerRef.current) {
+      setIsDirectSelectionActive(false);
+      return;
+    }
+
+    const tool = toolManagerRef.current.getActiveTool();
+    if (tool?.type === 'direct-selection') {
+      const dsTool = tool as DirectSelectionTool;
+      setIsDirectSelectionActive(true);
+      setDirectSelectionPoints(dsTool.getSelectedPoints());
+
+      // Collect all visible path nodes
+      const paths: PathNode[] = [];
+      sceneGraphRef.current.traverseVisible((node: Node) => {
+        if (node.type === 'path') {
+          paths.push(node as PathNode);
+        }
+      });
+      setDirectSelectionPathNodes(paths);
+    } else {
+      setIsDirectSelectionActive(false);
+      setDirectSelectionPoints([]);
+      setDirectSelectionPathNodes([]);
+    }
+  }, []);
+
+  // Sync active tool with ToolManager when it changes
+  useEffect(() => {
+    if (toolManagerRef.current) {
+      toolManagerRef.current.setActiveTool(activeTool);
+      setCursor(toolManagerRef.current.getCursor() as string);
+      syncDirectSelectionState();
+    }
+  }, [activeTool, syncDirectSelectionState]);
 
   // Event handlers
   const handlePointerDown = useCallback(
@@ -261,10 +303,11 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
       const preview = toolManagerRef.current.getPreviewNode();
       setPreviewNode(preview);
 
-      // Sync PenTool state for overlay
+      // Sync tool overlay state
       syncPenToolState();
+      syncDirectSelectionState();
     },
-    [setIsDrawing, syncPenToolState]
+    [setIsDrawing, syncPenToolState, syncDirectSelectionState]
   );
 
   const handlePointerMove = useCallback(
@@ -281,10 +324,11 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
       // Update cursor (for dynamic cursors like resize handles)
       setCursor(toolManagerRef.current.getCursor() as string);
 
-      // Sync PenTool state for overlay during handle drag
+      // Sync tool overlay state during drag
       syncPenToolState();
+      syncDirectSelectionState();
     },
-    [syncPenToolState]
+    [syncPenToolState, syncDirectSelectionState]
   );
 
   const handlePointerUp = useCallback(
@@ -299,18 +343,20 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
       // Clear preview
       setPreviewNode(null);
 
-      // Sync PenTool state for overlay
+      // Sync tool overlay state
       syncPenToolState();
+      syncDirectSelectionState();
     },
-    [setIsDrawing, syncPenToolState]
+    [setIsDrawing, syncPenToolState, syncDirectSelectionState]
   );
 
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent) => {
       if (!toolManagerRef.current) return;
       toolManagerRef.current.handleKeyDown(event.nativeEvent);
-      // Sync PenTool state after key events (Enter/Escape can finalize/cancel path)
+      // Sync tool overlay state after key events
       syncPenToolState();
+      syncDirectSelectionState();
     },
     [syncPenToolState]
   );
@@ -369,5 +415,8 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
     isPenToolDrawing,
     startPenHandleDrag,
     startPenPointDrag,
+    isDirectSelectionActive,
+    directSelectionPoints,
+    directSelectionPathNodes,
   };
 }
