@@ -309,14 +309,16 @@ export class PenTool extends BaseTool {
     // Add to scene graph
     this.context.sceneGraph.addNode(node);
 
+    // Reset state BEFORE switching tools to prevent recursive finalizePath
+    // (setActiveTool triggers onDeactivate, which would call finalizePath again
+    // if isDrawing is still true)
+    this.resetPenState();
+
     // Select the new node
     this.context.setSelectedIds([node.id]);
 
     // Switch to selection tool
     this.context.setActiveTool('selection');
-
-    // Reset state
-    this.resetPenState();
   }
 
   private cancelPath(): void {
