@@ -272,7 +272,8 @@ export function Canvas() {
       // Set up resize observer
       const resizeObserver = new ResizeObserver((entries) => {
         for (const entry of entries) {
-          const { width, height } = entry.contentRect;
+          const width = Math.round(entry.contentRect.width);
+          const height = Math.round(entry.contentRect.height);
           if (width > 0 && height > 0) {
             renderer.setViewport(width, height);
             camera.setViewport(width, height);
