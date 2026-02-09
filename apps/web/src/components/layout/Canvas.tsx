@@ -129,6 +129,28 @@ export function Canvas() {
   // Enable tool shortcuts
   useToolShortcuts();
 
+  // Global keyboard shortcuts for group/ungroup (works regardless of focus)
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey)) return;
+      if (e.key !== 'g' && e.key !== 'G') return;
+
+      // Skip when input is focused
+      const tag = (document.activeElement as HTMLElement)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+
+      e.preventDefault();
+      if (e.shiftKey) {
+        ungroupSelection(sceneGraph);
+      } else {
+        groupSelection(sceneGraph);
+      }
+    };
+
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+  }, [sceneGraph, groupSelection, ungroupSelection]);
+
   // Selection bounds for display: un-rotated bounds + rotation angle for single selection,
   // AABB + rotation 0 for multi-selection.
   const selectionDisplay = useMemo(() => {
