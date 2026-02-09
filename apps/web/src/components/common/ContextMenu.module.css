@@ -1,12 +1,12 @@
 .overlay {
   position: fixed;
   inset: 0;
-  z-index: 400;
+  z-index: var(--z-context-menu);
 }
 
 .menu {
   position: fixed;
-  z-index: 401;
+  z-index: var(--z-context-menu);
   min-width: 180px;
   background: var(--color-bg-elevated);
   border: 1px solid var(--color-border-default);

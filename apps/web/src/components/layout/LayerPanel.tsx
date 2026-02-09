@@ -105,10 +105,14 @@ function LayerRow({
 
   return (
     <>
-      {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- layer rows use click for selection, keyboard handled at panel level */}
+      {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events -- layer rows use click for selection, keyboard handled at panel level */}
       <div
         className={`${styles.layerRow} ${selected ? styles.selected : ''}`}
         style={{ paddingLeft: `${12 + depth * 16}px` }}
+        role="button"
+        tabIndex={0}
+        aria-label={`Layer: ${node.name}`}
+        aria-pressed={selected}
         onClick={(e) => onSelect(node.id, e.shiftKey)}
         onContextMenu={(e) => onContextMenu(node.id, e)}
         data-testid={`layer-row-${node.id}`}
@@ -120,6 +124,7 @@ function LayerRow({
               e.stopPropagation();
               setExpanded(!expanded);
             }}
+            aria-label={expanded ? 'Collapse group' : 'Expand group'}
           >
             <svg
               width="12"
@@ -149,6 +154,7 @@ function LayerRow({
               onToggleVisibility(node.id);
             }}
             title="Toggle visibility"
+            aria-label={node.visible ? 'Hide layer' : 'Show layer'}
           >
             <svg
               width="14"
@@ -169,6 +175,7 @@ function LayerRow({
               onToggleLock(node.id);
             }}
             title="Toggle lock"
+            aria-label={node.locked ? 'Unlock layer' : 'Lock layer'}
           >
             <svg
               width="14"

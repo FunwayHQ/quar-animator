@@ -40,6 +40,8 @@ export function usePlayback() {
       looping: state.isLooping,
       onFrameChange: (frame: number) => {
         useEditorStore.getState().setCurrentFrame(frame);
+        // Apply animations directly from the playback callback (single evaluation)
+        applyAnimations(frame);
       },
     });
     controllerRef.current = ctrl;
@@ -54,7 +56,9 @@ export function usePlayback() {
       if (curr.isLooping !== prev.isLooping) {
         ctrl.setLooping(curr.isLooping);
       }
-      if (curr.currentFrame !== prev.currentFrame) {
+      // Apply animations for manual frame changes (scrubbing, stepping)
+      // Only when NOT playing — playback applies via onFrameChange above
+      if (curr.currentFrame !== prev.currentFrame && !ctrl.isPlaying) {
         applyAnimations(curr.currentFrame);
       }
     });

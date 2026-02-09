@@ -8,13 +8,13 @@
 /* CSS Variables from theme */
 :root {
   /* Colors - Background (warm charcoal blacks) */
-  --color-bg-primary: #0A0A0B;
+  --color-bg-primary: #0a0a0b;
   --color-bg-secondary: #111113;
-  --color-bg-tertiary: #18181B;
-  --color-bg-elevated: #1F1F23;
+  --color-bg-tertiary: #18181b;
+  --color-bg-elevated: #1f1f23;
   --color-bg-hover: rgba(255, 255, 255, 0.04);
   --color-bg-active: rgba(255, 255, 255, 0.08);
-  --color-bg-canvas: #09090A;
+  --color-bg-canvas: #09090a;
 
   /* Glass effect backgrounds */
   --color-glass: rgba(17, 17, 19, 0.85);
@@ -22,36 +22,39 @@
   --color-glass-highlight: rgba(255, 255, 255, 0.03);
 
   /* Colors - Text (warmer whites) */
-  --color-text-primary: #FAFAF9;
-  --color-text-secondary: #A1A1AA;
-  --color-text-tertiary: #71717A;
-  --color-text-disabled: #3F3F46;
-  --color-text-inverse: #0A0A0B;
+  --color-text-primary: #fafaf9;
+  --color-text-secondary: #a1a1aa;
+  --color-text-tertiary: #71717a;
+  --color-text-disabled: #3f3f46;
+  --color-text-inverse: #0a0a0b;
 
   /* Colors - Border (subtle, refined) */
   --color-border-default: rgba(255, 255, 255, 0.08);
   --color-border-subtle: rgba(255, 255, 255, 0.04);
   --color-border-strong: rgba(255, 255, 255, 0.12);
-  --color-border-focus: #E89B47;
+  --color-border-focus: #e89b47;
 
   /* Colors - Accent (violet/bordeaux creative energy) */
-  --color-accent-primary: #A855F7;
-  --color-accent-primary-hover: #C084FC;
-  --color-accent-primary-active: #9333EA;
+  --color-accent-primary: #a855f7;
+  --color-accent-primary-hover: #c084fc;
+  --color-accent-primary-active: #9333ea;
   --color-accent-primary-glow: rgba(168, 85, 247, 0.3);
-  --color-accent-secondary: #9F1239;
+  --color-accent-secondary: #9f1239;
   --color-accent-secondary-glow: rgba(159, 18, 57, 0.3);
-  --color-accent-success: #34D399;
-  --color-accent-warning: #FBBF24;
-  --color-accent-error: #FB7185;
+  --color-accent-success: #34d399;
+  --color-accent-warning: #fbbf24;
+  --color-accent-error: #fb7185;
 
   /* Colors - Timeline */
-  --color-timeline-playhead: #FB7185;
-  --color-timeline-keyframe: #A855F7;
-  --color-timeline-keyframe-selected: #C084FC;
+  --color-timeline-playhead: #fb7185;
+  --color-timeline-keyframe: #a855f7;
+  --color-timeline-keyframe-selected: #c084fc;
   --color-timeline-keyframe-glow: rgba(168, 85, 247, 0.4);
   --color-timeline-onion-before: rgba(251, 113, 133, 0.6);
   --color-timeline-onion-after: rgba(52, 211, 153, 0.6);
+
+  /* Colors - Keyframe indicators */
+  --color-keyframe-active: #f5a623;
 
   /* Spacing */
   --space-xs: 4px;
@@ -105,13 +108,16 @@
   --easing-out: cubic-bezier(0, 0, 0.2, 1);
   --easing-in-out: cubic-bezier(0.4, 0, 0.2, 1);
 
-  /* Z-Index */
+  /* Z-index scale */
   --z-base: 0;
   --z-dropdown: 100;
   --z-sticky: 200;
-  --z-modal: 300;
-  --z-popover: 400;
-  --z-tooltip: 500;
+  --z-overlay: 1000;
+  --z-context-menu: 1010;
+  --z-popover: 1020;
+  --z-modal: 1030;
+  --z-color-picker: 1040;
+  --z-tooltip: 1050;
 
   /* Noise texture overlay */
   --noise-opacity: 0.015;
@@ -257,13 +263,24 @@ a {
 
 /* Glow effect for accent elements */
 @keyframes subtle-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.7; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
 }
 
 /* Button press effect */
 @keyframes button-press {
-  0% { transform: scale(1); }
-  50% { transform: scale(0.96); }
-  100% { transform: scale(1); }
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(0.96);
+  }
+  100% {
+    transform: scale(1);
+  }
 }

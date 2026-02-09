@@ -62,8 +62,9 @@ export class KeyframeManager {
     const track = getOrCreateTrack<T>(this.timeline, nodeId, property);
     const existing = track.keyframes.find((kf) => kf.time === frame);
     if (existing) {
-      existing.value = value as unknown as T;
-      return existing;
+      // Remove old keyframe and add updated one (immutable)
+      removeKeyframe(track, existing.id);
+      return addKeyframe(track, existing.time, value, existing.easing);
     }
     return addKeyframe(track, frame, value);
   }

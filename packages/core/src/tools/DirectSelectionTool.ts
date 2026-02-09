@@ -6,6 +6,10 @@
 import type { CanvasPointerEvent, PathNode, PathPoint, Vector2, Node } from '@quar/types';
 import { BaseTool, type ToolContext } from './BaseTool';
 import { vec2 } from '../math';
+import {
+  convertPointType as convertPointTypeUtil,
+  updateHandleWithSymmetry,
+} from '../path/pointUtils';
 
 // ============================================================================
 // Types
@@ -216,39 +220,14 @@ export class DirectSelectionTool extends BaseTool {
 
       const point = node.points[this.dragHandle.pointIndex];
       const handleOffset = vec2.subtract(worldPos, point.position);
+      const handleType = this.dragHandle.type === 'handle-out' ? 'out' : 'in';
 
       const newPoints = [...node.points];
-      const newPoint = { ...newPoints[this.dragHandle.pointIndex] };
-
-      if (this.dragHandle.type === 'handle-out') {
-        newPoint.handleOut = handleOffset;
-        // For smooth/symmetric points, update the other handle
-        if (newPoint.type === 'smooth' || newPoint.type === 'symmetric') {
-          const length =
-            newPoint.type === 'symmetric' && newPoint.handleIn
-              ? vec2.length(handleOffset)
-              : newPoint.handleIn
-                ? vec2.length(newPoint.handleIn)
-                : vec2.length(handleOffset);
-          const direction = vec2.normalize({ x: -handleOffset.x, y: -handleOffset.y });
-          newPoint.handleIn = vec2.multiply(direction, length);
-        }
-      } else {
-        newPoint.handleIn = handleOffset;
-        // For smooth/symmetric points, update the other handle
-        if (newPoint.type === 'smooth' || newPoint.type === 'symmetric') {
-          const length =
-            newPoint.type === 'symmetric' && newPoint.handleOut
-              ? vec2.length(handleOffset)
-              : newPoint.handleOut
-                ? vec2.length(newPoint.handleOut)
-                : vec2.length(handleOffset);
-          const direction = vec2.normalize({ x: -handleOffset.x, y: -handleOffset.y });
-          newPoint.handleOut = vec2.multiply(direction, length);
-        }
-      }
-
-      newPoints[this.dragHandle.pointIndex] = newPoint;
+      newPoints[this.dragHandle.pointIndex] = updateHandleWithSymmetry(
+        point,
+        handleType,
+        handleOffset
+      );
       this.context.sceneGraph.updateNode(this.dragHandle.nodeId, { points: newPoints });
     }
   }
@@ -517,62 +496,19 @@ export class DirectSelectionTool extends BaseTool {
     const point = points[pointIndex];
     if (!point) return;
 
+    // Resolve neighbors, wrapping around for closed paths
+    const prevIdx = pointIndex > 0 ? pointIndex - 1 : node.closed ? points.length - 1 : -1;
+    const nextIdx = pointIndex < points.length - 1 ? pointIndex + 1 : node.closed ? 0 : -1;
+
+    const prevPoint = prevIdx >= 0 ? points[prevIdx] : null;
+    const nextPoint = nextIdx >= 0 && nextIdx !== pointIndex ? points[nextIdx] : null;
+
     const newPoints = [...points];
-    const newPoint = { ...point };
-
-    if (point.type === 'corner') {
-      // Convert to smooth with default handles
-      const defaultHandleLength = 30;
-
-      // Calculate handle direction based on neighboring points
-      let direction: Vector2 = { x: 1, y: 0 };
-
-      const prevIdx = pointIndex > 0 ? pointIndex - 1 : node.closed ? points.length - 1 : -1;
-      const nextIdx = pointIndex < points.length - 1 ? pointIndex + 1 : node.closed ? 0 : -1;
-
-      const prevPoint = prevIdx >= 0 ? points[prevIdx] : null;
-      const nextPoint = nextIdx >= 0 && nextIdx !== pointIndex ? points[nextIdx] : null;
-
-      if (prevPoint && nextPoint) {
-        // Direction from prev to next
-        const toNext = vec2.subtract(nextPoint.position, prevPoint.position);
-        const len = vec2.length(toNext);
-        if (len > 0) {
-          direction = { x: toNext.x / len, y: toNext.y / len };
-        }
-      } else if (prevPoint) {
-        // Direction from prev to this
-        const toPrev = vec2.subtract(point.position, prevPoint.position);
-        const len = vec2.length(toPrev);
-        if (len > 0) {
-          direction = { x: toPrev.x / len, y: toPrev.y / len };
-        }
-      } else if (nextPoint) {
-        // Direction from this to next
-        const toNext = vec2.subtract(nextPoint.position, point.position);
-        const len = vec2.length(toNext);
-        if (len > 0) {
-          direction = { x: toNext.x / len, y: toNext.y / len };
-        }
-      }
-
-      newPoint.handleOut = {
-        x: direction.x * defaultHandleLength,
-        y: direction.y * defaultHandleLength,
-      };
-      newPoint.handleIn = {
-        x: -direction.x * defaultHandleLength,
-        y: -direction.y * defaultHandleLength,
-      };
-      newPoint.type = 'smooth';
-    } else {
-      // Convert to corner (remove handles)
-      newPoint.handleIn = null;
-      newPoint.handleOut = null;
-      newPoint.type = 'corner';
-    }
-
-    newPoints[pointIndex] = newPoint;
+    newPoints[pointIndex] = convertPointTypeUtil(
+      point,
+      prevPoint ? prevPoint.position : null,
+      nextPoint ? nextPoint.position : null
+    );
     this.context.sceneGraph.updateNode(nodeId, { points: newPoints });
 
     // Select the converted point
@@ -674,6 +610,13 @@ export class DirectSelectionTool extends BaseTool {
   onDeactivate(): void {
     this.clearPointSelection();
     this.dragMode = 'idle';
+    this.dragStartPoint = null;
+    this.dragHandle = null;
+    this.initialPointPositions.clear();
+    this.initialHandlePosition = null;
+    this.lastClickTime = 0;
+    this.lastClickPosition = null;
+    this.currentHover = null;
     this.state.isDragging = false;
   }
 }

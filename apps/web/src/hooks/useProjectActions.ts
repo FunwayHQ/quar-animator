@@ -7,6 +7,7 @@ import { useCallback, useEffect, useRef } from 'react';
 import { createTimeline } from '@quar/animation';
 import { useSceneGraph } from '../contexts/SceneGraphContext';
 import { useEditorStore } from '../stores/editorStore';
+import { toast } from '../components/common/Toast';
 import {
   saveProject as dbSave,
   loadProject as dbLoad,
@@ -129,6 +130,7 @@ export function useProjectActions(options: UseProjectActionsOptions = {}): Proje
     const json = JSON.stringify(data);
     await dbSave(projectId, state.projectName, json);
     await setLastProjectId(projectId);
+    toast.success('Project saved');
   }, [sceneGraph, getEditorSnapshot]);
 
   // ------ Save As ------
@@ -153,6 +155,7 @@ export function useProjectActions(options: UseProjectActionsOptions = {}): Proje
       const json = JSON.stringify(data);
       await dbSave(newId, name, json);
       await setLastProjectId(newId);
+      toast.success(`Project saved as "${name}"`);
     },
     [sceneGraph, getEditorSnapshot]
   );
@@ -190,26 +193,32 @@ export function useProjectActions(options: UseProjectActionsOptions = {}): Proje
       state.projectCreatedAt ?? undefined
     );
     downloadProjectFile(state.projectName, data);
+    toast.success('Project exported');
   }, [sceneGraph, getEditorSnapshot]);
 
   // ------ Import .quar file ------
   const importProject = useCallback(async () => {
-    const data = await uploadProjectFile();
-    deserializeProject(data, sceneGraph, applyEditorState);
+    try {
+      const data = await uploadProjectFile();
+      deserializeProject(data, sceneGraph, applyEditorState);
 
-    const newId = generateProjectId();
-    useEditorStore.setState({
-      projectId: newId,
-      projectName: data.name,
-      isDirty: false,
-      projectCreatedAt: data.createdAt,
-      selectedNodeIds: new Set<string>(),
-      selectedKeyframeIds: new Set<string>(),
-    });
+      const newId = generateProjectId();
+      useEditorStore.setState({
+        projectId: newId,
+        projectName: data.name,
+        isDirty: false,
+        projectCreatedAt: data.createdAt,
+        selectedNodeIds: new Set<string>(),
+        selectedKeyframeIds: new Set<string>(),
+      });
 
-    const json = JSON.stringify(data);
-    await dbSave(newId, data.name, json);
-    await setLastProjectId(newId);
+      const json = JSON.stringify(data);
+      await dbSave(newId, data.name, json);
+      await setLastProjectId(newId);
+      toast.success(`Imported "${data.name}"`);
+    } catch {
+      toast.error('Failed to import project file');
+    }
   }, [sceneGraph, applyEditorState]);
 
   // ------ Delete Project ------
@@ -257,7 +266,7 @@ export function useProjectActions(options: UseProjectActionsOptions = {}): Proje
           });
         }
       } catch {
-        // Silently fail — start with empty project
+        toast.error('Failed to load project — starting with empty project');
       }
     }
 
@@ -268,13 +277,19 @@ export function useProjectActions(options: UseProjectActionsOptions = {}): Proje
   }, [sceneGraph, applyEditorState, loadProjectId]);
 
   // ------ Auto-save every 30s when dirty ------
+  const autoSavingRef = useRef(false);
   useEffect(() => {
     autoSaveTimerRef.current = setInterval(() => {
       const { isDirty, projectId } = useEditorStore.getState();
-      if (isDirty && projectId) {
-        saveProject().catch(() => {
-          // Silently fail auto-save
-        });
+      if (isDirty && projectId && !autoSavingRef.current) {
+        autoSavingRef.current = true;
+        saveProject()
+          .catch(() => {
+            toast.error('Auto-save failed');
+          })
+          .finally(() => {
+            autoSavingRef.current = false;
+          });
       }
     }, AUTO_SAVE_INTERVAL);
 

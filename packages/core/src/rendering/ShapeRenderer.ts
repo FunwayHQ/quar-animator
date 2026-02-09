@@ -149,6 +149,46 @@ const ELLIPSE_TESSELLATION_TOLERANCE = 0.5;
 // ShapeRenderer Class
 // ============================================================================
 
+// ============================================================================
+// Tessellation Cache Types
+// ============================================================================
+
+interface TessellationCacheEntry {
+  /** Geometry key — changes when shape geometry changes */
+  geoKey: string;
+  /** Cached tessellated vertices (from tessellatePathToVertices) */
+  vertices: Float32Array;
+  /** Cached earcut fill indices */
+  fillIndices: number[];
+  /** Cached stroke outline vertices per stroke key (width+align) */
+  strokeCache: Map<string, { outline: Float32Array; indices: number[] }>;
+}
+
+/** Build a cache key string from node geometry properties */
+function buildGeometryKey(node: Node): string {
+  switch (node.type) {
+    case 'rectangle':
+      return `R:${String(node.width)}:${String(node.height)}:${String(node.transform.anchor.x)}:${String(node.transform.anchor.y)}:${String(node.cornerRadius ?? 0)}`;
+    case 'ellipse':
+      return `E:${node.radiusX}:${node.radiusY}`;
+    case 'polygon':
+      return `P:${node.radius}:${node.sides}:${node.innerRadius ?? ''}:${node.cornerRadius ?? 0}`;
+    case 'path': {
+      // Use a hash of all point positions/handles for paths
+      const parts: string[] = ['X', String(node.closed)];
+      for (const pt of node.points) {
+        parts.push(`${pt.x}:${pt.y}:${pt.type}`);
+        if (pt.handleIn) parts.push(`i${pt.handleIn.x}:${pt.handleIn.y}`);
+        if (pt.handleOut) parts.push(`o${pt.handleOut.x}:${pt.handleOut.y}`);
+        if (pt.cornerRadius) parts.push(`cr${pt.cornerRadius}`);
+      }
+      return parts.join(',');
+    }
+    default:
+      return '';
+  }
+}
+
 export class ShapeRenderer {
   private renderer: WebGLRenderer;
   private program: ShaderProgram | null = null;
@@ -164,6 +204,9 @@ export class ShapeRenderer {
   // Cached matrices for gradient program switching
   private currentVPMatrix: Float32Array | null = null;
   private currentModelMatrix: Float32Array | null = null;
+
+  // Tessellation cache — avoids re-tessellating and re-earcut-ing unchanged geometry
+  private geometryCache: Map<string, TessellationCacheEntry> = new Map();
 
   constructor(renderer: WebGLRenderer) {
     this.renderer = renderer;
@@ -231,6 +274,103 @@ export class ShapeRenderer {
     }
 
     this.renderer.bindVAO(null);
+  }
+
+  // --------------------------------------------------------------------------
+  // Tessellation Cache
+  // --------------------------------------------------------------------------
+
+  /**
+   * Get or compute tessellated vertices and earcut fill indices for a node.
+   * Returns cached result if geometry hasn't changed.
+   */
+  private getCachedTessellation(
+    nodeId: string,
+    node: Node,
+    pathPoints: import('@quar/types').PathPoint[],
+    closed: boolean,
+    tolerance: number
+  ): { vertices: Float32Array; fillIndices: number[] } {
+    const geoKey = buildGeometryKey(node);
+    const cached = this.geometryCache.get(nodeId);
+
+    if (cached && cached.geoKey === geoKey) {
+      return { vertices: cached.vertices, fillIndices: cached.fillIndices };
+    }
+
+    // Compute fresh tessellation
+    const vertices = tessellatePathToVertices(pathPoints, closed, tolerance);
+    const numVerts = vertices.length / 2;
+    const fillIndices = numVerts >= 3 ? earcut(vertices.subarray(0, numVerts * 2)) : [];
+
+    // Store in cache
+    const entry: TessellationCacheEntry = {
+      geoKey,
+      vertices,
+      fillIndices: Array.from(fillIndices),
+      strokeCache:
+        cached?.geoKey === geoKey
+          ? cached.strokeCache
+          : new Map<string, { outline: Float32Array; indices: number[] }>(),
+    };
+    this.geometryCache.set(nodeId, entry);
+
+    return { vertices, fillIndices: entry.fillIndices };
+  }
+
+  /**
+   * Get or compute stroke outline + earcut indices for a given stroke configuration.
+   */
+  private getCachedStrokeOutline(
+    nodeId: string,
+    vertices: Float32Array,
+    strokeWidth: number,
+    closed: boolean,
+    align: string
+  ): { outline: Float32Array; indices: number[] } | null {
+    const numVertices = vertices.length / 2;
+    if (numVertices < 2) return null;
+
+    const strokeKey = `${strokeWidth}:${align}`;
+    const cached = this.geometryCache.get(nodeId);
+
+    if (cached) {
+      const strokeCached = cached.strokeCache.get(strokeKey);
+      if (strokeCached) return strokeCached;
+    }
+
+    const outline = generateStrokeOutlineVertices(
+      vertices,
+      numVertices,
+      strokeWidth,
+      closed,
+      align as 'center' | 'inside' | 'outside'
+    );
+    const outlineCount = outline.length / 2;
+    if (outlineCount < 3) return null;
+
+    const indices = Array.from(earcut(outline));
+    const result = { outline, indices };
+
+    if (cached) {
+      cached.strokeCache.set(strokeKey, result);
+    }
+
+    return result;
+  }
+
+  /**
+   * Remove a node's cache entry (call when node is removed from scene)
+   */
+  invalidateCache(nodeId: string): void {
+    this.geometryCache.delete(nodeId);
+  }
+
+  /**
+   * Clear the entire tessellation cache
+   */
+  clearCache(): void {
+    this.geometryCache.clear();
   }
 
   // --------------------------------------------------------------------------
@@ -338,10 +478,12 @@ export class ShapeRenderer {
   }
 
   /**
-   * Render fills and strokes from arrays
+   * Render fills and strokes from arrays, using cached tessellation data
    */
   private renderFillsAndStrokes(
+    nodeId: string,
     tessellated: Float32Array,
+    fillIndices: number[],
     fills: Fill[],
     strokes: Stroke[],
     closed: boolean,
@@ -349,18 +491,19 @@ export class ShapeRenderer {
   ): void {
     for (const fill of fills) {
       if (fill.visible && fill.type !== 'none') {
-        this.renderFill(tessellated, fill, nodeOpacity);
+        this.renderFill(tessellated, fillIndices, fill, nodeOpacity);
       }
     }
     for (const stroke of strokes) {
       if (stroke.visible && stroke.width > 0) {
-        this.renderStroke(tessellated, stroke, closed, nodeOpacity);
+        this.renderStroke(nodeId, tessellated, stroke, closed, nodeOpacity);
       }
     }
   }
 
   /**
-   * Render fills and strokes as ghosts with tint/alpha
+   * Render fills and strokes as ghosts with tint/alpha.
+   * Ghost rendering uses inline earcut since ghost nodes are transient (different frames).
    */
   private renderFillsAndStrokesGhost(
     tessellated: Float32Array,
@@ -369,6 +512,10 @@ export class ShapeRenderer {
     closed: boolean,
     colorOverride: { tint: [number, number, number]; alpha: number }
   ): void {
+    // Compute earcut once for all ghost fills
+    const numVerts = tessellated.length / 2;
+    const ghostFillIndices = numVerts >= 3 ? earcut(tessellated.subarray(0, numVerts * 2)) : [];
+
     for (const fill of fills) {
       if (fill.visible && fill.type !== 'none') {
         const color = this.applyTintAndAlpha(
@@ -376,7 +523,7 @@ export class ShapeRenderer {
           colorOverride.tint,
           colorOverride.alpha
         );
-        this.renderFillWithColor(tessellated, color);
+        this.renderFillWithColor(tessellated, ghostFillIndices, color);
       }
     }
     for (const stroke of strokes) {
@@ -399,7 +546,7 @@ export class ShapeRenderer {
 
     const gl = this.renderer.context;
 
-    // Generate rectangle path
+    // Generate rectangle path and get cached tessellation
     const pathPoints = createRectanglePath(
       -node.width * node.transform.anchor.x,
       -node.height * node.transform.anchor.y,
@@ -407,16 +554,28 @@ export class ShapeRenderer {
       node.height,
       node.cornerRadius
     );
-
-    // Tessellate to vertices
-    const tessellated = tessellatePathToVertices(pathPoints, true, DEFAULT_TESSELLATION_TOLERANCE);
+    const { vertices: tessellated, fillIndices } = this.getCachedTessellation(
+      node.id,
+      node,
+      pathPoints,
+      true,
+      DEFAULT_TESSELLATION_TOLERANCE
+    );
 
     // Set model matrix
     const modelArray = mat3.toFloat32Array(worldMatrix);
     this.currentModelMatrix = modelArray;
     gl.uniformMatrix3fv(this.program.uniforms.u_model, false, modelArray);
 
-    this.renderFillsAndStrokes(tessellated, node.fills, node.strokes, true, node.opacity);
+    this.renderFillsAndStrokes(
+      node.id,
+      tessellated,
+      fillIndices,
+      node.fills,
+      node.strokes,
+      true,
+      node.opacity
+    );
   }
 
   /**
@@ -427,18 +586,30 @@ export class ShapeRenderer {
 
     const gl = this.renderer.context;
 
-    // Generate ellipse path
+    // Generate ellipse path and get cached tessellation
     const pathPoints = createEllipsePath(0, 0, node.radiusX, node.radiusY);
-
-    // Tessellate to vertices with fine tolerance for smooth curves
-    const tessellated = tessellatePathToVertices(pathPoints, true, ELLIPSE_TESSELLATION_TOLERANCE);
+    const { vertices: tessellated, fillIndices } = this.getCachedTessellation(
+      node.id,
+      node,
+      pathPoints,
+      true,
+      ELLIPSE_TESSELLATION_TOLERANCE
+    );
 
     // Set model matrix
     const modelArray = mat3.toFloat32Array(worldMatrix);
     this.currentModelMatrix = modelArray;
     gl.uniformMatrix3fv(this.program.uniforms.u_model, false, modelArray);
 
-    this.renderFillsAndStrokes(tessellated, node.fills, node.strokes, true, node.opacity);
+    this.renderFillsAndStrokes(
+      node.id,
+      tessellated,
+      fillIndices,
+      node.fills,
+      node.strokes,
+      true,
+      node.opacity
+    );
   }
 
   /**
@@ -449,7 +620,7 @@ export class ShapeRenderer {
 
     const gl = this.renderer.context;
 
-    // Generate polygon or star path
+    // Generate polygon or star path and get cached tessellation
     const pathPoints =
       node.innerRadius !== undefined
         ? createStarPath(
@@ -462,16 +633,28 @@ export class ShapeRenderer {
             node.cornerRadius
           )
         : createPolygonPath(0, 0, node.radius, node.sides, undefined, node.cornerRadius);
-
-    // Tessellate to vertices
-    const tessellated = tessellatePathToVertices(pathPoints, true, DEFAULT_TESSELLATION_TOLERANCE);
+    const { vertices: tessellated, fillIndices } = this.getCachedTessellation(
+      node.id,
+      node,
+      pathPoints,
+      true,
+      DEFAULT_TESSELLATION_TOLERANCE
+    );
 
     // Set model matrix
     const modelArray = mat3.toFloat32Array(worldMatrix);
     this.currentModelMatrix = modelArray;
     gl.uniformMatrix3fv(this.program.uniforms.u_model, false, modelArray);
 
-    this.renderFillsAndStrokes(tessellated, node.fills, node.strokes, true, node.opacity);
+    this.renderFillsAndStrokes(
+      node.id,
+      tessellated,
+      fillIndices,
+      node.fills,
+      node.strokes,
+      true,
+      node.opacity
+    );
   }
 
   /**
@@ -485,8 +668,10 @@ export class ShapeRenderer {
     // Apply per-vertex corner radius if any points have it
     const processed = applyCornerRadius(node.points, node.closed);
 
-    // Tessellate path
-    const tessellated = tessellatePathToVertices(
+    // Get cached tessellation
+    const { vertices: tessellated, fillIndices } = this.getCachedTessellation(
+      node.id,
+      node,
       processed,
       node.closed,
       DEFAULT_TESSELLATION_TOLERANCE
@@ -499,16 +684,28 @@ export class ShapeRenderer {
 
     // Only render fills for closed paths
     const fills = node.closed ? node.fills : [];
-    this.renderFillsAndStrokes(tessellated, fills, node.strokes, node.closed, node.opacity);
+    this.renderFillsAndStrokes(
+      node.id,
+      tessellated,
+      fillIndices,
+      fills,
+      node.strokes,
+      node.closed,
+      node.opacity
+    );
   }
 
   /**
-   * Render filled polygon using earcut triangulation
-   * This handles both convex and concave shapes correctly
+   * Render filled polygon using cached earcut triangulation indices.
    */
-  private renderFill(vertices: Float32Array, fill: Fill, nodeOpacity: number = 1): void {
+  private renderFill(
+    vertices: Float32Array,
+    fillIndices: number[],
+    fill: Fill,
+    nodeOpacity: number = 1
+  ): void {
     if (fill.type === 'gradient' && fill.gradient) {
-      this.renderFillGradient(vertices, fill.gradient, fill.opacity * nodeOpacity);
+      this.renderFillGradient(vertices, fillIndices, fill.gradient, fill.opacity * nodeOpacity);
       return;
     }
 
@@ -530,53 +727,48 @@ export class ShapeRenderer {
     const numVertices = vertices.length / 2;
     if (numVertices < 3) return;
 
-    // Use earcut for triangulation - handles both convex and concave polygons
-    // earcut expects a flat array of coordinates [x0, y0, x1, y1, ...]
-    const indices = earcut(vertices.subarray(0, numVertices * 2));
-
-    if (indices.length === 0) {
-      // Fallback to triangle fan if earcut fails (shouldn't happen for valid polygons)
+    if (fillIndices.length === 0) {
+      // Fallback to triangle fan if earcut produced no indices
       gl.drawArrays(gl.TRIANGLE_FAN, 0, numVertices);
       return;
     }
 
-    // Upload indices
-    const indicesArray = new Uint16Array(indices);
+    // Upload cached indices
+    const indicesArray = new Uint16Array(fillIndices);
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indexBuffer);
     gl.bufferSubData(gl.ELEMENT_ARRAY_BUFFER, 0, indicesArray);
 
     // Draw using indexed triangles
-    gl.drawElements(gl.TRIANGLES, indices.length, gl.UNSIGNED_SHORT, 0);
+    gl.drawElements(gl.TRIANGLES, fillIndices.length, gl.UNSIGNED_SHORT, 0);
   }
 
   /**
    * Render stroke as a filled outline polygon.
    * WebGL lineWidth is capped at 1px on most browsers, so we expand the stroke
    * into a filled polygon using perpendicular offsets and earcut triangulation.
+   * Uses cached stroke outline and indices when available.
    */
   private renderStroke(
+    nodeId: string,
     vertices: Float32Array,
     stroke: Stroke,
     closed: boolean,
     nodeOpacity: number = 1
   ): void {
-    const numVertices = vertices.length / 2;
-    if (numVertices < 2) return;
+    const align = stroke.align ?? 'center';
+    const cached = this.getCachedStrokeOutline(nodeId, vertices, stroke.width, closed, align);
+    if (!cached) return;
 
-    // Generate stroke outline as a filled polygon
-    const outlineVertices = generateStrokeOutlineVertices(
-      vertices,
-      numVertices,
-      stroke.width,
-      closed,
-      stroke.align ?? 'center'
-    );
-    const outlineCount = outlineVertices.length / 2;
-    if (outlineCount < 3) return;
+    const { outline: outlineVertices, indices: strokeIndices } = cached;
 
     // Use gradient shader for stroke gradient
     if (stroke.gradient) {
-      this.renderFillGradient(outlineVertices, stroke.gradient, stroke.opacity * nodeOpacity);
+      this.renderFillGradient(
+        outlineVertices,
+        strokeIndices,
+        stroke.gradient,
+        stroke.opacity * nodeOpacity
+      );
       return;
     }
 
@@ -595,16 +787,14 @@ export class ShapeRenderer {
     gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
     gl.bufferSubData(gl.ARRAY_BUFFER, 0, outlineVertices);
 
-    // Triangulate the outline polygon
-    const indices = earcut(outlineVertices);
-    if (indices.length === 0) return;
+    if (strokeIndices.length === 0) return;
 
-    // Upload indices and draw
-    const indicesArray = new Uint16Array(indices);
+    // Upload cached indices and draw
+    const indicesArray = new Uint16Array(strokeIndices);
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indexBuffer);
     gl.bufferSubData(gl.ELEMENT_ARRAY_BUFFER, 0, indicesArray);
 
-    gl.drawElements(gl.TRIANGLES, indices.length, gl.UNSIGNED_SHORT, 0);
+    gl.drawElements(gl.TRIANGLES, strokeIndices.length, gl.UNSIGNED_SHORT, 0);
   }
 
   // --------------------------------------------------------------------------
@@ -613,9 +803,14 @@ export class ShapeRenderer {
 
   /**
    * Render vertices with a gradient using the gradient shader program.
-   * Triangulates, uploads, sets gradient uniforms, and draws.
+   * Uses cached triangulation indices.
    */
-  private renderFillGradient(vertices: Float32Array, gradient: Gradient, opacity: number): void {
+  private renderFillGradient(
+    vertices: Float32Array,
+    cachedIndices: number[],
+    gradient: Gradient,
+    opacity: number
+  ): void {
     if (!this.gradientProgram) return;
 
     const gl = this.renderer.context;
@@ -624,35 +819,32 @@ export class ShapeRenderer {
 
     // Switch to gradient program
     this.renderer.useProgram(this.gradientProgram);
+    try {
+      // Re-set viewProjection and model on the gradient program
+      if (this.currentModelMatrix) {
+        gl.uniformMatrix3fv(this.gradientProgram.uniforms.u_model, false, this.currentModelMatrix);
+      }
 
-    // Re-set viewProjection and model on the gradient program
-    if (this.currentModelMatrix) {
-      gl.uniformMatrix3fv(this.gradientProgram.uniforms.u_model, false, this.currentModelMatrix);
-    }
+      // Upload gradient uniforms
+      this.setGradientUniforms(gradient, computeBounds(vertices), opacity);
 
-    // Upload gradient uniforms
-    this.setGradientUniforms(gradient, computeBounds(vertices), opacity);
+      // Upload vertices
+      gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
+      gl.bufferSubData(gl.ARRAY_BUFFER, 0, vertices);
 
-    // Upload vertices
-    gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
-    gl.bufferSubData(gl.ARRAY_BUFFER, 0, vertices);
-
-    // Triangulate
-    const indices = earcut(vertices.subarray(0, numVertices * 2));
-    if (indices.length === 0) {
-      gl.drawArrays(gl.TRIANGLE_FAN, 0, numVertices);
-      return;
-    }
-
-    const indicesArray = new Uint16Array(indices);
-    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indexBuffer);
-    gl.bufferSubData(gl.ELEMENT_ARRAY_BUFFER, 0, indicesArray);
-
-    gl.drawElements(gl.TRIANGLES, indices.length, gl.UNSIGNED_SHORT, 0);
-
-    // Switch back to flat program for subsequent rendering
-    if (this.program) {
-      this.renderer.useProgram(this.program);
+      if (cachedIndices.length === 0) {
+        gl.drawArrays(gl.TRIANGLE_FAN, 0, numVertices);
+      } else {
+        const indicesArray = new Uint16Array(cachedIndices);
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indexBuffer);
+        gl.bufferSubData(gl.ELEMENT_ARRAY_BUFFER, 0, indicesArray);
+        gl.drawElements(gl.TRIANGLES, cachedIndices.length, gl.UNSIGNED_SHORT, 0);
+      }
+    } finally {
+      // Switch back to flat program for subsequent rendering
+      if (this.program) {
+        this.renderer.useProgram(this.program);
+      }
     }
   }
 
@@ -781,13 +973,30 @@ export class ShapeRenderer {
     ]);
   }
 
-  private renderRectangleWithOverride(
-    node: RectangleNode,
+  /**
+   * Shared helper for ghost override methods: sets model matrix uniform and
+   * delegates to renderFillsAndStrokesGhost. Each shape-specific override
+   * method generates its own tessellated vertices and calls this.
+   */
+  private renderNodeGhost(
+    tessellated: Float32Array,
+    fills: Fill[],
+    strokes: Stroke[],
+    closed: boolean,
     worldMatrix: Matrix3,
     colorOverride: { tint: [number, number, number]; alpha: number }
   ): void {
     if (!this.program) return;
     const gl = this.renderer.context;
+    gl.uniformMatrix3fv(this.program.uniforms.u_model, false, mat3.toFloat32Array(worldMatrix));
+    this.renderFillsAndStrokesGhost(tessellated, fills, strokes, closed, colorOverride);
+  }
+
+  private renderRectangleWithOverride(
+    node: RectangleNode,
+    worldMatrix: Matrix3,
+    colorOverride: { tint: [number, number, number]; alpha: number }
+  ): void {
     const pathPoints = createRectanglePath(
       -node.width * node.transform.anchor.x,
       -node.height * node.transform.anchor.y,
@@ -796,8 +1005,7 @@ export class ShapeRenderer {
       node.cornerRadius
     );
     const tessellated = tessellatePathToVertices(pathPoints, true, DEFAULT_TESSELLATION_TOLERANCE);
-    gl.uniformMatrix3fv(this.program.uniforms.u_model, false, mat3.toFloat32Array(worldMatrix));
-    this.renderFillsAndStrokesGhost(tessellated, node.fills, node.strokes, true, colorOverride);
+    this.renderNodeGhost(tessellated, node.fills, node.strokes, true, worldMatrix, colorOverride);
   }
 
   private renderEllipseWithOverride(
@@ -805,12 +1013,9 @@ export class ShapeRenderer {
     worldMatrix: Matrix3,
     colorOverride: { tint: [number, number, number]; alpha: number }
   ): void {
-    if (!this.program) return;
-    const gl = this.renderer.context;
     const pathPoints = createEllipsePath(0, 0, node.radiusX, node.radiusY);
     const tessellated = tessellatePathToVertices(pathPoints, true, ELLIPSE_TESSELLATION_TOLERANCE);
-    gl.uniformMatrix3fv(this.program.uniforms.u_model, false, mat3.toFloat32Array(worldMatrix));
-    this.renderFillsAndStrokesGhost(tessellated, node.fills, node.strokes, true, colorOverride);
+    this.renderNodeGhost(tessellated, node.fills, node.strokes, true, worldMatrix, colorOverride);
   }
 
   private renderPolygonWithOverride(
@@ -818,8 +1023,6 @@ export class ShapeRenderer {
     worldMatrix: Matrix3,
     colorOverride: { tint: [number, number, number]; alpha: number }
   ): void {
-    if (!this.program) return;
-    const gl = this.renderer.context;
     const pathPoints =
       node.innerRadius !== undefined
         ? createStarPath(
@@ -833,8 +1036,7 @@ export class ShapeRenderer {
           )
         : createPolygonPath(0, 0, node.radius, node.sides, undefined, node.cornerRadius);
     const tessellated = tessellatePathToVertices(pathPoints, true, DEFAULT_TESSELLATION_TOLERANCE);
-    gl.uniformMatrix3fv(this.program.uniforms.u_model, false, mat3.toFloat32Array(worldMatrix));
-    this.renderFillsAndStrokesGhost(tessellated, node.fills, node.strokes, true, colorOverride);
+    this.renderNodeGhost(tessellated, node.fills, node.strokes, true, worldMatrix, colorOverride);
   }
 
   private renderPathWithOverride(
@@ -842,23 +1044,26 @@ export class ShapeRenderer {
     worldMatrix: Matrix3,
     colorOverride: { tint: [number, number, number]; alpha: number }
   ): void {
-    if (!this.program || node.points.length < 2) return;
-    const gl = this.renderer.context;
+    if (node.points.length < 2) return;
     const processed = applyCornerRadius(node.points, node.closed);
     const tessellated = tessellatePathToVertices(
       processed,
       node.closed,
       DEFAULT_TESSELLATION_TOLERANCE
     );
-    gl.uniformMatrix3fv(this.program.uniforms.u_model, false, mat3.toFloat32Array(worldMatrix));
     const fills = node.closed ? node.fills : [];
-    this.renderFillsAndStrokesGhost(tessellated, fills, node.strokes, node.closed, colorOverride);
+    this.renderNodeGhost(tessellated, fills, node.strokes, node.closed, worldMatrix, colorOverride);
   }
 
   /**
-   * Render fill with explicit color (bypassing getFillColor)
+   * Render fill with explicit color (bypassing getFillColor).
+   * Accepts pre-computed earcut indices.
    */
-  private renderFillWithColor(vertices: Float32Array, color: Float32Array): void {
+  private renderFillWithColor(
+    vertices: Float32Array,
+    cachedIndices: number[],
+    color: Float32Array
+  ): void {
     if (!this.program) return;
     const gl = this.renderer.context;
     gl.uniform4fv(this.program.uniforms.u_color, color);
@@ -866,15 +1071,14 @@ export class ShapeRenderer {
     gl.bufferSubData(gl.ARRAY_BUFFER, 0, vertices);
     const numVertices = vertices.length / 2;
     if (numVertices < 3) return;
-    const indices = earcut(vertices.subarray(0, numVertices * 2));
-    if (indices.length === 0) {
+    if (cachedIndices.length === 0) {
       gl.drawArrays(gl.TRIANGLE_FAN, 0, numVertices);
       return;
     }
-    const indicesArray = new Uint16Array(indices);
+    const indicesArray = new Uint16Array(cachedIndices);
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indexBuffer);
     gl.bufferSubData(gl.ELEMENT_ARRAY_BUFFER, 0, indicesArray);
-    gl.drawElements(gl.TRIANGLES, indices.length, gl.UNSIGNED_SHORT, 0);
+    gl.drawElements(gl.TRIANGLES, cachedIndices.length, gl.UNSIGNED_SHORT, 0);
   }
 
   /**
@@ -961,5 +1165,13 @@ export class ShapeRenderer {
       gl.deleteVertexArray(this.vao);
       this.vao = null;
     }
+
+    // Clean up shader programs from WebGLRenderer
+    this.renderer.deleteProgram('shape');
+    this.renderer.deleteProgram('shape-gradient');
+    this.program = null;
+    this.gradientProgram = null;
+
+    this.geometryCache.clear();
   }
 }

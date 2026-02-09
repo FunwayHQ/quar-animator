@@ -62,6 +62,8 @@ export class RectangleTool extends BaseTool {
 
   onPointerUp(event: CanvasPointerEvent): void {
     if (!this.state.isDragging || !this.startPoint) {
+      this.previewNode = null;
+      this.startPoint = null;
       this.resetState();
       return;
     }

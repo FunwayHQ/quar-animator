@@ -7,6 +7,10 @@ import type { CanvasPointerEvent, PathNode, PathPoint, Vector2 } from '@quar/typ
 import { BaseTool, type ToolContext } from './BaseTool';
 import { createDefaultTransform } from '../SceneGraph';
 import { vec2 } from '../math';
+import {
+  convertPointType as convertPointTypeUtil,
+  updateHandleWithSymmetry,
+} from '../path/pointUtils';
 
 // ============================================================================
 // PenTool Class
@@ -130,34 +134,10 @@ export class PenTool extends BaseTool {
     if (!point) return;
 
     const handleOffset = vec2.subtract(worldPos, point.position);
+    const updated = updateHandleWithSymmetry(point, handleType, handleOffset);
 
-    if (handleType === 'out') {
-      point.handleOut = handleOffset;
-      // For smooth points, update the opposite handle
-      if (point.type === 'smooth' || point.type === 'symmetric') {
-        const length =
-          point.type === 'symmetric' && point.handleIn
-            ? vec2.length(handleOffset)
-            : point.handleIn
-              ? vec2.length(point.handleIn)
-              : vec2.length(handleOffset);
-        const direction = vec2.normalize({ x: -handleOffset.x, y: -handleOffset.y });
-        point.handleIn = vec2.multiply(direction, length);
-      }
-    } else {
-      point.handleIn = handleOffset;
-      // For smooth points, update the opposite handle
-      if (point.type === 'smooth' || point.type === 'symmetric') {
-        const length =
-          point.type === 'symmetric' && point.handleOut
-            ? vec2.length(handleOffset)
-            : point.handleOut
-              ? vec2.length(point.handleOut)
-              : vec2.length(handleOffset);
-        const direction = vec2.normalize({ x: -handleOffset.x, y: -handleOffset.y });
-        point.handleOut = vec2.multiply(direction, length);
-      }
-    }
+    // Apply result back to the mutable path array
+    this.currentPath[pointIndex] = updated;
   }
 
   onPointerUp(_event: CanvasPointerEvent): void {
@@ -366,56 +346,14 @@ export class PenTool extends BaseTool {
     const point = this.currentPath[pointIndex];
     if (!point) return;
 
-    if (point.type === 'corner') {
-      // Convert to smooth with default handles
-      const defaultHandleLength = 30;
+    const prevPoint = this.currentPath[pointIndex - 1] ?? null;
+    const nextPoint = this.currentPath[pointIndex + 1] ?? null;
 
-      // Calculate handle direction based on neighboring points
-      let direction: Vector2 = { x: 1, y: 0 };
-
-      if (this.currentPath.length > 1) {
-        const prevPoint = this.currentPath[pointIndex - 1];
-        const nextPoint = this.currentPath[pointIndex + 1];
-
-        if (prevPoint && nextPoint) {
-          // Direction from prev to next
-          const toNext = vec2.subtract(nextPoint.position, prevPoint.position);
-          const len = vec2.length(toNext);
-          if (len > 0) {
-            direction = { x: toNext.x / len, y: toNext.y / len };
-          }
-        } else if (prevPoint) {
-          // Direction from prev to this
-          const toPrev = vec2.subtract(point.position, prevPoint.position);
-          const len = vec2.length(toPrev);
-          if (len > 0) {
-            direction = { x: toPrev.x / len, y: toPrev.y / len };
-          }
-        } else if (nextPoint) {
-          // Direction from this to next
-          const toNext = vec2.subtract(nextPoint.position, point.position);
-          const len = vec2.length(toNext);
-          if (len > 0) {
-            direction = { x: toNext.x / len, y: toNext.y / len };
-          }
-        }
-      }
-
-      point.handleOut = {
-        x: direction.x * defaultHandleLength,
-        y: direction.y * defaultHandleLength,
-      };
-      point.handleIn = {
-        x: -direction.x * defaultHandleLength,
-        y: -direction.y * defaultHandleLength,
-      };
-      point.type = 'smooth';
-    } else {
-      // Convert to corner (remove handles)
-      point.handleIn = null;
-      point.handleOut = null;
-      point.type = 'corner';
-    }
+    this.currentPath[pointIndex] = convertPointTypeUtil(
+      point,
+      prevPoint ? prevPoint.position : null,
+      nextPoint ? nextPoint.position : null
+    );
 
     this.updatePreviewNode();
   }

@@ -362,9 +362,9 @@ describe('interpolateValue', () => {
       addKeyframe(track, 0, { r: 0, g: 0, b: 0, a: 0 });
       addKeyframe(track, 10, { r: 255, g: 255, b: 255, a: 1 });
       const val = interpolateValue(track, 5, interpolators.color);
-      expect(val!.r).toBe(128); // Math.round(127.5)
-      expect(val!.g).toBe(128);
-      expect(val!.b).toBe(128);
+      expect(val!.r).toBeCloseTo(127.5, 5); // Float interpolation (rounding at render time)
+      expect(val!.g).toBeCloseTo(127.5, 5);
+      expect(val!.b).toBeCloseTo(127.5, 5);
       expect(val!.a).toBeCloseTo(0.5, 5);
     });
   });

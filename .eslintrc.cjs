@@ -95,10 +95,16 @@ module.exports = {
       },
     },
     {
-      // Files that import from workspace packages - relax strict type checking
-      // until build system generates declaration files for cross-package resolution
+      // Files that import from workspace packages (@quar/types, @quar/core,
+      // @quar/animation) - relax strict type checking until build system
+      // generates declaration files for cross-package resolution.
+      // Only files with actual workspace imports are listed here.
       files: [
-        'apps/web/src/hooks/**/*.ts',
+        'apps/web/src/hooks/useToolShortcuts.ts',
+        'apps/web/src/hooks/useCanvasTools.ts',
+        'apps/web/src/hooks/usePlayback.ts',
+        'apps/web/src/hooks/useProjectActions.ts',
+        'apps/web/src/hooks/useKeyframeState.ts',
         'apps/web/src/stores/**/*.ts',
         'apps/web/src/contexts/**/*.tsx',
         'apps/web/src/components/canvas/**/*.tsx',
@@ -107,7 +113,7 @@ module.exports = {
         'apps/web/src/components/layout/LayerPanel.tsx',
         'apps/web/src/components/layout/PropertiesPanel.tsx',
         'apps/web/src/components/layout/Timeline.tsx',
-        'apps/web/src/components/common/OnionSkinPanel.tsx',
+        'apps/web/src/services/projectSerializer.ts',
         'packages/animation/src/**/*.ts',
         'packages/core/src/selection/SelectionManager.ts',
         'packages/core/src/SceneGraph.ts',

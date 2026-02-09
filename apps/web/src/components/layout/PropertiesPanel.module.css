@@ -454,3 +454,19 @@
   color: var(--color-accent-primary);
   background: rgba(168, 85, 247, 0.15);
 }
+
+/* Utility: small top margin for second row of per-corner inputs */
+.marginTopXs {
+  margin-top: 4px;
+}
+
+/* Utility: fixed-width spacer to align with lock button column */
+.lockButtonSpacer {
+  width: 20px;
+  flex-shrink: 0;
+}
+
+/* Utility: flex-grow input group (e.g. stroke width in sub-row) */
+.inputGroupFlex {
+  flex: 1;
+}

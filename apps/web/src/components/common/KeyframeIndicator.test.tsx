@@ -20,8 +20,7 @@ describe('KeyframeIndicator', () => {
   it('shows filled for active state', () => {
     render(<KeyframeIndicator state="active" onToggle={() => {}} />);
     const btn = screen.getByTestId('keyframe-indicator');
-    // JSDOM normalizes hex to rgb
-    expect(btn.style.background).toBe('rgb(245, 166, 35)');
+    expect(btn.style.background).toBe('var(--color-keyframe-active)');
   });
 
   it('calls onToggle when clicked', () => {

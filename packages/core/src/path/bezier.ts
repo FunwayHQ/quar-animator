@@ -4,7 +4,7 @@
  */
 
 import type { Vector2, Rect } from '@quar/types';
-import { vec2 } from '../math';
+import { vec2, EPSILON } from '../math';
 
 // ============================================================================
 // Types
@@ -85,13 +85,7 @@ export const bezier = {
    * Compute the second derivative of a cubic bezier at parameter t
    * P''(t) = 6(1-t)(P2-2P1+P0) + 6t(P3-2P2+P1)
    */
-  cubicSecondDerivative(
-    p0: Vector2,
-    p1: Vector2,
-    p2: Vector2,
-    p3: Vector2,
-    t: number
-  ): Vector2 {
+  cubicSecondDerivative(p0: Vector2, p1: Vector2, p2: Vector2, p3: Vector2, t: number): Vector2 {
     const mt = 1 - t;
 
     return {
@@ -133,13 +127,7 @@ export const bezier = {
    * Calculate the approximate arc length of a cubic bezier curve
    * Uses recursive subdivision until segments are small enough
    */
-  cubicLength(
-    p0: Vector2,
-    p1: Vector2,
-    p2: Vector2,
-    p3: Vector2,
-    tolerance: number = 0.1
-  ): number {
+  cubicLength(p0: Vector2, p1: Vector2, p2: Vector2, p3: Vector2, tolerance: number = 0.1): number {
     const chordLength = vec2.distance(p0, p3);
     const controlLength = vec2.distance(p0, p1) + vec2.distance(p1, p2) + vec2.distance(p2, p3);
 
@@ -178,8 +166,9 @@ export const bezier = {
       const d1 = pointLineDistance(p1, p0, p3);
       const d2 = pointLineDistance(p2, p0, p3);
 
+      // Cap recursion at depth 10 to guarantee termination and bound
+      // the maximum number of output segments to 2^10 = 1024.
       if ((d1 + d2 < tolerance && depth > 0) || depth > 10) {
-        // Flat enough or max depth reached
         points.push(vec2.clone(p3));
         return;
       }
@@ -197,12 +186,7 @@ export const bezier = {
   /**
    * Tessellate a quadratic bezier into line segments
    */
-  tessellateQuadratic(
-    p0: Vector2,
-    p1: Vector2,
-    p2: Vector2,
-    tolerance: number = 1.0
-  ): Vector2[] {
+  tessellateQuadratic(p0: Vector2, p1: Vector2, p2: Vector2, tolerance: number = 1.0): Vector2[] {
     // Convert quadratic to cubic for unified handling
     // Cubic control points from quadratic:
     // CP1 = P0 + 2/3 * (P1 - P0)
@@ -246,17 +230,14 @@ export const bezier = {
       const b = 6 * (p0v - 2 * p1v + p2v);
       const c = 3 * (p1v - p0v);
 
-      if (Math.abs(a) < 1e-10) {
+      if (Math.abs(a) < EPSILON) {
         // Linear case
-        if (Math.abs(b) > 1e-10) {
+        if (Math.abs(b) > EPSILON) {
           const t = -c / b;
           if (t > 0 && t < 1) {
             const mt = 1 - t;
             const value =
-              mt * mt * mt * p0v +
-              3 * mt * mt * t * p1v +
-              3 * mt * t * t * p2v +
-              t * t * t * p3v;
+              mt * mt * mt * p0v + 3 * mt * mt * t * p1v + 3 * mt * t * t * p2v + t * t * t * p3v;
             updateMinMax(value);
           }
         }
@@ -272,10 +253,7 @@ export const bezier = {
             if (t > 0 && t < 1) {
               const mt = 1 - t;
               const value =
-                mt * mt * mt * p0v +
-                3 * mt * mt * t * p1v +
-                3 * mt * t * t * p2v +
-                t * t * t * p3v;
+                mt * mt * mt * p0v + 3 * mt * mt * t * p1v + 3 * mt * t * t * p2v + t * t * t * p3v;
               updateMinMax(value);
             }
           }
@@ -340,10 +318,9 @@ export const bezier = {
       const numerator = vec2.dot(diff, derivative);
 
       // Second derivative of distance squared
-      const denominator =
-        vec2.dot(derivative, derivative) + vec2.dot(diff, secondDerivative);
+      const denominator = vec2.dot(derivative, derivative) + vec2.dot(diff, secondDerivative);
 
-      if (Math.abs(denominator) < 1e-10) break;
+      if (Math.abs(denominator) < EPSILON) break;
 
       const delta = numerator / denominator;
       t = Math.max(0, Math.min(1, t - delta));
@@ -401,6 +378,9 @@ export const bezier = {
     for (const t of sorted) {
       if (t <= 0 || t >= 1) continue;
 
+      // Guard against division by zero when consumedT approaches 1
+      if (1 - consumedT < EPSILON) continue;
+
       // Adjust t for the current segment
       const adjustedT = (t - consumedT) / (1 - consumedT);
 
@@ -434,7 +414,7 @@ function pointLineDistance(point: Vector2, lineStart: Vector2, lineEnd: Vector2)
   const dy = lineEnd.y - lineStart.y;
   const lengthSq = dx * dx + dy * dy;
 
-  if (lengthSq === 0) {
+  if (lengthSq < EPSILON * EPSILON) {
     return vec2.distance(point, lineStart);
   }
 

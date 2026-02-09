@@ -778,6 +778,7 @@ export function Canvas() {
         ref={canvasRef}
         className={styles.canvas}
         tabIndex={0}
+        aria-label="Drawing canvas"
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}

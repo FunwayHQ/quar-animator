@@ -5,12 +5,12 @@
 .overlay {
   position: fixed;
   inset: 0;
-  z-index: var(--z-popover);
+  z-index: var(--z-color-picker);
 }
 
 .picker {
   position: fixed;
-  z-index: var(--z-popover);
+  z-index: var(--z-color-picker);
   width: 232px;
   background: var(--color-bg-elevated);
   border: 1px solid var(--color-border-strong);

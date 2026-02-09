@@ -376,7 +376,24 @@ export class SceneGraph {
     this.rootNodeIds = [];
     this.worldTransformCache.clear();
 
+    // Validate that nodes is an array
+    if (!Array.isArray(data.nodes)) {
+      console.warn('SceneGraph.fromJSON: data.nodes is not an array, using empty node list');
+      data.nodes = [];
+    }
+
+    // Validate that rootNodeIds is an array
+    if (!Array.isArray(data.rootNodeIds)) {
+      console.warn('SceneGraph.fromJSON: data.rootNodeIds is not an array, using empty root list');
+      data.rootNodeIds = [];
+    }
+
     for (const node of data.nodes) {
+      // Skip nodes without a valid id
+      if (!node || typeof node.id !== 'string' || node.id.length === 0) {
+        console.warn('SceneGraph.fromJSON: skipping node with missing or invalid id', node);
+        continue;
+      }
       // Migrate old fill/stroke singular fields to fills/strokes arrays
       this.migrateNodeFillsStrokes(node);
       this.nodes.set(node.id, node);
@@ -441,7 +458,13 @@ export class SceneGraph {
     this.listeners.get(type)!.add(callback);
 
     return () => {
-      this.listeners.get(type)?.delete(callback);
+      const set = this.listeners.get(type);
+      if (set) {
+        set.delete(callback);
+        if (set.size === 0) {
+          this.listeners.delete(type);
+        }
+      }
     };
   }
 

@@ -390,6 +390,18 @@ export class WebGLRenderer {
     ];
   }
 
+  /**
+   * Delete a specific shader program by name.
+   * Used by ShapeRenderer/Grid when they dispose their own programs.
+   */
+  deleteProgram(name: string): void {
+    const program = this.programs.get(name);
+    if (program) {
+      this.gl.deleteProgram(program.program);
+      this.programs.delete(name);
+    }
+  }
+
   // --------------------------------------------------------------------------
   // Cleanup
   // --------------------------------------------------------------------------

@@ -602,6 +602,73 @@ describe('generateStrokeOutlineVertices', () => {
     expect(result[1]).toBeCloseTo(0.5);
     expect(result[7]).toBeCloseTo(-0.5);
   });
+
+  it('inside alignment offsets stroke inward only on open path', () => {
+    // Horizontal line from (0,0) to (100,0), stroke width 10, inside alignment
+    const vertices = new Float32Array([0, 0, 100, 0]);
+    const inside = generateStrokeOutlineVertices(vertices, 2, 10, false, 'inside');
+    const center = generateStrokeOutlineVertices(vertices, 2, 10, false, 'center');
+
+    // Both should produce valid outlines with same vertex count
+    expect(inside.length).toBe(8);
+    expect(center.length).toBe(8);
+
+    // Inside: left offset = 0 (no outward expansion), right offset = -width
+    // For horizontal line, perpendicular is (0, 1)
+    // Left side Y = 0 + 0*0 = 0, right side Y = 0 + 0*(-10) = reversed to give 0 and -10
+    expect(inside[1]).toBeCloseTo(0); // left start Y: no outward offset
+    expect(inside[7]).toBeCloseTo(-10); // right start Y: full inward offset
+
+    // Center: symmetric +-5
+    expect(center[1]).toBeCloseTo(5);
+    expect(center[7]).toBeCloseTo(-5);
+
+    // Inside and center should produce different vertex positions
+    expect(inside[1]).not.toBeCloseTo(center[1]);
+  });
+
+  it('outside alignment offsets stroke outward only on open path', () => {
+    // Horizontal line from (0,0) to (100,0), stroke width 10, outside alignment
+    const vertices = new Float32Array([0, 0, 100, 0]);
+    const outside = generateStrokeOutlineVertices(vertices, 2, 10, false, 'outside');
+
+    expect(outside.length).toBe(8);
+
+    // Outside: left offset = +width (full outward), right offset = 0
+    // Left side Y = 0 + 0*10 = 10, right side Y = 0 + 0*0 = 0
+    expect(outside[1]).toBeCloseTo(10); // left start Y: full outward offset
+    expect(outside[7]).toBeCloseTo(0); // right start Y: no inward offset
+  });
+
+  it('inside and outside produce distinct results from center on multi-point open path', () => {
+    // L-shaped open path: (0,0) -> (100,0) -> (100,100)
+    const vertices = new Float32Array([0, 0, 100, 0, 100, 100]);
+    const center = generateStrokeOutlineVertices(vertices, 3, 6, false, 'center');
+    const inside = generateStrokeOutlineVertices(vertices, 3, 6, false, 'inside');
+    const outside = generateStrokeOutlineVertices(vertices, 3, 6, false, 'outside');
+
+    // All should have same structure: 3 points * 2 sides = 12 coordinates
+    expect(center.length).toBe(12);
+    expect(inside.length).toBe(12);
+    expect(outside.length).toBe(12);
+
+    // All coordinates should be finite
+    for (let i = 0; i < 12; i++) {
+      expect(isFinite(center[i])).toBe(true);
+      expect(isFinite(inside[i])).toBe(true);
+      expect(isFinite(outside[i])).toBe(true);
+    }
+
+    // The three alignments should not all be identical
+    let allSame = true;
+    for (let i = 0; i < 12; i++) {
+      if (Math.abs(center[i] - inside[i]) > 0.01) {
+        allSame = false;
+        break;
+      }
+    }
+    expect(allSame).toBe(false);
+  });
 });
 
 // ============================================================================
@@ -730,7 +797,9 @@ describe('applyCornerRadius', () => {
     const result = applyCornerRadius(points, true, 10);
     // Smooth point stays as-is, 2 corner points each become 2 = 4 + 1 = 5
     expect(result.length).toBe(5);
-    expect(result.find(p => p.type === 'smooth' && p.handleIn !== null && p.handleOut !== null)).toBeTruthy();
+    expect(
+      result.find((p) => p.type === 'smooth' && p.handleIn !== null && p.handleOut !== null)
+    ).toBeTruthy();
   });
 
   it('skips first/last points of open paths', () => {

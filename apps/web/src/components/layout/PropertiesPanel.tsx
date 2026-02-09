@@ -712,6 +712,7 @@ export function PropertiesPanel() {
                   className={`${styles.lockButton} ${aspectRatioLocked ? styles.lockButtonActive : ''}`}
                   onClick={toggleAspectRatioLock}
                   title={aspectRatioLocked ? 'Unlock aspect ratio' : 'Lock aspect ratio'}
+                  aria-label={aspectRatioLocked ? 'Unlock aspect ratio' : 'Lock aspect ratio'}
                   data-testid="aspect-ratio-lock"
                 >
                   {aspectRatioLocked ? <Lock size={12} /> : <Unlock size={12} />}
@@ -776,6 +777,7 @@ export function PropertiesPanel() {
                             className={`${styles.lockButton} ${styles.lockButtonActive}`}
                             onClick={() => setCornerRadiusLocked(false)}
                             title="Unlock per-corner editing"
+                            aria-label="Unlock per-corner editing"
                             data-testid="corner-radius-lock"
                           >
                             <Lock size={12} />
@@ -816,12 +818,13 @@ export function PropertiesPanel() {
                               className={styles.lockButton}
                               onClick={() => setCornerRadiusLocked(true)}
                               title="Lock corners together"
+                              aria-label="Lock corners together"
                               data-testid="corner-radius-lock"
                             >
                               <Unlock size={12} />
                             </button>
                           </div>
-                          <div className={styles.propertyInputs} style={{ marginTop: '4px' }}>
+                          <div className={`${styles.propertyInputs} ${styles.marginTopXs}`}>
                             <div className={styles.inputGroup}>
                               <ScrubLabel
                                 label="BL"
@@ -850,7 +853,7 @@ export function PropertiesPanel() {
                                 onChange={(e) => handleCornerRadiusChange(e.target.value, 2)}
                               />
                             </div>
-                            <div style={{ width: '20px', flexShrink: 0 }} />
+                            <div className={styles.lockButtonSpacer} />
                           </div>
                         </div>
                       )}
@@ -965,6 +968,7 @@ export function PropertiesPanel() {
                             className={styles.visibilityToggle}
                             onClick={() => handleToggleFillVisibility(index)}
                             title={fill.visible ? 'Hide fill' : 'Show fill'}
+                            aria-label={fill.visible ? 'Hide fill' : 'Show fill'}
                             data-testid={`fill-visibility-${index}`}
                           >
                             {fill.visible ? <Eye size={12} /> : <EyeOff size={12} />}
@@ -986,7 +990,16 @@ export function PropertiesPanel() {
                                 }}
                                 className={styles.colorSwatch}
                                 style={{ '--swatch-color': fillHex } as React.CSSProperties}
+                                role="button"
+                                tabIndex={0}
+                                aria-label={`Fill color: ${fillHex}`}
                                 onClick={() => openPicker(pickerKey)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter' || e.key === ' ') {
+                                    e.preventDefault();
+                                    openPicker(pickerKey);
+                                  }
+                                }}
                                 data-testid={index === 0 ? 'fill-swatch' : `fill-swatch-${index}`}
                               />
                               <input
@@ -1011,6 +1024,7 @@ export function PropertiesPanel() {
                             className={styles.removeButton}
                             onClick={() => handleRemoveFill(index)}
                             title="Remove fill"
+                            aria-label="Remove fill"
                             data-testid={`fill-remove-${index}`}
                           >
                             <X size={12} />
@@ -1029,6 +1043,7 @@ export function PropertiesPanel() {
                     className={styles.addButton}
                     onClick={handleAddFill}
                     title="Add fill"
+                    aria-label="Add fill"
                     data-testid="add-fill"
                   >
                     <Plus size={12} /> Add Fill
@@ -1059,6 +1074,7 @@ export function PropertiesPanel() {
                             className={styles.visibilityToggle}
                             onClick={() => handleToggleStrokeVisibility(index)}
                             title={stroke.visible ? 'Hide stroke' : 'Show stroke'}
+                            aria-label={stroke.visible ? 'Hide stroke' : 'Show stroke'}
                             data-testid={`stroke-visibility-${index}`}
                           >
                             {stroke.visible ? <Eye size={12} /> : <EyeOff size={12} />}
@@ -1080,7 +1096,16 @@ export function PropertiesPanel() {
                                 }}
                                 className={styles.colorSwatch}
                                 style={{ '--swatch-color': strokeHex } as React.CSSProperties}
+                                role="button"
+                                tabIndex={0}
+                                aria-label={`Stroke color: ${strokeHex}`}
                                 onClick={() => openPicker(pickerKey)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter' || e.key === ' ') {
+                                    e.preventDefault();
+                                    openPicker(pickerKey);
+                                  }
+                                }}
                                 data-testid={
                                   index === 0 ? 'stroke-swatch' : `stroke-swatch-${index}`
                                 }
@@ -1107,6 +1132,7 @@ export function PropertiesPanel() {
                             className={styles.removeButton}
                             onClick={() => handleRemoveStroke(index)}
                             title="Remove stroke"
+                            aria-label="Remove stroke"
                             data-testid={`stroke-remove-${index}`}
                           >
                             <X size={12} />
@@ -1119,7 +1145,7 @@ export function PropertiesPanel() {
                           onChange={(g) => handleStrokeGradientChange(index, g)}
                         />
                         <div className={styles.strokeSubRow}>
-                          <div className={styles.inputGroup} style={{ flex: 1 }}>
+                          <div className={`${styles.inputGroup} ${styles.inputGroupFlex}`}>
                             <ScrubLabel
                               label="W"
                               value={Math.round(stroke.width * 10) / 10}
@@ -1146,6 +1172,8 @@ export function PropertiesPanel() {
                                 className={`${styles.alignOption} ${(stroke.align ?? 'center') === a ? styles.alignOptionActive : ''}`}
                                 onClick={() => handleStrokeAlignChange(index, a)}
                                 title={`Stroke ${a}`}
+                                aria-label={`Stroke alignment: ${a}`}
+                                aria-pressed={(stroke.align ?? 'center') === a}
                                 data-testid={`stroke-align-${index}-${a}`}
                               >
                                 {a[0].toUpperCase()}
@@ -1160,6 +1188,7 @@ export function PropertiesPanel() {
                     className={styles.addButton}
                     onClick={handleAddStroke}
                     title="Add stroke"
+                    aria-label="Add stroke"
                     data-testid="add-stroke"
                   >
                     <Plus size={12} /> Add Stroke

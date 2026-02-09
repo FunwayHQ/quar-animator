@@ -891,4 +891,17 @@ export class SelectionTool extends BaseTool {
 
     return { x, y, width, height };
   }
+
+  /**
+   * Reset all transient state when tool is deactivated
+   */
+  onDeactivate(): void {
+    this.mode = 'idle';
+    this.startPoint = null;
+    this.marqueeRect = null;
+    this.moveStartPositions.clear();
+    this.resizeState = null;
+    this.rotationState = null;
+    this.currentCursor = 'default';
+  }
 }

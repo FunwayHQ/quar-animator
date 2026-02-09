@@ -68,6 +68,71 @@ export function serializeProject(
 }
 
 // ============================================================================
+// Validation
+// ============================================================================
+
+/**
+ * Validates that unknown data conforms to the ProjectData shape.
+ * Lightweight structural checks without a schema library.
+ */
+export function validateProjectData(data: unknown): data is ProjectData {
+  if (data == null || typeof data !== 'object' || Array.isArray(data)) {
+    return false;
+  }
+
+  const obj = data as Record<string, unknown>;
+
+  // version must be a string
+  if (typeof obj.version !== 'string') {
+    return false;
+  }
+
+  // sceneGraph must be an object with nodes array and rootNodeIds array
+  if (
+    obj.sceneGraph == null ||
+    typeof obj.sceneGraph !== 'object' ||
+    Array.isArray(obj.sceneGraph)
+  ) {
+    return false;
+  }
+  const sg = obj.sceneGraph as Record<string, unknown>;
+  if (!Array.isArray(sg.nodes) || !Array.isArray(sg.rootNodeIds)) {
+    return false;
+  }
+
+  // Validate each node has required fields
+  for (const node of sg.nodes) {
+    if (node == null || typeof node !== 'object' || Array.isArray(node)) {
+      return false;
+    }
+    const n = node as Record<string, unknown>;
+    if (typeof n.id !== 'string') {
+      return false;
+    }
+    if (typeof n.type !== 'string') {
+      return false;
+    }
+    if (n.transform == null || typeof n.transform !== 'object' || Array.isArray(n.transform)) {
+      return false;
+    }
+  }
+
+  // settings must be an object with numeric timelineDuration and frameRate
+  if (obj.settings == null || typeof obj.settings !== 'object' || Array.isArray(obj.settings)) {
+    return false;
+  }
+  const settings = obj.settings as Record<string, unknown>;
+  if (typeof settings.timelineDuration !== 'number' || !isFinite(settings.timelineDuration)) {
+    return false;
+  }
+  if (typeof settings.frameRate !== 'number' || !isFinite(settings.frameRate)) {
+    return false;
+  }
+
+  return true;
+}
+
+// ============================================================================
 // Deserialization
 // ============================================================================
 
@@ -142,15 +207,22 @@ export function uploadProjectFile(): Promise<ProjectData> {
         return;
       }
 
+      // Reject files over 50MB to prevent memory exhaustion
+      const MAX_FILE_SIZE = 50 * 1024 * 1024;
+      if (file.size > MAX_FILE_SIZE) {
+        reject(new Error('File too large. Maximum size is 50MB.'));
+        return;
+      }
+
       const reader = new FileReader();
       reader.onload = () => {
         try {
-          const data = JSON.parse(reader.result as string) as ProjectData;
-          if (!data.version || !data.sceneGraph || !data.settings) {
+          const parsed: unknown = JSON.parse(reader.result as string);
+          if (!validateProjectData(parsed)) {
             reject(new Error('Invalid .quar file format'));
             return;
           }
-          resolve(data);
+          resolve(parsed);
         } catch {
           reject(new Error('Failed to parse .quar file'));
         }

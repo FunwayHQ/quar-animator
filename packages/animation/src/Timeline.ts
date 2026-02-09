@@ -2,13 +2,7 @@
  * Timeline management for Quar Animator
  */
 
-import type {
-  Timeline,
-  PropertyTrack,
-  Keyframe,
-  Marker,
-  EasingFunction,
-} from '@quar/types';
+import type { Timeline, PropertyTrack, Keyframe, Marker, EasingFunction } from '@quar/types';
 import { applyEasing } from './Easing';
 
 // ============================================================================
@@ -58,9 +52,7 @@ export function findTrack<T>(
   nodeId: string,
   property: string
 ): PropertyTrack<T> | undefined {
-  return timeline.tracks.find(
-    (t) => t.nodeId === nodeId && t.property === property
-  ) as PropertyTrack<T> | undefined;
+  return timeline.tracks.find((t) => t.nodeId === nodeId && t.property === property);
 }
 
 export function getOrCreateTrack<T>(
@@ -76,6 +68,35 @@ export function getOrCreateTrack<T>(
   }
 
   return track;
+}
+
+// ============================================================================
+// Binary Search Helper
+// ============================================================================
+
+/**
+ * Binary search over a sorted keyframes array.
+ * Returns the index of the first keyframe with time >= targetTime.
+ * If all keyframes have time < targetTime, returns keyframes.length.
+ * This is equivalent to a "lower bound" search.
+ */
+export function binarySearchKeyframes<T>(
+  keyframes: readonly Keyframe<T>[],
+  targetTime: number
+): number {
+  let lo = 0;
+  let hi = keyframes.length;
+
+  while (lo < hi) {
+    const mid = (lo + hi) >>> 1;
+    if (keyframes[mid].time < targetTime) {
+      lo = mid + 1;
+    } else {
+      hi = mid;
+    }
+  }
+
+  return lo;
 }
 
 // ============================================================================
@@ -101,31 +122,23 @@ export function addKeyframe<T>(
   value: T,
   easing: EasingFunction = 'linear'
 ): Keyframe<T> {
-  // Check if keyframe exists at this time
-  const existingIndex = track.keyframes.findIndex((kf) => kf.time === time);
-
   const keyframe = createKeyframe(time, value, easing);
 
-  if (existingIndex !== -1) {
-    // Update existing keyframe
-    track.keyframes[existingIndex] = keyframe;
+  // Binary search: find index of first keyframe with time >= target
+  const index = binarySearchKeyframes(track.keyframes, time);
+
+  if (index < track.keyframes.length && track.keyframes[index].time === time) {
+    // Update existing keyframe at this time
+    track.keyframes[index] = keyframe;
   } else {
-    // Insert in sorted order
-    const insertIndex = track.keyframes.findIndex((kf) => kf.time > time);
-    if (insertIndex === -1) {
-      track.keyframes.push(keyframe);
-    } else {
-      track.keyframes.splice(insertIndex, 0, keyframe);
-    }
+    // Insert at the found position to maintain sorted order
+    track.keyframes.splice(index, 0, keyframe);
   }
 
   return keyframe;
 }
 
-export function removeKeyframe<T>(
-  track: PropertyTrack<T>,
-  keyframeId: string
-): boolean {
+export function removeKeyframe<T>(track: PropertyTrack<T>, keyframeId: string): boolean {
   const index = track.keyframes.findIndex((kf) => kf.id === keyframeId);
   if (index === -1) return false;
 
@@ -145,12 +158,8 @@ export function moveKeyframe<T>(
   removeKeyframe(track, keyframeId);
   keyframe.time = newTime;
 
-  const insertIndex = track.keyframes.findIndex((kf) => kf.time > newTime);
-  if (insertIndex === -1) {
-    track.keyframes.push(keyframe);
-  } else {
-    track.keyframes.splice(insertIndex, 0, keyframe);
-  }
+  const insertIndex = binarySearchKeyframes(track.keyframes, newTime);
+  track.keyframes.splice(insertIndex, 0, keyframe);
 
   return true;
 }
@@ -169,18 +178,21 @@ export function findSurroundingKeyframes<T>(
     return [null, null];
   }
 
-  // Find the keyframe just before or at the current time
-  let beforeIndex = -1;
-  for (let i = keyframes.length - 1; i >= 0; i--) {
-    if (keyframes[i].time <= time) {
-      beforeIndex = i;
-      break;
-    }
+  // Binary search: find index of first keyframe with time >= target
+  const index = binarySearchKeyframes(keyframes, time);
+
+  // Determine the "before" keyframe (at or before the given time)
+  let beforeIndex: number;
+  if (index < keyframes.length && keyframes[index].time === time) {
+    // Exact match — this keyframe is the "before"
+    beforeIndex = index;
+  } else {
+    // index points to the first keyframe AFTER time, so before is index - 1
+    beforeIndex = index - 1;
   }
 
   const before = beforeIndex >= 0 ? keyframes[beforeIndex] : null;
-  const after =
-    beforeIndex < keyframes.length - 1 ? keyframes[beforeIndex + 1] : null;
+  const after = beforeIndex < keyframes.length - 1 ? keyframes[beforeIndex + 1] : null;
 
   return [before, after];
 }
@@ -239,12 +251,20 @@ export const interpolators = {
     b: { r: number; g: number; b: number; a: number },
     t: number
   ): { r: number; g: number; b: number; a: number } => {
+    // Interpolate all channels as floats; rounding to integer should happen at render time
     return {
-      r: Math.round(a.r + (b.r - a.r) * t),
-      g: Math.round(a.g + (b.g - a.g) * t),
-      b: Math.round(a.b + (b.b - a.b) * t),
+      r: a.r + (b.r - a.r) * t,
+      g: a.g + (b.g - a.g) * t,
+      b: a.b + (b.b - a.b) * t,
       a: a.a + (b.a - a.a) * t,
     };
+  },
+
+  rotation: (a: number, b: number, t: number): number => {
+    // Shortest-path interpolation: wrap difference to [-180, 180]
+    let diff = ((b - a + 180) % 360) - 180;
+    if (diff < -180) diff += 360;
+    return a + diff * t;
   },
 
   // Discrete - no interpolation, just snap to value
@@ -288,10 +308,7 @@ export function removeMarker(timeline: Timeline, markerId: string): boolean {
 // Timeline Utilities
 // ============================================================================
 
-export function getTracksByNode(
-  timeline: Timeline,
-  nodeId: string
-): PropertyTrack[] {
+export function getTracksByNode(timeline: Timeline, nodeId: string): PropertyTrack[] {
   return timeline.tracks.filter((t) => t.nodeId === nodeId);
 }
 

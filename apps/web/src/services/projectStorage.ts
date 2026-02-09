@@ -64,6 +64,14 @@ export function resetDB(): void {
 // Project CRUD
 // ============================================================================
 
+/** Typed error for storage quota exceeded */
+export class StorageQuotaError extends Error {
+  constructor(message = 'Storage quota exceeded. Try deleting unused projects.') {
+    super(message);
+    this.name = 'StorageQuotaError';
+  }
+}
+
 export async function saveProject(id: string, name: string, data: string): Promise<void> {
   const db = await initDB();
   const record: StoredProject = {
@@ -77,7 +85,15 @@ export async function saveProject(id: string, name: string, data: string): Promi
     const tx = db.transaction(PROJECTS_STORE, 'readwrite');
     tx.objectStore(PROJECTS_STORE).put(record);
     tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
+    tx.onerror = () => {
+      // Detect quota exceeded errors
+      const error = tx.error;
+      if (error?.name === 'QuotaExceededError') {
+        reject(new StorageQuotaError());
+      } else {
+        reject(error);
+      }
+    };
   });
 }
 

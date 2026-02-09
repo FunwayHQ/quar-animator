@@ -617,8 +617,8 @@ describe('PropertiesPanel', () => {
       });
 
       const indicators = screen.getAllByTestId('keyframe-indicator');
-      // First indicator is position X - should be filled (active); JSDOM normalizes hex to rgb
-      expect(indicators[0].style.background).toBe('rgb(245, 166, 35)');
+      // First indicator is position X - should be filled (active)
+      expect(indicators[0].style.background).toBe('var(--color-keyframe-active)');
     });
 
     it('should show inactive when keyframes exist elsewhere', () => {

@@ -7,6 +7,9 @@ import type { PathPoint, Vector2, Rect } from '@quar/types';
 import { vec2 } from '../math';
 import { bezier } from './bezier';
 
+/** Epsilon for geometry length/distance comparisons (e.g. degenerate edges, closing gaps) */
+const GEOMETRY_EPSILON = 0.001;
+
 // ============================================================================
 // PathPoint Creation
 // ============================================================================
@@ -187,7 +190,10 @@ export function tessellatePathToVertices(
     const lastX = vertices[vertices.length - 2];
     const lastY = vertices[vertices.length - 1];
 
-    if (Math.abs(lastX - firstX) > 0.001 || Math.abs(lastY - firstY) > 0.001) {
+    if (
+      Math.abs(lastX - firstX) > GEOMETRY_EPSILON ||
+      Math.abs(lastY - firstY) > GEOMETRY_EPSILON
+    ) {
       vertices.push(firstX, firstY);
     }
   }
@@ -422,14 +428,14 @@ export function applyCornerRadius(
     const distNext = vec2.length(toNext);
 
     // Skip degenerate edges (zero length)
-    if (distPrev < 0.001 || distNext < 0.001) {
+    if (distPrev < GEOMETRY_EPSILON || distNext < GEOMETRY_EPSILON) {
       result.push(clonePathPoint(point));
       continue;
     }
 
     // Clamp radius so it doesn't exceed half of either edge
     const r = Math.min(radius, distPrev / 2, distNext / 2);
-    if (r < 0.001) {
+    if (r < GEOMETRY_EPSILON) {
       result.push(clonePathPoint(point));
       continue;
     }
@@ -765,7 +771,7 @@ export function generateStrokeOutlineVertices(
     let perpX: number;
     let perpY: number;
 
-    if (len < 0.001) {
+    if (len < GEOMETRY_EPSILON) {
       // Degenerate: reuse last valid perpendicular
       perpX = lastPerpX;
       perpY = lastPerpY;

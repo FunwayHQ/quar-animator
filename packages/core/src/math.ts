@@ -99,6 +99,15 @@ export const vec2 = {
     return Math.atan2(vec2.cross(a, b), vec2.dot(a, b));
   },
 
+  /**
+   * Compare two vectors for approximate equality within an epsilon threshold.
+   *
+   * The default epsilon of 0.0001 is chosen for screen-space pixel comparisons,
+   * where sub-pixel differences (less than 1/10000th of a pixel) are visually
+   * irrelevant. This is intentionally larger than the module-level EPSILON
+   * (1e-10) used for pure math operations, since pixel coordinates do not
+   * require that level of precision.
+   */
   equals(a: Vector2, b: Vector2, epsilon = 0.0001): boolean {
     return Math.abs(a.x - b.x) < epsilon && Math.abs(a.y - b.y) < epsilon;
   },
@@ -199,10 +208,10 @@ export const mat3 = {
     const d = m.d;
 
     const scaleX = Math.sqrt(a * a + b * b);
-    const scaleY = Math.sqrt(c * c + d * d);
 
     // Guard against zero scale
     if (scaleX < EPSILON) {
+      const scaleY = Math.sqrt(c * c + d * d);
       return {
         position: { x: m.tx, y: m.ty },
         rotation: 0,
@@ -211,17 +220,29 @@ export const mat3 = {
       };
     }
 
-    // Normalize
+    // Normalize first column
     const na = a / scaleX;
     const nb = b / scaleX;
 
     const rotation = Math.atan2(nb, na);
 
+    // Extract skew by projecting second column onto the normalized first column
+    // skewX = dot(col1_normalized, col2) — the shear along X
+    const skewX = na * c + nb * d;
+
+    // Remove skew contribution from second column to get true scaleY
+    const c2 = c - na * skewX;
+    const d2 = d - nb * skewX;
+    const scaleY = Math.sqrt(c2 * c2 + d2 * d2);
+
+    // Convert skew to angle (radians)
+    const skewAngle = scaleY > EPSILON ? Math.atan2(skewX, scaleY) : 0;
+
     return {
       position: { x: m.tx, y: m.ty },
       rotation: rotation * (180 / Math.PI),
       scale: { x: scaleX, y: scaleY },
-      skew: { x: 0, y: 0 }, // Simplified
+      skew: { x: skewAngle, y: 0 },
     };
   },
 
@@ -318,10 +339,12 @@ export const rect = {
 // ============================================================================
 
 export function clamp(value: number, min: number, max: number): number {
+  if (Number.isNaN(value)) return min;
   return Math.max(min, Math.min(max, value));
 }
 
 export function lerp(a: number, b: number, t: number): number {
+  if (Number.isNaN(t)) return a;
   return a + (b - a) * t;
 }
 

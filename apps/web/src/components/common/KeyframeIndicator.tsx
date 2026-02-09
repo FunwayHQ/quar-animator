@@ -28,8 +28,8 @@ export function KeyframeIndicator({ state, onToggle }: KeyframeIndicatorProps) {
             ? '1px solid var(--color-text-disabled)'
             : state === 'inactive'
               ? '1px solid var(--color-accent-primary)'
-              : '1px solid #F5A623',
-        background: state === 'active' ? '#F5A623' : 'transparent',
+              : '1px solid var(--color-keyframe-active)',
+        background: state === 'active' ? 'var(--color-keyframe-active)' : 'transparent',
         cursor: 'pointer',
         flexShrink: 0,
         display: 'inline-block',

@@ -124,12 +124,10 @@ export function Projects() {
     try {
       const stored = await dbLoad(renamingId);
       if (stored) {
-        const data = JSON.parse(stored.data);
+        const data = JSON.parse(stored.data) as { name: string };
         data.name = newName;
         await dbSave(renamingId, newName, JSON.stringify(data));
-        setProjects((prev) =>
-          prev.map((p) => (p.id === renamingId ? { ...p, name: newName } : p))
-        );
+        setProjects((prev) => prev.map((p) => (p.id === renamingId ? { ...p, name: newName } : p)));
       }
     } catch {
       // Silently fail rename
@@ -184,8 +182,7 @@ export function Projects() {
       {/* Header */}
       <header className={styles.header}>
         <div className={styles.brand}>
-          <img src="/logo.svg" alt="" className={styles.logoImage} />
-          <span className={styles.appName}>Quar Animator</span>
+          <img src="/logo.svg" alt="Quar Animator" className={styles.logoImage} />
         </div>
         <div className={styles.headerActions}>
           <button
@@ -257,6 +254,7 @@ export function Projects() {
                           ref={renameInputRef}
                           className={styles.renameInput}
                           value={renameValue}
+                          maxLength={100}
                           onChange={(e) => setRenameValue(e.target.value)}
                           onBlur={() => void handleRenameCommit()}
                           onKeyDown={handleRenameKeyDown}

@@ -326,5 +326,9 @@ export class Grid {
       gl.deleteVertexArray(this.vao);
       this.vao = null;
     }
+
+    // Clean up shader program from WebGLRenderer
+    this.renderer.deleteProgram('grid');
+    this.program = null;
   }
 }

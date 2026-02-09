@@ -99,7 +99,8 @@ export function sampleGradientColor(
   } else if (gradient.type === 'radial') {
     const cx = gradient.center?.x ?? 0.5;
     const cy = gradient.center?.y ?? 0.5;
-    const r = gradient.radius ?? 0.5;
+    let r = gradient.radius ?? 0.5;
+    if (r <= 0) r = 0.001;
     const dx = nx - cx;
     const dy = ny - cy;
     t = Math.sqrt(dx * dx + dy * dy) / r;
@@ -112,7 +113,8 @@ export function sampleGradientColor(
     const dy = ny - cy;
     const a = Math.atan2(dy, dx) + Math.PI;
     const startRad = (startAngle * Math.PI) / 180;
-    t = ((a - startRad + Math.PI * 4) % (Math.PI * 2)) / (Math.PI * 2);
+    const rawT = ((a - startRad + Math.PI * 4) % (Math.PI * 2)) / (Math.PI * 2);
+    t = isFinite(rawT) ? rawT : 0;
   }
 
   t = Math.max(0, Math.min(1, t));

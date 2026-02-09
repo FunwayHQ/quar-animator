@@ -4,3 +4,4 @@
 
 export * from './bezier';
 export * from './pathUtils';
+export * from './pointUtils';

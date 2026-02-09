@@ -365,6 +365,7 @@ export function Timeline() {
             className={styles.expandButton}
             onClick={toggleTimelineExpanded}
             title="Expand timeline"
+            aria-label="Expand timeline"
           >
             <svg
               width="14"
@@ -382,6 +383,7 @@ export function Timeline() {
             className={`${styles.controlButton} ${styles.playButton}`}
             onClick={togglePlay}
             title="Play/Pause (Space)"
+            aria-label={isPlaying ? 'Pause' : 'Play'}
           >
             {isPlaying ? (
               <svg
@@ -419,6 +421,7 @@ export function Timeline() {
             className={`${styles.optionButton} ${isLooping ? styles.active : ''}`}
             onClick={toggleLoop}
             title="Toggle loop (L)"
+            aria-label="Toggle loop"
           >
             <svg
               width="16"
@@ -451,6 +454,7 @@ export function Timeline() {
           className={styles.collapseButton}
           onClick={toggleTimelineExpanded}
           title="Collapse timeline"
+          aria-label="Collapse timeline"
         >
           <svg
             width="14"
@@ -465,7 +469,12 @@ export function Timeline() {
         </button>
 
         <div className={styles.transportControls}>
-          <button className={styles.controlButton} onClick={goToStart} title="Go to start (Home)">
+          <button
+            className={styles.controlButton}
+            onClick={goToStart}
+            title="Go to start (Home)"
+            aria-label="Go to start"
+          >
             <svg
               width="16"
               height="16"
@@ -482,6 +491,7 @@ export function Timeline() {
             className={styles.controlButton}
             onClick={() => stepFrame(-1)}
             title="Previous frame (,)"
+            aria-label="Previous frame"
           >
             <svg
               width="16"
@@ -498,6 +508,7 @@ export function Timeline() {
             className={`${styles.controlButton} ${styles.playButton}`}
             onClick={togglePlay}
             title="Play/Pause (Space)"
+            aria-label={isPlaying ? 'Pause' : 'Play'}
           >
             {isPlaying ? (
               <svg
@@ -528,6 +539,7 @@ export function Timeline() {
             className={styles.controlButton}
             onClick={() => stepFrame(1)}
             title="Next frame (.)"
+            aria-label="Next frame"
           >
             <svg
               width="16"
@@ -540,7 +552,12 @@ export function Timeline() {
               <polygon points="5 4 15 12 5 20" />
             </svg>
           </button>
-          <button className={styles.controlButton} onClick={goToEnd} title="Go to end (End)">
+          <button
+            className={styles.controlButton}
+            onClick={goToEnd}
+            title="Go to end (End)"
+            aria-label="Go to end"
+          >
             <svg
               width="16"
               height="16"
@@ -566,6 +583,7 @@ export function Timeline() {
             className={`${styles.optionButton} ${autoKeyframe ? styles.active : ''}`}
             onClick={toggleAutoKeyframe}
             title="Toggle auto-keyframe (K)"
+            aria-label="Toggle auto-keyframe"
             data-testid="auto-keyframe-toggle"
           >
             <svg
@@ -585,6 +603,7 @@ export function Timeline() {
             className={`${styles.optionButton} ${isLooping ? styles.active : ''}`}
             onClick={toggleLoop}
             title="Toggle loop (L)"
+            aria-label="Toggle loop"
           >
             <svg
               width="16"
@@ -604,6 +623,7 @@ export function Timeline() {
             <button
               className={`${styles.optionButton} ${onionSkinEnabled ? styles.active : ''}`}
               title="Toggle onion skinning (Shift+O)"
+              aria-label="Toggle onion skinning"
               onClick={() => setShowOnionSkinPanel(!showOnionSkinPanel)}
               onContextMenu={(e) => {
                 e.preventDefault();

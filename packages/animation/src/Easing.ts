@@ -13,19 +13,19 @@ const easeOutQuad = (t: number): number => t * (2 - t);
 const easeInOutQuad = (t: number): number => (t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t);
 
 const easeInCubic = (t: number): number => t * t * t;
-const easeOutCubic = (t: number): number => --t * t * t + 1;
+const easeOutCubic = (t: number): number => (t - 1) * (t - 1) * (t - 1) + 1;
 const easeInOutCubic = (t: number): number =>
   t < 0.5 ? 4 * t * t * t : (t - 1) * (2 * t - 2) * (2 * t - 2) + 1;
 
 const easeInQuart = (t: number): number => t * t * t * t;
-const easeOutQuart = (t: number): number => 1 - --t * t * t * t;
+const easeOutQuart = (t: number): number => 1 - (t - 1) * (t - 1) * (t - 1) * (t - 1);
 const easeInOutQuart = (t: number): number =>
-  t < 0.5 ? 8 * t * t * t * t : 1 - 8 * --t * t * t * t;
+  t < 0.5 ? 8 * t * t * t * t : 1 - 8 * (t - 1) * (t - 1) * (t - 1) * (t - 1);
 
 const easeInQuint = (t: number): number => t * t * t * t * t;
-const easeOutQuint = (t: number): number => 1 + --t * t * t * t * t;
+const easeOutQuint = (t: number): number => 1 + (t - 1) * (t - 1) * (t - 1) * (t - 1) * (t - 1);
 const easeInOutQuint = (t: number): number =>
-  t < 0.5 ? 16 * t * t * t * t * t : 1 + 16 * --t * t * t * t * t;
+  t < 0.5 ? 16 * t * t * t * t * t : 1 + 16 * (t - 1) * (t - 1) * (t - 1) * (t - 1) * (t - 1);
 
 // ============================================================================
 // Exponential Functions
@@ -45,7 +45,7 @@ const easeInOutExpo = (t: number): number => {
 // ============================================================================
 
 const easeInCirc = (t: number): number => 1 - Math.sqrt(1 - t * t);
-const easeOutCirc = (t: number): number => Math.sqrt(1 - --t * t);
+const easeOutCirc = (t: number): number => Math.sqrt(1 - (t - 1) * (t - 1));
 const easeInOutCirc = (t: number): number =>
   t < 0.5
     ? (1 - Math.sqrt(1 - 4 * t * t)) / 2

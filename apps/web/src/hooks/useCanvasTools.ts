@@ -224,18 +224,9 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
       manager.dispose();
       toolManagerRef.current = null;
     };
-    // Callbacks are now stable (use refs), so only camera triggers recreation
-  }, [
-    camera,
-    setActiveTool,
-    getSelectedIds,
-    setSelectedIds,
-    addToSelectionCb,
-    clearSelectionCb,
-    getDefaultFill,
-    getDefaultStroke,
-    onTransformComplete,
-  ]);
+    // Callbacks are stable (use refs), so only camera triggers recreation
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [camera]);
 
   // Sync PenTool path state for overlay
   const syncPenToolState = useCallback(() => {
