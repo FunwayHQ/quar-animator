@@ -170,6 +170,13 @@ export interface EditorStore {
   ) => void;
   removeKeyframeAtFrame: (nodeId: string, property: string, frame: number) => void;
 
+  // Snap-to-grid
+  snapToGrid: boolean;
+  gridSize: number;
+  setSnapToGrid: (snap: boolean) => void;
+  setGridSize: (size: number) => void;
+  toggleSnapToGrid: () => void;
+
   // Onion skin
   onionSkin: OnionSkinSettings;
   setOnionSkinEnabled: (enabled: boolean) => void;
@@ -545,6 +552,13 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     set({ timeline: { ...timeline }, isDirty: true });
   },
 
+  // Snap-to-grid
+  snapToGrid: false,
+  gridSize: 20,
+  setSnapToGrid: (snap: boolean) => set({ snapToGrid: snap }),
+  setGridSize: (size: number) => set({ gridSize: Math.max(1, size) }),
+  toggleSnapToGrid: () => set((state) => ({ snapToGrid: !state.snapToGrid })),
+
   // Onion skin
   onionSkin: { ...DEFAULT_ONION_SKIN_SETTINGS },
   setOnionSkinEnabled: (enabled: boolean) =>
@@ -659,6 +673,13 @@ export const useToggleAutoKeyframe = (): (() => void) =>
   useEditorStore((state: EditorStore) => state.toggleAutoKeyframe);
 export const useSelectedKeyframeIds = (): Set<string> =>
   useEditorStore((state: EditorStore) => state.selectedKeyframeIds);
+
+// Snap-to-grid selectors
+export const useSnapToGrid = (): boolean =>
+  useEditorStore((state: EditorStore) => state.snapToGrid);
+export const useGridSize = (): number => useEditorStore((state: EditorStore) => state.gridSize);
+export const useToggleSnapToGrid = (): (() => void) =>
+  useEditorStore((state: EditorStore) => state.toggleSnapToGrid);
 
 // Onion skin selectors
 export const useOnionSkin = (): OnionSkinSettings =>

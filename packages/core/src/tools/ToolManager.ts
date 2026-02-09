@@ -31,6 +31,8 @@ export interface ToolManagerOptions {
   getDefaultStroke: () => Stroke;
   onToolChange?: (tool: ToolType) => void;
   onTransformComplete?: (nodeIds: Set<string>, type: TransformType) => void;
+  getSnapToGrid?: () => boolean;
+  getGridSize?: () => number;
 }
 
 // ============================================================================
@@ -219,6 +221,8 @@ export class ToolManager {
       generateId: this.generateId.bind(this),
       setActiveTool: (tool: ToolType) => this.setActiveTool(tool),
       onTransformComplete: options.onTransformComplete,
+      getSnapToGrid: options.getSnapToGrid,
+      getGridSize: options.getGridSize,
     };
   }
 

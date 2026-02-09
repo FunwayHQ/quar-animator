@@ -25,6 +25,8 @@ export interface ToolContext {
   generateId: () => string;
   setActiveTool: (tool: ToolType) => void;
   onTransformComplete?: (nodeIds: Set<string>, type: TransformType) => void;
+  getSnapToGrid?: () => boolean;
+  getGridSize?: () => number;
 }
 
 export interface ToolState {

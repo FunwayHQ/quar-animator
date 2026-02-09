@@ -140,6 +140,10 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
   const addKeyframeAtFrameRef = useRef(useEditorStore.getState().addKeyframeAtFrame);
   const currentFrameRef = useRef(useEditorStore.getState().currentFrame);
 
+  // Snap-to-grid refs
+  const snapToGridRef = useRef(useEditorStore.getState().snapToGrid);
+  const gridSizeRef = useRef(useEditorStore.getState().gridSize);
+
   // Keep state values in refs for stable callbacks
   // This prevents ToolManager from being recreated on every state change
   const selectedNodeIdsRef = useRef(selectedNodeIds);
@@ -151,12 +155,14 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
   const activeToolRef = useRef(activeTool);
   activeToolRef.current = activeTool;
 
-  // Subscribe to store to keep auto-keyframe refs fresh
+  // Subscribe to store to keep refs fresh
   useEffect(() => {
     return useEditorStore.subscribe((state) => {
       autoKeyframeRef.current = state.autoKeyframe;
       addKeyframeAtFrameRef.current = state.addKeyframeAtFrame;
       currentFrameRef.current = state.currentFrame;
+      snapToGridRef.current = state.snapToGrid;
+      gridSizeRef.current = state.gridSize;
     });
   }, []);
 
@@ -167,6 +173,8 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
   const clearSelectionCb = useCallback(() => clearSelection(), [clearSelection]);
   const getDefaultFill = useCallback(() => defaultFillRef.current, []);
   const getDefaultStroke = useCallback(() => defaultStrokeRef.current, []);
+  const getSnapToGrid = useCallback(() => snapToGridRef.current, []);
+  const getGridSize = useCallback(() => gridSizeRef.current, []);
 
   // Auto-keyframe callback for canvas transform operations (move/resize/rotate)
   const onTransformComplete = useCallback((nodeIds: Set<string>, type: TransformType) => {
@@ -224,6 +232,8 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
         setCursor((toolManagerRef.current?.getCursor() as string) ?? 'default');
       },
       onTransformComplete,
+      getSnapToGrid,
+      getGridSize,
     });
 
     // Set the active tool from EditorStore (ToolManager defaults to 'selection')

@@ -245,7 +245,7 @@ export class SelectionTool extends BaseTool {
       for (const [id, startPos] of this.moveStartPositions) {
         const node = this.context.sceneGraph.getNode(id);
         if (node) {
-          const newPos = vec2.add(startPos, delta);
+          const newPos = this.snapPosition(vec2.add(startPos, delta));
           this.context.sceneGraph.updateNode(id, {
             transform: {
               ...node.transform,
@@ -405,13 +405,16 @@ export class SelectionTool extends BaseTool {
       case 'ArrowRight': {
         // Nudge selected nodes
         event.preventDefault();
-        const nudgeAmount = event.shiftKey ? 10 : 1;
+        const snapOn = this.context.getSnapToGrid?.() ?? false;
+        const gridSize = this.context.getGridSize?.() ?? 20;
+        const nudgeAmount = snapOn ? gridSize : event.shiftKey ? 10 : 1;
         const delta = this.getArrowDelta(event.key, nudgeAmount);
 
         for (const id of selectedIds) {
           const node = this.context.sceneGraph.getNode(id);
           if (node) {
-            const newPos = vec2.add(node.transform.position, delta);
+            const rawPos = vec2.add(node.transform.position, delta);
+            const newPos = snapOn ? this.snapPosition(rawPos) : rawPos;
             this.context.sceneGraph.updateNode(id, {
               transform: {
                 ...node.transform,
@@ -562,6 +565,21 @@ export class SelectionTool extends BaseTool {
    */
   getMode(): SelectionMode {
     return this.mode;
+  }
+
+  // --------------------------------------------------------------------------
+  // Snap Helpers
+  // --------------------------------------------------------------------------
+
+  private snapValue(value: number): number {
+    if (!this.context.getSnapToGrid?.()) return value;
+    const grid = this.context.getGridSize?.() ?? 20;
+    return Math.round(value / grid) * grid;
+  }
+
+  private snapPosition(pos: Vector2): Vector2 {
+    if (!this.context.getSnapToGrid?.()) return pos;
+    return { x: this.snapValue(pos.x), y: this.snapValue(pos.y) };
   }
 
   // --------------------------------------------------------------------------

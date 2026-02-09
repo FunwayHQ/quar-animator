@@ -9,7 +9,7 @@ import type {
   Fill,
   Stroke,
 } from '@quar/types';
-import { Lock, Unlock, Eye, EyeOff, Plus, X } from 'lucide-react';
+import { Lock, Unlock, Eye, EyeOff, Plus, X, Grid3X3 } from 'lucide-react';
 import { useSceneGraph } from '../../contexts/SceneGraphContext';
 import { useEditorStore, DEFAULT_FILL, DEFAULT_STROKE } from '../../stores/editorStore';
 import { ScrubLabel } from '../common/ScrubLabel';
@@ -17,7 +17,8 @@ import { KeyframeIndicator } from '../common/KeyframeIndicator';
 import { ColorPicker } from '../common/ColorPicker';
 import { GradientEditor } from '../common/GradientEditor';
 import type { FillType } from '../common/GradientEditor';
-import { createDefaultGradient } from '@quar/core';
+import { createDefaultGradient, SelectionManager } from '@quar/core';
+import type { SceneGraph } from '@quar/core';
 import { getKeyframeState } from '../../hooks/useKeyframeState';
 import styles from './PropertiesPanel.module.css';
 
@@ -44,7 +45,9 @@ function hexToColor(hex: string): Color | null {
   };
 }
 
-function getNodeSize(node: Node): { width: number; height: number } {
+const groupBoundsManager = new SelectionManager();
+
+function getNodeSize(node: Node, sceneGraph?: SceneGraph): { width: number; height: number } {
   switch (node.type) {
     case 'rectangle': {
       const rect = node as RectangleNode;
@@ -60,9 +63,23 @@ function getNodeSize(node: Node): { width: number; height: number } {
       const scaleY = polygon.transform.scale?.y ?? 1;
       return { width: polygon.radius * 2 * scaleX, height: polygon.radius * 2 * scaleY };
     }
+    case 'group': {
+      if (!sceneGraph) return { width: 0, height: 0 };
+      const childIds = new Set(sceneGraph.getDescendants(node.id).map((n) => n.id));
+      const bounds = groupBoundsManager.getSelectionBounds(childIds, sceneGraph);
+      if (bounds) return { width: bounds.rect.width, height: bounds.rect.height };
+      return { width: 0, height: 0 };
+    }
     default:
       return { width: 0, height: 0 };
   }
+}
+
+function getGroupPosition(node: Node, sceneGraph: SceneGraph): { x: number; y: number } {
+  const childIds = new Set(sceneGraph.getDescendants(node.id).map((n) => n.id));
+  const bounds = groupBoundsManager.getSelectionBounds(childIds, sceneGraph);
+  if (bounds) return { x: bounds.rect.x, y: bounds.rect.y };
+  return node.transform.position;
 }
 
 function isSizeEditable(node: Node): boolean {
@@ -132,6 +149,8 @@ export function PropertiesPanel() {
   const addKeyframeAtFrame = useEditorStore((state) => state.addKeyframeAtFrame);
   const removeKeyframeAtFrame = useEditorStore((state) => state.removeKeyframeAtFrame);
   const timeline = useEditorStore((state) => state.timeline);
+  const snapToGrid = useEditorStore((state) => state.snapToGrid);
+  const toggleSnapToGrid = useEditorStore((state) => state.toggleSnapToGrid);
 
   // Re-render on SceneGraph changes
   const [, setVersion] = useState(0);
@@ -152,17 +171,19 @@ export function PropertiesPanel() {
       if (isNaN(num)) return;
       const currentNode = sceneGraph.getNode(selectedId);
       if (!currentNode) return;
+      const { snapToGrid: snap, gridSize: grid } = useEditorStore.getState();
+      const snapped = snap ? Math.round(num / grid) * grid : num;
       sceneGraph.updateNode(selectedId, {
         transform: {
           ...currentNode.transform,
           position: {
             ...currentNode.transform.position,
-            [axis]: num,
+            [axis]: snapped,
           },
         },
       });
       if (autoKeyframe) {
-        addKeyframeAtFrame(selectedId, `transform.position.${axis}`, currentFrame, num);
+        addKeyframeAtFrame(selectedId, `transform.position.${axis}`, currentFrame, snapped);
       }
     },
     [selectedId, sceneGraph, autoKeyframe, currentFrame, addKeyframeAtFrame]
@@ -224,11 +245,13 @@ export function PropertiesPanel() {
   const handleSizeChange = useCallback(
     (dimension: 'width' | 'height', value: string) => {
       if (!selectedId) return;
-      const num = parseFloat(value);
-      if (isNaN(num) || num <= 0) return;
+      const raw = parseFloat(value);
+      if (isNaN(raw) || raw <= 0) return;
+      const { snapToGrid: snap, gridSize: grid } = useEditorStore.getState();
+      const num = snap ? Math.max(grid, Math.round(raw / grid) * grid) : raw;
       const currentNode = sceneGraph.getNode(selectedId);
       if (!currentNode) return;
-      const currentSize = getNodeSize(currentNode);
+      const currentSize = getNodeSize(currentNode, sceneGraph);
 
       let newW = currentSize.width;
       let newH = currentSize.height;
@@ -606,9 +629,10 @@ export function PropertiesPanel() {
     );
   }
 
-  const pos = node.transform.position;
+  const isGroup = node.type === 'group';
+  const pos = isGroup ? getGroupPosition(node, sceneGraph) : node.transform.position;
   const rotation = node.transform.rotation;
-  const size = getNodeSize(node);
+  const size = getNodeSize(node, sceneGraph);
   const fills = getNodeFills(node);
   const strokes = getNodeStrokes(node);
   const opacityPercent = Math.round(node.opacity * 100);
@@ -625,15 +649,27 @@ export function PropertiesPanel() {
     }
   };
 
+  const nodeTypeLabel = node.type.charAt(0).toUpperCase() + node.type.slice(1);
+
   return (
     <div className={styles.panel}>
       <div className={styles.header}>
         <h3 className={styles.title}>Properties</h3>
+        <span className={styles.nodeTypeLabel}>{nodeTypeLabel}</span>
       </div>
       <div className={styles.content}>
         <div className={styles.section}>
           <div className={styles.sectionHeader}>
             <span className={styles.sectionTitle}>Transform</span>
+            <button
+              className={`${styles.snapButton} ${snapToGrid ? styles.snapButtonActive : ''}`}
+              onClick={toggleSnapToGrid}
+              title={snapToGrid ? 'Disable snap to grid' : 'Enable snap to grid'}
+              aria-label={snapToGrid ? 'Disable snap to grid' : 'Enable snap to grid'}
+              data-testid="snap-to-grid-toggle"
+            >
+              <Grid3X3 size={12} />
+            </button>
           </div>
           <div className={styles.sectionContent}>
             <div className={styles.propertyRow}>
@@ -656,13 +692,14 @@ export function PropertiesPanel() {
                   <ScrubLabel
                     label="X"
                     value={Math.round(pos.x)}
-                    onChange={(v) => handlePositionChange('x', String(v))}
+                    onChange={isGroup ? undefined : (v) => handlePositionChange('x', String(v))}
                   />
                   <input
                     id="prop-pos-x"
                     type="text"
                     className={styles.input}
                     value={Math.round(pos.x)}
+                    readOnly={isGroup}
                     onChange={(e) => handlePositionChange('x', e.target.value)}
                   />
                 </div>
@@ -670,12 +707,13 @@ export function PropertiesPanel() {
                   <ScrubLabel
                     label="Y"
                     value={Math.round(pos.y)}
-                    onChange={(v) => handlePositionChange('y', String(v))}
+                    onChange={isGroup ? undefined : (v) => handlePositionChange('y', String(v))}
                   />
                   <input
                     type="text"
                     className={styles.input}
                     value={Math.round(pos.y)}
+                    readOnly={isGroup}
                     onChange={(e) => handlePositionChange('y', e.target.value)}
                   />
                 </div>
@@ -704,31 +742,33 @@ export function PropertiesPanel() {
                     type="text"
                     className={styles.input}
                     value={Math.round(size.width)}
-                    readOnly={!isSizeEditable(node)}
+                    readOnly={!isSizeEditable(node) || isGroup}
                     onChange={(e) => handleSizeChange('width', e.target.value)}
                   />
                 </div>
-                <button
-                  className={`${styles.lockButton} ${aspectRatioLocked ? styles.lockButtonActive : ''}`}
-                  onClick={toggleAspectRatioLock}
-                  title={aspectRatioLocked ? 'Unlock aspect ratio' : 'Lock aspect ratio'}
-                  aria-label={aspectRatioLocked ? 'Unlock aspect ratio' : 'Lock aspect ratio'}
-                  data-testid="aspect-ratio-lock"
-                >
-                  {aspectRatioLocked ? <Lock size={12} /> : <Unlock size={12} />}
-                </button>
+                {!isGroup && (
+                  <button
+                    className={`${styles.lockButton} ${aspectRatioLocked ? styles.lockButtonActive : ''}`}
+                    onClick={toggleAspectRatioLock}
+                    title={aspectRatioLocked ? 'Unlock aspect ratio' : 'Lock aspect ratio'}
+                    aria-label={aspectRatioLocked ? 'Unlock aspect ratio' : 'Lock aspect ratio'}
+                    data-testid="aspect-ratio-lock"
+                  >
+                    {aspectRatioLocked ? <Lock size={12} /> : <Unlock size={12} />}
+                  </button>
+                )}
                 <div className={styles.inputGroup}>
                   <ScrubLabel
                     label="H"
                     value={Math.round(size.height)}
-                    onChange={(v) => handleSizeChange('height', String(v))}
+                    onChange={isGroup ? undefined : (v) => handleSizeChange('height', String(v))}
                     min={1}
                   />
                   <input
                     type="text"
                     className={styles.input}
                     value={Math.round(size.height)}
-                    readOnly={!isSizeEditable(node)}
+                    readOnly={!isSizeEditable(node) || isGroup}
                     onChange={(e) => handleSizeChange('height', e.target.value)}
                   />
                 </div>
