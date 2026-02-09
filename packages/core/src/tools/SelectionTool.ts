@@ -584,11 +584,50 @@ export class SelectionTool extends BaseTool {
   }
 
   /**
-   * Snap a node's center position to the grid.
-   * Snaps the center directly so the displayed position always shows grid-aligned values.
+   * Snap a node's position so that its top-left corner aligns with grid lines.
    */
-  private snapNodePosition(_node: Node, centerPos: Vector2): Vector2 {
-    return this.snapPosition(centerPos);
+  private snapNodePosition(node: Node, centerPos: Vector2): Vector2 {
+    if (!this.context.getSnapToGrid?.()) return centerPos;
+
+    const size = this.getNodeBoundsSize(node);
+    if (size.width === 0 && size.height === 0) {
+      return this.snapPosition(centerPos);
+    }
+
+    const anchor = node.transform.anchor ?? { x: 0.5, y: 0.5 };
+    const topLeft = {
+      x: centerPos.x - size.width * anchor.x,
+      y: centerPos.y - size.height * anchor.y,
+    };
+    const snappedTL = this.snapPosition(topLeft);
+    return {
+      x: snappedTL.x + size.width * anchor.x,
+      y: snappedTL.y + size.height * anchor.y,
+    };
+  }
+
+  /** Get bounding box dimensions for a node (used for snap offset). */
+  private getNodeBoundsSize(node: Node): { width: number; height: number } {
+    switch (node.type) {
+      case 'rectangle':
+        return {
+          width: (node as { width: number }).width,
+          height: (node as { height: number }).height,
+        };
+      case 'ellipse':
+        return {
+          width: (node as { radiusX: number }).radiusX * 2,
+          height: (node as { radiusY: number }).radiusY * 2,
+        };
+      case 'polygon': {
+        const p = node as { radius: number; transform: { scale?: Vector2 } };
+        const sx = p.transform.scale?.x ?? 1;
+        const sy = p.transform.scale?.y ?? 1;
+        return { width: p.radius * 2 * sx, height: p.radius * 2 * sy };
+      }
+      default:
+        return { width: 0, height: 0 };
+    }
   }
 
   // --------------------------------------------------------------------------

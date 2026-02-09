@@ -146,9 +146,11 @@ describe('PropertiesPanel', () => {
       useEditorStore.getState().setSelection(['rect1']);
     });
 
-    // Position is 150, 200 (displayed with 1 decimal)
-    expect(screen.getByDisplayValue('150.0')).toBeInTheDocument();
-    expect(screen.getByDisplayValue('200.0')).toBeInTheDocument();
+    // Position displayed as top-left: center(150,200) - size(100,50)*anchor(0.5) = (100, 175)
+    // Position X (100.0) matches width W (100.0) too, so use the id-targeted input
+    const posXInput = document.getElementById('prop-pos-x') as HTMLInputElement;
+    expect(posXInput.value).toBe('100.0');
+    expect(screen.getByDisplayValue('175.0')).toBeInTheDocument();
   });
 
   it('displays actual node size', () => {
@@ -159,8 +161,9 @@ describe('PropertiesPanel', () => {
       useEditorStore.getState().setSelection(['rect1']);
     });
 
-    // Width 100, Height 50 (displayed with 1 decimal)
-    expect(screen.getByDisplayValue('100.0')).toBeInTheDocument();
+    // Width 100 (note: position X is also 100.0, so there are 2 matches)
+    expect(screen.getAllByDisplayValue('100.0').length).toBeGreaterThanOrEqual(2);
+    // Height 50
     expect(screen.getByDisplayValue('50.0')).toBeInTheDocument();
   });
 
@@ -239,7 +242,8 @@ describe('PropertiesPanel', () => {
         useEditorStore.getState().setSelection(['rect1']);
       });
 
-      const widthInput = screen.getByDisplayValue('100.0');
+      // Use id to target width input (position X also shows '100.0')
+      const widthInput = document.getElementById('prop-size-w')!;
       act(() => {
         fireEvent.change(widthInput, { target: { value: '200' } });
       });
@@ -309,7 +313,7 @@ describe('PropertiesPanel', () => {
         useEditorStore.getState().setSelection(['rect1']);
       });
 
-      const widthInput = screen.getByDisplayValue('100.0');
+      const widthInput = document.getElementById('prop-size-w')!;
       act(() => {
         fireEvent.change(widthInput, { target: { value: 'abc' } });
       });
@@ -326,7 +330,7 @@ describe('PropertiesPanel', () => {
         useEditorStore.getState().setSelection(['rect1']);
       });
 
-      const widthInput = screen.getByDisplayValue('100.0');
+      const widthInput = document.getElementById('prop-size-w')!;
       act(() => {
         fireEvent.change(widthInput, { target: { value: '0' } });
       });
@@ -499,7 +503,7 @@ describe('PropertiesPanel', () => {
         useEditorStore.getState().toggleAspectRatioLock();
       });
 
-      const widthInput = screen.getByDisplayValue('100.0');
+      const widthInput = document.getElementById('prop-size-w')!;
       act(() => {
         fireEvent.change(widthInput, { target: { value: '200' } });
       });
@@ -541,7 +545,7 @@ describe('PropertiesPanel', () => {
       });
 
       // Lock is off by default
-      const widthInput = screen.getByDisplayValue('100.0');
+      const widthInput = document.getElementById('prop-size-w')!;
       act(() => {
         fireEvent.change(widthInput, { target: { value: '200' } });
       });
