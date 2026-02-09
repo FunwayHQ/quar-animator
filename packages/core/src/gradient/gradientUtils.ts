@@ -3,7 +3,8 @@
  * Pure math functions for gradient computation
  */
 
-import type { Gradient, GradientStop, Color } from '@quar/types';
+import type { Gradient, GradientStop, Color, Vector2, Matrix3, Node } from '@quar/types';
+import { mat3 } from '../math';
 
 // ============================================================================
 // Bounds computation
@@ -16,14 +17,14 @@ import type { Gradient, GradientStop, Color } from '@quar/types';
 export function computeBounds(vertices: Float32Array): [number, number, number, number] {
   if (vertices.length < 2) return [0, 0, 0, 0];
 
-  let minX = vertices[0];
-  let minY = vertices[1];
-  let maxX = vertices[0];
-  let maxY = vertices[1];
+  let minX = vertices[0] as number;
+  let minY = vertices[1] as number;
+  let maxX = minX;
+  let maxY = minY;
 
   for (let i = 2; i < vertices.length; i += 2) {
-    const x = vertices[i];
-    const y = vertices[i + 1];
+    const x = vertices[i] as number;
+    const y = vertices[i + 1] as number;
     if (x < minX) minX = x;
     if (x > maxX) maxX = x;
     if (y < minY) minY = y;
@@ -49,9 +50,10 @@ export function normalizeGradientStops(stops: GradientStop[]): GradientStop[] {
   }
 
   if (stops.length === 1) {
+    const stop = stops[0]!;
     return [
-      { ...stops[0], offset: 0 },
-      { ...stops[0], offset: 1 },
+      { ...stop, offset: 0 },
+      { ...stop, offset: 1 },
     ];
   }
 
@@ -92,10 +94,25 @@ export function sampleGradientColor(
   let t: number;
 
   if (gradient.type === 'linear') {
-    const angle = gradient.angle ?? 0;
-    const rad = (angle * Math.PI) / 180;
-    const dir = { x: Math.cos(rad), y: Math.sin(rad) };
-    t = (nx - 0.5) * dir.x + (ny - 0.5) * dir.y + 0.5;
+    const start = gradient.start;
+    const end = gradient.end;
+    if (start && end) {
+      const dx = end.x - start.x;
+      const dy = end.y - start.y;
+      const len = Math.sqrt(dx * dx + dy * dy);
+      if (len > 0.001) {
+        const ndx = dx / len;
+        const ndy = dy / len;
+        t = ((nx - start.x) * ndx + (ny - start.y) * ndy) / len;
+      } else {
+        t = 0.5;
+      }
+    } else {
+      const angle = gradient.angle ?? 0;
+      const rad = (angle * Math.PI) / 180;
+      const dir = { x: Math.cos(rad), y: Math.sin(rad) };
+      t = (nx - 0.5) * dir.x + (ny - 0.5) * dir.y + 0.5;
+    }
   } else if (gradient.type === 'radial') {
     const cx = gradient.center?.x ?? 0.5;
     const cy = gradient.center?.y ?? 0.5;
@@ -127,13 +144,15 @@ export function sampleGradientColor(
  */
 function interpolateStopColor(stops: GradientStop[], t: number): Color {
   if (stops.length === 0) return { r: 0, g: 0, b: 0, a: 1 };
-  if (t <= stops[0].offset) return { ...stops[0].color };
-  if (t >= stops[stops.length - 1].offset) return { ...stops[stops.length - 1].color };
+  const first = stops[0]!;
+  const last = stops[stops.length - 1]!;
+  if (t <= first.offset) return { ...first.color };
+  if (t >= last.offset) return { ...last.color };
 
   for (let i = 1; i < stops.length; i++) {
-    if (t <= stops[i].offset) {
-      const s0 = stops[i - 1];
-      const s1 = stops[i];
+    const s1 = stops[i]!;
+    if (t <= s1.offset) {
+      const s0 = stops[i - 1]!;
       const range = s1.offset - s0.offset;
       const st = range > 0 ? (t - s0.offset) / range : 0;
       return {
@@ -145,7 +164,7 @@ function interpolateStopColor(stops: GradientStop[], t: number): Color {
     }
   }
 
-  return { ...stops[stops.length - 1].color };
+  return { ...last.color };
 }
 
 // ============================================================================
@@ -163,10 +182,119 @@ export function createDefaultGradient(type: 'linear' | 'radial' | 'conic' = 'lin
 
   switch (type) {
     case 'linear':
-      return { type: 'linear', stops, angle: 0 };
+      return {
+        type: 'linear',
+        stops,
+        angle: 0,
+        start: { x: 0, y: 0.5 },
+        end: { x: 1, y: 0.5 },
+      };
     case 'radial':
-      return { type: 'radial', stops, center: { x: 0.5, y: 0.5 }, radius: 0.5 };
+      return { type: 'radial', stops, center: { x: 0.5, y: 0.5 }, radius: 0.5, end: { x: 1, y: 0.5 } };
     case 'conic':
       return { type: 'conic', stops, center: { x: 0.5, y: 0.5 }, angle: 0 };
   }
+}
+
+// ============================================================================
+// Gradient coordinate conversions
+// ============================================================================
+
+/**
+ * Convert a linear gradient angle to normalized start/end points (0-1 space).
+ * angle=0 means left-to-right, angle=90 means bottom-to-top.
+ */
+export function linearGradientFromAngle(angle: number): { start: Vector2; end: Vector2 } {
+  const rad = (angle * Math.PI) / 180;
+  const cos = Math.cos(rad);
+  const sin = Math.sin(rad);
+  return {
+    start: { x: 0.5 - cos * 0.5, y: 0.5 - sin * 0.5 },
+    end: { x: 0.5 + cos * 0.5, y: 0.5 + sin * 0.5 },
+  };
+}
+
+/**
+ * Convert start/end points (normalized 0-1) back to an angle in degrees.
+ */
+export function angleFromLinearGradient(start: Vector2, end: Vector2): number {
+  const dx = end.x - start.x;
+  const dy = end.y - start.y;
+  return (Math.atan2(dy, dx) * 180) / Math.PI;
+}
+
+/**
+ * Get local-space bounding box for a node, matching ShapeRenderer's coordinate system.
+ * Returns [minX, minY, maxX, maxY] in node-local coordinates.
+ */
+export function getNodeLocalBounds(node: Node): [number, number, number, number] {
+  const anchor = node.transform.anchor ?? { x: 0.5, y: 0.5 };
+  switch (node.type) {
+    case 'rectangle': {
+      const x = -node.width * anchor.x;
+      const y = -node.height * anchor.y;
+      return [x, y, x + node.width, y + node.height];
+    }
+    case 'ellipse':
+      return [-node.radiusX, -node.radiusY, node.radiusX, node.radiusY];
+    case 'polygon': {
+      const r = node.radius;
+      const sx = node.transform.scale?.x ?? 1;
+      const sy = node.transform.scale?.y ?? 1;
+      return [-r * sx, -r * sy, r * sx, r * sy];
+    }
+    case 'path': {
+      if (node.points.length === 0) return [0, 0, 0, 0];
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      for (const pt of node.points) {
+        const px = pt.position.x;
+        const py = pt.position.y;
+        if (px < minX) minX = px;
+        if (py < minY) minY = py;
+        if (px > maxX) maxX = px;
+        if (py > maxY) maxY = py;
+      }
+      return [minX, minY, maxX, maxY];
+    }
+    default:
+      return [0, 0, 0, 0];
+  }
+}
+
+/**
+ * Convert a normalized gradient position (0-1 in local bounds space) to world coordinates.
+ */
+export function gradientNormalizedToWorld(
+  normalized: Vector2,
+  localBounds: [number, number, number, number],
+  worldMatrix: Matrix3
+): Vector2 {
+  const [minX, minY, maxX, maxY] = localBounds;
+  const w = maxX - minX;
+  const h = maxY - minY;
+  // Map normalized 0-1 to local coordinates
+  const localX = minX + normalized.x * w;
+  const localY = minY + normalized.y * h;
+  // Transform to world
+  return mat3.transformPoint(worldMatrix, { x: localX, y: localY });
+}
+
+/**
+ * Convert a world position back to normalized gradient coordinates (0-1).
+ */
+export function worldToGradientNormalized(
+  worldPos: Vector2,
+  localBounds: [number, number, number, number],
+  inverseWorldMatrix: Matrix3
+): Vector2 {
+  // Transform world to local
+  const local = mat3.transformPoint(inverseWorldMatrix, worldPos);
+  const [minX, minY, maxX, maxY] = localBounds;
+  const w = maxX - minX;
+  const h = maxY - minY;
+  // Map local to normalized 0-1
+  return {
+    x: w > 0 ? (local.x - minX) / w : 0.5,
+    y: h > 0 ? (local.y - minY) / h : 0.5,
+  };
 }

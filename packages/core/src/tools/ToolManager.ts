@@ -13,6 +13,7 @@ import { PolygonTool } from './PolygonTool';
 import { PenTool } from './PenTool';
 import { BrushTool } from './BrushTool';
 import { EraserTool } from './EraserTool';
+import { HandTool } from './HandTool';
 import type { SceneGraph } from '../SceneGraph';
 import type { Camera } from '../Camera';
 
@@ -64,6 +65,7 @@ export class ToolManager {
     starTool.setStarMode(true);
     this.tools.set('star', starTool);
 
+    this.tools.set('hand', new HandTool(context));
     this.tools.set('pen', new PenTool(context));
     this.tools.set('brush', new BrushTool(context));
     this.tools.set('eraser', new EraserTool(context));
@@ -168,8 +170,8 @@ export class ToolManager {
    * Route key down event to active tool
    */
   handleKeyDown(event: KeyboardEvent): void {
-    // Check for tool shortcuts first
-    if (!event.ctrlKey && !event.metaKey && !event.altKey) {
+    // Check for tool shortcuts first (skip when Shift is held — Shift+letter is reserved for other shortcuts)
+    if (!event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey) {
       const newTool = this.getToolForShortcut(event.key);
       if (newTool) {
         this.setActiveTool(newTool);
@@ -233,26 +235,18 @@ export class ToolManager {
   private getToolForShortcut(key: string): ToolType | null {
     const shortcuts: Record<string, ToolType> = {
       v: 'selection',
-      V: 'selection',
       a: 'direct-selection',
-      A: 'direct-selection',
+      h: 'hand',
       r: 'rectangle',
-      R: 'rectangle',
       o: 'ellipse',
-      O: 'ellipse',
       u: 'polygon',
-      U: 'polygon',
       s: 'star',
-      S: 'star',
       p: 'pen',
-      P: 'pen',
       b: 'brush',
-      B: 'brush',
       e: 'eraser',
-      E: 'eraser',
     };
 
-    return shortcuts[key] ?? null;
+    return shortcuts[key.toLowerCase()] ?? null;
   }
 
   // --------------------------------------------------------------------------

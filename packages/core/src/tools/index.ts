@@ -11,4 +11,5 @@ export * from './PolygonTool';
 export * from './PenTool';
 export * from './BrushTool';
 export * from './EraserTool';
+export * from './HandTool';
 export * from './ToolManager';

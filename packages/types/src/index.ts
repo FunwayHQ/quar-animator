@@ -51,6 +51,8 @@ export interface Gradient {
   angle?: number; // For linear and conic (startAngle)
   center?: Vector2; // For radial and conic
   radius?: number; // For radial
+  start?: Vector2; // Normalized 0-1, relative to shape local bounds (linear)
+  end?: Vector2; // Normalized 0-1, relative to shape local bounds (linear)
 }
 
 export interface GradientStop {
@@ -316,6 +318,7 @@ export interface Project {
 export type ToolType =
   | 'selection'
   | 'direct-selection'
+  | 'hand'
   | 'rectangle'
   | 'ellipse'
   | 'polygon'

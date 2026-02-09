@@ -57,6 +57,12 @@ export function useTimelineShortcuts(callbacks: TimelineShortcutCallbacks) {
           useEditorStore.getState().toggleOnionSkin();
           return;
         }
+        if (event.key === 'R' || event.key === 'r') {
+          // Shift+R : toggle rulers
+          event.preventDefault();
+          useEditorStore.getState().toggleShowRulers();
+          return;
+        }
       }
 
       switch (event.key) {

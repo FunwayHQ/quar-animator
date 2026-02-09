@@ -16,7 +16,7 @@ import type {
   Gradient,
 } from '@quar/types';
 import { WebGLRenderer, type ShaderProgram } from './WebGLRenderer';
-import { computeBounds, normalizeGradientStops } from '../gradient/gradientUtils';
+import { computeBounds, normalizeGradientStops, linearGradientFromAngle } from '../gradient/gradientUtils';
 import { SceneGraph } from '../SceneGraph';
 import { mat3 } from '../math';
 import {
@@ -96,6 +96,8 @@ uniform float u_angle;         // linear: angle, conic: startAngle
 uniform vec2 u_center;         // radial/conic center (normalized 0-1)
 uniform float u_radius;        // radial radius (normalized)
 uniform float u_opacity;       // fill/stroke opacity multiplier
+uniform vec2 u_gradStart;      // linear gradient start (normalized 0-1)
+uniform vec2 u_gradEnd;        // linear gradient end (normalized 0-1)
 
 out vec4 outColor;
 
@@ -107,9 +109,10 @@ void main() {
 
   float t;
   if (u_gradientType == 0) {
-    float rad = u_angle * 3.14159265 / 180.0;
-    vec2 dir = vec2(cos(rad), sin(rad));
-    t = dot(npos - vec2(0.5), dir) + 0.5;
+    vec2 gradDir = u_gradEnd - u_gradStart;
+    float gradLen = length(gradDir);
+    vec2 normDir = gradDir / max(gradLen, 0.001);
+    t = dot(npos - u_gradStart, normDir) / max(gradLen, 0.001);
   } else if (u_gradientType == 1) {
     t = length(npos - u_center) / max(u_radius, 0.001);
   } else {
@@ -245,6 +248,8 @@ export class ShapeRenderer {
         'u_center',
         'u_radius',
         'u_opacity',
+        'u_gradStart',
+        'u_gradEnd',
         ...Array.from({ length: MAX_GRADIENT_STOPS }, (_, i) => `u_stops[${i}]`),
         ...Array.from({ length: MAX_GRADIENT_STOPS }, (_, i) => `u_offsets[${i}]`),
       ]
@@ -897,6 +902,24 @@ export class ShapeRenderer {
     );
     gl.uniform1f(u['u_radius'], gradient.radius ?? 0.5);
     gl.uniform1f(u['u_opacity'], opacity);
+
+    // Linear gradient start/end — fall back to angle-based computation
+    if (gradient.type === 'linear') {
+      const start = gradient.start;
+      const end = gradient.end;
+      if (start && end) {
+        gl.uniform2fv(u['u_gradStart'], new Float32Array([start.x, start.y]));
+        gl.uniform2fv(u['u_gradEnd'], new Float32Array([end.x, end.y]));
+      } else {
+        const fallback = linearGradientFromAngle(gradient.angle ?? 0);
+        gl.uniform2fv(u['u_gradStart'], new Float32Array([fallback.start.x, fallback.start.y]));
+        gl.uniform2fv(u['u_gradEnd'], new Float32Array([fallback.end.x, fallback.end.y]));
+      }
+    } else {
+      // Non-linear gradients: set defaults that won't affect rendering
+      gl.uniform2fv(u['u_gradStart'], new Float32Array([0, 0.5]));
+      gl.uniform2fv(u['u_gradEnd'], new Float32Array([1, 0.5]));
+    }
   }
 
   // --------------------------------------------------------------------------

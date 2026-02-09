@@ -17,6 +17,8 @@ import { useSceneGraph } from '../../contexts/SceneGraphContext';
 import { SelectionOverlay } from '../canvas/SelectionOverlay';
 import { PenToolOverlay } from '../canvas/PenToolOverlay';
 import { DirectSelectionOverlay } from '../canvas/DirectSelectionOverlay';
+import { GradientHandleOverlay } from '../canvas/GradientHandleOverlay';
+import { CanvasRuler } from '../canvas/CanvasRuler';
 import { ContextMenu } from '../common/ContextMenu';
 import type { ContextMenuEntry } from '../common/ContextMenu';
 import styles from './Canvas.module.css';
@@ -63,6 +65,8 @@ export function Canvas() {
   const [cameraReady, setCameraReady] = useState(false);
   const [sceneGraphVersion, setSceneGraphVersion] = useState(0);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
+  const [viewportSize, setViewportSize] = useState<{ width: number; height: number }>({ width: 0, height: 0 });
+  const [cameraVersion, setCameraVersion] = useState(0);
 
   // Get selection state from store
   const selectedNodeIds = useEditorStore((state) => state.selectedNodeIds);
@@ -74,6 +78,8 @@ export function Canvas() {
   const selectAll = useEditorStore((state) => state.selectAll);
   const groupSelection = useEditorStore((state) => state.groupSelection);
   const ungroupSelection = useEditorStore((state) => state.ungroupSelection);
+  const editingGradient = useEditorStore((state) => state.editingGradient);
+  const showRulers = useEditorStore((state) => state.showRulers);
 
   // Get shared SceneGraph from context
   const sceneGraph = useSceneGraph();
@@ -267,6 +273,7 @@ export function Canvas() {
       // Listen to camera changes
       const unsubscribe = camera.on('change', () => {
         setZoomPercent(Math.round(camera.zoom * 100));
+        setCameraVersion((v) => v + 1);
       });
 
       // Set up resize observer
@@ -277,6 +284,7 @@ export function Canvas() {
           if (width > 0 && height > 0) {
             renderer.setViewport(width, height);
             camera.setViewport(width, height);
+            setViewportSize({ width, height });
           }
         }
       });
@@ -885,6 +893,18 @@ export function Canvas() {
           />
         </svg>
       )}
+      {editingGradient && (() => {
+        const editingNode = sceneGraph.getNode(editingGradient.nodeId);
+        return editingNode ? (
+          <GradientHandleOverlay
+            node={editingNode}
+            fillIndex={editingGradient.fillIndex}
+            source={editingGradient.source}
+            camera={cameraRef.current}
+            sceneGraph={sceneGraph}
+          />
+        ) : null;
+      })()}
       {isDirectSelectionActive && (
         <DirectSelectionOverlay
           pathNodes={directSelectionPathNodes}
@@ -898,6 +918,14 @@ export function Canvas() {
           camera={cameraRef.current}
           onHandlePointerDown={handlePenHandlePointerDown}
           onPointPointerDown={handlePenPointPointerDown}
+        />
+      )}
+      {showRulers && (
+        <CanvasRuler
+          camera={cameraRef.current}
+          viewportWidth={viewportSize.width}
+          viewportHeight={viewportSize.height}
+          cameraVersion={cameraVersion}
         />
       )}
       <div className={styles.statusBar}>

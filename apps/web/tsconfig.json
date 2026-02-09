@@ -6,7 +6,7 @@
     "rootDir": "src",
     "types": ["vite/client"]
   },
-  "include": ["src/**/*", "vite.config.ts"],
+  "include": ["src/**/*"],
   "exclude": ["node_modules", "dist"],
   "references": [
     { "path": "../../packages/types" },

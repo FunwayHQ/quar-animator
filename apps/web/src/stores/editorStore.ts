@@ -177,6 +177,16 @@ export interface EditorStore {
   setGridSize: (size: number) => void;
   toggleSnapToGrid: () => void;
 
+  // Rulers
+  showRulers: boolean;
+  setShowRulers: (show: boolean) => void;
+  toggleShowRulers: () => void;
+
+  // Gradient editing
+  editingGradient: { nodeId: string; fillIndex: number; source: 'fill' | 'stroke' } | null;
+  setEditingGradient: (editing: { nodeId: string; fillIndex: number; source: 'fill' | 'stroke' } | null) => void;
+  clearEditingGradient: () => void;
+
   // Onion skin
   onionSkin: OnionSkinSettings;
   setOnionSkinEnabled: (enabled: boolean) => void;
@@ -214,9 +224,16 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   selectedNodeIds: new Set<string>(),
   lastSelectedNodeId: null,
   setSelection: (ids: string[]) =>
-    set({
-      selectedNodeIds: new Set(ids),
-      lastSelectedNodeId: ids.length > 0 ? ids[ids.length - 1] : null,
+    set((state) => {
+      const newSet = new Set(ids);
+      const editingGradient = state.editingGradient && newSet.has(state.editingGradient.nodeId)
+        ? state.editingGradient
+        : null;
+      return {
+        selectedNodeIds: newSet,
+        lastSelectedNodeId: ids.length > 0 ? ids[ids.length - 1] : null,
+        editingGradient,
+      };
     }),
   addToSelection: (id: string) =>
     set((state) => ({
@@ -240,7 +257,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         return { selectedNodeIds: newSet, lastSelectedNodeId: id };
       }
     }),
-  clearSelection: () => set({ selectedNodeIds: new Set<string>(), lastSelectedNodeId: null }),
+  clearSelection: () => set({ selectedNodeIds: new Set<string>(), lastSelectedNodeId: null, editingGradient: null }),
   isSelected: (id: string) => get().selectedNodeIds.has(id),
   selectRange: (toId: string, sceneGraph: SceneGraphLike) => {
     const { lastSelectedNodeId } = get();
@@ -339,7 +356,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     for (const id of selectedNodeIds) {
       sceneGraph.removeNode(id);
     }
-    set({ selectedNodeIds: new Set<string>() });
+    set({ selectedNodeIds: new Set<string>(), editingGradient: null });
   },
   selectAll: (sceneGraph: SceneGraphLike) => {
     const allIds: string[] = [];
@@ -559,6 +576,16 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   setGridSize: (size: number) => set({ gridSize: Math.max(1, size) }),
   toggleSnapToGrid: () => set((state) => ({ snapToGrid: !state.snapToGrid })),
 
+  // Rulers
+  showRulers: true,
+  setShowRulers: (show: boolean) => set({ showRulers: show }),
+  toggleShowRulers: () => set((state) => ({ showRulers: !state.showRulers })),
+
+  // Gradient editing
+  editingGradient: null,
+  setEditingGradient: (editing) => set({ editingGradient: editing }),
+  clearEditingGradient: () => set({ editingGradient: null }),
+
   // Onion skin
   onionSkin: { ...DEFAULT_ONION_SKIN_SETTINGS },
   setOnionSkinEnabled: (enabled: boolean) =>
@@ -680,6 +707,18 @@ export const useSnapToGrid = (): boolean =>
 export const useGridSize = (): number => useEditorStore((state: EditorStore) => state.gridSize);
 export const useToggleSnapToGrid = (): (() => void) =>
   useEditorStore((state: EditorStore) => state.toggleSnapToGrid);
+
+// Ruler selectors
+export const useShowRulers = (): boolean =>
+  useEditorStore((state: EditorStore) => state.showRulers);
+export const useToggleShowRulers = (): (() => void) =>
+  useEditorStore((state: EditorStore) => state.toggleShowRulers);
+
+// Gradient editing selectors
+export const useEditingGradient = () =>
+  useEditorStore((state: EditorStore) => state.editingGradient);
+export const useClearEditingGradient = () =>
+  useEditorStore((state: EditorStore) => state.clearEditingGradient);
 
 // Onion skin selectors
 export const useOnionSkin = (): OnionSkinSettings =>

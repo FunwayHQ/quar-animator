@@ -226,3 +226,45 @@
   opacity: 0.3;
   pointer-events: none;
 }
+
+/* ---- Stop Context Menu ---- */
+
+.stopContextMenu {
+  position: fixed;
+  z-index: 1010;
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-lg);
+  padding: 4px;
+  min-width: 120px;
+}
+
+.stopContextMenuItem {
+  display: block;
+  width: 100%;
+  padding: 6px 10px;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-primary);
+  background: none;
+  border: none;
+  border-radius: var(--radius-xs);
+  cursor: pointer;
+  text-align: left;
+  transition: background var(--duration-fast);
+}
+
+.stopContextMenuItem:hover {
+  background: var(--color-bg-hover);
+}
+
+.stopContextMenuItem:disabled {
+  opacity: 0.3;
+  pointer-events: none;
+}
+
+/* Focus outline for gradient bar keyboard interaction */
+.gradientBar:focus {
+  outline: 2px solid var(--color-accent-primary);
+  outline-offset: 2px;
+}

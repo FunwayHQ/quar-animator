@@ -185,10 +185,10 @@ export function tessellatePathToVertices(
   // Close the path if needed
   if (closed && vertices.length >= 4) {
     // Add closing point if not already at start
-    const firstX = vertices[0];
-    const firstY = vertices[1];
-    const lastX = vertices[vertices.length - 2];
-    const lastY = vertices[vertices.length - 1];
+    const firstX = vertices[0] as number;
+    const firstY = vertices[1] as number;
+    const lastX = vertices[vertices.length - 2] as number;
+    const lastY = vertices[vertices.length - 1] as number;
 
     if (
       Math.abs(lastX - firstX) > GEOMETRY_EPSILON ||
@@ -743,8 +743,8 @@ export function generateStrokeOutlineVertices(
   let lastPerpY = 1; // Default perpendicular direction
 
   for (let i = 0; i < numVertices; i++) {
-    const cx = vertices[i * 2];
-    const cy = vertices[i * 2 + 1];
+    const cx = vertices[i * 2] as number;
+    const cy = vertices[i * 2 + 1] as number;
 
     // Calculate direction vector based on neighbors
     let dx = 0;
@@ -755,16 +755,16 @@ export function generateStrokeOutlineVertices(
 
     if (prevIdx >= 0 && nextIdx >= 0) {
       // Middle point (or closed path point): average direction from prev to next
-      dx = vertices[nextIdx * 2] - vertices[prevIdx * 2];
-      dy = vertices[nextIdx * 2 + 1] - vertices[prevIdx * 2 + 1];
+      dx = (vertices[nextIdx * 2] as number) - (vertices[prevIdx * 2] as number);
+      dy = (vertices[nextIdx * 2 + 1] as number) - (vertices[prevIdx * 2 + 1] as number);
     } else if (nextIdx >= 0) {
       // First point: direction toward next
-      dx = vertices[nextIdx * 2] - cx;
-      dy = vertices[nextIdx * 2 + 1] - cy;
+      dx = (vertices[nextIdx * 2] as number) - cx;
+      dy = (vertices[nextIdx * 2 + 1] as number) - cy;
     } else if (prevIdx >= 0) {
       // Last point: direction from prev
-      dx = cx - vertices[prevIdx * 2];
-      dy = cy - vertices[prevIdx * 2 + 1];
+      dx = cx - (vertices[prevIdx * 2] as number);
+      dy = cy - (vertices[prevIdx * 2 + 1] as number);
     }
 
     const len = Math.sqrt(dx * dx + dy * dy);

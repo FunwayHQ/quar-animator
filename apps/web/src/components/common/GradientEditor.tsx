@@ -11,7 +11,8 @@
  */
 
 import { useState, useRef, useCallback, useEffect } from 'react';
-import type { Color, Gradient, GradientStop } from '@quar/types';
+import type { Color, Gradient } from '@quar/types';
+import { linearGradientFromAngle } from '@quar/core';
 import { ColorPicker } from './ColorPicker';
 import styles from './GradientEditor.module.css';
 
@@ -30,6 +31,8 @@ export interface GradientEditorProps {
   gradient: Gradient;
   /** Called on gradient change */
   onChange: (gradient: Gradient) => void;
+  /** Called when the gradient editor is activated (bar click, type tab select) */
+  onActivate?: () => void;
 }
 
 // ============================================================================
@@ -72,6 +75,7 @@ export function GradientEditor({
   onFillTypeChange,
   gradient,
   onChange,
+  onActivate,
 }: GradientEditorProps) {
   const [selectedStopIndex, setSelectedStopIndex] = useState(0);
   const [colorPickerOpen, setColorPickerOpen] = useState(false);
@@ -129,6 +133,7 @@ export function GradientEditor({
       if ((e.target as HTMLElement).closest(`.${styles.stopHandle}`)) return;
       const bar = barRef.current;
       if (!bar) return;
+      onActivate?.();
       const rect = bar.getBoundingClientRect();
       const offset = clamp((e.clientX - rect.left) / rect.width, 0, 1);
 
@@ -154,7 +159,7 @@ export function GradientEditor({
       onChange({ ...gradient, stops: newStops });
       setSelectedStopIndex(newIndex);
     },
-    [gradient, onChange]
+    [gradient, onChange, onActivate]
   );
 
   // ---- Remove stop on double-click ----
@@ -197,7 +202,12 @@ export function GradientEditor({
     (value: string) => {
       const num = parseFloat(value);
       if (isNaN(num)) return;
-      onChange({ ...gradient, angle: num });
+      if (gradient.type === 'linear') {
+        const { start, end } = linearGradientFromAngle(num);
+        onChange({ ...gradient, angle: num, start, end });
+      } else {
+        onChange({ ...gradient, angle: num });
+      }
     },
     [gradient, onChange]
   );
@@ -221,6 +231,41 @@ export function GradientEditor({
     onChange({ ...gradient, stops: newStops });
     setSelectedStopIndex(Math.min(selectedStopIndex, newStops.length - 1));
   }, [gradient, onChange, selectedStopIndex]);
+
+  // ---- Delete selected stop via keyboard ----
+
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        e.preventDefault();
+        e.stopPropagation();
+        handleRemoveStop();
+      }
+    },
+    [handleRemoveStop]
+  );
+
+  // ---- Context menu on stop handles ----
+
+  const [stopContextMenu, setStopContextMenu] = useState<{ x: number; y: number; index: number } | null>(null);
+
+  const handleStopContextMenu = useCallback(
+    (e: React.MouseEvent, index: number) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setSelectedStopIndex(index);
+      setStopContextMenu({ x: e.clientX, y: e.clientY, index });
+    },
+    []
+  );
+
+  // Close context menu on outside click
+  useEffect(() => {
+    if (!stopContextMenu) return;
+    const handleClick = () => setStopContextMenu(null);
+    document.addEventListener('click', handleClick);
+    return () => document.removeEventListener('click', handleClick);
+  }, [stopContextMenu]);
 
   // Don't render gradient controls if solid fill
   if (fillType === 'solid') {
@@ -250,7 +295,7 @@ export function GradientEditor({
           <button
             key={type}
             className={`${styles.typeTab} ${fillType === type ? styles.typeTabActive : ''}`}
-            onClick={() => onFillTypeChange(type)}
+            onClick={() => { onFillTypeChange(type); if (type !== 'solid') onActivate?.(); }}
             data-testid={`fill-type-${type}`}
           >
             {type.charAt(0).toUpperCase() + type.slice(1)}
@@ -265,6 +310,8 @@ export function GradientEditor({
         onClick={handleBarClick}
         onPointerMove={handleStopPointerMove}
         onPointerUp={handleStopPointerUp}
+        onKeyDown={handleKeyDown}
+        tabIndex={0}
         data-testid="gradient-bar"
       >
         <div
@@ -282,6 +329,7 @@ export function GradientEditor({
             }}
             onPointerDown={(e) => handleStopPointerDown(e, index)}
             onDoubleClick={(e) => handleStopDoubleClick(e, index)}
+            onContextMenu={(e) => handleStopContextMenu(e, index)}
             data-testid={`stop-handle-${index}`}
           />
         ))}
@@ -337,6 +385,27 @@ export function GradientEditor({
               <span className={styles.paramLabel}>Angle</span>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Stop context menu */}
+      {stopContextMenu && (
+        <div
+          className={styles.stopContextMenu}
+          style={{ left: stopContextMenu.x, top: stopContextMenu.y }}
+          data-testid="stop-context-menu"
+        >
+          <button
+            className={styles.stopContextMenuItem}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleRemoveStop();
+              setStopContextMenu(null);
+            }}
+            disabled={gradient.stops.length <= 2}
+          >
+            Delete Stop
+          </button>
         </div>
       )}
 

@@ -382,6 +382,11 @@ export function PropertiesPanel() {
         const color = fill.gradient?.stops?.[0]?.color ??
           fill.color ?? { r: 128, g: 128, b: 128, a: 1 };
         fills[index] = { ...fill, type: 'solid', color };
+        // Clear gradient editing if this fill was being edited
+        const editing = useEditorStore.getState().editingGradient;
+        if (editing && editing.nodeId === selectedId && editing.fillIndex === index && editing.source === 'fill') {
+          useEditorStore.getState().clearEditingGradient();
+        }
       } else {
         const gradient = fill.gradient
           ? { ...fill.gradient, type: type as 'linear' | 'radial' | 'conic' }
@@ -502,6 +507,11 @@ export function PropertiesPanel() {
         const color = stroke.gradient?.stops?.[0]?.color ?? stroke.color;
         const { gradient: _removed, ...rest } = stroke;
         strokes[index] = { ...rest, color };
+        // Clear gradient editing if this stroke was being edited
+        const editing = useEditorStore.getState().editingGradient;
+        if (editing && editing.nodeId === selectedId && editing.fillIndex === index && editing.source === 'stroke') {
+          useEditorStore.getState().clearEditingGradient();
+        }
       } else {
         const gradient = stroke.gradient
           ? { ...stroke.gradient, type: type as 'linear' | 'radial' | 'conic' }
@@ -1140,6 +1150,15 @@ export function PropertiesPanel() {
                           onFillTypeChange={(t) => handleFillTypeChange(index, t)}
                           gradient={fillGradient}
                           onChange={(g) => handleFillGradientChange(index, g)}
+                          onActivate={() => {
+                            if (selectedId) {
+                              useEditorStore.getState().setEditingGradient({
+                                nodeId: selectedId,
+                                fillIndex: index,
+                                source: 'fill',
+                              });
+                            }
+                          }}
                         />
                       </div>
                     );
@@ -1248,6 +1267,15 @@ export function PropertiesPanel() {
                           onFillTypeChange={(t) => handleStrokeTypeChange(index, t)}
                           gradient={strokeGradient}
                           onChange={(g) => handleStrokeGradientChange(index, g)}
+                          onActivate={() => {
+                            if (selectedId) {
+                              useEditorStore.getState().setEditingGradient({
+                                nodeId: selectedId,
+                                fillIndex: index,
+                                source: 'stroke',
+                              });
+                            }
+                          }}
                         />
                         <div className={styles.strokeSubRow}>
                           <div className={`${styles.inputGroup} ${styles.inputGroupFlex}`}>

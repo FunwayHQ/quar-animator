@@ -175,8 +175,8 @@ export class SelectionTool extends BaseTool {
       const selectedIds = this.context.getSelectedIds();
       const isAlreadySelected = selectedIds.has(hitNode.id);
 
-      if (this.isAdditive(event)) {
-        // Ctrl/Cmd+click: toggle selection
+      if (this.isAdditive(event) || event.shiftKey) {
+        // Ctrl/Cmd/Shift+click: toggle selection
         if (isAlreadySelected) {
           // Remove from selection
           const newIds = [...selectedIds].filter((id) => id !== hitNode.id);
@@ -205,7 +205,7 @@ export class SelectionTool extends BaseTool {
       }
     } else {
       // Clicked on empty space
-      if (!this.isAdditive(event)) {
+      if (!this.isAdditive(event) && !event.shiftKey) {
         // Clear selection
         this.context.clearSelection();
       }
@@ -282,7 +282,7 @@ export class SelectionTool extends BaseTool {
       // Select all nodes within marquee
       const nodesInMarquee = this.getNodesInRect(this.marqueeRect);
 
-      if (this.isAdditive(event)) {
+      if (this.isAdditive(event) || event.shiftKey) {
         // Add to existing selection
         for (const node of nodesInMarquee) {
           this.context.addToSelection(node.id);
