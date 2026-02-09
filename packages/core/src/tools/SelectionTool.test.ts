@@ -1223,23 +1223,35 @@ describe('SelectionTool', () => {
   // ==========================================================================
 
   describe('rotating nodes', () => {
-    it('should enter rotating mode when clicking on rotation handle', () => {
-      // Create a rectangle centered at (100, 100) with size 100x100
+    // Helper: get a screen position just outside a corner of the selection bounds
+    // for triggering the Figma-style rotation zone.
+    // The point must be:
+    //   - Outside the screen-space bounds rect
+    //   - Within rotationZoneRadius (20px) of the corner
+    //   - Beyond handleHitRadius (12px) so it doesn't hit the resize handle
+    // Camera: viewport 800x600, zoom 1, worldToScreen: sx=400+wx, sy=300-wy
+    // So world offset (-15, 0) → screen offset (-15, 0), distance=15 from corner
+    function getRotationZonePoint(worldCorner: { x: number; y: number }, offsetX: number, offsetY: number) {
+      const worldPos = { x: worldCorner.x + offsetX, y: worldCorner.y + offsetY };
+      const screenPos = context.camera.worldToScreen(worldPos);
+      return { worldPos, screenPos };
+    }
+
+    it('should enter rotating mode when clicking in rotation zone outside corner', () => {
+      // Rect centered at (100, 100) with size 100x100
       // Bounds: x=50, y=50, width=100, height=100
-      // Rotation handle is above the top edge at (100, 50 - offset)
+      // Top-left corner world (50, 50). Outside that corner = x<50, y<50
       const rect = createTestRectangle('rect1', 100, 100, 100, 100);
       context.sceneGraph.addNode(rect);
       context.setSelectedIds(['rect1']);
 
-      // Top edge center is at world (100, 50), rotation handle is above that
-      // Default rotationHandleOffset is 20 (in screen pixels), at zoom 1 that's 20 world units
-      const rotationHandleWorld = { x: 100, y: 50 - 20 };
-      const rotationHandleScreen = context.camera.worldToScreen(rotationHandleWorld);
+      // Click outside the top-left corner (world Y-up: below 50 = outside top in world)
+      const { worldPos, screenPos } = getRotationZonePoint({ x: 50, y: 50 }, -15, 0);
 
       tool.onPointerDown(
         createMockPointerEvent({
-          worldPosition: rotationHandleWorld,
-          screenPosition: rotationHandleScreen,
+          worldPosition: worldPos,
+          screenPosition: screenPos,
           button: 0,
         })
       );
@@ -1247,29 +1259,25 @@ describe('SelectionTool', () => {
       expect(tool.getMode()).toBe('rotating');
     });
 
-    it('should rotate rectangle by dragging rotation handle', () => {
+    it('should rotate rectangle by dragging from rotation zone', () => {
       const rect = createTestRectangle('rect1', 100, 100, 100, 100);
       context.sceneGraph.addNode(rect);
       context.setSelectedIds(['rect1']);
 
-      // Initial rotation should be 0
       expect(rect.transform.rotation).toBe(0);
 
-      // Start at rotation handle (above top center)
-      const rotationHandleWorld = { x: 100, y: 50 - 20 };
-      const rotationHandleScreen = context.camera.worldToScreen(rotationHandleWorld);
+      // Start at rotation zone outside top-left corner
+      const { worldPos, screenPos } = getRotationZonePoint({ x: 50, y: 50 }, -15, 0);
 
       tool.onPointerDown(
         createMockPointerEvent({
-          worldPosition: rotationHandleWorld,
-          screenPosition: rotationHandleScreen,
+          worldPosition: worldPos,
+          screenPosition: screenPos,
           button: 0,
         })
       );
 
-      // Drag to the right to rotate clockwise
-      // Moving from above center (100, 30) to the right of center (200, 100)
-      // This is approximately a 90 degree clockwise rotation
+      // Drag to the right to rotate
       const endWorldPos = { x: 200, y: 100 };
       tool.onPointerMove(
         createMockPointerEvent({
@@ -1287,7 +1295,6 @@ describe('SelectionTool', () => {
       );
 
       const rotatedRect = context.sceneGraph.getNode('rect1');
-      // Rotation should have changed (approximately 90 degrees but depends on exact math)
       expect(rotatedRect?.transform.rotation).not.toBe(0);
     });
 
@@ -1296,20 +1303,18 @@ describe('SelectionTool', () => {
       context.sceneGraph.addNode(rect);
       context.setSelectedIds(['rect1']);
 
-      // Start at rotation handle
-      const rotationHandleWorld = { x: 100, y: 50 - 20 };
-      const rotationHandleScreen = context.camera.worldToScreen(rotationHandleWorld);
+      const { worldPos, screenPos } = getRotationZonePoint({ x: 50, y: 50 }, -15, 0);
 
       tool.onPointerDown(
         createMockPointerEvent({
-          worldPosition: rotationHandleWorld,
-          screenPosition: rotationHandleScreen,
+          worldPosition: worldPos,
+          screenPosition: screenPos,
           button: 0,
         })
       );
 
       // Drag to rotate with shift held
-      const endWorldPos = { x: 130, y: 50 }; // Slight rotation
+      const endWorldPos = { x: 130, y: 50 };
       tool.onPointerMove(
         createMockPointerEvent({
           worldPosition: endWorldPos,
@@ -1328,7 +1333,6 @@ describe('SelectionTool', () => {
       );
 
       const rotatedRect = context.sceneGraph.getNode('rect1');
-      // Rotation should be a multiple of 15
       const rotation = rotatedRect?.transform.rotation ?? 0;
       expect(rotation % 15).toBe(0);
     });
@@ -1340,21 +1344,18 @@ describe('SelectionTool', () => {
       context.sceneGraph.addNode(rect2);
       context.setSelectedIds(['rect1', 'rect2']);
 
-      // Combined bounds would be x=50 to x=250
-      // Center of combined selection is (150, 100)
-      // Top edge center would be at (150, 50)
-      const rotationHandleWorld = { x: 150, y: 50 - 20 };
-      const rotationHandleScreen = context.camera.worldToScreen(rotationHandleWorld);
+      // Combined bounds: x=50 to x=250, y=50 to y=150
+      // Top-left corner of combined bounds at world (50, 50)
+      const { worldPos, screenPos } = getRotationZonePoint({ x: 50, y: 50 }, -15, 0);
 
       tool.onPointerDown(
         createMockPointerEvent({
-          worldPosition: rotationHandleWorld,
-          screenPosition: rotationHandleScreen,
+          worldPosition: worldPos,
+          screenPosition: screenPos,
           button: 0,
         })
       );
 
-      // Rotate by some amount
       const endWorldPos = { x: 250, y: 100 };
       tool.onPointerMove(
         createMockPointerEvent({
@@ -1374,7 +1375,6 @@ describe('SelectionTool', () => {
       const rotatedRect1 = context.sceneGraph.getNode('rect1');
       const rotatedRect2 = context.sceneGraph.getNode('rect2');
 
-      // Both nodes should have the same rotation delta applied
       expect(rotatedRect1?.transform.rotation).toBe(rotatedRect2?.transform.rotation);
     });
 
@@ -1383,13 +1383,12 @@ describe('SelectionTool', () => {
       context.sceneGraph.addNode(rect);
       context.setSelectedIds(['rect1']);
 
-      const rotationHandleWorld = { x: 100, y: 50 - 20 };
-      const rotationHandleScreen = context.camera.worldToScreen(rotationHandleWorld);
+      const { worldPos, screenPos } = getRotationZonePoint({ x: 50, y: 50 }, -15, 0);
 
       tool.onPointerDown(
         createMockPointerEvent({
-          worldPosition: rotationHandleWorld,
-          screenPosition: rotationHandleScreen,
+          worldPosition: worldPos,
+          screenPosition: screenPos,
           button: 0,
         })
       );
@@ -1407,27 +1406,27 @@ describe('SelectionTool', () => {
       expect(tool.getMode()).toBe('idle');
     });
 
-    it('should provide grab cursor when hovering rotation handle', () => {
+    it('should provide rotate cursor when hovering rotation zone', () => {
       const rect = createTestRectangle('rect1', 100, 100, 100, 100);
       context.sceneGraph.addNode(rect);
       context.setSelectedIds(['rect1']);
 
-      // Default cursor
       expect(tool.getCursor()).toBe('default');
 
-      // Simulate hover over rotation handle
-      const rotationHandleWorld = { x: 100, y: 50 - 20 };
-      const rotationHandleScreen = context.camera.worldToScreen(rotationHandleWorld);
+      // Simulate hover over rotation zone outside top-left corner
+      const { worldPos, screenPos } = getRotationZonePoint({ x: 50, y: 50 }, -15, 0);
 
       tool.onPointerMove(
         createMockPointerEvent({
-          worldPosition: rotationHandleWorld,
-          screenPosition: rotationHandleScreen,
+          worldPosition: worldPos,
+          screenPosition: screenPos,
         })
       );
 
-      // Should have grab cursor for rotation handle
-      expect(tool.getCursor()).toBe('grab');
+      // Should have a rotate cursor (data URI with 'pointer' fallback)
+      const cursor = tool.getCursor();
+      expect(cursor).toContain('url(');
+      expect(cursor).toContain('pointer');
     });
 
     it('should preserve initial rotation offset when applying rotation', () => {
@@ -1436,27 +1435,29 @@ describe('SelectionTool', () => {
       context.sceneGraph.addNode(rect);
       context.setSelectedIds(['rect1']);
 
-      // Display bounds are un-rotated, but the SVG overlay rotates handles visually.
-      // For the hit test to work, provide the VISUAL (rotated) screen position.
-      // Un-rotated handle: world (100, 30) → screen (500, 270).
-      // SVG applies rotate(-45°) around screen center (500, 200).
-      // Vector (0, 70) rotated by -45°: (70*sin45, 70*cos45) ≈ (49.5, 49.5).
-      // Visual handle screen: (549.5, 249.5).
-      const screenCenter = context.camera.worldToScreen({ x: 100, y: 100 });
-      const unrotatedHandleScreen = context.camera.worldToScreen({ x: 100, y: 30 });
-      const angle = -45 * (Math.PI / 180); // SVG rotate(-rotation)
-      const dx = unrotatedHandleScreen.x - screenCenter.x;
-      const dy = unrotatedHandleScreen.y - screenCenter.y;
-      const rotatedScreenPos = {
-        x: screenCenter.x + dx * Math.cos(angle) - dy * Math.sin(angle),
-        y: screenCenter.y + dx * Math.sin(angle) + dy * Math.cos(angle),
+      // With 45° rotation, hitTest inverse-rotates screenPoint by +45° around screenCenter.
+      // We need the INVERSE-ROTATED point to be:
+      //   - outside the un-rotated screen bounds [450,550] x [150,250]
+      //   - within 20px of a corner but beyond 12px (hit radius)
+      // Strategy: pick a point 15px left of the un-rotated top-left corner screen (450, 250)
+      // in un-rotated space: (435, 250). Then rotate that by -45° to get the actual screen point.
+      const screenCenter = context.camera.worldToScreen({ x: 100, y: 100 }); // (500, 200)
+      const targetUnrotated = { x: 435, y: 250 }; // 15px left of corner (450, 250)
+
+      // Reverse: actual screen = rotate(targetUnrotated, -45°, screenCenter)
+      const revAngle = -45 * (Math.PI / 180);
+      const tdx = targetUnrotated.x - screenCenter.x;
+      const tdy = targetUnrotated.y - screenCenter.y;
+      const actualScreen = {
+        x: screenCenter.x + tdx * Math.cos(revAngle) - tdy * Math.sin(revAngle),
+        y: screenCenter.y + tdx * Math.sin(revAngle) + tdy * Math.cos(revAngle),
       };
-      const rotatedWorldPos = context.camera.screenToWorld(rotatedScreenPos);
+      const actualWorld = context.camera.screenToWorld(actualScreen);
 
       tool.onPointerDown(
         createMockPointerEvent({
-          worldPosition: rotatedWorldPos,
-          screenPosition: rotatedScreenPos,
+          worldPosition: actualWorld,
+          screenPosition: actualScreen,
           button: 0,
         })
       );
@@ -1480,7 +1481,6 @@ describe('SelectionTool', () => {
 
       const rotatedRect = context.sceneGraph.getNode('rect1');
       // The rotation should be 45 + delta, so it should not be exactly 45
-      // and should still contain the original offset
       expect(rotatedRect?.transform.rotation).not.toBe(45);
     });
   });

@@ -452,7 +452,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   // Timeline state
   currentFrame: 0,
   isPlaying: false,
-  isLooping: false,
+  isLooping: true,
   timelineDuration: 300,
   frameRate: 30,
   timelineExpanded: true,

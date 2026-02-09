@@ -12,7 +12,7 @@ import type { Rect, Vector2 } from '@quar/types';
 /**
  * Position identifiers for transform handles
  * - 8 resize handles at corners and edge midpoints
- * - 1 rotation handle above the selection
+ * - 4 rotation zones outside each corner
  */
 export type HandlePosition =
   | 'top-left'
@@ -23,7 +23,10 @@ export type HandlePosition =
   | 'bottom'
   | 'bottom-left'
   | 'left'
-  | 'rotation';
+  | 'rotate-top-left'
+  | 'rotate-top-right'
+  | 'rotate-bottom-left'
+  | 'rotate-bottom-right';
 
 // ============================================================================
 // Selection Bounds Types
@@ -51,8 +54,8 @@ export interface SelectionConfig {
   handleSize: number;
   /** Hit radius for handle interaction in screen pixels (default: 12) */
   handleHitRadius: number;
-  /** Distance of rotation handle above the bounds in screen pixels (default: 20) */
-  rotationHandleOffset: number;
+  /** Radius around each corner for rotation zone detection in screen pixels (default: 20) */
+  rotationZoneRadius: number;
 }
 
 /**
@@ -61,7 +64,7 @@ export interface SelectionConfig {
 export const DEFAULT_SELECTION_CONFIG: SelectionConfig = {
   handleSize: 8,
   handleHitRadius: 12,
-  rotationHandleOffset: 20,
+  rotationZoneRadius: 20,
 };
 
 // ============================================================================

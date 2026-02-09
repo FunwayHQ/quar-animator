@@ -312,6 +312,24 @@ export class SceneGraph {
     return { x: matrix.tx, y: matrix.ty };
   }
 
+  /**
+   * Get the effective opacity for a node, multiplying through the parent chain.
+   * A child inside a group at 50% opacity with its own 80% opacity → 40% effective.
+   */
+  getEffectiveOpacity(id: string): number {
+    const node = this.nodes.get(id);
+    if (!node) return 1;
+    let opacity = node.opacity;
+    let parentId = node.parent;
+    while (parentId) {
+      const parent = this.nodes.get(parentId);
+      if (!parent) break;
+      opacity *= parent.opacity;
+      parentId = parent.parent;
+    }
+    return opacity;
+  }
+
   private computeLocalMatrix(transform: Transform): Matrix3 {
     return mat3.compose(transform.position, transform.rotation, transform.scale, transform.anchor);
   }

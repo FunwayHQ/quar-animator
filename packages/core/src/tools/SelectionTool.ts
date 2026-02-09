@@ -128,7 +128,7 @@ export class SelectionTool extends BaseTool {
           rotation
         );
 
-        if (hitHandle === 'rotation') {
+        if (hitHandle?.startsWith('rotate-')) {
           // Start rotation operation
           this.mode = 'rotating';
           this.state.isDragging = true;

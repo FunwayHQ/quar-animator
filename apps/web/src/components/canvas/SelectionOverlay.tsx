@@ -28,7 +28,6 @@ export interface SelectionOverlayProps {
 // ============================================================================
 
 const DEFAULT_HANDLE_SIZE = 8;
-const ROTATION_HANDLE_RADIUS = 5;
 
 // ============================================================================
 // Component
@@ -54,10 +53,6 @@ export function SelectionOverlay({
 
   const halfHandle = handleSize / 2;
 
-  // Find rotation handle and its corresponding top-center handle
-  const rotationHandle = handles.find((h) => h.position === 'rotation');
-  const topHandle = handles.find((h) => h.position === 'top');
-
   // Calculate the transform for rotation around the center
   // Note: In screen coordinates, Y is inverted, so we negate the rotation
   const rotationTransform =
@@ -76,21 +71,9 @@ export function SelectionOverlay({
           data-testid="selection-bounds"
         />
 
-        {/* Line connecting rotation handle to selection */}
-        {rotationHandle && topHandle && (
-          <line
-            className={styles.rotationLine}
-            x1={topHandle.screenPosition.x}
-            y1={topHandle.screenPosition.y}
-            x2={rotationHandle.screenPosition.x}
-            y2={rotationHandle.screenPosition.y}
-            data-testid="rotation-line"
-          />
-        )}
-
         {/* Resize handles (squares at corners and edge midpoints) */}
         {handles
-          .filter((handle) => handle.position !== 'rotation')
+          .filter((handle) => !handle.position.startsWith('rotate-'))
           .map((handle) => (
             <rect
               key={handle.position}
@@ -104,19 +87,6 @@ export function SelectionOverlay({
               data-testid={`handle-${handle.position}`}
             />
           ))}
-
-        {/* Rotation handle (circle above selection) */}
-        {rotationHandle && (
-          <circle
-            className={styles.rotationHandle}
-            cx={rotationHandle.screenPosition.x}
-            cy={rotationHandle.screenPosition.y}
-            r={ROTATION_HANDLE_RADIUS}
-            style={{ cursor: rotationHandle.cursor }}
-            onPointerDown={(e) => onHandlePointerDown?.(rotationHandle, e)}
-            data-testid="handle-rotation"
-          />
-        )}
       </g>
     </svg>
   );

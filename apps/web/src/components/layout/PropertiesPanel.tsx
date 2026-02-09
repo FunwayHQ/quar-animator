@@ -941,7 +941,7 @@ export function PropertiesPanel() {
                   <ScrubLabel
                     label="X"
                     value={Math.round(pos.x) || 0}
-                    onChange={isGroup ? noop : (v) => handlePositionChange('x', String(v))}
+                    onChange={(v) => handlePositionChange('x', String(v))}
                   />
                   <input
                     ref={posXInputRef}
@@ -949,11 +949,9 @@ export function PropertiesPanel() {
                     type="text"
                     className={styles.input}
                     value={fmt1(pos.x)}
-                    readOnly={isGroup}
                     onChange={(e) => handlePositionChange('x', e.target.value)}
                     onKeyDown={(e) => {
-                      if (!isGroup)
-                        handleNumericInputKeyDown(e, pos.x, (v) => handlePositionChange('x', v));
+                      handleNumericInputKeyDown(e, pos.x, (v) => handlePositionChange('x', v));
                     }}
                   />
                 </div>
@@ -961,18 +959,16 @@ export function PropertiesPanel() {
                   <ScrubLabel
                     label="Y"
                     value={Math.round(pos.y) || 0}
-                    onChange={isGroup ? noop : (v) => handlePositionChange('y', String(v))}
+                    onChange={(v) => handlePositionChange('y', String(v))}
                   />
                   <input
                     ref={posYInputRef}
                     type="text"
                     className={styles.input}
                     value={fmt1(pos.y)}
-                    readOnly={isGroup}
                     onChange={(e) => handlePositionChange('y', e.target.value)}
                     onKeyDown={(e) => {
-                      if (!isGroup)
-                        handleNumericInputKeyDown(e, pos.y, (v) => handlePositionChange('y', v));
+                      handleNumericInputKeyDown(e, pos.y, (v) => handlePositionChange('y', v));
                     }}
                   />
                 </div>

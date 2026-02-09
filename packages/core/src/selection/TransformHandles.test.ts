@@ -39,11 +39,11 @@ describe('TransformHandles', () => {
   // ==========================================================================
 
   describe('getHandles', () => {
-    it('should return 9 handles', () => {
+    it('should return 8 handles', () => {
       const bounds = createTestBounds(100, 100, 200, 150);
       const result = handles.getHandles(bounds, camera);
 
-      expect(result).toHaveLength(9);
+      expect(result).toHaveLength(8);
     });
 
     it('should return handles with correct positions', () => {
@@ -59,7 +59,14 @@ describe('TransformHandles', () => {
       expect(positions).toContain('bottom');
       expect(positions).toContain('bottom-left');
       expect(positions).toContain('left');
-      expect(positions).toContain('rotation');
+    });
+
+    it('should not return a rotation handle', () => {
+      const bounds = createTestBounds(100, 100, 200, 150);
+      const result = handles.getHandles(bounds, camera);
+
+      const positions = result.map((h) => h.position);
+      expect(positions).not.toContain('rotation');
     });
 
     it('should calculate correct corner handle screen positions', () => {
@@ -115,29 +122,12 @@ describe('TransformHandles', () => {
       expect(left!.screenPosition.y).toBeCloseTo(expectedLeft.y, 1);
     });
 
-    it('should position rotation handle above selection', () => {
-      const bounds = createTestBounds(0, 0, 100, 100);
-      const result = handles.getHandles(bounds, camera);
-
-      const rotation = result.find((h) => h.position === 'rotation');
-      const top = result.find((h) => h.position === 'top');
-
-      expect(rotation).toBeDefined();
-      expect(top).toBeDefined();
-
-      // Rotation handle should be above top center in world space
-      // The rotation handle has x equal to top handle x
-      expect(rotation!.screenPosition.x).toBeCloseTo(top!.screenPosition.x, 1);
-      // The rotation handle Y is different from top handle Y (offset in world space)
-      expect(rotation!.screenPosition.y).not.toBe(top!.screenPosition.y);
-    });
-
     it('should include correct cursors for each handle', () => {
       const bounds = createTestBounds(0, 0, 100, 100);
       const result = handles.getHandles(bounds, camera);
 
       // Note: World coordinates use Y-up, so visual cursors are swapped
-      const cursorMap: Record<HandlePosition, string> = {
+      const cursorMap: Record<string, string> = {
         'top-left': 'nesw-resize', // Visually bottom-left
         top: 'ns-resize',
         'top-right': 'nwse-resize', // Visually bottom-right
@@ -146,34 +136,11 @@ describe('TransformHandles', () => {
         bottom: 'ns-resize',
         'bottom-left': 'nwse-resize', // Visually top-left
         left: 'ew-resize',
-        rotation: 'grab',
       };
 
       for (const handle of result) {
         expect(handle.cursor).toBe(cursorMap[handle.position]);
       }
-    });
-
-    it('should adjust rotation handle distance with zoom', () => {
-      const bounds = createTestBounds(0, 0, 100, 100);
-
-      // At zoom 1
-      camera.zoomTo(1);
-      const result1 = handles.getHandles(bounds, camera);
-      const rotation1 = result1.find((h) => h.position === 'rotation');
-      const top1 = result1.find((h) => h.position === 'top');
-      const offset1 = top1!.screenPosition.y - rotation1!.screenPosition.y;
-
-      // At zoom 2
-      camera.zoomTo(2);
-      const result2 = handles.getHandles(bounds, camera);
-      const rotation2 = result2.find((h) => h.position === 'rotation');
-      const top2 = result2.find((h) => h.position === 'top');
-      const offset2 = top2!.screenPosition.y - rotation2!.screenPosition.y;
-
-      // The screen offset should be roughly the same regardless of zoom
-      // (because we scale the world offset by 1/zoom to maintain consistent screen distance)
-      expect(offset1).toBeCloseTo(offset2, 0);
     });
   });
 
@@ -208,13 +175,46 @@ describe('TransformHandles', () => {
       expect(result).toBe('top');
     });
 
-    it('should detect hit on rotation handle', () => {
+    it('should detect rotation zone outside corner', () => {
       const bounds = createTestBounds(0, 0, 100, 100);
       const handleList = handles.getHandles(bounds, camera);
-      const rotation = handleList.find((h) => h.position === 'rotation');
+      const topLeft = handleList.find((h) => h.position === 'top-left')!;
 
-      const result = handles.hitTest(rotation!.screenPosition, bounds, camera);
-      expect(result).toBe('rotation');
+      // Point outside the bounds, near the top-left corner
+      // Move diagonally outside (negative x and negative y from the corner)
+      const outsidePoint = {
+        x: topLeft.screenPosition.x - 10,
+        y: topLeft.screenPosition.y - 10,
+      };
+
+      const result = handles.hitTest(outsidePoint, bounds, camera);
+      expect(result).toBe('rotate-top-left');
+    });
+
+    it('should return resize handle when directly on corner (not rotate)', () => {
+      const bounds = createTestBounds(0, 0, 100, 100);
+      const handleList = handles.getHandles(bounds, camera);
+      const topLeft = handleList.find((h) => h.position === 'top-left')!;
+
+      // Directly on the corner handle — should return resize, not rotate
+      const result = handles.hitTest(topLeft.screenPosition, bounds, camera);
+      expect(result).toBe('top-left');
+    });
+
+    it('should not detect rotation zone inside bounds', () => {
+      const bounds = createTestBounds(0, 0, 100, 100);
+      const handleList = handles.getHandles(bounds, camera);
+      const topLeft = handleList.find((h) => h.position === 'top-left')!;
+
+      // Point just inside the bounds near the corner
+      const insidePoint = {
+        x: topLeft.screenPosition.x + 15,
+        y: topLeft.screenPosition.y + 15,
+      };
+
+      // This is inside bounds and outside hit radius — should be null
+      const result = handles.hitTest(insidePoint, bounds, camera);
+      expect(result).toBeNull();
     });
 
     it('should detect hit within hit radius', () => {
@@ -237,7 +237,7 @@ describe('TransformHandles', () => {
       const handleList = handles.getHandles(bounds, camera);
       const topLeft = handleList.find((h) => h.position === 'top-left');
 
-      // Test point outside hit radius (default is 12)
+      // Test point outside hit radius (default is 12) and inside bounds — no rotation zone
       const offsetPoint = {
         x: topLeft!.screenPosition.x + 15,
         y: topLeft!.screenPosition.y + 15,
@@ -260,6 +260,7 @@ describe('TransformHandles', () => {
       };
 
       const result = customHandles.hitTest(offsetPoint, bounds, camera);
+      // Still inside bounds (on the top edge) so not a rotation zone either
       expect(result).toBeNull();
     });
   });
@@ -269,7 +270,7 @@ describe('TransformHandles', () => {
   // ==========================================================================
 
   describe('getCursor', () => {
-    it('should return correct cursor for each position', () => {
+    it('should return correct cursor for resize positions', () => {
       // Note: World coordinates use Y-up, so visual cursors are swapped
       const expectations: Array<[HandlePosition, string]> = [
         ['top-left', 'nesw-resize'], // Visually bottom-left
@@ -280,11 +281,25 @@ describe('TransformHandles', () => {
         ['bottom', 'ns-resize'],
         ['bottom-left', 'nwse-resize'], // Visually top-left
         ['left', 'ew-resize'],
-        ['rotation', 'grab'],
       ];
 
       for (const [position, expectedCursor] of expectations) {
         expect(handles.getCursor(position)).toBe(expectedCursor);
+      }
+    });
+
+    it('should return rotate cursor for rotation zone positions', () => {
+      const rotatePositions: HandlePosition[] = [
+        'rotate-top-left',
+        'rotate-top-right',
+        'rotate-bottom-left',
+        'rotate-bottom-right',
+      ];
+
+      for (const position of rotatePositions) {
+        const cursor = handles.getCursor(position);
+        expect(cursor).toContain('url(');
+        expect(cursor).toContain('pointer');
       }
     });
   });
@@ -299,7 +314,7 @@ describe('TransformHandles', () => {
 
       expect(config.handleSize).toBe(DEFAULT_SELECTION_CONFIG.handleSize);
       expect(config.handleHitRadius).toBe(DEFAULT_SELECTION_CONFIG.handleHitRadius);
-      expect(config.rotationHandleOffset).toBe(DEFAULT_SELECTION_CONFIG.rotationHandleOffset);
+      expect(config.rotationZoneRadius).toBe(DEFAULT_SELECTION_CONFIG.rotationZoneRadius);
     });
 
     it('should accept custom config in constructor', () => {
@@ -311,7 +326,7 @@ describe('TransformHandles', () => {
       const config = customHandles.getConfig();
       expect(config.handleSize).toBe(12);
       expect(config.handleHitRadius).toBe(16);
-      expect(config.rotationHandleOffset).toBe(DEFAULT_SELECTION_CONFIG.rotationHandleOffset);
+      expect(config.rotationZoneRadius).toBe(DEFAULT_SELECTION_CONFIG.rotationZoneRadius);
     });
 
     it('should update config with setConfig', () => {

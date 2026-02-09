@@ -28,20 +28,3 @@
 .handle:hover {
   fill: #dbeafe;
 }
-
-.rotationHandle {
-  fill: white;
-  stroke: #3b82f6;
-  stroke-width: 1.5;
-  pointer-events: auto;
-}
-
-.rotationHandle:hover {
-  fill: #dbeafe;
-}
-
-.rotationLine {
-  stroke: #3b82f6;
-  stroke-width: 1;
-  stroke-dasharray: 3 3;
-}

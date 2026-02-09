@@ -93,7 +93,7 @@ function EditorInner() {
             <PropertiesPanel />
           </div>
         </div>
-        <Timeline />
+        <Timeline playback={playback} />
       </div>
     </div>
   );

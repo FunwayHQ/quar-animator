@@ -1,6 +1,7 @@
 /**
  * TransformHandles for Quar Animator
  * Calculates handle positions and provides hit testing for transform operations
+ * Rotation is triggered by hovering outside the selection bounds near a corner (Figma-style)
  */
 
 import type { Vector2 } from '@quar/types';
@@ -13,6 +14,14 @@ import { vec2 } from '../math';
 // Cursor Mapping
 // ============================================================================
 
+// Inline SVG rotate cursor (24x24 curved arrow, hotspot 12,12)
+// Four variants rotated for each corner
+function makeRotateCursor(rotateDeg: number): string {
+  // White curved arrow with 1px black stroke outline — visible on dark backgrounds
+  const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none'><g transform='rotate(${rotateDeg} 12 12)'><path d='M7.5 3.5A8.5 8.5 0 0 1 20 12' stroke='black' stroke-width='3' stroke-linecap='round' fill='none'/><path d='M7.5 3.5A8.5 8.5 0 0 1 20 12' stroke='white' stroke-width='1.5' stroke-linecap='round' fill='none'/><polyline points='4.5,4.5 7.5,3.5 8.5,6.5' stroke='black' stroke-width='3' stroke-linecap='round' stroke-linejoin='round' fill='none'/><polyline points='4.5,4.5 7.5,3.5 8.5,6.5' stroke='white' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round' fill='none'/></g></svg>`;
+  return `url("data:image/svg+xml,${encodeURIComponent(svg)}") 12 12, pointer`;
+}
+
 // Note: World coordinates use Y-up, so "top" in code is visually at the bottom
 // The cursor mappings are adjusted for the visual appearance (screen coordinates)
 const HANDLE_CURSORS: Record<HandlePosition, string> = {
@@ -24,7 +33,20 @@ const HANDLE_CURSORS: Record<HandlePosition, string> = {
   bottom: 'ns-resize',
   'bottom-left': 'nwse-resize', // Visually top-left
   left: 'ew-resize',
-  rotation: 'grab',
+  // Rotation zones: cursor rotated per corner (world Y-up → visual positions swapped)
+  'rotate-top-left': makeRotateCursor(180),     // Visually bottom-left
+  'rotate-top-right': makeRotateCursor(270),     // Visually bottom-right
+  'rotate-bottom-left': makeRotateCursor(90),    // Visually top-left
+  'rotate-bottom-right': makeRotateCursor(0),    // Visually top-right
+};
+
+// Corner positions for rotation zone detection
+const CORNER_POSITIONS = ['top-left', 'top-right', 'bottom-left', 'bottom-right'] as const;
+const CORNER_TO_ROTATE: Record<string, HandlePosition> = {
+  'top-left': 'rotate-top-left',
+  'top-right': 'rotate-top-right',
+  'bottom-left': 'rotate-bottom-left',
+  'bottom-right': 'rotate-bottom-right',
 };
 
 // ============================================================================
@@ -46,7 +68,7 @@ export class TransformHandles {
    * Get all transform handles for the given selection bounds
    * @param bounds The selection bounds
    * @param camera The camera for coordinate conversion
-   * @returns Array of 9 transform handles (8 resize + 1 rotation)
+   * @returns Array of 8 transform handles (4 corners + 4 edges)
    */
   getHandles(bounds: SelectionBounds, camera: Camera): TransformHandle[] {
     const { rect } = bounds;
@@ -64,12 +86,6 @@ export class TransformHandles {
       right: { x: rect.x + rect.width, y: rect.y + rect.height / 2 },
       bottom: { x: rect.x + rect.width / 2, y: rect.y + rect.height },
       left: { x: rect.x, y: rect.y + rect.height / 2 },
-    };
-
-    // Calculate rotation handle position (above top center)
-    const rotationWorldPos = {
-      x: edges.top.x,
-      y: edges.top.y - this.config.rotationHandleOffset / camera.zoom,
     };
 
     // Convert all positions to screen coordinates
@@ -116,12 +132,6 @@ export class TransformHandles {
         screenPosition: camera.worldToScreen(edges.left),
         cursor: HANDLE_CURSORS['left'],
       },
-      // Rotation handle
-      {
-        position: 'rotation',
-        screenPosition: camera.worldToScreen(rotationWorldPos),
-        cursor: HANDLE_CURSORS['rotation'],
-      },
     ];
 
     return handles;
@@ -132,10 +142,11 @@ export class TransformHandles {
   // --------------------------------------------------------------------------
 
   /**
-   * Test if a screen point hits any transform handle
+   * Test if a screen point hits any transform handle or rotation zone
    * @param screenPoint The screen position to test
    * @param bounds The selection bounds
    * @param camera The camera for coordinate conversion
+   * @param rotation Current rotation in degrees
    * @returns The hit handle position or null
    */
   hitTest(
@@ -150,8 +161,8 @@ export class TransformHandles {
     // When bounds are un-rotated but visually rotated, inverse-rotate the
     // test point so it compares correctly against un-rotated handle positions.
     let testPoint = screenPoint;
+    const screenCenter = camera.worldToScreen(bounds.center);
     if (rotation !== 0) {
-      const screenCenter = camera.worldToScreen(bounds.center);
       // The SVG overlay applies rotate(-rotation) to position handles visually.
       // To undo this, we apply the inverse: rotate(+rotation) to the click point.
       const rad = rotation * (Math.PI / 180);
@@ -165,6 +176,7 @@ export class TransformHandles {
       };
     }
 
+    // 1. Check resize handles first — resize takes priority over rotation
     for (const handle of handles) {
       const distance = vec2.distance(testPoint, handle.screenPosition);
       if (distance <= hitRadius) {
@@ -172,7 +184,46 @@ export class TransformHandles {
       }
     }
 
+    // 2. Check rotation zones — near a corner but outside the bounds rect
+    const rotationRadius = this.config.rotationZoneRadius;
+    const cornerHandles = handles.filter(h =>
+      CORNER_POSITIONS.includes(h.position as typeof CORNER_POSITIONS[number])
+    );
+
+    for (const corner of cornerHandles) {
+      const distance = vec2.distance(testPoint, corner.screenPosition);
+      if (distance <= rotationRadius && this.isOutsideBounds(testPoint, handles)) {
+        return CORNER_TO_ROTATE[corner.position];
+      }
+    }
+
     return null;
+  }
+
+  // --------------------------------------------------------------------------
+  // Bounds Testing
+  // --------------------------------------------------------------------------
+
+  /**
+   * Check if a screen point is outside the selection bounds rectangle
+   * Uses the corner handle positions to define the rectangle in screen space
+   */
+  private isOutsideBounds(screenPoint: Vector2, handles: TransformHandle[]): boolean {
+    const tl = handles.find(h => h.position === 'top-left')!;
+    const br = handles.find(h => h.position === 'bottom-right')!;
+
+    // In screen space, determine the axis-aligned bounding rect from corners
+    const minX = Math.min(tl.screenPosition.x, br.screenPosition.x);
+    const maxX = Math.max(tl.screenPosition.x, br.screenPosition.x);
+    const minY = Math.min(tl.screenPosition.y, br.screenPosition.y);
+    const maxY = Math.max(tl.screenPosition.y, br.screenPosition.y);
+
+    return (
+      screenPoint.x < minX ||
+      screenPoint.x > maxX ||
+      screenPoint.y < minY ||
+      screenPoint.y > maxY
+    );
   }
 
   // --------------------------------------------------------------------------

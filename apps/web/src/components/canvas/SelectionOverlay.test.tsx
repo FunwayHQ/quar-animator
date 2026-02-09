@@ -50,7 +50,6 @@ function createAllHandles(bounds: SelectionBounds): TransformHandle[] {
     createTestHandle('bottom', cx, rect.y + rect.height, 'ns-resize'),
     createTestHandle('bottom-left', rect.x, rect.y + rect.height, 'nesw-resize'),
     createTestHandle('left', rect.x, cy, 'ew-resize'),
-    createTestHandle('rotation', cx, rect.y - 20, 'grab'),
   ];
 }
 
@@ -116,22 +115,14 @@ describe('SelectionOverlay', () => {
       }
     });
 
-    it('should render rotation handle', () => {
+    it('should not render a rotation handle or rotation line', () => {
       const bounds = createTestBounds(100, 100, 200, 150);
       const handles = createAllHandles(bounds);
 
       render(<SelectionOverlay bounds={bounds} handles={handles} />);
 
-      expect(screen.getByTestId('handle-rotation')).toBeInTheDocument();
-    });
-
-    it('should render rotation line connecting to top handle', () => {
-      const bounds = createTestBounds(100, 100, 200, 150);
-      const handles = createAllHandles(bounds);
-
-      render(<SelectionOverlay bounds={bounds} handles={handles} />);
-
-      expect(screen.getByTestId('rotation-line')).toBeInTheDocument();
+      expect(screen.queryByTestId('handle-rotation')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('rotation-line')).not.toBeInTheDocument();
     });
 
     it('should position handles correctly', () => {
@@ -157,9 +148,6 @@ describe('SelectionOverlay', () => {
 
       const top = screen.getByTestId('handle-top');
       expect(top).toHaveStyle({ cursor: 'ns-resize' });
-
-      const rotation = screen.getByTestId('handle-rotation');
-      expect(rotation).toHaveStyle({ cursor: 'grab' });
     });
   });
 
@@ -187,28 +175,6 @@ describe('SelectionOverlay', () => {
       expect(onHandlePointerDown).toHaveBeenCalledTimes(1);
       expect(onHandlePointerDown).toHaveBeenCalledWith(
         expect.objectContaining({ position: 'top-left' }),
-        expect.any(Object)
-      );
-    });
-
-    it('should call onHandlePointerDown for rotation handle', () => {
-      const bounds = createTestBounds(100, 100, 200, 150);
-      const handles = createAllHandles(bounds);
-      const onHandlePointerDown = vi.fn();
-
-      render(
-        <SelectionOverlay
-          bounds={bounds}
-          handles={handles}
-          onHandlePointerDown={onHandlePointerDown}
-        />
-      );
-
-      const rotation = screen.getByTestId('handle-rotation');
-      fireEvent.pointerDown(rotation);
-
-      expect(onHandlePointerDown).toHaveBeenCalledWith(
-        expect.objectContaining({ position: 'rotation' }),
         expect.any(Object)
       );
     });

@@ -219,6 +219,9 @@ export function getAnimatableProperties(nodeType: string): AnimatableProperty[] 
     case 'text':
       props.push(...SHAPE_ANIMATABLE_PROPERTIES);
       break;
+    case 'group':
+      // Groups support only transform and opacity (COMMON_ANIMATABLE_PROPERTIES)
+      break;
   }
 
   return props;

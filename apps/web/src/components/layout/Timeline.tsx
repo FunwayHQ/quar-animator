@@ -23,7 +23,21 @@ const EASING_PRESETS: Array<{ label: string; value: EasingFunction }> = [
   { label: 'Ease Out Elastic', value: 'easeOutElastic' },
 ];
 
-export function Timeline() {
+export interface TimelineProps {
+  /** Playback callbacks from usePlayback hook — controls the PlaybackController */
+  playback?: {
+    togglePlay: () => void;
+    play: () => void;
+    pause: () => void;
+    stop: () => void;
+    goToStart: () => void;
+    goToEnd: () => void;
+    nextFrame: () => void;
+    prevFrame: () => void;
+  };
+}
+
+export function Timeline({ playback }: TimelineProps = {}) {
   const sceneGraph = useSceneGraph();
   const currentFrame = useEditorStore((s) => s.currentFrame);
   const isPlaying = useEditorStore((s) => s.isPlaying);
@@ -130,24 +144,42 @@ export function Timeline() {
   );
 
   const togglePlay = useCallback(() => {
-    setIsPlaying(!isPlaying);
-  }, [isPlaying, setIsPlaying]);
+    if (playback) {
+      playback.togglePlay();
+    } else {
+      setIsPlaying(!isPlaying);
+    }
+  }, [playback, isPlaying, setIsPlaying]);
 
   const goToStart = useCallback(() => {
-    setCurrentFrame(0);
-    setIsPlaying(false);
-  }, [setCurrentFrame, setIsPlaying]);
+    if (playback) {
+      playback.stop();
+    } else {
+      setCurrentFrame(0);
+      setIsPlaying(false);
+    }
+  }, [playback, setCurrentFrame, setIsPlaying]);
 
   const goToEnd = useCallback(() => {
-    setCurrentFrame(duration - 1);
-    setIsPlaying(false);
-  }, [duration, setCurrentFrame, setIsPlaying]);
+    if (playback) {
+      playback.pause();
+      playback.goToEnd();
+    } else {
+      setCurrentFrame(duration - 1);
+      setIsPlaying(false);
+    }
+  }, [playback, duration, setCurrentFrame, setIsPlaying]);
 
   const stepFrame = useCallback(
     (delta: number) => {
-      setCurrentFrame(currentFrame + delta);
+      if (playback) {
+        if (delta > 0) playback.nextFrame();
+        else playback.prevFrame();
+      } else {
+        setCurrentFrame(currentFrame + delta);
+      }
     },
-    [currentFrame, setCurrentFrame]
+    [playback, currentFrame, setCurrentFrame]
   );
 
   const toggleLoop = useCallback(() => {

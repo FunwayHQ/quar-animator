@@ -207,6 +207,8 @@ export class ShapeRenderer {
   // Cached matrices for gradient program switching
   private currentVPMatrix: Float32Array | null = null;
   private currentModelMatrix: Float32Array | null = null;
+  /** Effective opacity for the node currently being rendered (includes parent group opacity) */
+  private currentEffectiveOpacity: number = 1;
 
   // Tessellation cache — avoids re-tessellating and re-earcut-ing unchanged geometry
   private geometryCache: Map<string, TessellationCacheEntry> = new Map();
@@ -413,6 +415,7 @@ export class ShapeRenderer {
     // Traverse and render visible shapes
     sceneGraph.traverseVisible((node) => {
       const worldTransform = sceneGraph.getWorldTransform(node.id);
+      this.currentEffectiveOpacity = sceneGraph.getEffectiveOpacity(node.id);
 
       switch (node.type) {
         case 'rectangle':
@@ -438,6 +441,8 @@ export class ShapeRenderer {
    */
   renderNode(node: Node, viewProjectionMatrix: Matrix3): void {
     if (!this.program || !this.vao || !node.visible) return;
+    // Standalone node rendering — use the node's own opacity (no parent chain)
+    this.currentEffectiveOpacity = node.opacity;
 
     const gl = this.renderer.context;
 
@@ -579,7 +584,7 @@ export class ShapeRenderer {
       node.fills,
       node.strokes,
       true,
-      node.opacity
+      this.currentEffectiveOpacity
     );
   }
 
@@ -613,7 +618,7 @@ export class ShapeRenderer {
       node.fills,
       node.strokes,
       true,
-      node.opacity
+      this.currentEffectiveOpacity
     );
   }
 
@@ -658,7 +663,7 @@ export class ShapeRenderer {
       node.fills,
       node.strokes,
       true,
-      node.opacity
+      this.currentEffectiveOpacity
     );
   }
 
@@ -696,7 +701,7 @@ export class ShapeRenderer {
       fills,
       node.strokes,
       node.closed,
-      node.opacity
+      this.currentEffectiveOpacity
     );
   }
 
