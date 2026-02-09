@@ -78,6 +78,10 @@ export function Canvas() {
   const selectAll = useEditorStore((state) => state.selectAll);
   const groupSelection = useEditorStore((state) => state.groupSelection);
   const ungroupSelection = useEditorStore((state) => state.ungroupSelection);
+  const bringForward = useEditorStore((state) => state.bringForward);
+  const sendBackward = useEditorStore((state) => state.sendBackward);
+  const bringToFront = useEditorStore((state) => state.bringToFront);
+  const sendToBack = useEditorStore((state) => state.sendToBack);
   const booleanUnion = useEditorStore((state) => state.booleanUnion);
   const booleanSubtract = useEditorStore((state) => state.booleanSubtract);
   const booleanIntersect = useEditorStore((state) => state.booleanIntersect);
@@ -613,6 +617,19 @@ export function Canvas() {
         return;
       }
 
+      // Z-order shortcuts (Ctrl+]/[, Ctrl+Shift+]/[)
+      if (!isInput && (e.ctrlKey || e.metaKey) && (e.key === ']' || e.key === '[')) {
+        e.preventDefault();
+        if (e.shiftKey) {
+          if (e.key === ']') bringToFront(sceneGraph);
+          else sendToBack(sceneGraph);
+        } else {
+          if (e.key === ']') bringForward(sceneGraph);
+          else sendBackward(sceneGraph);
+        }
+        return;
+      }
+
       // Clipboard shortcuts (skip if active element is an input)
       if (!isInput && (e.ctrlKey || e.metaKey)) {
         if (e.key === 'g' || e.key === 'G') {
@@ -663,6 +680,10 @@ export function Canvas() {
       selectAll,
       groupSelection,
       ungroupSelection,
+      bringForward,
+      sendBackward,
+      bringToFront,
+      sendToBack,
     ]
   );
 
@@ -730,6 +751,31 @@ export function Canvas() {
           shortcut: 'Ctrl+Shift+G',
           disabled: !hasGroup,
           onClick: () => ungroupSelection(sceneGraph),
+        },
+        { type: 'separator' },
+        {
+          id: 'bring-to-front',
+          label: 'Bring to Front',
+          shortcut: 'Ctrl+Shift+]',
+          onClick: () => bringToFront(sceneGraph),
+        },
+        {
+          id: 'bring-forward',
+          label: 'Bring Forward',
+          shortcut: 'Ctrl+]',
+          onClick: () => bringForward(sceneGraph),
+        },
+        {
+          id: 'send-backward',
+          label: 'Send Backward',
+          shortcut: 'Ctrl+[',
+          onClick: () => sendBackward(sceneGraph),
+        },
+        {
+          id: 'send-to-back',
+          label: 'Send to Back',
+          shortcut: 'Ctrl+Shift+[',
+          onClick: () => sendToBack(sceneGraph),
         },
         { type: 'separator' },
         {
@@ -819,6 +865,10 @@ export function Canvas() {
     selectAll,
     groupSelection,
     ungroupSelection,
+    bringForward,
+    sendBackward,
+    bringToFront,
+    sendToBack,
     booleanUnion,
     booleanSubtract,
     booleanIntersect,

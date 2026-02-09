@@ -17,6 +17,7 @@ import type {
   Gradient,
 } from '@quar/types';
 import { WebGLRenderer, type ShaderProgram } from './WebGLRenderer';
+import { EffectRenderer } from './EffectRenderer';
 import { computeBounds, normalizeGradientStops, linearGradientFromAngle } from '../gradient/gradientUtils';
 import { SceneGraph } from '../SceneGraph';
 import { mat3 } from '../math';
@@ -468,6 +469,9 @@ export class ShapeRenderer {
   // Tessellation cache — avoids re-tessellating and re-earcut-ing unchanged geometry
   private geometryCache: Map<string, TessellationCacheEntry> = new Map();
 
+  // Effect renderer for drop shadows, blur, blend modes
+  private effectRenderer: EffectRenderer;
+
   constructor(renderer: WebGLRenderer) {
     this.renderer = renderer;
     this.vertices = new Float32Array(MAX_VERTICES * 2);
@@ -476,6 +480,7 @@ export class ShapeRenderer {
     this.initializeShaders();
     this.initializeBuffers();
     this.initializeTextureBuffers();
+    this.effectRenderer = new EffectRenderer(renderer);
   }
 
   // --------------------------------------------------------------------------
@@ -779,27 +784,69 @@ export class ShapeRenderer {
     // Cache VP array for texture program
     this.currentVPArray = vpArray;
 
+    // Get canvas dimensions for effect rendering
+    const canvasWidth = gl.drawingBufferWidth;
+    const canvasHeight = gl.drawingBufferHeight;
+
     // Traverse and render visible shapes
     sceneGraph.traverseVisible((node) => {
       const worldTransform = sceneGraph.getWorldTransform(node.id);
       this.currentEffectiveOpacity = sceneGraph.getEffectiveOpacity(node.id);
 
-      switch (node.type) {
-        case 'rectangle':
-          this.renderRectangle(node, worldTransform);
-          break;
-        case 'ellipse':
-          this.renderEllipse(node, worldTransform);
-          break;
-        case 'polygon':
-          this.renderPolygon(node, worldTransform);
-          break;
-        case 'path':
-          this.renderPath(node, worldTransform);
-          break;
-        case 'image':
-          this.renderImage(node, worldTransform);
-          break;
+      const renderShape = () => {
+        switch (node.type) {
+          case 'rectangle':
+            this.renderRectangle(node, worldTransform);
+            break;
+          case 'ellipse':
+            this.renderEllipse(node, worldTransform);
+            break;
+          case 'polygon':
+            this.renderPolygon(node, worldTransform);
+            break;
+          case 'path':
+            this.renderPath(node, worldTransform);
+            break;
+          case 'image':
+            this.renderImage(node, worldTransform);
+            break;
+        }
+      };
+
+      // Check if node needs multi-pass rendering (effects or blend mode)
+      if (this.effectRenderer.needsMultiPass(node.effects, node.blendMode)) {
+        this.effectRenderer.renderNodeWithEffects(
+          node.effects,
+          node.blendMode,
+          () => {
+            // Re-setup shader state since effect renderer may have changed it
+            this.renderer.useProgram(this.program!);
+            this.renderer.bindVAO(this.vao!);
+            gl.uniformMatrix3fv(this.program!.uniforms.u_viewProjection ?? null, false, vpArray);
+            if (this.gradientProgram) {
+              this.renderer.useProgram(this.gradientProgram);
+              gl.uniformMatrix3fv(this.gradientProgram.uniforms.u_viewProjection ?? null, false, vpArray);
+              this.renderer.useProgram(this.program!);
+            }
+            this.currentVPArray = vpArray;
+            renderShape();
+          },
+          canvasWidth,
+          canvasHeight
+        );
+        // Restore shader state for next node
+        this.renderer.useProgram(this.program!);
+        this.renderer.bindVAO(this.vao!);
+        gl.uniformMatrix3fv(this.program!.uniforms.u_viewProjection ?? null, false, vpArray);
+        if (this.gradientProgram) {
+          this.renderer.useProgram(this.gradientProgram);
+          gl.uniformMatrix3fv(this.gradientProgram.uniforms.u_viewProjection ?? null, false, vpArray);
+          this.renderer.useProgram(this.program!);
+        }
+        this.currentVPArray = vpArray;
+      } else {
+        // Fast path: no effects, normal blend mode — render directly
+        renderShape();
       }
     });
 
@@ -1961,5 +2008,8 @@ export class ShapeRenderer {
     this.textureProgram = null;
 
     this.geometryCache.clear();
+
+    // Effect renderer cleanup
+    this.effectRenderer.dispose();
   }
 }

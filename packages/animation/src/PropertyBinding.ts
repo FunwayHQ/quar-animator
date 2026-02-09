@@ -8,7 +8,7 @@
  *   "fill.color.r"
  */
 
-import type { Node, PropertyTrack, Timeline } from '@quar/types';
+import type { Node, PropertyTrack, Timeline, Effect } from '@quar/types';
 import { interpolateValue, interpolators } from './Timeline';
 
 // ============================================================================
@@ -244,6 +244,41 @@ export function getAnimatableProperties(nodeType: string): AnimatableProperty[] 
   return props;
 }
 
+/**
+ * Get animatable properties for a specific node, including dynamic effect properties.
+ */
+export function getAnimatablePropertiesForNode(node: Node): AnimatableProperty[] {
+  const props = getAnimatableProperties(node.type);
+
+  // Add dynamic effect properties based on the node's current effects
+  if (node.effects) {
+    for (let i = 0; i < node.effects.length; i++) {
+      const effect = node.effects[i] as Effect;
+      const prefix = `effects.${i}`;
+      const label = effect.type === 'drop-shadow' ? 'Drop Shadow'
+        : effect.type === 'inner-shadow' ? 'Inner Shadow'
+        : 'Layer Blur';
+
+      if (effect.type === 'drop-shadow' || effect.type === 'inner-shadow') {
+        props.push(
+          { path: `${prefix}.offsetX`, displayName: `${label} Offset X`, interpolationType: 'number' },
+          { path: `${prefix}.offsetY`, displayName: `${label} Offset Y`, interpolationType: 'number' },
+          { path: `${prefix}.blur`, displayName: `${label} Blur`, interpolationType: 'number' },
+          { path: `${prefix}.spread`, displayName: `${label} Spread`, interpolationType: 'number' },
+          { path: `${prefix}.opacity`, displayName: `${label} Opacity`, interpolationType: 'number' },
+          { path: `${prefix}.color`, displayName: `${label} Color`, interpolationType: 'color' },
+        );
+      } else if (effect.type === 'layer-blur') {
+        props.push(
+          { path: `${prefix}.radius`, displayName: `${label} Radius`, interpolationType: 'number' },
+        );
+      }
+    }
+  }
+
+  return props;
+}
+
 // ============================================================================
 // Interpolator selection
 // ============================================================================
@@ -325,6 +360,10 @@ export function detectInterpolationType(path: string): InterpolationType {
 
   // Image adjustment properties
   if (path.startsWith('adjustments.')) return 'number';
+
+  // Effect properties (effects.N.*)
+  if (/^effects\.\d+\.color$/.test(path)) return 'color';
+  if (/^effects\.\d+\.(offsetX|offsetY|blur|spread|opacity|radius)$/.test(path)) return 'number';
 
   return 'discrete';
 }

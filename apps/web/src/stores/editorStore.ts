@@ -4,7 +4,7 @@
  */
 
 import { create } from 'zustand';
-import type { ToolType, Fill, Stroke, Color, Keyframe, Node, Timeline, EasingFunction } from '@quar/types';
+import type { ToolType, Fill, Stroke, Color, Keyframe, Node, Timeline, EasingFunction, Effect, EffectType, BlendMode } from '@quar/types';
 import type { KeyframeClipboard } from '@quar/animation';
 import { createTimeline, KeyframeManager } from '@quar/animation';
 import { DEFAULT_ONION_SKIN_SETTINGS, createGroupNode, booleanOperation } from '@quar/core';
@@ -20,6 +20,7 @@ interface SceneGraphLike {
   getRootNodes(): Node[];
   addNode(node: Node, parentId?: string): void;
   removeNode(id: string): void;
+  updateNode(id: string, updates: Partial<Node>): void;
   moveNode(id: string, newParentId: string | null, index?: number): void;
   getDescendants(id: string): Node[];
   traverse(callback: (node: Node, depth: number) => boolean | void): void;
@@ -200,6 +201,20 @@ export interface EditorStore {
   setOnionSkinOpacity: (opacity: number) => void;
   setOnionSkinFalloff: (falloff: number) => void;
   setOnionSkinShowDuringPlayback: (show: boolean) => void;
+
+  // Z-order operations
+  bringForward: (sceneGraph: SceneGraphLike) => void;
+  sendBackward: (sceneGraph: SceneGraphLike) => void;
+  bringToFront: (sceneGraph: SceneGraphLike) => void;
+  sendToBack: (sceneGraph: SceneGraphLike) => void;
+
+  // Effects & blend modes
+  addEffect: (sceneGraph: SceneGraphLike, nodeId: string, effectType: EffectType) => void;
+  removeEffect: (sceneGraph: SceneGraphLike, nodeId: string, effectIndex: number) => void;
+  updateEffect: (sceneGraph: SceneGraphLike, nodeId: string, effectIndex: number, updates: Partial<Effect>) => void;
+  toggleEffectVisibility: (sceneGraph: SceneGraphLike, nodeId: string, effectIndex: number) => void;
+  reorderEffect: (sceneGraph: SceneGraphLike, nodeId: string, fromIndex: number, toIndex: number) => void;
+  setBlendMode: (sceneGraph: SceneGraphLike, nodeId: string, blendMode: BlendMode) => void;
 
   // Boolean operations
   booleanUnion: (sceneGraph: SceneGraphLike) => void;
@@ -623,9 +638,229 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   setOnionSkinShowDuringPlayback: (show: boolean) =>
     set((state) => ({ onionSkin: { ...state.onionSkin, showDuringPlayback: show } })),
 
+  // Effects & blend modes
+  ...createEffectActions(set, get),
+
+  // Z-order operations
+  ...createZOrderActions(set, get),
+
   // Boolean operations
   ...createBooleanActions(set, get),
 }));
+
+// ============================================================================
+// Effect & Blend Mode Actions
+// ============================================================================
+
+function createDefaultEffect(effectType: EffectType): Effect {
+  const id = `fx_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  switch (effectType) {
+    case 'drop-shadow':
+      return {
+        id,
+        type: 'drop-shadow',
+        visible: true,
+        color: { r: 0, g: 0, b: 0, a: 1 },
+        offsetX: 4,
+        offsetY: -4,
+        blur: 8,
+        spread: 0,
+        opacity: 0.25,
+      };
+    case 'inner-shadow':
+      return {
+        id,
+        type: 'inner-shadow',
+        visible: true,
+        color: { r: 0, g: 0, b: 0, a: 1 },
+        offsetX: 2,
+        offsetY: -2,
+        blur: 4,
+        spread: 0,
+        opacity: 0.5,
+      };
+    case 'layer-blur':
+      return {
+        id,
+        type: 'layer-blur',
+        visible: true,
+        radius: 4,
+      };
+  }
+}
+
+function createEffectActions(
+  set: (partial: Partial<EditorStore> | ((state: EditorStore) => Partial<EditorStore>)) => void,
+  _get: () => EditorStore,
+) {
+  return {
+    addEffect: (sceneGraph: SceneGraphLike, nodeId: string, effectType: EffectType) => {
+      const node = sceneGraph.getNode(nodeId);
+      if (!node) return;
+      const effects = [...(node.effects ?? []), createDefaultEffect(effectType)];
+      sceneGraph.updateNode(nodeId, { effects } as Partial<Node>);
+      set({ isDirty: true });
+    },
+
+    removeEffect: (sceneGraph: SceneGraphLike, nodeId: string, effectIndex: number) => {
+      const node = sceneGraph.getNode(nodeId);
+      if (!node || !node.effects) return;
+      const effects = node.effects.filter((_, i) => i !== effectIndex);
+      sceneGraph.updateNode(nodeId, { effects: effects.length > 0 ? effects : undefined } as Partial<Node>);
+      set({ isDirty: true });
+    },
+
+    updateEffect: (sceneGraph: SceneGraphLike, nodeId: string, effectIndex: number, updates: Partial<Effect>) => {
+      const node = sceneGraph.getNode(nodeId);
+      if (!node || !node.effects || !node.effects[effectIndex]) return;
+      const effects = [...node.effects];
+      effects[effectIndex] = { ...effects[effectIndex], ...updates } as Effect;
+      sceneGraph.updateNode(nodeId, { effects } as Partial<Node>);
+      set({ isDirty: true });
+    },
+
+    toggleEffectVisibility: (sceneGraph: SceneGraphLike, nodeId: string, effectIndex: number) => {
+      const node = sceneGraph.getNode(nodeId);
+      if (!node || !node.effects || !node.effects[effectIndex]) return;
+      const effects = [...node.effects];
+      effects[effectIndex] = { ...effects[effectIndex], visible: !effects[effectIndex].visible } as Effect;
+      sceneGraph.updateNode(nodeId, { effects } as Partial<Node>);
+      set({ isDirty: true });
+    },
+
+    reorderEffect: (sceneGraph: SceneGraphLike, nodeId: string, fromIndex: number, toIndex: number) => {
+      const node = sceneGraph.getNode(nodeId);
+      if (!node || !node.effects) return;
+      const effects = [...node.effects];
+      const [removed] = effects.splice(fromIndex, 1);
+      if (removed) {
+        effects.splice(toIndex, 0, removed);
+        sceneGraph.updateNode(nodeId, { effects } as Partial<Node>);
+        set({ isDirty: true });
+      }
+    },
+
+    setBlendMode: (sceneGraph: SceneGraphLike, nodeId: string, blendMode: BlendMode) => {
+      sceneGraph.updateNode(nodeId, { blendMode } as Partial<Node>);
+      set({ isDirty: true });
+    },
+  };
+}
+
+// ============================================================================
+// Z-Order Actions (extracted to keep store creation concise)
+// ============================================================================
+
+function createZOrderActions(
+  set: (partial: Partial<EditorStore> | ((state: EditorStore) => Partial<EditorStore>)) => void,
+  get: () => EditorStore,
+) {
+  function getSiblings(node: Node, sceneGraph: SceneGraphLike): string[] {
+    if (node.parent) {
+      const parent = sceneGraph.getNode(node.parent);
+      return parent ? [...parent.children] : [];
+    }
+    return sceneGraph.getRootNodes().map((n) => n.id);
+  }
+
+  return {
+    bringForward: (sceneGraph: SceneGraphLike) => {
+      const { selectedNodeIds } = get();
+      if (selectedNodeIds.size === 0) return;
+
+      // Process from highest index first to avoid shifting issues
+      const entries: Array<{ id: string; parentId: string | null; index: number }> = [];
+      for (const id of selectedNodeIds) {
+        const node = sceneGraph.getNode(id);
+        if (!node) continue;
+        const siblings = getSiblings(node, sceneGraph);
+        const idx = siblings.indexOf(id);
+        entries.push({ id, parentId: node.parent, index: idx });
+      }
+      entries.sort((a, b) => b.index - a.index);
+
+      for (const { id, parentId, index } of entries) {
+        const node = sceneGraph.getNode(id);
+        if (!node) continue;
+        const siblings = getSiblings(node, sceneGraph);
+        if (index >= siblings.length - 1) continue; // Already at top
+        sceneGraph.moveNode(id, parentId, index + 2);
+      }
+      set({ isDirty: true });
+    },
+
+    sendBackward: (sceneGraph: SceneGraphLike) => {
+      const { selectedNodeIds } = get();
+      if (selectedNodeIds.size === 0) return;
+
+      // Process from lowest index first to avoid shifting issues
+      const entries: Array<{ id: string; parentId: string | null; index: number }> = [];
+      for (const id of selectedNodeIds) {
+        const node = sceneGraph.getNode(id);
+        if (!node) continue;
+        const siblings = getSiblings(node, sceneGraph);
+        const idx = siblings.indexOf(id);
+        entries.push({ id, parentId: node.parent, index: idx });
+      }
+      entries.sort((a, b) => a.index - b.index);
+
+      for (const { id, parentId, index } of entries) {
+        if (index <= 0) continue; // Already at bottom
+        sceneGraph.moveNode(id, parentId, index - 1);
+      }
+      set({ isDirty: true });
+    },
+
+    bringToFront: (sceneGraph: SceneGraphLike) => {
+      const { selectedNodeIds } = get();
+      if (selectedNodeIds.size === 0) return;
+
+      // Process from highest index first
+      const entries: Array<{ id: string; parentId: string | null; index: number }> = [];
+      for (const id of selectedNodeIds) {
+        const node = sceneGraph.getNode(id);
+        if (!node) continue;
+        const siblings = getSiblings(node, sceneGraph);
+        const idx = siblings.indexOf(id);
+        entries.push({ id, parentId: node.parent, index: idx });
+      }
+      entries.sort((a, b) => b.index - a.index);
+
+      for (const { id, parentId } of entries) {
+        const node = sceneGraph.getNode(id);
+        if (!node) continue;
+        const siblings = getSiblings(node, sceneGraph);
+        sceneGraph.moveNode(id, parentId, siblings.length);
+      }
+      set({ isDirty: true });
+    },
+
+    sendToBack: (sceneGraph: SceneGraphLike) => {
+      const { selectedNodeIds } = get();
+      if (selectedNodeIds.size === 0) return;
+
+      // Process from lowest index first
+      const entries: Array<{ id: string; parentId: string | null; index: number }> = [];
+      for (const id of selectedNodeIds) {
+        const node = sceneGraph.getNode(id);
+        if (!node) continue;
+        const siblings = getSiblings(node, sceneGraph);
+        const idx = siblings.indexOf(id);
+        entries.push({ id, parentId: node.parent, index: idx });
+      }
+      entries.sort((a, b) => a.index - b.index);
+
+      let insertAt = 0;
+      for (const { id } of entries) {
+        const node = sceneGraph.getNode(id);
+        if (!node) continue;
+        sceneGraph.moveNode(id, node.parent, insertAt);
+        insertAt++;
+      }
+      set({ isDirty: true });
+    },
+  };
+}
 
 // ============================================================================
 // Boolean Operation Actions (extracted to keep store creation concise)
@@ -816,6 +1051,16 @@ export const useProjectId = (): string | null =>
 export const useProjectName = (): string =>
   useEditorStore((state: EditorStore) => state.projectName);
 export const useIsDirty = (): boolean => useEditorStore((state: EditorStore) => state.isDirty);
+
+// Z-order selectors
+export const useBringForward = (): ((sceneGraph: SceneGraphLike) => void) =>
+  useEditorStore((state: EditorStore) => state.bringForward);
+export const useSendBackward = (): ((sceneGraph: SceneGraphLike) => void) =>
+  useEditorStore((state: EditorStore) => state.sendBackward);
+export const useBringToFront = (): ((sceneGraph: SceneGraphLike) => void) =>
+  useEditorStore((state: EditorStore) => state.bringToFront);
+export const useSendToBack = (): ((sceneGraph: SceneGraphLike) => void) =>
+  useEditorStore((state: EditorStore) => state.sendToBack);
 
 // Boolean operation selectors
 export const useBooleanUnion = (): ((sceneGraph: SceneGraphLike) => void) =>

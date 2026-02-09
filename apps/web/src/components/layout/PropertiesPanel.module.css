@@ -575,3 +575,144 @@
   background: rgba(168, 85, 247, 0.15);
   transform: scale(0.97);
 }
+
+/* ============================================================================
+   Effects Section
+   ============================================================================ */
+
+.effectAddWrapper {
+  position: relative;
+  margin-left: auto;
+}
+
+.effectAddButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  background: transparent;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-tertiary);
+  cursor: pointer;
+  transition: all var(--duration-fast);
+}
+
+.effectAddButton:hover {
+  border-color: var(--color-accent-primary);
+  color: var(--color-accent-primary);
+  background: rgba(168, 85, 247, 0.08);
+}
+
+.effectDropdown {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 4px;
+  min-width: 140px;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-md);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  z-index: 1020;
+  overflow: hidden;
+}
+
+.effectDropdownItem {
+  display: block;
+  width: 100%;
+  padding: 8px 12px;
+  background: transparent;
+  border: none;
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--duration-fast);
+}
+
+.effectDropdownItem:hover {
+  background: rgba(168, 85, 247, 0.12);
+}
+
+.effectItem {
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  padding: var(--space-sm);
+  margin-bottom: var(--space-xs);
+  background: var(--color-bg-tertiary);
+}
+
+.effectHeader {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: var(--space-xs);
+}
+
+.effectHeader .removeButton {
+  opacity: 0.6;
+}
+
+.effectHeader .removeButton:hover {
+  opacity: 1;
+}
+
+.effectTypeLabel {
+  flex: 1;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-secondary);
+}
+
+.effectProperties {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.effectPropRow {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+/* ============================================================================
+   Blend Mode Section
+   ============================================================================ */
+
+.blendModeSelect {
+  width: 100%;
+  height: 28px;
+  padding: 0 var(--space-sm);
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
+  font-family: var(--font-family-base);
+  cursor: pointer;
+  transition: all var(--duration-fast);
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L5 5L9 1' stroke='%23888' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  padding-right: 24px;
+}
+
+.blendModeSelect:hover {
+  border-color: var(--color-border-default);
+}
+
+.blendModeSelect:focus {
+  border-color: var(--color-accent-primary);
+  box-shadow: 0 0 0 2px var(--color-accent-primary-glow);
+  outline: none;
+}
+
+.blendModeSelect option {
+  background: var(--color-bg-secondary);
+  color: var(--color-text-primary);
+}

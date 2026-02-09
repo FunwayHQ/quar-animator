@@ -99,6 +99,44 @@ export interface Transform {
 }
 
 // ============================================================================
+// Effect Types
+// ============================================================================
+
+export interface DropShadowEffect {
+  id: string;
+  type: 'drop-shadow';
+  visible: boolean;
+  color: Color;
+  offsetX: number;
+  offsetY: number;
+  blur: number;
+  spread: number;
+  opacity: number;
+}
+
+export interface InnerShadowEffect {
+  id: string;
+  type: 'inner-shadow';
+  visible: boolean;
+  color: Color;
+  offsetX: number;
+  offsetY: number;
+  blur: number;
+  spread: number;
+  opacity: number;
+}
+
+export interface LayerBlurEffect {
+  id: string;
+  type: 'layer-blur';
+  visible: boolean;
+  radius: number;
+}
+
+export type Effect = DropShadowEffect | InnerShadowEffect | LayerBlurEffect;
+export type EffectType = Effect['type'];
+
+// ============================================================================
 // Node Types
 // ============================================================================
 
@@ -115,6 +153,7 @@ export interface BaseNode {
   locked: boolean;
   opacity: number;
   blendMode: BlendMode;
+  effects?: Effect[];
 }
 
 export type BlendMode =

@@ -334,6 +334,10 @@ export function LayerPanel() {
   const deleteSelection = useEditorStore((state) => state.deleteSelection);
   const groupSelection = useEditorStore((state) => state.groupSelection);
   const ungroupSelection = useEditorStore((state) => state.ungroupSelection);
+  const bringForward = useEditorStore((state) => state.bringForward);
+  const sendBackward = useEditorStore((state) => state.sendBackward);
+  const bringToFront = useEditorStore((state) => state.bringToFront);
+  const sendToBack = useEditorStore((state) => state.sendToBack);
 
   // Track scene graph version to re-render when nodes change
   const [, setVersion] = useState(0);
@@ -493,6 +497,31 @@ export function LayerPanel() {
         },
         { type: 'separator' },
         {
+          id: 'bring-to-front',
+          label: 'Bring to Front',
+          shortcut: 'Ctrl+Shift+]',
+          onClick: () => bringToFront(sceneGraph),
+        },
+        {
+          id: 'bring-forward',
+          label: 'Bring Forward',
+          shortcut: 'Ctrl+]',
+          onClick: () => bringForward(sceneGraph),
+        },
+        {
+          id: 'send-backward',
+          label: 'Send Backward',
+          shortcut: 'Ctrl+[',
+          onClick: () => sendBackward(sceneGraph),
+        },
+        {
+          id: 'send-to-back',
+          label: 'Send to Back',
+          shortcut: 'Ctrl+Shift+[',
+          onClick: () => sendToBack(sceneGraph),
+        },
+        { type: 'separator' },
+        {
           id: 'toggle-visibility',
           label: allVisible ? `Hide ${count} Layers` : `Show ${count} Layers`,
           onClick: () => {
@@ -552,6 +581,31 @@ export function LayerPanel() {
       },
       { type: 'separator' },
       {
+        id: 'bring-to-front',
+        label: 'Bring to Front',
+        shortcut: 'Ctrl+Shift+]',
+        onClick: () => bringToFront(sceneGraph),
+      },
+      {
+        id: 'bring-forward',
+        label: 'Bring Forward',
+        shortcut: 'Ctrl+]',
+        onClick: () => bringForward(sceneGraph),
+      },
+      {
+        id: 'send-backward',
+        label: 'Send Backward',
+        shortcut: 'Ctrl+[',
+        onClick: () => sendBackward(sceneGraph),
+      },
+      {
+        id: 'send-to-back',
+        label: 'Send to Back',
+        shortcut: 'Ctrl+Shift+[',
+        onClick: () => sendToBack(sceneGraph),
+      },
+      { type: 'separator' },
+      {
         id: 'toggle-visibility',
         label: node.visible ? 'Hide' : 'Show',
         onClick: () => handleToggleVisibility(nodeId),
@@ -570,6 +624,10 @@ export function LayerPanel() {
     deleteSelection,
     groupSelection,
     ungroupSelection,
+    bringForward,
+    sendBackward,
+    bringToFront,
+    sendToBack,
     handleToggleVisibility,
     handleToggleLock,
   ]);
