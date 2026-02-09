@@ -166,7 +166,7 @@ function getCornerRadius(node: Node): [number, number, number, number] | number 
     return (node as RectangleNode).cornerRadius;
   }
   if (node.type === 'image') {
-    return (node as ImageNode).cornerRadius;
+    return (node as ImageNode).cornerRadius ?? [0, 0, 0, 0];
   }
   if (node.type === 'polygon') {
     return (node as PolygonNode).cornerRadius ?? 0;
@@ -848,7 +848,7 @@ export function PropertiesPanel() {
         }
       } else if (currentNode.type === 'image') {
         const img = currentNode as ImageNode;
-        const newRadius = [...img.cornerRadius] as [number, number, number, number];
+        const newRadius = [...(img.cornerRadius ?? [0, 0, 0, 0])] as [number, number, number, number];
         if (corner !== undefined) {
           newRadius[corner] = num;
         } else {

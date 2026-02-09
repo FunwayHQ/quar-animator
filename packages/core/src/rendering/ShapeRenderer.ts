@@ -1108,7 +1108,7 @@ export class ShapeRenderer {
 
     // Corner radius SDF uniforms
     gl.uniform2f(this.textureProgram.uniforms.u_rectSize ?? null, node.width, node.height);
-    const cr = node.cornerRadius;
+    const cr = node.cornerRadius ?? [0, 0, 0, 0];
     gl.uniform4fv(this.textureProgram.uniforms.u_cornerRadius ?? null, new Float32Array([cr[0], cr[1], cr[2], cr[3]]));
 
     // Draw as triangle strip (4 vertices)
@@ -1812,8 +1812,8 @@ export class ShapeRenderer {
 
     // Corner radius SDF uniforms
     gl.uniform2f(this.textureProgram.uniforms.u_rectSize ?? null, node.width, node.height);
-    const cr = node.cornerRadius;
-    gl.uniform4fv(this.textureProgram.uniforms.u_cornerRadius ?? null, new Float32Array([cr[0], cr[1], cr[2], cr[3]]));
+    const cr2 = node.cornerRadius ?? [0, 0, 0, 0];
+    gl.uniform4fv(this.textureProgram.uniforms.u_cornerRadius ?? null, new Float32Array([cr2[0], cr2[1], cr2[2], cr2[3]]));
 
     // Draw
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
