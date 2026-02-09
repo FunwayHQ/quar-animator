@@ -220,6 +220,22 @@ export function getAnimatableProperties(nodeType: string): AnimatableProperty[] 
     case 'text':
       props.push(...SHAPE_ANIMATABLE_PROPERTIES);
       break;
+    case 'image':
+      props.push(
+        { path: 'width', displayName: 'Width', interpolationType: 'number' },
+        { path: 'height', displayName: 'Height', interpolationType: 'number' },
+        { path: 'cornerRadius.0', displayName: 'Corner TL', interpolationType: 'number' },
+        { path: 'cornerRadius.1', displayName: 'Corner TR', interpolationType: 'number' },
+        { path: 'cornerRadius.2', displayName: 'Corner BR', interpolationType: 'number' },
+        { path: 'cornerRadius.3', displayName: 'Corner BL', interpolationType: 'number' },
+        { path: 'adjustments.brightness', displayName: 'Brightness', interpolationType: 'number' },
+        { path: 'adjustments.contrast', displayName: 'Contrast', interpolationType: 'number' },
+        { path: 'adjustments.saturation', displayName: 'Saturation', interpolationType: 'number' },
+        { path: 'adjustments.hue', displayName: 'Hue', interpolationType: 'number' },
+        { path: 'adjustments.exposure', displayName: 'Exposure', interpolationType: 'number' },
+        { path: 'adjustments.temperature', displayName: 'Temperature', interpolationType: 'number' },
+      );
+      break;
     case 'group':
       // Groups support only transform and opacity (COMMON_ANIMATABLE_PROPERTIES)
       break;
@@ -306,6 +322,9 @@ export function detectInterpolationType(path: string): InterpolationType {
   if (/\.gradient\.stops\.\d+\.offset$/.test(path)) return 'number';
   if (/\.gradient\.radius$/.test(path)) return 'number';
   if (/\.gradient\.center\.[xy]$/.test(path)) return 'number';
+
+  // Image adjustment properties
+  if (path.startsWith('adjustments.')) return 'number';
 
   return 'discrete';
 }

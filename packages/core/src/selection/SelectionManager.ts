@@ -3,7 +3,7 @@
  * Calculates bounding boxes for selected nodes
  */
 
-import type { Node, Rect, Matrix3 } from '@quar/types';
+import type { Node, ImageNode, Rect, Matrix3 } from '@quar/types';
 import type { SceneGraph } from '../SceneGraph';
 import type { SelectionBounds } from './types';
 import { rect, mat3 } from '../math';
@@ -232,6 +232,16 @@ export class SelectionManager {
           if (spBounds) allBounds.push(spBounds);
         }
         return allBounds.length === 1 ? primaryBounds : this.unionBounds(allBounds);
+      }
+      case 'image': {
+        const imgNode = node as ImageNode;
+        const anchor = node.transform.anchor;
+        return {
+          x: -imgNode.width * anchor.x,
+          y: -imgNode.height * anchor.y,
+          width: imgNode.width,
+          height: imgNode.height,
+        };
       }
       default:
         return null;

@@ -1,0 +1,274 @@
+/* ============================================================================
+ * ImageAdjustments - Refined adjustment sliders for image nodes
+ * Neo-Industrial aesthetic with violet accent system
+ * ============================================================================ */
+
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* Header row with section title + reset button */
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-xs) 0;
+  margin-bottom: 4px;
+}
+
+.title {
+  font-size: var(--font-size-2xs);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.resetAll {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 6px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-disabled);
+  font-size: 9px;
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all var(--duration-fast);
+}
+
+.resetAll:hover {
+  color: var(--color-text-tertiary);
+  border-color: var(--color-border-subtle);
+  background: var(--color-bg-tertiary);
+}
+
+/* Individual adjustment row */
+.adjustmentRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 0;
+  border-radius: var(--radius-sm);
+  transition: background var(--duration-fast);
+}
+
+.adjustmentRow:hover {
+  background: rgba(255, 255, 255, 0.015);
+}
+
+/* Label with fixed width */
+.adjustmentLabel {
+  width: 68px;
+  flex-shrink: 0;
+  font-size: var(--font-size-2xs);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-disabled);
+  letter-spacing: 0.01em;
+  cursor: default;
+  user-select: none;
+  transition: color var(--duration-fast);
+}
+
+.adjustmentRow:hover .adjustmentLabel {
+  color: var(--color-text-tertiary);
+}
+
+/* Slider track container */
+.sliderContainer {
+  flex: 1;
+  position: relative;
+  height: 16px;
+  display: flex;
+  align-items: center;
+}
+
+/* Custom range slider */
+.adjustmentSlider {
+  width: 100%;
+  height: 3px;
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
+  cursor: pointer;
+  position: relative;
+  z-index: 1;
+  margin: 0;
+}
+
+/* Track background (rendered via pseudo-element on container) */
+.sliderTrack {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  height: 3px;
+  transform: translateY(-50%);
+  background: var(--color-bg-tertiary);
+  border-radius: 2px;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+/* Fill portion of the track */
+.sliderFill {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--color-accent-primary);
+  opacity: 0.6;
+  transition: opacity var(--duration-fast);
+  pointer-events: none;
+}
+
+.adjustmentRow:hover .sliderFill {
+  opacity: 0.8;
+}
+
+/* Center tick mark for bipolar sliders */
+.centerTick {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 1px;
+  height: 7px;
+  transform: translate(-50%, -50%);
+  background: var(--color-border-default);
+  pointer-events: none;
+  opacity: 0.5;
+}
+
+/* Webkit slider thumb */
+.adjustmentSlider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 11px;
+  height: 11px;
+  background: #e8e4e0;
+  border: 2px solid var(--color-accent-primary);
+  border-radius: 50%;
+  cursor: pointer;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+  transition:
+    transform var(--duration-fast),
+    box-shadow var(--duration-fast),
+    background var(--duration-fast);
+}
+
+.adjustmentSlider::-webkit-slider-thumb:hover {
+  transform: scale(1.2);
+  background: #fff;
+  box-shadow:
+    0 1px 6px rgba(168, 85, 247, 0.35),
+    0 0 0 3px rgba(168, 85, 247, 0.12);
+}
+
+.adjustmentSlider:active::-webkit-slider-thumb {
+  transform: scale(1.1);
+  background: var(--color-accent-primary);
+  border-color: var(--color-accent-primary);
+}
+
+/* Firefox slider thumb */
+.adjustmentSlider::-moz-range-thumb {
+  width: 11px;
+  height: 11px;
+  background: #e8e4e0;
+  border: 2px solid var(--color-accent-primary);
+  border-radius: 50%;
+  cursor: pointer;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+}
+
+/* Webkit track (invisible — we use custom track) */
+.adjustmentSlider::-webkit-slider-runnable-track {
+  height: 3px;
+  background: transparent;
+  border-radius: 2px;
+}
+
+/* Firefox track */
+.adjustmentSlider::-moz-range-track {
+  height: 3px;
+  background: transparent;
+  border-radius: 2px;
+  border: none;
+}
+
+/* Value display */
+.adjustmentValue {
+  width: 38px;
+  height: 22px;
+  padding: 0 3px;
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-primary);
+  font-size: 10px;
+  font-family: var(--font-family-mono);
+  font-weight: var(--font-weight-medium);
+  text-align: center;
+  flex-shrink: 0;
+  transition: all var(--duration-fast);
+}
+
+.adjustmentValue:hover {
+  border-color: var(--color-border-default);
+}
+
+.adjustmentValue:focus {
+  border-color: var(--color-accent-primary);
+  box-shadow: 0 0 0 2px var(--color-accent-primary-glow);
+  outline: none;
+}
+
+/* Reset button per row — appears on hover */
+.resetButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  color: var(--color-text-disabled);
+  cursor: pointer;
+  flex-shrink: 0;
+  border-radius: var(--radius-sm);
+  opacity: 0;
+  transition: all var(--duration-fast);
+}
+
+.adjustmentRow:hover .resetButton {
+  opacity: 1;
+}
+
+.resetButton:hover {
+  color: var(--color-text-tertiary);
+  background: var(--color-bg-tertiary);
+}
+
+/* Modified state — highlight when value differs from default */
+.modified .adjustmentLabel {
+  color: var(--color-text-secondary);
+}
+
+.modified .adjustmentValue {
+  color: var(--color-accent-primary);
+}
+
+/* Divider between groups */
+.divider {
+  height: 1px;
+  background: var(--color-border-subtle);
+  margin: 4px 0;
+  opacity: 0.5;
+}

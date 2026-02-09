@@ -8,7 +8,7 @@ import {
   SelectionManager,
   TransformHandles,
 } from '@quar/core';
-import type { Node, Vector2 } from '@quar/types';
+import type { Node, ImageNode, Vector2 } from '@quar/types';
 import { evaluateNodeAtFrame, applyAnimatedValues } from '@quar/animation';
 import { useCanvasTools } from '../../hooks/useCanvasTools';
 import { useToolShortcuts } from '../../hooks/useToolShortcuts';
@@ -116,10 +116,18 @@ export function Canvas() {
 
     const incrementVersion = () => setSceneGraphVersion((v) => v + 1);
 
+    // Dispose texture when an image node is removed
+    const handleNodeRemoved = (node: Node) => {
+      incrementVersion();
+      if (node.type === 'image' && shapeRendererRef.current) {
+        shapeRendererRef.current.disposeTexture((node as ImageNode).src);
+      }
+    };
+
     // Subscribe to all scene graph events that affect selection bounds
     const unsubscribeChanged = sceneGraph.on('nodeChanged', incrementVersion);
     const unsubscribeAdded = sceneGraph.on('nodeAdded', incrementVersion);
-    const unsubscribeRemoved = sceneGraph.on('nodeRemoved', incrementVersion);
+    const unsubscribeRemoved = sceneGraph.on('nodeRemoved', handleNodeRemoved);
 
     return () => {
       unsubscribeChanged();
@@ -940,11 +948,84 @@ export function Canvas() {
   );
 
   // --------------------------------------------------------------------------
+  // Drag-and-Drop Image Import
+  // --------------------------------------------------------------------------
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+  }, []);
+
+  const handleDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      const camera = cameraRef.current;
+      if (!camera || !sceneGraphRef.current) return;
+
+      const files = Array.from(e.dataTransfer.files);
+      const imageFile = files.find((f) => f.type.startsWith('image/'));
+      if (!imageFile) return;
+
+      const MAX_SIZE = 10 * 1024 * 1024;
+      if (imageFile.size > MAX_SIZE) return;
+
+      // Get world position at drop location
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const rect = canvas.getBoundingClientRect();
+      const screenPos = {
+        x: e.clientX - rect.left,
+        y: e.clientY - rect.top,
+      };
+      const worldPos = camera.screenToWorld(screenPos);
+
+      const reader = new FileReader();
+      reader.onload = () => {
+        const dataUri = reader.result as string;
+        const img = new Image();
+        img.onload = () => {
+          const nodeId = `node_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+          const imageNode = {
+            id: nodeId,
+            name: imageFile.name.replace(/\.[^.]+$/, ''),
+            type: 'image' as const,
+            parent: null,
+            children: [],
+            transform: {
+              position: { x: worldPos.x, y: worldPos.y },
+              rotation: 0,
+              scale: { x: 1, y: 1 },
+              anchor: { x: 0.5, y: 0.5 },
+              skew: { x: 0, y: 0 },
+            },
+            visible: true,
+            locked: false,
+            opacity: 1,
+            blendMode: 'normal' as const,
+            src: dataUri,
+            width: img.naturalWidth,
+            height: img.naturalHeight,
+            naturalWidth: img.naturalWidth,
+            naturalHeight: img.naturalHeight,
+            cornerRadius: [0, 0, 0, 0] as [number, number, number, number],
+          };
+
+          sceneGraphRef.current!.addNode(imageNode);
+          useEditorStore.setState({ selectedNodeIds: new Set([nodeId]) });
+        };
+        img.src = dataUri;
+      };
+      reader.readAsDataURL(imageFile);
+    },
+    []
+  );
+
+  // --------------------------------------------------------------------------
   // Render
   // --------------------------------------------------------------------------
 
   return (
-    <div className={styles.canvasContainer} ref={containerRef}>
+    <div className={styles.canvasContainer} ref={containerRef} onDragOver={handleDragOver} onDrop={handleDrop}>
       <canvas
         ref={canvasRef}
         className={styles.canvas}

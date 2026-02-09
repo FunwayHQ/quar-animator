@@ -202,6 +202,17 @@ export interface TextNode extends BaseNode {
   strokes: Stroke[];
 }
 
+export interface ImageAdjustments {
+  brightness: number; // -100 to 100, default 0
+  contrast: number;   // -100 to 100, default 0
+  saturation: number; // -100 to 100, default 0
+  hue: number;        // -180 to 180 degrees, default 0
+  exposure: number;   // -100 to 100, default 0
+  temperature: number; // -100 to 100 (cool to warm), default 0
+  tint: number;       // -100 to 100 (green to magenta), default 0
+  blur: number;       // 0 to 100, default 0
+}
+
 export interface ImageNode extends BaseNode {
   type: 'image';
   src: string;
@@ -209,6 +220,8 @@ export interface ImageNode extends BaseNode {
   height: number;
   naturalWidth: number;
   naturalHeight: number;
+  cornerRadius: [number, number, number, number]; // [TL, TR, BR, BL]
+  adjustments?: ImageAdjustments;
 }
 
 export type Node =

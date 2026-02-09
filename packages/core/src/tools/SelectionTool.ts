@@ -3,7 +3,7 @@
  * Selects, moves, and resizes shapes
  */
 
-import type { CanvasPointerEvent, Node, Vector2, Rect, Matrix3 } from '@quar/types';
+import type { CanvasPointerEvent, Node, ImageNode, Vector2, Rect, Matrix3 } from '@quar/types';
 import { BaseTool, type ToolContext } from './BaseTool';
 import { vec2, rect, mat3 } from '../math';
 import { SelectionManager } from '../selection/SelectionManager';
@@ -508,6 +508,16 @@ export class SelectionTool extends BaseTool {
         localBounds = getPathBounds(node.points, node.closed);
         break;
       }
+      case 'image': {
+        const anchor = transform.anchor;
+        localBounds = {
+          x: -(node as ImageNode).width * anchor.x,
+          y: -(node as ImageNode).height * anchor.y,
+          width: (node as ImageNode).width,
+          height: (node as ImageNode).height,
+        };
+        break;
+      }
       default:
         return null;
     }
@@ -653,6 +663,11 @@ export class SelectionTool extends BaseTool {
         const sy = pathNode.transform.scale?.y ?? 1;
         return { width: w * sx, height: h * sy };
       }
+      case 'image':
+        return {
+          width: (node as ImageNode).width,
+          height: (node as ImageNode).height,
+        };
       default:
         return { width: 0, height: 0 };
     }
@@ -706,6 +721,9 @@ export class SelectionTool extends BaseTool {
         state.scale = { ...node.transform.scale };
       } else if (node.type === 'path') {
         state.scale = { ...node.transform.scale };
+      } else if (node.type === 'image') {
+        state.width = (node as ImageNode).width;
+        state.height = (node as ImageNode).height;
       }
 
       states.set(id, state);
@@ -852,6 +870,19 @@ export class SelectionTool extends BaseTool {
             position: newPosition,
             scale: { x: newScaleX, y: newScaleY },
           },
+        });
+      } else if (
+        node.type === 'image' &&
+        initialState.width !== undefined &&
+        initialState.height !== undefined
+      ) {
+        const newWidth = Math.max(1, initialState.width * scaleX);
+        const newHeight = Math.max(1, initialState.height * scaleY);
+
+        this.context.sceneGraph.updateNode(id, {
+          transform: { ...node.transform, position: newPosition },
+          width: newWidth,
+          height: newHeight,
         });
       }
     }

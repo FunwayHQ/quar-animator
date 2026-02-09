@@ -9,6 +9,7 @@ import type {
   EllipseNode,
   PolygonNode,
   PathNode,
+  ImageNode,
   Node,
   Fill,
   Stroke,
@@ -136,6 +137,115 @@ void main() {
   }
   color.a *= u_opacity;
   outColor = color;
+}
+`;
+
+// Texture shaders for image rendering
+const TEXTURE_VERTEX_SHADER = `#version 300 es
+precision highp float;
+
+in vec2 a_position;
+in vec2 a_texCoord;
+
+uniform mat3 u_viewProjection;
+uniform mat3 u_model;
+
+out vec2 v_texCoord;
+
+void main() {
+  v_texCoord = a_texCoord;
+  vec3 worldPos = u_model * vec3(a_position, 1.0);
+  vec3 clipPos = u_viewProjection * worldPos;
+  gl_Position = vec4(clipPos.xy, 0.0, 1.0);
+}
+`;
+
+const TEXTURE_FRAGMENT_SHADER = `#version 300 es
+precision highp float;
+
+in vec2 v_texCoord;
+
+uniform sampler2D u_texture;
+uniform float u_opacity;
+uniform vec4 u_tintColor;   // rgb = tint, a = mix factor (0 = no tint)
+uniform float u_brightness; // -1 to 1
+uniform float u_contrast;   // -1 to 1
+uniform float u_saturation; // -1 to 1
+uniform float u_hue;        // radians
+uniform float u_exposure;   // -1 to 1
+uniform float u_temperature; // -1 to 1
+uniform vec2 u_rectSize;       // (width, height) for SDF masking
+uniform vec4 u_cornerRadius;   // (TL, TR, BR, BL)
+
+out vec4 outColor;
+
+float roundedBoxSDF(vec2 p, vec2 halfSize, vec4 radii) {
+  float r = (p.x > 0.0)
+    ? ((p.y > 0.0) ? radii.z : radii.y)   // BR : TR
+    : ((p.y > 0.0) ? radii.w : radii.x);   // BL : TL
+  vec2 q = abs(p) - halfSize + r;
+  return min(max(q.x, q.y), 0.0) + length(max(q, 0.0)) - r;
+}
+
+vec3 adjustHue(vec3 color, float hueShift) {
+  float cosH = cos(hueShift);
+  float sinH = sin(hueShift);
+  mat3 hueMatrix = mat3(
+    0.299 + 0.701 * cosH + 0.168 * sinH,
+    0.299 - 0.299 * cosH - 0.328 * sinH,
+    0.299 - 0.299 * cosH + 1.250 * sinH,
+    0.587 - 0.587 * cosH + 0.330 * sinH,
+    0.587 + 0.413 * cosH + 0.035 * sinH,
+    0.587 - 0.587 * cosH - 1.050 * sinH,
+    0.114 - 0.114 * cosH - 0.497 * sinH,
+    0.114 - 0.114 * cosH + 0.292 * sinH,
+    0.114 + 0.886 * cosH - 0.203 * sinH
+  );
+  return clamp(hueMatrix * color, 0.0, 1.0);
+}
+
+void main() {
+  vec4 texColor = texture(u_texture, v_texCoord);
+
+  vec3 c = texColor.rgb;
+
+  // Exposure
+  c *= pow(2.0, u_exposure);
+
+  // Brightness
+  c += u_brightness;
+
+  // Contrast
+  c = (c - 0.5) * (1.0 + u_contrast) + 0.5;
+
+  // Saturation
+  float gray = dot(c, vec3(0.2126, 0.7152, 0.0722));
+  c = mix(vec3(gray), c, 1.0 + u_saturation);
+
+  // Hue shift
+  if (abs(u_hue) > 0.001) {
+    c = adjustHue(c, u_hue);
+  }
+
+  // Temperature (warm/cool shift)
+  if (abs(u_temperature) > 0.001) {
+    c.r += u_temperature * 0.1;
+    c.b -= u_temperature * 0.1;
+  }
+
+  c = clamp(c, 0.0, 1.0);
+
+  // Tint mix (for ghost/onion skin rendering)
+  if (u_tintColor.a > 0.0) {
+    c = mix(c, u_tintColor.rgb, u_tintColor.a);
+  }
+
+  // Corner radius SDF masking
+  vec2 pixelPos = v_texCoord * u_rectSize - u_rectSize * 0.5;
+  float dist = roundedBoxSDF(pixelPos, u_rectSize * 0.5, u_cornerRadius);
+  float aa = 1.0 - smoothstep(-0.5, 0.5, dist);
+
+  outColor = vec4(c, texColor.a * u_opacity * aa);
 }
 `;
 
@@ -334,9 +444,17 @@ export class ShapeRenderer {
   private renderer: WebGLRenderer;
   private program: ShaderProgram | null = null;
   private gradientProgram: ShaderProgram | null = null;
+  private textureProgram: ShaderProgram | null = null;
   private vao: WebGLVertexArrayObject | null = null;
   private vertexBuffer: WebGLBuffer | null = null;
   private indexBuffer: WebGLBuffer | null = null;
+
+  // Texture rendering
+  private textureVAO: WebGLVertexArrayObject | null = null;
+  private textureVertexBuffer: WebGLBuffer | null = null;
+  private textureCache: Map<string, WebGLTexture> = new Map();
+  private pendingImages: Map<string, Promise<HTMLImageElement>> = new Map();
+  private currentVPArray: Float32Array | null = null;
 
   // Pre-allocated arrays to avoid GC
   private vertices: Float32Array;
@@ -357,6 +475,7 @@ export class ShapeRenderer {
 
     this.initializeShaders();
     this.initializeBuffers();
+    this.initializeTextureBuffers();
   }
 
   // --------------------------------------------------------------------------
@@ -393,6 +512,28 @@ export class ShapeRenderer {
         ...Array.from({ length: MAX_GRADIENT_STOPS }, (_, i) => `u_offsets[${i}]`),
       ]
     );
+
+    this.textureProgram = this.renderer.createShaderProgram(
+      'shape-texture',
+      TEXTURE_VERTEX_SHADER,
+      TEXTURE_FRAGMENT_SHADER,
+      ['a_position', 'a_texCoord'],
+      [
+        'u_viewProjection',
+        'u_model',
+        'u_texture',
+        'u_opacity',
+        'u_tintColor',
+        'u_brightness',
+        'u_contrast',
+        'u_saturation',
+        'u_hue',
+        'u_exposure',
+        'u_temperature',
+        'u_rectSize',
+        'u_cornerRadius',
+      ]
+    );
   }
 
   private initializeBuffers(): void {
@@ -418,6 +559,93 @@ export class ShapeRenderer {
     }
 
     this.renderer.bindVAO(null);
+  }
+
+  private initializeTextureBuffers(): void {
+    const gl = this.renderer.context;
+    if (!this.textureProgram) return;
+
+    // Create VAO for texture quad
+    this.textureVAO = this.renderer.createVAO();
+    this.renderer.bindVAO(this.textureVAO);
+
+    // Interleaved buffer: position (vec2) + texcoord (vec2) = 4 floats per vertex, 4 vertices
+    this.textureVertexBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.textureVertexBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, 4 * 4 * Float32Array.BYTES_PER_ELEMENT, gl.DYNAMIC_DRAW);
+
+    const stride = 4 * Float32Array.BYTES_PER_ELEMENT; // 4 floats per vertex
+    // a_position at location 0
+    gl.enableVertexAttribArray(this.textureProgram.attributes.a_position!);
+    gl.vertexAttribPointer(this.textureProgram.attributes.a_position!, 2, gl.FLOAT, false, stride, 0);
+    // a_texCoord at location 1
+    gl.enableVertexAttribArray(this.textureProgram.attributes.a_texCoord!);
+    gl.vertexAttribPointer(this.textureProgram.attributes.a_texCoord!, 2, gl.FLOAT, false, stride, 2 * Float32Array.BYTES_PER_ELEMENT);
+
+    this.renderer.bindVAO(null);
+  }
+
+  // --------------------------------------------------------------------------
+  // Texture Cache
+  // --------------------------------------------------------------------------
+
+  /**
+   * Get or load a WebGL texture from a src (data URI or URL).
+   * Returns null if the image is still loading.
+   */
+  getTexture(src: string): WebGLTexture | null {
+    const cached = this.textureCache.get(src);
+    if (cached) return cached;
+
+    // Already loading?
+    if (this.pendingImages.has(src)) return null;
+
+    // Start async load
+    const promise = new Promise<HTMLImageElement>((resolve, reject) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error(`Failed to load image: ${src.slice(0, 50)}`));
+      img.src = src;
+    });
+
+    this.pendingImages.set(src, promise);
+
+    promise
+      .then((img) => {
+        this.pendingImages.delete(src);
+        const gl = this.renderer.context;
+        const texture = gl.createTexture();
+        if (!texture) return;
+
+        gl.bindTexture(gl.TEXTURE_2D, texture);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
+        gl.generateMipmap(gl.TEXTURE_2D);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        gl.bindTexture(gl.TEXTURE_2D, null);
+
+        this.textureCache.set(src, texture);
+      })
+      .catch(() => {
+        this.pendingImages.delete(src);
+      });
+
+    return null;
+  }
+
+  /**
+   * Dispose a specific texture from cache
+   */
+  disposeTexture(src: string): void {
+    const texture = this.textureCache.get(src);
+    if (texture) {
+      this.renderer.context.deleteTexture(texture);
+      this.textureCache.delete(src);
+    }
+    this.pendingImages.delete(src);
   }
 
   // --------------------------------------------------------------------------
@@ -548,6 +776,9 @@ export class ShapeRenderer {
       this.renderer.useProgram(this.program);
     }
 
+    // Cache VP array for texture program
+    this.currentVPArray = vpArray;
+
     // Traverse and render visible shapes
     sceneGraph.traverseVisible((node) => {
       const worldTransform = sceneGraph.getWorldTransform(node.id);
@@ -565,6 +796,9 @@ export class ShapeRenderer {
           break;
         case 'path':
           this.renderPath(node, worldTransform);
+          break;
+        case 'image':
+          this.renderImage(node, worldTransform);
           break;
       }
     });
@@ -596,6 +830,9 @@ export class ShapeRenderer {
       this.renderer.useProgram(this.program);
     }
 
+    // Cache VP array for texture program
+    this.currentVPArray = vpArray;
+
     // Create world matrix from node transform
     const worldMatrix = mat3.compose(
       node.transform.position,
@@ -616,6 +853,9 @@ export class ShapeRenderer {
         break;
       case 'path':
         this.renderPath(node, worldMatrix);
+        break;
+      case 'image':
+        this.renderImage(node as ImageNode, worldMatrix);
         break;
     }
 
@@ -800,6 +1040,88 @@ export class ShapeRenderer {
       true,
       this.currentEffectiveOpacity
     );
+  }
+
+  /**
+   * Render an image node as a textured quad
+   */
+  renderImage(node: ImageNode, worldMatrix: Matrix3): void {
+    if (!this.textureProgram || !this.textureVAO || !this.textureVertexBuffer) return;
+
+    const texture = this.getTexture(node.src);
+    if (!texture) return; // Still loading
+
+    const gl = this.renderer.context;
+
+    // Switch to texture program + VAO
+    this.renderer.useProgram(this.textureProgram);
+    this.renderer.bindVAO(this.textureVAO);
+
+    // Set VP matrix
+    if (this.currentVPArray) {
+      gl.uniformMatrix3fv(this.textureProgram.uniforms.u_viewProjection ?? null, false, this.currentVPArray);
+    }
+
+    // Set model matrix
+    const modelArray = mat3.toFloat32Array(worldMatrix);
+    gl.uniformMatrix3fv(this.textureProgram.uniforms.u_model ?? null, false, modelArray);
+
+    // Build quad vertices: position + texcoord (interleaved)
+    // Anchor-based local coords (same as rectangle)
+    const ax = node.transform.anchor.x;
+    const ay = node.transform.anchor.y;
+    const x0 = -node.width * ax;
+    const y0 = -node.height * ay;
+    const x1 = x0 + node.width;
+    const y1 = y0 + node.height;
+
+    // UV: Y inverted because texImage2D loads top-to-bottom but world is Y-up
+    const quadData = new Float32Array([
+      x0, y0, 0, 1,  // bottom-left  → UV (0,1)
+      x1, y0, 1, 1,  // bottom-right → UV (1,1)
+      x0, y1, 0, 0,  // top-left     → UV (0,0)
+      x1, y1, 1, 0,  // top-right    → UV (1,0)
+    ]);
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.textureVertexBuffer);
+    gl.bufferSubData(gl.ARRAY_BUFFER, 0, quadData);
+
+    // Bind texture
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.uniform1i(this.textureProgram.uniforms.u_texture ?? null, 0);
+
+    // Set opacity
+    gl.uniform1f(this.textureProgram.uniforms.u_opacity ?? null, this.currentEffectiveOpacity);
+
+    // No tint for normal rendering
+    gl.uniform4fv(this.textureProgram.uniforms.u_tintColor ?? null, new Float32Array([0, 0, 0, 0]));
+
+    // Image adjustments
+    const adj = node.adjustments;
+    gl.uniform1f(this.textureProgram.uniforms.u_brightness ?? null, (adj?.brightness ?? 0) / 100);
+    gl.uniform1f(this.textureProgram.uniforms.u_contrast ?? null, (adj?.contrast ?? 0) / 100);
+    gl.uniform1f(this.textureProgram.uniforms.u_saturation ?? null, (adj?.saturation ?? 0) / 100);
+    gl.uniform1f(this.textureProgram.uniforms.u_hue ?? null, (adj?.hue ?? 0) * Math.PI / 180);
+    gl.uniform1f(this.textureProgram.uniforms.u_exposure ?? null, (adj?.exposure ?? 0) / 100);
+    gl.uniform1f(this.textureProgram.uniforms.u_temperature ?? null, (adj?.temperature ?? 0) / 100);
+
+    // Corner radius SDF uniforms
+    gl.uniform2f(this.textureProgram.uniforms.u_rectSize ?? null, node.width, node.height);
+    const cr = node.cornerRadius;
+    gl.uniform4fv(this.textureProgram.uniforms.u_cornerRadius ?? null, new Float32Array([cr[0], cr[1], cr[2], cr[3]]));
+
+    // Draw as triangle strip (4 vertices)
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+
+    // Unbind texture
+    gl.bindTexture(gl.TEXTURE_2D, null);
+
+    // Restore shape program + VAO
+    if (this.program && this.vao) {
+      this.renderer.useProgram(this.program);
+      this.renderer.bindVAO(this.vao);
+    }
   }
 
   /**
@@ -1203,10 +1525,12 @@ export class ShapeRenderer {
     this.renderer.bindVAO(this.vao);
 
     // Set view-projection matrix
+    const vpArray = mat3.toFloat32Array(viewProjectionMatrix);
+    this.currentVPArray = vpArray;
     gl.uniformMatrix3fv(
       this.program.uniforms.u_viewProjection ?? null,
       false,
-      mat3.toFloat32Array(viewProjectionMatrix)
+      vpArray
     );
 
     // Create world matrix from node transform
@@ -1231,6 +1555,9 @@ export class ShapeRenderer {
         break;
       case 'path':
         this.renderPathWithOverride(node, worldMatrix, colorOverride);
+        break;
+      case 'image':
+        this.renderImageWithOverride(node as ImageNode, worldMatrix, colorOverride);
         break;
     }
 
@@ -1415,6 +1742,90 @@ export class ShapeRenderer {
     this.renderNodeGhost(tessellated, fills, node.strokes, node.closed, worldMatrix, colorOverride);
   }
 
+  private renderImageWithOverride(
+    node: ImageNode,
+    worldMatrix: Matrix3,
+    colorOverride: { tint: [number, number, number]; alpha: number }
+  ): void {
+    if (!this.textureProgram || !this.textureVAO || !this.textureVertexBuffer) return;
+
+    const texture = this.getTexture(node.src);
+    if (!texture) return;
+
+    const gl = this.renderer.context;
+
+    // Switch to texture program + VAO
+    this.renderer.useProgram(this.textureProgram);
+    this.renderer.bindVAO(this.textureVAO);
+
+    // Set VP matrix (cached from renderGhostNode)
+    if (this.currentVPArray) {
+      gl.uniformMatrix3fv(this.textureProgram.uniforms.u_viewProjection ?? null, false, this.currentVPArray);
+    }
+
+    // Set model matrix
+    gl.uniformMatrix3fv(
+      this.textureProgram.uniforms.u_model ?? null,
+      false,
+      mat3.toFloat32Array(worldMatrix)
+    );
+
+    // Build quad
+    const ax = node.transform.anchor.x;
+    const ay = node.transform.anchor.y;
+    const x0 = -node.width * ax;
+    const y0 = -node.height * ay;
+    const x1 = x0 + node.width;
+    const y1 = y0 + node.height;
+
+    const quadData = new Float32Array([
+      x0, y0, 0, 1,
+      x1, y0, 1, 1,
+      x0, y1, 0, 0,
+      x1, y1, 1, 0,
+    ]);
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.textureVertexBuffer);
+    gl.bufferSubData(gl.ARRAY_BUFFER, 0, quadData);
+
+    // Bind texture
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.uniform1i(this.textureProgram.uniforms.u_texture ?? null, 0);
+
+    // Set opacity with ghost alpha
+    gl.uniform1f(this.textureProgram.uniforms.u_opacity ?? null, colorOverride.alpha);
+
+    // Tint color for ghost rendering (0.5 mix)
+    gl.uniform4fv(
+      this.textureProgram.uniforms.u_tintColor ?? null,
+      new Float32Array([colorOverride.tint[0], colorOverride.tint[1], colorOverride.tint[2], 0.5])
+    );
+
+    // No adjustments for ghost
+    gl.uniform1f(this.textureProgram.uniforms.u_brightness ?? null, 0);
+    gl.uniform1f(this.textureProgram.uniforms.u_contrast ?? null, 0);
+    gl.uniform1f(this.textureProgram.uniforms.u_saturation ?? null, 0);
+    gl.uniform1f(this.textureProgram.uniforms.u_hue ?? null, 0);
+    gl.uniform1f(this.textureProgram.uniforms.u_exposure ?? null, 0);
+    gl.uniform1f(this.textureProgram.uniforms.u_temperature ?? null, 0);
+
+    // Corner radius SDF uniforms
+    gl.uniform2f(this.textureProgram.uniforms.u_rectSize ?? null, node.width, node.height);
+    const cr = node.cornerRadius;
+    gl.uniform4fv(this.textureProgram.uniforms.u_cornerRadius ?? null, new Float32Array([cr[0], cr[1], cr[2], cr[3]]));
+
+    // Draw
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    gl.bindTexture(gl.TEXTURE_2D, null);
+
+    // Restore shape program + VAO
+    if (this.program && this.vao) {
+      this.renderer.useProgram(this.program);
+      this.renderer.bindVAO(this.vao);
+    }
+  }
+
   /**
    * Render fill with explicit color (bypassing getFillColor).
    * Accepts pre-computed earcut indices.
@@ -1526,11 +1937,28 @@ export class ShapeRenderer {
       this.vao = null;
     }
 
+    // Texture resources
+    if (this.textureVertexBuffer) {
+      gl.deleteBuffer(this.textureVertexBuffer);
+      this.textureVertexBuffer = null;
+    }
+    if (this.textureVAO) {
+      gl.deleteVertexArray(this.textureVAO);
+      this.textureVAO = null;
+    }
+    for (const texture of this.textureCache.values()) {
+      gl.deleteTexture(texture);
+    }
+    this.textureCache.clear();
+    this.pendingImages.clear();
+
     // Clean up shader programs from WebGLRenderer
     this.renderer.deleteProgram('shape');
     this.renderer.deleteProgram('shape-gradient');
+    this.renderer.deleteProgram('shape-texture');
     this.program = null;
     this.gradientProgram = null;
+    this.textureProgram = null;
 
     this.geometryCache.clear();
   }

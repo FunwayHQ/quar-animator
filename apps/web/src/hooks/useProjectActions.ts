@@ -51,6 +51,7 @@ export interface ProjectActions {
   downloadProject: () => void;
   importProject: () => Promise<void>;
   importSvg: () => void;
+  importImage: () => void;
   deleteProject: (id: string) => Promise<void>;
   listProjects: () => Promise<ProjectListItem[]>;
 }
@@ -258,6 +259,69 @@ export function useProjectActions(options: UseProjectActionsOptions = {}): Proje
     input.click();
   }, [sceneGraph]);
 
+  // ------ Import Image file ------
+  const importImageFile = useCallback(() => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/png,image/jpeg,image/gif,image/webp';
+    input.onchange = () => {
+      const file = input.files?.[0];
+      if (!file) return;
+
+      // Validate file size (max 10MB)
+      const MAX_SIZE = 10 * 1024 * 1024;
+      if (file.size > MAX_SIZE) {
+        toast.error('Image too large (max 10MB)');
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = () => {
+        const dataUri = reader.result as string;
+
+        // Load image to get natural dimensions
+        const img = new Image();
+        img.onload = () => {
+          const nodeId = `node_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+          const imageNode = {
+            id: nodeId,
+            name: file.name.replace(/\.[^.]+$/, ''),
+            type: 'image' as const,
+            parent: null,
+            children: [],
+            transform: {
+              position: { x: 0, y: 0 },
+              rotation: 0,
+              scale: { x: 1, y: 1 },
+              anchor: { x: 0.5, y: 0.5 },
+              skew: { x: 0, y: 0 },
+            },
+            visible: true,
+            locked: false,
+            opacity: 1,
+            blendMode: 'normal' as const,
+            src: dataUri,
+            width: img.naturalWidth,
+            height: img.naturalHeight,
+            naturalWidth: img.naturalWidth,
+            naturalHeight: img.naturalHeight,
+            cornerRadius: [0, 0, 0, 0] as [number, number, number, number],
+          };
+
+          sceneGraph.addNode(imageNode);
+          useEditorStore.setState({ selectedNodeIds: new Set([nodeId]) });
+          toast.success(`Imported image "${file.name}"`);
+        };
+        img.onerror = () => {
+          toast.error('Failed to load image');
+        };
+        img.src = dataUri;
+      };
+      reader.readAsDataURL(file);
+    };
+    input.click();
+  }, [sceneGraph]);
+
   // ------ Delete Project ------
   const deleteProjectAction = useCallback(async (id: string) => {
     await dbDelete(id);
@@ -345,6 +409,7 @@ export function useProjectActions(options: UseProjectActionsOptions = {}): Proje
     downloadProject,
     importProject,
     importSvg: importSvgFile,
+    importImage: importImageFile,
     deleteProject: deleteProjectAction,
     listProjects: listProjectsAction,
   };

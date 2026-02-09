@@ -5,12 +5,13 @@ import type {
   EllipseNode,
   PolygonNode,
   PathNode,
+  ImageNode,
   Color,
   Gradient,
   Fill,
   Stroke,
 } from '@quar/types';
-import { Lock, Unlock, Eye, EyeOff, Plus, X, Grid3X3 } from 'lucide-react';
+import { Lock, Unlock, Eye, EyeOff, Plus, X, Grid3X3, Merge, Minus, Combine, Diff } from 'lucide-react';
 import { useSceneGraph } from '../../contexts/SceneGraphContext';
 import { useEditorStore, DEFAULT_FILL, DEFAULT_STROKE } from '../../stores/editorStore';
 import { ScrubLabel } from '../common/ScrubLabel';
@@ -18,6 +19,8 @@ import { KeyframeIndicator } from '../common/KeyframeIndicator';
 import { ColorPicker } from '../common/ColorPicker';
 import { GradientEditor } from '../common/GradientEditor';
 import type { FillType } from '../common/GradientEditor';
+import { ImageAdjustments, DEFAULT_ADJUSTMENTS } from '../common/ImageAdjustments';
+import type { ImageAdjustments as ImageAdjustmentsType } from '@quar/types';
 import { createDefaultGradient, SelectionManager, getPathBounds } from '@quar/core';
 import type { SceneGraph } from '@quar/core';
 import { getKeyframeState } from '../../hooks/useKeyframeState';
@@ -95,6 +98,10 @@ function getNodeSize(node: Node, sceneGraph?: SceneGraph): { width: number; heig
       const sy = pathNode.transform.scale?.y ?? 1;
       return { width: w * sx, height: h * sy };
     }
+    case 'image': {
+      const imgNode = node as ImageNode;
+      return { width: imgNode.width, height: imgNode.height };
+    }
     case 'group': {
       if (!sceneGraph) return { width: 0, height: 0 };
       const childIds = new Set(sceneGraph.getDescendants(node.id).map((n: Node) => n.id));
@@ -136,12 +143,13 @@ function getGroupPosition(node: Node, sceneGraph: SceneGraph): { x: number; y: n
 }
 
 function isSizeEditable(node: Node): boolean {
-  return node.type === 'rectangle' || node.type === 'ellipse' || node.type === 'polygon' || node.type === 'path';
+  return node.type === 'rectangle' || node.type === 'ellipse' || node.type === 'polygon' || node.type === 'path' || node.type === 'image';
 }
 
 function getSizePropertyPaths(node: Node): { w: string; h: string } {
   switch (node.type) {
     case 'rectangle':
+    case 'image':
       return { w: 'width', h: 'height' };
     case 'ellipse':
       return { w: 'radiusX', h: 'radiusY' };
@@ -157,6 +165,9 @@ function getCornerRadius(node: Node): [number, number, number, number] | number 
   if (node.type === 'rectangle') {
     return (node as RectangleNode).cornerRadius;
   }
+  if (node.type === 'image') {
+    return (node as ImageNode).cornerRadius;
+  }
   if (node.type === 'polygon') {
     return (node as PolygonNode).cornerRadius ?? 0;
   }
@@ -164,7 +175,7 @@ function getCornerRadius(node: Node): [number, number, number, number] | number 
 }
 
 function hasCornerRadius(node: Node): boolean {
-  return node.type === 'rectangle' || node.type === 'polygon';
+  return node.type === 'rectangle' || node.type === 'image' || node.type === 'polygon';
 }
 
 /** Get fills array from any shape node */
@@ -205,6 +216,10 @@ export function PropertiesPanel() {
   const timeline = useEditorStore((state) => state.timeline);
   const snapToGrid = useEditorStore((state) => state.snapToGrid);
   const toggleSnapToGrid = useEditorStore((state) => state.toggleSnapToGrid);
+  const booleanUnion = useEditorStore((state) => state.booleanUnion);
+  const booleanSubtract = useEditorStore((state) => state.booleanSubtract);
+  const booleanIntersect = useEditorStore((state) => state.booleanIntersect);
+  const booleanExclude = useEditorStore((state) => state.booleanExclude);
 
   // Re-render on SceneGraph changes (any mutation)
   const [, setVersion] = useState(0);
@@ -223,6 +238,18 @@ export function PropertiesPanel() {
   // Get the first selected node (single-selection for properties)
   const selectedId = selectedNodeIds.size > 0 ? [...selectedNodeIds][0] : null;
   const node = selectedId ? sceneGraph.getNode(selectedId) : null;
+
+  // Detect multi-selection of shape nodes for boolean ops
+  const SHAPE_TYPES = new Set(['rectangle', 'ellipse', 'polygon', 'path']);
+  const multiShapeSelected = selectedNodeIds.size >= 2 && (() => {
+    let shapeCount = 0;
+    for (const id of selectedNodeIds) {
+      const n = sceneGraph.getNode(id);
+      if (n && SHAPE_TYPES.has(n.type)) shapeCount++;
+      if (shapeCount >= 2) return true;
+    }
+    return false;
+  })();
 
   const handlePositionChange = useCallback(
     (axis: 'x' | 'y', value: string) => {
@@ -279,7 +306,7 @@ export function PropertiesPanel() {
   const applySize = useCallback(
     (nodeToUpdate: Node, w: number, h: number) => {
       if (!selectedId) return;
-      if (nodeToUpdate.type === 'rectangle') {
+      if (nodeToUpdate.type === 'rectangle' || nodeToUpdate.type === 'image') {
         sceneGraph.updateNode(selectedId, { width: w, height: h });
         if (autoKeyframe) {
           addKeyframeAtFrame(selectedId, 'width', currentFrame, w);
@@ -748,6 +775,44 @@ export function PropertiesPanel() {
     [selectedId, sceneGraph, autoKeyframe, currentFrame, addKeyframeAtFrame]
   );
 
+  // ============================================================================
+  // Image adjustment handlers
+  // ============================================================================
+
+  const handleAdjustmentChange = useCallback(
+    (key: keyof ImageAdjustmentsType, value: number) => {
+      if (!selectedId) return;
+      const currentNode = sceneGraph.getNode(selectedId);
+      if (!currentNode || currentNode.type !== 'image') return;
+      const imgNode = currentNode as ImageNode;
+      const adjustments = { ...(imgNode.adjustments ?? DEFAULT_ADJUSTMENTS), [key]: value };
+      sceneGraph.updateNode(selectedId, { adjustments } as Partial<Node>);
+      if (autoKeyframe) {
+        addKeyframeAtFrame(selectedId, `adjustments.${key}`, currentFrame, value);
+      }
+    },
+    [selectedId, sceneGraph, autoKeyframe, currentFrame, addKeyframeAtFrame]
+  );
+
+  const handleAdjustmentReset = useCallback(
+    (key: keyof ImageAdjustmentsType) => {
+      if (!selectedId) return;
+      const currentNode = sceneGraph.getNode(selectedId);
+      if (!currentNode || currentNode.type !== 'image') return;
+      const imgNode = currentNode as ImageNode;
+      const adjustments = { ...(imgNode.adjustments ?? DEFAULT_ADJUSTMENTS), [key]: DEFAULT_ADJUSTMENTS[key] };
+      sceneGraph.updateNode(selectedId, { adjustments } as Partial<Node>);
+    },
+    [selectedId, sceneGraph]
+  );
+
+  const handleAdjustmentResetAll = useCallback(() => {
+    if (!selectedId) return;
+    const currentNode = sceneGraph.getNode(selectedId);
+    if (!currentNode || currentNode.type !== 'image') return;
+    sceneGraph.updateNode(selectedId, { adjustments: { ...DEFAULT_ADJUSTMENTS } } as Partial<Node>);
+  }, [selectedId, sceneGraph]);
+
   // Corner radius state
   const [cornerRadiusLocked, setCornerRadiusLocked] = useState(true);
 
@@ -762,6 +827,28 @@ export function PropertiesPanel() {
       if (currentNode.type === 'rectangle') {
         const rect = currentNode as RectangleNode;
         const newRadius = [...rect.cornerRadius] as [number, number, number, number];
+        if (corner !== undefined) {
+          newRadius[corner] = num;
+        } else {
+          newRadius[0] = num;
+          newRadius[1] = num;
+          newRadius[2] = num;
+          newRadius[3] = num;
+        }
+        sceneGraph.updateNode(selectedId, { cornerRadius: newRadius });
+        if (autoKeyframe) {
+          if (corner !== undefined) {
+            addKeyframeAtFrame(selectedId, `cornerRadius.${corner}`, currentFrame, num);
+          } else {
+            addKeyframeAtFrame(selectedId, 'cornerRadius.0', currentFrame, num);
+            addKeyframeAtFrame(selectedId, 'cornerRadius.1', currentFrame, num);
+            addKeyframeAtFrame(selectedId, 'cornerRadius.2', currentFrame, num);
+            addKeyframeAtFrame(selectedId, 'cornerRadius.3', currentFrame, num);
+          }
+        }
+      } else if (currentNode.type === 'image') {
+        const img = currentNode as ImageNode;
+        const newRadius = [...img.cornerRadius] as [number, number, number, number];
         if (corner !== undefined) {
           newRadius[corner] = num;
         } else {
@@ -897,6 +984,57 @@ export function PropertiesPanel() {
     setActivePickerKey(null);
   }, []);
 
+  // Boolean ops section (shared across empty and single-selection views)
+  const booleanOpsSection = multiShapeSelected ? (
+    <div className={styles.section} data-testid="boolean-ops-section">
+      <div className={styles.sectionHeader}>
+        <span className={styles.sectionTitle}>Boolean Operations</span>
+      </div>
+      <div className={styles.booleanOpsRow}>
+        <button
+          className={styles.booleanOpButton}
+          onClick={() => booleanUnion(sceneGraph)}
+          title="Union (Ctrl+Shift+U)"
+          aria-label="Boolean union"
+          data-testid="boolean-union"
+        >
+          <Merge size={14} />
+          <span>Union</span>
+        </button>
+        <button
+          className={styles.booleanOpButton}
+          onClick={() => booleanSubtract(sceneGraph)}
+          title="Subtract (Ctrl+Shift+D)"
+          aria-label="Boolean subtract"
+          data-testid="boolean-subtract"
+        >
+          <Minus size={14} />
+          <span>Subtract</span>
+        </button>
+        <button
+          className={styles.booleanOpButton}
+          onClick={() => booleanIntersect(sceneGraph)}
+          title="Intersect (Ctrl+Shift+I)"
+          aria-label="Boolean intersect"
+          data-testid="boolean-intersect"
+        >
+          <Combine size={14} />
+          <span>Intersect</span>
+        </button>
+        <button
+          className={styles.booleanOpButton}
+          onClick={() => booleanExclude(sceneGraph)}
+          title="Exclude (Ctrl+Shift+X)"
+          aria-label="Boolean exclude"
+          data-testid="boolean-exclude"
+        >
+          <Diff size={14} />
+          <span>Exclude</span>
+        </button>
+      </div>
+    </div>
+  ) : null;
+
   if (!node) {
     return (
       <div className={styles.panel}>
@@ -904,9 +1042,12 @@ export function PropertiesPanel() {
           <h3 className={styles.title}>Properties</h3>
         </div>
         <div className={styles.content}>
-          <div className={styles.emptyState} data-testid="properties-empty">
-            Select an object to view properties
-          </div>
+          {booleanOpsSection}
+          {!multiShapeSelected && (
+            <div className={styles.emptyState} data-testid="properties-empty">
+              Select an object to view properties
+            </div>
+          )}
         </div>
       </div>
     );
@@ -962,6 +1103,7 @@ export function PropertiesPanel() {
         <span className={styles.nodeTypeLabel}>{nodeTypeLabel}</span>
       </div>
       <div className={styles.content}>
+        {booleanOpsSection}
         <div className={styles.section}>
           <div className={styles.sectionHeader}>
             <span className={styles.sectionTitle}>Transform</span>
@@ -1084,7 +1226,7 @@ export function PropertiesPanel() {
                 const cr = getCornerRadius(node);
                 if (cr === null) return null;
 
-                if (node.type === 'rectangle') {
+                if (node.type === 'rectangle' || node.type === 'image') {
                   const corners = cr as [number, number, number, number];
                   const uniformValue = Math.round(corners[0]);
                   return (
@@ -1596,6 +1738,18 @@ export function PropertiesPanel() {
             </div>
           </div>
         </div>
+
+        {/* Image Adjustments — shown only for image nodes */}
+        {node.type === 'image' && (
+          <div className={styles.section} data-testid="image-adjustments-section">
+            <ImageAdjustments
+              adjustments={(node as ImageNode).adjustments ?? DEFAULT_ADJUSTMENTS}
+              onChange={handleAdjustmentChange}
+              onReset={handleAdjustmentReset}
+              onResetAll={handleAdjustmentResetAll}
+            />
+          </div>
+        )}
       </div>
     </div>
   );
