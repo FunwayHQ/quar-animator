@@ -86,7 +86,12 @@ const noop = () => {};
 function getGroupPosition(node: Node, sceneGraph: SceneGraph): { x: number; y: number } {
   const childIds = new Set(sceneGraph.getDescendants(node.id).map((n) => n.id));
   const bounds = groupBoundsManager.getSelectionBounds(childIds, sceneGraph);
-  if (bounds) return { x: bounds.rect.x, y: bounds.rect.y };
+  if (bounds) {
+    return {
+      x: bounds.rect.x + bounds.rect.width / 2,
+      y: bounds.rect.y + bounds.rect.height / 2,
+    };
+  }
   return node.transform.position;
 }
 
@@ -186,14 +191,16 @@ export function PropertiesPanel() {
       const currentNode = sceneGraph.getNode(selectedId);
       if (!currentNode) return;
       const { snapToGrid: snap, gridSize: grid } = useEditorStore.getState();
-      // Input is top-left, snap the top-left value, then convert to center
+      // Input is visual top-left, snap it, then convert to center
+      // X: visual left = world min X → center.x = snapped + width * anchor.x
+      // Y: visual top = world max Y (Y-up) → center.y = snapped - height * (1 - anchor.y)
       const snappedTL = snap ? Math.round(num / grid) * grid : num;
       const anchor = currentNode.transform.anchor ?? { x: 0.5, y: 0.5 };
       const nodeSize = getNodeSize(currentNode, sceneGraph);
       const centerValue =
         axis === 'x'
           ? snappedTL + nodeSize.width * anchor.x
-          : snappedTL + nodeSize.height * anchor.y;
+          : snappedTL - nodeSize.height * (1 - anchor.y);
       sceneGraph.updateNode(selectedId, {
         transform: {
           ...currentNode.transform,
@@ -630,15 +637,15 @@ export function PropertiesPanel() {
         if (!n) continue;
         const a = n.transform.anchor ?? { x: 0.5, y: 0.5 };
         const ns = getNodeSize(n, sceneGraph);
-        // Compute top-left from center
+        // Compute visual top-left from center (Y-up world: top = max Y)
         const tlX = n.transform.position.x - ns.width * a.x;
-        const tlY = n.transform.position.y - ns.height * a.y;
-        // Snap top-left to grid
+        const tlY = n.transform.position.y + ns.height * (1 - a.y);
+        // Snap visual top-left to grid
         const snappedTLX = Math.round(tlX / grid) * grid;
         const snappedTLY = Math.round(tlY / grid) * grid;
         // Convert back to center
         const newCenterX = snappedTLX + ns.width * a.x;
-        const newCenterY = snappedTLY + ns.height * a.y;
+        const newCenterY = snappedTLY - ns.height * (1 - a.y);
         if (newCenterX !== n.transform.position.x || newCenterY !== n.transform.position.y) {
           sceneGraph.updateNode(id, {
             transform: { ...n.transform, position: { x: newCenterX, y: newCenterY } },
@@ -685,9 +692,10 @@ export function PropertiesPanel() {
   // Display top-left corner position (not center)
   const center = isGroup ? getGroupPosition(node, sceneGraph) : node.transform.position;
   const anchor = node.transform.anchor ?? { x: 0.5, y: 0.5 };
+  // Visual top-left on screen: left edge (world min X), top edge (world max Y in Y-up)
   const pos = {
     x: center.x - size.width * anchor.x,
-    y: center.y - size.height * anchor.y,
+    y: center.y + size.height * (1 - anchor.y),
   };
   const rotation = node.transform.rotation;
   const fills = getNodeFills(node);

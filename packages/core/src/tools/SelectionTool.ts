@@ -584,7 +584,8 @@ export class SelectionTool extends BaseTool {
   }
 
   /**
-   * Snap a node's position so that its top-left corner aligns with grid lines.
+   * Snap a node's position so that its visual top-left corner aligns with grid lines.
+   * In world space (Y-up): visual left = min X, visual top = max Y.
    */
   private snapNodePosition(node: Node, centerPos: Vector2): Vector2 {
     if (!this.context.getSnapToGrid?.()) return centerPos;
@@ -595,14 +596,15 @@ export class SelectionTool extends BaseTool {
     }
 
     const anchor = node.transform.anchor ?? { x: 0.5, y: 0.5 };
-    const topLeft = {
+    // Visual top-left on screen: left edge (world min X), top edge (world max Y)
+    const visualTopLeft = {
       x: centerPos.x - size.width * anchor.x,
-      y: centerPos.y - size.height * anchor.y,
+      y: centerPos.y + size.height * (1 - anchor.y),
     };
-    const snappedTL = this.snapPosition(topLeft);
+    const snappedTL = this.snapPosition(visualTopLeft);
     return {
       x: snappedTL.x + size.width * anchor.x,
-      y: snappedTL.y + size.height * anchor.y,
+      y: snappedTL.y - size.height * (1 - anchor.y),
     };
   }
 
@@ -637,9 +639,9 @@ export class SelectionTool extends BaseTool {
   private getArrowDelta(key: string, amount: number): Vector2 {
     switch (key) {
       case 'ArrowUp':
-        return { x: 0, y: -amount };
+        return { x: 0, y: amount }; // World Y-up: increase Y = move up on screen
       case 'ArrowDown':
-        return { x: 0, y: amount };
+        return { x: 0, y: -amount }; // World Y-up: decrease Y = move down on screen
       case 'ArrowLeft':
         return { x: -amount, y: 0 };
       case 'ArrowRight':

@@ -146,11 +146,12 @@ describe('PropertiesPanel', () => {
       useEditorStore.getState().setSelection(['rect1']);
     });
 
-    // Position displayed as top-left: center(150,200) - size(100,50)*anchor(0.5) = (100, 175)
-    // Position X (100.0) matches width W (100.0) too, so use the id-targeted input
+    // Position displayed as visual top-left on screen:
+    // X: center.x - width * anchor.x = 150 - 100*0.5 = 100
+    // Y: center.y + height * (1 - anchor.y) = 200 + 50*0.5 = 225 (world max Y = visual top in Y-up)
     const posXInput = document.getElementById('prop-pos-x') as HTMLInputElement;
     expect(posXInput.value).toBe('100.0');
-    expect(screen.getByDisplayValue('175.0')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('225.0')).toBeInTheDocument();
   });
 
   it('displays actual node size', () => {
