@@ -72,6 +72,8 @@ export function Canvas() {
   const duplicateSelection = useEditorStore((state) => state.duplicateSelection);
   const deleteSelection = useEditorStore((state) => state.deleteSelection);
   const selectAll = useEditorStore((state) => state.selectAll);
+  const groupSelection = useEditorStore((state) => state.groupSelection);
+  const ungroupSelection = useEditorStore((state) => state.ungroupSelection);
 
   // Get shared SceneGraph from context
   const sceneGraph = useSceneGraph();
@@ -94,6 +96,7 @@ export function Canvas() {
     isDirectSelectionActive,
     directSelectionPoints,
     directSelectionPathNodes,
+    marqueeRect,
   } = useCanvasTools({ camera: cameraReady ? cameraRef.current : null, sceneGraph });
 
   // Subscribe to scene graph changes to update selection bounds
@@ -179,6 +182,23 @@ export function Canvas() {
     };
     // zoomPercent triggers recalculation when camera zoom changes
   }, [selectionBounds, zoomPercent]);
+
+  // Convert marquee rect (world coords) to screen coords for overlay
+  const screenMarqueeRect = useMemo(() => {
+    if (!marqueeRect || !cameraRef.current) return null;
+    const camera = cameraRef.current;
+    const p1 = camera.worldToScreen({ x: marqueeRect.x, y: marqueeRect.y });
+    const p2 = camera.worldToScreen({
+      x: marqueeRect.x + marqueeRect.width,
+      y: marqueeRect.y + marqueeRect.height,
+    });
+    return {
+      x: Math.min(p1.x, p2.x),
+      y: Math.min(p1.y, p2.y),
+      width: Math.abs(p2.x - p1.x),
+      height: Math.abs(p2.y - p1.y),
+    };
+  }, [marqueeRect, zoomPercent]);
 
   // --------------------------------------------------------------------------
   // Initialization
@@ -509,6 +529,15 @@ export function Canvas() {
 
       // Clipboard shortcuts (skip if active element is an input)
       if (!isInput && (e.ctrlKey || e.metaKey)) {
+        if (e.key === 'g' || e.key === 'G') {
+          e.preventDefault();
+          if (e.shiftKey) {
+            ungroupSelection(sceneGraph);
+          } else {
+            groupSelection(sceneGraph);
+          }
+          return;
+        }
         if (e.key === 'c') {
           copySelection(sceneGraph);
           return;
@@ -546,6 +575,8 @@ export function Canvas() {
       duplicateSelection,
       deleteSelection,
       selectAll,
+      groupSelection,
+      ungroupSelection,
     ]
   );
 
@@ -579,6 +610,11 @@ export function Canvas() {
     const hasSelection = selectedNodeIds.size > 0;
 
     if (hasSelection) {
+      const hasGroup = Array.from(selectedNodeIds).some((id) => {
+        const n = sceneGraph.getNode(id);
+        return n && n.type === 'group';
+      });
+
       return [
         { id: 'copy', label: 'Copy', shortcut: 'Ctrl+C', onClick: () => copySelection(sceneGraph) },
         {
@@ -586,6 +622,21 @@ export function Canvas() {
           label: 'Duplicate',
           shortcut: 'Ctrl+D',
           onClick: () => duplicateSelection(sceneGraph),
+        },
+        { type: 'separator' },
+        {
+          id: 'group',
+          label: 'Group',
+          shortcut: 'Ctrl+G',
+          disabled: selectedNodeIds.size < 2,
+          onClick: () => groupSelection(sceneGraph),
+        },
+        {
+          id: 'ungroup',
+          label: 'Ungroup',
+          shortcut: 'Ctrl+Shift+G',
+          disabled: !hasGroup,
+          onClick: () => ungroupSelection(sceneGraph),
         },
         { type: 'separator' },
         {
@@ -644,6 +695,8 @@ export function Canvas() {
     pasteClipboard,
     deleteSelection,
     selectAll,
+    groupSelection,
+    ungroupSelection,
   ]);
 
   // --------------------------------------------------------------------------
@@ -795,6 +848,20 @@ export function Canvas() {
         rotation={selectionRotation}
         onHandlePointerDown={handleOverlayPointerDown}
       />
+      {screenMarqueeRect && screenMarqueeRect.width > 0 && screenMarqueeRect.height > 0 && (
+        <svg className={styles.marqueeOverlay}>
+          <rect
+            x={screenMarqueeRect.x}
+            y={screenMarqueeRect.y}
+            width={screenMarqueeRect.width}
+            height={screenMarqueeRect.height}
+            fill="rgba(59, 130, 246, 0.1)"
+            stroke="#3b82f6"
+            strokeWidth="1"
+            strokeDasharray="4 4"
+          />
+        </svg>
+      )}
       {isDirectSelectionActive && (
         <DirectSelectionOverlay
           pathNodes={directSelectionPathNodes}

@@ -7,6 +7,23 @@ import type { ContextMenuEntry } from '../common/ContextMenu';
 import styles from './LayerPanel.module.css';
 
 // ============================================================================
+// Constants
+// ============================================================================
+
+const DRAG_THRESHOLD_PX = 5;
+
+// ============================================================================
+// Types
+// ============================================================================
+
+type DropPosition = 'before' | 'after' | 'inside';
+
+interface DropTarget {
+  nodeId: string;
+  position: DropPosition;
+}
+
+// ============================================================================
 // Helper: map node type to display icon
 // ============================================================================
 
@@ -23,6 +40,25 @@ function nodeTypeIcon(type: string): string {
     default:
       return '\u25FC';
   }
+}
+
+// ============================================================================
+// Helper: get top-level ancestors from selection (dedup children)
+// ============================================================================
+
+function getTopLevelDragIds(
+  dragIds: string[],
+  getNode: (id: string) => Node | undefined
+): string[] {
+  const dragSet = new Set(dragIds);
+  return dragIds.filter((id) => {
+    let node = getNode(id);
+    while (node && node.parent) {
+      if (dragSet.has(node.parent)) return false;
+      node = getNode(node.parent);
+    }
+    return true;
+  });
 }
 
 // ============================================================================
@@ -82,11 +118,14 @@ interface LayerRowProps {
   depth: number;
   selected: boolean;
   isRenaming: boolean;
-  onSelect: (id: string, shiftKey: boolean) => void;
+  isDragging: boolean;
+  dropTarget: DropTarget | null;
+  onSelect: (id: string, e: React.MouseEvent) => void;
   onToggleVisibility: (id: string) => void;
   onToggleLock: (id: string) => void;
   onContextMenu: (id: string, e: React.MouseEvent) => void;
   onRenameCommit: (id: string, name: string) => void;
+  onPointerDown: (id: string, e: React.PointerEvent) => void;
 }
 
 function LayerRow({
@@ -94,28 +133,42 @@ function LayerRow({
   depth,
   selected,
   isRenaming,
+  isDragging,
+  dropTarget,
   onSelect,
   onToggleVisibility,
   onToggleLock,
   onContextMenu,
   onRenameCommit,
+  onPointerDown,
 }: LayerRowProps) {
   const [expanded, setExpanded] = useState(true);
   const hasChildren = node.children && node.children.length > 0;
+
+  const dropClass =
+    dropTarget && dropTarget.nodeId === node.id
+      ? dropTarget.position === 'before'
+        ? styles.dropBefore
+        : dropTarget.position === 'after'
+          ? styles.dropAfter
+          : styles.dropInside
+      : '';
 
   return (
     <>
       {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events -- layer rows use click for selection, keyboard handled at panel level */}
       <div
-        className={`${styles.layerRow} ${selected ? styles.selected : ''}`}
+        className={`${styles.layerRow} ${selected ? styles.selected : ''} ${isDragging ? styles.dragging : ''} ${dropClass}`}
         style={{ paddingLeft: `${12 + depth * 16}px` }}
         role="button"
         tabIndex={0}
         aria-label={`Layer: ${node.name}`}
         aria-pressed={selected}
-        onClick={(e) => onSelect(node.id, e.shiftKey)}
+        onClick={(e) => onSelect(node.id, e)}
         onContextMenu={(e) => onContextMenu(node.id, e)}
+        onPointerDown={(e) => onPointerDown(node.id, e)}
         data-testid={`layer-row-${node.id}`}
+        data-layer-id={node.id}
       >
         {hasChildren && (
           <button
@@ -124,6 +177,7 @@ function LayerRow({
               e.stopPropagation();
               setExpanded(!expanded);
             }}
+            onPointerDown={(e) => e.stopPropagation()}
             aria-label={expanded ? 'Collapse group' : 'Expand group'}
           >
             <svg
@@ -153,6 +207,7 @@ function LayerRow({
               e.stopPropagation();
               onToggleVisibility(node.id);
             }}
+            onPointerDown={(e) => e.stopPropagation()}
             title="Toggle visibility"
             aria-label={node.visible ? 'Hide layer' : 'Show layer'}
           >
@@ -174,6 +229,7 @@ function LayerRow({
               e.stopPropagation();
               onToggleLock(node.id);
             }}
+            onPointerDown={(e) => e.stopPropagation()}
             title="Toggle lock"
             aria-label={node.locked ? 'Unlock layer' : 'Lock layer'}
           >
@@ -204,6 +260,9 @@ function LayerRow({
             onContextMenu={onContextMenu}
             isRenaming={false}
             onRenameCommit={onRenameCommit}
+            onPointerDown={onPointerDown}
+            draggedIds={isDragging ? new Set<string>() : null}
+            dropTarget={dropTarget}
           />
         ))}
     </>
@@ -220,15 +279,21 @@ function LayerRowById({
   onContextMenu,
   isRenaming,
   onRenameCommit,
+  onPointerDown,
+  draggedIds,
+  dropTarget,
 }: {
   nodeId: string;
   depth: number;
-  onSelect: (id: string, shiftKey: boolean) => void;
+  onSelect: (id: string, e: React.MouseEvent) => void;
   onToggleVisibility: (id: string) => void;
   onToggleLock: (id: string) => void;
   onContextMenu: (id: string, e: React.MouseEvent) => void;
   isRenaming: boolean;
   onRenameCommit: (id: string, name: string) => void;
+  onPointerDown: (id: string, e: React.PointerEvent) => void;
+  draggedIds: Set<string> | null;
+  dropTarget: DropTarget | null;
 }) {
   const sceneGraph = useSceneGraph();
   const selectedNodeIds = useEditorStore((state) => state.selectedNodeIds);
@@ -241,11 +306,14 @@ function LayerRowById({
       depth={depth}
       selected={selectedNodeIds.has(node.id)}
       isRenaming={isRenaming}
+      isDragging={draggedIds !== null && draggedIds.has(node.id)}
+      dropTarget={dropTarget}
       onSelect={onSelect}
       onToggleVisibility={onToggleVisibility}
       onToggleLock={onToggleLock}
       onContextMenu={onContextMenu}
       onRenameCommit={onRenameCommit}
+      onPointerDown={onPointerDown}
     />
   );
 }
@@ -258,9 +326,12 @@ export function LayerPanel() {
   const sceneGraph = useSceneGraph();
   const selectedNodeIds = useEditorStore((state) => state.selectedNodeIds);
   const setSelection = useEditorStore((state) => state.setSelection);
-  const addToSelection = useEditorStore((state) => state.addToSelection);
+  const toggleSelection = useEditorStore((state) => state.toggleSelection);
+  const selectRange = useEditorStore((state) => state.selectRange);
   const duplicateSelection = useEditorStore((state) => state.duplicateSelection);
   const deleteSelection = useEditorStore((state) => state.deleteSelection);
+  const groupSelection = useEditorStore((state) => state.groupSelection);
+  const ungroupSelection = useEditorStore((state) => state.ungroupSelection);
 
   // Track scene graph version to re-render when nodes change
   const [, setVersion] = useState(0);
@@ -268,6 +339,18 @@ export function LayerPanel() {
     null
   );
   const [renamingNodeId, setRenamingNodeId] = useState<string | null>(null);
+
+  // Drag-and-drop state
+  const [dragState, setDragState] = useState<{
+    active: boolean;
+    draggedIds: Set<string>;
+    startX: number;
+    startY: number;
+  } | null>(null);
+  const [dropTarget, setDropTarget] = useState<DropTarget | null>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+  // Ref to track whether drag was initiated (prevents click from firing after drag)
+  const didDragRef = useRef(false);
 
   useEffect(() => {
     const increment = () => setVersion((v) => v + 1);
@@ -285,15 +368,26 @@ export function LayerPanel() {
 
   const rootNodes = sceneGraph.getRootNodes();
 
+  // ========================================================================
+  // Selection handlers
+  // ========================================================================
+
   const handleSelect = useCallback(
-    (id: string, shiftKey: boolean) => {
-      if (shiftKey) {
-        addToSelection(id);
+    (id: string, e: React.MouseEvent) => {
+      // Don't select if we just finished a drag
+      if (didDragRef.current) {
+        didDragRef.current = false;
+        return;
+      }
+      if (e.ctrlKey || e.metaKey) {
+        toggleSelection(id);
+      } else if (e.shiftKey) {
+        selectRange(id, sceneGraph);
       } else {
         setSelection([id]);
       }
     },
-    [setSelection, addToSelection]
+    [setSelection, toggleSelection, selectRange, sceneGraph]
   );
 
   const handleToggleVisibility = useCallback(
@@ -316,11 +410,15 @@ export function LayerPanel() {
     [sceneGraph]
   );
 
+  // ========================================================================
+  // Context menu
+  // ========================================================================
+
   const handleContextMenu = useCallback(
     (nodeId: string, e: React.MouseEvent) => {
       e.preventDefault();
       e.stopPropagation();
-      // Select the node if not already selected
+      // If right-clicked node is NOT in selection, replace selection
       if (!selectedNodeIds.has(nodeId)) {
         setSelection([nodeId]);
       }
@@ -343,6 +441,80 @@ export function LayerPanel() {
     const node = sceneGraph.getNode(nodeId);
     if (!node) return [];
 
+    const count = selectedNodeIds.size;
+    const isMulti = count > 1;
+
+    if (isMulti) {
+      // Batch context menu for multi-selection
+      // Determine majority visibility/lock state
+      const selectedNodes: Node[] = [];
+      for (const id of selectedNodeIds) {
+        const n = sceneGraph.getNode(id);
+        if (n) selectedNodes.push(n);
+      }
+      const allVisible = selectedNodes.every((n) => n.visible);
+      const allLocked = selectedNodes.every((n) => n.locked);
+      const hasGroup = selectedNodes.some((n) => n.type === 'group');
+
+      return [
+        {
+          id: 'rename',
+          label: 'Rename',
+          disabled: true,
+          onClick: () => {},
+        },
+        {
+          id: 'duplicate',
+          label: `Duplicate ${count} Layers`,
+          onClick: () => duplicateSelection(sceneGraph),
+        },
+        {
+          id: 'delete',
+          label: `Delete ${count} Layers`,
+          shortcut: 'Del',
+          danger: true,
+          onClick: () => deleteSelection(sceneGraph),
+        },
+        { type: 'separator' },
+        {
+          id: 'group',
+          label: `Group ${count} Layers`,
+          shortcut: 'Ctrl+G',
+          onClick: () => groupSelection(sceneGraph),
+        },
+        {
+          id: 'ungroup',
+          label: 'Ungroup',
+          shortcut: 'Ctrl+Shift+G',
+          disabled: !hasGroup,
+          onClick: () => ungroupSelection(sceneGraph),
+        },
+        { type: 'separator' },
+        {
+          id: 'toggle-visibility',
+          label: allVisible ? `Hide ${count} Layers` : `Show ${count} Layers`,
+          onClick: () => {
+            const newVisible = !allVisible;
+            for (const id of selectedNodeIds) {
+              sceneGraph.updateNode(id, { visible: newVisible });
+            }
+          },
+        },
+        {
+          id: 'toggle-lock',
+          label: allLocked ? `Unlock ${count} Layers` : `Lock ${count} Layers`,
+          onClick: () => {
+            const newLocked = !allLocked;
+            for (const id of selectedNodeIds) {
+              sceneGraph.updateNode(id, { locked: newLocked });
+            }
+          },
+        },
+      ];
+    }
+
+    // Single-selection context menu
+    const isGroup = node.type === 'group';
     return [
       {
         id: 'rename',
@@ -363,6 +535,21 @@ export function LayerPanel() {
       },
       { type: 'separator' },
       {
+        id: 'group',
+        label: 'Group',
+        shortcut: 'Ctrl+G',
+        disabled: true,
+        onClick: () => {},
+      },
+      {
+        id: 'ungroup',
+        label: 'Ungroup',
+        shortcut: 'Ctrl+Shift+G',
+        disabled: !isGroup,
+        onClick: () => ungroupSelection(sceneGraph),
+      },
+      { type: 'separator' },
+      {
         id: 'toggle-visibility',
         label: node.visible ? 'Hide' : 'Show',
         onClick: () => handleToggleVisibility(nodeId),
@@ -376,18 +563,180 @@ export function LayerPanel() {
   }, [
     contextMenu,
     sceneGraph,
+    selectedNodeIds,
     duplicateSelection,
     deleteSelection,
+    groupSelection,
+    ungroupSelection,
     handleToggleVisibility,
     handleToggleLock,
   ]);
+
+  // ========================================================================
+  // Drag-and-drop
+  // ========================================================================
+
+  const handlePointerDown = useCallback(
+    (id: string, e: React.PointerEvent) => {
+      // Only left button
+      if (e.button !== 0) return;
+
+      didDragRef.current = false;
+
+      // Determine which nodes to drag
+      let draggedIds: Set<string>;
+      if (selectedNodeIds.has(id)) {
+        // Drag all selected nodes
+        draggedIds = new Set(selectedNodeIds);
+      } else {
+        // Drag only this node
+        draggedIds = new Set([id]);
+      }
+
+      setDragState({
+        active: false,
+        draggedIds,
+        startX: e.clientX,
+        startY: e.clientY,
+      });
+    },
+    [selectedNodeIds]
+  );
+
+  const hitTestDropTarget = useCallback(
+    (clientY: number): DropTarget | null => {
+      const container = contentRef.current;
+      if (!container) return null;
+
+      const rows = container.querySelectorAll<HTMLElement>('[data-layer-id]');
+      for (const row of rows) {
+        const rect = row.getBoundingClientRect();
+        if (clientY < rect.top || clientY > rect.bottom) continue;
+
+        const nodeId = row.getAttribute('data-layer-id')!;
+        const relY = clientY - rect.top;
+        const fraction = relY / rect.height;
+
+        const node = sceneGraph.getNode(nodeId);
+        const isGroup = node?.type === 'group';
+
+        if (fraction < 0.25) {
+          return { nodeId, position: 'before' };
+        } else if (fraction > 0.75) {
+          return { nodeId, position: 'after' };
+        } else if (isGroup) {
+          return { nodeId, position: 'inside' };
+        } else {
+          return { nodeId, position: 'after' };
+        }
+      }
+      return null;
+    },
+    [sceneGraph]
+  );
+
+  const handlePointerMove = useCallback(
+    (e: React.PointerEvent) => {
+      if (!dragState) return;
+
+      if (!dragState.active) {
+        const dx = e.clientX - dragState.startX;
+        const dy = e.clientY - dragState.startY;
+        if (Math.abs(dx) + Math.abs(dy) < DRAG_THRESHOLD_PX) return;
+        setDragState({ ...dragState, active: true });
+        didDragRef.current = true;
+        return;
+      }
+
+      const target = hitTestDropTarget(e.clientY);
+      // Don't allow dropping on a dragged node
+      if (target && dragState.draggedIds.has(target.nodeId)) {
+        setDropTarget(null);
+      } else {
+        setDropTarget(target);
+      }
+    },
+    [dragState, hitTestDropTarget]
+  );
+
+  const handlePointerUp = useCallback(
+    (_e: React.PointerEvent) => {
+      if (!dragState || !dragState.active || !dropTarget) {
+        setDragState(null);
+        setDropTarget(null);
+        return;
+      }
+
+      // Get top-level dragged nodes (dedup children)
+      const topIds = getTopLevelDragIds([...dragState.draggedIds], (id) => sceneGraph.getNode(id));
+
+      // Determine target parent and index
+      const targetNode = sceneGraph.getNode(dropTarget.nodeId);
+      if (!targetNode) {
+        setDragState(null);
+        setDropTarget(null);
+        return;
+      }
+
+      let parentId: string | null;
+      let insertIndex: number;
+
+      if (dropTarget.position === 'inside') {
+        parentId = dropTarget.nodeId;
+        insertIndex = 0;
+      } else {
+        parentId = targetNode.parent;
+        // Find index of target in parent's children
+        const parentNode = parentId ? sceneGraph.getNode(parentId) : null;
+        const siblings = parentNode
+          ? parentNode.children
+          : sceneGraph.getRootNodes().map((n) => n.id);
+        const targetIndex = siblings.indexOf(dropTarget.nodeId);
+        insertIndex = dropTarget.position === 'before' ? targetIndex : targetIndex + 1;
+      }
+
+      // Execute moves
+      for (const id of topIds) {
+        try {
+          sceneGraph.moveNode(id, parentId, insertIndex);
+          // After inserting, subsequent nodes should go after
+          insertIndex++;
+        } catch {
+          // SceneGraph.moveNode throws on circular refs — skip
+        }
+      }
+
+      setDragState(null);
+      setDropTarget(null);
+    },
+    [dragState, dropTarget, sceneGraph]
+  );
+
+  const handlePointerLeave = useCallback(() => {
+    if (dragState?.active) {
+      setDropTarget(null);
+    }
+  }, [dragState]);
+
+  // ========================================================================
+  // Render
+  // ========================================================================
+
+  const draggedIdSet = dragState?.active ? dragState.draggedIds : null;
 
   return (
     <div className={styles.panel}>
       <div className={styles.header}>
         <h3 className={styles.title}>Layers</h3>
       </div>
-      <div className={styles.content}>
+      {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions -- drag container needs pointer events */}
+      <div
+        ref={contentRef}
+        className={styles.content}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerLeave={handlePointerLeave}
+      >
         {rootNodes.length === 0 ? (
           <div className={styles.emptyState} data-testid="layer-empty">
             No layers yet
@@ -400,11 +749,14 @@ export function LayerPanel() {
               depth={0}
               selected={selectedNodeIds.has(node.id)}
               isRenaming={renamingNodeId === node.id}
+              isDragging={draggedIdSet !== null && draggedIdSet.has(node.id)}
+              dropTarget={dropTarget}
               onSelect={handleSelect}
               onToggleVisibility={handleToggleVisibility}
               onToggleLock={handleToggleLock}
               onContextMenu={handleContextMenu}
               onRenameCommit={handleRenameCommit}
+              onPointerDown={handlePointerDown}
             />
           ))
         )}

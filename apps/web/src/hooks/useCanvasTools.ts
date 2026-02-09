@@ -4,9 +4,16 @@
  */
 
 import { useEffect, useRef, useCallback, useState } from 'react';
-import { ToolManager, SceneGraph, Camera, PenTool, DirectSelectionTool } from '@quar/core';
+import {
+  ToolManager,
+  SceneGraph,
+  Camera,
+  PenTool,
+  DirectSelectionTool,
+  SelectionTool,
+} from '@quar/core';
 import type { TransformType } from '@quar/core';
-import type { CanvasPointerEvent, Node, PathNode, PathPoint, Vector2 } from '@quar/types';
+import type { CanvasPointerEvent, Node, PathNode, PathPoint, Rect, Vector2 } from '@quar/types';
 import { useEditorStore } from '../stores/editorStore';
 
 // ============================================================================
@@ -51,6 +58,8 @@ export interface UseCanvasToolsReturn {
   directSelectionPoints: Array<{ nodeId: string; pointIndex: number }>;
   /** All visible path nodes (for DirectSelection overlay) */
   directSelectionPathNodes: PathNode[];
+  /** Current marquee selection rectangle in world coordinates (null when not marquee-selecting) */
+  marqueeRect: Rect | null;
 }
 
 // ============================================================================
@@ -104,6 +113,9 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
   // Track PenTool state for overlay
   const [penToolPath, setPenToolPath] = useState<PathPoint[]>([]);
   const [isPenToolDrawing, setIsPenToolDrawing] = useState(false);
+
+  // Track marquee selection rect for overlay
+  const [marqueeRect, setMarqueeRect] = useState<Rect | null>(null);
 
   // Track DirectSelectionTool state for overlay
   const [isDirectSelectionActive, setIsDirectSelectionActive] = useState(false);
@@ -228,6 +240,20 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [camera]);
 
+  // Sync marquee rect state for overlay
+  const syncMarqueeState = useCallback(() => {
+    if (!toolManagerRef.current) {
+      setMarqueeRect(null);
+      return;
+    }
+    const tool = toolManagerRef.current.getActiveTool();
+    if (tool?.type === 'selection') {
+      setMarqueeRect((tool as SelectionTool).getMarqueeRect());
+    } else {
+      setMarqueeRect(null);
+    }
+  }, []);
+
   // Sync PenTool path state for overlay
   const syncPenToolState = useCallback(() => {
     if (!toolManagerRef.current) return;
@@ -297,8 +323,9 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
       // Sync tool overlay state
       syncPenToolState();
       syncDirectSelectionState();
+      syncMarqueeState();
     },
-    [setIsDrawing, syncPenToolState, syncDirectSelectionState]
+    [setIsDrawing, syncPenToolState, syncDirectSelectionState, syncMarqueeState]
   );
 
   const handlePointerMove = useCallback(
@@ -318,8 +345,9 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
       // Sync tool overlay state during drag
       syncPenToolState();
       syncDirectSelectionState();
+      syncMarqueeState();
     },
-    [syncPenToolState, syncDirectSelectionState]
+    [syncPenToolState, syncDirectSelectionState, syncMarqueeState]
   );
 
   const handlePointerUp = useCallback(
@@ -337,8 +365,9 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
       // Sync tool overlay state
       syncPenToolState();
       syncDirectSelectionState();
+      syncMarqueeState();
     },
-    [setIsDrawing, syncPenToolState, syncDirectSelectionState]
+    [setIsDrawing, syncPenToolState, syncDirectSelectionState, syncMarqueeState]
   );
 
   const handleKeyDown = useCallback(
@@ -409,5 +438,6 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
     isDirectSelectionActive,
     directSelectionPoints,
     directSelectionPathNodes,
+    marqueeRect,
   };
 }

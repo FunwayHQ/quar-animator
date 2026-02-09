@@ -233,17 +233,19 @@
   background: var(--color-bg-active);
 }
 
-/* Drop target indicator */
-.layerRow.dropTarget::after {
-  content: '';
-  position: absolute;
-  left: var(--space-md);
-  right: var(--space-md);
-  bottom: -1px;
-  height: 2px;
-  background: var(--color-accent-primary);
-  border-radius: var(--radius-full);
-  box-shadow: 0 0 8px var(--color-accent-primary-glow);
+/* Drop target indicators */
+.layerRow.dropBefore {
+  box-shadow: 0 -2px 0 0 var(--color-accent-primary);
+}
+
+.layerRow.dropAfter {
+  box-shadow: 0 2px 0 0 var(--color-accent-primary);
+}
+
+.layerRow.dropInside {
+  background: rgba(168, 85, 247, 0.2);
+  outline: 1px solid var(--color-accent-primary);
+  outline-offset: -1px;
 }
 
 /* Inline rename input */

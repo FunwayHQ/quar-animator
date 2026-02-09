@@ -7,7 +7,7 @@ import { create } from 'zustand';
 import type { ToolType, Fill, Stroke, Color, Node, Timeline, EasingFunction } from '@quar/types';
 import type { KeyframeClipboard } from '@quar/animation';
 import { createTimeline, KeyframeManager } from '@quar/animation';
-import { DEFAULT_ONION_SKIN_SETTINGS } from '@quar/core';
+import { DEFAULT_ONION_SKIN_SETTINGS, createGroupNode } from '@quar/core';
 import type { OnionSkinSettings } from '@quar/core';
 
 // ============================================================================
@@ -19,7 +19,9 @@ interface SceneGraphLike {
   getRootNodes(): Node[];
   addNode(node: Node, parentId?: string): void;
   removeNode(id: string): void;
+  moveNode(id: string, newParentId: string | null, index?: number): void;
   getDescendants(id: string): Node[];
+  traverse(callback: (node: Node, depth: number) => boolean | void): void;
 }
 
 // ============================================================================
@@ -76,12 +78,14 @@ export interface EditorStore {
 
   // Selection state
   selectedNodeIds: Set<string>;
+  lastSelectedNodeId: string | null;
   setSelection: (ids: string[]) => void;
   addToSelection: (id: string) => void;
   removeFromSelection: (id: string) => void;
   toggleSelection: (id: string) => void;
   clearSelection: () => void;
   isSelected: (id: string) => boolean;
+  selectRange: (toId: string, sceneGraph: SceneGraphLike) => void;
 
   // Default fill/stroke for new shapes
   defaultFill: Fill;
@@ -116,6 +120,8 @@ export interface EditorStore {
   duplicateSelection: (sceneGraph: SceneGraphLike) => void;
   deleteSelection: (sceneGraph: SceneGraphLike) => void;
   selectAll: (sceneGraph: SceneGraphLike) => void;
+  groupSelection: (sceneGraph: SceneGraphLike) => void;
+  ungroupSelection: (sceneGraph: SceneGraphLike) => void;
 
   // Timeline state
   currentFrame: number;
@@ -199,10 +205,16 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
   // Selection state
   selectedNodeIds: new Set<string>(),
-  setSelection: (ids: string[]) => set({ selectedNodeIds: new Set(ids) }),
+  lastSelectedNodeId: null,
+  setSelection: (ids: string[]) =>
+    set({
+      selectedNodeIds: new Set(ids),
+      lastSelectedNodeId: ids.length > 0 ? ids[ids.length - 1] : null,
+    }),
   addToSelection: (id: string) =>
     set((state) => ({
       selectedNodeIds: new Set([...state.selectedNodeIds, id]),
+      lastSelectedNodeId: id,
     })),
   removeFromSelection: (id: string) =>
     set((state) => {
@@ -215,13 +227,38 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       const newSet = new Set(state.selectedNodeIds);
       if (newSet.has(id)) {
         newSet.delete(id);
+        return { selectedNodeIds: newSet };
       } else {
         newSet.add(id);
+        return { selectedNodeIds: newSet, lastSelectedNodeId: id };
       }
-      return { selectedNodeIds: newSet };
     }),
-  clearSelection: () => set({ selectedNodeIds: new Set<string>() }),
+  clearSelection: () => set({ selectedNodeIds: new Set<string>(), lastSelectedNodeId: null }),
   isSelected: (id: string) => get().selectedNodeIds.has(id),
+  selectRange: (toId: string, sceneGraph: SceneGraphLike) => {
+    const { lastSelectedNodeId } = get();
+    if (!lastSelectedNodeId) {
+      // No anchor — just select the target
+      set({ selectedNodeIds: new Set([toId]), lastSelectedNodeId: toId });
+      return;
+    }
+    // Flatten scene graph in depth-first order
+    const flatOrder: string[] = [];
+    sceneGraph.traverse((node) => {
+      flatOrder.push(node.id);
+    });
+    const fromIndex = flatOrder.indexOf(lastSelectedNodeId);
+    const toIndex = flatOrder.indexOf(toId);
+    if (fromIndex === -1 || toIndex === -1) {
+      set({ selectedNodeIds: new Set([toId]), lastSelectedNodeId: toId });
+      return;
+    }
+    const start = Math.min(fromIndex, toIndex);
+    const end = Math.max(fromIndex, toIndex);
+    const rangeIds = flatOrder.slice(start, end + 1);
+    set({ selectedNodeIds: new Set(rangeIds) });
+    // Keep lastSelectedNodeId unchanged (anchor stays)
+  },
 
   // Default fill/stroke
   defaultFill: DEFAULT_FILL,
@@ -308,6 +345,84 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       }
     }
     set({ selectedNodeIds: new Set(allIds) });
+  },
+  groupSelection: (sceneGraph: SceneGraphLike) => {
+    const { selectedNodeIds } = get();
+    if (selectedNodeIds.size < 2) return;
+
+    // Flatten scene graph order, filter to selected IDs
+    const orderedSelected: string[] = [];
+    sceneGraph.traverse((node) => {
+      if (selectedNodeIds.has(node.id)) {
+        orderedSelected.push(node.id);
+      }
+    });
+    if (orderedSelected.length < 2) return;
+
+    // Find common parent among all selected nodes
+    const firstNode = sceneGraph.getNode(orderedSelected[0]);
+    if (!firstNode) return;
+    const commonParent = orderedSelected.every((id) => {
+      const n = sceneGraph.getNode(id);
+      return n && n.parent === firstNode.parent;
+    })
+      ? firstNode.parent
+      : null;
+
+    // Find insertion index: position of the first selected node among its siblings
+    const siblings = commonParent
+      ? (sceneGraph.getNode(commonParent)?.children ?? [])
+      : sceneGraph.getRootNodes().map((n) => n.id);
+    const firstIndex = siblings.indexOf(orderedSelected[0]);
+    const insertIndex = firstIndex !== -1 ? firstIndex : 0;
+
+    // Create and add the group node
+    const groupId = `group_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const group = createGroupNode(groupId, 'Group');
+    sceneGraph.addNode(group, commonParent ?? undefined);
+
+    // Move group to the correct insertion index
+    sceneGraph.moveNode(groupId, commonParent, insertIndex);
+
+    // Move each selected node (in scene-graph order) into the group
+    for (const id of orderedSelected) {
+      sceneGraph.moveNode(id, groupId);
+    }
+
+    set({ selectedNodeIds: new Set([groupId]), isDirty: true });
+  },
+  ungroupSelection: (sceneGraph: SceneGraphLike) => {
+    const { selectedNodeIds } = get();
+    if (selectedNodeIds.size === 0) return;
+
+    const movedChildIds: string[] = [];
+
+    for (const id of selectedNodeIds) {
+      const node = sceneGraph.getNode(id);
+      if (!node || node.type !== 'group') continue;
+
+      const parentId = node.parent;
+      // Find the group's index among its siblings
+      const siblings = parentId
+        ? (sceneGraph.getNode(parentId)?.children ?? [])
+        : sceneGraph.getRootNodes().map((n) => n.id);
+      const groupIndex = siblings.indexOf(id);
+      const insertAt = groupIndex !== -1 ? groupIndex : siblings.length;
+
+      // Move children out to the group's parent, preserving order
+      const childIds = [...node.children];
+      for (let i = 0; i < childIds.length; i++) {
+        sceneGraph.moveNode(childIds[i], parentId ?? null, insertAt + i);
+        movedChildIds.push(childIds[i]);
+      }
+
+      // Remove the now-empty group
+      sceneGraph.removeNode(id);
+    }
+
+    if (movedChildIds.length > 0) {
+      set({ selectedNodeIds: new Set(movedChildIds), isDirty: true });
+    }
   },
 
   // Timeline state
@@ -512,6 +627,10 @@ export const useDeleteSelection = (): ((sceneGraph: SceneGraphLike) => void) =>
   useEditorStore((state: EditorStore) => state.deleteSelection);
 export const useSelectAll = (): ((sceneGraph: SceneGraphLike) => void) =>
   useEditorStore((state: EditorStore) => state.selectAll);
+export const useGroupSelection = (): ((sceneGraph: SceneGraphLike) => void) =>
+  useEditorStore((state: EditorStore) => state.groupSelection);
+export const useUngroupSelection = (): ((sceneGraph: SceneGraphLike) => void) =>
+  useEditorStore((state: EditorStore) => state.ungroupSelection);
 
 // Timeline selectors
 export const useCurrentFrame = (): number =>

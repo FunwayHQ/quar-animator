@@ -51,10 +51,10 @@ describe('Projects', () => {
     mockDeleteProject.mockResolvedValue(undefined);
   });
 
-  it('should render the page title and import button', async () => {
+  it('should render the page logo and import button', async () => {
     render(<Projects />);
     await waitFor(() => {
-      expect(screen.getByText('Quar Animator')).toBeInTheDocument();
+      expect(screen.getByAltText('Quar Animator')).toBeInTheDocument();
     });
     expect(screen.getByTestId('import-button')).toBeInTheDocument();
   });
