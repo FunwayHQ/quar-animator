@@ -108,6 +108,8 @@ module.exports = {
         'apps/web/src/stores/**/*.ts',
         'apps/web/src/contexts/**/*.tsx',
         'apps/web/src/components/canvas/**/*.tsx',
+        'apps/web/src/components/common/ColorPicker.tsx',
+        'apps/web/src/components/common/GradientEditor.tsx',
         'apps/web/src/components/layout/Canvas.tsx',
         'apps/web/src/components/layout/Toolbar.tsx',
         'apps/web/src/components/layout/LayerPanel.tsx',

@@ -95,16 +95,13 @@ export function GradientEditor({
 
   // ---- Stop dragging ----
 
-  const handleStopPointerDown = useCallback(
-    (e: React.PointerEvent, index: number) => {
-      e.preventDefault();
-      e.stopPropagation();
-      draggingStopRef.current = index;
-      setSelectedStopIndex(index);
-      (e.target as HTMLElement).setPointerCapture(e.pointerId);
-    },
-    []
-  );
+  const handleStopPointerDown = useCallback((e: React.PointerEvent, index: number) => {
+    e.preventDefault();
+    e.stopPropagation();
+    draggingStopRef.current = index;
+    setSelectedStopIndex(index);
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+  }, []);
 
   const handleStopPointerMove = useCallback(
     (e: React.PointerEvent) => {
@@ -247,17 +244,18 @@ export function GradientEditor({
 
   // ---- Context menu on stop handles ----
 
-  const [stopContextMenu, setStopContextMenu] = useState<{ x: number; y: number; index: number } | null>(null);
+  const [stopContextMenu, setStopContextMenu] = useState<{
+    x: number;
+    y: number;
+    index: number;
+  } | null>(null);
 
-  const handleStopContextMenu = useCallback(
-    (e: React.MouseEvent, index: number) => {
-      e.preventDefault();
-      e.stopPropagation();
-      setSelectedStopIndex(index);
-      setStopContextMenu({ x: e.clientX, y: e.clientY, index });
-    },
-    []
-  );
+  const handleStopContextMenu = useCallback((e: React.MouseEvent, index: number) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setSelectedStopIndex(index);
+    setStopContextMenu({ x: e.clientX, y: e.clientY, index });
+  }, []);
 
   // Close context menu on outside click
   useEffect(() => {
@@ -295,7 +293,10 @@ export function GradientEditor({
           <button
             key={type}
             className={`${styles.typeTab} ${fillType === type ? styles.typeTabActive : ''}`}
-            onClick={() => { onFillTypeChange(type); if (type !== 'solid') onActivate?.(); }}
+            onClick={() => {
+              onFillTypeChange(type);
+              if (type !== 'solid') onActivate?.();
+            }}
             data-testid={`fill-type-${type}`}
           >
             {type.charAt(0).toUpperCase() + type.slice(1)}
@@ -311,13 +312,15 @@ export function GradientEditor({
         onPointerMove={handleStopPointerMove}
         onPointerUp={handleStopPointerUp}
         onKeyDown={handleKeyDown}
+        role="slider"
+        aria-label="Gradient stops"
+        aria-valuenow={selectedStop ? Math.round(selectedStop.offset * 100) : 0}
+        aria-valuemin={0}
+        aria-valuemax={100}
         tabIndex={0}
         data-testid="gradient-bar"
       >
-        <div
-          className={styles.gradientPreview}
-          style={{ background: gradientToCSS(gradient) }}
-        />
+        <div className={styles.gradientPreview} style={{ background: gradientToCSS(gradient) }} />
         {/* Stop handles */}
         {gradient.stops.map((stop, index) => (
           <div
@@ -345,6 +348,15 @@ export function GradientEditor({
               className={styles.stopColorSwatch}
               style={{ '--swatch-color': colorToHex(selectedStop.color) } as React.CSSProperties}
               onClick={openStopColorPicker}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  openStopColorPicker();
+                }
+              }}
+              role="button"
+              tabIndex={0}
+              aria-label={`Stop color: ${colorToHex(selectedStop.color)}`}
               data-testid="stop-color-swatch"
             />
             <button
