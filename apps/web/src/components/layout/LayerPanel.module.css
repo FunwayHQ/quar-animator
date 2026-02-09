@@ -118,15 +118,19 @@
   background: var(--color-accent-primary);
 }
 
-.expandButton {
+.expandButton,
+.expandSpacer {
   display: flex;
   align-items: center;
   justify-content: center;
   width: 18px;
   height: 18px;
+  flex-shrink: 0;
+}
+
+.expandButton {
   color: var(--color-text-disabled);
   transition: all var(--duration-fast) var(--easing-default);
-  flex-shrink: 0;
 }
 
 .expandButton:hover {

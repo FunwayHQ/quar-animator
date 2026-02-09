@@ -170,7 +170,7 @@ function LayerRow({
         data-testid={`layer-row-${node.id}`}
         data-layer-id={node.id}
       >
-        {hasChildren && (
+        {hasChildren ? (
           <button
             className={styles.expandButton}
             onClick={(e) => {
@@ -190,7 +190,9 @@ function LayerRow({
               <path d="M4 2l4 4-4 4" stroke="currentColor" strokeWidth="1.5" />
             </svg>
           </button>
-        )}
+        ) : depth > 0 ? (
+          <span className={styles.expandSpacer} />
+        ) : null}
         <span className={styles.layerIcon}>{nodeTypeIcon(node.type)}</span>
         {isRenaming ? (
           <InlineRenameInput
