@@ -418,7 +418,12 @@ export function PropertiesPanel() {
         fills[index] = { ...fill, type: 'solid', color };
         // Clear gradient editing if this fill was being edited
         const editing = useEditorStore.getState().editingGradient;
-        if (editing && editing.nodeId === selectedId && editing.fillIndex === index && editing.source === 'fill') {
+        if (
+          editing &&
+          editing.nodeId === selectedId &&
+          editing.fillIndex === index &&
+          editing.source === 'fill'
+        ) {
           useEditorStore.getState().clearEditingGradient();
         }
       } else {
@@ -605,7 +610,12 @@ export function PropertiesPanel() {
         strokes[index] = { ...rest, color };
         // Clear gradient editing if this stroke was being edited
         const editing = useEditorStore.getState().editingGradient;
-        if (editing && editing.nodeId === selectedId && editing.fillIndex === index && editing.source === 'stroke') {
+        if (
+          editing &&
+          editing.nodeId === selectedId &&
+          editing.fillIndex === index &&
+          editing.source === 'stroke'
+        ) {
           useEditorStore.getState().clearEditingGradient();
         }
       } else {
@@ -773,23 +783,24 @@ export function PropertiesPanel() {
 
   // Stable ref for current values — updated each render, read by wheel handlers
   const numericRef = useRef({
-    posX: 0, posY: 0, rotation: 0, isGroup: false,
+    posX: 0,
+    posY: 0,
+    rotation: 0,
+    isGroup: false,
     handlePositionChange: handlePositionChange,
     handleRotationChange: handleRotationChange,
   });
 
   // Non-passive wheel listeners for position/rotation inputs
   useEffect(() => {
-    const makeHandler = (
-      getValue: () => number,
-      onChange: (v: string) => void,
-      checkGroup: boolean
-    ) => (e: WheelEvent) => {
-      if (checkGroup && numericRef.current.isGroup) return;
-      e.preventDefault();
-      const delta = (e.deltaY < 0 ? 1 : -1) * (e.shiftKey ? 10 : 1);
-      onChange(String(getValue() + delta));
-    };
+    const makeHandler =
+      (getValue: () => number, onChange: (v: string) => void, checkGroup: boolean) =>
+      (e: WheelEvent) => {
+        if (checkGroup && numericRef.current.isGroup) return;
+        e.preventDefault();
+        const delta = (e.deltaY < 0 ? 1 : -1) * (e.shiftKey ? 10 : 1);
+        onChange(String(getValue() + delta));
+      };
 
     const entries: Array<[HTMLElement, (e: WheelEvent) => void]> = [];
 
@@ -851,6 +862,9 @@ export function PropertiesPanel() {
     );
   }
 
+  // After the early return above, selectedId is guaranteed non-null
+  const nodeId = selectedId as string;
+
   const isGroup = node.type === 'group';
   const size = getNodeSize(node, sceneGraph);
   // Display top-left corner position (not center)
@@ -865,8 +879,12 @@ export function PropertiesPanel() {
 
   // Keep numericRef in sync for wheel handlers
   numericRef.current = {
-    posX: pos.x, posY: pos.y, rotation, isGroup,
-    handlePositionChange, handleRotationChange,
+    posX: pos.x,
+    posY: pos.y,
+    rotation,
+    isGroup,
+    handlePositionChange,
+    handleRotationChange,
   };
 
   const fills = getNodeFills(node);
@@ -914,12 +932,7 @@ export function PropertiesPanel() {
                   Position
                 </label>
                 <KeyframeIndicator
-                  state={getKeyframeState(
-                    timeline,
-                    selectedId!,
-                    'transform.position.x',
-                    currentFrame
-                  )}
+                  state={getKeyframeState(timeline, nodeId, 'transform.position.x', currentFrame)}
                   onToggle={() => toggleKeyframe('transform.position.x', pos.x)}
                 />
               </div>
@@ -939,7 +952,8 @@ export function PropertiesPanel() {
                     readOnly={isGroup}
                     onChange={(e) => handlePositionChange('x', e.target.value)}
                     onKeyDown={(e) => {
-                      if (!isGroup) handleNumericInputKeyDown(e, pos.x, (v) => handlePositionChange('x', v));
+                      if (!isGroup)
+                        handleNumericInputKeyDown(e, pos.x, (v) => handlePositionChange('x', v));
                     }}
                   />
                 </div>
@@ -957,7 +971,8 @@ export function PropertiesPanel() {
                     readOnly={isGroup}
                     onChange={(e) => handlePositionChange('y', e.target.value)}
                     onKeyDown={(e) => {
-                      if (!isGroup) handleNumericInputKeyDown(e, pos.y, (v) => handlePositionChange('y', v));
+                      if (!isGroup)
+                        handleNumericInputKeyDown(e, pos.y, (v) => handlePositionChange('y', v));
                     }}
                   />
                 </div>
@@ -969,7 +984,7 @@ export function PropertiesPanel() {
                   Size
                 </label>
                 <KeyframeIndicator
-                  state={getKeyframeState(timeline, selectedId!, sizePaths.w, currentFrame)}
+                  state={getKeyframeState(timeline, nodeId, sizePaths.w, currentFrame)}
                   onToggle={() => toggleKeyframe(sizePaths.w, size.width)}
                 />
               </div>
@@ -1031,12 +1046,7 @@ export function PropertiesPanel() {
                       <div className={styles.propertyHeader}>
                         <span className={styles.propertyLabel}>Corner Radius</span>
                         <KeyframeIndicator
-                          state={getKeyframeState(
-                            timeline,
-                            selectedId!,
-                            'cornerRadius.0',
-                            currentFrame
-                          )}
+                          state={getKeyframeState(timeline, nodeId, 'cornerRadius.0', currentFrame)}
                           onToggle={() => toggleKeyframe('cornerRadius.0', corners[0])}
                         />
                       </div>
@@ -1152,12 +1162,7 @@ export function PropertiesPanel() {
                     <div className={styles.propertyHeader}>
                       <span className={styles.propertyLabel}>Corner Radius</span>
                       <KeyframeIndicator
-                        state={getKeyframeState(
-                          timeline,
-                          selectedId!,
-                          'cornerRadius',
-                          currentFrame
-                        )}
+                        state={getKeyframeState(timeline, nodeId, 'cornerRadius', currentFrame)}
                         onToggle={() => toggleKeyframe('cornerRadius', polyRadius)}
                       />
                     </div>
@@ -1187,12 +1192,7 @@ export function PropertiesPanel() {
                   Rotation
                 </label>
                 <KeyframeIndicator
-                  state={getKeyframeState(
-                    timeline,
-                    selectedId!,
-                    'transform.rotation',
-                    currentFrame
-                  )}
+                  state={getKeyframeState(timeline, nodeId, 'transform.rotation', currentFrame)}
                   onToggle={() => toggleKeyframe('transform.rotation', rotation)}
                 />
               </div>
@@ -1262,7 +1262,7 @@ export function PropertiesPanel() {
                           <KeyframeIndicator
                             state={getKeyframeState(
                               timeline,
-                              selectedId!,
+                              nodeId,
                               `fills.${index}.color`,
                               currentFrame
                             )}
@@ -1387,7 +1387,7 @@ export function PropertiesPanel() {
                           <KeyframeIndicator
                             state={getKeyframeState(
                               timeline,
-                              selectedId!,
+                              nodeId,
                               `strokes.${index}.color`,
                               currentFrame
                             )}
@@ -1526,7 +1526,7 @@ export function PropertiesPanel() {
                   Opacity
                 </label>
                 <KeyframeIndicator
-                  state={getKeyframeState(timeline, selectedId!, 'opacity', currentFrame)}
+                  state={getKeyframeState(timeline, nodeId, 'opacity', currentFrame)}
                   onToggle={() => toggleKeyframe('opacity', node.opacity)}
                 />
               </div>
