@@ -65,10 +65,7 @@ export class SelectionManager {
     for (const id of selectedIds) {
       const node = sceneGraph.getNode(id);
       if (node && node.visible) {
-        const nodeBounds = this.getNodeBounds(node);
-        if (nodeBounds) {
-          bounds.push(nodeBounds);
-        }
+        this.collectNodeBounds(node, sceneGraph, bounds);
       }
     }
 
@@ -133,6 +130,13 @@ export class SelectionManager {
       const node = sceneGraph.getNode(nodeId);
       if (!node || !node.visible) return null;
 
+      // Groups: compute bounds from descendants using world transforms
+      if (node.type === 'group') {
+        const bounds = this.getGroupBounds(node, sceneGraph);
+        if (!bounds) return null;
+        return { bounds, rotation: 0 };
+      }
+
       const nodeBounds = this.getNodeBoundsUnrotated(node);
       if (!nodeBounds) return null;
 
@@ -149,6 +153,44 @@ export class SelectionManager {
     const bounds = this.getSelectionBounds(selectedIds, sceneGraph);
     if (!bounds) return null;
     return { bounds, rotation: 0 };
+  }
+
+  // --------------------------------------------------------------------------
+  // Group Bounds
+  // --------------------------------------------------------------------------
+
+  /**
+   * Collect bounds for a node. For groups, recurse into descendants.
+   * Uses world-transform-based AABB for all leaf nodes.
+   */
+  private collectNodeBounds(node: Node, sceneGraph: SceneGraph, out: Rect[]): void {
+    if (node.type === 'group') {
+      const descendants = sceneGraph.getDescendants(node.id);
+      for (const desc of descendants) {
+        if (!desc.visible) continue;
+        const worldTransform = sceneGraph.getWorldTransform(desc.id);
+        const localBounds = this.getLocalBounds(desc);
+        if (localBounds) {
+          out.push(transformBoundsToWorld(localBounds, worldTransform));
+        }
+      }
+    } else {
+      const nodeBounds = this.getNodeBounds(node);
+      if (nodeBounds) {
+        out.push(nodeBounds);
+      }
+    }
+  }
+
+  /**
+   * Get combined bounds for a group node from its descendants (world-space AABB).
+   */
+  private getGroupBounds(groupNode: Node, sceneGraph: SceneGraph): SelectionBounds | null {
+    const rects: Rect[] = [];
+    this.collectNodeBounds(groupNode, sceneGraph, rects);
+    if (rects.length === 0) return null;
+    const unionRect = this.unionBounds(rects);
+    return { rect: unionRect, center: rect.center(unionRect) };
   }
 
   // --------------------------------------------------------------------------
