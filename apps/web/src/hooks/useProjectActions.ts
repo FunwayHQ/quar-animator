@@ -22,6 +22,7 @@ import {
   downloadProjectFile,
   uploadProjectFile,
 } from '../services/projectSerializer';
+import { importSvg } from '@quar/core';
 import type { ProjectListItem } from '../services/projectStorage';
 
 // ============================================================================
@@ -49,6 +50,7 @@ export interface ProjectActions {
   openProject: (id: string) => Promise<void>;
   downloadProject: () => void;
   importProject: () => Promise<void>;
+  importSvg: () => void;
   deleteProject: (id: string) => Promise<void>;
   listProjects: () => Promise<ProjectListItem[]>;
 }
@@ -221,6 +223,42 @@ export function useProjectActions(options: UseProjectActionsOptions = {}): Proje
     }
   }, [sceneGraph, applyEditorState]);
 
+  // ------ Import SVG file ------
+  const importSvgFile = useCallback(() => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.svg,image/svg+xml';
+    input.onchange = () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        const svgString = reader.result as string;
+        let idCounter = Date.now();
+        const generateId = () => `node_${idCounter++}`;
+        try {
+          const result = importSvg(svgString, sceneGraph, generateId, {
+            centerAtOrigin: true,
+            selectAfterImport: true,
+          });
+          if (result.rootIds.length > 0) {
+            useEditorStore.setState({ selectedNodeIds: new Set(result.rootIds) });
+            toast.success(`Imported ${result.nodes.length} element${result.nodes.length === 1 ? '' : 's'} from SVG`);
+          }
+          if (result.warnings.length > 0) {
+            for (const w of result.warnings) {
+              toast.info(w);
+            }
+          }
+        } catch {
+          toast.error('Failed to import SVG file');
+        }
+      };
+      reader.readAsText(file);
+    };
+    input.click();
+  }, [sceneGraph]);
+
   // ------ Delete Project ------
   const deleteProjectAction = useCallback(async (id: string) => {
     await dbDelete(id);
@@ -307,6 +345,7 @@ export function useProjectActions(options: UseProjectActionsOptions = {}): Proje
     openProject,
     downloadProject,
     importProject,
+    importSvg: importSvgFile,
     deleteProject: deleteProjectAction,
     listProjects: listProjectsAction,
   };

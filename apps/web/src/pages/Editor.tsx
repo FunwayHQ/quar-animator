@@ -69,6 +69,7 @@ function EditorInner() {
       onSaveAs: handleSaveAs,
       onNew: () => projectActions.newProject(),
       onOpen: handleOpen,
+      onImportSvg: () => projectActions.importSvg(),
     }),
     [projectActions, handleSaveAs, handleOpen]
   );

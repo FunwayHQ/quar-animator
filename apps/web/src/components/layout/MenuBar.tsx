@@ -105,6 +105,12 @@ export function MenuBar({ projectActions }: MenuBarProps) {
     void projectActions.importProject();
   }, [projectActions]);
 
+  const handleImportSvg = useCallback(() => {
+    setFileMenuOpen(false);
+    if (!projectActions) return;
+    projectActions.importSvg();
+  }, [projectActions]);
+
   // Project list dialog actions
   const handleOpenProject = useCallback(
     async (id: string) => {
@@ -176,6 +182,10 @@ export function MenuBar({ projectActions }: MenuBarProps) {
                 </button>
                 <button className={styles.dropdownItem} role="menuitem" onClick={handleImport}>
                   <span className={styles.dropdownLabel}>Import .quar...</span>
+                </button>
+                <button className={styles.dropdownItem} role="menuitem" onClick={handleImportSvg}>
+                  <span className={styles.dropdownLabel}>Import SVG...</span>
+                  <span className={styles.dropdownShortcut}>Ctrl+I</span>
                 </button>
               </div>
             )}

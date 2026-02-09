@@ -10,6 +10,7 @@ export interface ProjectShortcutCallbacks {
   onSaveAs: () => void;
   onNew: () => void;
   onOpen: () => void;
+  onImportSvg?: () => void;
 }
 
 export function useProjectShortcuts(callbacks: ProjectShortcutCallbacks) {
@@ -48,6 +49,13 @@ export function useProjectShortcuts(callbacks: ProjectShortcutCallbacks) {
           if (!event.shiftKey) {
             event.preventDefault();
             callbacks.onOpen();
+          }
+          break;
+
+        case 'i':
+          if (!event.shiftKey && callbacks.onImportSvg) {
+            event.preventDefault();
+            callbacks.onImportSvg();
           }
           break;
       }
