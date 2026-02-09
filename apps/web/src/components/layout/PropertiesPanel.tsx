@@ -83,6 +83,20 @@ function getNodeSize(node: Node, sceneGraph?: SceneGraph): { width: number; heig
 
 const noop = () => {};
 
+/** Handle ArrowUp/ArrowDown on numeric inputs: ±1 or ±10 with Shift */
+function handleNumericInputKeyDown(
+  e: { key: string; shiftKey: boolean; preventDefault: () => void },
+  currentValue: number,
+  onChange: (v: string) => void
+) {
+  if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+    e.preventDefault();
+    const delta = e.key === 'ArrowUp' ? 1 : -1;
+    const step = e.shiftKey ? 10 : 1;
+    onChange(String(currentValue + delta * step));
+  }
+}
+
 function getGroupPosition(node: Node, sceneGraph: SceneGraph): { x: number; y: number } {
   const childIds = new Set(sceneGraph.getDescendants(node.id).map((n) => n.id));
   const bounds = groupBoundsManager.getSelectionBounds(childIds, sceneGraph);
@@ -327,6 +341,26 @@ export function PropertiesPanel() {
       const fills = [...getNodeFills(currentNode)];
       const fill = fills[index];
       if (!fill) return;
+      // Preserve existing alpha when editing hex
+      const existingAlpha = fill.color?.a ?? 1;
+      const colorWithAlpha = { ...color, a: existingAlpha };
+      fills[index] = { ...fill, type: 'solid', color: colorWithAlpha };
+      sceneGraph.updateNode(selectedId, { fills } as Partial<Node>);
+      if (autoKeyframe) {
+        addKeyframeAtFrame(selectedId, `fills.${index}.color`, currentFrame, colorWithAlpha);
+      }
+    },
+    [selectedId, sceneGraph, autoKeyframe, currentFrame, addKeyframeAtFrame]
+  );
+
+  const handleFillPickerChange = useCallback(
+    (index: number, color: Color) => {
+      if (!selectedId) return;
+      const currentNode = sceneGraph.getNode(selectedId);
+      if (!currentNode) return;
+      const fills = [...getNodeFills(currentNode)];
+      const fill = fills[index];
+      if (!fill) return;
       fills[index] = { ...fill, type: 'solid', color };
       sceneGraph.updateNode(selectedId, { fills } as Partial<Node>);
       if (autoKeyframe) {
@@ -398,6 +432,27 @@ export function PropertiesPanel() {
     [selectedId, sceneGraph]
   );
 
+  const handleFillOpacityChange = useCallback(
+    (index: number, value: string) => {
+      if (!selectedId) return;
+      const cleaned = value.replace('%', '');
+      const num = parseFloat(cleaned);
+      if (isNaN(num)) return;
+      const clamped = Math.max(0, Math.min(1, num / 100));
+      const currentNode = sceneGraph.getNode(selectedId);
+      if (!currentNode) return;
+      const fills = [...getNodeFills(currentNode)];
+      const fill = fills[index];
+      if (!fill) return;
+      fills[index] = { ...fill, opacity: clamped };
+      sceneGraph.updateNode(selectedId, { fills } as Partial<Node>);
+      if (autoKeyframe) {
+        addKeyframeAtFrame(selectedId, `fills.${index}.opacity`, currentFrame, clamped);
+      }
+    },
+    [selectedId, sceneGraph, autoKeyframe, currentFrame, addKeyframeAtFrame]
+  );
+
   const handleFillGradientChange = useCallback(
     (index: number, gradient: Gradient) => {
       if (!selectedId) return;
@@ -434,6 +489,26 @@ export function PropertiesPanel() {
       const strokes = [...getNodeStrokes(currentNode)];
       const stroke = strokes[index];
       if (!stroke) return;
+      // Preserve existing alpha when editing hex
+      const existingAlpha = stroke.color?.a ?? 1;
+      const colorWithAlpha = { ...color, a: existingAlpha };
+      strokes[index] = { ...stroke, color: colorWithAlpha };
+      sceneGraph.updateNode(selectedId, { strokes } as Partial<Node>);
+      if (autoKeyframe) {
+        addKeyframeAtFrame(selectedId, `strokes.${index}.color`, currentFrame, colorWithAlpha);
+      }
+    },
+    [selectedId, sceneGraph, autoKeyframe, currentFrame, addKeyframeAtFrame]
+  );
+
+  const handleStrokePickerChange = useCallback(
+    (index: number, color: Color) => {
+      if (!selectedId) return;
+      const currentNode = sceneGraph.getNode(selectedId);
+      if (!currentNode) return;
+      const strokes = [...getNodeStrokes(currentNode)];
+      const stroke = strokes[index];
+      if (!stroke) return;
       strokes[index] = { ...stroke, color };
       sceneGraph.updateNode(selectedId, { strokes } as Partial<Node>);
       if (autoKeyframe) {
@@ -456,6 +531,27 @@ export function PropertiesPanel() {
       sceneGraph.updateNode(selectedId, { strokes } as Partial<Node>);
       if (autoKeyframe) {
         addKeyframeAtFrame(selectedId, `strokes.${index}.width`, currentFrame, clamped);
+      }
+    },
+    [selectedId, sceneGraph, autoKeyframe, currentFrame, addKeyframeAtFrame]
+  );
+
+  const handleStrokeOpacityChange = useCallback(
+    (index: number, value: string) => {
+      if (!selectedId) return;
+      const cleaned = value.replace('%', '');
+      const num = parseFloat(cleaned);
+      if (isNaN(num)) return;
+      const clamped = Math.max(0, Math.min(1, num / 100));
+      const currentNode = sceneGraph.getNode(selectedId);
+      if (!currentNode) return;
+      const strokes = [...getNodeStrokes(currentNode)];
+      const stroke = strokes[index];
+      if (!stroke) return;
+      strokes[index] = { ...stroke, opacity: clamped };
+      sceneGraph.updateNode(selectedId, { strokes } as Partial<Node>);
+      if (autoKeyframe) {
+        addKeyframeAtFrame(selectedId, `strokes.${index}.opacity`, currentFrame, clamped);
       }
     },
     [selectedId, sceneGraph, autoKeyframe, currentFrame, addKeyframeAtFrame]
@@ -670,6 +766,64 @@ export function PropertiesPanel() {
   const [pickerAnchor, setPickerAnchor] = useState({ x: 0, y: 0 });
   const swatchRefs = useRef<Map<string, HTMLDivElement>>(new Map());
 
+  // Refs for numeric input scroll-to-adjust (position X, Y, rotation)
+  const posXInputRef = useRef<HTMLInputElement>(null);
+  const posYInputRef = useRef<HTMLInputElement>(null);
+  const rotInputRef = useRef<HTMLInputElement>(null);
+
+  // Stable ref for current values — updated each render, read by wheel handlers
+  const numericRef = useRef({
+    posX: 0, posY: 0, rotation: 0, isGroup: false,
+    handlePositionChange: handlePositionChange,
+    handleRotationChange: handleRotationChange,
+  });
+
+  // Non-passive wheel listeners for position/rotation inputs
+  useEffect(() => {
+    const makeHandler = (
+      getValue: () => number,
+      onChange: (v: string) => void,
+      checkGroup: boolean
+    ) => (e: WheelEvent) => {
+      if (checkGroup && numericRef.current.isGroup) return;
+      e.preventDefault();
+      const delta = (e.deltaY < 0 ? 1 : -1) * (e.shiftKey ? 10 : 1);
+      onChange(String(getValue() + delta));
+    };
+
+    const entries: Array<[HTMLElement, (e: WheelEvent) => void]> = [];
+
+    if (posXInputRef.current) {
+      const h = makeHandler(
+        () => numericRef.current.posX,
+        (v) => numericRef.current.handlePositionChange('x', v),
+        true
+      );
+      posXInputRef.current.addEventListener('wheel', h, { passive: false });
+      entries.push([posXInputRef.current, h]);
+    }
+    if (posYInputRef.current) {
+      const h = makeHandler(
+        () => numericRef.current.posY,
+        (v) => numericRef.current.handlePositionChange('y', v),
+        true
+      );
+      posYInputRef.current.addEventListener('wheel', h, { passive: false });
+      entries.push([posYInputRef.current, h]);
+    }
+    if (rotInputRef.current) {
+      const h = makeHandler(
+        () => numericRef.current.rotation,
+        (v) => numericRef.current.handleRotationChange(v),
+        false
+      );
+      rotInputRef.current.addEventListener('wheel', h, { passive: false });
+      entries.push([rotInputRef.current, h]);
+    }
+
+    return () => entries.forEach(([el, h]) => el.removeEventListener('wheel', h));
+  }, [selectedId]);
+
   const openPicker = useCallback((key: string) => {
     const el = swatchRefs.current.get(key);
     if (!el) return;
@@ -708,6 +862,13 @@ export function PropertiesPanel() {
     y: center.y + size.height * (1 - anchor.y),
   };
   const rotation = node.transform.rotation;
+
+  // Keep numericRef in sync for wheel handlers
+  numericRef.current = {
+    posX: pos.x, posY: pos.y, rotation, isGroup,
+    handlePositionChange, handleRotationChange,
+  };
+
   const fills = getNodeFills(node);
   const strokes = getNodeStrokes(node);
   const opacityPercent = Math.round(node.opacity * 100);
@@ -770,12 +931,16 @@ export function PropertiesPanel() {
                     onChange={isGroup ? noop : (v) => handlePositionChange('x', String(v))}
                   />
                   <input
+                    ref={posXInputRef}
                     id="prop-pos-x"
                     type="text"
                     className={styles.input}
                     value={fmt1(pos.x)}
                     readOnly={isGroup}
                     onChange={(e) => handlePositionChange('x', e.target.value)}
+                    onKeyDown={(e) => {
+                      if (!isGroup) handleNumericInputKeyDown(e, pos.x, (v) => handlePositionChange('x', v));
+                    }}
                   />
                 </div>
                 <div className={styles.inputGroup}>
@@ -785,11 +950,15 @@ export function PropertiesPanel() {
                     onChange={isGroup ? noop : (v) => handlePositionChange('y', String(v))}
                   />
                   <input
+                    ref={posYInputRef}
                     type="text"
                     className={styles.input}
                     value={fmt1(pos.y)}
                     readOnly={isGroup}
                     onChange={(e) => handlePositionChange('y', e.target.value)}
+                    onKeyDown={(e) => {
+                      if (!isGroup) handleNumericInputKeyDown(e, pos.y, (v) => handlePositionChange('y', v));
+                    }}
                   />
                 </div>
               </div>
@@ -1038,11 +1207,13 @@ export function PropertiesPanel() {
                     max={360}
                   />
                   <input
+                    ref={rotInputRef}
                     id="prop-rotation"
                     type="text"
                     className={styles.input}
                     value={`${fmt1(rotation)}\u00B0`}
                     onChange={(e) => handleRotationChange(e.target.value)}
+                    onKeyDown={(e) => handleNumericInputKeyDown(e, rotation, handleRotationChange)}
                   />
                 </div>
               </div>
@@ -1126,15 +1297,25 @@ export function PropertiesPanel() {
                               />
                               {activePickerKey === pickerKey && (
                                 <ColorPicker
-                                  color={hexToColor(fillHex) || { r: 0, g: 0, b: 0, a: 1 }}
-                                  onChange={(c) => handleFillColorChange(index, colorToHex(c))}
+                                  color={fill.color || { r: 0, g: 0, b: 0, a: 1 }}
+                                  onChange={(c) => handleFillPickerChange(index, c)}
                                   anchorX={pickerAnchor.x}
                                   anchorY={pickerAnchor.y}
                                   onClose={closePicker}
+                                  showAlpha
                                 />
                               )}
                             </>
                           )}
+                          <input
+                            type="text"
+                            className={styles.opacityInput}
+                            value={`${Math.round(fill.opacity * 100)}%`}
+                            onChange={(e) => handleFillOpacityChange(index, e.target.value)}
+                            title="Fill opacity"
+                            aria-label={`Fill opacity: ${Math.round(fill.opacity * 100)}%`}
+                            data-testid={`fill-opacity-${index}`}
+                          />
                           <button
                             className={styles.removeButton}
                             onClick={() => handleRemoveFill(index)}
@@ -1243,15 +1424,25 @@ export function PropertiesPanel() {
                               />
                               {activePickerKey === pickerKey && (
                                 <ColorPicker
-                                  color={hexToColor(strokeHex) || { r: 0, g: 0, b: 0, a: 1 }}
-                                  onChange={(c) => handleStrokeColorChange(index, colorToHex(c))}
+                                  color={stroke.color || { r: 0, g: 0, b: 0, a: 1 }}
+                                  onChange={(c) => handleStrokePickerChange(index, c)}
                                   anchorX={pickerAnchor.x}
                                   anchorY={pickerAnchor.y}
                                   onClose={closePicker}
+                                  showAlpha
                                 />
                               )}
                             </>
                           )}
+                          <input
+                            type="text"
+                            className={styles.opacityInput}
+                            value={`${Math.round(stroke.opacity * 100)}%`}
+                            onChange={(e) => handleStrokeOpacityChange(index, e.target.value)}
+                            title="Stroke opacity"
+                            aria-label={`Stroke opacity: ${Math.round(stroke.opacity * 100)}%`}
+                            data-testid={`stroke-opacity-${index}`}
+                          />
                           <button
                             className={styles.removeButton}
                             onClick={() => handleRemoveStroke(index)}

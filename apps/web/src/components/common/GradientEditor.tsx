@@ -417,6 +417,7 @@ export function GradientEditor({
           anchorX={pickerAnchor.x}
           anchorY={pickerAnchor.y}
           onClose={() => setColorPickerOpen(false)}
+          showAlpha
         />
       )}
     </div>

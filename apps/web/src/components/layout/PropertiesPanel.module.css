@@ -462,6 +462,32 @@
   margin-top: 4px;
 }
 
+/* Opacity input for fill/stroke rows */
+.opacityInput {
+  width: 40px;
+  height: 22px;
+  padding: 0 2px;
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-2xs);
+  font-family: var(--font-family-mono);
+  font-weight: var(--font-weight-medium);
+  text-align: right;
+  flex-shrink: 0;
+  transition: all var(--duration-fast);
+}
+
+.opacityInput:hover {
+  border-color: var(--color-border-default);
+}
+
+.opacityInput:focus {
+  border-color: var(--color-accent-primary);
+  box-shadow: 0 0 0 2px var(--color-accent-primary-glow);
+}
+
 /* Utility: fixed-width spacer to align with lock button column */
 .lockButtonSpacer {
   width: 20px;
