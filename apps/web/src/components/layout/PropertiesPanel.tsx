@@ -611,6 +611,27 @@ export function PropertiesPanel() {
     [selectedId, sceneGraph, autoKeyframe, currentFrame, addKeyframeAtFrame]
   );
 
+  // Snap toggle: when enabling snap, immediately snap all selected nodes to grid
+  const handleToggleSnap = useCallback(() => {
+    const wasSnapped = useEditorStore.getState().snapToGrid;
+    toggleSnapToGrid();
+    // If we just enabled snap, snap all selected nodes now
+    if (!wasSnapped) {
+      const { gridSize: grid } = useEditorStore.getState();
+      for (const id of selectedNodeIds) {
+        const n = sceneGraph.getNode(id);
+        if (!n) continue;
+        const snappedX = Math.round(n.transform.position.x / grid) * grid;
+        const snappedY = Math.round(n.transform.position.y / grid) * grid;
+        if (snappedX !== n.transform.position.x || snappedY !== n.transform.position.y) {
+          sceneGraph.updateNode(id, {
+            transform: { ...n.transform, position: { x: snappedX, y: snappedY } },
+          });
+        }
+      }
+    }
+  }, [toggleSnapToGrid, selectedNodeIds, sceneGraph]);
+
   // Color picker popover state
   const [activePickerKey, setActivePickerKey] = useState<string | null>(null);
   const [pickerAnchor, setPickerAnchor] = useState({ x: 0, y: 0 });
@@ -677,7 +698,7 @@ export function PropertiesPanel() {
             <span className={styles.sectionTitle}>Transform</span>
             <button
               className={`${styles.snapButton} ${snapToGrid ? styles.snapButtonActive : ''}`}
-              onClick={toggleSnapToGrid}
+              onClick={handleToggleSnap}
               title={snapToGrid ? 'Disable snap to grid' : 'Enable snap to grid'}
               aria-label={snapToGrid ? 'Disable snap to grid' : 'Enable snap to grid'}
               data-testid="snap-to-grid-toggle"
