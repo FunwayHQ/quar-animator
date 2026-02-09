@@ -13,6 +13,8 @@
     "clean": "rimraf dist"
   },
   "dependencies": {
+    "@fontsource/dm-sans": "^5.2.8",
+    "@fontsource/ibm-plex-mono": "^5.2.7",
     "@quar/animation": "workspace:*",
     "@quar/core": "workspace:*",
     "@quar/export": "workspace:*",
