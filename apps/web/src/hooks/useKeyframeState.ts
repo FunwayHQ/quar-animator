@@ -1,4 +1,4 @@
-import type { Timeline } from '@quar/types';
+import type { Keyframe, Timeline } from '@quar/types';
 import type { KeyframeState } from '../components/common/KeyframeIndicator';
 import { findTrack } from '@quar/animation';
 
@@ -17,7 +17,7 @@ export function getKeyframeState(
   if (!timeline) return 'none';
   const track = findTrack(timeline, nodeId, property);
   if (!track || track.keyframes.length === 0) return 'none';
-  const hasAtFrame = track.keyframes.some((kf) => kf.time === currentFrame);
+  const hasAtFrame = track.keyframes.some((kf: Keyframe) => kf.time === currentFrame);
   if (hasAtFrame) return 'active';
   return 'inactive';
 }

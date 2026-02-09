@@ -16,8 +16,6 @@ import {
 // ============================================================================
 
 /** What the user is interacting with */
-type _HitType = 'point' | 'handle-in' | 'handle-out' | 'segment' | null;
-
 interface PointHit {
   type: 'point';
   nodeId: string;
@@ -65,7 +63,6 @@ export class DirectSelectionTool extends BaseTool {
   private dragStartPoint: Vector2 | null = null;
   private dragHandle: HandleHit | null = null;
   private initialPointPositions: Map<string, Vector2> = new Map();
-  private initialHandlePosition: Vector2 | null = null;
 
   // Double-click detection
   private lastClickTime: number = 0;
@@ -130,13 +127,7 @@ export class DirectSelectionTool extends BaseTool {
       this.dragHandle = handleHit;
       this.state.isDragging = true;
 
-      // Store initial handle position
-      const node = this.context.sceneGraph.getNode(handleHit.nodeId) as PathNode;
-      if (node) {
-        const point = node.points[handleHit.pointIndex];
-        const handle = handleHit.type === 'handle-in' ? point.handleIn : point.handleOut;
-        this.initialHandlePosition = handle ? { ...handle } : null;
-      }
+      // Note: initial handle position stored implicitly via dragHandle
       return;
     }
 
@@ -237,7 +228,6 @@ export class DirectSelectionTool extends BaseTool {
     this.dragStartPoint = null;
     this.dragHandle = null;
     this.initialPointPositions.clear();
-    this.initialHandlePosition = null;
     this.state.isDragging = false;
   }
 
@@ -613,7 +603,6 @@ export class DirectSelectionTool extends BaseTool {
     this.dragStartPoint = null;
     this.dragHandle = null;
     this.initialPointPositions.clear();
-    this.initialHandlePosition = null;
     this.lastClickTime = 0;
     this.lastClickPosition = null;
     this.currentHover = null;

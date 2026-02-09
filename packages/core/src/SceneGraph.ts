@@ -223,8 +223,8 @@ export class SceneGraph {
     if (!node) return [];
 
     return node.children
-      .map((childId) => this.nodes.get(childId))
-      .filter((child): child is Node => child !== undefined);
+      .map((childId: string) => this.nodes.get(childId))
+      .filter((child: Node | undefined): child is Node => child !== undefined);
   }
 
   getParent(id: string): Node | undefined {

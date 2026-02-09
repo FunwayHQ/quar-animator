@@ -180,8 +180,10 @@ export interface PathPoint {
 
 export interface PathNode extends BaseNode {
   type: 'path';
-  points: PathPoint[];
+  points: PathPoint[];          // Primary contour (backward compat)
+  subpaths?: PathPoint[][];     // Additional contours (holes or disjoint regions)
   closed: boolean;
+  fillRule?: 'nonzero' | 'evenodd';  // Default: 'nonzero'
   fills: Fill[];
   strokes: Stroke[];
 }

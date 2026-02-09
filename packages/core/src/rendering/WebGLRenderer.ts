@@ -384,9 +384,9 @@ export class WebGLRenderer {
     if (!result) return [1, 1, 1];
 
     return [
-      parseInt(result[1], 16) / 255,
-      parseInt(result[2], 16) / 255,
-      parseInt(result[3], 16) / 255,
+      parseInt(result[1]!, 16) / 255,
+      parseInt(result[2]!, 16) / 255,
+      parseInt(result[3]!, 16) / 255,
     ];
   }
 

@@ -13,7 +13,7 @@ import {
   SelectionTool,
 } from '@quar/core';
 import type { TransformType } from '@quar/core';
-import type { CanvasPointerEvent, Node, PathNode, PathPoint, Rect, Vector2 } from '@quar/types';
+import type { CanvasPointerEvent, Node, PathNode, PathPoint, Rect, ToolType, Vector2 } from '@quar/types';
 import { useEditorStore } from '../stores/editorStore';
 
 // ============================================================================
@@ -238,7 +238,7 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
       clearSelection: clearSelectionCb,
       getDefaultFill,
       getDefaultStroke,
-      onToolChange: (tool) => {
+      onToolChange: (tool: ToolType) => {
         setActiveTool(tool);
         setCursor((toolManagerRef.current?.getCursor() as string) ?? 'default');
       },

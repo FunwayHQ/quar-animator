@@ -264,8 +264,8 @@ export function parseSvgPath(d: string): ParsedSubpath[] {
 
     switch (cmd) {
       case 'M': {
-        const x = isRelative ? currentX + args[0] : args[0];
-        const y = isRelative ? currentY + args[1] : args[1];
+        const x = isRelative ? currentX + args[0]! : args[0]!;
+        const y = isRelative ? currentY + args[1]! : args[1]!;
         startNewSubpath();
         addCornerPoint(x, y);
         currentX = x;
@@ -276,8 +276,8 @@ export function parseSvgPath(d: string): ParsedSubpath[] {
       }
 
       case 'L': {
-        const x = isRelative ? currentX + args[0] : args[0];
-        const y = isRelative ? currentY + args[1] : args[1];
+        const x = isRelative ? currentX + args[0]! : args[0]!;
+        const y = isRelative ? currentY + args[1]! : args[1]!;
         addCornerPoint(x, y);
         currentX = x;
         currentY = y;
@@ -285,30 +285,30 @@ export function parseSvgPath(d: string): ParsedSubpath[] {
       }
 
       case 'H': {
-        const x = isRelative ? currentX + args[0] : args[0];
+        const x = isRelative ? currentX + args[0]! : args[0]!;
         addCornerPoint(x, currentY);
         currentX = x;
         break;
       }
 
       case 'V': {
-        const y = isRelative ? currentY + args[0] : args[0];
+        const y = isRelative ? currentY + args[0]! : args[0]!;
         addCornerPoint(currentX, y);
         currentY = y;
         break;
       }
 
       case 'C': {
-        const x1 = isRelative ? currentX + args[0] : args[0];
-        const y1 = isRelative ? currentY + args[1] : args[1];
-        const x2 = isRelative ? currentX + args[2] : args[2];
-        const y2 = isRelative ? currentY + args[3] : args[3];
-        const x = isRelative ? currentX + args[4] : args[4];
-        const y = isRelative ? currentY + args[5] : args[5];
+        const x1 = isRelative ? currentX + args[0]! : args[0]!;
+        const y1 = isRelative ? currentY + args[1]! : args[1]!;
+        const x2 = isRelative ? currentX + args[2]! : args[2]!;
+        const y2 = isRelative ? currentY + args[3]! : args[3]!;
+        const x = isRelative ? currentX + args[4]! : args[4]!;
+        const y = isRelative ? currentY + args[5]! : args[5]!;
 
         // Set handleOut on previous point
         if (currentPoints.length > 0) {
-          const prev = currentPoints[currentPoints.length - 1];
+          const prev = currentPoints[currentPoints.length - 1]!;
           prev.handleOut = { x: x1 - currentX, y: y1 - currentY };
           if (prev.type === 'corner' && (prev.handleOut.x !== 0 || prev.handleOut.y !== 0)) {
             prev.type = 'smooth';
@@ -340,13 +340,13 @@ export function parseSvgPath(d: string): ParsedSubpath[] {
           y1 = currentY;
         }
 
-        const x2 = isRelative ? currentX + args[0] : args[0];
-        const y2 = isRelative ? currentY + args[1] : args[1];
-        const x = isRelative ? currentX + args[2] : args[2];
-        const y = isRelative ? currentY + args[3] : args[3];
+        const x2 = isRelative ? currentX + args[0]! : args[0]!;
+        const y2 = isRelative ? currentY + args[1]! : args[1]!;
+        const x = isRelative ? currentX + args[2]! : args[2]!;
+        const y = isRelative ? currentY + args[3]! : args[3]!;
 
         if (currentPoints.length > 0) {
-          const prev = currentPoints[currentPoints.length - 1];
+          const prev = currentPoints[currentPoints.length - 1]!;
           prev.handleOut = { x: x1 - currentX, y: y1 - currentY };
           if (prev.type === 'corner') prev.type = 'smooth';
         }
@@ -367,10 +367,10 @@ export function parseSvgPath(d: string): ParsedSubpath[] {
 
       case 'Q': {
         // Quadratic bezier → convert to cubic
-        const qx = isRelative ? currentX + args[0] : args[0];
-        const qy = isRelative ? currentY + args[1] : args[1];
-        const x = isRelative ? currentX + args[2] : args[2];
-        const y = isRelative ? currentY + args[3] : args[3];
+        const qx = isRelative ? currentX + args[0]! : args[0]!;
+        const qy = isRelative ? currentY + args[1]! : args[1]!;
+        const x = isRelative ? currentX + args[2]! : args[2]!;
+        const y = isRelative ? currentY + args[3]! : args[3]!;
 
         // Convert Q to C: cp1 = start + 2/3*(ctrl - start), cp2 = end + 2/3*(ctrl - end)
         const cp1x = currentX + (2 / 3) * (qx - currentX);
@@ -379,7 +379,7 @@ export function parseSvgPath(d: string): ParsedSubpath[] {
         const cp2y = y + (2 / 3) * (qy - y);
 
         if (currentPoints.length > 0) {
-          const prev = currentPoints[currentPoints.length - 1];
+          const prev = currentPoints[currentPoints.length - 1]!;
           prev.handleOut = { x: cp1x - currentX, y: cp1y - currentY };
           if (prev.type === 'corner') prev.type = 'smooth';
         }
@@ -409,8 +409,8 @@ export function parseSvgPath(d: string): ParsedSubpath[] {
           qy = currentY;
         }
 
-        const x = isRelative ? currentX + args[0] : args[0];
-        const y = isRelative ? currentY + args[1] : args[1];
+        const x = isRelative ? currentX + args[0]! : args[0]!;
+        const y = isRelative ? currentY + args[1]! : args[1]!;
 
         const cp1x = currentX + (2 / 3) * (qx - currentX);
         const cp1y = currentY + (2 / 3) * (qy - currentY);
@@ -418,7 +418,7 @@ export function parseSvgPath(d: string): ParsedSubpath[] {
         const cp2y = y + (2 / 3) * (qy - y);
 
         if (currentPoints.length > 0) {
-          const prev = currentPoints[currentPoints.length - 1];
+          const prev = currentPoints[currentPoints.length - 1]!;
           prev.handleOut = { x: cp1x - currentX, y: cp1y - currentY };
           if (prev.type === 'corner') prev.type = 'smooth';
         }
@@ -438,13 +438,13 @@ export function parseSvgPath(d: string): ParsedSubpath[] {
       }
 
       case 'A': {
-        const rx = args[0];
-        const ry = args[1];
-        const xRotation = args[2];
-        const largeArc = args[3];
-        const sweep = args[4];
-        const x = isRelative ? currentX + args[5] : args[5];
-        const y = isRelative ? currentY + args[6] : args[6];
+        const rx = args[0]!;
+        const ry = args[1]!;
+        const xRotation = args[2]!;
+        const largeArc = args[3]!;
+        const sweep = args[4]!;
+        const x = isRelative ? currentX + args[5]! : args[5]!;
+        const y = isRelative ? currentY + args[6]! : args[6]!;
 
         if (currentX === x && currentY === y) break;
 
@@ -454,7 +454,7 @@ export function parseSvgPath(d: string): ParsedSubpath[] {
 
         for (const seg of beziers) {
           if (currentPoints.length > 0) {
-            const prev = currentPoints[currentPoints.length - 1];
+            const prev = currentPoints[currentPoints.length - 1]!;
             prev.handleOut = seg.handleOut;
             if (prev.type === 'corner') prev.type = 'smooth';
           }
@@ -475,8 +475,8 @@ export function parseSvgPath(d: string): ParsedSubpath[] {
       case 'Z': {
         if (currentPoints.length > 0) {
           // If last point is at subpath start, merge into closed path
-          const last = currentPoints[currentPoints.length - 1];
-          const first = currentPoints[0];
+          const last = currentPoints[currentPoints.length - 1]!;
+          const first = currentPoints[0]!;
           const dist = Math.hypot(
             last.position.x - first.position.x,
             last.position.y - first.position.y

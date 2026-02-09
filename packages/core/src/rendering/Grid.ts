@@ -126,8 +126,8 @@ export class Grid {
     gl.bufferData(gl.ARRAY_BUFFER, this.vertices.byteLength, gl.DYNAMIC_DRAW);
 
     if (this.program) {
-      gl.enableVertexAttribArray(this.program.attributes.a_position);
-      gl.vertexAttribPointer(this.program.attributes.a_position, 2, gl.FLOAT, false, 0, 0);
+      gl.enableVertexAttribArray(this.program.attributes.a_position!);
+      gl.vertexAttribPointer(this.program.attributes.a_position!, 2, gl.FLOAT, false, 0, 0);
     }
 
     // Create color buffer
@@ -136,8 +136,8 @@ export class Grid {
     gl.bufferData(gl.ARRAY_BUFFER, this.colors.byteLength, gl.DYNAMIC_DRAW);
 
     if (this.program) {
-      gl.enableVertexAttribArray(this.program.attributes.a_color);
-      gl.vertexAttribPointer(this.program.attributes.a_color, 4, gl.FLOAT, false, 0, 0);
+      gl.enableVertexAttribArray(this.program.attributes.a_color!);
+      gl.vertexAttribPointer(this.program.attributes.a_color!, 4, gl.FLOAT, false, 0, 0);
     }
 
     this.renderer.bindVAO(null);
@@ -183,7 +183,7 @@ export class Grid {
 
     // Set uniforms
     gl.uniformMatrix3fv(
-      this.program.uniforms.u_viewProjection,
+      this.program.uniforms.u_viewProjection ?? null,
       false,
       mat3.toFloat32Array(viewProjectionMatrix)
     );

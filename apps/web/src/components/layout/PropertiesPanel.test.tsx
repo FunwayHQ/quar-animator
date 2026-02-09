@@ -623,7 +623,7 @@ describe('PropertiesPanel', () => {
 
       const indicators = screen.getAllByTestId('keyframe-indicator');
       // First indicator is position X - should be filled (active)
-      expect(indicators[0].style.background).toBe('var(--color-keyframe-active)');
+      expect(indicators[0]!.style.background).toBe('var(--color-keyframe-active)');
     });
 
     it('should show inactive when keyframes exist elsewhere', () => {
@@ -637,8 +637,8 @@ describe('PropertiesPanel', () => {
 
       const indicators = screen.getAllByTestId('keyframe-indicator');
       // First indicator should be inactive (accent border, transparent bg)
-      expect(indicators[0].style.background).toBe('transparent');
-      expect(indicators[0].style.border).toContain('var(--color-accent-primary)');
+      expect(indicators[0]!.style.background).toBe('transparent');
+      expect(indicators[0]!.style.border).toContain('var(--color-accent-primary)');
     });
 
     it('should show none when no keyframes', () => {
@@ -651,8 +651,8 @@ describe('PropertiesPanel', () => {
 
       const indicators = screen.getAllByTestId('keyframe-indicator');
       // Should be outline-only (none)
-      expect(indicators[0].style.background).toBe('transparent');
-      expect(indicators[0].style.border).toContain('var(--color-text-disabled)');
+      expect(indicators[0]!.style.background).toBe('transparent');
+      expect(indicators[0]!.style.border).toContain('var(--color-text-disabled)');
     });
 
     it('should toggle keyframe when indicator is clicked', () => {
@@ -667,7 +667,7 @@ describe('PropertiesPanel', () => {
 
       // Click to add keyframe
       act(() => {
-        fireEvent.click(indicators[0]);
+        fireEvent.click(indicators[0]!);
       });
 
       expect(useEditorStore.getState().timeline.tracks.length).toBe(1);
@@ -675,7 +675,7 @@ describe('PropertiesPanel', () => {
 
       // Click again to remove keyframe
       act(() => {
-        fireEvent.click(indicators[0]);
+        fireEvent.click(indicators[0]!);
       });
 
       // Track should be cleaned up (auto-cleanup of empty tracks)

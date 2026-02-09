@@ -24,7 +24,7 @@ import {
   timeToFrame,
   formatTimecode,
 } from './Timeline';
-import type { Timeline, PropertyTrack } from '@quar/types';
+import type { Timeline, PropertyTrack, Keyframe, Marker } from '@quar/types';
 
 // ============================================================================
 // createTimeline
@@ -173,7 +173,7 @@ describe('addKeyframe', () => {
     addKeyframe(track, 30, 1);
     addKeyframe(track, 10, 0.5);
     addKeyframe(track, 20, 0.75);
-    expect(track.keyframes.map((kf) => kf.time)).toEqual([10, 20, 30]);
+    expect(track.keyframes.map((kf: Keyframe<number>) => kf.time)).toEqual([10, 20, 30]);
   });
 
   it('should replace existing keyframe at same time', () => {
@@ -236,13 +236,13 @@ describe('moveKeyframe', () => {
     const kfId = track.keyframes[1].id;
     const moved = moveKeyframe(track, kfId, 15);
     expect(moved).toBe(true);
-    expect(track.keyframes.map((kf) => kf.time)).toEqual([0, 15, 20]);
+    expect(track.keyframes.map((kf: Keyframe<number>) => kf.time)).toEqual([0, 15, 20]);
   });
 
   it('should maintain sorted order after move', () => {
     const kfId = track.keyframes[0].id;
     moveKeyframe(track, kfId, 25);
-    expect(track.keyframes.map((kf) => kf.time)).toEqual([10, 20, 25]);
+    expect(track.keyframes.map((kf: Keyframe<number>) => kf.time)).toEqual([10, 20, 25]);
   });
 
   it('should return false for non-existing keyframe', () => {
@@ -416,7 +416,7 @@ describe('addMarker', () => {
     addMarker(timeline, 30, 'C');
     addMarker(timeline, 10, 'A');
     addMarker(timeline, 20, 'B');
-    expect(timeline.markers.map((m) => m.name)).toEqual(['A', 'B', 'C']);
+    expect(timeline.markers.map((m: Marker) => m.name)).toEqual(['A', 'B', 'C']);
   });
 });
 

@@ -5,7 +5,7 @@
 
 import type {
   Node, GroupNode, RectangleNode, EllipseNode, PathNode,
-  Fill, Stroke, Color, Gradient, GradientStop, Transform, Vector2,
+  Fill, Stroke, Gradient, GradientStop, Transform,
 } from '@quar/types';
 import { createDefaultTransform } from '../SceneGraph';
 import { parseSvgTransform, parseSvgColor, parseUrlRef, type ResolvedStyle } from './svgUtils';
@@ -163,7 +163,15 @@ function convertCircle(el: SvgCircle, ctx: ConvertContext): EllipseNode {
 }
 
 function convertLine(el: SvgLine, ctx: ConvertContext): PathNode {
-  const transform = buildPathTransform(el.transform, ctx.viewBoxHeight);
+  const points = [
+    { position: { x: el.x1, y: ctx.viewBoxHeight - el.y1 }, handleIn: null, handleOut: null, type: 'corner' as const },
+    { position: { x: el.x2, y: ctx.viewBoxHeight - el.y2 }, handleIn: null, handleOut: null, type: 'corner' as const },
+  ];
+
+  // Center the path so rotation/scale works correctly
+  const { centeredPoints, center } = centerPathPoints(points);
+
+  const transform = buildCenteredPathTransform(center, el.transform, ctx.viewBoxHeight);
 
   const node: PathNode = {
     id: ctx.generateId(),
@@ -176,10 +184,7 @@ function convertLine(el: SvgLine, ctx: ConvertContext): PathNode {
     locked: false,
     opacity: el.style.opacity,
     blendMode: 'normal',
-    points: [
-      { position: { x: el.x1, y: ctx.viewBoxHeight - el.y1 }, handleIn: null, handleOut: null, type: 'corner' },
-      { position: { x: el.x2, y: ctx.viewBoxHeight - el.y2 }, handleIn: null, handleOut: null, type: 'corner' },
-    ],
+    points: centeredPoints,
     closed: false,
     fills: [],
     strokes: convertStrokes(el.style, ctx.defs),
@@ -190,14 +195,17 @@ function convertLine(el: SvgLine, ctx: ConvertContext): PathNode {
 }
 
 function convertPolygon(el: SvgPolygon, ctx: ConvertContext): PathNode {
-  const transform = buildPathTransform(el.transform, ctx.viewBoxHeight);
-
-  const points = el.points.map(p => ({
+  const rawPoints = el.points.map(p => ({
     position: { x: p.x, y: ctx.viewBoxHeight - p.y },
     handleIn: null,
     handleOut: null,
     type: 'corner' as const,
   }));
+
+  // Center the path so rotation/scale works correctly
+  const { centeredPoints, center } = centerPathPoints(rawPoints);
+
+  const transform = buildCenteredPathTransform(center, el.transform, ctx.viewBoxHeight);
 
   const node: PathNode = {
     id: ctx.generateId(),
@@ -210,7 +218,7 @@ function convertPolygon(el: SvgPolygon, ctx: ConvertContext): PathNode {
     locked: false,
     opacity: el.style.opacity,
     blendMode: 'normal',
-    points,
+    points: centeredPoints,
     closed: true,
     fills: convertFills(el.style, ctx.defs),
     strokes: convertStrokes(el.style, ctx.defs),
@@ -221,14 +229,17 @@ function convertPolygon(el: SvgPolygon, ctx: ConvertContext): PathNode {
 }
 
 function convertPolyline(el: SvgPolyline, ctx: ConvertContext): PathNode {
-  const transform = buildPathTransform(el.transform, ctx.viewBoxHeight);
-
-  const points = el.points.map(p => ({
+  const rawPoints = el.points.map(p => ({
     position: { x: p.x, y: ctx.viewBoxHeight - p.y },
     handleIn: null,
     handleOut: null,
     type: 'corner' as const,
   }));
+
+  // Center the path so rotation/scale works correctly
+  const { centeredPoints, center } = centerPathPoints(rawPoints);
+
+  const transform = buildCenteredPathTransform(center, el.transform, ctx.viewBoxHeight);
 
   const node: PathNode = {
     id: ctx.generateId(),
@@ -241,7 +252,7 @@ function convertPolyline(el: SvgPolyline, ctx: ConvertContext): PathNode {
     locked: false,
     opacity: el.style.opacity,
     blendMode: 'normal',
-    points,
+    points: centeredPoints,
     closed: false,
     fills: [],
     strokes: convertStrokes(el.style, ctx.defs),
@@ -252,21 +263,35 @@ function convertPolyline(el: SvgPolyline, ctx: ConvertContext): PathNode {
 }
 
 function convertPath(el: SvgPath, ctx: ConvertContext): PathNode[] {
-  const subpaths = parseSvgPath(el.d);
-  const nodes: PathNode[] = [];
+  const parsedSubpaths = parseSvgPath(el.d);
 
-  for (const subpath of subpaths) {
-    if (subpath.points.length < 2) continue;
-
-    const transform = buildPathTransform(el.transform, ctx.viewBoxHeight);
-
-    // Flip Y for all points and handles
-    const points = subpath.points.map(p => ({
-      position: { x: p.position.x, y: ctx.viewBoxHeight - p.position.y },
-      handleIn: p.handleIn ? { x: p.handleIn.x, y: -p.handleIn.y } : null,
-      handleOut: p.handleOut ? { x: p.handleOut.x, y: -p.handleOut.y } : null,
-      type: p.type,
+  // Flip Y for all subpaths
+  const flippedSubpaths = parsedSubpaths
+    .filter(sp => sp.points.length >= 2)
+    .map(sp => ({
+      points: sp.points.map(p => ({
+        position: { x: p.position.x, y: ctx.viewBoxHeight - p.position.y },
+        handleIn: p.handleIn ? { x: p.handleIn.x, y: -p.handleIn.y } : null,
+        handleOut: p.handleOut ? { x: p.handleOut.x, y: -p.handleOut.y } : null,
+        type: p.type,
+      })),
+      closed: sp.closed,
     }));
+
+  if (flippedSubpaths.length === 0) return [];
+
+  // Check if this is a compound path (multiple closed subpaths)
+  const closedSubpaths = flippedSubpaths.filter(sp => sp.closed);
+  if (closedSubpaths.length > 1) {
+    // Compound path: merge all closed subpaths into a single PathNode with subpaths/fillRule
+    return [convertCompoundPath(el, closedSubpaths, flippedSubpaths, ctx)];
+  }
+
+  // Simple path(s): one node per subpath, centered
+  const nodes: PathNode[] = [];
+  for (const sp of flippedSubpaths) {
+    const { centeredPoints, center } = centerPathPoints(sp.points);
+    const transform = buildCenteredPathTransform(center, el.transform, ctx.viewBoxHeight);
 
     const node: PathNode = {
       id: ctx.generateId(),
@@ -279,9 +304,9 @@ function convertPath(el: SvgPath, ctx: ConvertContext): PathNode[] {
       locked: false,
       opacity: el.style.opacity,
       blendMode: 'normal',
-      points,
-      closed: subpath.closed,
-      fills: subpath.closed ? convertFills(el.style, ctx.defs) : [],
+      points: centeredPoints,
+      closed: sp.closed,
+      fills: sp.closed ? convertFills(el.style, ctx.defs) : [],
       strokes: convertStrokes(el.style, ctx.defs),
     };
 
@@ -290,6 +315,69 @@ function convertPath(el: SvgPath, ctx: ConvertContext): PathNode[] {
   }
 
   return nodes;
+}
+
+/**
+ * Convert a compound SVG path (multiple closed subpaths) into a single PathNode
+ * with subpaths and fillRule for proper hole rendering.
+ */
+function convertCompoundPath(
+  el: SvgPath,
+  closedSubpaths: { points: import('@quar/types').PathPoint[]; closed: boolean }[],
+  allSubpaths: { points: import('@quar/types').PathPoint[]; closed: boolean }[],
+  ctx: ConvertContext,
+): PathNode {
+  // Gather all points from all subpaths for bounding box computation
+  const allPoints = allSubpaths.flatMap(sp => sp.points);
+  const { center } = centerPathPoints(allPoints);
+
+  // Center each subpath's points relative to the shared center
+  const centeredContours = closedSubpaths.map(sp =>
+    sp.points.map(p => ({
+      ...p,
+      position: { x: p.position.x - center.x, y: p.position.y - center.y },
+    }))
+  );
+
+  // Also include open subpaths (strokes only) — center them too
+  const openSubpaths = allSubpaths.filter(sp => !sp.closed);
+  const centeredOpen = openSubpaths.map(sp =>
+    sp.points.map(p => ({
+      ...p,
+      position: { x: p.position.x - center.x, y: p.position.y - center.y },
+    }))
+  );
+
+  // First closed contour → points, rest → subpaths
+  const primaryContour = centeredContours[0];
+  const additionalContours = centeredContours.slice(1);
+
+  // Include open subpaths in additionalContours if any
+  const subpaths = [...additionalContours, ...centeredOpen];
+
+  const transform = buildCenteredPathTransform(center, el.transform, ctx.viewBoxHeight);
+
+  const node: PathNode = {
+    id: ctx.generateId(),
+    name: el.id || 'Path',
+    type: 'path',
+    parent: null,
+    children: [],
+    transform,
+    visible: true,
+    locked: false,
+    opacity: el.style.opacity,
+    blendMode: 'normal',
+    points: primaryContour,
+    subpaths: subpaths.length > 0 ? subpaths : undefined,
+    closed: true,
+    fillRule: 'evenodd',
+    fills: convertFills(el.style, ctx.defs),
+    strokes: convertStrokes(el.style, ctx.defs),
+  };
+
+  ctx.allNodes.push(node);
+  return node;
 }
 
 function convertGroup(el: SvgGroup, ctx: ConvertContext): GroupNode {
@@ -327,6 +415,70 @@ function convertGroup(el: SvgGroup, ctx: ConvertContext): GroupNode {
 }
 
 // ============================================================================
+// Path Centering
+// ============================================================================
+
+/**
+ * Compute bounding box center of path points and offset all points so the center is at origin.
+ * Returns the centered points and the original center.
+ */
+function centerPathPoints(
+  points: import('@quar/types').PathPoint[]
+): { centeredPoints: import('@quar/types').PathPoint[]; center: import('@quar/types').Vector2 } {
+  if (points.length === 0) {
+    return { centeredPoints: [], center: { x: 0, y: 0 } };
+  }
+
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  for (const p of points) {
+    if (p.position.x < minX) minX = p.position.x;
+    if (p.position.x > maxX) maxX = p.position.x;
+    if (p.position.y < minY) minY = p.position.y;
+    if (p.position.y > maxY) maxY = p.position.y;
+  }
+
+  const center = { x: (minX + maxX) / 2, y: (minY + maxY) / 2 };
+
+  const centeredPoints = points.map(p => ({
+    ...p,
+    position: { x: p.position.x - center.x, y: p.position.y - center.y },
+    // Handles are relative offsets — no change needed
+  }));
+
+  return { centeredPoints, center };
+}
+
+/**
+ * Build a Quar Transform for a centered path node.
+ * Position is at the computed center, anchor is (0.5, 0.5).
+ * SVG transforms are applied on top.
+ */
+function buildCenteredPathTransform(
+  center: import('@quar/types').Vector2,
+  svgTransformAttr: string | undefined,
+  _viewBoxHeight: number
+): Transform {
+  const transform = createDefaultTransform();
+  // Anchor at center — matches rectangle/ellipse pattern
+  transform.anchor = { x: 0.5, y: 0.5 };
+
+  if (svgTransformAttr) {
+    const svgTransform = parseSvgTransform(svgTransformAttr);
+    transform.position = {
+      x: center.x + svgTransform.position.x,
+      y: center.y - svgTransform.position.y, // Flip Y translation
+    };
+    transform.rotation = -svgTransform.rotation;
+    transform.scale = svgTransform.scale;
+    transform.skew = svgTransform.skew;
+  } else {
+    transform.position = { x: center.x, y: center.y };
+  }
+
+  return transform;
+}
+
+// ============================================================================
 // Transform Building
 // ============================================================================
 
@@ -361,30 +513,7 @@ function buildTransform(
   return transform;
 }
 
-/**
- * Build a Quar Transform for a path node.
- * Paths use anchor (0, 0), so the SVG transform only applies as-is.
- */
-function buildPathTransform(
-  svgTransformAttr: string | undefined,
-  viewBoxHeight: number
-): Transform {
-  const transform = createDefaultTransform();
-  transform.anchor = { x: 0, y: 0 };
-
-  if (svgTransformAttr) {
-    const svgTransform = parseSvgTransform(svgTransformAttr);
-    transform.position = {
-      x: svgTransform.position.x,
-      y: -svgTransform.position.y, // Flip Y translation
-    };
-    transform.rotation = -svgTransform.rotation;
-    transform.scale = svgTransform.scale;
-    transform.skew = svgTransform.skew;
-  }
-
-  return transform;
-}
+// buildPathTransform removed — all paths now use buildCenteredPathTransform for proper rotation
 
 // ============================================================================
 // Fill / Stroke Conversion

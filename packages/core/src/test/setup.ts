@@ -130,9 +130,7 @@ export function createMockCanvas(): HTMLCanvasElement {
 }
 
 // Global setup for WebGL mocking
-beforeEach(() => {
-  // Reset any global state if needed
-});
+// Note: beforeEach is available via test runner (vitest), not compiled by tsc
 
 /**
  * Canvas pointer event interface for tool testing

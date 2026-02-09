@@ -88,11 +88,11 @@ export function parseSvgColor(value: string): Color | null {
 
   // rgb() / rgba()
   const rgbMatch = trimmed.match(/^rgba?\(\s*([^)]+)\s*\)$/);
-  if (rgbMatch) return parseRgbFunction(rgbMatch[1]);
+  if (rgbMatch) return parseRgbFunction(rgbMatch[1]!);
 
   // hsl() / hsla()
   const hslMatch = trimmed.match(/^hsla?\(\s*([^)]+)\s*\)$/);
-  if (hslMatch) return parseHslFunction(hslMatch[1]);
+  if (hslMatch) return parseHslFunction(hslMatch[1]!);
 
   return null;
 }
@@ -101,18 +101,18 @@ function parseHexColor(hex: string): Color | null {
   const h = hex.replace('#', '');
   if (h.length === 3) {
     return {
-      r: parseInt(h[0] + h[0], 16),
-      g: parseInt(h[1] + h[1], 16),
-      b: parseInt(h[2] + h[2], 16),
+      r: parseInt(h[0]! + h[0]!, 16),
+      g: parseInt(h[1]! + h[1]!, 16),
+      b: parseInt(h[2]! + h[2]!, 16),
       a: 1,
     };
   }
   if (h.length === 4) {
     return {
-      r: parseInt(h[0] + h[0], 16),
-      g: parseInt(h[1] + h[1], 16),
-      b: parseInt(h[2] + h[2], 16),
-      a: parseInt(h[3] + h[3], 16) / 255,
+      r: parseInt(h[0]! + h[0]!, 16),
+      g: parseInt(h[1]! + h[1]!, 16),
+      b: parseInt(h[2]! + h[2]!, 16),
+      a: parseInt(h[3]! + h[3]!, 16) / 255,
     };
   }
   if (h.length === 6) {
@@ -143,9 +143,9 @@ function parseRgbFunction(args: string): Color | null {
     return Math.round(parseFloat(s));
   };
 
-  const r = clamp(parseChannel(parts[0]), 0, 255);
-  const g = clamp(parseChannel(parts[1]), 0, 255);
-  const b = clamp(parseChannel(parts[2]), 0, 255);
+  const r = clamp(parseChannel(parts[0]!), 0, 255);
+  const g = clamp(parseChannel(parts[1]!), 0, 255);
+  const b = clamp(parseChannel(parts[2]!), 0, 255);
   const a = parts[3] !== undefined
     ? clamp(parts[3].endsWith('%') ? parseFloat(parts[3]) / 100 : parseFloat(parts[3]), 0, 1)
     : 1;
@@ -158,9 +158,9 @@ function parseHslFunction(args: string): Color | null {
   const parts = args.split(/[\s,/]+/).filter(Boolean);
   if (parts.length < 3) return null;
 
-  const h = ((parseFloat(parts[0]) % 360) + 360) % 360;
-  const s = clamp(parseFloat(parts[1]) / 100, 0, 1);
-  const l = clamp(parseFloat(parts[2]) / 100, 0, 1);
+  const h = ((parseFloat(parts[0]!) % 360) + 360) % 360;
+  const s = clamp(parseFloat(parts[1]!) / 100, 0, 1);
+  const l = clamp(parseFloat(parts[2]!) / 100, 0, 1);
   const a = parts[3] !== undefined
     ? clamp(parts[3].endsWith('%') ? parseFloat(parts[3]) / 100 : parseFloat(parts[3]), 0, 1)
     : 1;
@@ -242,8 +242,8 @@ export function parseSvgTransformToMatrix(attr: string): Mat2D {
   let match: RegExpExecArray | null;
 
   while ((match = regex.exec(attr)) !== null) {
-    const fn = match[1].toLowerCase();
-    const args = match[2].split(/[\s,]+/).filter(Boolean).map(Number);
+    const fn = match[1]!.toLowerCase();
+    const args = match[2]!.split(/[\s,]+/).filter(Boolean).map(Number);
     let m: Mat2D;
 
     switch (fn) {
@@ -489,7 +489,7 @@ function parseInlineStyle(style: string): Record<string, string> {
  */
 export function parseUrlRef(value: string): string | null {
   const match = value.match(/url\(\s*['"]?#([^'")\s]+)['"]?\s*\)/);
-  return match ? match[1] : null;
+  return match ? match[1]! : null;
 }
 
 // ============================================================================
@@ -508,7 +508,7 @@ export function parseSvgPoints(pointsAttr: string): Vector2[] {
   const numbers = pointsAttr.trim().split(/[\s,]+/).filter(Boolean).map(Number);
   const points: Vector2[] = [];
   for (let i = 0; i + 1 < numbers.length; i += 2) {
-    points.push({ x: numbers[i], y: numbers[i + 1] });
+    points.push({ x: numbers[i]!, y: numbers[i + 1]! });
   }
   return points;
 }

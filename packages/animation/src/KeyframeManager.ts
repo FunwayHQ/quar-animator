@@ -11,7 +11,6 @@ import {
   removeKeyframe,
   moveKeyframe as moveKf,
   findTrack,
-  createKeyframe,
 } from './Timeline';
 
 // ============================================================================
@@ -60,7 +59,7 @@ export class KeyframeManager {
    */
   setKeyframeAtFrame<T>(nodeId: string, property: string, frame: number, value: T): Keyframe<T> {
     const track = getOrCreateTrack<T>(this.timeline, nodeId, property);
-    const existing = track.keyframes.find((kf) => kf.time === frame);
+    const existing = track.keyframes.find((kf: Keyframe<T>) => kf.time === frame);
     if (existing) {
       // Remove old keyframe and add updated one (immutable)
       removeKeyframe(track, existing.id);
@@ -93,7 +92,7 @@ export class KeyframeManager {
     for (const kf of keyframes) {
       const track = findTrack(this.timeline, kf.nodeId, kf.property);
       if (!track) continue;
-      const keyframe = track.keyframes.find((k) => k.id === kf.keyframeId);
+      const keyframe = track.keyframes.find((k: Keyframe) => k.id === kf.keyframeId);
       if (!keyframe) continue;
       const newTime = Math.max(0, Math.round(keyframe.time + deltaFrames));
       if (moveKf(track, kf.keyframeId, newTime)) {
@@ -114,7 +113,7 @@ export class KeyframeManager {
   ): boolean {
     const track = findTrack(this.timeline, nodeId, property);
     if (!track) return false;
-    const keyframe = track.keyframes.find((kf) => kf.id === keyframeId);
+    const keyframe = track.keyframes.find((kf: Keyframe) => kf.id === keyframeId);
     if (!keyframe) return false;
     keyframe.easing = easing;
     return true;
@@ -163,7 +162,7 @@ export class KeyframeManager {
    */
   removeAllKeyframesForNode(nodeId: string): number {
     const before = this.timeline.tracks.length;
-    this.timeline.tracks = this.timeline.tracks.filter((t) => t.nodeId !== nodeId);
+    this.timeline.tracks = this.timeline.tracks.filter((t: PropertyTrack) => t.nodeId !== nodeId);
     return before - this.timeline.tracks.length;
   }
 
@@ -185,7 +184,7 @@ export class KeyframeManager {
     for (const kf of keyframes) {
       const track = findTrack(this.timeline, kf.nodeId, kf.property);
       if (!track) continue;
-      const keyframe = track.keyframes.find((k) => k.id === kf.keyframeId);
+      const keyframe = track.keyframes.find((k: Keyframe) => k.id === kf.keyframeId);
       if (!keyframe) continue;
       entries.push({
         property: track.property,
@@ -232,7 +231,7 @@ export class KeyframeManager {
   getKeyframeAt(nodeId: string, property: string, frame: number): Keyframe | null {
     const track = findTrack(this.timeline, nodeId, property);
     if (!track) return null;
-    return (track.keyframes.find((kf) => kf.time === frame) as Keyframe) ?? null;
+    return (track.keyframes.find((kf: Keyframe) => kf.time === frame) as Keyframe) ?? null;
   }
 
   /**
@@ -247,7 +246,7 @@ export class KeyframeManager {
     const track = findTrack(this.timeline, nodeId, property);
     if (!track) return [];
     return track.keyframes.filter(
-      (kf) => kf.time >= startFrame && kf.time <= endFrame
+      (kf: Keyframe) => kf.time >= startFrame && kf.time <= endFrame
     ) as Keyframe[];
   }
 
@@ -269,13 +268,13 @@ export class KeyframeManager {
    * Check if a node has any keyframes.
    */
   hasKeyframes(nodeId: string): boolean {
-    return this.timeline.tracks.some((t) => t.nodeId === nodeId && t.keyframes.length > 0);
+    return this.timeline.tracks.some((t: PropertyTrack) => t.nodeId === nodeId && t.keyframes.length > 0);
   }
 
   /**
    * Get the total number of keyframes in the timeline.
    */
   getKeyframeCount(): number {
-    return this.timeline.tracks.reduce((sum, track) => sum + track.keyframes.length, 0);
+    return this.timeline.tracks.reduce((sum: number, track: PropertyTrack) => sum + track.keyframes.length, 0);
   }
 }

@@ -4,11 +4,12 @@
  */
 
 import { create } from 'zustand';
-import type { ToolType, Fill, Stroke, Color, Node, Timeline, EasingFunction } from '@quar/types';
+import type { ToolType, Fill, Stroke, Color, Keyframe, Node, Timeline, EasingFunction } from '@quar/types';
 import type { KeyframeClipboard } from '@quar/animation';
 import { createTimeline, KeyframeManager } from '@quar/animation';
-import { DEFAULT_ONION_SKIN_SETTINGS, createGroupNode } from '@quar/core';
-import type { OnionSkinSettings } from '@quar/core';
+import { DEFAULT_ONION_SKIN_SETTINGS, createGroupNode, booleanOperation } from '@quar/core';
+import type { OnionSkinSettings, BooleanOp } from '@quar/core';
+import { toast } from '../components/common/Toast';
 
 // ============================================================================
 // SceneGraph Interface (subset used by store operations)
@@ -22,6 +23,7 @@ interface SceneGraphLike {
   moveNode(id: string, newParentId: string | null, index?: number): void;
   getDescendants(id: string): Node[];
   traverse(callback: (node: Node, depth: number) => boolean | void): void;
+  getWorldTransform(id: string): import('@quar/types').Matrix3;
 }
 
 // ============================================================================
@@ -198,6 +200,12 @@ export interface EditorStore {
   setOnionSkinOpacity: (opacity: number) => void;
   setOnionSkinFalloff: (falloff: number) => void;
   setOnionSkinShowDuringPlayback: (show: boolean) => void;
+
+  // Boolean operations
+  booleanUnion: (sceneGraph: SceneGraphLike) => void;
+  booleanSubtract: (sceneGraph: SceneGraphLike) => void;
+  booleanIntersect: (sceneGraph: SceneGraphLike) => void;
+  booleanExclude: (sceneGraph: SceneGraphLike) => void;
 }
 
 // ============================================================================
@@ -384,7 +392,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     if (orderedSelected.length < 2) return;
 
     // Find common parent among all selected nodes
-    const firstNode = sceneGraph.getNode(orderedSelected[0]);
+    const firstNode = sceneGraph.getNode(orderedSelected[0]!);
     if (!firstNode) return;
     const commonParent = orderedSelected.every((id) => {
       const n = sceneGraph.getNode(id);
@@ -540,7 +548,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     const pasted = mgr.pasteKeyframes(keyframeClipboard, nodeId, frame);
     set({
       timeline: { ...timeline },
-      selectedKeyframeIds: new Set(pasted.map((kf) => kf.id)),
+      selectedKeyframeIds: new Set(pasted.map((kf: Keyframe) => kf.id)),
     });
   },
   moveSelectedKeyframes: (
@@ -614,7 +622,83 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     })),
   setOnionSkinShowDuringPlayback: (show: boolean) =>
     set((state) => ({ onionSkin: { ...state.onionSkin, showDuringPlayback: show } })),
+
+  // Boolean operations
+  ...createBooleanActions(set, get),
 }));
+
+// ============================================================================
+// Boolean Operation Actions (extracted to keep store creation concise)
+// ============================================================================
+
+function createBooleanActions(
+  set: (partial: Partial<EditorStore> | ((state: EditorStore) => Partial<EditorStore>)) => void,
+  get: () => EditorStore,
+) {
+  const SHAPE_TYPES = new Set(['rectangle', 'ellipse', 'polygon', 'path']);
+
+  function performBooleanOp(sceneGraph: SceneGraphLike, op: BooleanOp): void {
+    const { selectedNodeIds } = get();
+    if (selectedNodeIds.size < 2) {
+      toast.error('Select at least 2 shapes for boolean operations');
+      return;
+    }
+
+    // Collect selected nodes in scene graph z-order
+    const orderedNodes: Node[] = [];
+    sceneGraph.traverse((node) => {
+      if (selectedNodeIds.has(node.id) && SHAPE_TYPES.has(node.type)) {
+        orderedNodes.push(node);
+      }
+    });
+
+    if (orderedNodes.length < 2) {
+      toast.error('Select at least 2 shape nodes (rectangles, ellipses, polygons, or paths)');
+      return;
+    }
+
+    // Get world transforms for each node
+    const worldTransforms = orderedNodes.map((n) => sceneGraph.getWorldTransform(n.id));
+
+    // Generate unique ID
+    const generateId = () => `bool_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
+    // Perform the boolean operation
+    const resultNode = booleanOperation(orderedNodes, worldTransforms, op, generateId);
+    if (!resultNode) {
+      toast.info('Boolean operation produced an empty result');
+      return;
+    }
+
+    // Find insertion point: first selected node's parent and position
+    const firstNode = orderedNodes[0];
+    const parentId = firstNode.parent;
+    const siblings = parentId
+      ? (sceneGraph.getNode(parentId)?.children ?? [])
+      : sceneGraph.getRootNodes().map((n) => n.id);
+    const insertIndex = siblings.indexOf(firstNode.id);
+
+    // Add result node
+    sceneGraph.addNode(resultNode, parentId ?? undefined);
+    if (insertIndex >= 0) {
+      sceneGraph.moveNode(resultNode.id, parentId ?? null, insertIndex);
+    }
+
+    // Remove original nodes
+    for (const node of orderedNodes) {
+      sceneGraph.removeNode(node.id);
+    }
+
+    set({ selectedNodeIds: new Set([resultNode.id]), isDirty: true });
+  }
+
+  return {
+    booleanUnion: (sceneGraph: SceneGraphLike) => performBooleanOp(sceneGraph, 'union'),
+    booleanSubtract: (sceneGraph: SceneGraphLike) => performBooleanOp(sceneGraph, 'subtract'),
+    booleanIntersect: (sceneGraph: SceneGraphLike) => performBooleanOp(sceneGraph, 'intersect'),
+    booleanExclude: (sceneGraph: SceneGraphLike) => performBooleanOp(sceneGraph, 'exclude'),
+  };
+}
 
 // ============================================================================
 // Selector Hooks
@@ -732,3 +816,13 @@ export const useProjectId = (): string | null =>
 export const useProjectName = (): string =>
   useEditorStore((state: EditorStore) => state.projectName);
 export const useIsDirty = (): boolean => useEditorStore((state: EditorStore) => state.isDirty);
+
+// Boolean operation selectors
+export const useBooleanUnion = (): ((sceneGraph: SceneGraphLike) => void) =>
+  useEditorStore((state: EditorStore) => state.booleanUnion);
+export const useBooleanSubtract = (): ((sceneGraph: SceneGraphLike) => void) =>
+  useEditorStore((state: EditorStore) => state.booleanSubtract);
+export const useBooleanIntersect = (): ((sceneGraph: SceneGraphLike) => void) =>
+  useEditorStore((state: EditorStore) => state.booleanIntersect);
+export const useBooleanExclude = (): ((sceneGraph: SceneGraphLike) => void) =>
+  useEditorStore((state: EditorStore) => state.booleanExclude);

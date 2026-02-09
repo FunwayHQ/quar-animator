@@ -627,6 +627,32 @@ export class SelectionTool extends BaseTool {
         const sy = p.transform.scale?.y ?? 1;
         return { width: p.radius * 2 * sx, height: p.radius * 2 * sy };
       }
+      case 'path': {
+        const pathNode = node as { points: import('@quar/types').PathPoint[]; closed: boolean; subpaths?: import('@quar/types').PathPoint[][]; transform: { scale?: Vector2 } };
+        const bounds = getPathBounds(pathNode.points, pathNode.closed);
+        if (!bounds) return { width: 0, height: 0 };
+        // Include subpaths in bounds
+        let w = bounds.width;
+        let h = bounds.height;
+        if (pathNode.subpaths) {
+          let minX = bounds.x, maxX = bounds.x + bounds.width;
+          let minY = bounds.y, maxY = bounds.y + bounds.height;
+          for (const sp of pathNode.subpaths) {
+            const spB = getPathBounds(sp, true);
+            if (spB) {
+              minX = Math.min(minX, spB.x);
+              maxX = Math.max(maxX, spB.x + spB.width);
+              minY = Math.min(minY, spB.y);
+              maxY = Math.max(maxY, spB.y + spB.height);
+            }
+          }
+          w = maxX - minX;
+          h = maxY - minY;
+        }
+        const sx = pathNode.transform.scale?.x ?? 1;
+        const sy = pathNode.transform.scale?.y ?? 1;
+        return { width: w * sx, height: h * sy };
+      }
       default:
         return { width: 0, height: 0 };
     }
@@ -677,6 +703,8 @@ export class SelectionTool extends BaseTool {
         state.radiusY = node.radiusY;
       } else if (node.type === 'polygon') {
         state.radius = node.radius;
+        state.scale = { ...node.transform.scale };
+      } else if (node.type === 'path') {
         state.scale = { ...node.transform.scale };
       }
 
@@ -800,6 +828,21 @@ export class SelectionTool extends BaseTool {
       ) {
         // For polygons, apply non-uniform scaling via transform scale
         // This allows stretching/squishing the polygon
+        const newScaleX = Math.max(0.01, initialState.scale.x * scaleX);
+        const newScaleY = Math.max(0.01, initialState.scale.y * scaleY);
+
+        this.context.sceneGraph.updateNode(id, {
+          transform: {
+            ...node.transform,
+            position: newPosition,
+            scale: { x: newScaleX, y: newScaleY },
+          },
+        });
+      } else if (
+        node.type === 'path' &&
+        initialState.scale !== undefined
+      ) {
+        // For paths, apply non-uniform scaling via transform scale
         const newScaleX = Math.max(0.01, initialState.scale.x * scaleX);
         const newScaleY = Math.max(0.01, initialState.scale.y * scaleY);
 

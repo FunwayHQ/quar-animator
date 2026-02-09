@@ -12,6 +12,7 @@ export * from './tools';
 export * from './selection';
 export * from './gradient/gradientUtils';
 export * from './svg';
+export * from './boolean';
 
 // Re-export types for convenience
 export type {

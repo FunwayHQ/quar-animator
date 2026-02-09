@@ -186,8 +186,8 @@ describe('copyKeyframes / pasteKeyframes', () => {
     expect(clipboard).not.toBeNull();
     expect(clipboard!.entries.length).toBe(2);
     // Times should be relative (0 and 10)
-    expect(clipboard!.entries[0].time).toBe(0);
-    expect(clipboard!.entries[1].time).toBe(10);
+    expect(clipboard!.entries[0]!.time).toBe(0);
+    expect(clipboard!.entries[1]!.time).toBe(10);
 
     // Paste at frame 50 on node2
     const pasted = mgr.pasteKeyframes(clipboard!, 'node2', 50);
@@ -209,7 +209,7 @@ describe('copyKeyframes / pasteKeyframes', () => {
     ]);
     // Mutate original
     color.r = 0;
-    expect((clipboard!.entries[0].value as { r: number }).r).toBe(255);
+    expect((clipboard!.entries[0]!.value as { r: number }).r).toBe(255);
   });
 });
 
@@ -256,8 +256,8 @@ describe('getAllKeyframesForNode', () => {
     mgr.addKeyframe('node2', 'opacity', 0, 0.5);
     const all = mgr.getAllKeyframesForNode('node1');
     expect(all.length).toBe(2);
-    expect(all[0].property).toBe('opacity');
-    expect(all[1].property).toBe('transform.position.x');
+    expect(all[0]!.property).toBe('opacity');
+    expect(all[1]!.property).toBe('transform.position.x');
   });
 });
 

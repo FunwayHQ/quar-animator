@@ -62,7 +62,7 @@ export function DirectSelectionOverlay({
           )}
 
           {/* Bezier handle lines and circles for selected points */}
-          {node.points.map((point, index) => {
+          {node.points.map((point: PathPoint, index: number) => {
             const selected = isPointSelected(selectedPoints, node.id, index);
             if (!selected) return null;
 
@@ -109,7 +109,7 @@ export function DirectSelectionOverlay({
           })}
 
           {/* Control points (rendered on top of handles) */}
-          {node.points.map((point, index) => {
+          {node.points.map((point: PathPoint, index: number) => {
             const selected = isPointSelected(selectedPoints, node.id, index);
             const screenPos = toScreen(getPointWorldPos(node, point));
 

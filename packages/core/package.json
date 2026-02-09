@@ -16,7 +16,8 @@
   },
   "dependencies": {
     "@quar/types": "workspace:*",
-    "earcut": "^3.0.2"
+    "earcut": "^3.0.2",
+    "polygon-clipping": "^0.15.7"
   },
   "devDependencies": {
     "@types/earcut": "^3.0.0",

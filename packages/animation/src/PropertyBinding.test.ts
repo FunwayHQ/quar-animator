@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import type { Node, RectangleNode, EllipseNode, PolygonNode, Timeline } from '@quar/types';
+import type { RectangleNode } from '@quar/types';
 import {
   getProperty,
   setProperty,

@@ -27,8 +27,8 @@ const mockProjects: ProjectListItem[] = [
   { id: 'proj_3', name: 'Character Idle', updatedAt: '2024-06-15T09:15:00.000Z' },
 ];
 
-const mockListProjects = vi.fn<() => Promise<ProjectListItem[]>>();
-const mockDeleteProject = vi.fn<(id: string) => Promise<void>>();
+const mockListProjects = vi.fn<[], Promise<ProjectListItem[]>>();
+const mockDeleteProject = vi.fn<[string], Promise<void>>();
 
 vi.mock('../services/projectStorage', () => ({
   listProjects: (...args: unknown[]) => mockListProjects(...(args as [])),

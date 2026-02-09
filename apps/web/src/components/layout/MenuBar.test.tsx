@@ -20,6 +20,7 @@ function createMockProjectActions(): ProjectActions {
     importProject: vi.fn().mockResolvedValue(undefined),
     deleteProject: vi.fn().mockResolvedValue(undefined),
     listProjects: vi.fn().mockResolvedValue([]),
+    importSvg: vi.fn(),
   };
 }
 

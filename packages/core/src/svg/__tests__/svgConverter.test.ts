@@ -148,17 +148,21 @@ describe('convertSvgToNodes', () => {
       expect(node.closed).toBe(false);
     });
 
-    it('Y-flips path points', () => {
+    it('Y-flips path points and centers them', () => {
       const { nodes } = convert(`
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
           <path d="M 10 20 L 30 40" stroke="black" fill="none" />
         </svg>
       `);
       const node = nodes[0] as PathNode;
-      // Y-flip: 100 - 20 = 80
-      expect(node.points[0].position.y).toBeCloseTo(80);
-      // Y-flip: 100 - 40 = 60
-      expect(node.points[1].position.y).toBeCloseTo(60);
+      // Raw Y-flip: (10, 80) and (30, 60) → center (20, 70)
+      // Centered: (-10, 10) and (10, -10)
+      expect(node.transform.position.x).toBeCloseTo(20);
+      expect(node.transform.position.y).toBeCloseTo(70);
+      expect(node.points[0].position.x).toBeCloseTo(-10);
+      expect(node.points[0].position.y).toBeCloseTo(10);
+      expect(node.points[1].position.x).toBeCloseTo(10);
+      expect(node.points[1].position.y).toBeCloseTo(-10);
     });
 
     it('closed paths get fills', () => {

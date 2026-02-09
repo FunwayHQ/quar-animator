@@ -126,7 +126,7 @@ export class SelectionManager {
     if (selectedIds.size === 0) return null;
 
     if (selectedIds.size === 1) {
-      const nodeId = [...selectedIds][0];
+      const nodeId = [...selectedIds][0]!;
       const node = sceneGraph.getNode(nodeId);
       if (!node || !node.visible) return null;
 
@@ -220,8 +220,19 @@ export class SelectionManager {
         };
       case 'polygon':
         return getPolygonBounds(0, 0, node.radius, node.sides, 1, 1, node.innerRadius);
-      case 'path':
-        return getPathBounds(node.points, node.closed);
+      case 'path': {
+        const primaryBounds = getPathBounds(node.points, node.closed);
+        if (!primaryBounds) return null;
+        if (!node.subpaths || node.subpaths.length === 0) return primaryBounds;
+
+        // Include subpaths in bounds calculation
+        const allBounds = [primaryBounds];
+        for (const sp of node.subpaths) {
+          const spBounds = getPathBounds(sp, true);
+          if (spBounds) allBounds.push(spBounds);
+        }
+        return allBounds.length === 1 ? primaryBounds : this.unionBounds(allBounds);
+      }
       default:
         return null;
     }

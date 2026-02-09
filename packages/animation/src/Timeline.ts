@@ -52,7 +52,7 @@ export function findTrack<T>(
   nodeId: string,
   property: string
 ): PropertyTrack<T> | undefined {
-  return timeline.tracks.find((t) => t.nodeId === nodeId && t.property === property);
+  return timeline.tracks.find((t: PropertyTrack) => t.nodeId === nodeId && t.property === property);
 }
 
 export function getOrCreateTrack<T>(
@@ -139,7 +139,7 @@ export function addKeyframe<T>(
 }
 
 export function removeKeyframe<T>(track: PropertyTrack<T>, keyframeId: string): boolean {
-  const index = track.keyframes.findIndex((kf) => kf.id === keyframeId);
+  const index = track.keyframes.findIndex((kf: Keyframe<T>) => kf.id === keyframeId);
   if (index === -1) return false;
 
   track.keyframes.splice(index, 1);
@@ -151,7 +151,7 @@ export function moveKeyframe<T>(
   keyframeId: string,
   newTime: number
 ): boolean {
-  const keyframe = track.keyframes.find((kf) => kf.id === keyframeId);
+  const keyframe = track.keyframes.find((kf: Keyframe<T>) => kf.id === keyframeId);
   if (!keyframe) return false;
 
   // Remove and re-insert to maintain sorted order
@@ -291,13 +291,13 @@ export function addMarker(
   };
 
   timeline.markers.push(marker);
-  timeline.markers.sort((a, b) => a.time - b.time);
+  timeline.markers.sort((a: Marker, b: Marker) => a.time - b.time);
 
   return marker;
 }
 
 export function removeMarker(timeline: Timeline, markerId: string): boolean {
-  const index = timeline.markers.findIndex((m) => m.id === markerId);
+  const index = timeline.markers.findIndex((m: Marker) => m.id === markerId);
   if (index === -1) return false;
 
   timeline.markers.splice(index, 1);
@@ -309,11 +309,11 @@ export function removeMarker(timeline: Timeline, markerId: string): boolean {
 // ============================================================================
 
 export function getTracksByNode(timeline: Timeline, nodeId: string): PropertyTrack[] {
-  return timeline.tracks.filter((t) => t.nodeId === nodeId);
+  return timeline.tracks.filter((t: PropertyTrack) => t.nodeId === nodeId);
 }
 
 export function getKeyframeCount(timeline: Timeline): number {
-  return timeline.tracks.reduce((sum, track) => sum + track.keyframes.length, 0);
+  return timeline.tracks.reduce((sum: number, track: PropertyTrack) => sum + track.keyframes.length, 0);
 }
 
 export function getAnimatedNodes(timeline: Timeline): Set<string> {

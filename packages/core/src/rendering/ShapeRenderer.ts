@@ -143,7 +143,8 @@ void main() {
 // Configuration
 // ============================================================================
 
-const _DEFAULT_ELLIPSE_SEGMENTS = 64;
+// Ellipse segments constant reserved for future use
+// const _DEFAULT_ELLIPSE_SEGMENTS = 64;
 const MAX_VERTICES = 10000;
 const DEFAULT_TESSELLATION_TOLERANCE = 1.0;
 const ELLIPSE_TESSELLATION_TOLERANCE = 0.5;
@@ -178,18 +179,155 @@ function buildGeometryKey(node: Node): string {
       return `P:${node.radius}:${node.sides}:${node.innerRadius ?? ''}:${node.cornerRadius ?? 0}`;
     case 'path': {
       // Use a hash of all point positions/handles for paths
-      const parts: string[] = ['X', String(node.closed)];
-      for (const pt of node.points) {
-        parts.push(`${pt.x}:${pt.y}:${pt.type}`);
-        if (pt.handleIn) parts.push(`i${pt.handleIn.x}:${pt.handleIn.y}`);
-        if (pt.handleOut) parts.push(`o${pt.handleOut.x}:${pt.handleOut.y}`);
-        if (pt.cornerRadius) parts.push(`cr${pt.cornerRadius}`);
+      const parts: string[] = ['X', String(node.closed), String(node.fillRule ?? 'nonzero')];
+      const pushPoints = (pts: import('@quar/types').PathPoint[]) => {
+        for (const pt of pts) {
+          parts.push(`${pt.position.x}:${pt.position.y}:${pt.type}`);
+          if (pt.handleIn) parts.push(`i${pt.handleIn.x}:${pt.handleIn.y}`);
+          if (pt.handleOut) parts.push(`o${pt.handleOut.x}:${pt.handleOut.y}`);
+          if (pt.cornerRadius) parts.push(`cr${pt.cornerRadius}`);
+        }
+      };
+      pushPoints(node.points);
+      if (node.subpaths) {
+        for (const sp of node.subpaths) {
+          parts.push('|');
+          pushPoints(sp);
+        }
       }
       return parts.join(',');
     }
     default:
       return '';
   }
+}
+
+// ============================================================================
+// Multi-Contour Containment Grouping
+// ============================================================================
+
+interface ContourGroup {
+  outer: number;   // index into contourArrays
+  holes: number[]; // indices into contourArrays
+}
+
+/** Compute AABB for a tessellated vertex array (flat x,y pairs). */
+function contourAABB(verts: Float32Array): { minX: number; minY: number; maxX: number; maxY: number } {
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (let i = 0; i < verts.length; i += 2) {
+    const x = verts[i]!;
+    const y = verts[i + 1]!;
+    if (x < minX) minX = x;
+    if (y < minY) minY = y;
+    if (x > maxX) maxX = x;
+    if (y > maxY) maxY = y;
+  }
+  return { minX, minY, maxX, maxY };
+}
+
+/** Point-in-polygon test (ray casting) for tessellated vertices. */
+function pointInContour(px: number, py: number, verts: Float32Array): boolean {
+  let inside = false;
+  const n = verts.length / 2;
+  for (let i = 0, j = n - 1; i < n; j = i++) {
+    const xi = verts[i * 2]!;
+    const yi = verts[i * 2 + 1]!;
+    const xj = verts[j * 2]!;
+    const yj = verts[j * 2 + 1]!;
+    if ((yi > py) !== (yj > py) && px < ((xj - xi) * (py - yi)) / (yj - yi) + xi) {
+      inside = !inside;
+    }
+  }
+  return inside;
+}
+
+/** Compute signed area of a contour (positive = CCW, negative = CW). */
+function contourSignedArea(verts: Float32Array): number {
+  let area = 0;
+  const n = verts.length / 2;
+  for (let i = 0, j = n - 1; i < n; j = i++) {
+    area += verts[j * 2]! * verts[i * 2 + 1]! - verts[i * 2]! * verts[j * 2 + 1]!;
+  }
+  return area / 2;
+}
+
+/**
+ * Group contours by containment: each outer contour with its holes.
+ * Disjoint contours become separate groups (each is its own outer).
+ * Uses AABB pre-check + point-in-polygon for containment, then signed area
+ * to disambiguate outer vs hole.
+ */
+function groupContoursByContainment(contourArrays: Float32Array[]): ContourGroup[] {
+  const n = contourArrays.length;
+  if (n <= 1) {
+    return n === 1 ? [{ outer: 0, holes: [] }] : [];
+  }
+
+  // Precompute AABBs and areas
+  const aabbs = contourArrays.map(contourAABB);
+  const areas = contourArrays.map(contourSignedArea);
+
+  // For each contour, find which contours contain it (AABB + point-in-polygon)
+  const containedBy: number[][] = Array.from({ length: n }, () => []);
+
+  for (let i = 0; i < n; i++) {
+    for (let j = 0; j < n; j++) {
+      if (i === j) continue;
+      const ai = aabbs[i]!;
+      const aj = aabbs[j]!;
+      // Quick AABB check: is i's AABB inside j's AABB?
+      if (
+        ai.minX >= aj.minX && ai.maxX <= aj.maxX &&
+        ai.minY >= aj.minY && ai.maxY <= aj.maxY
+      ) {
+        // Use first vertex of contour i as test point
+        const px = contourArrays[i]![0]!;
+        const py = contourArrays[i]![1]!;
+        if (pointInContour(px, py, contourArrays[j]!)) {
+          containedBy[i]!.push(j);
+        }
+      }
+    }
+  }
+
+  // A contour is a hole if it is contained by exactly one outer at its nesting level.
+  // Simple heuristic: a contour with odd nesting depth is a hole.
+  const depth = containedBy.map(parents => parents!.length);
+  const isHole = depth.map(d => d % 2 === 1);
+
+  // Build groups: each non-hole contour is an outer
+  const groups: ContourGroup[] = [];
+  const outerIndices = contourArrays.map((_, i) => i).filter(i => !isHole[i]!);
+  const holeIndices = contourArrays.map((_, i) => i).filter(i => isHole[i]!);
+
+  for (const outerIdx of outerIndices) {
+    groups.push({ outer: outerIdx, holes: [] });
+  }
+
+  // Assign each hole to its immediate parent (the outer that directly contains it)
+  for (const holeIdx of holeIndices) {
+    // Find the tightest (smallest area) outer contour that contains this hole
+    let bestOuter = -1;
+    let bestArea = Infinity;
+    for (const parentIdx of containedBy[holeIdx]!) {
+      if (!isHole[parentIdx]!) {
+        const absArea = Math.abs(areas[parentIdx]!);
+        if (absArea < bestArea) {
+          bestArea = absArea;
+          bestOuter = parentIdx;
+        }
+      }
+    }
+    if (bestOuter >= 0) {
+      const group = groups.find(g => g.outer === bestOuter);
+      if (group) group.holes.push(holeIdx);
+    } else {
+      // Orphan hole (no containing outer) — treat as its own outer
+      groups.push({ outer: holeIdx, holes: [] });
+    }
+  }
+
+  return groups;
 }
 
 export class ShapeRenderer {
@@ -205,7 +343,6 @@ export class ShapeRenderer {
   private indices: Uint16Array;
 
   // Cached matrices for gradient program switching
-  private currentVPMatrix: Float32Array | null = null;
   private currentModelMatrix: Float32Array | null = null;
   /** Effective opacity for the node currently being rendered (includes parent group opacity) */
   private currentEffectiveOpacity: number = 1;
@@ -276,8 +413,8 @@ export class ShapeRenderer {
     gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, this.indices.byteLength, gl.DYNAMIC_DRAW);
 
     if (this.program) {
-      gl.enableVertexAttribArray(this.program.attributes.a_position);
-      gl.vertexAttribPointer(this.program.attributes.a_position, 2, gl.FLOAT, false, 0, 0);
+      gl.enableVertexAttribArray(this.program.attributes.a_position!);
+      gl.vertexAttribPointer(this.program.attributes.a_position!, 2, gl.FLOAT, false, 0, 0);
     }
 
     this.renderer.bindVAO(null);
@@ -402,13 +539,12 @@ export class ShapeRenderer {
 
     // Set view-projection matrix
     const vpArray = mat3.toFloat32Array(viewProjectionMatrix);
-    this.currentVPMatrix = vpArray;
-    gl.uniformMatrix3fv(this.program.uniforms.u_viewProjection, false, vpArray);
+    gl.uniformMatrix3fv(this.program.uniforms.u_viewProjection ?? null, false, vpArray);
 
     // Also set on gradient program if available
     if (this.gradientProgram) {
       this.renderer.useProgram(this.gradientProgram);
-      gl.uniformMatrix3fv(this.gradientProgram.uniforms.u_viewProjection, false, vpArray);
+      gl.uniformMatrix3fv(this.gradientProgram.uniforms.u_viewProjection ?? null, false, vpArray);
       this.renderer.useProgram(this.program);
     }
 
@@ -452,12 +588,11 @@ export class ShapeRenderer {
 
     // Set view-projection matrix
     const vpArray = mat3.toFloat32Array(viewProjectionMatrix);
-    this.currentVPMatrix = vpArray;
-    gl.uniformMatrix3fv(this.program.uniforms.u_viewProjection, false, vpArray);
+    gl.uniformMatrix3fv(this.program.uniforms.u_viewProjection ?? null, false, vpArray);
 
     if (this.gradientProgram) {
       this.renderer.useProgram(this.gradientProgram);
-      gl.uniformMatrix3fv(this.gradientProgram.uniforms.u_viewProjection, false, vpArray);
+      gl.uniformMatrix3fv(this.gradientProgram.uniforms.u_viewProjection ?? null, false, vpArray);
       this.renderer.useProgram(this.program);
     }
 
@@ -575,7 +710,7 @@ export class ShapeRenderer {
     // Set model matrix
     const modelArray = mat3.toFloat32Array(worldMatrix);
     this.currentModelMatrix = modelArray;
-    gl.uniformMatrix3fv(this.program.uniforms.u_model, false, modelArray);
+    gl.uniformMatrix3fv(this.program.uniforms.u_model ?? null, false, modelArray);
 
     this.renderFillsAndStrokes(
       node.id,
@@ -609,7 +744,7 @@ export class ShapeRenderer {
     // Set model matrix
     const modelArray = mat3.toFloat32Array(worldMatrix);
     this.currentModelMatrix = modelArray;
-    gl.uniformMatrix3fv(this.program.uniforms.u_model, false, modelArray);
+    gl.uniformMatrix3fv(this.program.uniforms.u_model ?? null, false, modelArray);
 
     this.renderFillsAndStrokes(
       node.id,
@@ -654,7 +789,7 @@ export class ShapeRenderer {
     // Set model matrix
     const modelArray = mat3.toFloat32Array(worldMatrix);
     this.currentModelMatrix = modelArray;
-    gl.uniformMatrix3fv(this.program.uniforms.u_model, false, modelArray);
+    gl.uniformMatrix3fv(this.program.uniforms.u_model ?? null, false, modelArray);
 
     this.renderFillsAndStrokes(
       node.id,
@@ -668,17 +803,43 @@ export class ShapeRenderer {
   }
 
   /**
-   * Render a path node
+   * Render a path node (supports multi-contour paths with subpaths/holes)
    */
   renderPath(node: PathNode, worldMatrix: Matrix3): void {
     if (!this.program || node.points.length < 2) return;
 
     const gl = this.renderer.context;
 
-    // Apply per-vertex corner radius if any points have it
-    const processed = applyCornerRadius(node.points, node.closed);
+    // Set model matrix
+    const modelArray = mat3.toFloat32Array(worldMatrix);
+    this.currentModelMatrix = modelArray;
+    gl.uniformMatrix3fv(this.program.uniforms.u_model ?? null, false, modelArray);
 
-    // Get cached tessellation
+    // Multi-contour path (compound path with holes)
+    if (node.subpaths && node.subpaths.length > 0 && node.closed) {
+      const { vertices, fillIndices } = this.getCachedMultiContourTessellation(node.id, node);
+      const fills = node.fills;
+
+      // Render fills with combined vertices+holes
+      this.renderFillsAndStrokes(node.id, vertices, fillIndices, fills, [], node.closed, this.currentEffectiveOpacity);
+
+      // Render strokes for each contour independently
+      const allContours = [node.points, ...node.subpaths];
+      for (const contour of allContours) {
+        const processed = applyCornerRadius(contour, true);
+        const contourVerts = tessellatePathToVertices(processed, true, DEFAULT_TESSELLATION_TOLERANCE);
+        // Strokes don't use earcut — render outline per contour
+        for (const stroke of node.strokes) {
+          if (stroke.visible && stroke.width > 0) {
+            this.renderStroke(node.id + '_s', contourVerts, stroke, true, this.currentEffectiveOpacity);
+          }
+        }
+      }
+      return;
+    }
+
+    // Simple single-contour path
+    const processed = applyCornerRadius(node.points, node.closed);
     const { vertices: tessellated, fillIndices } = this.getCachedTessellation(
       node.id,
       node,
@@ -687,12 +848,6 @@ export class ShapeRenderer {
       DEFAULT_TESSELLATION_TOLERANCE
     );
 
-    // Set model matrix
-    const modelArray = mat3.toFloat32Array(worldMatrix);
-    this.currentModelMatrix = modelArray;
-    gl.uniformMatrix3fv(this.program.uniforms.u_model, false, modelArray);
-
-    // Only render fills for closed paths
     const fills = node.closed ? node.fills : [];
     this.renderFillsAndStrokes(
       node.id,
@@ -703,6 +858,104 @@ export class ShapeRenderer {
       node.closed,
       this.currentEffectiveOpacity
     );
+  }
+
+  /**
+   * Get or compute tessellation for multi-contour path with earcut holes.
+   * Concatenates all contours' vertices and builds hole index array for earcut.
+   */
+  private getCachedMultiContourTessellation(
+    nodeId: string,
+    node: PathNode,
+  ): { vertices: Float32Array; fillIndices: number[] } {
+    const geoKey = buildGeometryKey(node);
+    const cached = this.geometryCache.get(nodeId);
+
+    if (cached && cached.geoKey === geoKey) {
+      return { vertices: cached.vertices, fillIndices: cached.fillIndices };
+    }
+
+    // Tessellate each contour
+    const allContours = [node.points, ...(node.subpaths ?? [])];
+    const contourArrays: Float32Array[] = [];
+    for (const contour of allContours) {
+      const processed = applyCornerRadius(contour, true);
+      contourArrays.push(tessellatePathToVertices(processed, true, DEFAULT_TESSELLATION_TOLERANCE));
+    }
+
+    // Compute global vertex start index for each contour
+    const globalVertStarts: number[] = [];
+    let totalFloats = 0;
+    for (const arr of contourArrays) {
+      globalVertStarts.push(totalFloats / 2);
+      totalFloats += arr.length;
+    }
+
+    // Build combined vertex array
+    const combined = new Float32Array(totalFloats);
+    let writeOffset = 0;
+    for (const arr of contourArrays) {
+      combined.set(arr, writeOffset);
+      writeOffset += arr.length;
+    }
+
+    // Group contours by containment: outers with their holes
+    const groups = groupContoursByContainment(contourArrays);
+
+    // Tessellate each group independently with earcut, then remap indices
+    const allFillIndices: number[] = [];
+    for (const group of groups) {
+      const contourIndices = [group.outer, ...group.holes];
+
+      // Build per-group vertex array + hole indices
+      let groupFloats = 0;
+      for (const ci of contourIndices) groupFloats += contourArrays[ci]!.length;
+
+      const groupVerts = new Float32Array(groupFloats);
+      const groupHoles: number[] = [];
+      // Track where each contour starts within the group-local array (vertex index)
+      const localContourStarts: number[] = [];
+      let localOffset = 0;
+
+      for (let gi = 0; gi < contourIndices.length; gi++) {
+        const ci = contourIndices[gi]!;
+        localContourStarts.push(localOffset / 2);
+        if (gi > 0) {
+          groupHoles.push(localOffset / 2);
+        }
+        groupVerts.set(contourArrays[ci]!, localOffset);
+        localOffset += contourArrays[ci]!.length;
+      }
+
+      if (groupVerts.length / 2 < 3) continue;
+
+      const indices = earcut(groupVerts, groupHoles.length > 0 ? groupHoles : undefined);
+
+      // Remap each local index to global: find which contour it belongs to, offset
+      for (const localIdx of indices) {
+        // Find which contour this local vertex belongs to
+        let contourSlot = 0;
+        for (let gi = contourIndices.length - 1; gi >= 0; gi--) {
+          if (localIdx >= localContourStarts[gi]!) {
+            contourSlot = gi;
+            break;
+          }
+        }
+        const ci = contourIndices[contourSlot]!;
+        const withinContour = localIdx - localContourStarts[contourSlot]!;
+        allFillIndices.push(globalVertStarts[ci]! + withinContour);
+      }
+    }
+
+    const entry: TessellationCacheEntry = {
+      geoKey,
+      vertices: combined,
+      fillIndices: allFillIndices,
+      strokeCache: new Map(),
+    };
+    this.geometryCache.set(nodeId, entry);
+
+    return { vertices: combined, fillIndices: allFillIndices };
   }
 
   /**
@@ -728,7 +981,7 @@ export class ShapeRenderer {
 
     // Set fill color
     const color = this.getFillColor(fill, nodeOpacity);
-    gl.uniform4fv(this.program.uniforms.u_color, color);
+    gl.uniform4fv(this.program.uniforms.u_color ?? null, color);
 
     // Upload vertices
     gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
@@ -791,7 +1044,7 @@ export class ShapeRenderer {
 
     // Set stroke color
     const color = this.getStrokeColor(stroke, nodeOpacity);
-    gl.uniform4fv(this.program.uniforms.u_color, color);
+    gl.uniform4fv(this.program.uniforms.u_color ?? null, color);
 
     // Upload outline vertices
     gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
@@ -832,7 +1085,7 @@ export class ShapeRenderer {
     try {
       // Re-set viewProjection and model on the gradient program
       if (this.currentModelMatrix) {
-        gl.uniformMatrix3fv(this.gradientProgram.uniforms.u_model, false, this.currentModelMatrix);
+        gl.uniformMatrix3fv(this.gradientProgram.uniforms.u_model ?? null, false, this.currentModelMatrix);
       }
 
       // Upload gradient uniforms
@@ -872,17 +1125,17 @@ export class ShapeRenderer {
     const u = this.gradientProgram.uniforms;
 
     // Gradient type: 0=linear, 1=radial, 2=conic
-    const typeMap = { linear: 0, radial: 1, conic: 2 } as const;
-    gl.uniform1i(u['u_gradientType'], typeMap[gradient.type] ?? 0);
+    const typeMap: Record<string, number> = { linear: 0, radial: 1, conic: 2 };
+    gl.uniform1i(u['u_gradientType'] ?? null, typeMap[gradient.type] ?? 0);
 
     // Normalize stops
     const stops = normalizeGradientStops(gradient.stops);
     const stopCount = Math.min(stops.length, MAX_GRADIENT_STOPS);
-    gl.uniform1i(u['u_stopCount'], stopCount);
+    gl.uniform1i(u['u_stopCount'] ?? null, stopCount);
 
     // Upload individual stop colors and offsets
     for (let i = 0; i < stopCount; i++) {
-      const s = stops[i];
+      const s = stops[i]!;
       const stopUniform = u[`u_stops[${i}]`];
       const offsetUniform = u[`u_offsets[${i}]`];
       if (stopUniform) {
@@ -897,33 +1150,33 @@ export class ShapeRenderer {
     }
 
     // Bounds
-    gl.uniform4fv(u['u_bounds'], new Float32Array(bounds));
+    gl.uniform4fv(u['u_bounds'] ?? null, new Float32Array(bounds));
 
     // Gradient-specific params
-    gl.uniform1f(u['u_angle'], gradient.angle ?? 0);
+    gl.uniform1f(u['u_angle'] ?? null, gradient.angle ?? 0);
     gl.uniform2fv(
-      u['u_center'],
+      u['u_center'] ?? null,
       new Float32Array([gradient.center?.x ?? 0.5, gradient.center?.y ?? 0.5])
     );
-    gl.uniform1f(u['u_radius'], gradient.radius ?? 0.5);
-    gl.uniform1f(u['u_opacity'], opacity);
+    gl.uniform1f(u['u_radius'] ?? null, gradient.radius ?? 0.5);
+    gl.uniform1f(u['u_opacity'] ?? null, opacity);
 
     // Linear gradient start/end — fall back to angle-based computation
     if (gradient.type === 'linear') {
       const start = gradient.start;
       const end = gradient.end;
       if (start && end) {
-        gl.uniform2fv(u['u_gradStart'], new Float32Array([start.x, start.y]));
-        gl.uniform2fv(u['u_gradEnd'], new Float32Array([end.x, end.y]));
+        gl.uniform2fv(u['u_gradStart'] ?? null, new Float32Array([start.x, start.y]));
+        gl.uniform2fv(u['u_gradEnd'] ?? null, new Float32Array([end.x, end.y]));
       } else {
         const fallback = linearGradientFromAngle(gradient.angle ?? 0);
-        gl.uniform2fv(u['u_gradStart'], new Float32Array([fallback.start.x, fallback.start.y]));
-        gl.uniform2fv(u['u_gradEnd'], new Float32Array([fallback.end.x, fallback.end.y]));
+        gl.uniform2fv(u['u_gradStart'] ?? null, new Float32Array([fallback.start.x, fallback.start.y]));
+        gl.uniform2fv(u['u_gradEnd'] ?? null, new Float32Array([fallback.end.x, fallback.end.y]));
       }
     } else {
       // Non-linear gradients: set defaults that won't affect rendering
-      gl.uniform2fv(u['u_gradStart'], new Float32Array([0, 0.5]));
-      gl.uniform2fv(u['u_gradEnd'], new Float32Array([1, 0.5]));
+      gl.uniform2fv(u['u_gradStart'] ?? null, new Float32Array([0, 0.5]));
+      gl.uniform2fv(u['u_gradEnd'] ?? null, new Float32Array([1, 0.5]));
     }
   }
 
@@ -951,7 +1204,7 @@ export class ShapeRenderer {
 
     // Set view-projection matrix
     gl.uniformMatrix3fv(
-      this.program.uniforms.u_viewProjection,
+      this.program.uniforms.u_viewProjection ?? null,
       false,
       mat3.toFloat32Array(viewProjectionMatrix)
     );
@@ -994,10 +1247,10 @@ export class ShapeRenderer {
   ): Float32Array {
     const mix = 0.5;
     return new Float32Array([
-      color[0] * (1 - mix) + tint[0] * mix,
-      color[1] * (1 - mix) + tint[1] * mix,
-      color[2] * (1 - mix) + tint[2] * mix,
-      color[3] * alpha,
+      (color[0] ?? 0) * (1 - mix) + tint[0] * mix,
+      (color[1] ?? 0) * (1 - mix) + tint[1] * mix,
+      (color[2] ?? 0) * (1 - mix) + tint[2] * mix,
+      (color[3] ?? 0) * alpha,
     ]);
   }
 
@@ -1016,7 +1269,7 @@ export class ShapeRenderer {
   ): void {
     if (!this.program) return;
     const gl = this.renderer.context;
-    gl.uniformMatrix3fv(this.program.uniforms.u_model, false, mat3.toFloat32Array(worldMatrix));
+    gl.uniformMatrix3fv(this.program.uniforms.u_model ?? null, false, mat3.toFloat32Array(worldMatrix));
     this.renderFillsAndStrokesGhost(tessellated, fills, strokes, closed, colorOverride);
   }
 
@@ -1073,6 +1326,85 @@ export class ShapeRenderer {
     colorOverride: { tint: [number, number, number]; alpha: number }
   ): void {
     if (node.points.length < 2) return;
+
+    // Multi-contour ghost rendering
+    if (node.subpaths && node.subpaths.length > 0 && node.closed) {
+      const allContours = [node.points, ...node.subpaths];
+      const contourArrays: Float32Array[] = [];
+      for (const contour of allContours) {
+        const processed = applyCornerRadius(contour, true);
+        contourArrays.push(tessellatePathToVertices(processed, true, DEFAULT_TESSELLATION_TOLERANCE));
+      }
+
+      // Compute global vertex starts
+      const globalVertStarts: number[] = [];
+      let totalFloats = 0;
+      for (const arr of contourArrays) {
+        globalVertStarts.push(totalFloats / 2);
+        totalFloats += arr.length;
+      }
+
+      const combined = new Float32Array(totalFloats);
+      let writeOff = 0;
+      for (const arr of contourArrays) {
+        combined.set(arr, writeOff);
+        writeOff += arr.length;
+      }
+
+      // Group by containment and tessellate per group
+      const groups = groupContoursByContainment(contourArrays);
+      const ghostFillIndices: number[] = [];
+      for (const group of groups) {
+        const contourIndices = [group.outer, ...group.holes];
+        let groupFloats = 0;
+        for (const ci of contourIndices) groupFloats += contourArrays[ci]!.length;
+        const groupVerts = new Float32Array(groupFloats);
+        const groupHoles: number[] = [];
+        const localStarts: number[] = [];
+        let lOff = 0;
+        for (let gi = 0; gi < contourIndices.length; gi++) {
+          const ci = contourIndices[gi]!;
+          localStarts.push(lOff / 2);
+          if (gi > 0) groupHoles.push(lOff / 2);
+          groupVerts.set(contourArrays[ci]!, lOff);
+          lOff += contourArrays[ci]!.length;
+        }
+        if (groupVerts.length / 2 < 3) continue;
+        const indices = earcut(groupVerts, groupHoles.length > 0 ? groupHoles : undefined);
+        for (const localIdx of indices) {
+          let slot = 0;
+          for (let gi = contourIndices.length - 1; gi >= 0; gi--) {
+            if (localIdx >= localStarts[gi]!) { slot = gi; break; }
+          }
+          ghostFillIndices.push(globalVertStarts[contourIndices[slot]!]! + localIdx - localStarts[slot]!);
+        }
+      }
+
+      // Ghost fills
+      if (!this.program) return;
+      const gl = this.renderer.context;
+      gl.uniformMatrix3fv(this.program.uniforms.u_model ?? null, false, mat3.toFloat32Array(worldMatrix));
+
+      for (const fill of node.fills) {
+        if (fill.visible && fill.type !== 'none') {
+          const color = this.applyTintAndAlpha(this.getFillColor(fill), colorOverride.tint, colorOverride.alpha);
+          this.renderFillWithColor(combined, ghostFillIndices, color);
+        }
+      }
+
+      // Ghost strokes per contour
+      for (const contourVerts of contourArrays) {
+        for (const stroke of node.strokes) {
+          if (stroke.visible && stroke.width > 0) {
+            const color = this.applyTintAndAlpha(this.getStrokeColor(stroke), colorOverride.tint, colorOverride.alpha);
+            this.renderStrokeWithColor(contourVerts, stroke, true, color);
+          }
+        }
+      }
+      return;
+    }
+
+    // Simple single-contour ghost
     const processed = applyCornerRadius(node.points, node.closed);
     const tessellated = tessellatePathToVertices(
       processed,
@@ -1094,7 +1426,7 @@ export class ShapeRenderer {
   ): void {
     if (!this.program) return;
     const gl = this.renderer.context;
-    gl.uniform4fv(this.program.uniforms.u_color, color);
+    gl.uniform4fv(this.program.uniforms.u_color ?? null, color);
     gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
     gl.bufferSubData(gl.ARRAY_BUFFER, 0, vertices);
     const numVertices = vertices.length / 2;
@@ -1131,7 +1463,7 @@ export class ShapeRenderer {
     );
     const outlineCount = outlineVertices.length / 2;
     if (outlineCount < 3) return;
-    gl.uniform4fv(this.program.uniforms.u_color, color);
+    gl.uniform4fv(this.program.uniforms.u_color ?? null, color);
     gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
     gl.bufferSubData(gl.ARRAY_BUFFER, 0, outlineVertices);
     const indices = earcut(outlineVertices);

@@ -236,7 +236,7 @@ export class BrushTool extends BaseTool {
     // Only add point if it's far enough from the last point
     // This prevents too many points from being captured
     if (this.capturedPoints.length > 0) {
-      const lastPoint = this.capturedPoints[this.capturedPoints.length - 1];
+      const lastPoint = this.capturedPoints[this.capturedPoints.length - 1]!;
       const minDistance = 2 / this.context.camera.zoom; // 2 screen pixels
       if (vec2.distance(point.position, lastPoint.position) < minDistance) {
         return;

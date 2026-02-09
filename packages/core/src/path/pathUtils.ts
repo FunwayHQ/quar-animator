@@ -791,15 +791,15 @@ export function generateStrokeOutlineVertices(
   const outline = new Float32Array(totalCoords);
   // Copy left side
   for (let i = 0; i < leftSide.length; i++) {
-    outline[i] = leftSide[i];
+    outline[i] = leftSide[i]!;
   }
   // Copy right side in reverse order
   const rightCount = rightSide.length / 2;
   for (let i = 0; i < rightCount; i++) {
     const srcIdx = (rightCount - 1 - i) * 2;
     const dstIdx = leftSide.length + i * 2;
-    outline[dstIdx] = rightSide[srcIdx];
-    outline[dstIdx + 1] = rightSide[srcIdx + 1];
+    outline[dstIdx] = rightSide[srcIdx]!;
+    outline[dstIdx + 1] = rightSide[srcIdx + 1]!;
   }
 
   return outline;

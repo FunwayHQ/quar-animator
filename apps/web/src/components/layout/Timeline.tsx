@@ -2,7 +2,7 @@ import { useRef, useCallback, useState, useEffect, useMemo } from 'react';
 import { useSceneGraph } from '../../contexts/SceneGraphContext';
 import { useEditorStore } from '../../stores/editorStore';
 import { formatTimecode, getTracksByNode } from '@quar/animation';
-import type { Node, Keyframe, EasingFunction } from '@quar/types';
+import type { Node, EasingFunction } from '@quar/types';
 import { ContextMenu } from '../common/ContextMenu';
 import type { ContextMenuEntry } from '../common/ContextMenu';
 import { OnionSkinPanel } from '../common/OnionSkinPanel';
@@ -361,7 +361,7 @@ export function Timeline({ playback }: TimelineProps = {}) {
     const kfClipboard = useEditorStore.getState().keyframeClipboard;
     const selectedIds = useEditorStore.getState().selectedNodeIds;
     if (kfClipboard && selectedIds.size > 0) {
-      const firstNodeId = [...selectedIds][0];
+      const firstNodeId = [...selectedIds][0]!;
       items.push({ type: 'separator' });
       items.push({
         id: 'paste-keyframes',

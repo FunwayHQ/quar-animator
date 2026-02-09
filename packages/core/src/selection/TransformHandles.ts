@@ -193,7 +193,7 @@ export class TransformHandles {
     for (const corner of cornerHandles) {
       const distance = vec2.distance(testPoint, corner.screenPosition);
       if (distance <= rotationRadius && this.isOutsideBounds(testPoint, handles)) {
-        return CORNER_TO_ROTATE[corner.position];
+        return CORNER_TO_ROTATE[corner.position] ?? null;
       }
     }
 

@@ -96,7 +96,7 @@ export function ContextMenu({ x, y, items, onClose }: ContextMenuProps) {
       let buttonIndex = 0;
       for (let i = 0; i < items.length; i++) {
         if (i === index) break;
-        if (!isSeparator(items[i])) buttonIndex++;
+        if (!isSeparator(items[i]!)) buttonIndex++;
       }
       buttons[buttonIndex]?.focus();
       focusIndexRef.current = index;
@@ -120,7 +120,7 @@ export function ContextMenu({ x, y, items, onClose }: ContextMenuProps) {
         e.preventDefault();
         const currentPos = navigable.indexOf(focusIndexRef.current);
         const nextPos = currentPos < navigable.length - 1 ? currentPos + 1 : 0;
-        focusItem(navigable[nextPos]);
+        focusItem(navigable[nextPos] ?? 0);
         return;
       }
 
@@ -128,7 +128,7 @@ export function ContextMenu({ x, y, items, onClose }: ContextMenuProps) {
         e.preventDefault();
         const currentPos = navigable.indexOf(focusIndexRef.current);
         const prevPos = currentPos > 0 ? currentPos - 1 : navigable.length - 1;
-        focusItem(navigable[prevPos]);
+        focusItem(navigable[prevPos] ?? 0);
         return;
       }
 

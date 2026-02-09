@@ -9,7 +9,7 @@
  */
 
 import type { Node, PropertyTrack, Timeline } from '@quar/types';
-import { findTrack, interpolateValue, interpolators } from './Timeline';
+import { interpolateValue, interpolators } from './Timeline';
 
 // ============================================================================
 // Property path get/set
@@ -38,24 +38,25 @@ export function setProperty<N extends Node>(node: N, path: string, value: unknow
 
   // Single-level path
   if (parts.length === 1) {
-    return { ...node, [parts[0]]: value };
+    return { ...node, [parts[0]!]: value };
   }
 
   // Multi-level: clone each level on the path
   const root = { ...node } as Record<string, unknown>;
   let current = root;
   for (let i = 0; i < parts.length - 1; i++) {
-    const existing = current[parts[i]];
+    const key = parts[i]!;
+    const existing = current[key];
     const cloned =
       typeof existing === 'object' && existing !== null
         ? Array.isArray(existing)
           ? [...existing]
           : { ...(existing as Record<string, unknown>) }
         : {};
-    current[parts[i]] = cloned;
+    current[key] = cloned;
     current = cloned as Record<string, unknown>;
   }
-  current[parts[parts.length - 1]] = value;
+  current[parts[parts.length - 1]!] = value;
 
   return root as N;
 }

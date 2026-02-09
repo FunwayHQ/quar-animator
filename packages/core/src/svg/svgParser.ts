@@ -128,7 +128,7 @@ function parseViewBox(attr: string | null): { x: number; y: number; width: numbe
   if (!attr) return null;
   const parts = attr.trim().split(/[\s,]+/).map(Number);
   if (parts.length < 4 || parts.some(isNaN)) return null;
-  return { x: parts[0], y: parts[1], width: parts[2], height: parts[3] };
+  return { x: parts[0]!, y: parts[1]!, width: parts[2]!, height: parts[3]! };
 }
 
 // ============================================================================

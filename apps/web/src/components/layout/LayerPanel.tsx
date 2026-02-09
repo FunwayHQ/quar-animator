@@ -251,7 +251,7 @@ function LayerRow({
       </div>
       {expanded &&
         hasChildren &&
-        node.children.map((childId) => (
+        node.children.map((childId: string) => (
           <LayerRowById
             key={childId}
             nodeId={childId}
@@ -692,7 +692,7 @@ export function LayerPanel() {
         const parentNode = parentId ? sceneGraph.getNode(parentId) : null;
         const siblings = parentNode
           ? parentNode.children
-          : sceneGraph.getRootNodes().map((n) => n.id);
+          : sceneGraph.getRootNodes().map((n: Node) => n.id);
         const targetIndex = siblings.indexOf(dropTarget.nodeId);
         insertIndex = dropTarget.position === 'before' ? targetIndex : targetIndex + 1;
       }
@@ -744,7 +744,7 @@ export function LayerPanel() {
             No layers yet
           </div>
         ) : (
-          rootNodes.map((node) => (
+          rootNodes.map((node: Node) => (
             <LayerRow
               key={node.id}
               node={node}

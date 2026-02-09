@@ -104,7 +104,7 @@ function createMockWebGL2Context() {
     drawElements: vi.fn(),
 
     // Canvas reference (will be set per-canvas)
-    canvas: null,
+    canvas: null as HTMLCanvasElement | null,
   };
 }
 

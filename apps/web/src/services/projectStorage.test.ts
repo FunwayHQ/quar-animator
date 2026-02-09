@@ -72,8 +72,8 @@ describe('ProjectStorage', () => {
       const projects = await listProjects();
       expect(projects).toHaveLength(2);
       // Most recent first
-      expect(projects[0].id).toBe('proj2');
-      expect(projects[1].id).toBe('proj1');
+      expect(projects[0]!.id).toBe('proj2');
+      expect(projects[1]!.id).toBe('proj1');
     });
 
     it('should return empty array when no projects', async () => {

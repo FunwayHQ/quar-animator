@@ -571,7 +571,12 @@ describe('EditorStore', () => {
         removeNode: vi.fn((id: string) => {
           nodes.delete(id);
         }),
+        moveNode: vi.fn(),
         getDescendants: () => [],
+        traverse: (cb: (node: any, depth: number) => void) => {
+          for (const node of nodes.values()) cb(node, 0);
+        },
+        getWorldTransform: () => ({ a: 1, b: 0, c: 0, d: 1, tx: 0, ty: 0 }),
         _addTestNode: (node: any) => {
           nodes.set(node.id, node);
         },
@@ -634,7 +639,7 @@ describe('EditorStore', () => {
       pasteClipboard(sg);
 
       expect(sg.addNode).toHaveBeenCalledOnce();
-      const addedNode = sg.addNode.mock.calls[0][0];
+      const addedNode = sg.addNode.mock.calls[0]![0];
       expect(addedNode.id).not.toBe('rect1');
     });
 
@@ -646,7 +651,7 @@ describe('EditorStore', () => {
       const { pasteClipboard } = useEditorStore.getState();
       pasteClipboard(sg);
 
-      const addedNode = sg.addNode.mock.calls[0][0];
+      const addedNode = sg.addNode.mock.calls[0]![0];
       expect(addedNode.transform.position.x).toBe(70);
       expect(addedNode.transform.position.y).toBe(30);
     });
@@ -681,7 +686,7 @@ describe('EditorStore', () => {
       duplicateSelection(sg);
 
       expect(sg.addNode).toHaveBeenCalledOnce();
-      const addedNode = sg.addNode.mock.calls[0][0];
+      const addedNode = sg.addNode.mock.calls[0]![0];
       expect(addedNode.id).not.toBe('rect1');
       expect(addedNode.transform.position.x).toBe(30);
     });
@@ -834,7 +839,7 @@ describe('EditorStore', () => {
       pasteKeyframes('node2', 50);
       const { timeline } = useEditorStore.getState();
       // Should now have tracks for node1 and node2
-      const node2Tracks = timeline.tracks.filter((t) => t.nodeId === 'node2');
+      const node2Tracks = timeline.tracks.filter((t: { nodeId: string }) => t.nodeId === 'node2');
       expect(node2Tracks.length).toBe(1);
       expect(node2Tracks[0].keyframes.length).toBe(2);
       expect(node2Tracks[0].keyframes[0].time).toBe(50);

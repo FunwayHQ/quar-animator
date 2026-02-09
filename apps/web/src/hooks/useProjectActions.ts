@@ -146,7 +146,6 @@ export function useProjectActions(options: UseProjectActionsOptions = {}): Proje
         projectCreatedAt: null,
       });
 
-      const state = useEditorStore.getState();
       const data = serializeProject(name, sceneGraph, getEditorSnapshot());
 
       useEditorStore.setState({

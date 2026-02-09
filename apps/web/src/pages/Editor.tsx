@@ -58,7 +58,7 @@ function EditorInner() {
     if (choice) {
       const idx = parseInt(choice, 10) - 1;
       if (idx >= 0 && idx < projects.length) {
-        await projectActions.openProject(projects[idx].id);
+        await projectActions.openProject(projects[idx]!.id);
       }
     }
   }, [projectActions]);

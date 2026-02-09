@@ -11,7 +11,7 @@
  */
 
 import { useState, useRef, useCallback, useEffect } from 'react';
-import type { Color, Gradient } from '@quar/types';
+import type { Color, Gradient, GradientStop } from '@quar/types';
 import { linearGradientFromAngle } from '@quar/core';
 import { ColorPicker } from './ColorPicker';
 import styles from './GradientEditor.module.css';
@@ -110,7 +110,7 @@ export function GradientEditor({
       if (!bar) return;
       const rect = bar.getBoundingClientRect();
       const offset = clamp((e.clientX - rect.left) / rect.width, 0, 1);
-      const newStops = gradient.stops.map((s, i) =>
+      const newStops = gradient.stops.map((s: GradientStop, i: number) =>
         i === draggingStopRef.current ? { ...s, offset } : s
       );
       onChange({ ...gradient, stops: newStops });
@@ -166,7 +166,7 @@ export function GradientEditor({
       e.preventDefault();
       e.stopPropagation();
       if (gradient.stops.length <= 2) return; // Need at least 2 stops
-      const newStops = gradient.stops.filter((_, i) => i !== index);
+      const newStops = gradient.stops.filter((_: GradientStop, i: number) => i !== index);
       onChange({ ...gradient, stops: newStops });
       setSelectedStopIndex(Math.min(selectedStopIndex, newStops.length - 1));
     },
@@ -185,7 +185,7 @@ export function GradientEditor({
 
   const handleStopColorChange = useCallback(
     (color: Color) => {
-      const newStops = gradient.stops.map((s, i) =>
+      const newStops = gradient.stops.map((s: GradientStop, i: number) =>
         i === selectedStopIndex ? { ...s, color } : s
       );
       onChange({ ...gradient, stops: newStops });
@@ -214,7 +214,7 @@ export function GradientEditor({
       const num = parseFloat(value);
       if (isNaN(num)) return;
       const offset = clamp(num / 100, 0, 1);
-      const newStops = gradient.stops.map((s, i) =>
+      const newStops = gradient.stops.map((s: GradientStop, i: number) =>
         i === selectedStopIndex ? { ...s, offset } : s
       );
       onChange({ ...gradient, stops: newStops });
@@ -224,7 +224,7 @@ export function GradientEditor({
 
   const handleRemoveStop = useCallback(() => {
     if (gradient.stops.length <= 2) return;
-    const newStops = gradient.stops.filter((_, i) => i !== selectedStopIndex);
+    const newStops = gradient.stops.filter((_: GradientStop, i: number) => i !== selectedStopIndex);
     onChange({ ...gradient, stops: newStops });
     setSelectedStopIndex(Math.min(selectedStopIndex, newStops.length - 1));
   }, [gradient, onChange, selectedStopIndex]);
@@ -322,7 +322,7 @@ export function GradientEditor({
       >
         <div className={styles.gradientPreview} style={{ background: gradientToCSS(gradient) }} />
         {/* Stop handles */}
-        {gradient.stops.map((stop, index) => (
+        {gradient.stops.map((stop: GradientStop, index: number) => (
           <div
             key={index}
             className={`${styles.stopHandle} ${index === selectedStopIndex ? styles.stopHandleSelected : ''}`}

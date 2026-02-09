@@ -4,6 +4,7 @@ import type {
   RectangleNode,
   EllipseNode,
   PolygonNode,
+  PathNode,
   Color,
   Gradient,
   Fill,
@@ -17,7 +18,7 @@ import { KeyframeIndicator } from '../common/KeyframeIndicator';
 import { ColorPicker } from '../common/ColorPicker';
 import { GradientEditor } from '../common/GradientEditor';
 import type { FillType } from '../common/GradientEditor';
-import { createDefaultGradient, SelectionManager } from '@quar/core';
+import { createDefaultGradient, SelectionManager, getPathBounds } from '@quar/core';
 import type { SceneGraph } from '@quar/core';
 import { getKeyframeState } from '../../hooks/useKeyframeState';
 import styles from './PropertiesPanel.module.css';
@@ -69,9 +70,34 @@ function getNodeSize(node: Node, sceneGraph?: SceneGraph): { width: number; heig
       const scaleY = polygon.transform.scale?.y ?? 1;
       return { width: polygon.radius * 2 * scaleX, height: polygon.radius * 2 * scaleY };
     }
+    case 'path': {
+      const pathNode = node as PathNode;
+      const bounds = getPathBounds(pathNode.points, pathNode.closed);
+      if (!bounds) return { width: 0, height: 0 };
+      let w = bounds.width;
+      let h = bounds.height;
+      if (pathNode.subpaths) {
+        let minX = bounds.x, maxX = bounds.x + bounds.width;
+        let minY = bounds.y, maxY = bounds.y + bounds.height;
+        for (const sp of pathNode.subpaths) {
+          const spB = getPathBounds(sp, true);
+          if (spB) {
+            minX = Math.min(minX, spB.x);
+            maxX = Math.max(maxX, spB.x + spB.width);
+            minY = Math.min(minY, spB.y);
+            maxY = Math.max(maxY, spB.y + spB.height);
+          }
+        }
+        w = maxX - minX;
+        h = maxY - minY;
+      }
+      const sx = pathNode.transform.scale?.x ?? 1;
+      const sy = pathNode.transform.scale?.y ?? 1;
+      return { width: w * sx, height: h * sy };
+    }
     case 'group': {
       if (!sceneGraph) return { width: 0, height: 0 };
-      const childIds = new Set(sceneGraph.getDescendants(node.id).map((n) => n.id));
+      const childIds = new Set(sceneGraph.getDescendants(node.id).map((n: Node) => n.id));
       const bounds = groupBoundsManager.getSelectionBounds(childIds, sceneGraph);
       if (bounds) return { width: bounds.rect.width, height: bounds.rect.height };
       return { width: 0, height: 0 };
@@ -98,7 +124,7 @@ function handleNumericInputKeyDown(
 }
 
 function getGroupPosition(node: Node, sceneGraph: SceneGraph): { x: number; y: number } {
-  const childIds = new Set(sceneGraph.getDescendants(node.id).map((n) => n.id));
+  const childIds = new Set(sceneGraph.getDescendants(node.id).map((n: Node) => n.id));
   const bounds = groupBoundsManager.getSelectionBounds(childIds, sceneGraph);
   if (bounds) {
     return {
@@ -110,7 +136,7 @@ function getGroupPosition(node: Node, sceneGraph: SceneGraph): { x: number; y: n
 }
 
 function isSizeEditable(node: Node): boolean {
-  return node.type === 'rectangle' || node.type === 'ellipse' || node.type === 'polygon';
+  return node.type === 'rectangle' || node.type === 'ellipse' || node.type === 'polygon' || node.type === 'path';
 }
 
 function getSizePropertyPaths(node: Node): { w: string; h: string } {
@@ -120,6 +146,7 @@ function getSizePropertyPaths(node: Node): { w: string; h: string } {
     case 'ellipse':
       return { w: 'radiusX', h: 'radiusY' };
     case 'polygon':
+    case 'path':
       return { w: 'transform.scale.x', h: 'transform.scale.y' };
     default:
       return { w: 'width', h: 'height' };
@@ -279,6 +306,41 @@ export function PropertiesPanel() {
           addKeyframeAtFrame(selectedId, 'transform.scale.x', currentFrame, scaleX);
           addKeyframeAtFrame(selectedId, 'transform.scale.y', currentFrame, scaleY);
         }
+      } else if (nodeToUpdate.type === 'path') {
+        const pathNode = nodeToUpdate as PathNode;
+        const bounds = getPathBounds(pathNode.points, pathNode.closed);
+        if (bounds && bounds.width > 0 && bounds.height > 0) {
+          // Include subpaths in base size
+          let baseW = bounds.width;
+          let baseH = bounds.height;
+          if (pathNode.subpaths) {
+            let minX = bounds.x, maxX = bounds.x + bounds.width;
+            let minY = bounds.y, maxY = bounds.y + bounds.height;
+            for (const sp of pathNode.subpaths) {
+              const spB = getPathBounds(sp, true);
+              if (spB) {
+                minX = Math.min(minX, spB.x);
+                maxX = Math.max(maxX, spB.x + spB.width);
+                minY = Math.min(minY, spB.y);
+                maxY = Math.max(maxY, spB.y + spB.height);
+              }
+            }
+            baseW = maxX - minX;
+            baseH = maxY - minY;
+          }
+          const scaleX = w / baseW;
+          const scaleY = h / baseH;
+          sceneGraph.updateNode(selectedId, {
+            transform: {
+              ...nodeToUpdate.transform,
+              scale: { x: scaleX, y: scaleY },
+            },
+          });
+          if (autoKeyframe) {
+            addKeyframeAtFrame(selectedId, 'transform.scale.x', currentFrame, scaleX);
+            addKeyframeAtFrame(selectedId, 'transform.scale.y', currentFrame, scaleY);
+          }
+        }
       }
     },
     [selectedId, sceneGraph, autoKeyframe, currentFrame, addKeyframeAtFrame]
@@ -318,18 +380,6 @@ export function PropertiesPanel() {
   // ============================================================================
   // Fill handlers (array-based)
   // ============================================================================
-
-  const updateFillAtIndex = useCallback(
-    (index: number, updatedFill: Fill) => {
-      if (!selectedId) return;
-      const currentNode = sceneGraph.getNode(selectedId);
-      if (!currentNode) return;
-      const fills = [...getNodeFills(currentNode)];
-      fills[index] = updatedFill;
-      sceneGraph.updateNode(selectedId, { fills } as Partial<Node>);
-    },
-    [selectedId, sceneGraph]
-  );
 
   const handleFillColorChange = useCallback(
     (index: number, hex: string) => {
@@ -1496,7 +1546,7 @@ export function PropertiesPanel() {
                                 aria-pressed={(stroke.align ?? 'center') === a}
                                 data-testid={`stroke-align-${index}-${a}`}
                               >
-                                {a[0].toUpperCase()}
+                                {a[0]!.toUpperCase()}
                               </button>
                             ))}
                           </div>

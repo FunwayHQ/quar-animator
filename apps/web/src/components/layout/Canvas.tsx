@@ -8,7 +8,7 @@ import {
   SelectionManager,
   TransformHandles,
 } from '@quar/core';
-import type { Vector2 } from '@quar/types';
+import type { Node, Vector2 } from '@quar/types';
 import { evaluateNodeAtFrame, applyAnimatedValues } from '@quar/animation';
 import { useCanvasTools } from '../../hooks/useCanvasTools';
 import { useToolShortcuts } from '../../hooks/useToolShortcuts';
@@ -78,6 +78,10 @@ export function Canvas() {
   const selectAll = useEditorStore((state) => state.selectAll);
   const groupSelection = useEditorStore((state) => state.groupSelection);
   const ungroupSelection = useEditorStore((state) => state.ungroupSelection);
+  const booleanUnion = useEditorStore((state) => state.booleanUnion);
+  const booleanSubtract = useEditorStore((state) => state.booleanSubtract);
+  const booleanIntersect = useEditorStore((state) => state.booleanIntersect);
+  const booleanExclude = useEditorStore((state) => state.booleanExclude);
   const editingGradient = useEditorStore((state) => state.editingGradient);
   const showRulers = useEditorStore((state) => state.showRulers);
 
@@ -156,6 +160,40 @@ export function Canvas() {
     window.addEventListener('keydown', handleGlobalKeyDown);
     return () => window.removeEventListener('keydown', handleGlobalKeyDown);
   }, [sceneGraph, groupSelection, ungroupSelection]);
+
+  // Global keyboard shortcuts for boolean operations (Ctrl+Shift+U/D/I/X)
+  useEffect(() => {
+    const handleBooleanKeyDown = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey) || !e.shiftKey) return;
+
+      // Skip when input is focused
+      const tag = (document.activeElement as HTMLElement)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+
+      const key = e.key.toLowerCase();
+      switch (key) {
+        case 'u':
+          e.preventDefault();
+          booleanUnion(sceneGraph);
+          break;
+        case 'd':
+          e.preventDefault();
+          booleanSubtract(sceneGraph);
+          break;
+        case 'i':
+          e.preventDefault();
+          booleanIntersect(sceneGraph);
+          break;
+        case 'x':
+          e.preventDefault();
+          booleanExclude(sceneGraph);
+          break;
+      }
+    };
+
+    window.addEventListener('keydown', handleBooleanKeyDown);
+    return () => window.removeEventListener('keydown', handleBooleanKeyDown);
+  }, [sceneGraph, booleanUnion, booleanSubtract, booleanIntersect, booleanExclude]);
 
   // Selection bounds for display: un-rotated bounds + rotation angle for single selection,
   // AABB + rotation 0 for multi-selection.
@@ -317,7 +355,7 @@ export function Canvas() {
           if (onionSkin.enabled && (!playing || onionSkin.showDuringPlayback)) {
             const sg = sceneGraphRef.current;
             const getNodesAtFrame = (f: number) => {
-              return sg.getRootNodes().map((node) => {
+              return sg.getRootNodes().map((node: Node) => {
                 const values = evaluateNodeAtFrame(tl, node.id, f);
                 if (values.size > 0) {
                   return applyAnimatedValues(node, values);
@@ -364,6 +402,7 @@ export function Canvas() {
       };
     } catch (error) {
       console.error('Failed to initialize WebGL:', error);
+      return;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- initialization should only run once on mount
   }, []);
@@ -654,6 +693,13 @@ export function Canvas() {
         return n && n.type === 'group';
       });
 
+      const SHAPE_TYPES = new Set(['rectangle', 'ellipse', 'polygon', 'path']);
+      const shapeCount = Array.from(selectedNodeIds).filter((id) => {
+        const n = sceneGraph.getNode(id);
+        return n && SHAPE_TYPES.has(n.type);
+      }).length;
+      const canBoolean = shapeCount >= 2;
+
       return [
         { id: 'copy', label: 'Copy', shortcut: 'Ctrl+C', onClick: () => copySelection(sceneGraph) },
         {
@@ -676,6 +722,35 @@ export function Canvas() {
           shortcut: 'Ctrl+Shift+G',
           disabled: !hasGroup,
           onClick: () => ungroupSelection(sceneGraph),
+        },
+        { type: 'separator' },
+        {
+          id: 'boolean-union',
+          label: 'Union',
+          shortcut: 'Ctrl+Shift+U',
+          disabled: !canBoolean,
+          onClick: () => booleanUnion(sceneGraph),
+        },
+        {
+          id: 'boolean-subtract',
+          label: 'Subtract',
+          shortcut: 'Ctrl+Shift+D',
+          disabled: !canBoolean,
+          onClick: () => booleanSubtract(sceneGraph),
+        },
+        {
+          id: 'boolean-intersect',
+          label: 'Intersect',
+          shortcut: 'Ctrl+Shift+I',
+          disabled: !canBoolean,
+          onClick: () => booleanIntersect(sceneGraph),
+        },
+        {
+          id: 'boolean-exclude',
+          label: 'Exclude',
+          shortcut: 'Ctrl+Shift+X',
+          disabled: !canBoolean,
+          onClick: () => booleanExclude(sceneGraph),
         },
         { type: 'separator' },
         {
@@ -736,6 +811,10 @@ export function Canvas() {
     selectAll,
     groupSelection,
     ungroupSelection,
+    booleanUnion,
+    booleanSubtract,
+    booleanIntersect,
+    booleanExclude,
   ]);
 
   // --------------------------------------------------------------------------
@@ -796,7 +875,7 @@ export function Canvas() {
   // --------------------------------------------------------------------------
 
   const handleOverlayPointerDown = useCallback(
-    (handle: { position: string; screenPosition: Vector2 }, e: React.PointerEvent) => {
+    (_handle: { position: string; screenPosition: Vector2 }, e: React.PointerEvent) => {
       const camera = cameraRef.current;
       const canvas = canvasRef.current;
       if (!camera || !canvas) return;
