@@ -75,6 +75,8 @@ function getNodeSize(node: Node, sceneGraph?: SceneGraph): { width: number; heig
   }
 }
 
+const noop = () => {};
+
 function getGroupPosition(node: Node, sceneGraph: SceneGraph): { x: number; y: number } {
   const childIds = new Set(sceneGraph.getDescendants(node.id).map((n) => n.id));
   const bounds = groupBoundsManager.getSelectionBounds(childIds, sceneGraph);
@@ -152,17 +154,36 @@ export function PropertiesPanel() {
   const snapToGrid = useEditorStore((state) => state.snapToGrid);
   const toggleSnapToGrid = useEditorStore((state) => state.toggleSnapToGrid);
 
-  // Re-render on SceneGraph changes
+  // Re-render on SceneGraph changes (any mutation)
   const [, setVersion] = useState(0);
   useEffect(() => {
     const increment = () => setVersion((v) => v + 1);
-    const unsub = sceneGraph.on('nodeChanged', increment);
-    return unsub;
+    const unsub1 = sceneGraph.on('nodeChanged', increment);
+    const unsub2 = sceneGraph.on('nodeAdded', increment);
+    const unsub3 = sceneGraph.on('nodeRemoved', increment);
+    return () => {
+      unsub1();
+      unsub2();
+      unsub3();
+    };
   }, [sceneGraph]);
 
   // Get the first selected node (single-selection for properties)
   const selectedId = selectedNodeIds.size > 0 ? [...selectedNodeIds][0] : null;
   const node = selectedId ? sceneGraph.getNode(selectedId) : null;
+
+  // DEBUG: trace selection state at runtime (remove after fixing)
+  if (
+    typeof window !== 'undefined' &&
+    (window as Record<string, unknown>).__QUAR_DEBUG_PROPS !== false
+  ) {
+    console.log('[PropertiesPanel] render:', {
+      selectedNodeIdsSize: selectedNodeIds.size,
+      selectedId,
+      nodeType: node?.type ?? null,
+      sceneGraphNodeCount: sceneGraph.getRootNodes().length,
+    });
+  }
 
   const handlePositionChange = useCallback(
     (axis: 'x' | 'y', value: string) => {
@@ -692,7 +713,7 @@ export function PropertiesPanel() {
                   <ScrubLabel
                     label="X"
                     value={Math.round(pos.x)}
-                    onChange={isGroup ? undefined : (v) => handlePositionChange('x', String(v))}
+                    onChange={isGroup ? noop : (v) => handlePositionChange('x', String(v))}
                   />
                   <input
                     id="prop-pos-x"
@@ -707,7 +728,7 @@ export function PropertiesPanel() {
                   <ScrubLabel
                     label="Y"
                     value={Math.round(pos.y)}
-                    onChange={isGroup ? undefined : (v) => handlePositionChange('y', String(v))}
+                    onChange={isGroup ? noop : (v) => handlePositionChange('y', String(v))}
                   />
                   <input
                     type="text"
@@ -761,7 +782,7 @@ export function PropertiesPanel() {
                   <ScrubLabel
                     label="H"
                     value={Math.round(size.height)}
-                    onChange={isGroup ? undefined : (v) => handleSizeChange('height', String(v))}
+                    onChange={isGroup ? noop : (v) => handleSizeChange('height', String(v))}
                     min={1}
                   />
                   <input
