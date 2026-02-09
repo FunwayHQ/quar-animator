@@ -488,7 +488,7 @@ export function Canvas() {
   // Wheel Handler (Zoom)
   // --------------------------------------------------------------------------
 
-  const handleWheel = useCallback((e: React.WheelEvent) => {
+  const handleWheel = useCallback((e: WheelEvent) => {
     const camera = cameraRef.current;
     const canvas = canvasRef.current;
     if (!camera || !canvas) return;
@@ -505,6 +505,14 @@ export function Canvas() {
     const zoomDelta = -e.deltaY;
     camera.zoomAt(screenPos, zoomDelta);
   }, []);
+
+  // Attach wheel listener as non-passive so preventDefault() blocks browser zoom (Ctrl+Scroll)
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    canvas.addEventListener('wheel', handleWheel, { passive: false });
+    return () => canvas.removeEventListener('wheel', handleWheel);
+  }, [handleWheel]);
 
   // --------------------------------------------------------------------------
   // Keyboard Handlers
@@ -867,7 +875,6 @@ export function Canvas() {
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseLeave}
-        onWheel={handleWheel}
         onKeyDown={handleKeyDown}
         onKeyUp={handleKeyUp}
         onContextMenu={handleContextMenu}
