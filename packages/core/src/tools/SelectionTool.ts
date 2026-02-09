@@ -245,7 +245,8 @@ export class SelectionTool extends BaseTool {
       for (const [id, startPos] of this.moveStartPositions) {
         const node = this.context.sceneGraph.getNode(id);
         if (node) {
-          const newPos = this.snapPosition(vec2.add(startPos, delta));
+          const rawPos = vec2.add(startPos, delta);
+          const newPos = this.snapNodePosition(node, rawPos);
           this.context.sceneGraph.updateNode(id, {
             transform: {
               ...node.transform,
@@ -414,7 +415,7 @@ export class SelectionTool extends BaseTool {
           const node = this.context.sceneGraph.getNode(id);
           if (node) {
             const rawPos = vec2.add(node.transform.position, delta);
-            const newPos = snapOn ? this.snapPosition(rawPos) : rawPos;
+            const newPos = snapOn ? this.snapNodePosition(node, rawPos) : rawPos;
             this.context.sceneGraph.updateNode(id, {
               transform: {
                 ...node.transform,
@@ -580,6 +581,57 @@ export class SelectionTool extends BaseTool {
   private snapPosition(pos: Vector2): Vector2 {
     if (!this.context.getSnapToGrid?.()) return pos;
     return { x: this.snapValue(pos.x), y: this.snapValue(pos.y) };
+  }
+
+  /**
+   * Snap a node's center position so that its top-left corner aligns with the grid.
+   * Falls back to plain center snap for nodes with unknown dimensions.
+   */
+  private snapNodePosition(node: Node, centerPos: Vector2): Vector2 {
+    if (!this.context.getSnapToGrid?.()) return centerPos;
+
+    const size = this.getNodeBoundsSize(node);
+    if (size.width === 0 && size.height === 0) {
+      return this.snapPosition(centerPos);
+    }
+
+    const anchor = node.transform.anchor ?? { x: 0.5, y: 0.5 };
+    // Compute top-left from center
+    const topLeft = {
+      x: centerPos.x - size.width * anchor.x,
+      y: centerPos.y - size.height * anchor.y,
+    };
+    // Snap top-left to grid
+    const snappedTL = this.snapPosition(topLeft);
+    // Convert back to center
+    return {
+      x: snappedTL.x + size.width * anchor.x,
+      y: snappedTL.y + size.height * anchor.y,
+    };
+  }
+
+  /** Get bounding box dimensions for a node (used for snap offset). */
+  private getNodeBoundsSize(node: Node): { width: number; height: number } {
+    switch (node.type) {
+      case 'rectangle':
+        return {
+          width: (node as { width: number }).width,
+          height: (node as { height: number }).height,
+        };
+      case 'ellipse':
+        return {
+          width: (node as { radiusX: number }).radiusX * 2,
+          height: (node as { radiusY: number }).radiusY * 2,
+        };
+      case 'polygon': {
+        const p = node as { radius: number; transform: { scale?: Vector2 } };
+        const sx = p.transform.scale?.x ?? 1;
+        const sy = p.transform.scale?.y ?? 1;
+        return { width: p.radius * 2 * sx, height: p.radius * 2 * sy };
+      }
+      default:
+        return { width: 0, height: 0 };
+    }
   }
 
   // --------------------------------------------------------------------------

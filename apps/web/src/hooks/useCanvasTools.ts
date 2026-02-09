@@ -174,7 +174,18 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
   const getDefaultFill = useCallback(() => defaultFillRef.current, []);
   const getDefaultStroke = useCallback(() => defaultStrokeRef.current, []);
   const getSnapToGrid = useCallback(() => snapToGridRef.current, []);
-  const getGridSize = useCallback(() => gridSizeRef.current, []);
+  // Compute adaptive grid size matching the visible Grid rendering
+  const getGridSize = useCallback(() => {
+    if (!camera) return gridSizeRef.current;
+    const zoom = camera.zoom;
+    const majorSpacing = 100;
+    const minorDivisions = 5;
+    let spacing = majorSpacing;
+    // Match Grid.calculateAdaptiveSpacing logic
+    while (spacing * zoom < 50) spacing *= 2;
+    while (spacing * zoom > 200) spacing /= 2;
+    return spacing / minorDivisions;
+  }, [camera]);
 
   // Auto-keyframe callback for canvas transform operations (move/resize/rotate)
   const onTransformComplete = useCallback((nodeIds: Set<string>, type: TransformType) => {

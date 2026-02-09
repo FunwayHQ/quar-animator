@@ -146,9 +146,9 @@ describe('PropertiesPanel', () => {
       useEditorStore.getState().setSelection(['rect1']);
     });
 
-    // Position is 150, 200
-    expect(screen.getByDisplayValue('150')).toBeInTheDocument();
-    expect(screen.getByDisplayValue('200')).toBeInTheDocument();
+    // Position is 150, 200 (displayed with 1 decimal)
+    expect(screen.getByDisplayValue('150.0')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('200.0')).toBeInTheDocument();
   });
 
   it('displays actual node size', () => {
@@ -159,9 +159,9 @@ describe('PropertiesPanel', () => {
       useEditorStore.getState().setSelection(['rect1']);
     });
 
-    // Width 100, Height 50
-    expect(screen.getByDisplayValue('100')).toBeInTheDocument();
-    expect(screen.getByDisplayValue('50')).toBeInTheDocument();
+    // Width 100, Height 50 (displayed with 1 decimal)
+    expect(screen.getByDisplayValue('100.0')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('50.0')).toBeInTheDocument();
   });
 
   it('displays rotation with degree symbol', () => {
@@ -172,7 +172,7 @@ describe('PropertiesPanel', () => {
       useEditorStore.getState().setSelection(['rect1']);
     });
 
-    expect(screen.getByDisplayValue('45\u00B0')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('45.0\u00B0')).toBeInTheDocument();
   });
 
   it('displays appearance section with fill and stroke colors', () => {
@@ -239,7 +239,7 @@ describe('PropertiesPanel', () => {
         useEditorStore.getState().setSelection(['rect1']);
       });
 
-      const widthInput = screen.getByDisplayValue('100');
+      const widthInput = screen.getByDisplayValue('100.0');
       act(() => {
         fireEvent.change(widthInput, { target: { value: '200' } });
       });
@@ -256,7 +256,7 @@ describe('PropertiesPanel', () => {
         useEditorStore.getState().setSelection(['rect1']);
       });
 
-      const heightInput = screen.getByDisplayValue('50');
+      const heightInput = screen.getByDisplayValue('50.0');
       act(() => {
         fireEvent.change(heightInput, { target: { value: '75' } });
       });
@@ -274,7 +274,7 @@ describe('PropertiesPanel', () => {
       });
 
       // Ellipse W = radiusX * 2 = 120
-      const widthInput = screen.getByDisplayValue('120');
+      const widthInput = screen.getByDisplayValue('120.0');
       act(() => {
         fireEvent.change(widthInput, { target: { value: '160' } });
       });
@@ -292,7 +292,7 @@ describe('PropertiesPanel', () => {
       });
 
       // Ellipse H = radiusY * 2 = 80
-      const heightInput = screen.getByDisplayValue('80');
+      const heightInput = screen.getByDisplayValue('80.0');
       act(() => {
         fireEvent.change(heightInput, { target: { value: '100' } });
       });
@@ -309,7 +309,7 @@ describe('PropertiesPanel', () => {
         useEditorStore.getState().setSelection(['rect1']);
       });
 
-      const widthInput = screen.getByDisplayValue('100');
+      const widthInput = screen.getByDisplayValue('100.0');
       act(() => {
         fireEvent.change(widthInput, { target: { value: 'abc' } });
       });
@@ -326,7 +326,7 @@ describe('PropertiesPanel', () => {
         useEditorStore.getState().setSelection(['rect1']);
       });
 
-      const widthInput = screen.getByDisplayValue('100');
+      const widthInput = screen.getByDisplayValue('100.0');
       act(() => {
         fireEvent.change(widthInput, { target: { value: '0' } });
       });
@@ -499,7 +499,7 @@ describe('PropertiesPanel', () => {
         useEditorStore.getState().toggleAspectRatioLock();
       });
 
-      const widthInput = screen.getByDisplayValue('100');
+      const widthInput = screen.getByDisplayValue('100.0');
       act(() => {
         fireEvent.change(widthInput, { target: { value: '200' } });
       });
@@ -522,7 +522,7 @@ describe('PropertiesPanel', () => {
         useEditorStore.getState().toggleAspectRatioLock();
       });
 
-      const heightInput = screen.getByDisplayValue('50');
+      const heightInput = screen.getByDisplayValue('50.0');
       act(() => {
         fireEvent.change(heightInput, { target: { value: '100' } });
       });
@@ -541,7 +541,7 @@ describe('PropertiesPanel', () => {
       });
 
       // Lock is off by default
-      const widthInput = screen.getByDisplayValue('100');
+      const widthInput = screen.getByDisplayValue('100.0');
       act(() => {
         fireEvent.change(widthInput, { target: { value: '200' } });
       });

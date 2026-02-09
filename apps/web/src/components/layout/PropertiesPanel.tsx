@@ -47,6 +47,12 @@ function hexToColor(hex: string): Color | null {
 
 const groupBoundsManager = new SelectionManager();
 
+/** Safely format a number to 1 decimal place — returns '0.0' for NaN/Infinity */
+function fmt1(v: number): string {
+  if (!isFinite(v)) return '0.0';
+  return (Math.round(v * 10) / 10).toFixed(1);
+}
+
 function getNodeSize(node: Node, sceneGraph?: SceneGraph): { width: number; height: number } {
   switch (node.type) {
     case 'rectangle': {
@@ -171,19 +177,6 @@ export function PropertiesPanel() {
   // Get the first selected node (single-selection for properties)
   const selectedId = selectedNodeIds.size > 0 ? [...selectedNodeIds][0] : null;
   const node = selectedId ? sceneGraph.getNode(selectedId) : null;
-
-  // DEBUG: trace selection state at runtime (remove after fixing)
-  if (
-    typeof window !== 'undefined' &&
-    (window as Record<string, unknown>).__QUAR_DEBUG_PROPS !== false
-  ) {
-    console.log('[PropertiesPanel] render:', {
-      selectedNodeIdsSize: selectedNodeIds.size,
-      selectedId,
-      nodeType: node?.type ?? null,
-      sceneGraphNodeCount: sceneGraph.getRootNodes().length,
-    });
-  }
 
   const handlePositionChange = useCallback(
     (axis: 'x' | 'y', value: string) => {
@@ -642,7 +635,7 @@ export function PropertiesPanel() {
           <h3 className={styles.title}>Properties</h3>
         </div>
         <div className={styles.content}>
-          <div className={styles.emptyStateVisible} data-testid="properties-empty">
+          <div className={styles.emptyState} data-testid="properties-empty">
             Select an object to view properties
           </div>
         </div>
@@ -712,14 +705,14 @@ export function PropertiesPanel() {
                 <div className={styles.inputGroup}>
                   <ScrubLabel
                     label="X"
-                    value={Math.round(pos.x)}
+                    value={Math.round(pos.x) || 0}
                     onChange={isGroup ? noop : (v) => handlePositionChange('x', String(v))}
                   />
                   <input
                     id="prop-pos-x"
                     type="text"
                     className={styles.input}
-                    value={Math.round(pos.x)}
+                    value={fmt1(pos.x)}
                     readOnly={isGroup}
                     onChange={(e) => handlePositionChange('x', e.target.value)}
                   />
@@ -727,13 +720,13 @@ export function PropertiesPanel() {
                 <div className={styles.inputGroup}>
                   <ScrubLabel
                     label="Y"
-                    value={Math.round(pos.y)}
+                    value={Math.round(pos.y) || 0}
                     onChange={isGroup ? noop : (v) => handlePositionChange('y', String(v))}
                   />
                   <input
                     type="text"
                     className={styles.input}
-                    value={Math.round(pos.y)}
+                    value={fmt1(pos.y)}
                     readOnly={isGroup}
                     onChange={(e) => handlePositionChange('y', e.target.value)}
                   />
@@ -754,7 +747,7 @@ export function PropertiesPanel() {
                 <div className={styles.inputGroup}>
                   <ScrubLabel
                     label="W"
-                    value={Math.round(size.width)}
+                    value={Math.round(size.width) || 0}
                     onChange={(v) => handleSizeChange('width', String(v))}
                     min={1}
                   />
@@ -762,7 +755,7 @@ export function PropertiesPanel() {
                     id="prop-size-w"
                     type="text"
                     className={styles.input}
-                    value={Math.round(size.width)}
+                    value={fmt1(size.width)}
                     readOnly={!isSizeEditable(node) || isGroup}
                     onChange={(e) => handleSizeChange('width', e.target.value)}
                   />
@@ -781,14 +774,14 @@ export function PropertiesPanel() {
                 <div className={styles.inputGroup}>
                   <ScrubLabel
                     label="H"
-                    value={Math.round(size.height)}
+                    value={Math.round(size.height) || 0}
                     onChange={isGroup ? noop : (v) => handleSizeChange('height', String(v))}
                     min={1}
                   />
                   <input
                     type="text"
                     className={styles.input}
-                    value={Math.round(size.height)}
+                    value={fmt1(size.height)}
                     readOnly={!isSizeEditable(node) || isGroup}
                     onChange={(e) => handleSizeChange('height', e.target.value)}
                   />
@@ -829,7 +822,7 @@ export function PropertiesPanel() {
                             <input
                               type="text"
                               className={styles.input}
-                              value={uniformValue}
+                              value={fmt1(corners[0])}
                               onChange={(e) => handleCornerRadiusChange(e.target.value)}
                               data-testid="corner-radius-input"
                             />
@@ -850,28 +843,28 @@ export function PropertiesPanel() {
                             <div className={styles.inputGroup}>
                               <ScrubLabel
                                 label="TL"
-                                value={Math.round(corners[0])}
+                                value={Math.round(corners[0]) || 0}
                                 onChange={(v) => handleCornerRadiusChange(String(v), 0)}
                                 min={0}
                               />
                               <input
                                 type="text"
                                 className={styles.input}
-                                value={Math.round(corners[0])}
+                                value={fmt1(corners[0])}
                                 onChange={(e) => handleCornerRadiusChange(e.target.value, 0)}
                               />
                             </div>
                             <div className={styles.inputGroup}>
                               <ScrubLabel
                                 label="TR"
-                                value={Math.round(corners[1])}
+                                value={Math.round(corners[1]) || 0}
                                 onChange={(v) => handleCornerRadiusChange(String(v), 1)}
                                 min={0}
                               />
                               <input
                                 type="text"
                                 className={styles.input}
-                                value={Math.round(corners[1])}
+                                value={fmt1(corners[1])}
                                 onChange={(e) => handleCornerRadiusChange(e.target.value, 1)}
                               />
                             </div>
@@ -889,28 +882,28 @@ export function PropertiesPanel() {
                             <div className={styles.inputGroup}>
                               <ScrubLabel
                                 label="BL"
-                                value={Math.round(corners[3])}
+                                value={Math.round(corners[3]) || 0}
                                 onChange={(v) => handleCornerRadiusChange(String(v), 3)}
                                 min={0}
                               />
                               <input
                                 type="text"
                                 className={styles.input}
-                                value={Math.round(corners[3])}
+                                value={fmt1(corners[3])}
                                 onChange={(e) => handleCornerRadiusChange(e.target.value, 3)}
                               />
                             </div>
                             <div className={styles.inputGroup}>
                               <ScrubLabel
                                 label="BR"
-                                value={Math.round(corners[2])}
+                                value={Math.round(corners[2]) || 0}
                                 onChange={(v) => handleCornerRadiusChange(String(v), 2)}
                                 min={0}
                               />
                               <input
                                 type="text"
                                 className={styles.input}
-                                value={Math.round(corners[2])}
+                                value={fmt1(corners[2])}
                                 onChange={(e) => handleCornerRadiusChange(e.target.value, 2)}
                               />
                             </div>
@@ -942,14 +935,14 @@ export function PropertiesPanel() {
                       <div className={styles.inputGroup}>
                         <ScrubLabel
                           label="CR"
-                          value={Math.round(polyRadius)}
+                          value={Math.round(polyRadius) || 0}
                           onChange={(v) => handleCornerRadiusChange(String(v))}
                           min={0}
                         />
                         <input
                           type="text"
                           className={styles.input}
-                          value={Math.round(polyRadius)}
+                          value={fmt1(polyRadius)}
                           onChange={(e) => handleCornerRadiusChange(e.target.value)}
                           data-testid="corner-radius-input"
                         />
@@ -977,7 +970,7 @@ export function PropertiesPanel() {
                 <div className={styles.inputGroup}>
                   <ScrubLabel
                     label="R"
-                    value={Math.round(rotation)}
+                    value={Math.round(rotation) || 0}
                     onChange={(v) => handleRotationChange(String(v))}
                     sensitivity={1}
                     min={-360}
@@ -987,7 +980,7 @@ export function PropertiesPanel() {
                     id="prop-rotation"
                     type="text"
                     className={styles.input}
-                    value={`${Math.round(rotation)}\u00B0`}
+                    value={`${fmt1(rotation)}\u00B0`}
                     onChange={(e) => handleRotationChange(e.target.value)}
                   />
                 </div>
@@ -1209,7 +1202,7 @@ export function PropertiesPanel() {
                           <div className={`${styles.inputGroup} ${styles.inputGroupFlex}`}>
                             <ScrubLabel
                               label="W"
-                              value={Math.round(stroke.width * 10) / 10}
+                              value={Math.round(stroke.width * 10) / 10 || 0}
                               onChange={(v) => handleStrokeWidthChange(index, v)}
                               sensitivity={0.5}
                               min={0.5}
@@ -1218,7 +1211,7 @@ export function PropertiesPanel() {
                             <input
                               type="text"
                               className={styles.input}
-                              value={Math.round(stroke.width * 10) / 10}
+                              value={fmt1(stroke.width)}
                               onChange={(e) => {
                                 const v = parseFloat(e.target.value);
                                 if (!isNaN(v)) handleStrokeWidthChange(index, v);

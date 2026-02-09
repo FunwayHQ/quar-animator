@@ -133,10 +133,12 @@
 
 .input {
   flex: 1;
+  width: 0; /* Let flex-grow size from 0, not intrinsic width */
+  min-width: 36px;
   height: 26px;
   padding: 0 var(--space-sm);
   background: transparent;
-  color: var(--color-text-primary);
+  color: var(--color-text-primary, #fafaf9);
   font-size: var(--font-size-sm);
   font-family: var(--font-family-mono);
   font-weight: var(--font-weight-medium);
@@ -304,7 +306,7 @@
   border-color: var(--color-accent-primary);
 }
 
-.emptyStateVisible {
+.emptyState {
   display: flex;
   flex-direction: column;
   align-items: center;
