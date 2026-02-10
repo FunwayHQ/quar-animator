@@ -106,6 +106,7 @@ export function useProjectActions(options: UseProjectActionsOptions = {}): Proje
       keyframeClipboard: null,
       clipboard: null,
     });
+    useEditorStore.getState().clearHistory();
   }, [sceneGraph]);
 
   // ------ Save Project ------
@@ -179,6 +180,7 @@ export function useProjectActions(options: UseProjectActionsOptions = {}): Proje
         selectedNodeIds: new Set<string>(),
         selectedKeyframeIds: new Set<string>(),
       });
+      useEditorStore.getState().clearHistory();
 
       await setLastProjectId(id);
     },
@@ -217,6 +219,7 @@ export function useProjectActions(options: UseProjectActionsOptions = {}): Proje
       const json = JSON.stringify(data);
       await dbSave(newId, data.name, json);
       await setLastProjectId(newId);
+      useEditorStore.getState().clearHistory();
       toast.success(`Imported "${data.name}"`);
     } catch {
       toast.error('Failed to import project file');
@@ -243,7 +246,9 @@ export function useProjectActions(options: UseProjectActionsOptions = {}): Proje
           });
           if (result.rootIds.length > 0) {
             useEditorStore.setState({ selectedNodeIds: new Set(result.rootIds) });
-            toast.success(`Imported ${result.nodes.length} element${result.nodes.length === 1 ? '' : 's'} from SVG`);
+            toast.success(
+              `Imported ${result.nodes.length} element${result.nodes.length === 1 ? '' : 's'} from SVG`
+            );
           }
           if (result.warnings.length > 0) {
             for (const w of result.warnings) {

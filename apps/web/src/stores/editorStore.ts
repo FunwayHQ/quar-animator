@@ -34,7 +34,7 @@ import { toast } from '../components/common/Toast';
 // SceneGraph Interface (subset used by store operations)
 // ============================================================================
 
-interface SceneGraphLike {
+export interface SceneGraphLike {
   getNode(id: string): Node | undefined;
   getRootNodes(): Node[];
   addNode(node: Node, parentId?: string): void;
@@ -44,6 +44,19 @@ interface SceneGraphLike {
   getDescendants(id: string): Node[];
   traverse(callback: (node: Node, depth: number) => boolean | void): void;
   getWorldTransform(id: string): import('@quar/types').Matrix3;
+  toJSON(): { nodes: Node[]; rootNodeIds: string[] };
+  fromJSON(data: { nodes: Node[]; rootNodeIds: string[] }): void;
+}
+
+// ============================================================================
+// Undo/Redo History
+// ============================================================================
+
+const MAX_UNDO_STACK_SIZE = 50;
+
+interface HistorySnapshot {
+  sceneData: { nodes: Node[]; rootNodeIds: string[] };
+  selectedNodeIds: string[];
 }
 
 // ============================================================================
@@ -267,6 +280,17 @@ export interface EditorStore {
   flattenBooleanGroup: (sceneGraph: SceneGraphLike) => void;
   releaseBooleanGroup: (sceneGraph: SceneGraphLike) => void;
   changeBooleanOp: (sceneGraph: SceneGraphLike, op: BooleanOp) => void;
+
+  // Undo/Redo history
+  undoStack: HistorySnapshot[];
+  redoStack: HistorySnapshot[];
+  canUndo: boolean;
+  canRedo: boolean;
+  pushUndo: (sceneGraph: SceneGraphLike) => void;
+  undo: (sceneGraph: SceneGraphLike) => void;
+  redo: (sceneGraph: SceneGraphLike) => void;
+  clearHistory: () => void;
+  cutSelection: (sceneGraph: SceneGraphLike) => void;
 }
 
 // ============================================================================
@@ -397,6 +421,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   pasteClipboard: (sceneGraph: SceneGraphLike) => {
     const { clipboard } = get();
     if (!clipboard || clipboard.length === 0) return;
+    get().pushUndo(sceneGraph);
     const newIds: string[] = [];
     for (const original of clipboard) {
       const newNode = structuredClone(original);
@@ -417,13 +442,15 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     set({ selectedNodeIds: new Set(newIds) });
   },
   duplicateSelection: (sceneGraph: SceneGraphLike) => {
-    const { copySelection, pasteClipboard } = get();
+    const { copySelection } = get();
+    // pushUndo is called inside pasteClipboard, so no extra push needed here
     copySelection(sceneGraph);
-    pasteClipboard(sceneGraph);
+    get().pasteClipboard(sceneGraph);
   },
   deleteSelection: (sceneGraph: SceneGraphLike) => {
     const { selectedNodeIds, timeline } = get();
     if (selectedNodeIds.size === 0) return;
+    get().pushUndo(sceneGraph);
     // Clean up keyframe tracks for deleted nodes
     const mgr = new KeyframeManager(timeline);
     for (const id of selectedNodeIds) {
@@ -452,6 +479,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   groupSelection: (sceneGraph: SceneGraphLike) => {
     const { selectedNodeIds } = get();
     if (selectedNodeIds.size < 2) return;
+    get().pushUndo(sceneGraph);
 
     // Flatten scene graph order, filter to selected IDs
     const orderedSelected: string[] = [];
@@ -497,6 +525,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   ungroupSelection: (sceneGraph: SceneGraphLike) => {
     const { selectedNodeIds } = get();
     if (selectedNodeIds.size === 0) return;
+    get().pushUndo(sceneGraph);
 
     const movedChildIds: string[] = [];
 
@@ -782,6 +811,9 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
   // Boolean operations
   ...createBooleanActions(set, get),
+
+  // Undo/Redo history
+  ...createHistoryActions(set, get),
 }));
 
 // ============================================================================
@@ -827,12 +859,13 @@ function createDefaultEffect(effectType: EffectType): Effect {
 
 function createEffectActions(
   set: (partial: Partial<EditorStore> | ((state: EditorStore) => Partial<EditorStore>)) => void,
-  _get: () => EditorStore
+  get: () => EditorStore
 ) {
   return {
     addEffect: (sceneGraph: SceneGraphLike, nodeId: string, effectType: EffectType) => {
       const node = sceneGraph.getNode(nodeId);
       if (!node) return;
+      get().pushUndo(sceneGraph);
       const effects = [...(node.effects ?? []), createDefaultEffect(effectType)];
       sceneGraph.updateNode(nodeId, { effects } as Partial<Node>);
       set({ isDirty: true });
@@ -841,6 +874,7 @@ function createEffectActions(
     removeEffect: (sceneGraph: SceneGraphLike, nodeId: string, effectIndex: number) => {
       const node = sceneGraph.getNode(nodeId);
       if (!node || !node.effects) return;
+      get().pushUndo(sceneGraph);
       const effects = node.effects.filter((_, i) => i !== effectIndex);
       sceneGraph.updateNode(nodeId, {
         effects: effects.length > 0 ? effects : undefined,
@@ -856,6 +890,7 @@ function createEffectActions(
     ) => {
       const node = sceneGraph.getNode(nodeId);
       if (!node || !node.effects || !node.effects[effectIndex]) return;
+      get().pushUndo(sceneGraph);
       const effects = [...node.effects];
       effects[effectIndex] = { ...effects[effectIndex], ...updates } as Effect;
       sceneGraph.updateNode(nodeId, { effects } as Partial<Node>);
@@ -865,6 +900,7 @@ function createEffectActions(
     toggleEffectVisibility: (sceneGraph: SceneGraphLike, nodeId: string, effectIndex: number) => {
       const node = sceneGraph.getNode(nodeId);
       if (!node || !node.effects || !node.effects[effectIndex]) return;
+      get().pushUndo(sceneGraph);
       const effects = [...node.effects];
       effects[effectIndex] = {
         ...effects[effectIndex],
@@ -882,6 +918,7 @@ function createEffectActions(
     ) => {
       const node = sceneGraph.getNode(nodeId);
       if (!node || !node.effects) return;
+      get().pushUndo(sceneGraph);
       const effects = [...node.effects];
       const [removed] = effects.splice(fromIndex, 1);
       if (removed) {
@@ -892,6 +929,7 @@ function createEffectActions(
     },
 
     setBlendMode: (sceneGraph: SceneGraphLike, nodeId: string, blendMode: BlendMode) => {
+      get().pushUndo(sceneGraph);
       sceneGraph.updateNode(nodeId, { blendMode } as Partial<Node>);
       set({ isDirty: true });
     },
@@ -918,6 +956,7 @@ function createZOrderActions(
     bringForward: (sceneGraph: SceneGraphLike) => {
       const { selectedNodeIds } = get();
       if (selectedNodeIds.size === 0) return;
+      get().pushUndo(sceneGraph);
 
       // Process from highest index first to avoid shifting issues
       const entries: Array<{ id: string; parentId: string | null; index: number }> = [];
@@ -943,6 +982,7 @@ function createZOrderActions(
     sendBackward: (sceneGraph: SceneGraphLike) => {
       const { selectedNodeIds } = get();
       if (selectedNodeIds.size === 0) return;
+      get().pushUndo(sceneGraph);
 
       // Process from lowest index first to avoid shifting issues
       const entries: Array<{ id: string; parentId: string | null; index: number }> = [];
@@ -965,6 +1005,7 @@ function createZOrderActions(
     bringToFront: (sceneGraph: SceneGraphLike) => {
       const { selectedNodeIds } = get();
       if (selectedNodeIds.size === 0) return;
+      get().pushUndo(sceneGraph);
 
       // Process from highest index first
       const entries: Array<{ id: string; parentId: string | null; index: number }> = [];
@@ -989,6 +1030,7 @@ function createZOrderActions(
     sendToBack: (sceneGraph: SceneGraphLike) => {
       const { selectedNodeIds } = get();
       if (selectedNodeIds.size === 0) return;
+      get().pushUndo(sceneGraph);
 
       // Process from lowest index first
       const entries: Array<{ id: string; parentId: string | null; index: number }> = [];
@@ -1039,6 +1081,7 @@ function createBooleanActions(
       toast.error('Select at least 2 shapes for boolean operations');
       return;
     }
+    get().pushUndo(sceneGraph);
 
     // Collect selected nodes in scene graph z-order
     const orderedNodes: Node[] = [];
@@ -1105,6 +1148,7 @@ function createBooleanActions(
     flattenBooleanGroup: (sceneGraph: SceneGraphLike) => {
       const { selectedNodeIds } = get();
       if (selectedNodeIds.size !== 1) return;
+      get().pushUndo(sceneGraph);
 
       const groupId = [...selectedNodeIds][0];
       const node = sceneGraph.getNode(groupId);
@@ -1164,6 +1208,7 @@ function createBooleanActions(
     releaseBooleanGroup: (sceneGraph: SceneGraphLike) => {
       const { selectedNodeIds } = get();
       if (selectedNodeIds.size === 0) return;
+      get().pushUndo(sceneGraph);
 
       const movedChildIds: string[] = [];
       for (const id of selectedNodeIds) {
@@ -1194,6 +1239,7 @@ function createBooleanActions(
     },
 
     changeBooleanOp: (sceneGraph: SceneGraphLike, op: BooleanOp) => {
+      get().pushUndo(sceneGraph);
       const { selectedNodeIds } = get();
       for (const id of selectedNodeIds) {
         const node = sceneGraph.getNode(id);
@@ -1202,6 +1248,125 @@ function createBooleanActions(
         }
       }
       set({ isDirty: true });
+    },
+  };
+}
+
+// ============================================================================
+// History (Undo/Redo) Actions
+// ============================================================================
+
+function createHistoryActions(
+  set: (partial: Partial<EditorStore> | ((state: EditorStore) => Partial<EditorStore>)) => void,
+  get: () => EditorStore
+) {
+  return {
+    undoStack: [] as HistorySnapshot[],
+    redoStack: [] as HistorySnapshot[],
+    canUndo: false,
+    canRedo: false,
+
+    pushUndo: (sceneGraph: SceneGraphLike) => {
+      const { undoStack, selectedNodeIds } = get();
+      const snapshot: HistorySnapshot = {
+        sceneData: structuredClone(sceneGraph.toJSON()),
+        selectedNodeIds: Array.from(selectedNodeIds),
+      };
+      const newStack = [...undoStack, snapshot];
+      if (newStack.length > MAX_UNDO_STACK_SIZE) {
+        newStack.shift();
+      }
+      set({
+        undoStack: newStack,
+        redoStack: [],
+        canUndo: true,
+        canRedo: false,
+      });
+    },
+
+    undo: (sceneGraph: SceneGraphLike) => {
+      const { undoStack, redoStack, selectedNodeIds } = get();
+      if (undoStack.length === 0) return;
+
+      // Save current state to redo stack
+      const currentSnapshot: HistorySnapshot = {
+        sceneData: structuredClone(sceneGraph.toJSON()),
+        selectedNodeIds: Array.from(selectedNodeIds),
+      };
+      const newRedoStack = [...redoStack, currentSnapshot];
+
+      // Pop and restore from undo stack
+      const newUndoStack = [...undoStack];
+      const snapshot = newUndoStack.pop()!;
+      sceneGraph.fromJSON(structuredClone(snapshot.sceneData));
+
+      set({
+        undoStack: newUndoStack,
+        redoStack: newRedoStack,
+        canUndo: newUndoStack.length > 0,
+        canRedo: true,
+        selectedNodeIds: new Set(snapshot.selectedNodeIds),
+        isDirty: true,
+      });
+    },
+
+    redo: (sceneGraph: SceneGraphLike) => {
+      const { undoStack, redoStack, selectedNodeIds } = get();
+      if (redoStack.length === 0) return;
+
+      // Save current state to undo stack
+      const currentSnapshot: HistorySnapshot = {
+        sceneData: structuredClone(sceneGraph.toJSON()),
+        selectedNodeIds: Array.from(selectedNodeIds),
+      };
+      const newUndoStack = [...undoStack, currentSnapshot];
+
+      // Pop and restore from redo stack
+      const newRedoStack = [...redoStack];
+      const snapshot = newRedoStack.pop()!;
+      sceneGraph.fromJSON(structuredClone(snapshot.sceneData));
+
+      set({
+        undoStack: newUndoStack,
+        redoStack: newRedoStack,
+        canUndo: true,
+        canRedo: newRedoStack.length > 0,
+        selectedNodeIds: new Set(snapshot.selectedNodeIds),
+        isDirty: true,
+      });
+    },
+
+    clearHistory: () => {
+      set({
+        undoStack: [],
+        redoStack: [],
+        canUndo: false,
+        canRedo: false,
+      });
+    },
+
+    cutSelection: (sceneGraph: SceneGraphLike) => {
+      const { selectedNodeIds, copySelection, timeline } = get();
+      if (selectedNodeIds.size === 0) return;
+
+      // Push undo snapshot before cut
+      get().pushUndo(sceneGraph);
+
+      // Copy to clipboard
+      copySelection(sceneGraph);
+
+      // Delete selection (inline to avoid double pushUndo)
+      const mgr = new KeyframeManager(timeline);
+      for (const id of selectedNodeIds) {
+        mgr.removeAllKeyframesForNode(id);
+        sceneGraph.removeNode(id);
+      }
+      set({
+        selectedNodeIds: new Set<string>(),
+        editingGradient: null,
+        timeline: { ...timeline },
+        isDirty: true,
+      });
     },
   };
 }
@@ -1348,3 +1513,15 @@ export const useReleaseBooleanGroup = (): ((sceneGraph: SceneGraphLike) => void)
   useEditorStore((state: EditorStore) => state.releaseBooleanGroup);
 export const useChangeBooleanOp = (): ((sceneGraph: SceneGraphLike, op: BooleanOp) => void) =>
   useEditorStore((state: EditorStore) => state.changeBooleanOp);
+
+// History (undo/redo) selectors
+export const useCanUndo = (): boolean => useEditorStore((state: EditorStore) => state.canUndo);
+export const useCanRedo = (): boolean => useEditorStore((state: EditorStore) => state.canRedo);
+export const useUndo = (): ((sceneGraph: SceneGraphLike) => void) =>
+  useEditorStore((state: EditorStore) => state.undo);
+export const useRedo = (): ((sceneGraph: SceneGraphLike) => void) =>
+  useEditorStore((state: EditorStore) => state.redo);
+export const usePushUndo = (): ((sceneGraph: SceneGraphLike) => void) =>
+  useEditorStore((state: EditorStore) => state.pushUndo);
+export const useCutSelection = (): ((sceneGraph: SceneGraphLike) => void) =>
+  useEditorStore((state: EditorStore) => state.cutSelection);

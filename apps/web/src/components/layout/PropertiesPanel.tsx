@@ -296,6 +296,12 @@ export function PropertiesPanel() {
   const updateEffect = useEditorStore((state) => state.updateEffect);
   const toggleEffectVisibility = useEditorStore((state) => state.toggleEffectVisibility);
   const setBlendMode = useEditorStore((state) => state.setBlendMode);
+  const pushUndo = useEditorStore((state) => state.pushUndo);
+
+  // Undo snapshot before scrub or input commit
+  const handleScrubStart = useCallback(() => {
+    pushUndo(sceneGraph);
+  }, [pushUndo, sceneGraph]);
 
   // Re-render on SceneGraph changes (any mutation)
   const [, setVersion] = useState(0);
@@ -1228,6 +1234,7 @@ export function PropertiesPanel() {
               <div className={styles.propertyInputs}>
                 <div className={styles.inputGroup}>
                   <ScrubLabel
+                    onScrubStart={handleScrubStart}
                     label="X"
                     value={Math.round(pos.x) || 0}
                     onChange={(v) => handlePositionChange('x', String(v))}
@@ -1246,6 +1253,7 @@ export function PropertiesPanel() {
                 </div>
                 <div className={styles.inputGroup}>
                   <ScrubLabel
+                    onScrubStart={handleScrubStart}
                     label="Y"
                     value={Math.round(pos.y) || 0}
                     onChange={(v) => handlePositionChange('y', String(v))}
@@ -1276,6 +1284,7 @@ export function PropertiesPanel() {
               <div className={styles.propertyInputs}>
                 <div className={styles.inputGroup}>
                   <ScrubLabel
+                    onScrubStart={handleScrubStart}
                     label="W"
                     value={Math.round(size.width) || 0}
                     onChange={(v) => handleSizeChange('width', String(v))}
@@ -1307,6 +1316,7 @@ export function PropertiesPanel() {
                 )}
                 <div className={styles.inputGroup}>
                   <ScrubLabel
+                    onScrubStart={handleScrubStart}
                     label="H"
                     value={Math.round(size.height) || 0}
                     onChange={isGroup ? noop : (v) => handleSizeChange('height', String(v))}
@@ -1347,6 +1357,7 @@ export function PropertiesPanel() {
                         <div className={styles.propertyInputs}>
                           <div className={styles.inputGroup}>
                             <ScrubLabel
+                              onScrubStart={handleScrubStart}
                               label="CR"
                               value={uniformValue}
                               onChange={(v) => handleCornerRadiusChange(String(v))}
@@ -1379,6 +1390,7 @@ export function PropertiesPanel() {
                           <div className={styles.propertyInputs}>
                             <div className={styles.inputGroup}>
                               <ScrubLabel
+                                onScrubStart={handleScrubStart}
                                 label="TL"
                                 value={Math.round(corners[0]) || 0}
                                 onChange={(v) => handleCornerRadiusChange(String(v), 0)}
@@ -1397,6 +1409,7 @@ export function PropertiesPanel() {
                             </div>
                             <div className={styles.inputGroup}>
                               <ScrubLabel
+                                onScrubStart={handleScrubStart}
                                 label="TR"
                                 value={Math.round(corners[1]) || 0}
                                 onChange={(v) => handleCornerRadiusChange(String(v), 1)}
@@ -1426,6 +1439,7 @@ export function PropertiesPanel() {
                           <div className={`${styles.propertyInputs} ${styles.marginTopXs}`}>
                             <div className={styles.inputGroup}>
                               <ScrubLabel
+                                onScrubStart={handleScrubStart}
                                 label="BL"
                                 value={Math.round(corners[3]) || 0}
                                 onChange={(v) => handleCornerRadiusChange(String(v), 3)}
@@ -1444,6 +1458,7 @@ export function PropertiesPanel() {
                             </div>
                             <div className={styles.inputGroup}>
                               <ScrubLabel
+                                onScrubStart={handleScrubStart}
                                 label="BR"
                                 value={Math.round(corners[2]) || 0}
                                 onChange={(v) => handleCornerRadiusChange(String(v), 2)}
@@ -1482,6 +1497,7 @@ export function PropertiesPanel() {
                     <div className={styles.propertyInputs}>
                       <div className={styles.inputGroup}>
                         <ScrubLabel
+                          onScrubStart={handleScrubStart}
                           label="CR"
                           value={Math.round(polyRadius) || 0}
                           onChange={(v) => handleCornerRadiusChange(String(v))}
@@ -1519,6 +1535,7 @@ export function PropertiesPanel() {
                       <div className={styles.propertyInputs}>
                         <div className={styles.inputGroup}>
                           <ScrubLabel
+                            onScrubStart={handleScrubStart}
                             label="N"
                             value={poly.sides}
                             onChange={(v) => handleSidesChange(String(Math.round(v)))}
@@ -1560,6 +1577,7 @@ export function PropertiesPanel() {
                             return (
                               <>
                                 <ScrubLabel
+                                  onScrubStart={handleScrubStart}
                                   label="IR"
                                   value={Math.round(irPixels)}
                                   onChange={(v) => {
@@ -1610,6 +1628,7 @@ export function PropertiesPanel() {
               <div className={styles.propertyInputs}>
                 <div className={styles.inputGroup}>
                   <ScrubLabel
+                    onScrubStart={handleScrubStart}
                     label="R"
                     value={Math.round(rotation) || 0}
                     onChange={(v) => handleRotationChange(String(v))}
@@ -1938,6 +1957,7 @@ export function PropertiesPanel() {
                         <div className={styles.strokeSubRow}>
                           <div className={`${styles.inputGroup} ${styles.inputGroupFlex}`}>
                             <ScrubLabel
+                              onScrubStart={handleScrubStart}
                               label="W"
                               value={Math.round(stroke.width * 10) / 10 || 0}
                               onChange={(v) => handleStrokeWidthChange(index, v)}
@@ -2209,6 +2229,7 @@ export function PropertiesPanel() {
                             )}
                             <div className={styles.inputGroup}>
                               <ScrubLabel
+                                onScrubStart={handleScrubStart}
                                 label="Op"
                                 value={Math.round(shadow.opacity * 100)}
                                 onChange={(v) => {
@@ -2284,6 +2305,7 @@ export function PropertiesPanel() {
                           <div className={styles.effectPropRow}>
                             <div className={styles.inputGroup}>
                               <ScrubLabel
+                                onScrubStart={handleScrubStart}
                                 label="X"
                                 value={shadow.offsetX}
                                 onChange={(v) => {
@@ -2351,6 +2373,7 @@ export function PropertiesPanel() {
                             </div>
                             <div className={styles.inputGroup}>
                               <ScrubLabel
+                                onScrubStart={handleScrubStart}
                                 label="Y"
                                 value={shadow.offsetY}
                                 onChange={(v) => {
@@ -2420,6 +2443,7 @@ export function PropertiesPanel() {
                           <div className={styles.effectPropRow}>
                             <div className={styles.inputGroup}>
                               <ScrubLabel
+                                onScrubStart={handleScrubStart}
                                 label="Blur"
                                 value={shadow.blur}
                                 onChange={(v) => {
@@ -2492,6 +2516,7 @@ export function PropertiesPanel() {
                             </div>
                             <div className={styles.inputGroup}>
                               <ScrubLabel
+                                onScrubStart={handleScrubStart}
                                 label="Spread"
                                 value={shadow.spread}
                                 onChange={(v) => {
@@ -2573,6 +2598,7 @@ export function PropertiesPanel() {
                         <div className={styles.effectPropRow}>
                           <div className={styles.inputGroup}>
                             <ScrubLabel
+                              onScrubStart={handleScrubStart}
                               label="Radius"
                               value={blur.radius}
                               onChange={(v) => {

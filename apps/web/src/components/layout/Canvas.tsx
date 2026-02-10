@@ -92,6 +92,9 @@ export function Canvas() {
   const flattenBooleanGroup = useEditorStore((state) => state.flattenBooleanGroup);
   const releaseBooleanGroup = useEditorStore((state) => state.releaseBooleanGroup);
   const changeBooleanOp = useEditorStore((state) => state.changeBooleanOp);
+  const undo = useEditorStore((state) => state.undo);
+  const redo = useEditorStore((state) => state.redo);
+  const cutSelection = useEditorStore((state) => state.cutSelection);
   const editingGradient = useEditorStore((state) => state.editingGradient);
   const showRulers = useEditorStore((state) => state.showRulers);
 
@@ -649,6 +652,25 @@ export function Canvas() {
         return;
       }
 
+      // Undo/Redo shortcuts
+      if (!isInput && (e.ctrlKey || e.metaKey)) {
+        if (e.key === 'z' && !e.shiftKey) {
+          e.preventDefault();
+          undo(sceneGraph);
+          return;
+        }
+        if ((e.key === 'z' && e.shiftKey) || e.key === 'y') {
+          e.preventDefault();
+          redo(sceneGraph);
+          return;
+        }
+        if (e.key === 'x') {
+          e.preventDefault();
+          cutSelection(sceneGraph);
+          return;
+        }
+      }
+
       // Clipboard shortcuts (skip if active element is an input)
       if (!isInput && (e.ctrlKey || e.metaKey)) {
         if (e.key === 'g' || e.key === 'G') {
@@ -703,6 +725,9 @@ export function Canvas() {
       sendBackward,
       bringToFront,
       sendToBack,
+      undo,
+      redo,
+      cutSelection,
     ]
   );
 
@@ -1125,6 +1150,7 @@ export function Canvas() {
           cornerRadius: [0, 0, 0, 0] as [number, number, number, number],
         };
 
+        useEditorStore.getState().pushUndo(sceneGraphRef.current);
         sceneGraphRef.current!.addNode(imageNode);
         useEditorStore.setState({ selectedNodeIds: new Set([nodeId]) });
       };

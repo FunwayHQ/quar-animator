@@ -410,24 +410,28 @@ export function LayerPanel() {
     [setSelection, toggleSelection, selectRange, sceneGraph]
   );
 
+  const pushUndo = useEditorStore((state) => state.pushUndo);
+
   const handleToggleVisibility = useCallback(
     (id: string) => {
       const node = sceneGraph.getNode(id);
       if (node) {
+        pushUndo(sceneGraph);
         sceneGraph.updateNode(id, { visible: !node.visible });
       }
     },
-    [sceneGraph]
+    [sceneGraph, pushUndo]
   );
 
   const handleToggleLock = useCallback(
     (id: string) => {
       const node = sceneGraph.getNode(id);
       if (node) {
+        pushUndo(sceneGraph);
         sceneGraph.updateNode(id, { locked: !node.locked });
       }
     },
-    [sceneGraph]
+    [sceneGraph, pushUndo]
   );
 
   // ========================================================================
@@ -449,10 +453,11 @@ export function LayerPanel() {
 
   const handleRenameCommit = useCallback(
     (id: string, name: string) => {
+      pushUndo(sceneGraph);
       sceneGraph.updateNode(id, { name });
       setRenamingNodeId(null);
     },
-    [sceneGraph]
+    [sceneGraph, pushUndo]
   );
 
   const contextMenuItems = useCallback((): ContextMenuEntry[] => {

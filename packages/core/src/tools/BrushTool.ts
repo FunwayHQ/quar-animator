@@ -287,6 +287,7 @@ export class BrushTool extends BaseTool {
     const node = this.createPathNode(pathPoints, false);
 
     // Add to scene graph
+    this.context.onTransformStart?.();
     this.context.sceneGraph.addNode(node);
 
     // Select the new node

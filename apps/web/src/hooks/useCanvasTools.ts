@@ -13,7 +13,15 @@ import {
   SelectionTool,
 } from '@quar/core';
 import type { TransformType } from '@quar/core';
-import type { CanvasPointerEvent, Node, PathNode, PathPoint, Rect, ToolType, Vector2 } from '@quar/types';
+import type {
+  CanvasPointerEvent,
+  Node,
+  PathNode,
+  PathPoint,
+  Rect,
+  ToolType,
+  Vector2,
+} from '@quar/types';
 import { useEditorStore } from '../stores/editorStore';
 
 // ============================================================================
@@ -187,6 +195,11 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
     return spacing / minorDivisions;
   }, [camera]);
 
+  // Undo snapshot before canvas transform operations (move/resize/rotate/shape create)
+  const onTransformStart = useCallback(() => {
+    useEditorStore.getState().pushUndo(sceneGraphRef.current);
+  }, []);
+
   // Auto-keyframe callback for canvas transform operations (move/resize/rotate)
   const onTransformComplete = useCallback((nodeIds: Set<string>, type: TransformType) => {
     if (!autoKeyframeRef.current) return;
@@ -242,6 +255,7 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
         setActiveTool(tool);
         setCursor((toolManagerRef.current?.getCursor() as string) ?? 'default');
       },
+      onTransformStart,
       onTransformComplete,
       getSnapToGrid,
       getGridSize,
@@ -307,7 +321,7 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
       const paths: PathNode[] = [];
       sceneGraphRef.current.traverseVisible((node: Node) => {
         if (node.type === 'path') {
-          paths.push(node as PathNode);
+          paths.push(node);
         }
       });
       setDirectSelectionPathNodes(paths);

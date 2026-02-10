@@ -3,12 +3,18 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '../../test/utils';
+import { render as baseRender, screen, fireEvent } from '../../test/utils';
 import { useEditorStore, DEFAULT_FILL, DEFAULT_STROKE } from '../../stores/editorStore';
 import { createTimeline } from '@quar/animation';
 import { DEFAULT_ONION_SKIN_SETTINGS } from '@quar/core';
+import { SceneGraphProvider } from '../../contexts/SceneGraphContext';
 import { MenuBar } from './MenuBar';
 import type { ProjectActions } from '../../hooks/useProjectActions';
+import type { ReactElement } from 'react';
+
+function render(ui: ReactElement) {
+  return baseRender(<SceneGraphProvider>{ui}</SceneGraphProvider>);
+}
 
 function createMockProjectActions(): ProjectActions {
   return {
@@ -21,6 +27,7 @@ function createMockProjectActions(): ProjectActions {
     deleteProject: vi.fn().mockResolvedValue(undefined),
     listProjects: vi.fn().mockResolvedValue([]),
     importSvg: vi.fn(),
+    importImage: vi.fn(),
   };
 }
 
@@ -53,6 +60,10 @@ describe('MenuBar', () => {
       projectName: 'Untitled Project',
       isDirty: false,
       projectCreatedAt: null,
+      undoStack: [],
+      redoStack: [],
+      canUndo: false,
+      canRedo: false,
     });
   });
 

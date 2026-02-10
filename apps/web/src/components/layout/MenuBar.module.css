@@ -184,6 +184,12 @@
   margin-left: 16px;
 }
 
+.dropdownItemDisabled {
+  opacity: 0.4;
+  cursor: default;
+  pointer-events: none;
+}
+
 .dropdownSeparator {
   height: 1px;
   background: var(--color-border-subtle);

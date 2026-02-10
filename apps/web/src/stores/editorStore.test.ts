@@ -40,6 +40,10 @@ describe('EditorStore', () => {
       projectName: 'Untitled Project',
       isDirty: false,
       projectCreatedAt: null,
+      undoStack: [],
+      redoStack: [],
+      canUndo: false,
+      canRedo: false,
     });
   });
 
@@ -666,14 +670,21 @@ describe('EditorStore', () => {
   describe('clipboard & node operations', () => {
     function createMockSceneGraph() {
       const nodes = new Map<string, any>();
+      let rootNodeIds: string[] = [];
       return {
         getNode: (id: string) => nodes.get(id),
-        getRootNodes: () => [...nodes.values()].filter((n) => !n.parent),
+        getRootNodes: () => rootNodeIds.map((id) => nodes.get(id)).filter(Boolean),
         addNode: vi.fn((node: any) => {
           nodes.set(node.id, node);
+          if (!node.parent && !rootNodeIds.includes(node.id)) rootNodeIds.push(node.id);
         }),
         removeNode: vi.fn((id: string) => {
           nodes.delete(id);
+          rootNodeIds = rootNodeIds.filter((rid) => rid !== id);
+        }),
+        updateNode: vi.fn((id: string, updates: any) => {
+          const node = nodes.get(id);
+          if (node) nodes.set(id, { ...node, ...updates });
         }),
         moveNode: vi.fn(),
         getDescendants: () => [],
@@ -681,8 +692,18 @@ describe('EditorStore', () => {
           for (const node of nodes.values()) cb(node, 0);
         },
         getWorldTransform: () => ({ a: 1, b: 0, c: 0, d: 1, tx: 0, ty: 0 }),
+        toJSON: () => ({
+          nodes: Array.from(nodes.values()),
+          rootNodeIds: [...rootNodeIds],
+        }),
+        fromJSON: (data: { nodes: any[]; rootNodeIds: string[] }) => {
+          nodes.clear();
+          for (const node of data.nodes) nodes.set(node.id, node);
+          rootNodeIds = [...data.rootNodeIds];
+        },
         _addTestNode: (node: any) => {
           nodes.set(node.id, node);
+          if (!node.parent && !rootNodeIds.includes(node.id)) rootNodeIds.push(node.id);
         },
       };
     }
@@ -1214,6 +1235,18 @@ describe('EditorStore', () => {
           }
         },
         getWorldTransform: () => ({ a: 1, b: 0, c: 0, d: 1, tx: 0, ty: 0 }),
+        toJSON: () => ({
+          nodes: Array.from(nodes.values()).map((n: any) => structuredClone(n)),
+          rootNodeIds: [...rootNodeIds],
+        }),
+        fromJSON: (data: any) => {
+          nodes.clear();
+          rootNodeIds.length = 0;
+          for (const n of data.nodes) {
+            nodes.set(n.id, n);
+          }
+          rootNodeIds.push(...data.rootNodeIds);
+        },
         _addTestNode: (node: any, parentId?: string) => {
           nodes.set(node.id, node);
           if (parentId) {
@@ -1460,6 +1493,255 @@ describe('EditorStore', () => {
       // Selection should remain unchanged
       const { selectedNodeIds } = useEditorStore.getState();
       expect(selectedNodeIds.has('rect1')).toBe(true);
+    });
+  });
+
+  // ==========================================================================
+  // Undo/Redo History
+  // ==========================================================================
+
+  describe('undo/redo history', () => {
+    function createMockSceneGraphWithHistory() {
+      const nodes = new Map<string, any>();
+      let rootNodeIds: string[] = [];
+
+      const sg = {
+        getNode: (id: string) => nodes.get(id),
+        getRootNodes: () => rootNodeIds.map((id) => nodes.get(id)).filter(Boolean),
+        addNode: vi.fn((node: any) => {
+          nodes.set(node.id, node);
+          if (!node.parent) rootNodeIds.push(node.id);
+        }),
+        removeNode: vi.fn((id: string) => {
+          nodes.delete(id);
+          rootNodeIds = rootNodeIds.filter((rid) => rid !== id);
+        }),
+        updateNode: vi.fn((id: string, updates: any) => {
+          const node = nodes.get(id);
+          if (node) nodes.set(id, { ...node, ...updates });
+        }),
+        moveNode: vi.fn(),
+        getDescendants: () => [],
+        traverse: (cb: (node: any, depth: number) => void) => {
+          for (const node of nodes.values()) cb(node, 0);
+        },
+        getWorldTransform: () => ({ a: 1, b: 0, c: 0, d: 1, tx: 0, ty: 0 }),
+        toJSON: () => ({
+          nodes: Array.from(nodes.values()),
+          rootNodeIds: [...rootNodeIds],
+        }),
+        fromJSON: (data: { nodes: any[]; rootNodeIds: string[] }) => {
+          nodes.clear();
+          for (const node of data.nodes) nodes.set(node.id, node);
+          rootNodeIds = [...data.rootNodeIds];
+        },
+        _addTestNode: (node: any) => {
+          nodes.set(node.id, node);
+          if (!node.parent) rootNodeIds.push(node.id);
+        },
+      };
+
+      return sg;
+    }
+
+    function makeTestRect(id: string, x = 0, y = 0) {
+      return {
+        id,
+        name: id,
+        type: 'rectangle' as const,
+        parent: null,
+        children: [],
+        transform: {
+          position: { x, y },
+          rotation: 0,
+          scale: { x: 1, y: 1 },
+          anchor: { x: 0.5, y: 0.5 },
+          skew: { x: 0, y: 0 },
+        },
+        visible: true,
+        locked: false,
+        opacity: 1,
+        blendMode: 'normal' as const,
+        width: 100,
+        height: 100,
+        cornerRadius: [0, 0, 0, 0] as [number, number, number, number],
+        fills: [],
+        strokes: [],
+      };
+    }
+
+    it('pushUndo creates a snapshot and sets canUndo', () => {
+      const sg = createMockSceneGraphWithHistory();
+      sg._addTestNode(makeTestRect('rect1'));
+
+      const { pushUndo } = useEditorStore.getState();
+      pushUndo(sg);
+
+      const state = useEditorStore.getState();
+      expect(state.canUndo).toBe(true);
+      expect(state.canRedo).toBe(false);
+      expect(state.undoStack).toHaveLength(1);
+      expect(state.undoStack[0].sceneData.nodes).toHaveLength(1);
+    });
+
+    it('undo restores previous scene state', () => {
+      const sg = createMockSceneGraphWithHistory();
+      sg._addTestNode(makeTestRect('rect1', 10, 20));
+
+      const { pushUndo } = useEditorStore.getState();
+      pushUndo(sg);
+
+      // Simulate a modification
+      sg.removeNode('rect1');
+      expect(sg.getRootNodes()).toHaveLength(0);
+
+      // Undo should restore
+      useEditorStore.getState().undo(sg);
+      expect(sg.getRootNodes()).toHaveLength(1);
+      expect(sg.getNode('rect1')).toBeDefined();
+      expect(sg.getNode('rect1').transform.position.x).toBe(10);
+    });
+
+    it('redo restores after undo', () => {
+      const sg = createMockSceneGraphWithHistory();
+      sg._addTestNode(makeTestRect('rect1'));
+
+      const { pushUndo } = useEditorStore.getState();
+      pushUndo(sg);
+
+      // Delete node
+      sg.removeNode('rect1');
+
+      // Undo — rect1 back
+      useEditorStore.getState().undo(sg);
+      expect(sg.getRootNodes()).toHaveLength(1);
+
+      // Redo — rect1 gone again
+      useEditorStore.getState().redo(sg);
+      expect(sg.getRootNodes()).toHaveLength(0);
+    });
+
+    it('undo restores selection', () => {
+      const sg = createMockSceneGraphWithHistory();
+      sg._addTestNode(makeTestRect('rect1'));
+      useEditorStore.setState({ selectedNodeIds: new Set(['rect1']) });
+
+      const { pushUndo } = useEditorStore.getState();
+      pushUndo(sg);
+
+      // Change selection
+      useEditorStore.setState({ selectedNodeIds: new Set<string>() });
+
+      // Undo
+      useEditorStore.getState().undo(sg);
+      const { selectedNodeIds } = useEditorStore.getState();
+      expect(selectedNodeIds.has('rect1')).toBe(true);
+    });
+
+    it('new action clears redo stack', () => {
+      const sg = createMockSceneGraphWithHistory();
+      sg._addTestNode(makeTestRect('rect1'));
+
+      const { pushUndo } = useEditorStore.getState();
+      pushUndo(sg);
+
+      // Modify and undo
+      sg.removeNode('rect1');
+      useEditorStore.getState().undo(sg);
+      expect(useEditorStore.getState().canRedo).toBe(true);
+
+      // New action should clear redo
+      useEditorStore.getState().pushUndo(sg);
+      expect(useEditorStore.getState().canRedo).toBe(false);
+      expect(useEditorStore.getState().redoStack).toHaveLength(0);
+    });
+
+    it('undo stack is capped at MAX_UNDO_STACK_SIZE (50)', () => {
+      const sg = createMockSceneGraphWithHistory();
+
+      for (let i = 0; i < 60; i++) {
+        useEditorStore.getState().pushUndo(sg);
+      }
+
+      expect(useEditorStore.getState().undoStack.length).toBeLessThanOrEqual(50);
+    });
+
+    it('canUndo and canRedo reflect stack state', () => {
+      const sg = createMockSceneGraphWithHistory();
+
+      expect(useEditorStore.getState().canUndo).toBe(false);
+      expect(useEditorStore.getState().canRedo).toBe(false);
+
+      useEditorStore.getState().pushUndo(sg);
+      expect(useEditorStore.getState().canUndo).toBe(true);
+
+      useEditorStore.getState().undo(sg);
+      expect(useEditorStore.getState().canUndo).toBe(false);
+      expect(useEditorStore.getState().canRedo).toBe(true);
+    });
+
+    it('clearHistory empties both stacks', () => {
+      const sg = createMockSceneGraphWithHistory();
+
+      useEditorStore.getState().pushUndo(sg);
+      useEditorStore.getState().pushUndo(sg);
+      expect(useEditorStore.getState().undoStack).toHaveLength(2);
+
+      useEditorStore.getState().clearHistory();
+      expect(useEditorStore.getState().undoStack).toHaveLength(0);
+      expect(useEditorStore.getState().redoStack).toHaveLength(0);
+      expect(useEditorStore.getState().canUndo).toBe(false);
+      expect(useEditorStore.getState().canRedo).toBe(false);
+    });
+
+    it('cutSelection snapshots before cutting', () => {
+      const sg = createMockSceneGraphWithHistory();
+      sg._addTestNode(makeTestRect('rect1'));
+      useEditorStore.setState({ selectedNodeIds: new Set(['rect1']) });
+
+      useEditorStore.getState().cutSelection(sg);
+
+      // Node should be removed
+      expect(sg.getRootNodes()).toHaveLength(0);
+
+      // Clipboard should have the node
+      expect(useEditorStore.getState().clipboard).toHaveLength(1);
+
+      // Undo should restore
+      useEditorStore.getState().undo(sg);
+      expect(sg.getRootNodes()).toHaveLength(1);
+    });
+
+    it('deleteSelection with undo restores deleted nodes', () => {
+      const sg = createMockSceneGraphWithHistory();
+      sg._addTestNode(makeTestRect('rect1'));
+      sg._addTestNode(makeTestRect('rect2', 100, 100));
+      useEditorStore.setState({ selectedNodeIds: new Set(['rect1']) });
+
+      useEditorStore.getState().deleteSelection(sg);
+      expect(sg.getRootNodes()).toHaveLength(1);
+      expect(sg.getNode('rect1')).toBeUndefined();
+
+      useEditorStore.getState().undo(sg);
+      expect(sg.getRootNodes()).toHaveLength(2);
+      expect(sg.getNode('rect1')).toBeDefined();
+    });
+
+    it('undo on empty stack does nothing', () => {
+      const sg = createMockSceneGraphWithHistory();
+      sg._addTestNode(makeTestRect('rect1'));
+
+      // Calling undo on empty stack should not throw
+      useEditorStore.getState().undo(sg);
+      expect(sg.getRootNodes()).toHaveLength(1);
+    });
+
+    it('redo on empty stack does nothing', () => {
+      const sg = createMockSceneGraphWithHistory();
+      sg._addTestNode(makeTestRect('rect1'));
+
+      useEditorStore.getState().redo(sg);
+      expect(sg.getRootNodes()).toHaveLength(1);
     });
   });
 });

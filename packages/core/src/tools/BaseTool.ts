@@ -24,6 +24,7 @@ export interface ToolContext {
   defaultStroke: Stroke;
   generateId: () => string;
   setActiveTool: (tool: ToolType) => void;
+  onTransformStart?: () => void;
   onTransformComplete?: (nodeIds: Set<string>, type: TransformType) => void;
   getSnapToGrid?: () => boolean;
   getGridSize?: () => number;

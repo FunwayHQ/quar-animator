@@ -4,7 +4,13 @@
  */
 
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { useProjectName, useIsDirty } from '../../stores/editorStore';
+import {
+  useEditorStore,
+  useProjectName,
+  useIsDirty,
+  type SceneGraphLike,
+} from '../../stores/editorStore';
+import { useSceneGraph } from '../../contexts/SceneGraphContext';
 import type { ProjectActions } from '../../hooks/useProjectActions';
 import type { ProjectListItem } from '../../services/projectStorage';
 import { ProjectListDialog } from '../common/ProjectListDialog';
@@ -26,12 +32,29 @@ export function MenuBar({ projectActions }: MenuBarProps) {
   const projectName = useProjectName();
   const isDirty = useIsDirty();
   const [fileMenuOpen, setFileMenuOpen] = useState(false);
+  const [editMenuOpen, setEditMenuOpen] = useState(false);
   const [showProjectList, setShowProjectList] = useState(false);
   const [showSaveAsPrompt, setShowSaveAsPrompt] = useState(false);
   const [saveAsName, setSaveAsName] = useState('');
   const [projects, setProjects] = useState<ProjectListItem[]>([]);
   const fileMenuRef = useRef<HTMLDivElement>(null);
   const fileButtonRef = useRef<HTMLButtonElement>(null);
+  const editMenuRef = useRef<HTMLDivElement>(null);
+  const editButtonRef = useRef<HTMLButtonElement>(null);
+
+  const sceneGraph = useSceneGraph() as unknown as SceneGraphLike;
+  const canUndo = useEditorStore((state) => state.canUndo);
+  const canRedo = useEditorStore((state) => state.canRedo);
+  const selectedNodeIds = useEditorStore((state) => state.selectedNodeIds);
+  const clipboard = useEditorStore((state) => state.clipboard);
+  const undoAction = useEditorStore((state) => state.undo);
+  const redoAction = useEditorStore((state) => state.redo);
+  const cutSelectionAction = useEditorStore((state) => state.cutSelection);
+  const copySelectionAction = useEditorStore((state) => state.copySelection);
+  const pasteClipboardAction = useEditorStore((state) => state.pasteClipboard);
+  const duplicateSelectionAction = useEditorStore((state) => state.duplicateSelection);
+  const deleteSelectionAction = useEditorStore((state) => state.deleteSelection);
+  const selectAllAction = useEditorStore((state) => state.selectAll);
 
   // Close file menu when clicking outside
   useEffect(() => {
@@ -59,6 +82,33 @@ export function MenuBar({ projectActions }: MenuBarProps) {
       document.removeEventListener('keydown', handleEscape);
     };
   }, [fileMenuOpen]);
+
+  // Close edit menu when clicking outside
+  useEffect(() => {
+    if (!editMenuOpen) return;
+
+    const handleClick = (e: MouseEvent) => {
+      if (
+        editMenuRef.current &&
+        !editMenuRef.current.contains(e.target as HTMLElement) &&
+        editButtonRef.current &&
+        !editButtonRef.current.contains(e.target as HTMLElement)
+      ) {
+        setEditMenuOpen(false);
+      }
+    };
+
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setEditMenuOpen(false);
+    };
+
+    document.addEventListener('mousedown', handleClick);
+    document.addEventListener('keydown', handleEscape);
+    return () => {
+      document.removeEventListener('mousedown', handleClick);
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [editMenuOpen]);
 
   // File menu actions
   const handleNew = useCallback(() => {
@@ -149,7 +199,10 @@ export function MenuBar({ projectActions }: MenuBarProps) {
             <button
               ref={fileButtonRef}
               className={`${styles.menuItem} ${fileMenuOpen ? styles.active : ''}`}
-              onClick={() => setFileMenuOpen(!fileMenuOpen)}
+              onClick={() => {
+                setFileMenuOpen(!fileMenuOpen);
+                setEditMenuOpen(false);
+              }}
               data-testid="menu-file"
             >
               File
@@ -199,7 +252,125 @@ export function MenuBar({ projectActions }: MenuBarProps) {
               </div>
             )}
           </div>
-          <button className={styles.menuItem}>Edit</button>
+          <div className={styles.menuContainer}>
+            <button
+              ref={editButtonRef}
+              className={`${styles.menuItem} ${editMenuOpen ? styles.active : ''}`}
+              onClick={() => {
+                setEditMenuOpen(!editMenuOpen);
+                setFileMenuOpen(false);
+              }}
+              data-testid="menu-edit"
+            >
+              Edit
+            </button>
+            {editMenuOpen && (
+              <div
+                ref={editMenuRef}
+                className={styles.dropdown}
+                role="menu"
+                data-testid="edit-menu-dropdown"
+              >
+                <button
+                  className={`${styles.dropdownItem} ${!canUndo ? styles.dropdownItemDisabled : ''}`}
+                  role="menuitem"
+                  onClick={() => {
+                    setEditMenuOpen(false);
+                    undoAction(sceneGraph);
+                  }}
+                  disabled={!canUndo}
+                >
+                  <span className={styles.dropdownLabel}>Undo</span>
+                  <span className={styles.dropdownShortcut}>Ctrl+Z</span>
+                </button>
+                <button
+                  className={`${styles.dropdownItem} ${!canRedo ? styles.dropdownItemDisabled : ''}`}
+                  role="menuitem"
+                  onClick={() => {
+                    setEditMenuOpen(false);
+                    redoAction(sceneGraph);
+                  }}
+                  disabled={!canRedo}
+                >
+                  <span className={styles.dropdownLabel}>Redo</span>
+                  <span className={styles.dropdownShortcut}>Ctrl+Shift+Z</span>
+                </button>
+                <div className={styles.dropdownSeparator} role="separator" />
+                <button
+                  className={`${styles.dropdownItem} ${selectedNodeIds.size === 0 ? styles.dropdownItemDisabled : ''}`}
+                  role="menuitem"
+                  onClick={() => {
+                    setEditMenuOpen(false);
+                    cutSelectionAction(sceneGraph);
+                  }}
+                  disabled={selectedNodeIds.size === 0}
+                >
+                  <span className={styles.dropdownLabel}>Cut</span>
+                  <span className={styles.dropdownShortcut}>Ctrl+X</span>
+                </button>
+                <button
+                  className={`${styles.dropdownItem} ${selectedNodeIds.size === 0 ? styles.dropdownItemDisabled : ''}`}
+                  role="menuitem"
+                  onClick={() => {
+                    setEditMenuOpen(false);
+                    copySelectionAction(sceneGraph);
+                  }}
+                  disabled={selectedNodeIds.size === 0}
+                >
+                  <span className={styles.dropdownLabel}>Copy</span>
+                  <span className={styles.dropdownShortcut}>Ctrl+C</span>
+                </button>
+                <button
+                  className={`${styles.dropdownItem} ${!clipboard ? styles.dropdownItemDisabled : ''}`}
+                  role="menuitem"
+                  onClick={() => {
+                    setEditMenuOpen(false);
+                    pasteClipboardAction(sceneGraph);
+                  }}
+                  disabled={!clipboard}
+                >
+                  <span className={styles.dropdownLabel}>Paste</span>
+                  <span className={styles.dropdownShortcut}>Ctrl+V</span>
+                </button>
+                <button
+                  className={`${styles.dropdownItem} ${selectedNodeIds.size === 0 ? styles.dropdownItemDisabled : ''}`}
+                  role="menuitem"
+                  onClick={() => {
+                    setEditMenuOpen(false);
+                    duplicateSelectionAction(sceneGraph);
+                  }}
+                  disabled={selectedNodeIds.size === 0}
+                >
+                  <span className={styles.dropdownLabel}>Duplicate</span>
+                  <span className={styles.dropdownShortcut}>Ctrl+D</span>
+                </button>
+                <div className={styles.dropdownSeparator} role="separator" />
+                <button
+                  className={`${styles.dropdownItem} ${selectedNodeIds.size === 0 ? styles.dropdownItemDisabled : ''}`}
+                  role="menuitem"
+                  onClick={() => {
+                    setEditMenuOpen(false);
+                    deleteSelectionAction(sceneGraph);
+                  }}
+                  disabled={selectedNodeIds.size === 0}
+                >
+                  <span className={styles.dropdownLabel}>Delete</span>
+                  <span className={styles.dropdownShortcut}>Del</span>
+                </button>
+                <button
+                  className={styles.dropdownItem}
+                  role="menuitem"
+                  onClick={() => {
+                    setEditMenuOpen(false);
+                    selectAllAction(sceneGraph);
+                  }}
+                >
+                  <span className={styles.dropdownLabel}>Select All</span>
+                  <span className={styles.dropdownShortcut}>Ctrl+A</span>
+                </button>
+              </div>
+            )}
+          </div>
           <button className={styles.menuItem}>View</button>
           <button className={styles.menuItem}>Animation</button>
           <button className={styles.menuItem}>Rigging</button>

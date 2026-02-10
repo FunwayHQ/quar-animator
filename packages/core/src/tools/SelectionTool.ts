@@ -3,6 +3,7 @@
  * Selects, moves, and resizes shapes
  */
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- ImageNode used in type casts
 import type { CanvasPointerEvent, Node, ImageNode, Vector2, Rect, Matrix3 } from '@quar/types';
 import { BaseTool, type ToolContext } from './BaseTool';
 import { vec2, rect, mat3 } from '../math';
@@ -130,6 +131,7 @@ export class SelectionTool extends BaseTool {
 
         if (hitHandle?.startsWith('rotate-')) {
           // Start rotation operation
+          this.context.onTransformStart?.();
           this.mode = 'rotating';
           this.state.isDragging = true;
 
@@ -156,6 +158,7 @@ export class SelectionTool extends BaseTool {
           return;
         } else if (hitHandle) {
           // Start resize operation
+          this.context.onTransformStart?.();
           this.mode = 'resizing';
           this.state.isDragging = true;
           this.resizeState = {
@@ -191,6 +194,7 @@ export class SelectionTool extends BaseTool {
       }
 
       // Start move mode
+      this.context.onTransformStart?.();
       this.mode = 'moving';
       this.state.isDragging = true;
 
@@ -511,10 +515,10 @@ export class SelectionTool extends BaseTool {
       case 'image': {
         const anchor = transform.anchor;
         localBounds = {
-          x: -(node as ImageNode).width * anchor.x,
-          y: -(node as ImageNode).height * anchor.y,
-          width: (node as ImageNode).width,
-          height: (node as ImageNode).height,
+          x: -node.width * anchor.x,
+          y: -node.height * anchor.y,
+          width: node.width,
+          height: node.height,
         };
         break;
       }
@@ -638,15 +642,22 @@ export class SelectionTool extends BaseTool {
         return { width: p.radius * 2 * sx, height: p.radius * 2 * sy };
       }
       case 'path': {
-        const pathNode = node as { points: import('@quar/types').PathPoint[]; closed: boolean; subpaths?: import('@quar/types').PathPoint[][]; transform: { scale?: Vector2 } };
+        const pathNode = node as {
+          points: import('@quar/types').PathPoint[];
+          closed: boolean;
+          subpaths?: import('@quar/types').PathPoint[][];
+          transform: { scale?: Vector2 };
+        };
         const bounds = getPathBounds(pathNode.points, pathNode.closed);
         if (!bounds) return { width: 0, height: 0 };
         // Include subpaths in bounds
         let w = bounds.width;
         let h = bounds.height;
         if (pathNode.subpaths) {
-          let minX = bounds.x, maxX = bounds.x + bounds.width;
-          let minY = bounds.y, maxY = bounds.y + bounds.height;
+          let minX = bounds.x,
+            maxX = bounds.x + bounds.width;
+          let minY = bounds.y,
+            maxY = bounds.y + bounds.height;
           for (const sp of pathNode.subpaths) {
             const spB = getPathBounds(sp, true);
             if (spB) {
@@ -665,8 +676,8 @@ export class SelectionTool extends BaseTool {
       }
       case 'image':
         return {
-          width: (node as ImageNode).width,
-          height: (node as ImageNode).height,
+          width: node.width,
+          height: node.height,
         };
       default:
         return { width: 0, height: 0 };
@@ -722,8 +733,8 @@ export class SelectionTool extends BaseTool {
       } else if (node.type === 'path') {
         state.scale = { ...node.transform.scale };
       } else if (node.type === 'image') {
-        state.width = (node as ImageNode).width;
-        state.height = (node as ImageNode).height;
+        state.width = node.width;
+        state.height = node.height;
       }
 
       states.set(id, state);
@@ -856,10 +867,7 @@ export class SelectionTool extends BaseTool {
             scale: { x: newScaleX, y: newScaleY },
           },
         });
-      } else if (
-        node.type === 'path' &&
-        initialState.scale !== undefined
-      ) {
+      } else if (node.type === 'path' && initialState.scale !== undefined) {
         // For paths, apply non-uniform scaling via transform scale
         const newScaleX = Math.max(0.01, initialState.scale.x * scaleX);
         const newScaleY = Math.max(0.01, initialState.scale.y * scaleY);

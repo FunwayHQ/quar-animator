@@ -293,6 +293,7 @@ export class PenTool extends BaseTool {
     const node = this.createPathNode(this.currentPath, closed);
 
     // Add to scene graph
+    this.context.onTransformStart?.();
     this.context.sceneGraph.addNode(node);
 
     // Reset state BEFORE switching tools to prevent recursive finalizePath

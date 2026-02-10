@@ -86,6 +86,7 @@ export class RectangleTool extends BaseTool {
       );
 
       // Add to scene graph
+      this.context.onTransformStart?.();
       this.context.sceneGraph.addNode(node);
 
       // Select the new node

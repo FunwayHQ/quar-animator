@@ -81,6 +81,7 @@ export class EllipseTool extends BaseTool {
       const node = this.createEllipseNode(ellipse.cx, ellipse.cy, ellipse.radiusX, ellipse.radiusY);
 
       // Add to scene graph
+      this.context.onTransformStart?.();
       this.context.sceneGraph.addNode(node);
 
       // Select the new node

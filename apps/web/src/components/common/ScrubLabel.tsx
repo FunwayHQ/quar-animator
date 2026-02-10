@@ -14,6 +14,8 @@ export interface ScrubLabelProps {
   min?: number;
   /** Maximum allowed value */
   max?: number;
+  /** Called once at the start of a scrub gesture (for undo snapshots) */
+  onScrubStart?: () => void;
 }
 
 export function ScrubLabel({
@@ -23,6 +25,7 @@ export function ScrubLabel({
   sensitivity = 1,
   min = -Infinity,
   max = Infinity,
+  onScrubStart,
 }: ScrubLabelProps) {
   const [isScrubbing, setIsScrubbing] = useState(false);
   const startXRef = useRef(0);
@@ -31,11 +34,12 @@ export function ScrubLabel({
   const handlePointerDown = useCallback(
     (e: React.PointerEvent) => {
       e.preventDefault();
+      onScrubStart?.();
       startXRef.current = e.clientX;
       startValueRef.current = value;
       setIsScrubbing(true);
     },
-    [value]
+    [value, onScrubStart]
   );
 
   useEffect(() => {

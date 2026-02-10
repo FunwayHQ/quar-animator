@@ -145,6 +145,7 @@ export class PolygonTool extends BaseTool {
       const node = this.createPolygonNode(polygon.cx, polygon.cy, polygon.radius);
 
       // Add to scene graph
+      this.context.onTransformStart?.();
       this.context.sceneGraph.addNode(node);
 
       // Select the new node
