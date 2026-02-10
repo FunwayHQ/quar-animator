@@ -87,6 +87,7 @@ export const COMMON_ANIMATABLE_PROPERTIES: AnimatableProperty[] = [
   { path: 'transform.skew.x', displayName: 'Skew X', interpolationType: 'number' },
   { path: 'transform.skew.y', displayName: 'Skew Y', interpolationType: 'number' },
   { path: 'opacity', displayName: 'Opacity', interpolationType: 'number' },
+  { path: 'blendMode', displayName: 'Blend Mode', interpolationType: 'discrete' },
 ];
 
 /**
@@ -168,6 +169,61 @@ export const SHAPE_ANIMATABLE_PROPERTIES: AnimatableProperty[] = [
     displayName: 'Stroke Stop 2 Color',
     interpolationType: 'color',
   },
+  {
+    path: 'strokes.0.dashOffset',
+    displayName: 'Stroke Dash Offset',
+    interpolationType: 'number',
+  },
+  {
+    path: 'strokes.0.gradient.stops.2.offset',
+    displayName: 'Stroke Stop 3 Offset',
+    interpolationType: 'number',
+  },
+  {
+    path: 'strokes.0.gradient.stops.2.color',
+    displayName: 'Stroke Stop 3 Color',
+    interpolationType: 'color',
+  },
+  {
+    path: 'strokes.0.gradient.stops.3.offset',
+    displayName: 'Stroke Stop 4 Offset',
+    interpolationType: 'number',
+  },
+  {
+    path: 'strokes.0.gradient.stops.3.color',
+    displayName: 'Stroke Stop 4 Color',
+    interpolationType: 'color',
+  },
+  {
+    path: 'fills.0.gradient.center.x',
+    displayName: 'Fill Gradient Center X',
+    interpolationType: 'number',
+  },
+  {
+    path: 'fills.0.gradient.center.y',
+    displayName: 'Fill Gradient Center Y',
+    interpolationType: 'number',
+  },
+  {
+    path: 'fills.0.gradient.radius',
+    displayName: 'Fill Gradient Radius',
+    interpolationType: 'number',
+  },
+  {
+    path: 'strokes.0.gradient.center.x',
+    displayName: 'Stroke Gradient Center X',
+    interpolationType: 'number',
+  },
+  {
+    path: 'strokes.0.gradient.center.y',
+    displayName: 'Stroke Gradient Center Y',
+    interpolationType: 'number',
+  },
+  {
+    path: 'strokes.0.gradient.radius',
+    displayName: 'Stroke Gradient Radius',
+    interpolationType: 'number',
+  },
 ];
 
 /**
@@ -196,6 +252,8 @@ export const ELLIPSE_ANIMATABLE_PROPERTIES: AnimatableProperty[] = [
 export const POLYGON_ANIMATABLE_PROPERTIES: AnimatableProperty[] = [
   { path: 'radius', displayName: 'Radius', interpolationType: 'number' },
   { path: 'cornerRadius', displayName: 'Corner Radius', interpolationType: 'number' },
+  { path: 'sides', displayName: 'Sides', interpolationType: 'number' },
+  { path: 'innerRadius', displayName: 'Inner Radius', interpolationType: 'number' },
 ];
 
 /**
@@ -233,7 +291,13 @@ export function getAnimatableProperties(nodeType: string): AnimatableProperty[] 
         { path: 'adjustments.saturation', displayName: 'Saturation', interpolationType: 'number' },
         { path: 'adjustments.hue', displayName: 'Hue', interpolationType: 'number' },
         { path: 'adjustments.exposure', displayName: 'Exposure', interpolationType: 'number' },
-        { path: 'adjustments.temperature', displayName: 'Temperature', interpolationType: 'number' },
+        {
+          path: 'adjustments.temperature',
+          displayName: 'Temperature',
+          interpolationType: 'number',
+        },
+        { path: 'adjustments.tint', displayName: 'Tint', interpolationType: 'number' },
+        { path: 'adjustments.blur', displayName: 'Blur', interpolationType: 'number' }
       );
       break;
     case 'group':
@@ -255,23 +319,40 @@ export function getAnimatablePropertiesForNode(node: Node): AnimatableProperty[]
     for (let i = 0; i < node.effects.length; i++) {
       const effect = node.effects[i] as Effect;
       const prefix = `effects.${i}`;
-      const label = effect.type === 'drop-shadow' ? 'Drop Shadow'
-        : effect.type === 'inner-shadow' ? 'Inner Shadow'
-        : 'Layer Blur';
+      const label =
+        effect.type === 'drop-shadow'
+          ? 'Drop Shadow'
+          : effect.type === 'inner-shadow'
+            ? 'Inner Shadow'
+            : 'Layer Blur';
 
       if (effect.type === 'drop-shadow' || effect.type === 'inner-shadow') {
         props.push(
-          { path: `${prefix}.offsetX`, displayName: `${label} Offset X`, interpolationType: 'number' },
-          { path: `${prefix}.offsetY`, displayName: `${label} Offset Y`, interpolationType: 'number' },
+          {
+            path: `${prefix}.offsetX`,
+            displayName: `${label} Offset X`,
+            interpolationType: 'number',
+          },
+          {
+            path: `${prefix}.offsetY`,
+            displayName: `${label} Offset Y`,
+            interpolationType: 'number',
+          },
           { path: `${prefix}.blur`, displayName: `${label} Blur`, interpolationType: 'number' },
           { path: `${prefix}.spread`, displayName: `${label} Spread`, interpolationType: 'number' },
-          { path: `${prefix}.opacity`, displayName: `${label} Opacity`, interpolationType: 'number' },
-          { path: `${prefix}.color`, displayName: `${label} Color`, interpolationType: 'color' },
+          {
+            path: `${prefix}.opacity`,
+            displayName: `${label} Opacity`,
+            interpolationType: 'number',
+          },
+          { path: `${prefix}.color`, displayName: `${label} Color`, interpolationType: 'color' }
         );
       } else if (effect.type === 'layer-blur') {
-        props.push(
-          { path: `${prefix}.radius`, displayName: `${label} Radius`, interpolationType: 'number' },
-        );
+        props.push({
+          path: `${prefix}.radius`,
+          displayName: `${label} Radius`,
+          interpolationType: 'number',
+        });
       }
     }
   }
@@ -343,10 +424,18 @@ export function detectInterpolationType(path: string): InterpolationType {
     path === 'lineHeight' ||
     path === 'letterSpacing' ||
     path === 'cornerRadius' ||
-    path.startsWith('cornerRadius.')
+    path.startsWith('cornerRadius.') ||
+    path === 'sides' ||
+    path === 'innerRadius'
   ) {
     return 'number';
   }
+
+  // Stroke dashOffset
+  if (/^strokes\.\d+\.dashOffset$/.test(path)) return 'number';
+
+  // Blend mode (discrete)
+  if (path === 'blendMode') return 'discrete';
 
   // Fill/stroke array number properties (opacity, width)
   if (/^fills\.\d+\.opacity$/.test(path)) return 'number';

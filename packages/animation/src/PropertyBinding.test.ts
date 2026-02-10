@@ -132,7 +132,7 @@ describe('setProperty', () => {
 describe('getAnimatableProperties', () => {
   it('returns common properties for group nodes', () => {
     const props = getAnimatableProperties('group');
-    expect(props.length).toBe(10); // common only
+    expect(props.length).toBe(11); // common only (includes blendMode)
     expect(props.some((p) => p.path === 'transform.position.x')).toBe(true);
     expect(props.some((p) => p.path === 'opacity')).toBe(true);
   });

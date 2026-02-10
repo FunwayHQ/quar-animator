@@ -17,7 +17,20 @@ import type {
   InnerShadowEffect,
   LayerBlurEffect,
 } from '@quar/types';
-import { Lock, Unlock, Eye, EyeOff, Plus, X, Grid3X3, Merge, Minus, Combine, Diff, ChevronDown } from 'lucide-react';
+import {
+  Lock,
+  Unlock,
+  Eye,
+  EyeOff,
+  Plus,
+  X,
+  Grid3X3,
+  Merge,
+  Minus,
+  Combine,
+  Diff,
+  ChevronDown,
+} from 'lucide-react';
 import { useSceneGraph } from '../../contexts/SceneGraphContext';
 import { useEditorStore, DEFAULT_FILL, DEFAULT_STROKE } from '../../stores/editorStore';
 import { ScrubLabel } from '../common/ScrubLabel';
@@ -86,8 +99,10 @@ function getNodeSize(node: Node, sceneGraph?: SceneGraph): { width: number; heig
       let w = bounds.width;
       let h = bounds.height;
       if (pathNode.subpaths) {
-        let minX = bounds.x, maxX = bounds.x + bounds.width;
-        let minY = bounds.y, maxY = bounds.y + bounds.height;
+        let minX = bounds.x,
+          maxX = bounds.x + bounds.width;
+        let minY = bounds.y,
+          maxY = bounds.y + bounds.height;
         for (const sp of pathNode.subpaths) {
           const spB = getPathBounds(sp, true);
           if (spB) {
@@ -149,7 +164,13 @@ function getGroupPosition(node: Node, sceneGraph: SceneGraph): { x: number; y: n
 }
 
 function isSizeEditable(node: Node): boolean {
-  return node.type === 'rectangle' || node.type === 'ellipse' || node.type === 'polygon' || node.type === 'path' || node.type === 'image';
+  return (
+    node.type === 'rectangle' ||
+    node.type === 'ellipse' ||
+    node.type === 'polygon' ||
+    node.type === 'path' ||
+    node.type === 'image'
+  );
 }
 
 function getSizePropertyPaths(node: Node): { w: string; h: string } {
@@ -252,15 +273,17 @@ export function PropertiesPanel() {
 
   // Detect multi-selection of shape nodes for boolean ops
   const SHAPE_TYPES = new Set(['rectangle', 'ellipse', 'polygon', 'path']);
-  const multiShapeSelected = selectedNodeIds.size >= 2 && (() => {
-    let shapeCount = 0;
-    for (const id of selectedNodeIds) {
-      const n = sceneGraph.getNode(id);
-      if (n && SHAPE_TYPES.has(n.type)) shapeCount++;
-      if (shapeCount >= 2) return true;
-    }
-    return false;
-  })();
+  const multiShapeSelected =
+    selectedNodeIds.size >= 2 &&
+    (() => {
+      let shapeCount = 0;
+      for (const id of selectedNodeIds) {
+        const n = sceneGraph.getNode(id);
+        if (n && SHAPE_TYPES.has(n.type)) shapeCount++;
+        if (shapeCount >= 2) return true;
+      }
+      return false;
+    })();
 
   const handlePositionChange = useCallback(
     (axis: 'x' | 'y', value: string) => {
@@ -352,8 +375,10 @@ export function PropertiesPanel() {
           let baseW = bounds.width;
           let baseH = bounds.height;
           if (pathNode.subpaths) {
-            let minX = bounds.x, maxX = bounds.x + bounds.width;
-            let minY = bounds.y, maxY = bounds.y + bounds.height;
+            let minX = bounds.x,
+              maxX = bounds.x + bounds.width;
+            let minY = bounds.y,
+              maxY = bounds.y + bounds.height;
             for (const sp of pathNode.subpaths) {
               const spB = getPathBounds(sp, true);
               if (spB) {
@@ -811,7 +836,10 @@ export function PropertiesPanel() {
       const currentNode = sceneGraph.getNode(selectedId);
       if (!currentNode || currentNode.type !== 'image') return;
       const imgNode = currentNode as ImageNode;
-      const adjustments = { ...(imgNode.adjustments ?? DEFAULT_ADJUSTMENTS), [key]: DEFAULT_ADJUSTMENTS[key] };
+      const adjustments = {
+        ...(imgNode.adjustments ?? DEFAULT_ADJUSTMENTS),
+        [key]: DEFAULT_ADJUSTMENTS[key],
+      };
       sceneGraph.updateNode(selectedId, { adjustments } as Partial<Node>);
     },
     [selectedId, sceneGraph]
@@ -859,7 +887,12 @@ export function PropertiesPanel() {
         }
       } else if (currentNode.type === 'image') {
         const img = currentNode as ImageNode;
-        const newRadius = [...(img.cornerRadius ?? [0, 0, 0, 0])] as [number, number, number, number];
+        const newRadius = [...(img.cornerRadius ?? [0, 0, 0, 0])] as [
+          number,
+          number,
+          number,
+          number,
+        ];
         if (corner !== undefined) {
           newRadius[corner] = num;
         } else {
@@ -1098,13 +1131,20 @@ export function PropertiesPanel() {
   // Get the actual property value for a size path (not the display size)
   const getSizePropertyValue = (path: string): number => {
     switch (path) {
-      case 'width': return (node as RectangleNode | ImageNode).width ?? 0;
-      case 'height': return (node as RectangleNode | ImageNode).height ?? 0;
-      case 'radiusX': return (node as EllipseNode).radiusX ?? 0;
-      case 'radiusY': return (node as EllipseNode).radiusY ?? 0;
-      case 'transform.scale.x': return node.transform.scale?.x ?? 1;
-      case 'transform.scale.y': return node.transform.scale?.y ?? 1;
-      default: return 0;
+      case 'width':
+        return node.width ?? 0;
+      case 'height':
+        return node.height ?? 0;
+      case 'radiusX':
+        return (node as EllipseNode).radiusX ?? 0;
+      case 'radiusY':
+        return (node as EllipseNode).radiusY ?? 0;
+      case 'transform.scale.x':
+        return node.transform.scale?.x ?? 1;
+      case 'transform.scale.y':
+        return node.transform.scale?.y ?? 1;
+      default:
+        return 0;
     }
   };
 
@@ -1795,7 +1835,12 @@ export function PropertiesPanel() {
                   <button
                     className={styles.effectDropdownItem}
                     onClick={() => {
-                      if (selectedId) addEffect(sceneGraph as unknown as Parameters<typeof addEffect>[0], selectedId, 'drop-shadow');
+                      if (selectedId)
+                        addEffect(
+                          sceneGraph as unknown as Parameters<typeof addEffect>[0],
+                          selectedId,
+                          'drop-shadow'
+                        );
                       setShowEffectDropdown(false);
                     }}
                   >
@@ -1804,7 +1849,12 @@ export function PropertiesPanel() {
                   <button
                     className={styles.effectDropdownItem}
                     onClick={() => {
-                      if (selectedId) addEffect(sceneGraph as unknown as Parameters<typeof addEffect>[0], selectedId, 'inner-shadow');
+                      if (selectedId)
+                        addEffect(
+                          sceneGraph as unknown as Parameters<typeof addEffect>[0],
+                          selectedId,
+                          'inner-shadow'
+                        );
                       setShowEffectDropdown(false);
                     }}
                   >
@@ -1813,7 +1863,12 @@ export function PropertiesPanel() {
                   <button
                     className={styles.effectDropdownItem}
                     onClick={() => {
-                      if (selectedId) addEffect(sceneGraph as unknown as Parameters<typeof addEffect>[0], selectedId, 'layer-blur');
+                      if (selectedId)
+                        addEffect(
+                          sceneGraph as unknown as Parameters<typeof addEffect>[0],
+                          selectedId,
+                          'layer-blur'
+                        );
                       setShowEffectDropdown(false);
                     }}
                   >
@@ -1825,12 +1880,21 @@ export function PropertiesPanel() {
           </div>
           <div className={styles.sectionContent}>
             {(node.effects ?? []).map((effect, index) => (
-              <div key={effect.id} className={styles.effectItem} data-testid={`effect-item-${index}`}>
+              <div
+                key={effect.id}
+                className={styles.effectItem}
+                data-testid={`effect-item-${index}`}
+              >
                 <div className={styles.effectHeader}>
                   <button
                     className={`${styles.visibilityToggle} ${!effect.visible ? styles.inactive : ''}`}
                     onClick={() => {
-                      if (selectedId) toggleEffectVisibility(sceneGraph as unknown as Parameters<typeof toggleEffectVisibility>[0], selectedId, index);
+                      if (selectedId)
+                        toggleEffectVisibility(
+                          sceneGraph as unknown as Parameters<typeof toggleEffectVisibility>[0],
+                          selectedId,
+                          index
+                        );
                     }}
                     title={effect.visible ? 'Hide effect' : 'Show effect'}
                     aria-label={effect.visible ? 'Hide effect' : 'Show effect'}
@@ -1838,14 +1902,21 @@ export function PropertiesPanel() {
                     {effect.visible ? <Eye size={12} /> : <EyeOff size={12} />}
                   </button>
                   <span className={styles.effectTypeLabel}>
-                    {effect.type === 'drop-shadow' ? 'Drop Shadow'
-                      : effect.type === 'inner-shadow' ? 'Inner Shadow'
-                      : 'Layer Blur'}
+                    {effect.type === 'drop-shadow'
+                      ? 'Drop Shadow'
+                      : effect.type === 'inner-shadow'
+                        ? 'Inner Shadow'
+                        : 'Layer Blur'}
                   </span>
                   <button
                     className={styles.removeButton}
                     onClick={() => {
-                      if (selectedId) removeEffect(sceneGraph as unknown as Parameters<typeof removeEffect>[0], selectedId, index);
+                      if (selectedId)
+                        removeEffect(
+                          sceneGraph as unknown as Parameters<typeof removeEffect>[0],
+                          selectedId,
+                          index
+                        );
                     }}
                     title="Remove effect"
                     aria-label="Remove effect"
@@ -1854,178 +1925,372 @@ export function PropertiesPanel() {
                   </button>
                 </div>
                 <div className={styles.effectProperties}>
-                  {(effect.type === 'drop-shadow' || effect.type === 'inner-shadow') && (() => {
-                    const shadow = effect as DropShadowEffect | InnerShadowEffect;
-                    return (
-                      <>
-                        <div className={styles.effectPropRow}>
-                          <div
-                            className={styles.colorSwatch}
-                            style={{ '--swatch-color': colorToHex(shadow.color) } as React.CSSProperties}
-                            role="button"
-                            tabIndex={0}
-                            aria-label={`Effect color: ${colorToHex(shadow.color)}`}
-                            onClick={() => {
-                              /* Color picker for effect shadow color - reuses existing picker */
-                              const pickerKey = `effect-${index}-color`;
-                              openPicker(pickerKey);
-                            }}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter' || e.key === ' ') {
-                                e.preventDefault();
-                                openPicker(`effect-${index}-color`);
+                  {(effect.type === 'drop-shadow' || effect.type === 'inner-shadow') &&
+                    (() => {
+                      const shadow = effect as DropShadowEffect | InnerShadowEffect;
+                      return (
+                        <>
+                          <div className={styles.effectPropRow}>
+                            <div
+                              className={styles.colorSwatch}
+                              style={
+                                {
+                                  '--swatch-color': colorToHex(shadow.color),
+                                } as React.CSSProperties
                               }
-                            }}
-                            ref={(el) => {
-                              if (el) swatchRefs.current.set(`effect-${index}-color`, el);
-                            }}
-                          />
-                          {activePickerKey === `effect-${index}-color` && (
-                            <ColorPicker
-                              color={shadow.color}
-                              onChange={(c) => {
-                                if (selectedId) updateEffect(sceneGraph as unknown as Parameters<typeof updateEffect>[0], selectedId, index, { color: c } as Partial<Effect>);
+                              role="button"
+                              tabIndex={0}
+                              aria-label={`Effect color: ${colorToHex(shadow.color)}`}
+                              onClick={() => {
+                                /* Color picker for effect shadow color - reuses existing picker */
+                                const pickerKey = `effect-${index}-color`;
+                                openPicker(pickerKey);
                               }}
-                              anchorX={pickerAnchor.x}
-                              anchorY={pickerAnchor.y}
-                              onClose={closePicker}
-                              showAlpha
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' || e.key === ' ') {
+                                  e.preventDefault();
+                                  openPicker(`effect-${index}-color`);
+                                }
+                              }}
+                              ref={(el) => {
+                                if (el) swatchRefs.current.set(`effect-${index}-color`, el);
+                              }}
                             />
-                          )}
+                            {activePickerKey === `effect-${index}-color` && (
+                              <ColorPicker
+                                color={shadow.color}
+                                onChange={(c) => {
+                                  if (selectedId) {
+                                    updateEffect(
+                                      sceneGraph as unknown as Parameters<typeof updateEffect>[0],
+                                      selectedId,
+                                      index,
+                                      { color: c } as Partial<Effect>
+                                    );
+                                    if (autoKeyframe)
+                                      addKeyframeAtFrame(
+                                        selectedId,
+                                        `effects.${index}.color`,
+                                        currentFrame,
+                                        c
+                                      );
+                                  }
+                                }}
+                                anchorX={pickerAnchor.x}
+                                anchorY={pickerAnchor.y}
+                                onClose={closePicker}
+                                showAlpha
+                              />
+                            )}
+                            <div className={styles.inputGroup}>
+                              <ScrubLabel
+                                label="Op"
+                                value={Math.round(shadow.opacity * 100)}
+                                onChange={(v) => {
+                                  if (selectedId) {
+                                    const clamped = Math.max(0, Math.min(1, v / 100));
+                                    updateEffect(
+                                      sceneGraph as unknown as Parameters<typeof updateEffect>[0],
+                                      selectedId,
+                                      index,
+                                      { opacity: clamped } as Partial<Effect>
+                                    );
+                                    if (autoKeyframe)
+                                      addKeyframeAtFrame(
+                                        selectedId,
+                                        `effects.${index}.opacity`,
+                                        currentFrame,
+                                        clamped
+                                      );
+                                  }
+                                }}
+                                sensitivity={1}
+                                min={0}
+                                max={100}
+                              />
+                              <input
+                                type="text"
+                                className={styles.input}
+                                value={`${Math.round(shadow.opacity * 100)}%`}
+                                onChange={(e) => {
+                                  const v = parseInt(e.target.value.replace('%', ''), 10);
+                                  if (!isNaN(v) && selectedId) {
+                                    const clamped = Math.max(0, Math.min(1, v / 100));
+                                    updateEffect(
+                                      sceneGraph as unknown as Parameters<typeof updateEffect>[0],
+                                      selectedId,
+                                      index,
+                                      { opacity: clamped } as Partial<Effect>
+                                    );
+                                    if (autoKeyframe)
+                                      addKeyframeAtFrame(
+                                        selectedId,
+                                        `effects.${index}.opacity`,
+                                        currentFrame,
+                                        clamped
+                                      );
+                                  }
+                                }}
+                              />
+                            </div>
+                          </div>
+                          <div className={styles.effectPropRow}>
+                            <div className={styles.inputGroup}>
+                              <ScrubLabel
+                                label="X"
+                                value={shadow.offsetX}
+                                onChange={(v) => {
+                                  if (selectedId) {
+                                    updateEffect(
+                                      sceneGraph as unknown as Parameters<typeof updateEffect>[0],
+                                      selectedId,
+                                      index,
+                                      { offsetX: v } as Partial<Effect>
+                                    );
+                                    if (autoKeyframe)
+                                      addKeyframeAtFrame(
+                                        selectedId,
+                                        `effects.${index}.offsetX`,
+                                        currentFrame,
+                                        v
+                                      );
+                                  }
+                                }}
+                              />
+                              <input
+                                type="text"
+                                className={styles.input}
+                                value={fmt1(shadow.offsetX)}
+                                onChange={(e) => {
+                                  const v = parseFloat(e.target.value);
+                                  if (!isNaN(v) && selectedId) {
+                                    updateEffect(
+                                      sceneGraph as unknown as Parameters<typeof updateEffect>[0],
+                                      selectedId,
+                                      index,
+                                      { offsetX: v } as Partial<Effect>
+                                    );
+                                    if (autoKeyframe)
+                                      addKeyframeAtFrame(
+                                        selectedId,
+                                        `effects.${index}.offsetX`,
+                                        currentFrame,
+                                        v
+                                      );
+                                  }
+                                }}
+                              />
+                            </div>
+                            <div className={styles.inputGroup}>
+                              <ScrubLabel
+                                label="Y"
+                                value={shadow.offsetY}
+                                onChange={(v) => {
+                                  if (selectedId) {
+                                    updateEffect(
+                                      sceneGraph as unknown as Parameters<typeof updateEffect>[0],
+                                      selectedId,
+                                      index,
+                                      { offsetY: v } as Partial<Effect>
+                                    );
+                                    if (autoKeyframe)
+                                      addKeyframeAtFrame(
+                                        selectedId,
+                                        `effects.${index}.offsetY`,
+                                        currentFrame,
+                                        v
+                                      );
+                                  }
+                                }}
+                              />
+                              <input
+                                type="text"
+                                className={styles.input}
+                                value={fmt1(shadow.offsetY)}
+                                onChange={(e) => {
+                                  const v = parseFloat(e.target.value);
+                                  if (!isNaN(v) && selectedId) {
+                                    updateEffect(
+                                      sceneGraph as unknown as Parameters<typeof updateEffect>[0],
+                                      selectedId,
+                                      index,
+                                      { offsetY: v } as Partial<Effect>
+                                    );
+                                    if (autoKeyframe)
+                                      addKeyframeAtFrame(
+                                        selectedId,
+                                        `effects.${index}.offsetY`,
+                                        currentFrame,
+                                        v
+                                      );
+                                  }
+                                }}
+                              />
+                            </div>
+                          </div>
+                          <div className={styles.effectPropRow}>
+                            <div className={styles.inputGroup}>
+                              <ScrubLabel
+                                label="Blur"
+                                value={shadow.blur}
+                                onChange={(v) => {
+                                  if (selectedId) {
+                                    const clamped = Math.max(0, v);
+                                    updateEffect(
+                                      sceneGraph as unknown as Parameters<typeof updateEffect>[0],
+                                      selectedId,
+                                      index,
+                                      { blur: clamped } as Partial<Effect>
+                                    );
+                                    if (autoKeyframe)
+                                      addKeyframeAtFrame(
+                                        selectedId,
+                                        `effects.${index}.blur`,
+                                        currentFrame,
+                                        clamped
+                                      );
+                                  }
+                                }}
+                                min={0}
+                                max={100}
+                              />
+                              <input
+                                type="text"
+                                className={styles.input}
+                                value={fmt1(shadow.blur)}
+                                onChange={(e) => {
+                                  const v = parseFloat(e.target.value);
+                                  if (!isNaN(v) && selectedId) {
+                                    const clamped = Math.max(0, v);
+                                    updateEffect(
+                                      sceneGraph as unknown as Parameters<typeof updateEffect>[0],
+                                      selectedId,
+                                      index,
+                                      { blur: clamped } as Partial<Effect>
+                                    );
+                                    if (autoKeyframe)
+                                      addKeyframeAtFrame(
+                                        selectedId,
+                                        `effects.${index}.blur`,
+                                        currentFrame,
+                                        clamped
+                                      );
+                                  }
+                                }}
+                              />
+                            </div>
+                            <div className={styles.inputGroup}>
+                              <ScrubLabel
+                                label="Spread"
+                                value={shadow.spread}
+                                onChange={(v) => {
+                                  if (selectedId) {
+                                    const clamped = Math.max(0, v);
+                                    updateEffect(
+                                      sceneGraph as unknown as Parameters<typeof updateEffect>[0],
+                                      selectedId,
+                                      index,
+                                      { spread: clamped } as Partial<Effect>
+                                    );
+                                    if (autoKeyframe)
+                                      addKeyframeAtFrame(
+                                        selectedId,
+                                        `effects.${index}.spread`,
+                                        currentFrame,
+                                        clamped
+                                      );
+                                  }
+                                }}
+                                min={0}
+                                max={100}
+                              />
+                              <input
+                                type="text"
+                                className={styles.input}
+                                value={fmt1(shadow.spread)}
+                                onChange={(e) => {
+                                  const v = parseFloat(e.target.value);
+                                  if (!isNaN(v) && selectedId) {
+                                    const clamped = Math.max(0, v);
+                                    updateEffect(
+                                      sceneGraph as unknown as Parameters<typeof updateEffect>[0],
+                                      selectedId,
+                                      index,
+                                      { spread: clamped } as Partial<Effect>
+                                    );
+                                    if (autoKeyframe)
+                                      addKeyframeAtFrame(
+                                        selectedId,
+                                        `effects.${index}.spread`,
+                                        currentFrame,
+                                        clamped
+                                      );
+                                  }
+                                }}
+                              />
+                            </div>
+                          </div>
+                        </>
+                      );
+                    })()}
+                  {effect.type === 'layer-blur' &&
+                    (() => {
+                      const blur = effect as LayerBlurEffect;
+                      return (
+                        <div className={styles.effectPropRow}>
                           <div className={styles.inputGroup}>
                             <ScrubLabel
-                              label="Op"
-                              value={Math.round(shadow.opacity * 100)}
+                              label="Radius"
+                              value={blur.radius}
                               onChange={(v) => {
-                                if (selectedId) updateEffect(sceneGraph as unknown as Parameters<typeof updateEffect>[0], selectedId, index, { opacity: Math.max(0, Math.min(1, v / 100)) } as Partial<Effect>);
+                                if (selectedId) {
+                                  const clamped = Math.max(0, v);
+                                  updateEffect(
+                                    sceneGraph as unknown as Parameters<typeof updateEffect>[0],
+                                    selectedId,
+                                    index,
+                                    { radius: clamped } as Partial<Effect>
+                                  );
+                                  if (autoKeyframe)
+                                    addKeyframeAtFrame(
+                                      selectedId,
+                                      `effects.${index}.radius`,
+                                      currentFrame,
+                                      clamped
+                                    );
+                                }
                               }}
-                              sensitivity={1}
                               min={0}
                               max={100}
                             />
                             <input
                               type="text"
                               className={styles.input}
-                              value={`${Math.round(shadow.opacity * 100)}%`}
+                              value={fmt1(blur.radius)}
                               onChange={(e) => {
-                                const v = parseInt(e.target.value.replace('%', ''), 10);
+                                const v = parseFloat(e.target.value);
                                 if (!isNaN(v) && selectedId) {
-                                  updateEffect(sceneGraph as unknown as Parameters<typeof updateEffect>[0], selectedId, index, { opacity: Math.max(0, Math.min(1, v / 100)) } as Partial<Effect>);
+                                  const clamped = Math.max(0, v);
+                                  updateEffect(
+                                    sceneGraph as unknown as Parameters<typeof updateEffect>[0],
+                                    selectedId,
+                                    index,
+                                    { radius: clamped } as Partial<Effect>
+                                  );
+                                  if (autoKeyframe)
+                                    addKeyframeAtFrame(
+                                      selectedId,
+                                      `effects.${index}.radius`,
+                                      currentFrame,
+                                      clamped
+                                    );
                                 }
                               }}
                             />
                           </div>
                         </div>
-                        <div className={styles.effectPropRow}>
-                          <div className={styles.inputGroup}>
-                            <ScrubLabel
-                              label="X"
-                              value={shadow.offsetX}
-                              onChange={(v) => {
-                                if (selectedId) updateEffect(sceneGraph as unknown as Parameters<typeof updateEffect>[0], selectedId, index, { offsetX: v } as Partial<Effect>);
-                              }}
-                            />
-                            <input
-                              type="text"
-                              className={styles.input}
-                              value={fmt1(shadow.offsetX)}
-                              onChange={(e) => {
-                                const v = parseFloat(e.target.value);
-                                if (!isNaN(v) && selectedId) updateEffect(sceneGraph as unknown as Parameters<typeof updateEffect>[0], selectedId, index, { offsetX: v } as Partial<Effect>);
-                              }}
-                            />
-                          </div>
-                          <div className={styles.inputGroup}>
-                            <ScrubLabel
-                              label="Y"
-                              value={shadow.offsetY}
-                              onChange={(v) => {
-                                if (selectedId) updateEffect(sceneGraph as unknown as Parameters<typeof updateEffect>[0], selectedId, index, { offsetY: v } as Partial<Effect>);
-                              }}
-                            />
-                            <input
-                              type="text"
-                              className={styles.input}
-                              value={fmt1(shadow.offsetY)}
-                              onChange={(e) => {
-                                const v = parseFloat(e.target.value);
-                                if (!isNaN(v) && selectedId) updateEffect(sceneGraph as unknown as Parameters<typeof updateEffect>[0], selectedId, index, { offsetY: v } as Partial<Effect>);
-                              }}
-                            />
-                          </div>
-                        </div>
-                        <div className={styles.effectPropRow}>
-                          <div className={styles.inputGroup}>
-                            <ScrubLabel
-                              label="Blur"
-                              value={shadow.blur}
-                              onChange={(v) => {
-                                if (selectedId) updateEffect(sceneGraph as unknown as Parameters<typeof updateEffect>[0], selectedId, index, { blur: Math.max(0, v) } as Partial<Effect>);
-                              }}
-                              min={0}
-                              max={100}
-                            />
-                            <input
-                              type="text"
-                              className={styles.input}
-                              value={fmt1(shadow.blur)}
-                              onChange={(e) => {
-                                const v = parseFloat(e.target.value);
-                                if (!isNaN(v) && selectedId) updateEffect(sceneGraph as unknown as Parameters<typeof updateEffect>[0], selectedId, index, { blur: Math.max(0, v) } as Partial<Effect>);
-                              }}
-                            />
-                          </div>
-                          <div className={styles.inputGroup}>
-                            <ScrubLabel
-                              label="Spread"
-                              value={shadow.spread}
-                              onChange={(v) => {
-                                if (selectedId) updateEffect(sceneGraph as unknown as Parameters<typeof updateEffect>[0], selectedId, index, { spread: Math.max(0, v) } as Partial<Effect>);
-                              }}
-                              min={0}
-                              max={100}
-                            />
-                            <input
-                              type="text"
-                              className={styles.input}
-                              value={fmt1(shadow.spread)}
-                              onChange={(e) => {
-                                const v = parseFloat(e.target.value);
-                                if (!isNaN(v) && selectedId) updateEffect(sceneGraph as unknown as Parameters<typeof updateEffect>[0], selectedId, index, { spread: Math.max(0, v) } as Partial<Effect>);
-                              }}
-                            />
-                          </div>
-                        </div>
-                      </>
-                    );
-                  })()}
-                  {effect.type === 'layer-blur' && (() => {
-                    const blur = effect as LayerBlurEffect;
-                    return (
-                      <div className={styles.effectPropRow}>
-                        <div className={styles.inputGroup}>
-                          <ScrubLabel
-                            label="Radius"
-                            value={blur.radius}
-                            onChange={(v) => {
-                              if (selectedId) updateEffect(sceneGraph as unknown as Parameters<typeof updateEffect>[0], selectedId, index, { radius: Math.max(0, v) } as Partial<Effect>);
-                            }}
-                            min={0}
-                            max={100}
-                          />
-                          <input
-                            type="text"
-                            className={styles.input}
-                            value={fmt1(blur.radius)}
-                            onChange={(e) => {
-                              const v = parseFloat(e.target.value);
-                              if (!isNaN(v) && selectedId) updateEffect(sceneGraph as unknown as Parameters<typeof updateEffect>[0], selectedId, index, { radius: Math.max(0, v) } as Partial<Effect>);
-                            }}
-                          />
-                        </div>
-                      </div>
-                    );
-                  })()}
+                      );
+                    })()}
                 </div>
               </div>
             ))}
@@ -2042,7 +2307,12 @@ export function PropertiesPanel() {
               className={styles.blendModeSelect}
               value={node.blendMode}
               onChange={(e) => {
-                if (selectedId) setBlendMode(sceneGraph as unknown as Parameters<typeof setBlendMode>[0], selectedId, e.target.value as BlendMode);
+                if (selectedId)
+                  setBlendMode(
+                    sceneGraph as unknown as Parameters<typeof setBlendMode>[0],
+                    selectedId,
+                    e.target.value as BlendMode
+                  );
               }}
               data-testid="blend-mode-select"
             >
