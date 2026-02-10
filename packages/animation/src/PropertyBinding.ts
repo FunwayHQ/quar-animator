@@ -65,7 +65,7 @@ export function setProperty<N extends Node>(node: N, path: string, value: unknow
 // Animatable property definitions
 // ============================================================================
 
-export type InterpolationType = 'number' | 'vector2' | 'color' | 'discrete';
+export type InterpolationType = 'number' | 'vector2' | 'color' | 'rotation' | 'discrete';
 
 export interface AnimatableProperty {
   path: string;
@@ -79,7 +79,7 @@ export interface AnimatableProperty {
 export const COMMON_ANIMATABLE_PROPERTIES: AnimatableProperty[] = [
   { path: 'transform.position.x', displayName: 'Position X', interpolationType: 'number' },
   { path: 'transform.position.y', displayName: 'Position Y', interpolationType: 'number' },
-  { path: 'transform.rotation', displayName: 'Rotation', interpolationType: 'number' },
+  { path: 'transform.rotation', displayName: 'Rotation', interpolationType: 'rotation' },
   { path: 'transform.scale.x', displayName: 'Scale X', interpolationType: 'number' },
   { path: 'transform.scale.y', displayName: 'Scale Y', interpolationType: 'number' },
   { path: 'transform.anchor.x', displayName: 'Anchor X', interpolationType: 'number' },
@@ -292,6 +292,8 @@ export function getInterpolator(
   switch (type) {
     case 'number':
       return interpolators.number as (a: unknown, b: unknown, t: number) => unknown;
+    case 'rotation':
+      return interpolators.rotation as (a: unknown, b: unknown, t: number) => unknown;
     case 'vector2':
       return interpolators.vector2 as (a: unknown, b: unknown, t: number) => unknown;
     case 'color':
@@ -320,6 +322,9 @@ export function detectInterpolationType(path: string): InterpolationType {
   )
     return 'vector2';
 
+  // Rotation property — uses shortest-path interpolation
+  if (path === 'transform.rotation') return 'rotation';
+
   // Number properties (individual components, opacity, width, etc.)
   if (
     path.endsWith('.x') ||
@@ -334,7 +339,6 @@ export function detectInterpolationType(path: string): InterpolationType {
     path === 'radiusX' ||
     path === 'radiusY' ||
     path === 'radius' ||
-    path === 'transform.rotation' ||
     path === 'fontSize' ||
     path === 'lineHeight' ||
     path === 'letterSpacing' ||

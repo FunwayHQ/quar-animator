@@ -61,6 +61,8 @@ export function Timeline({ playback }: TimelineProps = {}) {
   const copySelectedKeyframes = useEditorStore((s) => s.copySelectedKeyframes);
   const pasteKeyframes = useEditorStore((s) => s.pasteKeyframes);
   const moveSelectedKeyframes = useEditorStore((s) => s.moveSelectedKeyframes);
+  const keyframeClipboard = useEditorStore((s) => s.keyframeClipboard);
+  const selectedNodeIds = useEditorStore((s) => s.selectedNodeIds);
 
   const onionSkinEnabled = useEditorStore((s) => s.onionSkin.enabled);
   const toggleOnionSkin = useEditorStore((s) => s.toggleOnionSkin);
@@ -92,9 +94,13 @@ export function Timeline({ playback }: TimelineProps = {}) {
     update();
     const unsub = sceneGraph.on('nodeAdded', update);
     const unsub2 = sceneGraph.on('nodeRemoved', update);
+    const unsub3 = sceneGraph.on('nodeMoved', update);
+    const unsub4 = sceneGraph.on('nodeChanged', update);
     return () => {
       unsub();
       unsub2();
+      unsub3();
+      unsub4();
     };
   }, [sceneGraph]);
 
@@ -358,10 +364,8 @@ export function Timeline({ playback }: TimelineProps = {}) {
     ];
 
     // Add paste option if clipboard has content
-    const kfClipboard = useEditorStore.getState().keyframeClipboard;
-    const selectedIds = useEditorStore.getState().selectedNodeIds;
-    if (kfClipboard && selectedIds.size > 0) {
-      const firstNodeId = [...selectedIds][0]!;
+    if (keyframeClipboard && selectedNodeIds.size > 0) {
+      const firstNodeId = [...selectedNodeIds][0]!;
       items.push({ type: 'separator' });
       items.push({
         id: 'paste-keyframes',
@@ -383,6 +387,8 @@ export function Timeline({ playback }: TimelineProps = {}) {
     copySelectedKeyframes,
     removeSelectedKeyframes,
     pasteKeyframes,
+    keyframeClipboard,
+    selectedNodeIds,
   ]);
 
   // ============================================================

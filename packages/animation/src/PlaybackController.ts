@@ -56,6 +56,10 @@ export class PlaybackController {
 
   play(): void {
     if (this._disposed || this._playing) return;
+    // Auto-rewind to start if at the end of a non-looping animation
+    if (!this._looping && this._currentFrame >= this._duration - 1) {
+      this._setFrame(0);
+    }
     this._playing = true;
     this._lastTimestamp = -1;
     this._accumulator = 0;
@@ -138,7 +142,12 @@ export class PlaybackController {
 
     this._accumulator += delta;
 
-    while (this._accumulator >= msPerFrame) {
+    // Limit iterations to prevent frame-catching burst after tab backgrounding
+    const MAX_CATCHUP_FRAMES = 10;
+    let iterations = 0;
+
+    while (this._accumulator >= msPerFrame && iterations < MAX_CATCHUP_FRAMES) {
+      iterations++;
       this._accumulator -= msPerFrame;
       const nextFrame = this._currentFrame + 1;
 

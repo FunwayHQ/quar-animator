@@ -63,6 +63,8 @@ export function useTimelineShortcuts(callbacks: TimelineShortcutCallbacks) {
           useEditorStore.getState().toggleShowRulers();
           return;
         }
+        // Don't process other keys when Shift is held (avoid unintended Shift+K, Shift+L, etc.)
+        return;
       }
 
       switch (event.key) {

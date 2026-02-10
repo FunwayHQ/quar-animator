@@ -18,7 +18,7 @@ import type { WebGLRenderer, ShaderProgram } from './WebGLRenderer';
  * Create a VAO for a fullscreen quad (two triangles covering NDC -1..1).
  * UV coordinates go from 0..1.
  */
-export function createFullscreenQuad(gl: WebGL2RenderingContext): WebGLVertexArrayObject {
+export function createFullscreenQuad(gl: WebGL2RenderingContext): { vao: WebGLVertexArrayObject; vbo: WebGLBuffer } {
   const vao = gl.createVertexArray()!;
   gl.bindVertexArray(vao);
 
@@ -49,7 +49,7 @@ export function createFullscreenQuad(gl: WebGL2RenderingContext): WebGLVertexArr
   gl.bindVertexArray(null);
   gl.bindBuffer(gl.ARRAY_BUFFER, null);
 
-  return vao;
+  return { vao, vbo };
 }
 
 // ============================================================================
@@ -307,6 +307,7 @@ export interface PostProcessPrograms {
   shadow: ShaderProgram;
   composite: ShaderProgram;
   quadVAO: WebGLVertexArrayObject;
+  quadVBO: WebGLBuffer;
 }
 
 export function createPostProcessPrograms(renderer: WebGLRenderer): PostProcessPrograms {
@@ -338,11 +339,12 @@ export function createPostProcessPrograms(renderer: WebGLRenderer): PostProcessP
     ['a_position', 'a_texCoord'],
     ['u_texture']
   );
-  const quadVAO = createFullscreenQuad(renderer.context);
+  const { vao: quadVAO, vbo: quadVBO } = createFullscreenQuad(renderer.context);
 
-  return { blur, blend, shadow, composite, quadVAO };
+  return { blur, blend, shadow, composite, quadVAO, quadVBO };
 }
 
 export function disposePostProcessPrograms(gl: WebGL2RenderingContext, programs: PostProcessPrograms): void {
   gl.deleteVertexArray(programs.quadVAO);
+  gl.deleteBuffer(programs.quadVBO);
 }

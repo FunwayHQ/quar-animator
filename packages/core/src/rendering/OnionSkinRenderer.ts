@@ -67,12 +67,14 @@ export class OnionSkinRenderer {
    * @param currentFrame - The current frame number
    * @param getNodesAtFrame - Callback that evaluates timeline at a frame and returns node states
    * @param viewProjectionMatrix - Camera view-projection matrix
+   * @param timelineDuration - Total duration in frames (optional, used to clamp after frames)
    */
   render(
     settings: OnionSkinSettings,
     currentFrame: number,
     getNodesAtFrame: (frame: number) => Node[],
-    viewProjectionMatrix: Matrix3
+    viewProjectionMatrix: Matrix3,
+    timelineDuration?: number
   ): void {
     if (!settings.enabled) return;
 
@@ -100,6 +102,7 @@ export class OnionSkinRenderer {
     // Render after frames (furthest first, so closest overlaps on top)
     for (let i = settings.afterCount; i >= 1; i--) {
       const frame = currentFrame + i;
+      if (timelineDuration !== undefined && frame >= timelineDuration) continue;
       const frameOpacity = settings.opacity * Math.pow(1 - settings.opacityFalloff, i - 1);
       const nodes = getNodesAtFrame(frame);
       for (const node of nodes) {

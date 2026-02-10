@@ -146,6 +146,7 @@ function cubicBezier(x1: number, y1: number, x2: number, y2: number): (t: number
   };
 
   const solveCurveX = (x: number): number => {
+    // Newton-Raphson iteration
     let t = x;
     for (let i = 0; i < 8; i++) {
       const xEst = sampleCurveX(t) - x;
@@ -153,6 +154,21 @@ function cubicBezier(x1: number, y1: number, x2: number, y2: number): (t: number
       const d = sampleCurveDerivativeX(t);
       if (Math.abs(d) < 1e-6) break;
       t = t - xEst / d;
+    }
+
+    // Bisection fallback for when Newton-Raphson fails to converge
+    let lo = 0;
+    let hi = 1;
+    t = x;
+    for (let i = 0; i < 20; i++) {
+      const xEst = sampleCurveX(t) - x;
+      if (Math.abs(xEst) < 1e-6) return t;
+      if (xEst > 0) {
+        hi = t;
+      } else {
+        lo = t;
+      }
+      t = (lo + hi) / 2;
     }
     return t;
   };

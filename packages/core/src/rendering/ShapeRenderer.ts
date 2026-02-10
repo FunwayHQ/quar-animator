@@ -1588,7 +1588,9 @@ export class ShapeRenderer {
       node.transform.anchor
     );
 
-    const colorOverride = { tint: tintColor, alpha };
+    // Multiply ghost alpha by node's own opacity for correct visual representation
+    const effectiveAlpha = alpha * (node.opacity ?? 1);
+    const colorOverride = { tint: tintColor, alpha: effectiveAlpha };
 
     switch (node.type) {
       case 'rectangle':

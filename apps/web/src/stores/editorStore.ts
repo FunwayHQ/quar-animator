@@ -374,12 +374,15 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     pasteClipboard(sceneGraph);
   },
   deleteSelection: (sceneGraph: SceneGraphLike) => {
-    const { selectedNodeIds } = get();
+    const { selectedNodeIds, timeline } = get();
     if (selectedNodeIds.size === 0) return;
+    // Clean up keyframe tracks for deleted nodes
+    const mgr = new KeyframeManager(timeline);
     for (const id of selectedNodeIds) {
+      mgr.removeAllKeyframesForNode(id);
       sceneGraph.removeNode(id);
     }
-    set({ selectedNodeIds: new Set<string>(), editingGradient: null });
+    set({ selectedNodeIds: new Set<string>(), editingGradient: null, timeline: { ...timeline }, isDirty: true });
   },
   selectAll: (sceneGraph: SceneGraphLike) => {
     const allIds: string[] = [];
@@ -485,9 +488,20 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     })),
   setIsPlaying: (playing: boolean) => set({ isPlaying: playing }),
   setIsLooping: (looping: boolean) => set({ isLooping: looping }),
-  setTimelineDuration: (duration: number) =>
-    set({ timelineDuration: Math.max(1, Math.round(duration)) }),
-  setFrameRate: (rate: number) => set({ frameRate: Math.max(1, Math.min(120, Math.round(rate))) }),
+  setTimelineDuration: (duration: number) => {
+    const d = Math.max(1, Math.round(duration));
+    set((state) => ({
+      timelineDuration: d,
+      timeline: { ...state.timeline, duration: d },
+    }));
+  },
+  setFrameRate: (rate: number) => {
+    const r = Math.max(1, Math.min(120, Math.round(rate)));
+    set((state) => ({
+      frameRate: r,
+      timeline: { ...state.timeline, frameRate: r },
+    }));
+  },
   setTimelineExpanded: (expanded: boolean) => set({ timelineExpanded: expanded }),
   toggleTimelineExpanded: () => set((state) => ({ timelineExpanded: !state.timelineExpanded })),
 
@@ -513,7 +527,14 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   ) => {
     const { timeline } = get();
     const mgr = new KeyframeManager(timeline);
-    mgr.addKeyframe(nodeId, property, frame, value, easing);
+    // Use setKeyframeAtFrame to preserve existing easing when updating a keyframe
+    // (e.g., auto-keyframe mode adjusting a value at a frame that already has custom easing)
+    const existing = mgr.getKeyframeAt(nodeId, property, frame);
+    if (existing) {
+      mgr.setKeyframeAtFrame(nodeId, property, frame, value);
+    } else {
+      mgr.addKeyframe(nodeId, property, frame, value, easing);
+    }
     // Trigger re-render by creating a new timeline reference
     set({ timeline: { ...timeline }, isDirty: true });
   },
@@ -564,6 +585,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     set({
       timeline: { ...timeline },
       selectedKeyframeIds: new Set(pasted.map((kf: Keyframe) => kf.id)),
+      isDirty: true,
     });
   },
   moveSelectedKeyframes: (

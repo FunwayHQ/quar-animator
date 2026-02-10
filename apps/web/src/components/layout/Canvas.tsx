@@ -9,7 +9,7 @@ import {
   TransformHandles,
 } from '@quar/core';
 import type { Node, ImageNode, Vector2 } from '@quar/types';
-import { evaluateNodeAtFrame, applyAnimatedValues } from '@quar/animation';
+import { evaluateNodeAtFrame, applyAnimatedValues, getAnimatedNodes } from '@quar/animation';
 import { useCanvasTools } from '../../hooks/useCanvasTools';
 import { useToolShortcuts } from '../../hooks/useToolShortcuts';
 import { useEditorStore } from '../../stores/editorStore';
@@ -363,19 +363,26 @@ export function Canvas() {
             isPlaying: playing,
             timeline: tl,
             currentFrame: frame,
+            timelineDuration: tlDuration,
           } = useEditorStore.getState();
           if (onionSkin.enabled && (!playing || onionSkin.showDuringPlayback)) {
             const sg = sceneGraphRef.current;
             const getNodesAtFrame = (f: number) => {
-              return sg.getRootNodes().map((node: Node) => {
-                const values = evaluateNodeAtFrame(tl, node.id, f);
+              // Evaluate all animated nodes (including children in groups), then
+              // return all root-level nodes with animated values applied
+              const animatedIds = getAnimatedNodes(tl);
+              const overrides = new Map<string, Node>();
+              for (const nodeId of animatedIds) {
+                const node = sg.getNode(nodeId);
+                if (!node) continue;
+                const values = evaluateNodeAtFrame(tl, nodeId, f);
                 if (values.size > 0) {
-                  return applyAnimatedValues(node, values);
+                  overrides.set(nodeId, applyAnimatedValues(node, values));
                 }
-                return node;
-              });
+              }
+              return sg.getRootNodes().map((node: Node) => overrides.get(node.id) ?? node);
             };
-            onionSkinRenderer.render(onionSkin, frame, getNodesAtFrame, viewProjectionMatrix);
+            onionSkinRenderer.render(onionSkin, frame, getNodesAtFrame, viewProjectionMatrix, tlDuration);
           }
         }
 

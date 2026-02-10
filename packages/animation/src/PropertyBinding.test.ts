@@ -179,9 +179,12 @@ describe('detectInterpolationType', () => {
     expect(detectInterpolationType('transform.position.x')).toBe('number');
     expect(detectInterpolationType('opacity')).toBe('number');
     expect(detectInterpolationType('width')).toBe('number');
-    expect(detectInterpolationType('transform.rotation')).toBe('number');
     expect(detectInterpolationType('fills.0.opacity')).toBe('number');
     expect(detectInterpolationType('strokes.0.width')).toBe('number');
+  });
+
+  it('detects rotation property', () => {
+    expect(detectInterpolationType('transform.rotation')).toBe('rotation');
   });
 
   it('defaults to discrete for unknown properties', () => {

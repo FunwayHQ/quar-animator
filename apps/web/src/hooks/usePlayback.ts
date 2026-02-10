@@ -4,7 +4,7 @@
  */
 
 import { useEffect, useRef, useCallback } from 'react';
-import { PlaybackController, evaluateNodeAtFrame, applyAnimatedValues } from '@quar/animation';
+import { PlaybackController, evaluateNodeAtFrame, applyAnimatedValues, getAnimatedNodes } from '@quar/animation';
 import { useEditorStore } from '../stores/editorStore';
 import { useSceneGraph } from '../contexts/SceneGraphContext';
 
@@ -14,18 +14,21 @@ export function usePlayback() {
   const sceneGraphRef = useRef(sceneGraph);
   sceneGraphRef.current = sceneGraph;
 
-  // Apply animated values from timeline to scene graph nodes
+  // Apply animated values from timeline to ALL scene graph nodes (including children in groups)
   const applyAnimations = useCallback((frame: number) => {
     const sg = sceneGraphRef.current;
     const { timeline } = useEditorStore.getState();
     if (!timeline.tracks || timeline.tracks.length === 0) return;
-    const rootNodes = sg.getRootNodes();
-    for (const node of rootNodes) {
-      const values = evaluateNodeAtFrame(timeline, node.id, frame);
+    // Get all unique animated node IDs from timeline tracks
+    const animatedNodeIds = getAnimatedNodes(timeline);
+    for (const nodeId of animatedNodeIds) {
+      const node = sg.getNode(nodeId);
+      if (!node) continue;
+      const values = evaluateNodeAtFrame(timeline, nodeId, frame);
       if (values.size > 0) {
         const updated = applyAnimatedValues(node, values);
         if (updated !== node) {
-          sg.updateNode(node.id, updated);
+          sg.updateNode(nodeId, updated);
         }
       }
     }
@@ -93,9 +96,8 @@ export function usePlayback() {
   }, []);
 
   const stop = useCallback(() => {
-    controllerRef.current?.stop();
+    controllerRef.current?.stop(); // Calls _setFrame(0) → onFrameChange → setCurrentFrame(0)
     useEditorStore.getState().setIsPlaying(false);
-    useEditorStore.getState().setCurrentFrame(0);
   }, []);
 
   const nextFrame = useCallback(() => {

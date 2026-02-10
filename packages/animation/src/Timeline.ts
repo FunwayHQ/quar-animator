@@ -159,7 +159,13 @@ export function moveKeyframe<T>(
   keyframe.time = newTime;
 
   const insertIndex = binarySearchKeyframes(track.keyframes, newTime);
-  track.keyframes.splice(insertIndex, 0, keyframe);
+
+  // Replace existing keyframe at newTime if present (maintain sorted-unique invariant)
+  if (insertIndex < track.keyframes.length && track.keyframes[insertIndex].time === newTime) {
+    track.keyframes[insertIndex] = keyframe;
+  } else {
+    track.keyframes.splice(insertIndex, 0, keyframe);
+  }
 
   return true;
 }
@@ -262,8 +268,8 @@ export const interpolators = {
 
   rotation: (a: number, b: number, t: number): number => {
     // Shortest-path interpolation: wrap difference to [-180, 180]
-    let diff = ((b - a + 180) % 360) - 180;
-    if (diff < -180) diff += 360;
+    // Use true mathematical modulo ((x % n) + n) % n to handle negative values
+    const diff = (((b - a + 180) % 360) + 360) % 360 - 180;
     return a + diff * t;
   },
 

@@ -113,9 +113,10 @@ export class KeyframeManager {
   ): boolean {
     const track = findTrack(this.timeline, nodeId, property);
     if (!track) return false;
-    const keyframe = track.keyframes.find((kf: Keyframe) => kf.id === keyframeId);
-    if (!keyframe) return false;
-    keyframe.easing = easing;
+    const index = track.keyframes.findIndex((kf: Keyframe) => kf.id === keyframeId);
+    if (index === -1) return false;
+    // Clone-and-replace to maintain immutability
+    track.keyframes[index] = { ...track.keyframes[index], easing };
     return true;
   }
 

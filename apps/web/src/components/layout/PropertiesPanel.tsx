@@ -799,7 +799,7 @@ export function PropertiesPanel() {
       const adjustments = { ...(imgNode.adjustments ?? DEFAULT_ADJUSTMENTS), [key]: value };
       sceneGraph.updateNode(selectedId, { adjustments } as Partial<Node>);
       if (autoKeyframe) {
-        addKeyframeAtFrame(selectedId, `adjustments.${key}`, currentFrame, value);
+        addKeyframeAtFrame(selectedId, `adjustments.${String(key)}`, currentFrame, value);
       }
     },
     [selectedId, sceneGraph, autoKeyframe, currentFrame, addKeyframeAtFrame]
@@ -1095,6 +1095,19 @@ export function PropertiesPanel() {
   const opacityPercent = Math.round(node.opacity * 100);
   const sizePaths = getSizePropertyPaths(node);
 
+  // Get the actual property value for a size path (not the display size)
+  const getSizePropertyValue = (path: string): number => {
+    switch (path) {
+      case 'width': return (node as RectangleNode | ImageNode).width ?? 0;
+      case 'height': return (node as RectangleNode | ImageNode).height ?? 0;
+      case 'radiusX': return (node as EllipseNode).radiusX ?? 0;
+      case 'radiusY': return (node as EllipseNode).radiusY ?? 0;
+      case 'transform.scale.x': return node.transform.scale?.x ?? 1;
+      case 'transform.scale.y': return node.transform.scale?.y ?? 1;
+      default: return 0;
+    }
+  };
+
   // Helper to toggle a keyframe for a given property
   const toggleKeyframe = (property: string, value: unknown) => {
     if (!selectedId) return;
@@ -1137,7 +1150,7 @@ export function PropertiesPanel() {
                 </label>
                 <KeyframeIndicator
                   state={getKeyframeState(timeline, nodeId, 'transform.position.x', currentFrame)}
-                  onToggle={() => toggleKeyframe('transform.position.x', pos.x)}
+                  onToggle={() => toggleKeyframe('transform.position.x', node.transform.position.x)}
                 />
               </div>
               <div className={styles.propertyInputs}>
@@ -1185,7 +1198,7 @@ export function PropertiesPanel() {
                 </label>
                 <KeyframeIndicator
                   state={getKeyframeState(timeline, nodeId, sizePaths.w, currentFrame)}
-                  onToggle={() => toggleKeyframe(sizePaths.w, size.width)}
+                  onToggle={() => toggleKeyframe(sizePaths.w, getSizePropertyValue(sizePaths.w))}
                 />
               </div>
               <div className={styles.propertyInputs}>
