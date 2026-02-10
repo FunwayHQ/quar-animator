@@ -28,7 +28,7 @@ import {
 } from '../gradient/gradientUtils';
 import { SceneGraph } from '../SceneGraph';
 import { mat3 } from '../math';
-import { nodeToPolygon, performBoolean, polygonToContours } from '../boolean/booleanOps';
+import { nodeToPolygon, performBoolean } from '../boolean/booleanOps';
 import type { MultiPolygon } from 'polygon-clipping';
 import {
   tessellatePathToVertices,
@@ -1544,40 +1544,92 @@ export class ShapeRenderer {
 
         if (!accum || accum.length === 0) return;
 
-        const contours = polygonToContours(accum);
-        if (contours.length === 0) return;
+        // Tessellate directly from MultiPolygon structure.
+        // polygon-clipping returns [Polygon, ...] where each Polygon = [outerRing, ...holeRings].
+        // Ring[0] = outer (CCW), Ring[1+] = holes (CW) — use this directly instead of
+        // flattening and reconstructing containment.
+        const allRingArrays: Float32Array[] = [];
+        // For each polygon, store [outerContourIdx, holeContourIdx, ...]
+        const polyRingIndices: number[][] = [];
 
-        // Flatten contours to vertex arrays for tessellation
-        const contourArrays: Float32Array[] = contours.map((contour) => {
-          const flat = new Float32Array(contour.length * 2);
-          for (let j = 0; j < contour.length; j++) {
-            flat[j * 2] = contour[j]!.position.x;
-            flat[j * 2 + 1] = contour[j]!.position.y;
+        for (const polygon of accum) {
+          if (polygon.length === 0) continue;
+          const ringIndices: number[] = [];
+          for (const ring of polygon) {
+            // polygon-clipping returns closed rings (first==last); remove duplicate
+            let pts = ring;
+            if (
+              pts.length > 1 &&
+              pts[0]![0] === pts[pts.length - 1]![0] &&
+              pts[0]![1] === pts[pts.length - 1]![1]
+            ) {
+              pts = pts.slice(0, -1);
+            }
+            if (pts.length < 3) continue;
+            const flat = new Float32Array(pts.length * 2);
+            for (let j = 0; j < pts.length; j++) {
+              flat[j * 2] = pts[j]![0];
+              flat[j * 2 + 1] = pts[j]![1];
+            }
+            ringIndices.push(allRingArrays.length);
+            allRingArrays.push(flat);
           }
-          return flat;
-        });
-
-        // Simple case: single contour
-        if (contourArrays.length === 1) {
-          vertices = contourArrays[0]!;
-          const numVerts = vertices.length / 2;
-          fillIndices = numVerts >= 3 ? Array.from(earcut(vertices)) : [];
-        } else {
-          // Multi-contour: combine and use earcut with holes
-          let totalFloats = 0;
-          for (const arr of contourArrays) totalFloats += arr.length;
-          vertices = new Float32Array(totalFloats);
-          const holeIndices: number[] = [];
-          let writeOffset = 0;
-          for (let i = 0; i < contourArrays.length; i++) {
-            if (i > 0) holeIndices.push(writeOffset / 2);
-            vertices.set(contourArrays[i]!, writeOffset);
-            writeOffset += contourArrays[i]!.length;
+          if (ringIndices.length > 0) {
+            polyRingIndices.push(ringIndices);
           }
-          fillIndices = Array.from(
-            earcut(vertices, holeIndices.length > 0 ? holeIndices : undefined)
-          );
         }
+
+        if (allRingArrays.length === 0) return;
+
+        // Build combined vertex buffer
+        const globalVertStarts: number[] = [];
+        let totalFloats = 0;
+        for (const arr of allRingArrays) {
+          globalVertStarts.push(totalFloats / 2);
+          totalFloats += arr.length;
+        }
+        vertices = new Float32Array(totalFloats);
+        let writeOffset = 0;
+        for (const arr of allRingArrays) {
+          vertices.set(arr, writeOffset);
+          writeOffset += arr.length;
+        }
+
+        // Tessellate each polygon (outer + its holes)
+        const allFillIndices: number[] = [];
+        for (const ringIdxs of polyRingIndices) {
+          let groupFloats = 0;
+          for (const ri of ringIdxs) groupFloats += allRingArrays[ri]!.length;
+
+          const groupVerts = new Float32Array(groupFloats);
+          const groupHoles: number[] = [];
+          const localStarts: number[] = [];
+          let lo = 0;
+          for (let gi = 0; gi < ringIdxs.length; gi++) {
+            const ri = ringIdxs[gi]!;
+            localStarts.push(lo / 2);
+            if (gi > 0) groupHoles.push(lo / 2); // holes are ring[1+]
+            groupVerts.set(allRingArrays[ri]!, lo);
+            lo += allRingArrays[ri]!.length;
+          }
+
+          if (groupVerts.length / 2 < 3) continue;
+          const indices = earcut(groupVerts, groupHoles.length > 0 ? groupHoles : undefined);
+
+          for (const localIdx of indices) {
+            let slot = 0;
+            for (let gi = ringIdxs.length - 1; gi >= 0; gi--) {
+              if (localIdx >= localStarts[gi]!) {
+                slot = gi;
+                break;
+              }
+            }
+            const ri = ringIdxs[slot]!;
+            const within = localIdx - localStarts[slot]!;
+            allFillIndices.push(globalVertStarts[ri]! + within);
+          }
+        }
+        fillIndices = allFillIndices;
 
         // Cache the result
         const entry: TessellationCacheEntry = {
@@ -2095,33 +2147,75 @@ export class ShapeRenderer {
     }
     if (!accum || accum.length === 0) return;
 
-    const contours = polygonToContours(accum);
-    if (contours.length === 0) return;
-
-    // Flatten to vertices
-    const contourArrays = contours.map((contour) => {
-      const flat = new Float32Array(contour.length * 2);
-      for (let j = 0; j < contour.length; j++) {
-        flat[j * 2] = contour[j]!.position.x;
-        flat[j * 2 + 1] = contour[j]!.position.y;
+    // Tessellate directly from MultiPolygon ring structure (outer+holes per polygon)
+    const allRingArrays: Float32Array[] = [];
+    const polyRings: number[][] = [];
+    for (const polygon of accum) {
+      if (polygon.length === 0) continue;
+      const idxs: number[] = [];
+      for (const ring of polygon) {
+        let pts = ring;
+        if (
+          pts.length > 1 &&
+          pts[0]![0] === pts[pts.length - 1]![0] &&
+          pts[0]![1] === pts[pts.length - 1]![1]
+        ) {
+          pts = pts.slice(0, -1);
+        }
+        if (pts.length < 3) continue;
+        const flat = new Float32Array(pts.length * 2);
+        for (let j = 0; j < pts.length; j++) {
+          flat[j * 2] = pts[j]![0];
+          flat[j * 2 + 1] = pts[j]![1];
+        }
+        idxs.push(allRingArrays.length);
+        allRingArrays.push(flat);
       }
-      return flat;
-    });
+      if (idxs.length > 0) polyRings.push(idxs);
+    }
+    if (allRingArrays.length === 0) return;
 
-    let vertices: Float32Array;
+    // Combine all ring vertices
+    let totalFloats = 0;
+    const gvStarts: number[] = [];
+    for (const arr of allRingArrays) {
+      gvStarts.push(totalFloats / 2);
+      totalFloats += arr.length;
+    }
+    const vertices = new Float32Array(totalFloats);
+    let wo = 0;
+    for (const arr of allRingArrays) {
+      vertices.set(arr, wo);
+      wo += arr.length;
+    }
 
-    if (contourArrays.length === 1) {
-      vertices = contourArrays[0]!;
-    } else {
-      let totalFloats = 0;
-      for (const arr of contourArrays) totalFloats += arr.length;
-      vertices = new Float32Array(totalFloats);
-      const holeIndices: number[] = [];
-      let writeOffset = 0;
-      for (let i = 0; i < contourArrays.length; i++) {
-        if (i > 0) holeIndices.push(writeOffset / 2);
-        vertices.set(contourArrays[i]!, writeOffset);
-        writeOffset += contourArrays[i]!.length;
+    // Earcut each polygon with proper holes
+    const ghostFillIndices: number[] = [];
+    for (const ringIdxs of polyRings) {
+      let gf = 0;
+      for (const ri of ringIdxs) gf += allRingArrays[ri]!.length;
+      const gv = new Float32Array(gf);
+      const gh: number[] = [];
+      const ls: number[] = [];
+      let lo = 0;
+      for (let gi = 0; gi < ringIdxs.length; gi++) {
+        const ri = ringIdxs[gi]!;
+        ls.push(lo / 2);
+        if (gi > 0) gh.push(lo / 2);
+        gv.set(allRingArrays[ri]!, lo);
+        lo += allRingArrays[ri]!.length;
+      }
+      if (gv.length / 2 < 3) continue;
+      const idcs = earcut(gv, gh.length > 0 ? gh : undefined);
+      for (const li of idcs) {
+        let slot = 0;
+        for (let gi = ringIdxs.length - 1; gi >= 0; gi--) {
+          if (li >= ls[gi]!) {
+            slot = gi;
+            break;
+          }
+        }
+        ghostFillIndices.push(gvStarts[ringIdxs[slot]!]! + li - ls[slot]!);
       }
     }
 
@@ -2137,11 +2231,25 @@ export class ShapeRenderer {
     gl.uniformMatrix3fv(this.program.uniforms.u_model ?? null, false, identityArray);
 
     const effectiveAlpha = alpha * (groupNode.opacity ?? 1);
-    const colorOverride = { tint: tintColor, alpha: effectiveAlpha };
     const fills = groupNode.fills ?? [];
     const strokes = groupNode.strokes ?? [];
 
-    this.renderFillsAndStrokesGhost(vertices, fills, strokes, true, colorOverride);
+    for (const fill of fills) {
+      if (fill.visible && fill.type !== 'none') {
+        const color = this.applyTintAndAlpha(this.getFillColor(fill), tintColor, effectiveAlpha);
+        this.renderFillWithColor(vertices, ghostFillIndices, color);
+      }
+    }
+    for (const stroke of strokes) {
+      if (stroke.visible && stroke.width > 0) {
+        const color = this.applyTintAndAlpha(
+          this.getStrokeColor(stroke),
+          tintColor,
+          effectiveAlpha
+        );
+        this.renderStrokeWithColor(vertices, stroke, true, color);
+      }
+    }
     this.renderer.bindVAO(null);
   }
 

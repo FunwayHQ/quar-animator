@@ -631,7 +631,7 @@ export function createPolygonPath(
   cy: number,
   radius: number,
   sides: number,
-  startAngle: number = -Math.PI / 2,
+  startAngle: number = Math.PI / 2,
   cornerRadius?: number
 ): PathPoint[] {
   if (sides < 3) sides = 3;
@@ -665,7 +665,7 @@ export function createStarPath(
   outerRadius: number,
   innerRadius: number,
   points: number,
-  startAngle: number = -Math.PI / 2,
+  startAngle: number = Math.PI / 2,
   cornerRadius?: number
 ): PathPoint[] {
   if (points < 3) points = 3;

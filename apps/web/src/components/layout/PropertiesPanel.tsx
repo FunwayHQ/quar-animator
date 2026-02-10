@@ -1904,7 +1904,7 @@ export function PropertiesPanel() {
             <div className={styles.sectionContent}>
               <div className={styles.propertyRow}>
                 <select
-                  className={styles.input}
+                  className={styles.select}
                   value={(node as GroupNode).booleanOp ?? 'union'}
                   onChange={(e) => changeBooleanOp(sceneGraph, e.target.value as BooleanOp)}
                   data-testid="boolean-op-select"
@@ -2927,7 +2927,7 @@ export function PropertiesPanel() {
           </div>
           <div className={styles.sectionContent}>
             <select
-              className={styles.blendModeSelect}
+              className={styles.select}
               value={node.blendMode}
               onChange={(e) => {
                 if (selectedId)
