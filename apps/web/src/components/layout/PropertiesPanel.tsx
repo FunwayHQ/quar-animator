@@ -441,6 +441,42 @@ export function PropertiesPanel() {
   );
 
   // ============================================================================
+  // Polygon-specific handlers (sides, innerRadius)
+  // ============================================================================
+
+  const handleSidesChange = useCallback(
+    (value: string) => {
+      if (!selectedId) return;
+      const num = parseInt(value, 10);
+      if (isNaN(num) || num < 3 || num > 64) return;
+      const currentNode = sceneGraph.getNode(selectedId);
+      if (!currentNode || currentNode.type !== 'polygon') return;
+      sceneGraph.updateNode(selectedId, { sides: num } as Partial<Node>);
+      if (autoKeyframe) {
+        addKeyframeAtFrame(selectedId, 'sides', currentFrame, num);
+      }
+    },
+    [selectedId, sceneGraph, autoKeyframe, currentFrame, addKeyframeAtFrame]
+  );
+
+  const handleInnerRadiusChange = useCallback(
+    (value: string) => {
+      if (!selectedId) return;
+      const num = parseFloat(value);
+      if (isNaN(num) || num < 0) return;
+      const currentNode = sceneGraph.getNode(selectedId);
+      if (!currentNode || currentNode.type !== 'polygon') return;
+      const poly = currentNode as PolygonNode;
+      const clamped = Math.min(num, poly.radius);
+      sceneGraph.updateNode(selectedId, { innerRadius: clamped } as Partial<Node>);
+      if (autoKeyframe) {
+        addKeyframeAtFrame(selectedId, 'innerRadius', currentFrame, clamped);
+      }
+    },
+    [selectedId, sceneGraph, autoKeyframe, currentFrame, addKeyframeAtFrame]
+  );
+
+  // ============================================================================
   // Fill handlers (array-based)
   // ============================================================================
 
@@ -1437,6 +1473,98 @@ export function PropertiesPanel() {
                       </div>
                     </div>
                   </div>
+                );
+              })()}
+            {node.type === 'polygon' &&
+              (() => {
+                const poly = node as PolygonNode;
+                return (
+                  <>
+                    <div className={styles.propertyRow}>
+                      <div className={styles.propertyHeader}>
+                        <span className={styles.propertyLabel}>Sides</span>
+                        <KeyframeIndicator
+                          state={getKeyframeState(timeline, nodeId, 'sides', currentFrame)}
+                          onToggle={() => toggleKeyframe('sides', poly.sides)}
+                        />
+                      </div>
+                      <div className={styles.propertyInputs}>
+                        <div className={styles.inputGroup}>
+                          <ScrubLabel
+                            label="N"
+                            value={poly.sides}
+                            onChange={(v) => handleSidesChange(String(Math.round(v)))}
+                            sensitivity={0.2}
+                            min={3}
+                            max={64}
+                          />
+                          <input
+                            type="text"
+                            className={styles.input}
+                            value={poly.sides}
+                            onChange={(e) => handleSidesChange(e.target.value)}
+                            onKeyDown={(e) =>
+                              handleNumericInputKeyDown(e, poly.sides, handleSidesChange)
+                            }
+                            data-testid="polygon-sides-input"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                    <div className={styles.propertyRow}>
+                      <div className={styles.propertyHeader}>
+                        <span className={styles.propertyLabel}>Inner Radius</span>
+                        <KeyframeIndicator
+                          state={getKeyframeState(timeline, nodeId, 'innerRadius', currentFrame)}
+                          onToggle={() => toggleKeyframe('innerRadius', poly.innerRadius ?? 1)}
+                        />
+                      </div>
+                      <div className={styles.propertyInputs}>
+                        <div className={styles.inputGroup}>
+                          {(() => {
+                            const sx = Math.abs(poly.transform.scale?.x ?? 1);
+                            const sy = Math.abs(poly.transform.scale?.y ?? 1);
+                            const avgScale = (sx + sy) / 2;
+                            const irRaw = poly.innerRadius ?? poly.radius;
+                            const irPixels = irRaw * avgScale;
+                            const maxPixels = poly.radius * avgScale;
+                            return (
+                              <>
+                                <ScrubLabel
+                                  label="IR"
+                                  value={Math.round(irPixels)}
+                                  onChange={(v) => {
+                                    const raw = avgScale > 0 ? v / avgScale : v;
+                                    handleInnerRadiusChange(String(raw));
+                                  }}
+                                  min={0}
+                                  max={Math.round(maxPixels)}
+                                />
+                                <input
+                                  type="text"
+                                  className={styles.input}
+                                  value={fmt1(irPixels)}
+                                  onChange={(e) => {
+                                    const px = parseFloat(e.target.value);
+                                    if (!isNaN(px) && avgScale > 0)
+                                      handleInnerRadiusChange(String(px / avgScale));
+                                  }}
+                                  onKeyDown={(e) =>
+                                    handleNumericInputKeyDown(e, Math.round(irPixels), (v) => {
+                                      const px = parseFloat(v);
+                                      if (!isNaN(px) && avgScale > 0)
+                                        handleInnerRadiusChange(String(px / avgScale));
+                                    })
+                                  }
+                                  data-testid="polygon-inner-radius-input"
+                                />
+                              </>
+                            );
+                          })()}
+                        </div>
+                      </div>
+                    </div>
+                  </>
                 );
               })()}
             <div className={styles.propertyRow}>
