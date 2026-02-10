@@ -1185,12 +1185,14 @@ export function Canvas() {
         onContextMenu={handleContextMenu}
         style={{ cursor: toolCursor }}
       />
-      <SelectionOverlay
-        bounds={screenBounds}
-        handles={transformHandles}
-        rotation={selectionRotation}
-        onHandlePointerDown={handleOverlayPointerDown}
-      />
+      {!isDirectSelectionActive && (
+        <SelectionOverlay
+          bounds={screenBounds}
+          handles={transformHandles}
+          rotation={selectionRotation}
+          onHandlePointerDown={handleOverlayPointerDown}
+        />
+      )}
       {screenMarqueeRect && screenMarqueeRect.width > 0 && screenMarqueeRect.height > 0 && (
         <svg className={styles.marqueeOverlay}>
           <rect
