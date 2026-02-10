@@ -78,6 +78,9 @@ export function usePlayback() {
       // Apply animations for manual frame changes (scrubbing, stepping)
       // Only when NOT playing — playback applies via onFrameChange above
       if (curr.currentFrame !== prev.currentFrame && !ctrl.isPlaying) {
+        // Keep controller in sync with store (e.g. timeline ruler click sets
+        // currentFrame directly, bypassing the PlaybackController)
+        ctrl.syncFrame(curr.currentFrame);
         applyAnimations(curr.currentFrame);
       }
     });

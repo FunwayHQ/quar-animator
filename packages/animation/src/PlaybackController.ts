@@ -144,6 +144,14 @@ export class PlaybackController {
     this._setFrame(this._clampFrame(frame));
   }
 
+  /**
+   * Sync the internal frame counter without triggering onFrameChange.
+   * Used when the store's currentFrame is changed externally (e.g. timeline ruler click).
+   */
+  syncFrame(frame: number): void {
+    this._currentFrame = this._clampFrame(frame);
+  }
+
   nextFrame(): void {
     const next = this._currentFrame + 1;
     const max = this._effectiveEnd;
