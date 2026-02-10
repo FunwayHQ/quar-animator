@@ -5,7 +5,7 @@
 
 import type { CanvasPointerEvent, PathNode, PathPoint, Vector2, Node } from '@quar/types';
 import { BaseTool, type ToolContext } from './BaseTool';
-import { vec2 } from '../math';
+import { vec2, mat3 } from '../math';
 import {
   convertPointType as convertPointTypeUtil,
   updateHandleWithSymmetry,
@@ -185,8 +185,8 @@ export class DirectSelectionTool extends BaseTool {
     if (!this.dragStartPoint) return;
 
     if (this.dragMode === 'dragging-point') {
-      // Move selected points
-      const delta = vec2.subtract(worldPos, this.dragStartPoint);
+      // Move selected points — convert world-space delta to local-space
+      const worldDelta = vec2.subtract(worldPos, this.dragStartPoint);
 
       for (const sel of this.selectedPoints) {
         const node = this.context.sceneGraph.getNode(sel.nodeId) as PathNode;
@@ -196,28 +196,43 @@ export class DirectSelectionTool extends BaseTool {
         const initialPos = this.initialPointPositions.get(key);
         if (!initialPos) continue;
 
+        // Convert world delta to local delta via inverse linear transform
+        const linearMatrix = this.getNodeLinearMatrix(node);
+        const invLinear = mat3.invert(linearMatrix);
+        const localDelta = invLinear ? mat3.transformPoint(invLinear, worldDelta) : worldDelta;
+
         const newPoints = [...node.points];
         newPoints[sel.pointIndex] = {
           ...newPoints[sel.pointIndex],
-          position: vec2.add(initialPos, delta),
+          position: vec2.add(initialPos, localDelta),
         };
 
         this.context.sceneGraph.updateNode(sel.nodeId, { points: newPoints });
       }
     } else if (this.dragMode === 'dragging-handle' && this.dragHandle) {
-      // Move handle
+      // Move handle — convert world position to local-space handle offset
       const node = this.context.sceneGraph.getNode(this.dragHandle.nodeId) as PathNode;
       if (!node) return;
 
       const point = node.points[this.dragHandle.pointIndex];
-      const handleOffset = vec2.subtract(worldPos, point.position);
+      // Get the point's world position and compute handle offset in world space
+      const pointWorldPos = this.getPointWorldPosition(node, point);
+      const worldHandleOffset = vec2.subtract(worldPos, pointWorldPos);
+
+      // Convert world handle offset to local-space via inverse linear transform
+      const linearMatrix = this.getNodeLinearMatrix(node);
+      const invLinear = mat3.invert(linearMatrix);
+      const localHandleOffset = invLinear
+        ? mat3.transformPoint(invLinear, worldHandleOffset)
+        : worldHandleOffset;
+
       const handleType = this.dragHandle.type === 'handle-out' ? 'out' : 'in';
 
       const newPoints = [...node.points];
       newPoints[this.dragHandle.pointIndex] = updateHandleWithSymmetry(
         point,
         handleType,
-        handleOffset
+        localHandleOffset
       );
       this.context.sceneGraph.updateNode(this.dragHandle.nodeId, { points: newPoints });
     }
@@ -297,10 +312,12 @@ export class DirectSelectionTool extends BaseTool {
       if (!point) continue;
 
       const pointWorldPos = this.getPointWorldPosition(node, point);
+      const linearMatrix = this.getNodeLinearMatrix(node);
 
       // Test handle in
       if (point.handleIn) {
-        const handleWorldPos = vec2.add(pointWorldPos, point.handleIn);
+        const handleWorldOffset = mat3.transformPoint(linearMatrix, point.handleIn);
+        const handleWorldPos = vec2.add(pointWorldPos, handleWorldOffset);
         if (vec2.distance(worldPos, handleWorldPos) < hitRadius) {
           return { type: 'handle-in', nodeId: node.id, pointIndex: sel.pointIndex };
         }
@@ -308,7 +325,8 @@ export class DirectSelectionTool extends BaseTool {
 
       // Test handle out
       if (point.handleOut) {
-        const handleWorldPos = vec2.add(pointWorldPos, point.handleOut);
+        const handleWorldOffset = mat3.transformPoint(linearMatrix, point.handleOut);
+        const handleWorldPos = vec2.add(pointWorldPos, handleWorldOffset);
         if (vec2.distance(worldPos, handleWorldPos) < hitRadius) {
           return { type: 'handle-out', nodeId: node.id, pointIndex: sel.pointIndex };
         }
@@ -449,17 +467,21 @@ export class DirectSelectionTool extends BaseTool {
     const p1World = this.getPointWorldPosition(node, p1);
     const p2World = this.getPointWorldPosition(node, p2);
 
-    // Interpolate position
-    const newPos = {
+    // Interpolate position in world space
+    const newWorldPos = {
       x: p1World.x + (p2World.x - p1World.x) * hit.t,
       y: p1World.y + (p2World.y - p1World.y) * hit.t,
     };
 
-    // Convert back to local coordinates
-    const localPos = {
-      x: newPos.x - node.transform.position.x,
-      y: newPos.y - node.transform.position.y,
-    };
+    // Convert back to local coordinates via inverse world matrix
+    const worldMatrix = this.getNodeWorldMatrix(node);
+    const invWorld = mat3.invert(worldMatrix);
+    const localPos = invWorld
+      ? mat3.transformPoint(invWorld, newWorldPos)
+      : {
+          x: newWorldPos.x - node.transform.position.x,
+          y: newWorldPos.y - node.transform.position.y,
+        };
 
     const newPoint: PathPoint = {
       position: localPos,
@@ -524,11 +546,25 @@ export class DirectSelectionTool extends BaseTool {
     return paths;
   }
 
+  /**
+   * Get the world transform matrix for a node (position + rotation + scale).
+   */
+  private getNodeWorldMatrix(node: PathNode) {
+    return mat3.compose(node.transform.position, node.transform.rotation, node.transform.scale);
+  }
+
+  /**
+   * Get the linear part of the world matrix (rotation + scale, no translation).
+   * Used for transforming direction vectors / offsets (handles).
+   */
+  private getNodeLinearMatrix(node: PathNode) {
+    const m = this.getNodeWorldMatrix(node);
+    return { a: m.a, b: m.b, c: m.c, d: m.d, tx: 0, ty: 0 };
+  }
+
   private getPointWorldPosition(node: PathNode, point: PathPoint): Vector2 {
-    return {
-      x: point.position.x + node.transform.position.x,
-      y: point.position.y + node.transform.position.y,
-    };
+    const worldMatrix = this.getNodeWorldMatrix(node);
+    return mat3.transformPoint(worldMatrix, point.position);
   }
 
   private pointToLineDistance(point: Vector2, lineStart: Vector2, lineEnd: Vector2): number {

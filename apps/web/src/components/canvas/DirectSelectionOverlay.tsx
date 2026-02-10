@@ -3,7 +3,7 @@
  */
 
 import type { PathNode, PathPoint, Vector2 } from '@quar/types';
-import type { Camera } from '@quar/core';
+import { type Camera, mat3 } from '@quar/core';
 import styles from './DirectSelectionOverlay.module.css';
 
 // ============================================================================
@@ -29,13 +29,26 @@ function isPointSelected(
 }
 
 /**
- * Get the world position of a path point (local position + node position)
+ * Get the world transform matrix for a path node.
+ */
+function getNodeWorldMatrix(node: PathNode) {
+  return mat3.compose(node.transform.position, node.transform.rotation, node.transform.scale);
+}
+
+/**
+ * Get the world position of a path point (applying full transform: position + rotation + scale).
  */
 function getPointWorldPos(node: PathNode, point: PathPoint): Vector2 {
-  return {
-    x: point.position.x + node.transform.position.x,
-    y: point.position.y + node.transform.position.y,
-  };
+  return mat3.transformPoint(getNodeWorldMatrix(node), point.position);
+}
+
+/**
+ * Transform a local-space handle offset to world-space offset (rotation + scale only, no translation).
+ */
+function getHandleWorldOffset(node: PathNode, handle: Vector2): Vector2 {
+  const m = getNodeWorldMatrix(node);
+  // Linear part only (no translation) to transform direction vectors
+  return mat3.transformPoint({ a: m.a, b: m.b, c: m.c, d: m.d, tx: 0, ty: 0 }, handle);
 }
 
 // ============================================================================
@@ -70,40 +83,42 @@ export function DirectSelectionOverlay({
 
             return (
               <g key={`handles-${index}`}>
-                {point.handleIn && (
-                  <>
-                    <line
-                      className={styles.handleLine}
-                      x1={screenPos.x}
-                      y1={screenPos.y}
-                      x2={screenPos.x + point.handleIn.x * zoom}
-                      y2={screenPos.y - point.handleIn.y * zoom}
-                    />
-                    <circle
-                      className={styles.handle}
-                      cx={screenPos.x + point.handleIn.x * zoom}
-                      cy={screenPos.y - point.handleIn.y * zoom}
-                      r={4}
-                    />
-                  </>
-                )}
-                {point.handleOut && (
-                  <>
-                    <line
-                      className={styles.handleLine}
-                      x1={screenPos.x}
-                      y1={screenPos.y}
-                      x2={screenPos.x + point.handleOut.x * zoom}
-                      y2={screenPos.y - point.handleOut.y * zoom}
-                    />
-                    <circle
-                      className={styles.handle}
-                      cx={screenPos.x + point.handleOut.x * zoom}
-                      cy={screenPos.y - point.handleOut.y * zoom}
-                      r={4}
-                    />
-                  </>
-                )}
+                {point.handleIn &&
+                  (() => {
+                    const wo = getHandleWorldOffset(node, point.handleIn);
+                    const hx = screenPos.x + wo.x * zoom;
+                    const hy = screenPos.y - wo.y * zoom;
+                    return (
+                      <>
+                        <line
+                          className={styles.handleLine}
+                          x1={screenPos.x}
+                          y1={screenPos.y}
+                          x2={hx}
+                          y2={hy}
+                        />
+                        <circle className={styles.handle} cx={hx} cy={hy} r={4} />
+                      </>
+                    );
+                  })()}
+                {point.handleOut &&
+                  (() => {
+                    const wo = getHandleWorldOffset(node, point.handleOut);
+                    const hx = screenPos.x + wo.x * zoom;
+                    const hy = screenPos.y - wo.y * zoom;
+                    return (
+                      <>
+                        <line
+                          className={styles.handleLine}
+                          x1={screenPos.x}
+                          y1={screenPos.y}
+                          x2={hx}
+                          y2={hy}
+                        />
+                        <circle className={styles.handle} cx={hx} cy={hy} r={4} />
+                      </>
+                    );
+                  })()}
               </g>
             );
           })}
@@ -151,11 +166,13 @@ function buildPathD(node: PathNode, toScreen: (pos: Vector2) => Vector2, zoom: n
       const prevScreen = toScreen(getPointWorldPos(node, prev));
 
       if (prev.handleOut || p.handleIn) {
-        // Cubic bezier
-        const cp1x = prevScreen.x + (prev.handleOut?.x ?? 0) * zoom;
-        const cp1y = prevScreen.y - (prev.handleOut?.y ?? 0) * zoom;
-        const cp2x = screen.x + (p.handleIn?.x ?? 0) * zoom;
-        const cp2y = screen.y - (p.handleIn?.y ?? 0) * zoom;
+        // Cubic bezier — transform handle offsets through node rotation+scale
+        const ho = prev.handleOut ? getHandleWorldOffset(node, prev.handleOut) : { x: 0, y: 0 };
+        const hi = p.handleIn ? getHandleWorldOffset(node, p.handleIn) : { x: 0, y: 0 };
+        const cp1x = prevScreen.x + ho.x * zoom;
+        const cp1y = prevScreen.y - ho.y * zoom;
+        const cp2x = screen.x + hi.x * zoom;
+        const cp2y = screen.y - hi.y * zoom;
         parts.push(`C ${cp1x} ${cp1y} ${cp2x} ${cp2y} ${screen.x} ${screen.y}`);
       } else {
         parts.push(`L ${screen.x} ${screen.y}`);
@@ -171,10 +188,12 @@ function buildPathD(node: PathNode, toScreen: (pos: Vector2) => Vector2, zoom: n
     const lastScreen = toScreen(getPointWorldPos(node, last));
 
     if (last.handleOut || first.handleIn) {
-      const cp1x = lastScreen.x + (last.handleOut?.x ?? 0) * zoom;
-      const cp1y = lastScreen.y - (last.handleOut?.y ?? 0) * zoom;
-      const cp2x = firstScreen.x + (first.handleIn?.x ?? 0) * zoom;
-      const cp2y = firstScreen.y - (first.handleIn?.y ?? 0) * zoom;
+      const ho = last.handleOut ? getHandleWorldOffset(node, last.handleOut) : { x: 0, y: 0 };
+      const hi = first.handleIn ? getHandleWorldOffset(node, first.handleIn) : { x: 0, y: 0 };
+      const cp1x = lastScreen.x + ho.x * zoom;
+      const cp1y = lastScreen.y - ho.y * zoom;
+      const cp2x = firstScreen.x + hi.x * zoom;
+      const cp2y = firstScreen.y - hi.y * zoom;
       parts.push(`C ${cp1x} ${cp1y} ${cp2x} ${cp2y} ${firstScreen.x} ${firstScreen.y}`);
     } else {
       parts.push('Z');
