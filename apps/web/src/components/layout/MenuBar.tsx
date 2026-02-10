@@ -3,7 +3,7 @@
  * Application menu bar with File menu dropdown and project name display
  */
 
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import {
   useEditorStore,
   useProjectName,
@@ -55,6 +55,25 @@ export function MenuBar({ projectActions }: MenuBarProps) {
   const duplicateSelectionAction = useEditorStore((state) => state.duplicateSelection);
   const deleteSelectionAction = useEditorStore((state) => state.deleteSelection);
   const selectAllAction = useEditorStore((state) => state.selectAll);
+  const convertTextToPathAction = useEditorStore((state) => state.convertTextToPath);
+  const outlineStrokeAction = useEditorStore((state) => state.outlineStroke);
+
+  // Computed flags for Convert to Path / Outline Stroke
+  const hasTextSelected = useMemo(() => {
+    return Array.from(selectedNodeIds).some((id) => {
+      const n = sceneGraph.getNode(id);
+      return n && n.type === 'text';
+    });
+  }, [selectedNodeIds, sceneGraph]);
+
+  const hasStrokeSelected = useMemo(() => {
+    return Array.from(selectedNodeIds).some((id) => {
+      const n = sceneGraph.getNode(id);
+      if (!n) return false;
+      const strokes = (n as { strokes?: { visible: boolean }[] }).strokes;
+      return strokes && strokes.some((s) => s.visible);
+    });
+  }, [selectedNodeIds, sceneGraph]);
 
   // Close file menu when clicking outside
   useEffect(() => {
@@ -367,6 +386,31 @@ export function MenuBar({ projectActions }: MenuBarProps) {
                 >
                   <span className={styles.dropdownLabel}>Select All</span>
                   <span className={styles.dropdownShortcut}>Ctrl+A</span>
+                </button>
+                <div className={styles.dropdownSeparator} role="separator" />
+                <button
+                  className={`${styles.dropdownItem} ${!hasTextSelected ? styles.dropdownItemDisabled : ''}`}
+                  role="menuitem"
+                  onClick={() => {
+                    setEditMenuOpen(false);
+                    convertTextToPathAction(sceneGraph);
+                  }}
+                  disabled={!hasTextSelected}
+                >
+                  <span className={styles.dropdownLabel}>Convert to Path</span>
+                  <span className={styles.dropdownShortcut}>Ctrl+Shift+P</span>
+                </button>
+                <button
+                  className={`${styles.dropdownItem} ${!hasStrokeSelected ? styles.dropdownItemDisabled : ''}`}
+                  role="menuitem"
+                  onClick={() => {
+                    setEditMenuOpen(false);
+                    outlineStrokeAction(sceneGraph);
+                  }}
+                  disabled={!hasStrokeSelected}
+                >
+                  <span className={styles.dropdownLabel}>Outline Stroke</span>
+                  <span className={styles.dropdownShortcut}>Ctrl+Shift+O</span>
                 </button>
               </div>
             )}

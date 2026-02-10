@@ -14,6 +14,12 @@ export default defineConfig({
       reporter: ['text', 'json', 'html'],
       exclude: ['node_modules/', 'src/test/'],
     },
+    alias: {
+      'opentype.js': path.resolve(
+        __dirname,
+        '../../packages/core/src/test/__mocks__/opentype.js.ts'
+      ),
+    },
   },
   resolve: {
     alias: {

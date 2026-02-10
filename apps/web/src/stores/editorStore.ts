@@ -26,6 +26,8 @@ import {
   booleanOperation,
   createBooleanResultNode,
   computeBooleanGroupResult,
+  convertTextToPath as convertTextToPathFn,
+  outlineStroke as outlineStrokeFn,
 } from '@quar/core';
 import type { OnionSkinSettings, BooleanOp } from '@quar/core';
 import { toast } from '../components/common/Toast';
@@ -115,6 +117,10 @@ export interface EditorStore {
   enteredGroupId: string | null;
   enterGroup: (groupId: string) => void;
   exitGroup: () => void;
+
+  // Text editing state
+  editingTextNodeId: string | null;
+  setEditingTextNodeId: (id: string | null) => void;
 
   // Selection state
   selectedNodeIds: Set<string>;
@@ -286,6 +292,10 @@ export interface EditorStore {
   releaseBooleanGroup: (sceneGraph: SceneGraphLike) => void;
   changeBooleanOp: (sceneGraph: SceneGraphLike, op: BooleanOp) => void;
 
+  // Convert operations
+  convertTextToPath: (sceneGraph: SceneGraphLike) => void;
+  outlineStroke: (sceneGraph: SceneGraphLike) => void;
+
   // Undo/Redo history
   undoStack: HistorySnapshot[];
   redoStack: HistorySnapshot[];
@@ -323,6 +333,9 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   enterGroup: (groupId: string) =>
     set({ enteredGroupId: groupId, selectedNodeIds: new Set<string>() }),
   exitGroup: () => set({ enteredGroupId: null }),
+
+  editingTextNodeId: null,
+  setEditingTextNodeId: (id: string | null) => set({ editingTextNodeId: id }),
 
   // Selection state
   selectedNodeIds: new Set<string>(),
@@ -1271,6 +1284,111 @@ function createBooleanActions(
       }
       set({ isDirty: true });
     },
+
+    convertTextToPath: (sceneGraph: SceneGraphLike) => {
+      const { selectedNodeIds } = get();
+      if (selectedNodeIds.size === 0) return;
+
+      const textIds = [...selectedNodeIds].filter((id) => {
+        const n = sceneGraph.getNode(id);
+        return n && n.type === 'text';
+      });
+      if (textIds.length === 0) {
+        toast.info('Select a text node to convert to path');
+        return;
+      }
+
+      get().pushUndo(sceneGraph);
+      const generateId = () => `txt2p_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      const newIds: string[] = [];
+
+      for (const id of textIds) {
+        const node = sceneGraph.getNode(id);
+        if (!node || node.type !== 'text') continue;
+
+        const pathNode = convertTextToPathFn(node, generateId);
+        if (!pathNode) {
+          toast.error(`Could not convert "${node.name}" — font not loaded`);
+          continue;
+        }
+
+        // Find insertion point
+        const parentId = node.parent;
+        const siblings = parentId
+          ? (sceneGraph.getNode(parentId)?.children ?? [])
+          : sceneGraph.getRootNodes().map((n) => n.id);
+        const insertIndex = siblings.indexOf(id);
+
+        // Add result, remove original
+        sceneGraph.addNode(pathNode, parentId ?? undefined);
+        if (insertIndex >= 0) {
+          sceneGraph.moveNode(pathNode.id, parentId ?? null, insertIndex);
+        }
+        sceneGraph.removeNode(id);
+        newIds.push(pathNode.id);
+      }
+
+      if (newIds.length > 0) {
+        set({ selectedNodeIds: new Set(newIds), isDirty: true });
+      }
+    },
+
+    outlineStroke: (sceneGraph: SceneGraphLike) => {
+      const { selectedNodeIds } = get();
+      if (selectedNodeIds.size === 0) return;
+
+      const validIds = [...selectedNodeIds].filter((id) => {
+        const n = sceneGraph.getNode(id);
+        if (!n) return false;
+        const strokes = (n as { strokes?: import('@quar/types').Stroke[] }).strokes;
+        return strokes && strokes.some((s) => s.visible);
+      });
+      if (validIds.length === 0) {
+        toast.info('Select a node with visible strokes');
+        return;
+      }
+
+      get().pushUndo(sceneGraph);
+      const generateId = () => `so_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      const newIds: string[] = [];
+
+      for (const id of validIds) {
+        const node = sceneGraph.getNode(id);
+        if (!node) continue;
+
+        // Outline the first visible stroke
+        const strokes = (node as { strokes?: import('@quar/types').Stroke[] }).strokes;
+        if (!strokes) continue;
+        const strokeIdx = strokes.findIndex((s) => s.visible);
+        if (strokeIdx < 0) continue;
+
+        const outlinePath = outlineStrokeFn(node, strokeIdx, generateId);
+        if (!outlinePath) {
+          toast.error(`Could not outline stroke on "${node.name}"`);
+          continue;
+        }
+
+        // Add as sibling after original
+        const parentId = node.parent;
+        const siblings = parentId
+          ? (sceneGraph.getNode(parentId)?.children ?? [])
+          : sceneGraph.getRootNodes().map((n) => n.id);
+        const insertIndex = siblings.indexOf(id);
+
+        sceneGraph.addNode(outlinePath, parentId ?? undefined);
+        if (insertIndex >= 0) {
+          sceneGraph.moveNode(outlinePath.id, parentId ?? null, insertIndex + 1);
+        }
+        newIds.push(outlinePath.id);
+      }
+
+      if (newIds.length > 0) {
+        set({
+          selectedNodeIds: new Set([...selectedNodeIds, ...newIds]),
+          isDirty: true,
+        });
+      }
+    },
   };
 }
 
@@ -1537,6 +1655,10 @@ export const useReleaseBooleanGroup = (): ((sceneGraph: SceneGraphLike) => void)
   useEditorStore((state: EditorStore) => state.releaseBooleanGroup);
 export const useChangeBooleanOp = (): ((sceneGraph: SceneGraphLike, op: BooleanOp) => void) =>
   useEditorStore((state: EditorStore) => state.changeBooleanOp);
+export const useConvertTextToPath = (): ((sceneGraph: SceneGraphLike) => void) =>
+  useEditorStore((state: EditorStore) => state.convertTextToPath);
+export const useOutlineStroke = (): ((sceneGraph: SceneGraphLike) => void) =>
+  useEditorStore((state: EditorStore) => state.outlineStroke);
 
 // History (undo/redo) selectors
 export const useCanUndo = (): boolean => useEditorStore((state: EditorStore) => state.canUndo);
@@ -1557,3 +1679,9 @@ export const useEnterGroup = (): ((groupId: string) => void) =>
   useEditorStore((state: EditorStore) => state.enterGroup);
 export const useExitGroup = (): (() => void) =>
   useEditorStore((state: EditorStore) => state.exitGroup);
+
+// Text editing selectors
+export const useEditingTextNodeId = (): string | null =>
+  useEditorStore((state: EditorStore) => state.editingTextNodeId);
+export const useSetEditingTextNodeId = (): ((id: string | null) => void) =>
+  useEditorStore((state: EditorStore) => state.setEditingTextNodeId);

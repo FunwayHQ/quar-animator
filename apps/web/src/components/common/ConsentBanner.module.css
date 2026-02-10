@@ -55,6 +55,26 @@
   font-weight: 500;
 }
 
+.googleFontsToggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  cursor: pointer;
+  color: var(--color-text-secondary, #a1a1aa);
+  font-size: var(--font-size-sm, 11px);
+}
+
+.googleFontsToggle input[type='checkbox'] {
+  accent-color: var(--color-primary, #a855f7);
+  cursor: pointer;
+}
+
+.hint {
+  opacity: 0.6;
+  font-size: 10px;
+}
+
 .acceptButton {
   flex-shrink: 0;
   padding: 6px 16px;

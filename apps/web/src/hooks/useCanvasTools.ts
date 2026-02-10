@@ -274,6 +274,9 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
           useEditorStore.getState().enterGroup(id);
         }
       },
+      onEnterTextEdit: (nodeId: string) => {
+        useEditorStore.getState().setEditingTextNodeId(nodeId);
+      },
     });
 
     // Set the active tool from EditorStore (ToolManager defaults to 'selection')

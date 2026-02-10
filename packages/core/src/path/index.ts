@@ -5,3 +5,5 @@
 export * from './bezier';
 export * from './pathUtils';
 export * from './pointUtils';
+export * from './shapeToPath';
+export * from './outlineStroke';

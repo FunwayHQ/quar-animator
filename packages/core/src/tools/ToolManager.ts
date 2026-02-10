@@ -14,6 +14,7 @@ import { PenTool } from './PenTool';
 import { BrushTool } from './BrushTool';
 import { EraserTool } from './EraserTool';
 import { HandTool } from './HandTool';
+import { TextTool } from './TextTool';
 import type { SceneGraph } from '../SceneGraph';
 import type { Camera } from '../Camera';
 
@@ -37,6 +38,7 @@ export interface ToolManagerOptions {
   getGridSize?: () => number;
   getEnteredGroupId?: () => string | null;
   setEnteredGroupId?: (id: string | null) => void;
+  onEnterTextEdit?: (nodeId: string) => void;
 }
 
 // ============================================================================
@@ -72,6 +74,7 @@ export class ToolManager {
     this.tools.set('pen', new PenTool(context));
     this.tools.set('brush', new BrushTool(context));
     this.tools.set('eraser', new EraserTool(context));
+    this.tools.set('text', new TextTool(context));
 
     // Set default tool
     this.setActiveTool('selection');
@@ -231,6 +234,7 @@ export class ToolManager {
       getGridSize: options.getGridSize,
       getEnteredGroupId: options.getEnteredGroupId,
       setEnteredGroupId: options.setEnteredGroupId,
+      onEnterTextEdit: options.onEnterTextEdit,
     };
   }
 
@@ -250,6 +254,7 @@ export class ToolManager {
       p: 'pen',
       b: 'brush',
       e: 'eraser',
+      t: 'text',
     };
 
     return shortcuts[key.toLowerCase()] ?? null;

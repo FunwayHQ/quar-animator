@@ -30,6 +30,7 @@ export interface ToolContext {
   getGridSize?: () => number;
   getEnteredGroupId?: () => string | null;
   setEnteredGroupId?: (id: string | null) => void;
+  onEnterTextEdit?: (nodeId: string) => void;
 }
 
 export interface ToolState {

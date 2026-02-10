@@ -276,7 +276,13 @@ export function getAnimatableProperties(nodeType: string): AnimatableProperty[] 
       props.push(...SHAPE_ANIMATABLE_PROPERTIES);
       break;
     case 'text':
-      props.push(...SHAPE_ANIMATABLE_PROPERTIES);
+      props.push(
+        ...SHAPE_ANIMATABLE_PROPERTIES,
+        { path: 'fontSize', displayName: 'Font Size', interpolationType: 'number' },
+        { path: 'lineHeight', displayName: 'Line Height', interpolationType: 'number' },
+        { path: 'letterSpacing', displayName: 'Letter Spacing', interpolationType: 'number' },
+        { path: 'fontWeight', displayName: 'Font Weight', interpolationType: 'number' }
+      );
       break;
     case 'image':
       props.push(

@@ -1,0 +1,22 @@
+.textEditOverlay {
+  position: absolute;
+  z-index: 1000;
+  pointer-events: auto;
+}
+
+.textEditArea {
+  background: transparent;
+  border: 1px solid var(--color-primary, #a855f7);
+  outline: none;
+  resize: none;
+  overflow: hidden;
+  padding: 0;
+  margin: 0;
+  min-width: 20px;
+  min-height: 1em;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--color-text, #fff);
+  caret-color: var(--color-primary, #a855f7);
+  box-sizing: border-box;
+}

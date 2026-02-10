@@ -3,14 +3,23 @@
  * Selects, moves, and resizes shapes
  */
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars -- ImageNode used in type casts
-import type { CanvasPointerEvent, Node, ImageNode, Vector2, Rect, Matrix3 } from '@quar/types';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- ImageNode/TextNode used in type casts
+import type {
+  CanvasPointerEvent,
+  Node,
+  ImageNode,
+  TextNode,
+  Vector2,
+  Rect,
+  Matrix3,
+} from '@quar/types';
 import { BaseTool, type ToolContext } from './BaseTool';
 import { vec2, rect, mat3 } from '../math';
 import { SelectionManager } from '../selection/SelectionManager';
 import { TransformHandles } from '../selection/TransformHandles';
 import type { HandlePosition, SelectionBounds } from '../selection/types';
 import { getPolygonBounds, getPathBounds } from '../path/pathUtils';
+import { getTextBounds } from '../font/textMetrics';
 
 /**
  * Transform a local-space AABB through a world matrix and return the new AABB.
@@ -186,6 +195,13 @@ export class SelectionTool extends BaseTool {
     if (event.clickCount === 2 && hitNode && hitNode.type === 'path') {
       this.context.setSelectedIds([hitNode.id]);
       this.context.setActiveTool('direct-selection');
+      return;
+    }
+
+    // Double-click on a text node to enter inline text editing
+    if (event.clickCount === 2 && hitNode && hitNode.type === 'text') {
+      this.context.setSelectedIds([hitNode.id]);
+      this.context.onEnterTextEdit?.(hitNode.id);
       return;
     }
 
@@ -592,6 +608,18 @@ export class SelectionTool extends BaseTool {
         localBounds = getPathBounds(node.points, node.closed);
         break;
       }
+      case 'text': {
+        const textNode = node;
+        localBounds = getTextBounds(
+          textNode.content,
+          textNode.fontFamily,
+          textNode.fontSize,
+          textNode.lineHeight,
+          textNode.letterSpacing,
+          textNode.textAlign
+        );
+        break;
+      }
       case 'image': {
         const anchor = transform.anchor;
         localBounds = {
@@ -818,6 +846,8 @@ export class SelectionTool extends BaseTool {
         state.scale = { ...node.transform.scale };
       } else if (node.type === 'path') {
         state.scale = { ...node.transform.scale };
+      } else if (node.type === 'text') {
+        state.scale = { ...node.transform.scale };
       } else if (node.type === 'image') {
         state.width = node.width;
         state.height = node.height;
@@ -953,8 +983,11 @@ export class SelectionTool extends BaseTool {
             scale: { x: newScaleX, y: newScaleY },
           },
         });
-      } else if (node.type === 'path' && initialState.scale !== undefined) {
-        // For paths, apply non-uniform scaling via transform scale
+      } else if (
+        (node.type === 'path' || node.type === 'text') &&
+        initialState.scale !== undefined
+      ) {
+        // For paths and text, apply non-uniform scaling via transform scale
         const newScaleX = Math.max(0.01, initialState.scale.x * scaleX);
         const newScaleY = Math.max(0.01, initialState.scale.y * scaleY);
 

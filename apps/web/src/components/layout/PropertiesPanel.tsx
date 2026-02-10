@@ -5,6 +5,7 @@ import type {
   EllipseNode,
   PolygonNode,
   PathNode,
+  TextNode,
   ImageNode,
   GroupNode,
   Color,
@@ -42,7 +43,14 @@ import { GradientEditor } from '../common/GradientEditor';
 import type { FillType } from '../common/GradientEditor';
 import { ImageAdjustments, DEFAULT_ADJUSTMENTS } from '../common/ImageAdjustments';
 import type { ImageAdjustments as ImageAdjustmentsType } from '@quar/types';
-import { createDefaultGradient, SelectionManager, getPathBounds } from '@quar/core';
+import {
+  createDefaultGradient,
+  SelectionManager,
+  getPathBounds,
+  getTextBounds,
+  WEB_SAFE_FONTS,
+  getFontManager,
+} from '@quar/core';
 import type { SceneGraph } from '@quar/core';
 import { getKeyframeState } from '../../hooks/useKeyframeState';
 import styles from './PropertiesPanel.module.css';
@@ -120,6 +128,20 @@ function getNodeSize(node: Node, sceneGraph?: SceneGraph): { width: number; heig
       const sx = pathNode.transform.scale?.x ?? 1;
       const sy = pathNode.transform.scale?.y ?? 1;
       return { width: w * sx, height: h * sy };
+    }
+    case 'text': {
+      const textNode = node;
+      const textBounds = getTextBounds(
+        textNode.content,
+        textNode.fontFamily,
+        textNode.fontSize,
+        textNode.lineHeight,
+        textNode.letterSpacing,
+        textNode.textAlign
+      );
+      const tsx = textNode.transform.scale?.x ?? 1;
+      const tsy = textNode.transform.scale?.y ?? 1;
+      return { width: textBounds.width * tsx, height: textBounds.height * tsy };
     }
     case 'image': {
       const imgNode = node;
@@ -217,6 +239,7 @@ function getSizePropertyPaths(node: Node): { w: string; h: string } {
       return { w: 'radiusX', h: 'radiusY' };
     case 'polygon':
     case 'path':
+    case 'text':
       return { w: 'transform.scale.x', h: 'transform.scale.y' };
     default:
       return { w: 'width', h: 'height' };
@@ -1609,6 +1632,225 @@ export function PropertiesPanel() {
                               </>
                             );
                           })()}
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                );
+              })()}
+            {node.type === 'text' &&
+              (() => {
+                const textNode = node as TextNode;
+                const fm = getFontManager();
+                const loadedFonts = fm.getLoadedFamilies();
+                const allFonts = [...new Set([...loadedFonts, ...WEB_SAFE_FONTS])].sort();
+                return (
+                  <>
+                    <div className={styles.propertyRow}>
+                      <span className={styles.propertyLabel}>Font</span>
+                      <div className={styles.propertyInputs}>
+                        <select
+                          className={styles.select}
+                          value={textNode.fontFamily}
+                          onChange={(e) => {
+                            pushUndo();
+                            sceneGraph.updateNode(nodeId, { fontFamily: e.target.value });
+                            if (autoKeyframe)
+                              addKeyframeAtFrame(
+                                nodeId,
+                                'fontFamily',
+                                currentFrame,
+                                e.target.value
+                              );
+                          }}
+                        >
+                          {allFonts.map((f) => (
+                            <option key={f} value={f}>
+                              {f}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                    <div className={styles.propertyRow}>
+                      <div className={styles.propertyHeader}>
+                        <span className={styles.propertyLabel}>Font Size</span>
+                        <KeyframeIndicator
+                          state={getKeyframeState(timeline, nodeId, 'fontSize', currentFrame)}
+                          onToggle={() => toggleKeyframe('fontSize', textNode.fontSize)}
+                        />
+                      </div>
+                      <div className={styles.propertyInputs}>
+                        <div className={styles.inputGroup}>
+                          <ScrubLabel
+                            onScrubStart={handleScrubStart}
+                            label="Sz"
+                            value={textNode.fontSize}
+                            onChange={(v) => {
+                              const val = Math.max(1, Math.round(v));
+                              sceneGraph.updateNode(nodeId, { fontSize: val });
+                              if (autoKeyframe)
+                                addKeyframeAtFrame(nodeId, 'fontSize', currentFrame, val);
+                            }}
+                            min={1}
+                            max={999}
+                          />
+                          <input
+                            type="text"
+                            className={styles.input}
+                            value={textNode.fontSize}
+                            onChange={(e) => {
+                              const val = parseInt(e.target.value);
+                              if (!isNaN(val) && val > 0) {
+                                pushUndo();
+                                sceneGraph.updateNode(nodeId, { fontSize: val });
+                                if (autoKeyframe)
+                                  addKeyframeAtFrame(nodeId, 'fontSize', currentFrame, val);
+                              }
+                            }}
+                            {...numericInputProps(
+                              () => textNode.fontSize,
+                              (v) => {
+                                const val = parseInt(v);
+                                if (!isNaN(val) && val > 0) {
+                                  sceneGraph.updateNode(nodeId, { fontSize: val });
+                                  if (autoKeyframe)
+                                    addKeyframeAtFrame(nodeId, 'fontSize', currentFrame, val);
+                                }
+                              }
+                            )}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                    <div className={styles.propertyRow}>
+                      <span className={styles.propertyLabel}>Weight</span>
+                      <div className={styles.propertyInputs}>
+                        <select
+                          className={styles.select}
+                          value={textNode.fontWeight}
+                          onChange={(e) => {
+                            pushUndo();
+                            const w = parseInt(e.target.value);
+                            sceneGraph.updateNode(nodeId, { fontWeight: w });
+                          }}
+                        >
+                          {[100, 200, 300, 400, 500, 600, 700, 800, 900].map((w) => (
+                            <option key={w} value={w}>
+                              {w}
+                              {w === 400 ? ' (Regular)' : w === 700 ? ' (Bold)' : ''}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                    <div className={styles.propertyRow}>
+                      <span className={styles.propertyLabel}>Align</span>
+                      <div className={styles.propertyInputs} style={{ display: 'flex', gap: 4 }}>
+                        {(['left', 'center', 'right'] as const).map((align) => (
+                          <button
+                            key={align}
+                            className={styles.iconButton}
+                            style={{
+                              opacity: textNode.textAlign === align ? 1 : 0.5,
+                              background:
+                                textNode.textAlign === align
+                                  ? 'var(--color-surface-hover)'
+                                  : 'transparent',
+                            }}
+                            onClick={() => {
+                              pushUndo();
+                              sceneGraph.updateNode(nodeId, { textAlign: align });
+                            }}
+                          >
+                            {align === 'left' ? '⫷' : align === 'center' ? '☰' : '⫸'}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div className={styles.propertyRow}>
+                      <div className={styles.propertyHeader}>
+                        <span className={styles.propertyLabel}>Line Height</span>
+                        <KeyframeIndicator
+                          state={getKeyframeState(timeline, nodeId, 'lineHeight', currentFrame)}
+                          onToggle={() => toggleKeyframe('lineHeight', textNode.lineHeight)}
+                        />
+                      </div>
+                      <div className={styles.propertyInputs}>
+                        <div className={styles.inputGroup}>
+                          <ScrubLabel
+                            onScrubStart={handleScrubStart}
+                            label="LH"
+                            value={+textNode.lineHeight.toFixed(2)}
+                            onChange={(v) => {
+                              const val = Math.max(0.5, +v.toFixed(2));
+                              sceneGraph.updateNode(nodeId, { lineHeight: val });
+                              if (autoKeyframe)
+                                addKeyframeAtFrame(nodeId, 'lineHeight', currentFrame, val);
+                            }}
+                            sensitivity={0.01}
+                            min={0.5}
+                            max={5}
+                          />
+                          <input
+                            type="text"
+                            className={styles.input}
+                            value={textNode.lineHeight.toFixed(2)}
+                            onChange={(e) => {
+                              const val = parseFloat(e.target.value);
+                              if (!isNaN(val) && val > 0) {
+                                pushUndo();
+                                sceneGraph.updateNode(nodeId, { lineHeight: val });
+                                if (autoKeyframe)
+                                  addKeyframeAtFrame(nodeId, 'lineHeight', currentFrame, val);
+                              }
+                            }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                    <div className={styles.propertyRow}>
+                      <div className={styles.propertyHeader}>
+                        <span className={styles.propertyLabel}>Letter Spacing</span>
+                        <KeyframeIndicator
+                          state={getKeyframeState(timeline, nodeId, 'letterSpacing', currentFrame)}
+                          onToggle={() => toggleKeyframe('letterSpacing', textNode.letterSpacing)}
+                        />
+                      </div>
+                      <div className={styles.propertyInputs}>
+                        <div className={styles.inputGroup}>
+                          <ScrubLabel
+                            onScrubStart={handleScrubStart}
+                            label="LS"
+                            value={textNode.letterSpacing}
+                            onChange={(v) => {
+                              sceneGraph.updateNode(nodeId, { letterSpacing: +v.toFixed(1) });
+                              if (autoKeyframe)
+                                addKeyframeAtFrame(
+                                  nodeId,
+                                  'letterSpacing',
+                                  currentFrame,
+                                  +v.toFixed(1)
+                                );
+                            }}
+                            sensitivity={0.5}
+                            min={-50}
+                            max={200}
+                          />
+                          <input
+                            type="text"
+                            className={styles.input}
+                            value={textNode.letterSpacing}
+                            onChange={(e) => {
+                              const val = parseFloat(e.target.value);
+                              if (!isNaN(val)) {
+                                pushUndo();
+                                sceneGraph.updateNode(nodeId, { letterSpacing: val });
+                                if (autoKeyframe)
+                                  addKeyframeAtFrame(nodeId, 'letterSpacing', currentFrame, val);
+                              }
+                            }}
+                          />
                         </div>
                       </div>
                     </div>

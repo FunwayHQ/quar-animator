@@ -16,6 +16,7 @@ const TOOL_SHORTCUTS: Record<string, ToolType> = {
   r: 'rectangle',
   o: 'ellipse',
   p: 'pen',
+  t: 'text',
 };
 
 // ============================================================================

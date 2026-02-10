@@ -9,6 +9,7 @@ import type {
   EllipseNode,
   PolygonNode,
   PathNode,
+  TextNode,
   ImageNode,
   GroupNode,
   Node,
@@ -39,6 +40,8 @@ import {
   applyCornerRadius,
 } from '../path/pathUtils';
 import earcut from 'earcut';
+import { getFontManager } from '../font/FontManager';
+import { textToSubpaths } from '../font/glyphConverter';
 
 // ============================================================================
 // Shaders
@@ -316,6 +319,8 @@ function buildGeometryKey(node: Node): string {
       }
       return parts.join(',');
     }
+    case 'text':
+      return `T:${node.content}:${node.fontFamily}:${node.fontSize}:${node.fontWeight}:${node.fontStyle}:${node.textAlign}:${node.lineHeight}:${node.letterSpacing}`;
     default:
       return '';
   }
@@ -883,6 +888,9 @@ export class ShapeRenderer {
           case 'path':
             this.renderPath(node, worldTransform);
             break;
+          case 'text':
+            this.renderText(node, worldTransform);
+            break;
           case 'image':
             this.renderImage(node, worldTransform);
             break;
@@ -985,6 +993,9 @@ export class ShapeRenderer {
         break;
       case 'path':
         this.renderPath(node, worldMatrix);
+        break;
+      case 'text':
+        this.renderText(node, worldMatrix);
         break;
       case 'image':
         this.renderImage(node, worldMatrix);
@@ -1347,6 +1358,131 @@ export class ShapeRenderer {
       fills,
       node.strokes,
       node.closed,
+      this.currentEffectiveOpacity
+    );
+  }
+
+  /**
+   * Render a text node by converting glyphs to tessellated paths.
+   * Uses the same multi-contour rendering pipeline as compound paths.
+   */
+  private renderText(node: TextNode, worldMatrix: Matrix3): void {
+    if (!this.program || !node.content) return;
+
+    const fm = getFontManager();
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+    const font = fm.getFontOrFallback(node.fontFamily);
+    if (!font) return; // Font not loaded yet
+
+    const gl = this.renderer.context;
+
+    // Set model matrix
+    const modelArray = mat3.toFloat32Array(worldMatrix);
+    this.currentModelMatrix = modelArray;
+    gl.uniformMatrix3fv(this.program.uniforms.u_model ?? null, false, modelArray);
+
+    // Get cached tessellation for this text
+    const geoKey = buildGeometryKey(node);
+    const cached = this.geometryCache.get(node.id);
+
+    if (cached && cached.geoKey === geoKey) {
+      this.renderFillsAndStrokes(
+        node.id,
+        cached.vertices,
+        cached.fillIndices,
+        node.fills,
+        node.strokes,
+        true,
+        this.currentEffectiveOpacity
+      );
+      return;
+    }
+
+    // Convert text to subpaths
+    const result = textToSubpaths(node.content, font, node.fontSize, {
+      textAlign: node.textAlign,
+      lineHeight: node.lineHeight,
+      letterSpacing: node.letterSpacing,
+    });
+
+    if (result.subpaths.length === 0) return;
+
+    // Tessellate all glyph contours
+    const contourArrays: Float32Array[] = [];
+    for (const sp of result.subpaths) {
+      if (sp.length < 2) continue;
+      const verts = tessellatePathToVertices(sp, true, DEFAULT_TESSELLATION_TOLERANCE);
+      if (verts.length >= 6) {
+        // At least 3 points
+        contourArrays.push(verts);
+      }
+    }
+
+    if (contourArrays.length === 0) return;
+
+    // Compute global vertex starts
+    const globalVertStarts: number[] = [];
+    let totalFloats = 0;
+    for (const arr of contourArrays) {
+      globalVertStarts.push(totalFloats / 2);
+      totalFloats += arr.length;
+    }
+
+    const combined = new Float32Array(totalFloats);
+    let writeOff = 0;
+    for (const arr of contourArrays) {
+      combined.set(arr, writeOff);
+      writeOff += arr.length;
+    }
+
+    // Group by containment (handle glyphs with holes like 'o', 'a', etc.)
+    const groups = groupContoursByContainment(contourArrays);
+    const fillIndices: number[] = [];
+
+    for (const group of groups) {
+      const contourIndices = [group.outer, ...group.holes];
+      let groupFloats = 0;
+      for (const ci of contourIndices) groupFloats += contourArrays[ci]!.length;
+      const groupVerts = new Float32Array(groupFloats);
+      const groupHoles: number[] = [];
+      const localStarts: number[] = [];
+      let lOff = 0;
+      for (let gi = 0; gi < contourIndices.length; gi++) {
+        const ci = contourIndices[gi]!;
+        localStarts.push(lOff / 2);
+        if (gi > 0) groupHoles.push(lOff / 2);
+        groupVerts.set(contourArrays[ci]!, lOff);
+        lOff += contourArrays[ci]!.length;
+      }
+      if (groupVerts.length / 2 < 3) continue;
+      const indices = earcut(groupVerts, groupHoles.length > 0 ? groupHoles : undefined);
+      for (const localIdx of indices) {
+        let slot = 0;
+        for (let gi = contourIndices.length - 1; gi >= 0; gi--) {
+          if (localIdx >= localStarts[gi]!) {
+            slot = gi;
+            break;
+          }
+        }
+        fillIndices.push(globalVertStarts[contourIndices[slot]!]! + localIdx - localStarts[slot]!);
+      }
+    }
+
+    // Cache tessellation
+    this.geometryCache.set(node.id, {
+      geoKey,
+      vertices: combined,
+      fillIndices,
+      strokeCache: new Map(),
+    });
+
+    this.renderFillsAndStrokes(
+      node.id,
+      combined,
+      fillIndices,
+      node.fills,
+      node.strokes,
+      true,
       this.currentEffectiveOpacity
     );
   }
@@ -1919,6 +2055,9 @@ export class ShapeRenderer {
       case 'path':
         this.renderPathWithOverride(node, worldMatrix, colorOverride);
         break;
+      case 'text':
+        this.renderTextWithOverride(node, worldMatrix, colorOverride);
+        break;
       case 'image':
         this.renderImageWithOverride(node, worldMatrix, colorOverride);
         break;
@@ -2205,6 +2344,49 @@ export class ShapeRenderer {
     );
     const fills = node.closed ? node.fills : [];
     this.renderNodeGhost(tessellated, fills, node.strokes, node.closed, worldMatrix, colorOverride);
+  }
+
+  private renderTextWithOverride(
+    node: TextNode,
+    worldMatrix: Matrix3,
+    colorOverride: { tint: [number, number, number]; alpha: number }
+  ): void {
+    if (!node.content) return;
+
+    const fm = getFontManager();
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+    const font = fm.getFontOrFallback(node.fontFamily);
+    if (!font) return;
+
+    const result = textToSubpaths(node.content, font, node.fontSize, {
+      textAlign: node.textAlign,
+      lineHeight: node.lineHeight,
+      letterSpacing: node.letterSpacing,
+    });
+
+    if (result.subpaths.length === 0) return;
+
+    // Tessellate all glyph contours
+    const contourArrays: Float32Array[] = [];
+    for (const sp of result.subpaths) {
+      if (sp.length < 2) continue;
+      const verts = tessellatePathToVertices(sp, true, DEFAULT_TESSELLATION_TOLERANCE);
+      if (verts.length >= 6) contourArrays.push(verts);
+    }
+
+    if (contourArrays.length === 0) return;
+
+    // Combine into single array
+    let totalFloats = 0;
+    for (const arr of contourArrays) totalFloats += arr.length;
+    const combined = new Float32Array(totalFloats);
+    let writeOff = 0;
+    for (const arr of contourArrays) {
+      combined.set(arr, writeOff);
+      writeOff += arr.length;
+    }
+
+    this.renderNodeGhost(combined, node.fills, node.strokes, true, worldMatrix, colorOverride);
   }
 
   private renderImageWithOverride(

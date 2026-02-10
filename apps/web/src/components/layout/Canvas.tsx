@@ -8,7 +8,7 @@ import {
   SelectionManager,
   TransformHandles,
 } from '@quar/core';
-import type { Node, ImageNode, GroupNode, Vector2 } from '@quar/types';
+import type { Node, ImageNode, TextNode, GroupNode, Vector2 } from '@quar/types';
 import { evaluateNodeAtFrame, applyAnimatedValues, getAnimatedNodes } from '@quar/animation';
 import { useCanvasTools } from '../../hooks/useCanvasTools';
 import { useToolShortcuts } from '../../hooks/useToolShortcuts';
@@ -19,6 +19,7 @@ import { PenToolOverlay } from '../canvas/PenToolOverlay';
 import { DirectSelectionOverlay } from '../canvas/DirectSelectionOverlay';
 import { GradientHandleOverlay } from '../canvas/GradientHandleOverlay';
 import { CanvasRuler } from '../canvas/CanvasRuler';
+import { TextEditOverlay } from '../canvas/TextEditOverlay';
 import { ContextMenu } from '../common/ContextMenu';
 import type { ContextMenuEntry } from '../common/ContextMenu';
 import styles from './Canvas.module.css';
@@ -92,11 +93,15 @@ export function Canvas() {
   const flattenBooleanGroup = useEditorStore((state) => state.flattenBooleanGroup);
   const releaseBooleanGroup = useEditorStore((state) => state.releaseBooleanGroup);
   const changeBooleanOp = useEditorStore((state) => state.changeBooleanOp);
+  const convertTextToPath = useEditorStore((state) => state.convertTextToPath);
+  const outlineStroke = useEditorStore((state) => state.outlineStroke);
   const undo = useEditorStore((state) => state.undo);
   const redo = useEditorStore((state) => state.redo);
   const cutSelection = useEditorStore((state) => state.cutSelection);
   const editingGradient = useEditorStore((state) => state.editingGradient);
   const showRulers = useEditorStore((state) => state.showRulers);
+  const editingTextNodeId = useEditorStore((state) => state.editingTextNodeId);
+  const setEditingTextNodeId = useEditorStore((state) => state.setEditingTextNodeId);
 
   // Get shared SceneGraph from context
   const sceneGraph = useSceneGraph();
@@ -209,12 +214,28 @@ export function Canvas() {
           e.preventDefault();
           booleanExclude(sceneGraph);
           break;
+        case 'p':
+          e.preventDefault();
+          convertTextToPath(sceneGraph);
+          break;
+        case 'o':
+          e.preventDefault();
+          outlineStroke(sceneGraph);
+          break;
       }
     };
 
     window.addEventListener('keydown', handleBooleanKeyDown);
     return () => window.removeEventListener('keydown', handleBooleanKeyDown);
-  }, [sceneGraph, booleanUnion, booleanSubtract, booleanIntersect, booleanExclude]);
+  }, [
+    sceneGraph,
+    booleanUnion,
+    booleanSubtract,
+    booleanIntersect,
+    booleanExclude,
+    convertTextToPath,
+    outlineStroke,
+  ]);
 
   // Selection bounds for display: un-rotated bounds + rotation angle for single selection,
   // AABB + rotation 0 for multi-selection.
@@ -897,6 +918,29 @@ export function Canvas() {
           : []),
         { type: 'separator' },
         {
+          id: 'convert-to-path',
+          label: 'Convert to Path',
+          shortcut: 'Ctrl+Shift+P',
+          disabled: !Array.from(selectedNodeIds).some((id) => {
+            const n = sceneGraph.getNode(id);
+            return n && n.type === 'text';
+          }),
+          onClick: () => convertTextToPath(sceneGraph),
+        },
+        {
+          id: 'outline-stroke',
+          label: 'Outline Stroke',
+          shortcut: 'Ctrl+Shift+O',
+          disabled: !Array.from(selectedNodeIds).some((id) => {
+            const n = sceneGraph.getNode(id);
+            if (!n) return false;
+            const strokes = (n as { strokes?: { visible: boolean }[] }).strokes;
+            return strokes && strokes.some((s) => s.visible);
+          }),
+          onClick: () => outlineStroke(sceneGraph),
+        },
+        { type: 'separator' },
+        {
           id: 'toggle-visibility',
           label: 'Show/Hide',
           onClick: () => {
@@ -965,6 +1009,8 @@ export function Canvas() {
     flattenBooleanGroup,
     releaseBooleanGroup,
     changeBooleanOp,
+    convertTextToPath,
+    outlineStroke,
   ]);
 
   // --------------------------------------------------------------------------
@@ -1243,6 +1289,24 @@ export function Canvas() {
           cameraVersion={cameraVersion}
         />
       )}
+      {editingTextNodeId &&
+        cameraRef.current &&
+        (() => {
+          const textNode = sceneGraph.getNode(editingTextNodeId);
+          if (!textNode || textNode.type !== 'text') return null;
+          return (
+            <TextEditOverlay
+              node={textNode as TextNode}
+              camera={cameraRef.current}
+              onCommit={(content: string) => {
+                useEditorStore.getState().pushUndo(sceneGraph);
+                sceneGraph.updateNode(editingTextNodeId, { content });
+                setEditingTextNodeId(null);
+              }}
+              onCancel={() => setEditingTextNodeId(null)}
+            />
+          );
+        })()}
       <div className={styles.statusBar}>
         <span className={styles.coordinates}>
           X: {mouseWorldPos.x.toFixed(1)} Y: {mouseWorldPos.y.toFixed(1)}

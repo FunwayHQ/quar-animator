@@ -3,11 +3,12 @@
  * Calculates bounding boxes for selected nodes
  */
 
-import type { Node, ImageNode, Rect, Matrix3 } from '@quar/types';
+import type { Node, ImageNode, TextNode, Rect, Matrix3 } from '@quar/types';
 import type { SceneGraph } from '../SceneGraph';
 import type { SelectionBounds } from './types';
 import { rect, mat3 } from '../math';
 import { getPolygonBounds, getPathBounds } from '../path/pathUtils';
+import { getTextBounds } from '../font/textMetrics';
 
 // ============================================================================
 // Helpers
@@ -246,8 +247,19 @@ export class SelectionManager {
         }
         return allBounds.length === 1 ? primaryBounds : this.unionBounds(allBounds);
       }
+      case 'text': {
+        const textNode = node;
+        return getTextBounds(
+          textNode.content,
+          textNode.fontFamily,
+          textNode.fontSize,
+          textNode.lineHeight,
+          textNode.letterSpacing,
+          textNode.textAlign
+        );
+      }
       case 'image': {
-        const imgNode = node as ImageNode;
+        const imgNode = node;
         const anchor = node.transform.anchor;
         return {
           x: -imgNode.width * anchor.x,
