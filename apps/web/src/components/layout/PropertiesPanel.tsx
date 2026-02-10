@@ -151,6 +151,39 @@ function handleNumericInputKeyDown(
   }
 }
 
+/**
+ * Returns props (onKeyDown + ref callback) for a numeric input that supports
+ * ArrowUp/Down keys (±1, ±10 with Shift) and mouse wheel scrolling.
+ * The ref callback attaches a non-passive wheel listener (React onWheel is passive).
+ */
+function numericInputProps(
+  getValue: () => number,
+  onChange: (v: string) => void
+): {
+  onKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => void;
+  ref: (el: HTMLInputElement | null) => void;
+} {
+  return {
+    onKeyDown: (e) => handleNumericInputKeyDown(e, getValue(), onChange),
+    ref: (el) => {
+      if (!el) return;
+      // Avoid duplicate listeners via a data attribute marker
+      if ((el as unknown as Record<string, unknown>).__numWheel) return;
+      (el as unknown as Record<string, unknown>).__numWheel = true;
+      el.addEventListener(
+        'wheel',
+        (we: WheelEvent) => {
+          if (document.activeElement !== el) return;
+          we.preventDefault();
+          const delta = (we.deltaY < 0 ? 1 : -1) * (we.shiftKey ? 10 : 1);
+          onChange(String(getValue() + delta));
+        },
+        { passive: false }
+      );
+    },
+  };
+}
+
 function getGroupPosition(node: Node, sceneGraph: SceneGraph): { x: number; y: number } {
   const childIds = new Set(sceneGraph.getDescendants(node.id).map((n: Node) => n.id));
   const bounds = groupBoundsManager.getSelectionBounds(childIds, sceneGraph);
@@ -994,12 +1027,7 @@ export function PropertiesPanel() {
   const swatchRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const [showEffectDropdown, setShowEffectDropdown] = useState(false);
 
-  // Refs for numeric input scroll-to-adjust (position X, Y, rotation)
-  const posXInputRef = useRef<HTMLInputElement>(null);
-  const posYInputRef = useRef<HTMLInputElement>(null);
-  const rotInputRef = useRef<HTMLInputElement>(null);
-
-  // Stable ref for current values — updated each render, read by wheel handlers
+  // Stable ref for current values — read by numericInputProps closures
   const numericRef = useRef({
     posX: 0,
     posY: 0,
@@ -1008,50 +1036,6 @@ export function PropertiesPanel() {
     handlePositionChange: handlePositionChange,
     handleRotationChange: handleRotationChange,
   });
-
-  // Non-passive wheel listeners for position/rotation inputs
-  useEffect(() => {
-    const makeHandler =
-      (getValue: () => number, onChange: (v: string) => void, checkGroup: boolean) =>
-      (e: WheelEvent) => {
-        if (checkGroup && numericRef.current.isGroup) return;
-        e.preventDefault();
-        const delta = (e.deltaY < 0 ? 1 : -1) * (e.shiftKey ? 10 : 1);
-        onChange(String(getValue() + delta));
-      };
-
-    const entries: Array<[HTMLElement, (e: WheelEvent) => void]> = [];
-
-    if (posXInputRef.current) {
-      const h = makeHandler(
-        () => numericRef.current.posX,
-        (v) => numericRef.current.handlePositionChange('x', v),
-        true
-      );
-      posXInputRef.current.addEventListener('wheel', h, { passive: false });
-      entries.push([posXInputRef.current, h]);
-    }
-    if (posYInputRef.current) {
-      const h = makeHandler(
-        () => numericRef.current.posY,
-        (v) => numericRef.current.handlePositionChange('y', v),
-        true
-      );
-      posYInputRef.current.addEventListener('wheel', h, { passive: false });
-      entries.push([posYInputRef.current, h]);
-    }
-    if (rotInputRef.current) {
-      const h = makeHandler(
-        () => numericRef.current.rotation,
-        (v) => numericRef.current.handleRotationChange(v),
-        false
-      );
-      rotInputRef.current.addEventListener('wheel', h, { passive: false });
-      entries.push([rotInputRef.current, h]);
-    }
-
-    return () => entries.forEach(([el, h]) => el.removeEventListener('wheel', h));
-  }, [selectedId]);
 
   const openPicker = useCallback((key: string) => {
     const el = swatchRefs.current.get(key);
@@ -1237,15 +1221,15 @@ export function PropertiesPanel() {
                     onChange={(v) => handlePositionChange('x', String(v))}
                   />
                   <input
-                    ref={posXInputRef}
                     id="prop-pos-x"
                     type="text"
                     className={styles.input}
                     value={fmt1(pos.x)}
                     onChange={(e) => handlePositionChange('x', e.target.value)}
-                    onKeyDown={(e) => {
-                      handleNumericInputKeyDown(e, pos.x, (v) => handlePositionChange('x', v));
-                    }}
+                    {...numericInputProps(
+                      () => numericRef.current.posX,
+                      (v) => numericRef.current.handlePositionChange('x', v)
+                    )}
                   />
                 </div>
                 <div className={styles.inputGroup}>
@@ -1255,14 +1239,14 @@ export function PropertiesPanel() {
                     onChange={(v) => handlePositionChange('y', String(v))}
                   />
                   <input
-                    ref={posYInputRef}
                     type="text"
                     className={styles.input}
                     value={fmt1(pos.y)}
                     onChange={(e) => handlePositionChange('y', e.target.value)}
-                    onKeyDown={(e) => {
-                      handleNumericInputKeyDown(e, pos.y, (v) => handlePositionChange('y', v));
-                    }}
+                    {...numericInputProps(
+                      () => numericRef.current.posY,
+                      (v) => numericRef.current.handlePositionChange('y', v)
+                    )}
                   />
                 </div>
               </div>
@@ -1292,6 +1276,10 @@ export function PropertiesPanel() {
                     value={fmt1(size.width)}
                     readOnly={!isSizeEditable(node) || isGroup}
                     onChange={(e) => handleSizeChange('width', e.target.value)}
+                    {...numericInputProps(
+                      () => Math.round(size.width),
+                      (v) => handleSizeChange('width', v)
+                    )}
                   />
                 </div>
                 {!isGroup && (
@@ -1318,6 +1306,10 @@ export function PropertiesPanel() {
                     value={fmt1(size.height)}
                     readOnly={!isSizeEditable(node) || isGroup}
                     onChange={(e) => handleSizeChange('height', e.target.value)}
+                    {...numericInputProps(
+                      () => Math.round(size.height),
+                      (v) => handleSizeChange('height', v)
+                    )}
                   />
                 </div>
               </div>
@@ -1354,6 +1346,10 @@ export function PropertiesPanel() {
                               value={fmt1(corners[0])}
                               onChange={(e) => handleCornerRadiusChange(e.target.value)}
                               data-testid="corner-radius-input"
+                              {...numericInputProps(
+                                () => Math.round(corners[0]),
+                                (v) => handleCornerRadiusChange(v)
+                              )}
                             />
                           </div>
                           <button
@@ -1381,6 +1377,10 @@ export function PropertiesPanel() {
                                 className={styles.input}
                                 value={fmt1(corners[0])}
                                 onChange={(e) => handleCornerRadiusChange(e.target.value, 0)}
+                                {...numericInputProps(
+                                  () => Math.round(corners[0]),
+                                  (v) => handleCornerRadiusChange(v, 0)
+                                )}
                               />
                             </div>
                             <div className={styles.inputGroup}>
@@ -1395,6 +1395,10 @@ export function PropertiesPanel() {
                                 className={styles.input}
                                 value={fmt1(corners[1])}
                                 onChange={(e) => handleCornerRadiusChange(e.target.value, 1)}
+                                {...numericInputProps(
+                                  () => Math.round(corners[1]),
+                                  (v) => handleCornerRadiusChange(v, 1)
+                                )}
                               />
                             </div>
                             <button
@@ -1420,6 +1424,10 @@ export function PropertiesPanel() {
                                 className={styles.input}
                                 value={fmt1(corners[3])}
                                 onChange={(e) => handleCornerRadiusChange(e.target.value, 3)}
+                                {...numericInputProps(
+                                  () => Math.round(corners[3]),
+                                  (v) => handleCornerRadiusChange(v, 3)
+                                )}
                               />
                             </div>
                             <div className={styles.inputGroup}>
@@ -1434,6 +1442,10 @@ export function PropertiesPanel() {
                                 className={styles.input}
                                 value={fmt1(corners[2])}
                                 onChange={(e) => handleCornerRadiusChange(e.target.value, 2)}
+                                {...numericInputProps(
+                                  () => Math.round(corners[2]),
+                                  (v) => handleCornerRadiusChange(v, 2)
+                                )}
                               />
                             </div>
                             <div className={styles.lockButtonSpacer} />
@@ -1469,6 +1481,10 @@ export function PropertiesPanel() {
                           value={fmt1(polyRadius)}
                           onChange={(e) => handleCornerRadiusChange(e.target.value)}
                           data-testid="corner-radius-input"
+                          {...numericInputProps(
+                            () => Math.round(polyRadius),
+                            (v) => handleCornerRadiusChange(v)
+                          )}
                         />
                       </div>
                     </div>
@@ -1503,10 +1519,11 @@ export function PropertiesPanel() {
                             className={styles.input}
                             value={poly.sides}
                             onChange={(e) => handleSidesChange(e.target.value)}
-                            onKeyDown={(e) =>
-                              handleNumericInputKeyDown(e, poly.sides, handleSidesChange)
-                            }
                             data-testid="polygon-sides-input"
+                            {...numericInputProps(
+                              () => poly.sides,
+                              (v) => handleSidesChange(String(Math.round(parseFloat(v))))
+                            )}
                           />
                         </div>
                       </div>
@@ -1549,14 +1566,15 @@ export function PropertiesPanel() {
                                     if (!isNaN(px) && avgScale > 0)
                                       handleInnerRadiusChange(String(px / avgScale));
                                   }}
-                                  onKeyDown={(e) =>
-                                    handleNumericInputKeyDown(e, Math.round(irPixels), (v) => {
+                                  data-testid="polygon-inner-radius-input"
+                                  {...numericInputProps(
+                                    () => Math.round(irPixels),
+                                    (v) => {
                                       const px = parseFloat(v);
                                       if (!isNaN(px) && avgScale > 0)
                                         handleInnerRadiusChange(String(px / avgScale));
-                                    })
-                                  }
-                                  data-testid="polygon-inner-radius-input"
+                                    }
+                                  )}
                                 />
                               </>
                             );
@@ -1588,13 +1606,15 @@ export function PropertiesPanel() {
                     max={360}
                   />
                   <input
-                    ref={rotInputRef}
                     id="prop-rotation"
                     type="text"
                     className={styles.input}
                     value={`${fmt1(rotation)}\u00B0`}
                     onChange={(e) => handleRotationChange(e.target.value)}
-                    onKeyDown={(e) => handleNumericInputKeyDown(e, rotation, handleRotationChange)}
+                    {...numericInputProps(
+                      () => numericRef.current.rotation,
+                      (v) => numericRef.current.handleRotationChange(v)
+                    )}
                   />
                 </div>
               </div>
@@ -1696,6 +1716,10 @@ export function PropertiesPanel() {
                             title="Fill opacity"
                             aria-label={`Fill opacity: ${Math.round(fill.opacity * 100)}%`}
                             data-testid={`fill-opacity-${index}`}
+                            {...numericInputProps(
+                              () => Math.round(fill.opacity * 100),
+                              (v) => handleFillOpacityChange(index, v)
+                            )}
                           />
                           <button
                             className={styles.removeButton}
@@ -1823,6 +1847,10 @@ export function PropertiesPanel() {
                             title="Stroke opacity"
                             aria-label={`Stroke opacity: ${Math.round(stroke.opacity * 100)}%`}
                             data-testid={`stroke-opacity-${index}`}
+                            {...numericInputProps(
+                              () => Math.round(stroke.opacity * 100),
+                              (v) => handleStrokeOpacityChange(index, v)
+                            )}
                           />
                           <button
                             className={styles.removeButton}
@@ -1868,6 +1896,13 @@ export function PropertiesPanel() {
                                 if (!isNaN(v)) handleStrokeWidthChange(index, v);
                               }}
                               data-testid={`stroke-width-${index}`}
+                              {...numericInputProps(
+                                () => stroke.width,
+                                (v) => {
+                                  const val = parseFloat(v);
+                                  if (!isNaN(val)) handleStrokeWidthChange(index, val);
+                                }
+                              )}
                             />
                           </div>
                           <div className={styles.alignToggle} data-testid={`stroke-align-${index}`}>
@@ -1926,6 +1961,10 @@ export function PropertiesPanel() {
                   className={styles.inputSmall}
                   value={`${opacityPercent}%`}
                   onChange={(e) => handleOpacityChange(e.target.value)}
+                  {...numericInputProps(
+                    () => opacityPercent,
+                    (v) => handleOpacityChange(v)
+                  )}
                 />
               </div>
             </div>
@@ -2159,6 +2198,28 @@ export function PropertiesPanel() {
                                       );
                                   }
                                 }}
+                                {...numericInputProps(
+                                  () => Math.round(shadow.opacity * 100),
+                                  (v) => {
+                                    const val = parseInt(v, 10);
+                                    if (!isNaN(val) && selectedId) {
+                                      const clamped = Math.max(0, Math.min(1, val / 100));
+                                      updateEffect(
+                                        sceneGraph as unknown as Parameters<typeof updateEffect>[0],
+                                        selectedId,
+                                        index,
+                                        { opacity: clamped } as Partial<Effect>
+                                      );
+                                      if (autoKeyframe)
+                                        addKeyframeAtFrame(
+                                          selectedId,
+                                          `effects.${index}.opacity`,
+                                          currentFrame,
+                                          clamped
+                                        );
+                                    }
+                                  }
+                                )}
                               />
                             </div>
                           </div>
@@ -2207,6 +2268,27 @@ export function PropertiesPanel() {
                                       );
                                   }
                                 }}
+                                {...numericInputProps(
+                                  () => shadow.offsetX,
+                                  (v) => {
+                                    const val = parseFloat(v);
+                                    if (!isNaN(val) && selectedId) {
+                                      updateEffect(
+                                        sceneGraph as unknown as Parameters<typeof updateEffect>[0],
+                                        selectedId,
+                                        index,
+                                        { offsetX: val } as Partial<Effect>
+                                      );
+                                      if (autoKeyframe)
+                                        addKeyframeAtFrame(
+                                          selectedId,
+                                          `effects.${index}.offsetX`,
+                                          currentFrame,
+                                          val
+                                        );
+                                    }
+                                  }
+                                )}
                               />
                             </div>
                             <div className={styles.inputGroup}>
@@ -2253,6 +2335,27 @@ export function PropertiesPanel() {
                                       );
                                   }
                                 }}
+                                {...numericInputProps(
+                                  () => shadow.offsetY,
+                                  (v) => {
+                                    const val = parseFloat(v);
+                                    if (!isNaN(val) && selectedId) {
+                                      updateEffect(
+                                        sceneGraph as unknown as Parameters<typeof updateEffect>[0],
+                                        selectedId,
+                                        index,
+                                        { offsetY: val } as Partial<Effect>
+                                      );
+                                      if (autoKeyframe)
+                                        addKeyframeAtFrame(
+                                          selectedId,
+                                          `effects.${index}.offsetY`,
+                                          currentFrame,
+                                          val
+                                        );
+                                    }
+                                  }
+                                )}
                               />
                             </div>
                           </div>
@@ -2305,6 +2408,28 @@ export function PropertiesPanel() {
                                       );
                                   }
                                 }}
+                                {...numericInputProps(
+                                  () => shadow.blur,
+                                  (v) => {
+                                    const val = parseFloat(v);
+                                    if (!isNaN(val) && selectedId) {
+                                      const clamped = Math.max(0, val);
+                                      updateEffect(
+                                        sceneGraph as unknown as Parameters<typeof updateEffect>[0],
+                                        selectedId,
+                                        index,
+                                        { blur: clamped } as Partial<Effect>
+                                      );
+                                      if (autoKeyframe)
+                                        addKeyframeAtFrame(
+                                          selectedId,
+                                          `effects.${index}.blur`,
+                                          currentFrame,
+                                          clamped
+                                        );
+                                    }
+                                  }
+                                )}
                               />
                             </div>
                             <div className={styles.inputGroup}>
@@ -2355,6 +2480,28 @@ export function PropertiesPanel() {
                                       );
                                   }
                                 }}
+                                {...numericInputProps(
+                                  () => shadow.spread,
+                                  (v) => {
+                                    const val = parseFloat(v);
+                                    if (!isNaN(val) && selectedId) {
+                                      const clamped = Math.max(0, val);
+                                      updateEffect(
+                                        sceneGraph as unknown as Parameters<typeof updateEffect>[0],
+                                        selectedId,
+                                        index,
+                                        { spread: clamped } as Partial<Effect>
+                                      );
+                                      if (autoKeyframe)
+                                        addKeyframeAtFrame(
+                                          selectedId,
+                                          `effects.${index}.spread`,
+                                          currentFrame,
+                                          clamped
+                                        );
+                                    }
+                                  }
+                                )}
                               />
                             </div>
                           </div>
@@ -2414,6 +2561,28 @@ export function PropertiesPanel() {
                                     );
                                 }
                               }}
+                              {...numericInputProps(
+                                () => blur.radius,
+                                (v) => {
+                                  const val = parseFloat(v);
+                                  if (!isNaN(val) && selectedId) {
+                                    const clamped = Math.max(0, val);
+                                    updateEffect(
+                                      sceneGraph as unknown as Parameters<typeof updateEffect>[0],
+                                      selectedId,
+                                      index,
+                                      { radius: clamped } as Partial<Effect>
+                                    );
+                                    if (autoKeyframe)
+                                      addKeyframeAtFrame(
+                                        selectedId,
+                                        `effects.${index}.radius`,
+                                        currentFrame,
+                                        clamped
+                                      );
+                                  }
+                                }
+                              )}
                             />
                           </div>
                         </div>
