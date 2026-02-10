@@ -686,7 +686,7 @@ export function Canvas() {
           redo(sceneGraph);
           return;
         }
-        if (e.key === 'x') {
+        if (e.key === 'x' && !e.shiftKey) {
           e.preventDefault();
           cutSelection(sceneGraph);
           return;
@@ -712,7 +712,7 @@ export function Canvas() {
           pasteClipboard(sceneGraph);
           return;
         }
-        if (e.key === 'd') {
+        if (e.key === 'd' && !e.shiftKey) {
           e.preventDefault();
           duplicateSelection(sceneGraph);
           return;

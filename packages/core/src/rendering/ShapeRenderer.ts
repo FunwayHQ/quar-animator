@@ -487,6 +487,9 @@ export class ShapeRenderer {
   // Tessellation cache — avoids re-tessellating and re-earcut-ing unchanged geometry
   private geometryCache: Map<string, TessellationCacheEntry> = new Map();
 
+  // Per-ring vertex arrays for boolean groups — needed for per-ring stroke rendering
+  private booleanRingCache: Map<string, Float32Array[]> = new Map();
+
   // Effect renderer for drop shadows, blur, blend modes
   private effectRenderer: EffectRenderer;
 
@@ -780,6 +783,7 @@ export class ShapeRenderer {
    */
   clearCache(): void {
     this.geometryCache.clear();
+    this.booleanRingCache.clear();
   }
 
   // --------------------------------------------------------------------------
@@ -1639,6 +1643,9 @@ export class ShapeRenderer {
           strokeCache: new Map(),
         };
         this.geometryCache.set(cacheKey, entry);
+
+        // Cache per-ring arrays for per-ring stroke rendering
+        this.booleanRingCache.set(cacheKey, allRingArrays);
       } catch (_err) {
         return;
       }
@@ -1656,18 +1663,60 @@ export class ShapeRenderer {
     this.currentModelMatrix = modelArray;
     gl.uniformMatrix3fv(this.program.uniforms.u_model ?? null, false, modelArray);
 
-    // Render using the group's fills/strokes
+    // Render fills using combined buffer + earcut indices (correct — indices skip between rings)
     const fills = groupNode.fills ?? [];
     const strokes = groupNode.strokes ?? [];
-    this.renderFillsAndStrokes(
-      cacheKey,
-      vertices!,
-      fillIndices!,
-      fills,
-      strokes,
-      true,
-      this.currentEffectiveOpacity
-    );
+    const nodeOpacity = this.currentEffectiveOpacity;
+
+    for (const fill of fills) {
+      if (fill.visible && fill.type !== 'none') {
+        this.renderFill(vertices!, fillIndices!, fill, nodeOpacity);
+      }
+    }
+
+    // Render strokes PER-RING to avoid bridge lines between disjoint contours.
+    // Cannot use renderStroke() here because getCachedStrokeOutline uses the same
+    // cacheKey for all rings, so ring 2+ would get ring 1's cached outline.
+    const ringArrays = this.booleanRingCache.get(cacheKey);
+    if (ringArrays) {
+      for (const stroke of strokes) {
+        if (stroke.visible && stroke.width > 0) {
+          for (const ringVerts of ringArrays) {
+            const numVerts = ringVerts.length / 2;
+            if (numVerts < 2) continue;
+            const outline = generateStrokeOutlineVertices(
+              ringVerts,
+              numVerts,
+              stroke.width,
+              true,
+              stroke.align ?? 'center'
+            );
+            if (outline.length / 2 < 3) continue;
+            const strokeIndices = earcut(outline);
+            if (strokeIndices.length === 0) continue;
+
+            if (stroke.gradient) {
+              this.renderFillGradient(
+                outline,
+                Array.from(strokeIndices),
+                stroke.gradient,
+                stroke.opacity * nodeOpacity
+              );
+            } else {
+              this.renderer.useProgram(this.program);
+              const color = this.getStrokeColor(stroke, nodeOpacity);
+              gl.uniform4fv(this.program.uniforms.u_color ?? null, color);
+              gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
+              gl.bufferSubData(gl.ARRAY_BUFFER, 0, outline);
+              const idxArr = new Uint16Array(strokeIndices);
+              gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indexBuffer);
+              gl.bufferSubData(gl.ELEMENT_ARRAY_BUFFER, 0, idxArr);
+              gl.drawElements(gl.TRIANGLES, strokeIndices.length, gl.UNSIGNED_SHORT, 0);
+            }
+          }
+        }
+      }
+    }
   }
 
   /**
@@ -2240,6 +2289,7 @@ export class ShapeRenderer {
         this.renderFillWithColor(vertices, ghostFillIndices, color);
       }
     }
+    // Render strokes per-ring to avoid bridge lines between disjoint contours
     for (const stroke of strokes) {
       if (stroke.visible && stroke.width > 0) {
         const color = this.applyTintAndAlpha(
@@ -2247,7 +2297,9 @@ export class ShapeRenderer {
           tintColor,
           effectiveAlpha
         );
-        this.renderStrokeWithColor(vertices, stroke, true, color);
+        for (const ringVerts of allRingArrays) {
+          this.renderStrokeWithColor(ringVerts, stroke, true, color);
+        }
       }
     }
     this.renderer.bindVAO(null);

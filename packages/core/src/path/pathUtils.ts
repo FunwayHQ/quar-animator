@@ -818,7 +818,7 @@ export function getPolygonBounds(
   scaleY: number = 1,
   innerRadius?: number
 ): Rect {
-  const startAngle = -Math.PI / 2;
+  const startAngle = Math.PI / 2;
   let minX = Infinity;
   let minY = Infinity;
   let maxX = -Infinity;

@@ -56,7 +56,7 @@ export function getShapeOutlinePoints(node: Node): ShapeOutline | null {
           node.radius,
           node.innerRadius,
           node.sides,
-          -Math.PI / 2,
+          Math.PI / 2,
           node.cornerRadius
         );
         return { points, closed: true };
@@ -66,7 +66,7 @@ export function getShapeOutlinePoints(node: Node): ShapeOutline | null {
         0,
         node.radius,
         node.sides,
-        -Math.PI / 2,
+        Math.PI / 2,
         node.cornerRadius
       );
       return { points, closed: true };
