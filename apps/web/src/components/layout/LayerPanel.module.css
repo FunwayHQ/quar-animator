@@ -231,6 +231,16 @@
   font-size: var(--font-size-sm);
 }
 
+/* Entered group indicator */
+.layerRow.enteredGroup {
+  background: linear-gradient(90deg, rgba(168, 85, 247, 0.08) 0%, transparent 100%);
+}
+
+.layerRow.enteredGroup::before {
+  background: var(--color-accent-primary);
+  width: 3px;
+}
+
 /* Drag indicator */
 .layerRow.dragging {
   opacity: 0.5;

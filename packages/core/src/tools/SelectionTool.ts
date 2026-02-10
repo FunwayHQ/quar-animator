@@ -172,7 +172,29 @@ export class SelectionTool extends BaseTool {
     }
 
     // Hit test to find node under cursor
-    const hitNode = this.hitTest(worldPos);
+    const rawHit = this.hitTest(worldPos);
+    const enteredGroupId = this.context.getEnteredGroupId?.() ?? null;
+    const hitNode = rawHit ? this.resolveHitToScope(rawHit) : null;
+
+    // Double-click on a group to enter it
+    if (event.clickCount === 2 && hitNode && hitNode.type === 'group') {
+      this.context.setEnteredGroupId?.(hitNode.id);
+      return;
+    }
+
+    // Click on a node outside the entered group: exit group and select root ancestor
+    if (rawHit && !hitNode && enteredGroupId) {
+      this.context.setEnteredGroupId?.(null);
+      // Re-resolve at root scope and select
+      let rootNode = rawHit;
+      while (rootNode.parent) {
+        const p = this.context.sceneGraph.getNode(rootNode.parent);
+        if (!p) break;
+        rootNode = p;
+      }
+      this.context.setSelectedIds([rootNode.id]);
+      return;
+    }
 
     if (hitNode) {
       const selectedIds = this.context.getSelectedIds();
@@ -210,6 +232,10 @@ export class SelectionTool extends BaseTool {
     } else {
       // Clicked on empty space
       if (!this.isAdditive(event) && !event.shiftKey) {
+        // If inside a group, exit group first
+        if (enteredGroupId) {
+          this.context.setEnteredGroupId?.(null);
+        }
         // Clear selection
         this.context.clearSelection();
       }
@@ -388,7 +414,14 @@ export class SelectionTool extends BaseTool {
           this.mode = 'idle';
           this.state.isDragging = false;
         } else {
-          this.context.clearSelection();
+          // If inside a group, exit the group and select it
+          const groupId = this.context.getEnteredGroupId?.() ?? null;
+          if (groupId) {
+            this.context.setEnteredGroupId?.(null);
+            this.context.setSelectedIds([groupId]);
+          } else {
+            this.context.clearSelection();
+          }
         }
         break;
 
@@ -451,6 +484,46 @@ export class SelectionTool extends BaseTool {
     });
 
     return hitNode;
+  }
+
+  /**
+   * Walk a hit node up to the appropriate scope level based on enteredGroupId.
+   * - If enteredGroupId is null: walk up to root-level ancestor (parent === null)
+   * - If enteredGroupId is set: walk up to immediate child of that group
+   * - Returns null if the node is not a descendant of the entered group
+   */
+  private resolveHitToScope(hitNode: Node): Node | null {
+    const enteredGroupId = this.context.getEnteredGroupId?.() ?? null;
+
+    if (enteredGroupId === null) {
+      // Walk up to root-level ancestor
+      let current = hitNode;
+      while (current.parent !== null) {
+        const parent = this.context.sceneGraph.getNode(current.parent);
+        if (!parent) break;
+        current = parent;
+      }
+      return current;
+    }
+
+    // Walk up to immediate child of the entered group
+    // First verify the hit node is a descendant of the entered group
+    let current = hitNode;
+
+    // Check if current is the entered group itself — shouldn't select it
+    if (current.id === enteredGroupId) return null;
+
+    // Walk up until we find a node whose parent is the entered group
+    while (current.parent !== enteredGroupId) {
+      if (current.parent === null) {
+        // Reached root without finding entered group — node is outside
+        return null;
+      }
+      const parent = this.context.sceneGraph.getNode(current.parent);
+      if (!parent) return null;
+      current = parent;
+    }
+    return current;
   }
 
   /**
@@ -536,11 +609,13 @@ export class SelectionTool extends BaseTool {
   }
 
   /**
-   * Get all nodes that intersect with the given rectangle
+   * Get all nodes that intersect with the given rectangle,
+   * scoped through resolveHitToScope to respect group entry.
    */
   private getNodesInRect(selectionRect: Rect): Node[] {
-    const result: Node[] = [];
     const hitTolerance = 8 / this.context.camera.zoom; // 8 screen pixels
+    const scopedIds = new Set<string>();
+    const scopedNodes: Node[] = [];
 
     this.context.sceneGraph.traverseVisible((node) => {
       let bounds = this.getNodeBounds(node);
@@ -557,11 +632,15 @@ export class SelectionTool extends BaseTool {
       }
 
       if (rect.intersects(selectionRect, bounds)) {
-        result.push(node);
+        const scoped = this.resolveHitToScope(node);
+        if (scoped && !scopedIds.has(scoped.id)) {
+          scopedIds.add(scoped.id);
+          scopedNodes.push(scoped);
+        }
       }
     });
 
-    return result;
+    return scopedNodes;
   }
 
   // --------------------------------------------------------------------------
@@ -1053,5 +1132,7 @@ export class SelectionTool extends BaseTool {
     this.resizeState = null;
     this.rotationState = null;
     this.currentCursor = 'default';
+    // Exit group when switching away from selection tool
+    this.context.setEnteredGroupId?.(null);
   }
 }

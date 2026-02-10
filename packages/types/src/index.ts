@@ -401,6 +401,7 @@ export interface CanvasPointerEvent {
   metaKey: boolean;
   pressure: number;
   timestamp: number;
+  clickCount?: number;
 }
 
 // ============================================================================

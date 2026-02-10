@@ -484,7 +484,8 @@ export function Canvas() {
           toolPointerDown(
             positions.screenPos,
             positions.worldPos,
-            e as unknown as React.PointerEvent
+            e as unknown as React.PointerEvent,
+            e.detail
           );
         }
       }

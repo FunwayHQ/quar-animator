@@ -105,6 +105,7 @@ export function useProjectActions(options: UseProjectActionsOptions = {}): Proje
       selectedKeyframeIds: new Set<string>(),
       keyframeClipboard: null,
       clipboard: null,
+      enteredGroupId: null,
     });
     useEditorStore.getState().clearHistory();
   }, [sceneGraph]);

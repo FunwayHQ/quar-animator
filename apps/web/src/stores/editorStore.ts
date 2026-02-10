@@ -111,6 +111,11 @@ export interface EditorStore {
   activeTool: ToolType;
   setActiveTool: (tool: ToolType) => void;
 
+  // Group entry state (Figma-style group selection)
+  enteredGroupId: string | null;
+  enterGroup: (groupId: string) => void;
+  exitGroup: () => void;
+
   // Selection state
   selectedNodeIds: Set<string>;
   lastSelectedNodeId: string | null;
@@ -313,6 +318,12 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   activeTool: 'selection',
   setActiveTool: (tool: ToolType) => set({ activeTool: tool }),
 
+  // Group entry state (Figma-style group selection)
+  enteredGroupId: null,
+  enterGroup: (groupId: string) =>
+    set({ enteredGroupId: groupId, selectedNodeIds: new Set<string>() }),
+  exitGroup: () => set({ enteredGroupId: null }),
+
   // Selection state
   selectedNodeIds: new Set<string>(),
   lastSelectedNodeId: null,
@@ -448,7 +459,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     get().pasteClipboard(sceneGraph);
   },
   deleteSelection: (sceneGraph: SceneGraphLike) => {
-    const { selectedNodeIds, timeline } = get();
+    const { selectedNodeIds, timeline, enteredGroupId } = get();
     if (selectedNodeIds.size === 0) return;
     get().pushUndo(sceneGraph);
     // Clean up keyframe tracks for deleted nodes
@@ -457,11 +468,14 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       mgr.removeAllKeyframesForNode(id);
       sceneGraph.removeNode(id);
     }
+    // Clear enteredGroupId if the entered group no longer exists
+    const clearGroup = enteredGroupId && !sceneGraph.getNode(enteredGroupId);
     set({
       selectedNodeIds: new Set<string>(),
       editingGradient: null,
       timeline: { ...timeline },
       isDirty: true,
+      ...(clearGroup ? { enteredGroupId: null } : {}),
     });
   },
   selectAll: (sceneGraph: SceneGraphLike) => {
@@ -523,15 +537,19 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     set({ selectedNodeIds: new Set([groupId]), isDirty: true });
   },
   ungroupSelection: (sceneGraph: SceneGraphLike) => {
-    const { selectedNodeIds } = get();
+    const { selectedNodeIds, enteredGroupId } = get();
     if (selectedNodeIds.size === 0) return;
     get().pushUndo(sceneGraph);
 
     const movedChildIds: string[] = [];
+    let clearGroup = false;
 
     for (const id of selectedNodeIds) {
       const node = sceneGraph.getNode(id);
       if (!node || node.type !== 'group') continue;
+
+      // If ungrouping the entered group, exit it
+      if (id === enteredGroupId) clearGroup = true;
 
       const parentId = node.parent;
       // Find the group's index among its siblings
@@ -553,7 +571,11 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     }
 
     if (movedChildIds.length > 0) {
-      set({ selectedNodeIds: new Set(movedChildIds), isDirty: true });
+      set({
+        selectedNodeIds: new Set(movedChildIds),
+        isDirty: true,
+        ...(clearGroup ? { enteredGroupId: null } : {}),
+      });
     }
   },
 
@@ -1306,6 +1328,7 @@ function createHistoryActions(
         canUndo: newUndoStack.length > 0,
         canRedo: true,
         selectedNodeIds: new Set(snapshot.selectedNodeIds),
+        enteredGroupId: null,
         isDirty: true,
       });
     },
@@ -1332,6 +1355,7 @@ function createHistoryActions(
         canUndo: true,
         canRedo: newRedoStack.length > 0,
         selectedNodeIds: new Set(snapshot.selectedNodeIds),
+        enteredGroupId: null,
         isDirty: true,
       });
     },
@@ -1525,3 +1549,11 @@ export const usePushUndo = (): ((sceneGraph: SceneGraphLike) => void) =>
   useEditorStore((state: EditorStore) => state.pushUndo);
 export const useCutSelection = (): ((sceneGraph: SceneGraphLike) => void) =>
   useEditorStore((state: EditorStore) => state.cutSelection);
+
+// Group entry selectors
+export const useEnteredGroupId = (): string | null =>
+  useEditorStore((state: EditorStore) => state.enteredGroupId);
+export const useEnterGroup = (): ((groupId: string) => void) =>
+  useEditorStore((state: EditorStore) => state.enterGroup);
+export const useExitGroup = (): (() => void) =>
+  useEditorStore((state: EditorStore) => state.exitGroup);

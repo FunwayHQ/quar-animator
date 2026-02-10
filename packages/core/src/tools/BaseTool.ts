@@ -28,6 +28,8 @@ export interface ToolContext {
   onTransformComplete?: (nodeIds: Set<string>, type: TransformType) => void;
   getSnapToGrid?: () => boolean;
   getGridSize?: () => number;
+  getEnteredGroupId?: () => string | null;
+  setEnteredGroupId?: (id: string | null) => void;
 }
 
 export interface ToolState {

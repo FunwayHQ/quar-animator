@@ -133,8 +133,10 @@ interface LayerRowProps {
   selected: boolean;
   isRenaming: boolean;
   isDragging: boolean;
+  isEnteredGroup: boolean;
   dropTarget: DropTarget | null;
   onSelect: (id: string, e: React.MouseEvent) => void;
+  onDoubleClick: (id: string) => void;
   onToggleVisibility: (id: string) => void;
   onToggleLock: (id: string) => void;
   onContextMenu: (id: string, e: React.MouseEvent) => void;
@@ -148,8 +150,10 @@ function LayerRow({
   selected,
   isRenaming,
   isDragging,
+  isEnteredGroup,
   dropTarget,
   onSelect,
+  onDoubleClick,
   onToggleVisibility,
   onToggleLock,
   onContextMenu,
@@ -172,13 +176,14 @@ function LayerRow({
     <>
       {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events -- layer rows use click for selection, keyboard handled at panel level */}
       <div
-        className={`${styles.layerRow} ${selected ? styles.selected : ''} ${isDragging ? styles.dragging : ''} ${dropClass}`}
+        className={`${styles.layerRow} ${selected ? styles.selected : ''} ${isDragging ? styles.dragging : ''} ${isEnteredGroup ? styles.enteredGroup : ''} ${dropClass}`}
         style={{ paddingLeft: `${12 + depth * 16}px` }}
         role="button"
         tabIndex={0}
         aria-label={`Layer: ${node.name}`}
         aria-pressed={selected}
         onClick={(e) => onSelect(node.id, e)}
+        onDoubleClick={() => onDoubleClick(node.id)}
         onContextMenu={(e) => onContextMenu(node.id, e)}
         onPointerDown={(e) => onPointerDown(node.id, e)}
         data-testid={`layer-row-${node.id}`}
@@ -271,6 +276,7 @@ function LayerRow({
             nodeId={childId}
             depth={depth + 1}
             onSelect={onSelect}
+            onDoubleClick={onDoubleClick}
             onToggleVisibility={onToggleVisibility}
             onToggleLock={onToggleLock}
             onContextMenu={onContextMenu}
@@ -290,6 +296,7 @@ function LayerRowById({
   nodeId,
   depth,
   onSelect,
+  onDoubleClick,
   onToggleVisibility,
   onToggleLock,
   onContextMenu,
@@ -302,6 +309,7 @@ function LayerRowById({
   nodeId: string;
   depth: number;
   onSelect: (id: string, e: React.MouseEvent) => void;
+  onDoubleClick: (id: string) => void;
   onToggleVisibility: (id: string) => void;
   onToggleLock: (id: string) => void;
   onContextMenu: (id: string, e: React.MouseEvent) => void;
@@ -313,6 +321,7 @@ function LayerRowById({
 }) {
   const sceneGraph = useSceneGraph();
   const selectedNodeIds = useEditorStore((state) => state.selectedNodeIds);
+  const enteredGroupId = useEditorStore((state) => state.enteredGroupId);
   const node = sceneGraph.getNode(nodeId);
   if (!node) return null;
 
@@ -323,8 +332,10 @@ function LayerRowById({
       selected={selectedNodeIds.has(node.id)}
       isRenaming={isRenaming}
       isDragging={draggedIds !== null && draggedIds.has(node.id)}
+      isEnteredGroup={enteredGroupId === node.id}
       dropTarget={dropTarget}
       onSelect={onSelect}
+      onDoubleClick={onDoubleClick}
       onToggleVisibility={onToggleVisibility}
       onToggleLock={onToggleLock}
       onContextMenu={onContextMenu}
@@ -352,6 +363,8 @@ export function LayerPanel() {
   const sendBackward = useEditorStore((state) => state.sendBackward);
   const bringToFront = useEditorStore((state) => state.bringToFront);
   const sendToBack = useEditorStore((state) => state.sendToBack);
+  const enteredGroupId = useEditorStore((state) => state.enteredGroupId);
+  const enterGroup = useEditorStore((state) => state.enterGroup);
 
   // Track scene graph version to re-render when nodes change
   const [, setVersion] = useState(0);
@@ -408,6 +421,16 @@ export function LayerPanel() {
       }
     },
     [setSelection, toggleSelection, selectRange, sceneGraph]
+  );
+
+  const handleDoubleClick = useCallback(
+    (id: string) => {
+      const node = sceneGraph.getNode(id);
+      if (node && node.type === 'group') {
+        enterGroup(id);
+      }
+    },
+    [sceneGraph, enterGroup]
   );
 
   const pushUndo = useEditorStore((state) => state.pushUndo);
@@ -829,8 +852,10 @@ export function LayerPanel() {
               selected={selectedNodeIds.has(node.id)}
               isRenaming={renamingNodeId === node.id}
               isDragging={draggedIdSet !== null && draggedIdSet.has(node.id)}
+              isEnteredGroup={enteredGroupId === node.id}
               dropTarget={dropTarget}
               onSelect={handleSelect}
+              onDoubleClick={handleDoubleClick}
               onToggleVisibility={handleToggleVisibility}
               onToggleLock={handleToggleLock}
               onContextMenu={handleContextMenu}

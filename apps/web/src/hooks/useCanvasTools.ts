@@ -39,7 +39,12 @@ export interface UseCanvasToolsReturn {
   /** Reference to the SceneGraph instance */
   sceneGraphRef: React.RefObject<SceneGraph>;
   /** Handle pointer down event on canvas */
-  handlePointerDown: (screenPos: Vector2, worldPos: Vector2, event: React.PointerEvent) => void;
+  handlePointerDown: (
+    screenPos: Vector2,
+    worldPos: Vector2,
+    event: React.PointerEvent,
+    clickCount?: number
+  ) => void;
   /** Handle pointer move event on canvas */
   handlePointerMove: (screenPos: Vector2, worldPos: Vector2, event: React.PointerEvent) => void;
   /** Handle pointer up event on canvas */
@@ -80,7 +85,8 @@ export interface UseCanvasToolsReturn {
 function createCanvasPointerEvent(
   screenPos: Vector2,
   worldPos: Vector2,
-  event: React.PointerEvent
+  event: React.PointerEvent,
+  clickCount?: number
 ): CanvasPointerEvent {
   return {
     screenPosition: screenPos,
@@ -93,6 +99,7 @@ function createCanvasPointerEvent(
     metaKey: event.metaKey,
     pressure: event.pressure,
     timestamp: event.timeStamp,
+    clickCount,
   };
 }
 
@@ -259,6 +266,14 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
       onTransformComplete,
       getSnapToGrid,
       getGridSize,
+      getEnteredGroupId: () => useEditorStore.getState().enteredGroupId,
+      setEnteredGroupId: (id: string | null) => {
+        if (id === null) {
+          useEditorStore.getState().exitGroup();
+        } else {
+          useEditorStore.getState().enterGroup(id);
+        }
+      },
     });
 
     // Set the active tool from EditorStore (ToolManager defaults to 'selection')
@@ -343,10 +358,10 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
 
   // Event handlers
   const handlePointerDown = useCallback(
-    (screenPos: Vector2, worldPos: Vector2, event: React.PointerEvent) => {
+    (screenPos: Vector2, worldPos: Vector2, event: React.PointerEvent, clickCount?: number) => {
       if (!toolManagerRef.current) return;
 
-      const canvasEvent = createCanvasPointerEvent(screenPos, worldPos, event);
+      const canvasEvent = createCanvasPointerEvent(screenPos, worldPos, event, clickCount);
       toolManagerRef.current.handlePointerDown(canvasEvent);
 
       setIsDrawing(true);

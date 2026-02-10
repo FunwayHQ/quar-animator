@@ -35,6 +35,8 @@ export interface ToolManagerOptions {
   onTransformComplete?: (nodeIds: Set<string>, type: TransformType) => void;
   getSnapToGrid?: () => boolean;
   getGridSize?: () => number;
+  getEnteredGroupId?: () => string | null;
+  setEnteredGroupId?: (id: string | null) => void;
 }
 
 // ============================================================================
@@ -227,6 +229,8 @@ export class ToolManager {
       onTransformComplete: options.onTransformComplete,
       getSnapToGrid: options.getSnapToGrid,
       getGridSize: options.getGridSize,
+      getEnteredGroupId: options.getEnteredGroupId,
+      setEnteredGroupId: options.setEnteredGroupId,
     };
   }
 
