@@ -182,6 +182,13 @@ export class SelectionTool extends BaseTool {
       return;
     }
 
+    // Double-click on a path to switch to direct selection for vertex editing
+    if (event.clickCount === 2 && hitNode && hitNode.type === 'path') {
+      this.context.setSelectedIds([hitNode.id]);
+      this.context.setActiveTool('direct-selection');
+      return;
+    }
+
     // Click on a node outside the entered group: exit group and select root ancestor
     if (rawHit && !hitNode && enteredGroupId) {
       this.context.setEnteredGroupId?.(null);

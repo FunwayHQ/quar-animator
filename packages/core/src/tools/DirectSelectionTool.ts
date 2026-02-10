@@ -243,7 +243,12 @@ export class DirectSelectionTool extends BaseTool {
         break;
 
       case 'Escape':
-        this.clearPointSelection();
+        if (this.selectedPoints.length > 0) {
+          this.clearPointSelection();
+        } else {
+          // No points selected — return to selection tool
+          this.context.setActiveTool('selection');
+        }
         break;
 
       case 'a':
