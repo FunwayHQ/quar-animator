@@ -130,11 +130,13 @@ describe('setProperty', () => {
 // ============================================================================
 
 describe('getAnimatableProperties', () => {
-  it('returns common properties for group nodes', () => {
+  it('returns common + shape properties for group nodes (boolean groups have fills/strokes)', () => {
     const props = getAnimatableProperties('group');
-    expect(props.length).toBe(11); // common only (includes blendMode)
+    expect(props.length).toBe(41); // common + shape animatable properties for boolean groups
     expect(props.some((p) => p.path === 'transform.position.x')).toBe(true);
     expect(props.some((p) => p.path === 'opacity')).toBe(true);
+    expect(props.some((p) => p.path === 'fills.0.color')).toBe(true);
+    expect(props.some((p) => p.path === 'strokes.0.width')).toBe(true);
   });
 
   it('returns shape + rectangle properties for rectangle nodes', () => {

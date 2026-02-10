@@ -744,4 +744,102 @@ describe('SceneGraph', () => {
       expect(callback2).toHaveBeenCalledTimes(1);
     });
   });
+
+  // ==========================================================================
+  // traverseVisible skip-children
+  // ==========================================================================
+
+  describe('traverseVisible skip-children', () => {
+    const makeNode = (id: string, name: string): Node =>
+      ({
+        id,
+        name,
+        type: 'rectangle',
+        parent: null,
+        children: [],
+        transform: createDefaultTransform(),
+        visible: true,
+        locked: false,
+        opacity: 1,
+        blendMode: 'normal',
+        width: 100,
+        height: 100,
+        cornerRadius: [0, 0, 0, 0],
+        fills: [],
+        strokes: [],
+      }) as unknown as Node;
+
+    it('returns false skips children but continues siblings', () => {
+      const root = createGroupNode('root', 'Root');
+      const child1 = createGroupNode('child1', 'Child 1');
+      const grandchild = makeNode('grandchild', 'Grandchild');
+      const child2 = makeNode('child2', 'Child 2');
+
+      sceneGraph.addNode(root);
+      sceneGraph.addNode(child1, 'root');
+      sceneGraph.addNode(grandchild, 'child1');
+      sceneGraph.addNode(child2, 'root');
+
+      const visited: string[] = [];
+      sceneGraph.traverseVisible((node) => {
+        visited.push(node.id);
+        if (node.id === 'child1') return false; // skip children of child1
+      });
+
+      expect(visited).toContain('root');
+      expect(visited).toContain('child1');
+      expect(visited).not.toContain('grandchild'); // skipped because parent returned false
+      expect(visited).toContain('child2'); // sibling still visited
+    });
+
+    it('invisible nodes are skipped entirely', () => {
+      const root = createGroupNode('root', 'Root');
+      const visibleChild = makeNode('visible-child', 'Visible Child');
+      const invisibleChild = createGroupNode('invisible-child', 'Invisible Child');
+      invisibleChild.visible = false;
+      const grandchild = makeNode('grandchild', 'Grandchild');
+
+      sceneGraph.addNode(root);
+      sceneGraph.addNode(visibleChild, 'root');
+      sceneGraph.addNode(invisibleChild, 'root');
+      sceneGraph.addNode(grandchild, 'invisible-child');
+
+      const visited: string[] = [];
+      sceneGraph.traverseVisible((node) => {
+        visited.push(node.id);
+      });
+
+      expect(visited).toContain('root');
+      expect(visited).toContain('visible-child');
+      expect(visited).not.toContain('invisible-child');
+      expect(visited).not.toContain('grandchild');
+    });
+
+    it('all visible nodes visited when callback returns void', () => {
+      const root = createGroupNode('root', 'Root');
+      const child1 = createGroupNode('child1', 'Child 1');
+      const child2 = makeNode('child2', 'Child 2');
+      const grandchild1 = makeNode('gc1', 'Grandchild 1');
+      const grandchild2 = makeNode('gc2', 'Grandchild 2');
+
+      sceneGraph.addNode(root);
+      sceneGraph.addNode(child1, 'root');
+      sceneGraph.addNode(grandchild1, 'child1');
+      sceneGraph.addNode(grandchild2, 'child1');
+      sceneGraph.addNode(child2, 'root');
+
+      const visited: string[] = [];
+      sceneGraph.traverseVisible((node) => {
+        visited.push(node.id);
+        // return void (undefined) - should not skip anything
+      });
+
+      expect(visited).toContain('root');
+      expect(visited).toContain('child1');
+      expect(visited).toContain('gc1');
+      expect(visited).toContain('gc2');
+      expect(visited).toContain('child2');
+      expect(visited).toHaveLength(5);
+    });
+  });
 });

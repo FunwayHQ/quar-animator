@@ -8,7 +8,7 @@ import {
   SelectionManager,
   TransformHandles,
 } from '@quar/core';
-import type { Node, ImageNode, Vector2 } from '@quar/types';
+import type { Node, ImageNode, GroupNode, Vector2 } from '@quar/types';
 import { evaluateNodeAtFrame, applyAnimatedValues, getAnimatedNodes } from '@quar/animation';
 import { useCanvasTools } from '../../hooks/useCanvasTools';
 import { useToolShortcuts } from '../../hooks/useToolShortcuts';
@@ -65,7 +65,10 @@ export function Canvas() {
   const [cameraReady, setCameraReady] = useState(false);
   const [sceneGraphVersion, setSceneGraphVersion] = useState(0);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
-  const [viewportSize, setViewportSize] = useState<{ width: number; height: number }>({ width: 0, height: 0 });
+  const [viewportSize, setViewportSize] = useState<{ width: number; height: number }>({
+    width: 0,
+    height: 0,
+  });
   const [cameraVersion, setCameraVersion] = useState(0);
 
   // Get selection state from store
@@ -86,6 +89,9 @@ export function Canvas() {
   const booleanSubtract = useEditorStore((state) => state.booleanSubtract);
   const booleanIntersect = useEditorStore((state) => state.booleanIntersect);
   const booleanExclude = useEditorStore((state) => state.booleanExclude);
+  const flattenBooleanGroup = useEditorStore((state) => state.flattenBooleanGroup);
+  const releaseBooleanGroup = useEditorStore((state) => state.releaseBooleanGroup);
+  const changeBooleanOp = useEditorStore((state) => state.changeBooleanOp);
   const editingGradient = useEditorStore((state) => state.editingGradient);
   const showRulers = useEditorStore((state) => state.showRulers);
 
@@ -124,7 +130,7 @@ export function Canvas() {
     const handleNodeRemoved = (node: Node) => {
       incrementVersion();
       if (node.type === 'image' && shapeRendererRef.current) {
-        shapeRendererRef.current.disposeTexture((node as ImageNode).src);
+        shapeRendererRef.current.disposeTexture(node.src);
       }
     };
 
@@ -224,8 +230,8 @@ export function Canvas() {
   const transformHandles = useMemo(() => {
     if (!transformHandlesRef.current || !selectionBounds || !cameraRef.current) return [];
     return transformHandlesRef.current.getHandles(selectionBounds, cameraRef.current);
-    // zoomPercent triggers recalculation when camera zoom changes
-  }, [selectionBounds, zoomPercent]);
+    // cameraVersion triggers recalculation when camera changes (pan + zoom)
+  }, [selectionBounds, cameraVersion]);
 
   // Convert selection bounds to screen coordinates for overlay
   const screenBounds = useMemo(() => {
@@ -258,8 +264,8 @@ export function Canvas() {
       },
       center: camera.worldToScreen(selectionBounds.center),
     };
-    // zoomPercent triggers recalculation when camera zoom changes
-  }, [selectionBounds, zoomPercent]);
+    // cameraVersion triggers recalculation when camera changes (pan + zoom)
+  }, [selectionBounds, cameraVersion]);
 
   // Convert marquee rect (world coords) to screen coords for overlay
   const screenMarqueeRect = useMemo(() => {
@@ -276,7 +282,7 @@ export function Canvas() {
       width: Math.abs(p2.x - p1.x),
       height: Math.abs(p2.y - p1.y),
     };
-  }, [marqueeRect, zoomPercent]);
+  }, [marqueeRect, cameraVersion]);
 
   // --------------------------------------------------------------------------
   // Initialization
@@ -382,7 +388,13 @@ export function Canvas() {
               }
               return sg.getRootNodes().map((node: Node) => overrides.get(node.id) ?? node);
             };
-            onionSkinRenderer.render(onionSkin, frame, getNodesAtFrame, viewProjectionMatrix, tlDuration);
+            onionSkinRenderer.render(
+              onionSkin,
+              frame,
+              getNodesAtFrame,
+              viewProjectionMatrix,
+              tlDuration
+            );
           }
         }
 
@@ -730,11 +742,19 @@ export function Canvas() {
       });
 
       const SHAPE_TYPES = new Set(['rectangle', 'ellipse', 'polygon', 'path']);
+      const isBooleanInput = (n: Node) =>
+        SHAPE_TYPES.has(n.type) || (n.type === 'group' && n.booleanOp !== undefined);
       const shapeCount = Array.from(selectedNodeIds).filter((id) => {
         const n = sceneGraph.getNode(id);
-        return n && SHAPE_TYPES.has(n.type);
+        return n && isBooleanInput(n);
       }).length;
       const canBoolean = shapeCount >= 2;
+
+      // Check if any selected node is a boolean group
+      const hasBooleanGroup = Array.from(selectedNodeIds).some((id) => {
+        const n = sceneGraph.getNode(id);
+        return n && n.type === 'group' && (n as GroupNode).booleanOp !== undefined;
+      });
 
       return [
         { id: 'copy', label: 'Copy', shortcut: 'Ctrl+C', onClick: () => copySelection(sceneGraph) },
@@ -813,6 +833,42 @@ export function Canvas() {
           disabled: !canBoolean,
           onClick: () => booleanExclude(sceneGraph),
         },
+        ...(hasBooleanGroup
+          ? [
+              { type: 'separator' as const },
+              {
+                id: 'change-op-union',
+                label: 'Change to Union',
+                onClick: () => changeBooleanOp(sceneGraph, 'union' as const),
+              },
+              {
+                id: 'change-op-subtract',
+                label: 'Change to Subtract',
+                onClick: () => changeBooleanOp(sceneGraph, 'subtract' as const),
+              },
+              {
+                id: 'change-op-intersect',
+                label: 'Change to Intersect',
+                onClick: () => changeBooleanOp(sceneGraph, 'intersect' as const),
+              },
+              {
+                id: 'change-op-exclude',
+                label: 'Change to Exclude',
+                onClick: () => changeBooleanOp(sceneGraph, 'exclude' as const),
+              },
+              { type: 'separator' as const },
+              {
+                id: 'release-boolean',
+                label: 'Release Boolean Group',
+                onClick: () => releaseBooleanGroup(sceneGraph),
+              },
+              {
+                id: 'flatten-boolean',
+                label: 'Flatten to Path',
+                onClick: () => flattenBooleanGroup(sceneGraph),
+              },
+            ]
+          : []),
         { type: 'separator' },
         {
           id: 'toggle-visibility',
@@ -880,6 +936,9 @@ export function Canvas() {
     booleanSubtract,
     booleanIntersect,
     booleanExclude,
+    flattenBooleanGroup,
+    releaseBooleanGroup,
+    changeBooleanOp,
   ]);
 
   // --------------------------------------------------------------------------
@@ -1013,76 +1072,78 @@ export function Canvas() {
     e.dataTransfer.dropEffect = 'copy';
   }, []);
 
-  const handleDrop = useCallback(
-    (e: React.DragEvent) => {
-      e.preventDefault();
-      const camera = cameraRef.current;
-      if (!camera || !sceneGraphRef.current) return;
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    const camera = cameraRef.current;
+    if (!camera || !sceneGraphRef.current) return;
 
-      const files = Array.from(e.dataTransfer.files);
-      const imageFile = files.find((f) => f.type.startsWith('image/'));
-      if (!imageFile) return;
+    const files = Array.from(e.dataTransfer.files);
+    const imageFile = files.find((f) => f.type.startsWith('image/'));
+    if (!imageFile) return;
 
-      const MAX_SIZE = 10 * 1024 * 1024;
-      if (imageFile.size > MAX_SIZE) return;
+    const MAX_SIZE = 10 * 1024 * 1024;
+    if (imageFile.size > MAX_SIZE) return;
 
-      // Get world position at drop location
-      const canvas = canvasRef.current;
-      if (!canvas) return;
-      const rect = canvas.getBoundingClientRect();
-      const screenPos = {
-        x: e.clientX - rect.left,
-        y: e.clientY - rect.top,
-      };
-      const worldPos = camera.screenToWorld(screenPos);
+    // Get world position at drop location
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const screenPos = {
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top,
+    };
+    const worldPos = camera.screenToWorld(screenPos);
 
-      const reader = new FileReader();
-      reader.onload = () => {
-        const dataUri = reader.result as string;
-        const img = new Image();
-        img.onload = () => {
-          const nodeId = `node_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
-          const imageNode = {
-            id: nodeId,
-            name: imageFile.name.replace(/\.[^.]+$/, ''),
-            type: 'image' as const,
-            parent: null,
-            children: [],
-            transform: {
-              position: { x: worldPos.x, y: worldPos.y },
-              rotation: 0,
-              scale: { x: 1, y: 1 },
-              anchor: { x: 0.5, y: 0.5 },
-              skew: { x: 0, y: 0 },
-            },
-            visible: true,
-            locked: false,
-            opacity: 1,
-            blendMode: 'normal' as const,
-            src: dataUri,
-            width: img.naturalWidth,
-            height: img.naturalHeight,
-            naturalWidth: img.naturalWidth,
-            naturalHeight: img.naturalHeight,
-            cornerRadius: [0, 0, 0, 0] as [number, number, number, number],
-          };
-
-          sceneGraphRef.current!.addNode(imageNode);
-          useEditorStore.setState({ selectedNodeIds: new Set([nodeId]) });
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUri = reader.result as string;
+      const img = new Image();
+      img.onload = () => {
+        const nodeId = `node_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+        const imageNode = {
+          id: nodeId,
+          name: imageFile.name.replace(/\.[^.]+$/, ''),
+          type: 'image' as const,
+          parent: null,
+          children: [],
+          transform: {
+            position: { x: worldPos.x, y: worldPos.y },
+            rotation: 0,
+            scale: { x: 1, y: 1 },
+            anchor: { x: 0.5, y: 0.5 },
+            skew: { x: 0, y: 0 },
+          },
+          visible: true,
+          locked: false,
+          opacity: 1,
+          blendMode: 'normal' as const,
+          src: dataUri,
+          width: img.naturalWidth,
+          height: img.naturalHeight,
+          naturalWidth: img.naturalWidth,
+          naturalHeight: img.naturalHeight,
+          cornerRadius: [0, 0, 0, 0] as [number, number, number, number],
         };
-        img.src = dataUri;
+
+        sceneGraphRef.current!.addNode(imageNode);
+        useEditorStore.setState({ selectedNodeIds: new Set([nodeId]) });
       };
-      reader.readAsDataURL(imageFile);
-    },
-    []
-  );
+      img.src = dataUri;
+    };
+    reader.readAsDataURL(imageFile);
+  }, []);
 
   // --------------------------------------------------------------------------
   // Render
   // --------------------------------------------------------------------------
 
   return (
-    <div className={styles.canvasContainer} ref={containerRef} onDragOver={handleDragOver} onDrop={handleDrop}>
+    <div
+      className={styles.canvasContainer}
+      ref={containerRef}
+      onDragOver={handleDragOver}
+      onDrop={handleDrop}
+    >
       <canvas
         ref={canvasRef}
         className={styles.canvas}
@@ -1117,18 +1178,19 @@ export function Canvas() {
           />
         </svg>
       )}
-      {editingGradient && (() => {
-        const editingNode = sceneGraph.getNode(editingGradient.nodeId);
-        return editingNode ? (
-          <GradientHandleOverlay
-            node={editingNode}
-            fillIndex={editingGradient.fillIndex}
-            source={editingGradient.source}
-            camera={cameraRef.current}
-            sceneGraph={sceneGraph}
-          />
-        ) : null;
-      })()}
+      {editingGradient &&
+        (() => {
+          const editingNode = sceneGraph.getNode(editingGradient.nodeId);
+          return editingNode ? (
+            <GradientHandleOverlay
+              node={editingNode}
+              fillIndex={editingGradient.fillIndex}
+              source={editingGradient.source}
+              camera={cameraRef.current}
+              sceneGraph={sceneGraph}
+            />
+          ) : null;
+        })()}
       {isDirectSelectionActive && (
         <DirectSelectionOverlay
           pathNodes={directSelectionPathNodes}

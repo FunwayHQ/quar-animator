@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import type { Node } from '@quar/types';
+import type { Node, GroupNode } from '@quar/types';
 import { useSceneGraph } from '../../contexts/SceneGraphContext';
 import { useEditorStore } from '../../stores/editorStore';
 import { ContextMenu } from '../common/ContextMenu';
@@ -27,10 +27,24 @@ interface DropTarget {
 // Helper: map node type to display icon
 // ============================================================================
 
-function nodeTypeIcon(type: string): string {
+function nodeTypeIcon(type: string, node?: Node): string {
   switch (type) {
-    case 'group':
+    case 'group': {
+      const booleanOp = node ? (node as GroupNode).booleanOp : undefined;
+      if (booleanOp) {
+        switch (booleanOp) {
+          case 'union':
+            return '\u222A'; // ∪
+          case 'subtract':
+            return '\u2216'; // ∖
+          case 'intersect':
+            return '\u2229'; // ∩
+          case 'exclude':
+            return '\u2295'; // ⊕
+        }
+      }
       return '\u{1F4C1}'; // folder
+    }
     case 'rectangle':
     case 'ellipse':
     case 'polygon':
@@ -193,7 +207,7 @@ function LayerRow({
         ) : depth > 0 ? (
           <span className={styles.expandSpacer} />
         ) : null}
-        <span className={styles.layerIcon}>{nodeTypeIcon(node.type)}</span>
+        <span className={styles.layerIcon}>{nodeTypeIcon(node.type, node)}</span>
         {isRenaming ? (
           <InlineRenameInput
             initialName={node.name}

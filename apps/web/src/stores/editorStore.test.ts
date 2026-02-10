@@ -1093,4 +1093,373 @@ describe('EditorStore', () => {
       expect(useEditorStore.getState().projectId).toBeNull();
     });
   });
+
+  // ==========================================================================
+  // Boolean Group Operations
+  // ==========================================================================
+
+  describe('Boolean Group Operations', () => {
+    function createMockSceneGraph() {
+      const nodes = new Map<string, any>();
+      const rootNodeIds: string[] = [];
+
+      return {
+        getNode: (id: string) => nodes.get(id),
+        getRootNodes: () => rootNodeIds.map((id) => nodes.get(id)).filter(Boolean),
+        addNode: vi.fn((node: any, parentId?: string) => {
+          nodes.set(node.id, node);
+          if (parentId) {
+            const parent = nodes.get(parentId);
+            if (parent) {
+              node.parent = parentId;
+              parent.children.push(node.id);
+            }
+          } else {
+            node.parent = null;
+            rootNodeIds.push(node.id);
+          }
+        }),
+        removeNode: vi.fn((id: string) => {
+          const node = nodes.get(id);
+          if (!node) return;
+          // Remove from parent's children
+          if (node.parent) {
+            const parent = nodes.get(node.parent);
+            if (parent) {
+              parent.children = parent.children.filter((cid: string) => cid !== id);
+            }
+          } else {
+            const idx = rootNodeIds.indexOf(id);
+            if (idx >= 0) rootNodeIds.splice(idx, 1);
+          }
+          // Remove descendants
+          const removeDescendants = (nodeId: string) => {
+            const n = nodes.get(nodeId);
+            if (!n) return;
+            for (const childId of [...n.children]) {
+              removeDescendants(childId);
+            }
+            nodes.delete(nodeId);
+          };
+          removeDescendants(id);
+        }),
+        updateNode: vi.fn((id: string, updates: any) => {
+          const node = nodes.get(id);
+          if (node) Object.assign(node, updates);
+        }),
+        moveNode: vi.fn((id: string, newParentId: string | null, index?: number) => {
+          const node = nodes.get(id);
+          if (!node) return;
+          // Remove from current parent
+          if (node.parent) {
+            const parent = nodes.get(node.parent);
+            if (parent) {
+              parent.children = parent.children.filter((cid: string) => cid !== id);
+            }
+          } else {
+            const idx = rootNodeIds.indexOf(id);
+            if (idx >= 0) rootNodeIds.splice(idx, 1);
+          }
+          // Add to new parent
+          if (newParentId) {
+            const newParent = nodes.get(newParentId);
+            if (newParent) {
+              node.parent = newParentId;
+              if (index !== undefined) {
+                newParent.children.splice(index, 0, id);
+              } else {
+                newParent.children.push(id);
+              }
+            }
+          } else {
+            node.parent = null;
+            if (index !== undefined) {
+              rootNodeIds.splice(index, 0, id);
+            } else {
+              rootNodeIds.push(id);
+            }
+          }
+        }),
+        getDescendants: (id: string) => {
+          const result: any[] = [];
+          const collect = (nodeId: string) => {
+            const n = nodes.get(nodeId);
+            if (!n) return;
+            for (const childId of n.children) {
+              const child = nodes.get(childId);
+              if (child) {
+                result.push(child);
+                collect(childId);
+              }
+            }
+          };
+          collect(id);
+          return result;
+        },
+        traverse: (cb: (node: any, depth: number) => boolean | void) => {
+          const visit = (nodeId: string, depth: number): boolean => {
+            const n = nodes.get(nodeId);
+            if (!n) return true;
+            const result = cb(n, depth);
+            if (result === false) return false;
+            for (const childId of n.children) {
+              const cont = visit(childId, depth + 1);
+              if (!cont) return false;
+            }
+            return true;
+          };
+          for (const rootId of rootNodeIds) {
+            const cont = visit(rootId, 0);
+            if (!cont) break;
+          }
+        },
+        getWorldTransform: () => ({ a: 1, b: 0, c: 0, d: 1, tx: 0, ty: 0 }),
+        _addTestNode: (node: any, parentId?: string) => {
+          nodes.set(node.id, node);
+          if (parentId) {
+            const parent = nodes.get(parentId);
+            if (parent) {
+              node.parent = parentId;
+              parent.children.push(node.id);
+            }
+          } else {
+            node.parent = null;
+            rootNodeIds.push(node.id);
+          }
+        },
+      };
+    }
+
+    function makeTestRect(id: string, x = 0, y = 0) {
+      return {
+        id,
+        name: id,
+        type: 'rectangle' as const,
+        parent: null,
+        children: [],
+        transform: {
+          position: { x, y },
+          rotation: 0,
+          scale: { x: 1, y: 1 },
+          anchor: { x: 0.5, y: 0.5 },
+          skew: { x: 0, y: 0 },
+        },
+        visible: true,
+        locked: false,
+        opacity: 1,
+        blendMode: 'normal' as const,
+        width: 100,
+        height: 100,
+        cornerRadius: [0, 0, 0, 0] as [number, number, number, number],
+        fills: [
+          {
+            type: 'solid' as const,
+            color: { r: 255, g: 0, b: 0, a: 1 },
+            opacity: 1,
+            visible: true,
+          },
+        ],
+        strokes: [
+          {
+            color: { r: 0, g: 0, b: 0, a: 1 },
+            width: 2,
+            opacity: 1,
+            cap: 'round' as const,
+            join: 'round' as const,
+            visible: true,
+          },
+        ],
+      };
+    }
+
+    it('performBooleanOp creates a boolean group (non-destructive)', () => {
+      const sg = createMockSceneGraph();
+      sg._addTestNode(makeTestRect('rect1', 0, 0));
+      sg._addTestNode(makeTestRect('rect2', 50, 0));
+      useEditorStore.setState({ selectedNodeIds: new Set(['rect1', 'rect2']) });
+
+      const { booleanUnion } = useEditorStore.getState();
+      booleanUnion(sg);
+
+      // Should have created a group node
+      const { selectedNodeIds } = useEditorStore.getState();
+      expect(selectedNodeIds.size).toBe(1);
+      const groupId = [...selectedNodeIds][0];
+      const group = sg.getNode(groupId);
+      expect(group).toBeDefined();
+      expect(group.type).toBe('group');
+      expect(group.booleanOp).toBe('union');
+    });
+
+    it('boolean group has booleanOp, fills, strokes set', () => {
+      const sg = createMockSceneGraph();
+      const r1 = makeTestRect('rect1', 0, 0);
+      const r2 = makeTestRect('rect2', 50, 0);
+      sg._addTestNode(r1);
+      sg._addTestNode(r2);
+      useEditorStore.setState({ selectedNodeIds: new Set(['rect1', 'rect2']) });
+
+      const { booleanSubtract } = useEditorStore.getState();
+      booleanSubtract(sg);
+
+      const { selectedNodeIds } = useEditorStore.getState();
+      const groupId = [...selectedNodeIds][0];
+      const group = sg.getNode(groupId);
+      expect(group.booleanOp).toBe('subtract');
+      expect(group.fills).toBeDefined();
+      expect(group.fills.length).toBeGreaterThan(0);
+      // Strokes should also be set (from first node)
+      expect(group.strokes).toBeDefined();
+    });
+
+    it('source nodes are moved into the group (not deleted)', () => {
+      const sg = createMockSceneGraph();
+      sg._addTestNode(makeTestRect('rect1', 0, 0));
+      sg._addTestNode(makeTestRect('rect2', 50, 0));
+      useEditorStore.setState({ selectedNodeIds: new Set(['rect1', 'rect2']) });
+
+      const { booleanUnion } = useEditorStore.getState();
+      booleanUnion(sg);
+
+      // Source nodes should still exist in the scene graph
+      const rect1 = sg.getNode('rect1');
+      const rect2 = sg.getNode('rect2');
+      expect(rect1).toBeDefined();
+      expect(rect2).toBeDefined();
+
+      // They should now be children of the boolean group
+      const { selectedNodeIds } = useEditorStore.getState();
+      const groupId = [...selectedNodeIds][0];
+      const group = sg.getNode(groupId);
+      expect(group.children).toContain('rect1');
+      expect(group.children).toContain('rect2');
+    });
+
+    it('flattenBooleanGroup converts to PathNode', () => {
+      const sg = createMockSceneGraph();
+      const r1 = makeTestRect('rect1', 0, 0);
+      const r2 = makeTestRect('rect2', 50, 0);
+      sg._addTestNode(r1);
+      sg._addTestNode(r2);
+      useEditorStore.setState({ selectedNodeIds: new Set(['rect1', 'rect2']) });
+
+      // First create the boolean group
+      const { booleanUnion } = useEditorStore.getState();
+      booleanUnion(sg);
+
+      const { selectedNodeIds } = useEditorStore.getState();
+      const groupId = [...selectedNodeIds][0];
+
+      // Now flatten it
+      const { flattenBooleanGroup } = useEditorStore.getState();
+      flattenBooleanGroup(sg);
+
+      // The group should be removed
+      expect(sg.getNode(groupId)).toBeUndefined();
+
+      // A new path node should have been added
+      expect(sg.addNode).toHaveBeenCalled();
+      // Find the last added node that is a path
+      const addCalls = sg.addNode.mock.calls;
+      const lastAddedNode = addCalls[addCalls.length - 1]?.[0];
+      expect(lastAddedNode.type).toBe('path');
+      expect(lastAddedNode.closed).toBe(true);
+    });
+
+    it('releaseBooleanGroup moves children out', () => {
+      const sg = createMockSceneGraph();
+      sg._addTestNode(makeTestRect('rect1', 0, 0));
+      sg._addTestNode(makeTestRect('rect2', 50, 0));
+      useEditorStore.setState({ selectedNodeIds: new Set(['rect1', 'rect2']) });
+
+      // Create the boolean group
+      const { booleanIntersect } = useEditorStore.getState();
+      booleanIntersect(sg);
+
+      const groupId = [...useEditorStore.getState().selectedNodeIds][0];
+      expect(sg.getNode(groupId)).toBeDefined();
+
+      // Release the group
+      const { releaseBooleanGroup } = useEditorStore.getState();
+      releaseBooleanGroup(sg);
+
+      // The group should be removed
+      expect(sg.removeNode).toHaveBeenCalledWith(groupId);
+
+      // Children should be selected after release
+      const { selectedNodeIds: releasedIds } = useEditorStore.getState();
+      expect(releasedIds.size).toBeGreaterThan(0);
+    });
+
+    it('changeBooleanOp updates the operation', () => {
+      const sg = createMockSceneGraph();
+      sg._addTestNode(makeTestRect('rect1', 0, 0));
+      sg._addTestNode(makeTestRect('rect2', 50, 0));
+      useEditorStore.setState({ selectedNodeIds: new Set(['rect1', 'rect2']) });
+
+      // Create a union group
+      const { booleanUnion } = useEditorStore.getState();
+      booleanUnion(sg);
+
+      const groupId = [...useEditorStore.getState().selectedNodeIds][0];
+
+      // Change to subtract
+      const { changeBooleanOp } = useEditorStore.getState();
+      changeBooleanOp(sg, 'subtract');
+
+      // The updateNode call should have been made with the new op
+      expect(sg.updateNode).toHaveBeenCalledWith(
+        groupId,
+        expect.objectContaining({ booleanOp: 'subtract' })
+      );
+    });
+
+    it('boolean ops accept boolean groups as inputs', () => {
+      const sg = createMockSceneGraph();
+      sg._addTestNode(makeTestRect('rect1', 0, 0));
+      sg._addTestNode(makeTestRect('rect2', 50, 0));
+      sg._addTestNode(makeTestRect('rect3', 100, 0));
+      useEditorStore.setState({ selectedNodeIds: new Set(['rect1', 'rect2']) });
+
+      // Create first boolean group
+      const { booleanUnion } = useEditorStore.getState();
+      booleanUnion(sg);
+
+      const group1Id = [...useEditorStore.getState().selectedNodeIds][0];
+      const group1 = sg.getNode(group1Id);
+      expect(group1.type).toBe('group');
+      expect(group1.booleanOp).toBe('union');
+
+      // Now select the boolean group + another rect and create a new boolean group
+      useEditorStore.setState({ selectedNodeIds: new Set([group1Id, 'rect3']) });
+      const { booleanSubtract } = useEditorStore.getState();
+      booleanSubtract(sg);
+
+      // Should have created a new boolean group containing the first group and rect3
+      const { selectedNodeIds: finalIds } = useEditorStore.getState();
+      expect(finalIds.size).toBe(1);
+      const group2Id = [...finalIds][0];
+      const group2 = sg.getNode(group2Id);
+      expect(group2).toBeDefined();
+      expect(group2.type).toBe('group');
+      expect(group2.booleanOp).toBe('subtract');
+    });
+
+    it('cannot create boolean group with fewer than 2 shapes', () => {
+      const sg = createMockSceneGraph();
+      sg._addTestNode(makeTestRect('rect1', 0, 0));
+      useEditorStore.setState({ selectedNodeIds: new Set(['rect1']) });
+
+      const addCallsBefore = sg.addNode.mock.calls.length;
+      const { booleanUnion } = useEditorStore.getState();
+      booleanUnion(sg);
+
+      // No new node should have been created
+      expect(sg.addNode.mock.calls.length).toBe(addCallsBefore);
+
+      // Selection should remain unchanged
+      const { selectedNodeIds } = useEditorStore.getState();
+      expect(selectedNodeIds.has('rect1')).toBe(true);
+    });
+  });
 });

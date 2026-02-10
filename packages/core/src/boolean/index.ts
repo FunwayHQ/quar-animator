@@ -4,5 +4,6 @@ export {
   polygonToContours,
   createBooleanResultNode,
   booleanOperation,
+  computeBooleanGroupResult,
   type BooleanOp,
 } from './booleanOps';

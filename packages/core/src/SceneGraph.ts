@@ -369,13 +369,24 @@ export class SceneGraph {
     }
   }
 
-  traverseVisible(callback: (node: Node) => void): void {
-    this.traverse((node) => {
-      if (node.visible) {
-        callback(node);
+  /**
+   * Traverse visible nodes. Callback returning `false` skips that node's children
+   * but continues visiting siblings. Returning `void` or anything else visits children normally.
+   * Invisible nodes and their subtrees are always skipped.
+   */
+  traverseVisible(callback: (node: Node) => boolean | void): void {
+    const visit = (nodeId: string): void => {
+      const node = this.nodes.get(nodeId);
+      if (!node || !node.visible) return;
+      const result = callback(node);
+      if (result === false) return; // skip children, continue siblings
+      for (const childId of node.children) {
+        visit(childId);
       }
-      return node.visible; // Don't traverse invisible subtrees
-    });
+    };
+    for (const rootId of this.rootNodeIds) {
+      visit(rootId);
+    }
   }
 
   // --------------------------------------------------------------------------

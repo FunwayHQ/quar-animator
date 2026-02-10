@@ -10,17 +10,25 @@ import type {
   PolygonNode,
   PathNode,
   ImageNode,
+  GroupNode,
   Node,
   Fill,
   Stroke,
   Color,
   Gradient,
+  BooleanOp,
 } from '@quar/types';
 import { WebGLRenderer, type ShaderProgram } from './WebGLRenderer';
 import { EffectRenderer } from './EffectRenderer';
-import { computeBounds, normalizeGradientStops, linearGradientFromAngle } from '../gradient/gradientUtils';
+import {
+  computeBounds,
+  normalizeGradientStops,
+  linearGradientFromAngle,
+} from '../gradient/gradientUtils';
 import { SceneGraph } from '../SceneGraph';
 import { mat3 } from '../math';
+import { nodeToPolygon, performBoolean, polygonToContours } from '../boolean/booleanOps';
+import type { MultiPolygon } from 'polygon-clipping';
 import {
   tessellatePathToVertices,
   createRectanglePath,
@@ -318,13 +326,21 @@ function buildGeometryKey(node: Node): string {
 // ============================================================================
 
 interface ContourGroup {
-  outer: number;   // index into contourArrays
+  outer: number; // index into contourArrays
   holes: number[]; // indices into contourArrays
 }
 
 /** Compute AABB for a tessellated vertex array (flat x,y pairs). */
-function contourAABB(verts: Float32Array): { minX: number; minY: number; maxX: number; maxY: number } {
-  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+function contourAABB(verts: Float32Array): {
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+} {
+  let minX = Infinity,
+    minY = Infinity,
+    maxX = -Infinity,
+    maxY = -Infinity;
   for (let i = 0; i < verts.length; i += 2) {
     const x = verts[i]!;
     const y = verts[i + 1]!;
@@ -345,7 +361,7 @@ function pointInContour(px: number, py: number, verts: Float32Array): boolean {
     const yi = verts[i * 2 + 1]!;
     const xj = verts[j * 2]!;
     const yj = verts[j * 2 + 1]!;
-    if ((yi > py) !== (yj > py) && px < ((xj - xi) * (py - yi)) / (yj - yi) + xi) {
+    if (yi > py !== yj > py && px < ((xj - xi) * (py - yi)) / (yj - yi) + xi) {
       inside = !inside;
     }
   }
@@ -387,10 +403,7 @@ function groupContoursByContainment(contourArrays: Float32Array[]): ContourGroup
       const ai = aabbs[i]!;
       const aj = aabbs[j]!;
       // Quick AABB check: is i's AABB inside j's AABB?
-      if (
-        ai.minX >= aj.minX && ai.maxX <= aj.maxX &&
-        ai.minY >= aj.minY && ai.maxY <= aj.maxY
-      ) {
+      if (ai.minX >= aj.minX && ai.maxX <= aj.maxX && ai.minY >= aj.minY && ai.maxY <= aj.maxY) {
         // Use first vertex of contour i as test point
         const px = contourArrays[i]![0]!;
         const py = contourArrays[i]![1]!;
@@ -403,13 +416,13 @@ function groupContoursByContainment(contourArrays: Float32Array[]): ContourGroup
 
   // A contour is a hole if it is contained by exactly one outer at its nesting level.
   // Simple heuristic: a contour with odd nesting depth is a hole.
-  const depth = containedBy.map(parents => parents!.length);
-  const isHole = depth.map(d => d % 2 === 1);
+  const depth = containedBy.map((parents) => parents.length);
+  const isHole = depth.map((d) => d % 2 === 1);
 
   // Build groups: each non-hole contour is an outer
   const groups: ContourGroup[] = [];
-  const outerIndices = contourArrays.map((_, i) => i).filter(i => !isHole[i]!);
-  const holeIndices = contourArrays.map((_, i) => i).filter(i => isHole[i]!);
+  const outerIndices = contourArrays.map((_, i) => i).filter((i) => !isHole[i]!);
+  const holeIndices = contourArrays.map((_, i) => i).filter((i) => isHole[i]!);
 
   for (const outerIdx of outerIndices) {
     groups.push({ outer: outerIdx, holes: [] });
@@ -430,7 +443,7 @@ function groupContoursByContainment(contourArrays: Float32Array[]): ContourGroup
       }
     }
     if (bestOuter >= 0) {
-      const group = groups.find(g => g.outer === bestOuter);
+      const group = groups.find((g) => g.outer === bestOuter);
       if (group) group.holes.push(holeIdx);
     } else {
       // Orphan hole (no containing outer) — treat as its own outer
@@ -582,10 +595,24 @@ export class ShapeRenderer {
     const stride = 4 * Float32Array.BYTES_PER_ELEMENT; // 4 floats per vertex
     // a_position at location 0
     gl.enableVertexAttribArray(this.textureProgram.attributes.a_position!);
-    gl.vertexAttribPointer(this.textureProgram.attributes.a_position!, 2, gl.FLOAT, false, stride, 0);
+    gl.vertexAttribPointer(
+      this.textureProgram.attributes.a_position!,
+      2,
+      gl.FLOAT,
+      false,
+      stride,
+      0
+    );
     // a_texCoord at location 1
     gl.enableVertexAttribArray(this.textureProgram.attributes.a_texCoord!);
-    gl.vertexAttribPointer(this.textureProgram.attributes.a_texCoord!, 2, gl.FLOAT, false, stride, 2 * Float32Array.BYTES_PER_ELEMENT);
+    gl.vertexAttribPointer(
+      this.textureProgram.attributes.a_texCoord!,
+      2,
+      gl.FLOAT,
+      false,
+      stride,
+      2 * Float32Array.BYTES_PER_ELEMENT
+    );
 
     this.renderer.bindVAO(null);
   }
@@ -793,6 +820,55 @@ export class ShapeRenderer {
       const worldTransform = sceneGraph.getWorldTransform(node.id);
       this.currentEffectiveOpacity = sceneGraph.getEffectiveOpacity(node.id);
 
+      // Boolean group: render computed result, skip children
+      if (node.type === 'group' && node.booleanOp) {
+        const groupNode = node;
+        const renderBoolGroup = () => {
+          this.renderBooleanGroup(groupNode, worldTransform, sceneGraph);
+        };
+
+        if (this.effectRenderer.needsMultiPass(node.effects, node.blendMode)) {
+          this.effectRenderer.renderNodeWithEffects(
+            node.effects,
+            node.blendMode,
+            () => {
+              this.renderer.useProgram(this.program!);
+              this.renderer.bindVAO(this.vao);
+              gl.uniformMatrix3fv(this.program!.uniforms.u_viewProjection ?? null, false, vpArray);
+              if (this.gradientProgram) {
+                this.renderer.useProgram(this.gradientProgram);
+                gl.uniformMatrix3fv(
+                  this.gradientProgram.uniforms.u_viewProjection ?? null,
+                  false,
+                  vpArray
+                );
+                this.renderer.useProgram(this.program!);
+              }
+              this.currentVPArray = vpArray;
+              renderBoolGroup();
+            },
+            canvasWidth,
+            canvasHeight
+          );
+          this.renderer.useProgram(this.program!);
+          this.renderer.bindVAO(this.vao);
+          gl.uniformMatrix3fv(this.program!.uniforms.u_viewProjection ?? null, false, vpArray);
+          if (this.gradientProgram) {
+            this.renderer.useProgram(this.gradientProgram);
+            gl.uniformMatrix3fv(
+              this.gradientProgram.uniforms.u_viewProjection ?? null,
+              false,
+              vpArray
+            );
+            this.renderer.useProgram(this.program!);
+          }
+          this.currentVPArray = vpArray;
+        } else {
+          renderBoolGroup();
+        }
+        return false; // skip children — they are rendered as part of the boolean result
+      }
+
       const renderShape = () => {
         switch (node.type) {
           case 'rectangle':
@@ -821,11 +897,15 @@ export class ShapeRenderer {
           () => {
             // Re-setup shader state since effect renderer may have changed it
             this.renderer.useProgram(this.program!);
-            this.renderer.bindVAO(this.vao!);
+            this.renderer.bindVAO(this.vao);
             gl.uniformMatrix3fv(this.program!.uniforms.u_viewProjection ?? null, false, vpArray);
             if (this.gradientProgram) {
               this.renderer.useProgram(this.gradientProgram);
-              gl.uniformMatrix3fv(this.gradientProgram.uniforms.u_viewProjection ?? null, false, vpArray);
+              gl.uniformMatrix3fv(
+                this.gradientProgram.uniforms.u_viewProjection ?? null,
+                false,
+                vpArray
+              );
               this.renderer.useProgram(this.program!);
             }
             this.currentVPArray = vpArray;
@@ -836,11 +916,15 @@ export class ShapeRenderer {
         );
         // Restore shader state for next node
         this.renderer.useProgram(this.program!);
-        this.renderer.bindVAO(this.vao!);
+        this.renderer.bindVAO(this.vao);
         gl.uniformMatrix3fv(this.program!.uniforms.u_viewProjection ?? null, false, vpArray);
         if (this.gradientProgram) {
           this.renderer.useProgram(this.gradientProgram);
-          gl.uniformMatrix3fv(this.gradientProgram.uniforms.u_viewProjection ?? null, false, vpArray);
+          gl.uniformMatrix3fv(
+            this.gradientProgram.uniforms.u_viewProjection ?? null,
+            false,
+            vpArray
+          );
           this.renderer.useProgram(this.program!);
         }
         this.currentVPArray = vpArray;
@@ -848,6 +932,7 @@ export class ShapeRenderer {
         // Fast path: no effects, normal blend mode — render directly
         renderShape();
       }
+      return; // explicit void return (callback returns boolean | void)
     });
 
     this.renderer.bindVAO(null);
@@ -902,7 +987,7 @@ export class ShapeRenderer {
         this.renderPath(node, worldMatrix);
         break;
       case 'image':
-        this.renderImage(node as ImageNode, worldMatrix);
+        this.renderImage(node, worldMatrix);
         break;
     }
 
@@ -1106,7 +1191,11 @@ export class ShapeRenderer {
 
     // Set VP matrix
     if (this.currentVPArray) {
-      gl.uniformMatrix3fv(this.textureProgram.uniforms.u_viewProjection ?? null, false, this.currentVPArray);
+      gl.uniformMatrix3fv(
+        this.textureProgram.uniforms.u_viewProjection ?? null,
+        false,
+        this.currentVPArray
+      );
     }
 
     // Set model matrix
@@ -1124,10 +1213,22 @@ export class ShapeRenderer {
 
     // UV: Y inverted because texImage2D loads top-to-bottom but world is Y-up
     const quadData = new Float32Array([
-      x0, y0, 0, 1,  // bottom-left  → UV (0,1)
-      x1, y0, 1, 1,  // bottom-right → UV (1,1)
-      x0, y1, 0, 0,  // top-left     → UV (0,0)
-      x1, y1, 1, 0,  // top-right    → UV (1,0)
+      x0,
+      y0,
+      0,
+      1, // bottom-left  → UV (0,1)
+      x1,
+      y0,
+      1,
+      1, // bottom-right → UV (1,1)
+      x0,
+      y1,
+      0,
+      0, // top-left     → UV (0,0)
+      x1,
+      y1,
+      1,
+      0, // top-right    → UV (1,0)
     ]);
 
     gl.bindBuffer(gl.ARRAY_BUFFER, this.textureVertexBuffer);
@@ -1149,14 +1250,17 @@ export class ShapeRenderer {
     gl.uniform1f(this.textureProgram.uniforms.u_brightness ?? null, (adj?.brightness ?? 0) / 100);
     gl.uniform1f(this.textureProgram.uniforms.u_contrast ?? null, (adj?.contrast ?? 0) / 100);
     gl.uniform1f(this.textureProgram.uniforms.u_saturation ?? null, (adj?.saturation ?? 0) / 100);
-    gl.uniform1f(this.textureProgram.uniforms.u_hue ?? null, (adj?.hue ?? 0) * Math.PI / 180);
+    gl.uniform1f(this.textureProgram.uniforms.u_hue ?? null, ((adj?.hue ?? 0) * Math.PI) / 180);
     gl.uniform1f(this.textureProgram.uniforms.u_exposure ?? null, (adj?.exposure ?? 0) / 100);
     gl.uniform1f(this.textureProgram.uniforms.u_temperature ?? null, (adj?.temperature ?? 0) / 100);
 
     // Corner radius SDF uniforms
     gl.uniform2f(this.textureProgram.uniforms.u_rectSize ?? null, node.width, node.height);
     const cr = node.cornerRadius ?? [0, 0, 0, 0];
-    gl.uniform4fv(this.textureProgram.uniforms.u_cornerRadius ?? null, new Float32Array([cr[0], cr[1], cr[2], cr[3]]));
+    gl.uniform4fv(
+      this.textureProgram.uniforms.u_cornerRadius ?? null,
+      new Float32Array([cr[0], cr[1], cr[2], cr[3]])
+    );
 
     // Draw as triangle strip (4 vertices)
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
@@ -1190,17 +1294,35 @@ export class ShapeRenderer {
       const fills = node.fills;
 
       // Render fills with combined vertices+holes
-      this.renderFillsAndStrokes(node.id, vertices, fillIndices, fills, [], node.closed, this.currentEffectiveOpacity);
+      this.renderFillsAndStrokes(
+        node.id,
+        vertices,
+        fillIndices,
+        fills,
+        [],
+        node.closed,
+        this.currentEffectiveOpacity
+      );
 
       // Render strokes for each contour independently
       const allContours = [node.points, ...node.subpaths];
       for (const contour of allContours) {
         const processed = applyCornerRadius(contour, true);
-        const contourVerts = tessellatePathToVertices(processed, true, DEFAULT_TESSELLATION_TOLERANCE);
+        const contourVerts = tessellatePathToVertices(
+          processed,
+          true,
+          DEFAULT_TESSELLATION_TOLERANCE
+        );
         // Strokes don't use earcut — render outline per contour
         for (const stroke of node.strokes) {
           if (stroke.visible && stroke.width > 0) {
-            this.renderStroke(node.id + '_s', contourVerts, stroke, true, this.currentEffectiveOpacity);
+            this.renderStroke(
+              node.id + '_s',
+              contourVerts,
+              stroke,
+              true,
+              this.currentEffectiveOpacity
+            );
           }
         }
       }
@@ -1229,13 +1351,202 @@ export class ShapeRenderer {
     );
   }
 
+  // --------------------------------------------------------------------------
+  // Boolean Group Rendering
+  // --------------------------------------------------------------------------
+
+  /**
+   * Render a boolean group by computing its boolean result dynamically.
+   */
+  private renderBooleanGroup(
+    groupNode: GroupNode,
+    _worldMatrix: Matrix3,
+    sceneGraph: SceneGraph
+  ): void {
+    if (!this.program || !this.vao) return;
+
+    const children = sceneGraph.getChildren(groupNode.id).filter((c) => c.visible);
+    const op = groupNode.booleanOp;
+    if (!op || children.length < 2) return;
+
+    // Compute the boolean result using children's world transforms
+    const childTransforms = children.map((c) => sceneGraph.getWorldTransform(c.id));
+
+    // Try to get cached tessellation
+    const cacheKey = this.buildBooleanGroupCacheKey(groupNode, children, childTransforms, op);
+    const cached = this.geometryCache.get(cacheKey);
+
+    let vertices: Float32Array;
+    let fillIndices: number[];
+
+    if (cached && cached.geoKey === cacheKey) {
+      vertices = cached.vertices;
+      fillIndices = cached.fillIndices;
+    } else {
+      // Compute boolean result
+      try {
+        let accum: MultiPolygon | null = null;
+        for (let i = 0; i < children.length; i++) {
+          const child = children[i]!;
+          const childTransform = childTransforms[i]!;
+          let poly: MultiPolygon | null;
+
+          // Handle nested boolean groups
+          if (child.type === 'group' && child.booleanOp) {
+            poly = this.computeNestedBooleanPolygon(child, childTransform, sceneGraph);
+          } else {
+            poly = nodeToPolygon(child, childTransform);
+          }
+          if (!poly) continue;
+
+          if (!accum) {
+            accum = poly;
+          } else {
+            accum = performBoolean(accum, poly, op);
+          }
+        }
+
+        if (!accum || accum.length === 0) return;
+
+        const contours = polygonToContours(accum);
+        if (contours.length === 0) return;
+
+        // Flatten contours to vertex arrays for tessellation
+        const contourArrays: Float32Array[] = contours.map((contour) => {
+          const flat = new Float32Array(contour.length * 2);
+          for (let j = 0; j < contour.length; j++) {
+            flat[j * 2] = contour[j]!.position.x;
+            flat[j * 2 + 1] = contour[j]!.position.y;
+          }
+          return flat;
+        });
+
+        // Simple case: single contour
+        if (contourArrays.length === 1) {
+          vertices = contourArrays[0]!;
+          const numVerts = vertices.length / 2;
+          fillIndices = numVerts >= 3 ? Array.from(earcut(vertices)) : [];
+        } else {
+          // Multi-contour: combine and use earcut with holes
+          let totalFloats = 0;
+          for (const arr of contourArrays) totalFloats += arr.length;
+          vertices = new Float32Array(totalFloats);
+          const holeIndices: number[] = [];
+          let writeOffset = 0;
+          for (let i = 0; i < contourArrays.length; i++) {
+            if (i > 0) holeIndices.push(writeOffset / 2);
+            vertices.set(contourArrays[i]!, writeOffset);
+            writeOffset += contourArrays[i]!.length;
+          }
+          fillIndices = Array.from(
+            earcut(vertices, holeIndices.length > 0 ? holeIndices : undefined)
+          );
+        }
+
+        // Cache the result
+        const entry: TessellationCacheEntry = {
+          geoKey: cacheKey,
+          vertices,
+          fillIndices,
+          strokeCache: new Map(),
+        };
+        this.geometryCache.set(cacheKey, entry);
+      } catch (_err) {
+        return;
+      }
+    }
+
+    const gl = this.renderer.context;
+
+    // Ensure correct GL state — flat program + VAO must be active
+    this.renderer.useProgram(this.program);
+    this.renderer.bindVAO(this.vao);
+
+    // Boolean result is in world space — use identity model matrix
+    const identityMatrix = mat3.identity();
+    const modelArray = mat3.toFloat32Array(identityMatrix);
+    this.currentModelMatrix = modelArray;
+    gl.uniformMatrix3fv(this.program.uniforms.u_model ?? null, false, modelArray);
+
+    // Render using the group's fills/strokes
+    const fills = groupNode.fills ?? [];
+    const strokes = groupNode.strokes ?? [];
+    this.renderFillsAndStrokes(
+      cacheKey,
+      vertices!,
+      fillIndices!,
+      fills,
+      strokes,
+      true,
+      this.currentEffectiveOpacity
+    );
+  }
+
+  /**
+   * Recursively compute the polygon for a nested boolean group.
+   */
+  private computeNestedBooleanPolygon(
+    group: GroupNode,
+    _groupWorldTransform: Matrix3,
+    sceneGraph: SceneGraph,
+    depth: number = 0
+  ): MultiPolygon | null {
+    if (depth > 10) return null;
+    const op = group.booleanOp;
+    if (!op) return null;
+
+    const children = sceneGraph.getChildren(group.id).filter((c) => c.visible);
+    if (children.length < 2) return null;
+
+    let accum: MultiPolygon | null = null;
+    for (const child of children) {
+      const childTransform = sceneGraph.getWorldTransform(child.id);
+      let poly: MultiPolygon | null;
+
+      if (child.type === 'group' && child.booleanOp) {
+        poly = this.computeNestedBooleanPolygon(child, childTransform, sceneGraph, depth + 1);
+      } else {
+        poly = nodeToPolygon(child, childTransform);
+      }
+      if (!poly) continue;
+
+      if (!accum) {
+        accum = poly;
+      } else {
+        accum = performBoolean(accum, poly, op);
+      }
+    }
+
+    return accum;
+  }
+
+  /**
+   * Build a cache key for a boolean group's computed geometry.
+   */
+  private buildBooleanGroupCacheKey(
+    _groupNode: GroupNode,
+    children: Node[],
+    childTransforms: Matrix3[],
+    op: BooleanOp
+  ): string {
+    const parts: string[] = [`BG:${op}`];
+    for (let i = 0; i < children.length; i++) {
+      const child = children[i]!;
+      const t = childTransforms[i]!;
+      parts.push(
+        `${buildGeometryKey(child)}@${t.a.toFixed(4)},${t.b.toFixed(4)},${t.c.toFixed(4)},${t.d.toFixed(4)},${t.tx.toFixed(2)},${t.ty.toFixed(2)}`
+      );
+    }
+    return parts.join('|');
+  }
+
   /**
    * Get or compute tessellation for multi-contour path with earcut holes.
    * Concatenates all contours' vertices and builds hole index array for earcut.
    */
   private getCachedMultiContourTessellation(
     nodeId: string,
-    node: PathNode,
+    node: PathNode
   ): { vertices: Float32Array; fillIndices: number[] } {
     const geoKey = buildGeometryKey(node);
     const cached = this.geometryCache.get(nodeId);
@@ -1454,7 +1765,11 @@ export class ShapeRenderer {
     try {
       // Re-set viewProjection and model on the gradient program
       if (this.currentModelMatrix) {
-        gl.uniformMatrix3fv(this.gradientProgram.uniforms.u_model ?? null, false, this.currentModelMatrix);
+        gl.uniformMatrix3fv(
+          this.gradientProgram.uniforms.u_model ?? null,
+          false,
+          this.currentModelMatrix
+        );
       }
 
       // Upload gradient uniforms
@@ -1539,7 +1854,10 @@ export class ShapeRenderer {
         gl.uniform2fv(u['u_gradEnd'] ?? null, new Float32Array([end.x, end.y]));
       } else {
         const fallback = linearGradientFromAngle(gradient.angle ?? 0);
-        gl.uniform2fv(u['u_gradStart'] ?? null, new Float32Array([fallback.start.x, fallback.start.y]));
+        gl.uniform2fv(
+          u['u_gradStart'] ?? null,
+          new Float32Array([fallback.start.x, fallback.start.y])
+        );
         gl.uniform2fv(u['u_gradEnd'] ?? null, new Float32Array([fallback.end.x, fallback.end.y]));
       }
     } else {
@@ -1574,11 +1892,7 @@ export class ShapeRenderer {
     // Set view-projection matrix
     const vpArray = mat3.toFloat32Array(viewProjectionMatrix);
     this.currentVPArray = vpArray;
-    gl.uniformMatrix3fv(
-      this.program.uniforms.u_viewProjection ?? null,
-      false,
-      vpArray
-    );
+    gl.uniformMatrix3fv(this.program.uniforms.u_viewProjection ?? null, false, vpArray);
 
     // Create world matrix from node transform
     const worldMatrix = mat3.compose(
@@ -1606,10 +1920,89 @@ export class ShapeRenderer {
         this.renderPathWithOverride(node, worldMatrix, colorOverride);
         break;
       case 'image':
-        this.renderImageWithOverride(node as ImageNode, worldMatrix, colorOverride);
+        this.renderImageWithOverride(node, worldMatrix, colorOverride);
         break;
     }
 
+    this.renderer.bindVAO(null);
+  }
+
+  /**
+   * Render a ghost boolean group node (for onion skinning).
+   * Ghost nodes are transient, so we skip caching.
+   */
+  renderGhostBooleanGroup(
+    groupNode: GroupNode,
+    children: Node[],
+    childTransforms: Matrix3[],
+    viewProjectionMatrix: Matrix3,
+    alpha: number,
+    tintColor: [number, number, number]
+  ): void {
+    if (!this.program || !this.vao) return;
+    const op = groupNode.booleanOp;
+    if (!op || children.length < 2) return;
+
+    // Compute boolean result
+    let accum: MultiPolygon | null = null;
+    for (let i = 0; i < children.length; i++) {
+      const poly = nodeToPolygon(children[i]!, childTransforms[i]!);
+      if (!poly) continue;
+      if (!accum) {
+        accum = poly;
+      } else {
+        accum = performBoolean(accum, poly, op);
+      }
+    }
+    if (!accum || accum.length === 0) return;
+
+    const contours = polygonToContours(accum);
+    if (contours.length === 0) return;
+
+    // Flatten to vertices
+    const contourArrays = contours.map((contour) => {
+      const flat = new Float32Array(contour.length * 2);
+      for (let j = 0; j < contour.length; j++) {
+        flat[j * 2] = contour[j]!.position.x;
+        flat[j * 2 + 1] = contour[j]!.position.y;
+      }
+      return flat;
+    });
+
+    let vertices: Float32Array;
+
+    if (contourArrays.length === 1) {
+      vertices = contourArrays[0]!;
+    } else {
+      let totalFloats = 0;
+      for (const arr of contourArrays) totalFloats += arr.length;
+      vertices = new Float32Array(totalFloats);
+      const holeIndices: number[] = [];
+      let writeOffset = 0;
+      for (let i = 0; i < contourArrays.length; i++) {
+        if (i > 0) holeIndices.push(writeOffset / 2);
+        vertices.set(contourArrays[i]!, writeOffset);
+        writeOffset += contourArrays[i]!.length;
+      }
+    }
+
+    const gl = this.renderer.context;
+    this.renderer.useProgram(this.program);
+    this.renderer.bindVAO(this.vao);
+
+    const vpArray = mat3.toFloat32Array(viewProjectionMatrix);
+    gl.uniformMatrix3fv(this.program.uniforms.u_viewProjection ?? null, false, vpArray);
+
+    // Use identity model matrix (result is in world space)
+    const identityArray = mat3.toFloat32Array(mat3.identity());
+    gl.uniformMatrix3fv(this.program.uniforms.u_model ?? null, false, identityArray);
+
+    const effectiveAlpha = alpha * (groupNode.opacity ?? 1);
+    const colorOverride = { tint: tintColor, alpha: effectiveAlpha };
+    const fills = groupNode.fills ?? [];
+    const strokes = groupNode.strokes ?? [];
+
+    this.renderFillsAndStrokesGhost(vertices, fills, strokes, true, colorOverride);
     this.renderer.bindVAO(null);
   }
 
@@ -1645,7 +2038,11 @@ export class ShapeRenderer {
   ): void {
     if (!this.program) return;
     const gl = this.renderer.context;
-    gl.uniformMatrix3fv(this.program.uniforms.u_model ?? null, false, mat3.toFloat32Array(worldMatrix));
+    gl.uniformMatrix3fv(
+      this.program.uniforms.u_model ?? null,
+      false,
+      mat3.toFloat32Array(worldMatrix)
+    );
     this.renderFillsAndStrokesGhost(tessellated, fills, strokes, closed, colorOverride);
   }
 
@@ -1709,7 +2106,9 @@ export class ShapeRenderer {
       const contourArrays: Float32Array[] = [];
       for (const contour of allContours) {
         const processed = applyCornerRadius(contour, true);
-        contourArrays.push(tessellatePathToVertices(processed, true, DEFAULT_TESSELLATION_TOLERANCE));
+        contourArrays.push(
+          tessellatePathToVertices(processed, true, DEFAULT_TESSELLATION_TOLERANCE)
+        );
       }
 
       // Compute global vertex starts
@@ -1750,20 +2149,33 @@ export class ShapeRenderer {
         for (const localIdx of indices) {
           let slot = 0;
           for (let gi = contourIndices.length - 1; gi >= 0; gi--) {
-            if (localIdx >= localStarts[gi]!) { slot = gi; break; }
+            if (localIdx >= localStarts[gi]!) {
+              slot = gi;
+              break;
+            }
           }
-          ghostFillIndices.push(globalVertStarts[contourIndices[slot]!]! + localIdx - localStarts[slot]!);
+          ghostFillIndices.push(
+            globalVertStarts[contourIndices[slot]!]! + localIdx - localStarts[slot]!
+          );
         }
       }
 
       // Ghost fills
       if (!this.program) return;
       const gl = this.renderer.context;
-      gl.uniformMatrix3fv(this.program.uniforms.u_model ?? null, false, mat3.toFloat32Array(worldMatrix));
+      gl.uniformMatrix3fv(
+        this.program.uniforms.u_model ?? null,
+        false,
+        mat3.toFloat32Array(worldMatrix)
+      );
 
       for (const fill of node.fills) {
         if (fill.visible && fill.type !== 'none') {
-          const color = this.applyTintAndAlpha(this.getFillColor(fill), colorOverride.tint, colorOverride.alpha);
+          const color = this.applyTintAndAlpha(
+            this.getFillColor(fill),
+            colorOverride.tint,
+            colorOverride.alpha
+          );
           this.renderFillWithColor(combined, ghostFillIndices, color);
         }
       }
@@ -1772,7 +2184,11 @@ export class ShapeRenderer {
       for (const contourVerts of contourArrays) {
         for (const stroke of node.strokes) {
           if (stroke.visible && stroke.width > 0) {
-            const color = this.applyTintAndAlpha(this.getStrokeColor(stroke), colorOverride.tint, colorOverride.alpha);
+            const color = this.applyTintAndAlpha(
+              this.getStrokeColor(stroke),
+              colorOverride.tint,
+              colorOverride.alpha
+            );
             this.renderStrokeWithColor(contourVerts, stroke, true, color);
           }
         }
@@ -1809,7 +2225,11 @@ export class ShapeRenderer {
 
     // Set VP matrix (cached from renderGhostNode)
     if (this.currentVPArray) {
-      gl.uniformMatrix3fv(this.textureProgram.uniforms.u_viewProjection ?? null, false, this.currentVPArray);
+      gl.uniformMatrix3fv(
+        this.textureProgram.uniforms.u_viewProjection ?? null,
+        false,
+        this.currentVPArray
+      );
     }
 
     // Set model matrix
@@ -1827,12 +2247,7 @@ export class ShapeRenderer {
     const x1 = x0 + node.width;
     const y1 = y0 + node.height;
 
-    const quadData = new Float32Array([
-      x0, y0, 0, 1,
-      x1, y0, 1, 1,
-      x0, y1, 0, 0,
-      x1, y1, 1, 0,
-    ]);
+    const quadData = new Float32Array([x0, y0, 0, 1, x1, y0, 1, 1, x0, y1, 0, 0, x1, y1, 1, 0]);
 
     gl.bindBuffer(gl.ARRAY_BUFFER, this.textureVertexBuffer);
     gl.bufferSubData(gl.ARRAY_BUFFER, 0, quadData);
@@ -1862,7 +2277,10 @@ export class ShapeRenderer {
     // Corner radius SDF uniforms
     gl.uniform2f(this.textureProgram.uniforms.u_rectSize ?? null, node.width, node.height);
     const cr2 = node.cornerRadius ?? [0, 0, 0, 0];
-    gl.uniform4fv(this.textureProgram.uniforms.u_cornerRadius ?? null, new Float32Array([cr2[0], cr2[1], cr2[2], cr2[3]]));
+    gl.uniform4fv(
+      this.textureProgram.uniforms.u_cornerRadius ?? null,
+      new Float32Array([cr2[0], cr2[1], cr2[2], cr2[3]])
+    );
 
     // Draw
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
@@ -1944,7 +2362,7 @@ export class ShapeRenderer {
     }
     if (fill.type === 'gradient' && fill.gradient && fill.gradient.stops.length > 0) {
       // For flat-color contexts (e.g. ghost rendering), use first stop color
-      return this.colorToFloat32Array(fill.gradient.stops[0].color, fill.opacity, nodeOpacity);
+      return this.colorToFloat32Array(fill.gradient.stops[0]!.color, fill.opacity, nodeOpacity);
     }
     return new Float32Array([0.5, 0.5, 0.5, fill.opacity * nodeOpacity]);
   }

@@ -104,6 +104,12 @@ export class PenTool extends BaseTool {
     const worldPos = { ...event.worldPosition };
     this.state.currentWorldPos = worldPos;
 
+    // If mouse button was released (e.g. mouseUp on overlay element), stop dragging
+    if (this.isDraggingHandle && event.buttons === 0) {
+      this.isDraggingHandle = false;
+      this.handleDragState = { mode: 'none', pointIndex: -1, handleType: 'out' };
+    }
+
     if (this.isDraggingHandle && this.currentPath.length > 0) {
       if (this.handleDragState.mode === 'existing-handle') {
         // Dragging an existing handle

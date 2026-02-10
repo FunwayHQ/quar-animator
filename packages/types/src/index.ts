@@ -178,8 +178,13 @@ export type BlendMode =
 // Shape Nodes
 // ============================================================================
 
+export type BooleanOp = 'union' | 'subtract' | 'intersect' | 'exclude';
+
 export interface GroupNode extends BaseNode {
   type: 'group';
+  booleanOp?: BooleanOp; // undefined = normal group, set = boolean group
+  fills?: Fill[]; // appearance of boolean result
+  strokes?: Stroke[]; // appearance of boolean result
 }
 
 export interface RectangleNode extends BaseNode {
@@ -219,10 +224,10 @@ export interface PathPoint {
 
 export interface PathNode extends BaseNode {
   type: 'path';
-  points: PathPoint[];          // Primary contour (backward compat)
-  subpaths?: PathPoint[][];     // Additional contours (holes or disjoint regions)
+  points: PathPoint[]; // Primary contour (backward compat)
+  subpaths?: PathPoint[][]; // Additional contours (holes or disjoint regions)
   closed: boolean;
-  fillRule?: 'nonzero' | 'evenodd';  // Default: 'nonzero'
+  fillRule?: 'nonzero' | 'evenodd'; // Default: 'nonzero'
   fills: Fill[];
   strokes: Stroke[];
 }
@@ -243,13 +248,13 @@ export interface TextNode extends BaseNode {
 
 export interface ImageAdjustments {
   brightness: number; // -100 to 100, default 0
-  contrast: number;   // -100 to 100, default 0
+  contrast: number; // -100 to 100, default 0
   saturation: number; // -100 to 100, default 0
-  hue: number;        // -180 to 180 degrees, default 0
-  exposure: number;   // -100 to 100, default 0
+  hue: number; // -180 to 180 degrees, default 0
+  exposure: number; // -100 to 100, default 0
   temperature: number; // -100 to 100 (cool to warm), default 0
-  tint: number;       // -100 to 100 (green to magenta), default 0
-  blur: number;       // 0 to 100, default 0
+  tint: number; // -100 to 100 (green to magenta), default 0
+  blur: number; // 0 to 100, default 0
 }
 
 export interface ImageNode extends BaseNode {

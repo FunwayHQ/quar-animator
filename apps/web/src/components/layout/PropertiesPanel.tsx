@@ -6,6 +6,7 @@ import type {
   PolygonNode,
   PathNode,
   ImageNode,
+  GroupNode,
   Color,
   Gradient,
   Fill,
@@ -13,6 +14,7 @@ import type {
   Effect,
   EffectType,
   BlendMode,
+  BooleanOp,
   DropShadowEffect,
   InnerShadowEffect,
   LayerBlurEffect,
@@ -79,21 +81,21 @@ function fmt1(v: number): string {
 function getNodeSize(node: Node, sceneGraph?: SceneGraph): { width: number; height: number } {
   switch (node.type) {
     case 'rectangle': {
-      const rect = node as RectangleNode;
+      const rect = node;
       return { width: rect.width, height: rect.height };
     }
     case 'ellipse': {
-      const ellipse = node as EllipseNode;
+      const ellipse = node;
       return { width: ellipse.radiusX * 2, height: ellipse.radiusY * 2 };
     }
     case 'polygon': {
-      const polygon = node as PolygonNode;
+      const polygon = node;
       const scaleX = polygon.transform.scale?.x ?? 1;
       const scaleY = polygon.transform.scale?.y ?? 1;
       return { width: polygon.radius * 2 * scaleX, height: polygon.radius * 2 * scaleY };
     }
     case 'path': {
-      const pathNode = node as PathNode;
+      const pathNode = node;
       const bounds = getPathBounds(pathNode.points, pathNode.closed);
       if (!bounds) return { width: 0, height: 0 };
       let w = bounds.width;
@@ -120,7 +122,7 @@ function getNodeSize(node: Node, sceneGraph?: SceneGraph): { width: number; heig
       return { width: w * sx, height: h * sy };
     }
     case 'image': {
-      const imgNode = node as ImageNode;
+      const imgNode = node;
       return { width: imgNode.width, height: imgNode.height };
     }
     case 'group': {
@@ -223,13 +225,13 @@ function getSizePropertyPaths(node: Node): { w: string; h: string } {
 
 function getCornerRadius(node: Node): [number, number, number, number] | number | null {
   if (node.type === 'rectangle') {
-    return (node as RectangleNode).cornerRadius;
+    return node.cornerRadius;
   }
   if (node.type === 'image') {
-    return (node as ImageNode).cornerRadius ?? [0, 0, 0, 0];
+    return node.cornerRadius ?? [0, 0, 0, 0];
   }
   if (node.type === 'polygon') {
-    return (node as PolygonNode).cornerRadius ?? 0;
+    return node.cornerRadius ?? 0;
   }
   return null;
 }
@@ -256,8 +258,14 @@ function hasFillsStrokes(node: Node): boolean {
     node.type === 'ellipse' ||
     node.type === 'polygon' ||
     node.type === 'path' ||
-    node.type === 'text'
+    node.type === 'text' ||
+    (node.type === 'group' && node.booleanOp !== undefined)
   );
+}
+
+/** Check if node is a boolean group */
+function isBooleanGroup(node: Node): boolean {
+  return node.type === 'group' && node.booleanOp !== undefined;
 }
 
 // ============================================================================
@@ -280,6 +288,9 @@ export function PropertiesPanel() {
   const booleanSubtract = useEditorStore((state) => state.booleanSubtract);
   const booleanIntersect = useEditorStore((state) => state.booleanIntersect);
   const booleanExclude = useEditorStore((state) => state.booleanExclude);
+  const changeBooleanOp = useEditorStore((state) => state.changeBooleanOp);
+  const flattenBooleanGroup = useEditorStore((state) => state.flattenBooleanGroup);
+  const releaseBooleanGroup = useEditorStore((state) => state.releaseBooleanGroup);
   const addEffect = useEditorStore((state) => state.addEffect);
   const removeEffect = useEditorStore((state) => state.removeEffect);
   const updateEffect = useEditorStore((state) => state.updateEffect);
@@ -306,13 +317,14 @@ export function PropertiesPanel() {
 
   // Detect multi-selection of shape nodes for boolean ops
   const SHAPE_TYPES = new Set(['rectangle', 'ellipse', 'polygon', 'path']);
+  const isBooleanInputNode = (n: Node) => SHAPE_TYPES.has(n.type) || isBooleanGroup(n);
   const multiShapeSelected =
     selectedNodeIds.size >= 2 &&
     (() => {
       let shapeCount = 0;
       for (const id of selectedNodeIds) {
         const n = sceneGraph.getNode(id);
-        if (n && SHAPE_TYPES.has(n.type)) shapeCount++;
+        if (n && isBooleanInputNode(n)) shapeCount++;
         if (shapeCount >= 2) return true;
       }
       return false;
@@ -386,7 +398,7 @@ export function PropertiesPanel() {
           addKeyframeAtFrame(selectedId, 'radiusY', currentFrame, h / 2);
         }
       } else if (nodeToUpdate.type === 'polygon') {
-        const polygon = nodeToUpdate as PolygonNode;
+        const polygon = nodeToUpdate;
         const baseSize = polygon.radius * 2;
         const scaleX = w / baseSize;
         const scaleY = h / baseSize;
@@ -401,7 +413,7 @@ export function PropertiesPanel() {
           addKeyframeAtFrame(selectedId, 'transform.scale.y', currentFrame, scaleY);
         }
       } else if (nodeToUpdate.type === 'path') {
-        const pathNode = nodeToUpdate as PathNode;
+        const pathNode = nodeToUpdate;
         const bounds = getPathBounds(pathNode.points, pathNode.closed);
         if (bounds && bounds.width > 0 && bounds.height > 0) {
           // Include subpaths in base size
@@ -1621,6 +1633,52 @@ export function PropertiesPanel() {
             </div>
           </div>
         </div>
+
+        {/* Boolean group operation selector */}
+        {isBooleanGroup(node) && (
+          <div className={styles.section} data-testid="boolean-group-section">
+            <div className={styles.sectionHeader}>
+              <span className={styles.sectionTitle}>Boolean Operation</span>
+            </div>
+            <div className={styles.sectionContent}>
+              <div className={styles.propertyRow}>
+                <select
+                  className={styles.input}
+                  value={(node as GroupNode).booleanOp ?? 'union'}
+                  onChange={(e) => changeBooleanOp(sceneGraph, e.target.value as BooleanOp)}
+                  data-testid="boolean-op-select"
+                >
+                  <option value="union">Union</option>
+                  <option value="subtract">Subtract</option>
+                  <option value="intersect">Intersect</option>
+                  <option value="exclude">Exclude</option>
+                </select>
+              </div>
+              <div className={styles.booleanOpsRow}>
+                <button
+                  className={styles.booleanOpButton}
+                  onClick={() => flattenBooleanGroup(sceneGraph)}
+                  title="Flatten to path"
+                  aria-label="Flatten boolean group to path"
+                  data-testid="boolean-flatten"
+                >
+                  <Combine size={14} />
+                  <span>Flatten</span>
+                </button>
+                <button
+                  className={styles.booleanOpButton}
+                  onClick={() => releaseBooleanGroup(sceneGraph)}
+                  title="Release shapes"
+                  aria-label="Release boolean group"
+                  data-testid="boolean-release"
+                >
+                  <Diff size={14} />
+                  <span>Release</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className={styles.section}>
           <div className={styles.sectionHeader}>

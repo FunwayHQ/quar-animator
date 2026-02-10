@@ -11,6 +11,7 @@ import type {
   Color,
   Keyframe,
   Node,
+  GroupNode,
   Timeline,
   EasingFunction,
   Effect,
@@ -19,7 +20,13 @@ import type {
 } from '@quar/types';
 import type { KeyframeClipboard } from '@quar/animation';
 import { createTimeline, KeyframeManager } from '@quar/animation';
-import { DEFAULT_ONION_SKIN_SETTINGS, createGroupNode, booleanOperation } from '@quar/core';
+import {
+  DEFAULT_ONION_SKIN_SETTINGS,
+  createGroupNode,
+  booleanOperation,
+  createBooleanResultNode,
+  computeBooleanGroupResult,
+} from '@quar/core';
 import type { OnionSkinSettings, BooleanOp } from '@quar/core';
 import { toast } from '../components/common/Toast';
 
@@ -252,11 +259,14 @@ export interface EditorStore {
   ) => void;
   setBlendMode: (sceneGraph: SceneGraphLike, nodeId: string, blendMode: BlendMode) => void;
 
-  // Boolean operations
+  // Boolean operations (non-destructive)
   booleanUnion: (sceneGraph: SceneGraphLike) => void;
   booleanSubtract: (sceneGraph: SceneGraphLike) => void;
   booleanIntersect: (sceneGraph: SceneGraphLike) => void;
   booleanExclude: (sceneGraph: SceneGraphLike) => void;
+  flattenBooleanGroup: (sceneGraph: SceneGraphLike) => void;
+  releaseBooleanGroup: (sceneGraph: SceneGraphLike) => void;
+  changeBooleanOp: (sceneGraph: SceneGraphLike, op: BooleanOp) => void;
 }
 
 // ============================================================================
@@ -1013,6 +1023,16 @@ function createBooleanActions(
 ) {
   const SHAPE_TYPES = new Set(['rectangle', 'ellipse', 'polygon', 'path']);
 
+  /** Check if a node is a valid boolean input (shape or boolean group) */
+  function isBooleanInput(node: Node): boolean {
+    if (SHAPE_TYPES.has(node.type)) return true;
+    if (node.type === 'group' && node.booleanOp) return true;
+    return false;
+  }
+
+  /**
+   * Non-destructive boolean operation: creates a boolean group containing the source nodes.
+   */
   function performBooleanOp(sceneGraph: SceneGraphLike, op: BooleanOp): void {
     const { selectedNodeIds } = get();
     if (selectedNodeIds.size < 2) {
@@ -1023,7 +1043,7 @@ function createBooleanActions(
     // Collect selected nodes in scene graph z-order
     const orderedNodes: Node[] = [];
     sceneGraph.traverse((node) => {
-      if (selectedNodeIds.has(node.id) && SHAPE_TYPES.has(node.type)) {
+      if (selectedNodeIds.has(node.id) && isBooleanInput(node)) {
         orderedNodes.push(node);
       }
     });
@@ -1033,39 +1053,47 @@ function createBooleanActions(
       return;
     }
 
-    // Get world transforms for each node
-    const worldTransforms = orderedNodes.map((n) => sceneGraph.getWorldTransform(n.id));
-
-    // Generate unique ID
-    const generateId = () => `bool_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-
-    // Perform the boolean operation
-    const resultNode = booleanOperation(orderedNodes, worldTransforms, op, generateId);
-    if (!resultNode) {
-      toast.info('Boolean operation produced an empty result');
-      return;
-    }
-
-    // Find insertion point: first selected node's parent and position
+    // Get fills/strokes from the first node for the group's appearance
     const firstNode = orderedNodes[0];
-    const parentId = firstNode.parent;
-    const siblings = parentId
-      ? (sceneGraph.getNode(parentId)?.children ?? [])
+    const fills: Fill[] = 'fills' in firstNode ? (firstNode as { fills: Fill[] }).fills : [];
+    const strokes: Stroke[] =
+      'strokes' in firstNode ? (firstNode as { strokes: Stroke[] }).strokes : [];
+
+    // Determine common parent
+    const commonParent = orderedNodes.every((n) => n.parent === firstNode.parent)
+      ? firstNode.parent
+      : null;
+
+    // Find insertion index: position of the first selected node among its siblings
+    const siblings = commonParent
+      ? (sceneGraph.getNode(commonParent)?.children ?? [])
       : sceneGraph.getRootNodes().map((n) => n.id);
     const insertIndex = siblings.indexOf(firstNode.id);
 
-    // Add result node
-    sceneGraph.addNode(resultNode, parentId ?? undefined);
+    // Create group node with booleanOp
+    const groupId = `boolgrp_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const group = createGroupNode(groupId, `Boolean ${op.charAt(0).toUpperCase() + op.slice(1)}`);
+    // Boolean groups use identity transform — anchor (0,0) avoids any offset
+    group.transform.anchor = { x: 0, y: 0 };
+    (group as GroupNode).booleanOp = op;
+    (group as GroupNode).fills =
+      fills.length > 0
+        ? structuredClone(fills)
+        : [{ type: 'solid', color: { r: 100, g: 149, b: 237, a: 1 }, opacity: 1, visible: true }];
+    (group as GroupNode).strokes = strokes.length > 0 ? structuredClone(strokes) : [];
+
+    // Add group at the first node's parent position
+    sceneGraph.addNode(group, commonParent ?? undefined);
     if (insertIndex >= 0) {
-      sceneGraph.moveNode(resultNode.id, parentId ?? null, insertIndex);
+      sceneGraph.moveNode(groupId, commonParent ?? null, insertIndex);
     }
 
-    // Remove original nodes
+    // Move all source nodes INTO the group (preserve them, don't delete!)
     for (const node of orderedNodes) {
-      sceneGraph.removeNode(node.id);
+      sceneGraph.moveNode(node.id, groupId);
     }
 
-    set({ selectedNodeIds: new Set([resultNode.id]), isDirty: true });
+    set({ selectedNodeIds: new Set([groupId]), isDirty: true });
   }
 
   return {
@@ -1073,6 +1101,108 @@ function createBooleanActions(
     booleanSubtract: (sceneGraph: SceneGraphLike) => performBooleanOp(sceneGraph, 'subtract'),
     booleanIntersect: (sceneGraph: SceneGraphLike) => performBooleanOp(sceneGraph, 'intersect'),
     booleanExclude: (sceneGraph: SceneGraphLike) => performBooleanOp(sceneGraph, 'exclude'),
+
+    flattenBooleanGroup: (sceneGraph: SceneGraphLike) => {
+      const { selectedNodeIds } = get();
+      if (selectedNodeIds.size !== 1) return;
+
+      const groupId = [...selectedNodeIds][0];
+      const node = sceneGraph.getNode(groupId);
+      if (!node || node.type !== 'group' || !node.booleanOp) {
+        toast.error('Select a boolean group to flatten');
+        return;
+      }
+
+      const groupNode = node;
+      const children: Node[] = [];
+      for (const childId of groupNode.children) {
+        const child = sceneGraph.getNode(childId);
+        if (child) children.push(child);
+      }
+
+      if (children.length < 2) {
+        toast.error('Boolean group needs at least 2 children');
+        return;
+      }
+
+      // Get world transforms
+      const worldTransforms = children.map((c) => sceneGraph.getWorldTransform(c.id));
+      const generateId = () => `bool_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
+      const resultNode = booleanOperation(
+        children,
+        worldTransforms,
+        groupNode.booleanOp!,
+        generateId
+      );
+      if (!resultNode) {
+        toast.info('Boolean operation produced an empty result');
+        return;
+      }
+
+      // Use the group's fills/strokes for the flattened result
+      resultNode.fills = groupNode.fills ?? resultNode.fills;
+      resultNode.strokes = groupNode.strokes ?? resultNode.strokes;
+
+      // Find insertion point
+      const parentId = groupNode.parent;
+      const siblings = parentId
+        ? (sceneGraph.getNode(parentId)?.children ?? [])
+        : sceneGraph.getRootNodes().map((n) => n.id);
+      const insertIndex = siblings.indexOf(groupId);
+
+      // Add result, remove group (which also removes children)
+      sceneGraph.addNode(resultNode, parentId ?? undefined);
+      if (insertIndex >= 0) {
+        sceneGraph.moveNode(resultNode.id, parentId ?? null, insertIndex);
+      }
+      sceneGraph.removeNode(groupId);
+
+      set({ selectedNodeIds: new Set([resultNode.id]), isDirty: true });
+    },
+
+    releaseBooleanGroup: (sceneGraph: SceneGraphLike) => {
+      const { selectedNodeIds } = get();
+      if (selectedNodeIds.size === 0) return;
+
+      const movedChildIds: string[] = [];
+      for (const id of selectedNodeIds) {
+        const node = sceneGraph.getNode(id);
+        if (!node || node.type !== 'group' || !node.booleanOp) continue;
+
+        const parentId = node.parent;
+        const siblings = parentId
+          ? (sceneGraph.getNode(parentId)?.children ?? [])
+          : sceneGraph.getRootNodes().map((n) => n.id);
+        const groupIndex = siblings.indexOf(id);
+        const insertAt = groupIndex !== -1 ? groupIndex : siblings.length;
+
+        // Move children out
+        const childIds = [...node.children];
+        for (let i = 0; i < childIds.length; i++) {
+          sceneGraph.moveNode(childIds[i], parentId ?? null, insertAt + i);
+          movedChildIds.push(childIds[i]);
+        }
+
+        // Remove the now-empty group
+        sceneGraph.removeNode(id);
+      }
+
+      if (movedChildIds.length > 0) {
+        set({ selectedNodeIds: new Set(movedChildIds), isDirty: true });
+      }
+    },
+
+    changeBooleanOp: (sceneGraph: SceneGraphLike, op: BooleanOp) => {
+      const { selectedNodeIds } = get();
+      for (const id of selectedNodeIds) {
+        const node = sceneGraph.getNode(id);
+        if (node && node.type === 'group' && node.booleanOp) {
+          sceneGraph.updateNode(id, { booleanOp: op } as Partial<Node>);
+        }
+      }
+      set({ isDirty: true });
+    },
   };
 }
 
@@ -1212,3 +1342,9 @@ export const useBooleanIntersect = (): ((sceneGraph: SceneGraphLike) => void) =>
   useEditorStore((state: EditorStore) => state.booleanIntersect);
 export const useBooleanExclude = (): ((sceneGraph: SceneGraphLike) => void) =>
   useEditorStore((state: EditorStore) => state.booleanExclude);
+export const useFlattenBooleanGroup = (): ((sceneGraph: SceneGraphLike) => void) =>
+  useEditorStore((state: EditorStore) => state.flattenBooleanGroup);
+export const useReleaseBooleanGroup = (): ((sceneGraph: SceneGraphLike) => void) =>
+  useEditorStore((state: EditorStore) => state.releaseBooleanGroup);
+export const useChangeBooleanOp = (): ((sceneGraph: SceneGraphLike, op: BooleanOp) => void) =>
+  useEditorStore((state: EditorStore) => state.changeBooleanOp);
