@@ -5,7 +5,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { SelectionManager } from './SelectionManager';
 import { SceneGraph, createDefaultTransform } from '../SceneGraph';
-import type { RectangleNode, EllipseNode, PathNode, GroupNode } from '@quar/types';
+import type { RectangleNode, EllipseNode, PathNode, GroupNode, PolygonNode } from '@quar/types';
 
 // ============================================================================
 // Test Helpers
@@ -124,6 +124,41 @@ function createTestGroup(id: string): GroupNode {
     opacity: 1,
     blendMode: 'normal',
   };
+}
+
+function createTestPolygon(
+  id: string,
+  x: number,
+  y: number,
+  radius: number,
+  sides: number,
+  innerRadius?: number,
+  rotation: number = 0
+): PolygonNode {
+  const transform = createDefaultTransform();
+  transform.position = { x, y };
+  transform.rotation = rotation;
+
+  const node: PolygonNode = {
+    id,
+    name: `Polygon ${id}`,
+    type: 'polygon',
+    parent: null,
+    children: [],
+    transform,
+    visible: true,
+    locked: false,
+    opacity: 1,
+    blendMode: 'normal',
+    sides,
+    radius,
+    fills: [{ type: 'solid', color: { r: 100, g: 149, b: 237, a: 1 }, opacity: 1, visible: true }],
+    strokes: [],
+  };
+  if (innerRadius !== undefined) {
+    node.innerRadius = innerRadius;
+  }
+  return node;
 }
 
 // ============================================================================
@@ -397,6 +432,39 @@ describe('SelectionManager', () => {
       expect(result.y).toBe(-10);
       expect(result.width).toBe(35); // -20 to 15
       expect(result.height).toBe(25); // -10 to 15
+    });
+  });
+
+  // ==========================================================================
+  // getSelectionBoundsForDisplay — rotation center
+  // ==========================================================================
+
+  describe('getSelectionBoundsForDisplay rotation center', () => {
+    it('should use node world position as rotation center for polygon', () => {
+      const poly = createTestPolygon('star1', 200, 300, 100, 5, 40, 45);
+      sceneGraph.addNode(poly);
+
+      const result = manager.getSelectionBoundsForDisplay(new Set(['star1']), sceneGraph);
+      expect(result).not.toBeNull();
+      // The rotation center must match the node's world position (the
+      // actual rotation pivot), NOT the AABB center which is offset for
+      // odd-sided polygons/stars.
+      expect(result!.bounds.center.x).toBeCloseTo(200, 0);
+      expect(result!.bounds.center.y).toBeCloseTo(300, 0);
+      expect(result!.rotation).toBe(45);
+    });
+
+    it('should use node position as rotation center for rectangle', () => {
+      const rect = createTestRectangle('rect1', 100, 200, 60, 40);
+      rect.transform.rotation = 30;
+      sceneGraph.addNode(rect);
+
+      const result = manager.getSelectionBoundsForDisplay(new Set(['rect1']), sceneGraph);
+      expect(result).not.toBeNull();
+      // For rectangles, AABB center and node position should coincide
+      expect(result!.bounds.center.x).toBeCloseTo(100, 0);
+      expect(result!.bounds.center.y).toBeCloseTo(200, 0);
+      expect(result!.rotation).toBe(30);
     });
   });
 });

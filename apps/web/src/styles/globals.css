@@ -52,6 +52,9 @@
   --color-timeline-keyframe-glow: rgba(168, 85, 247, 0.4);
   --color-timeline-onion-before: rgba(251, 113, 133, 0.6);
   --color-timeline-onion-after: rgba(52, 211, 153, 0.6);
+  --color-timeline-work-area: rgba(168, 85, 247, 0.15);
+  --color-timeline-work-area-border: rgba(168, 85, 247, 0.6);
+  --color-timeline-work-area-bar: rgba(168, 85, 247, 0.35);
 
   /* Colors - Keyframe indicators */
   --color-keyframe-active: #f5a623;

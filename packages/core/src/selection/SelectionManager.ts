@@ -140,10 +140,23 @@ export class SelectionManager {
       const nodeBounds = this.getNodeBoundsUnrotated(node);
       if (!nodeBounds) return null;
 
+      // Use the node's transform.position as the rotation center — this is
+      // the actual rotation pivot used by the renderer (translate(pos) then
+      // rotate). For polygons/stars with odd sides, the AABB center differs
+      // from the node position, causing the selection box to drift if we
+      // used rect.center() instead.
+      // For root nodes, position IS the world-space pivot.
+      // For nested nodes, transform through the parent's world matrix.
+      let rotationCenter = node.transform.position;
+      if (node.parent) {
+        const parentWorld = sceneGraph.getWorldTransform(node.parent);
+        rotationCenter = mat3.transformPoint(parentWorld, node.transform.position);
+      }
+
       return {
         bounds: {
           rect: nodeBounds,
-          center: rect.center(nodeBounds),
+          center: rotationCenter,
         },
         rotation: node.transform.rotation,
       };

@@ -17,6 +17,25 @@ interface TimelineShortcutCallbacks {
 export function useTimelineShortcuts(callbacks: TimelineShortcutCallbacks) {
   const handleKeyDown = useCallback(
     (event: KeyboardEvent) => {
+      // Alt+W: toggle work area (handle before the altKey guard)
+      if (
+        event.altKey &&
+        (event.key === 'w' || event.key === 'W') &&
+        !event.ctrlKey &&
+        !event.metaKey
+      ) {
+        const target = event.target as HTMLElement | null;
+        if (target && target.tagName) {
+          const tagName = target.tagName.toLowerCase();
+          if (tagName === 'input' || tagName === 'textarea' || tagName === 'select') {
+            return;
+          }
+        }
+        event.preventDefault();
+        useEditorStore.getState().toggleWorkArea();
+        return;
+      }
+
       // Ignore when ctrl/alt/meta keys are pressed (except Shift which we handle)
       if (event.ctrlKey || event.altKey || event.metaKey) {
         return;
@@ -49,6 +68,12 @@ export function useTimelineShortcuts(callbacks: TimelineShortcutCallbacks) {
             event.preventDefault();
             state.setCurrentFrame(state.currentFrame + 10);
           }
+          return;
+        }
+        if (event.key === 'I' || event.key === 'i') {
+          // Shift+I : set work area OUT (end) to current frame
+          event.preventDefault();
+          useEditorStore.getState().setWorkAreaToCurrentFrame('end');
           return;
         }
         if (event.key === 'O' || event.key === 'o') {
@@ -107,6 +132,13 @@ export function useTimelineShortcuts(callbacks: TimelineShortcutCallbacks) {
           // Toggle loop
           event.preventDefault();
           useEditorStore.getState().setIsLooping(!state.isLooping);
+          break;
+
+        case 'i':
+        case 'I':
+          // Set work area IN (start) to current frame
+          event.preventDefault();
+          useEditorStore.getState().setWorkAreaToCurrentFrame('start');
           break;
 
         case 'k':

@@ -310,6 +310,167 @@ describe('setters', () => {
 // Dispose
 // ============================================================================
 
+// ============================================================================
+// Work Area
+// ============================================================================
+
+describe('work area', () => {
+  it('should be disabled by default with start=0', () => {
+    const { controller } = createController();
+    expect(controller.workAreaEnabled).toBe(false);
+    expect(controller.workAreaStart).toBe(0);
+    expect(controller.workAreaEnd).toBe(299); // duration - 1
+  });
+
+  it('setWorkArea() should enable and set bounds', () => {
+    const { controller } = createController();
+    controller.setWorkArea(true, 50, 150);
+    expect(controller.workAreaEnabled).toBe(true);
+    expect(controller.workAreaStart).toBe(50);
+    expect(controller.workAreaEnd).toBe(150);
+  });
+
+  it('setWorkArea() should enforce start < end', () => {
+    const { controller } = createController();
+    controller.setWorkArea(true, 100, 50);
+    // start should be clamped to end - 1
+    expect(controller.workAreaStart).toBe(49);
+    expect(controller.workAreaEnd).toBe(50);
+  });
+
+  it('setWorkAreaStart/End should update individually', () => {
+    const { controller } = createController();
+    controller.setWorkArea(true, 10, 200);
+    controller.setWorkAreaStart(30);
+    expect(controller.workAreaStart).toBe(30);
+    controller.setWorkAreaEnd(250);
+    expect(controller.workAreaEnd).toBe(250);
+  });
+
+  it('playback should stop at workAreaEnd (non-looping)', () => {
+    const { controller, timer } = createController({
+      duration: 300,
+      frameRate: 30,
+      looping: false,
+    });
+    controller.setWorkArea(true, 0, 3);
+    controller.play();
+    timer.tick(0);
+    // Advance enough to reach end (3 frames at 33.3ms = ~100ms)
+    timer.tick(150);
+    expect(controller.currentFrame).toBe(3);
+    expect(controller.isPlaying).toBe(false);
+  });
+
+  it('playback should loop to workAreaStart (looping)', () => {
+    const { controller, timer } = createController({
+      duration: 300,
+      frameRate: 30,
+      looping: true,
+    });
+    controller.setWorkArea(true, 10, 13);
+    controller.goToFrame(10);
+    controller.play();
+    timer.tick(0);
+    // Advance past end (4 frames * 33.3ms = 133ms, but one to init)
+    timer.tick(200);
+    expect(controller.currentFrame).toBeGreaterThanOrEqual(10);
+    expect(controller.currentFrame).toBeLessThanOrEqual(13);
+    expect(controller.isPlaying).toBe(true);
+  });
+
+  it('goToStart() should go to workAreaStart when enabled', () => {
+    const { controller } = createController();
+    controller.setWorkArea(true, 50, 200);
+    controller.goToFrame(100);
+    controller.goToStart();
+    expect(controller.currentFrame).toBe(50);
+  });
+
+  it('goToEnd() should go to workAreaEnd when enabled', () => {
+    const { controller } = createController();
+    controller.setWorkArea(true, 50, 200);
+    controller.goToEnd();
+    expect(controller.currentFrame).toBe(200);
+  });
+
+  it('stop() should go to workAreaStart when enabled', () => {
+    const { controller, timer } = createController();
+    controller.setWorkArea(true, 20, 100);
+    controller.play();
+    timer.tick(0);
+    timer.tick(100);
+    controller.stop();
+    expect(controller.isPlaying).toBe(false);
+    expect(controller.currentFrame).toBe(20);
+  });
+
+  it('nextFrame() should clamp at workAreaEnd', () => {
+    const { controller } = createController();
+    controller.setWorkArea(true, 0, 5);
+    controller.goToFrame(5);
+    controller.nextFrame();
+    expect(controller.currentFrame).toBe(5);
+  });
+
+  it('prevFrame() should clamp at workAreaStart', () => {
+    const { controller } = createController();
+    controller.setWorkArea(true, 10, 50);
+    controller.goToFrame(10);
+    controller.prevFrame();
+    expect(controller.currentFrame).toBe(10);
+  });
+
+  it('goToFrame() should be unrestricted (can seek outside work area)', () => {
+    const { controller } = createController();
+    controller.setWorkArea(true, 50, 200);
+    controller.goToFrame(10);
+    expect(controller.currentFrame).toBe(10);
+    controller.goToFrame(250);
+    expect(controller.currentFrame).toBe(250);
+  });
+
+  it('play() should auto-rewind from workAreaEnd', () => {
+    const { controller } = createController({ looping: false });
+    controller.setWorkArea(true, 50, 100);
+    controller.goToFrame(100);
+    controller.play();
+    // Should have rewound to 50
+    expect(controller.currentFrame).toBe(50);
+    expect(controller.isPlaying).toBe(true);
+  });
+
+  it('disabling work area should restore full range behavior', () => {
+    const { controller } = createController();
+    controller.setWorkArea(true, 50, 100);
+    controller.setWorkAreaEnabled(false);
+    controller.goToStart();
+    expect(controller.currentFrame).toBe(0);
+    controller.goToEnd();
+    expect(controller.currentFrame).toBe(299);
+  });
+
+  it('setDuration() should shrink work area if needed', () => {
+    const { controller } = createController();
+    controller.setWorkArea(true, 100, 250);
+    controller.setDuration(150);
+    expect(controller.workAreaEnd).toBe(149); // clamped to duration - 1
+    expect(controller.workAreaStart).toBe(100); // still valid
+  });
+
+  it('setDuration() should shrink both start and end if needed', () => {
+    const { controller } = createController();
+    controller.setWorkArea(true, 200, 250);
+    controller.setDuration(50);
+    expect(controller.workAreaEnd).toBe(49);
+    expect(controller.workAreaStart).toBeLessThan(49);
+  });
+});
+
+// ============================================================================
+// Dispose
+// ============================================================================
+
 describe('dispose', () => {
   it('should cancel pending frame on dispose', () => {
     const { controller, timer } = createController();

@@ -25,6 +25,11 @@ export class PlaybackController {
   private _cancelFrame: (id: number) => void;
   private _disposed: boolean = false;
 
+  // Work area (loop region)
+  private _workAreaEnabled: boolean = false;
+  private _workAreaStart: number = 0;
+  private _workAreaEnd: number = -1; // -1 = use duration - 1
+
   constructor(options: PlaybackOptions) {
     this._duration = Math.max(1, options.duration);
     this._frameRate = Math.max(1, Math.min(120, options.frameRate));
@@ -54,11 +59,61 @@ export class PlaybackController {
     return this._looping;
   }
 
+  get workAreaEnabled(): boolean {
+    return this._workAreaEnabled;
+  }
+
+  get workAreaStart(): number {
+    return this._workAreaStart;
+  }
+
+  get workAreaEnd(): number {
+    return this._workAreaEnd < 0 ? this._duration - 1 : this._workAreaEnd;
+  }
+
+  private get _effectiveStart(): number {
+    return this._workAreaEnabled ? this._workAreaStart : 0;
+  }
+
+  private get _effectiveEnd(): number {
+    if (!this._workAreaEnabled) return this._duration - 1;
+    const end = this._workAreaEnd < 0 ? this._duration - 1 : this._workAreaEnd;
+    return Math.min(end, this._duration - 1);
+  }
+
+  setWorkArea(enabled: boolean, start?: number, end?: number): void {
+    this._workAreaEnabled = enabled;
+    if (start !== undefined) this._workAreaStart = Math.max(0, Math.round(start));
+    if (end !== undefined) this._workAreaEnd = Math.max(0, Math.round(end));
+    // Enforce start < end
+    if (this._workAreaEnd >= 0 && this._workAreaStart >= this._workAreaEnd) {
+      this._workAreaStart = Math.max(0, this._workAreaEnd - 1);
+    }
+  }
+
+  setWorkAreaEnabled(enabled: boolean): void {
+    this._workAreaEnabled = enabled;
+  }
+
+  setWorkAreaStart(start: number): void {
+    this._workAreaStart = Math.max(0, Math.round(start));
+    if (this._workAreaEnd >= 0 && this._workAreaStart >= this._workAreaEnd) {
+      this._workAreaStart = Math.max(0, this._workAreaEnd - 1);
+    }
+  }
+
+  setWorkAreaEnd(end: number): void {
+    this._workAreaEnd = Math.max(0, Math.round(end));
+    if (this._workAreaEnd <= this._workAreaStart) {
+      this._workAreaEnd = this._workAreaStart + 1;
+    }
+  }
+
   play(): void {
     if (this._disposed || this._playing) return;
-    // Auto-rewind to start if at the end of a non-looping animation
-    if (!this._looping && this._currentFrame >= this._duration - 1) {
-      this._setFrame(0);
+    // Auto-rewind to effective start if at the effective end
+    if (!this._looping && this._currentFrame >= this._effectiveEnd) {
+      this._setFrame(this._effectiveStart);
     }
     this._playing = true;
     this._lastTimestamp = -1;
@@ -82,7 +137,7 @@ export class PlaybackController {
 
   stop(): void {
     this.pause();
-    this._setFrame(0);
+    this._setFrame(this._effectiveStart);
   }
 
   goToFrame(frame: number): void {
@@ -90,23 +145,37 @@ export class PlaybackController {
   }
 
   nextFrame(): void {
-    this._setFrame(this._clampFrame(this._currentFrame + 1));
+    const next = this._currentFrame + 1;
+    const max = this._effectiveEnd;
+    this._setFrame(Math.min(this._clampFrame(next), max));
   }
 
   prevFrame(): void {
-    this._setFrame(this._clampFrame(this._currentFrame - 1));
+    const prev = this._currentFrame - 1;
+    const min = this._effectiveStart;
+    this._setFrame(Math.max(this._clampFrame(prev), min));
   }
 
   goToStart(): void {
-    this._setFrame(0);
+    this._setFrame(this._effectiveStart);
   }
 
   goToEnd(): void {
-    this._setFrame(this._duration - 1);
+    this._setFrame(this._effectiveEnd);
   }
 
   setDuration(duration: number): void {
     this._duration = Math.max(1, duration);
+    // Shrink work area bounds if they exceed new duration
+    if (this._workAreaEnd >= 0 && this._workAreaEnd >= this._duration) {
+      this._workAreaEnd = this._duration - 1;
+    }
+    if (this._workAreaStart >= this._duration) {
+      this._workAreaStart = Math.max(0, this._duration - 2);
+    }
+    if (this._workAreaEnd >= 0 && this._workAreaStart >= this._workAreaEnd) {
+      this._workAreaStart = Math.max(0, this._workAreaEnd - 1);
+    }
     if (this._currentFrame >= this._duration) {
       this._setFrame(this._duration - 1);
     }
@@ -146,16 +215,19 @@ export class PlaybackController {
     const MAX_CATCHUP_FRAMES = 10;
     let iterations = 0;
 
+    const effectiveEnd = this._effectiveEnd;
+    const effectiveStart = this._effectiveStart;
+
     while (this._accumulator >= msPerFrame && iterations < MAX_CATCHUP_FRAMES) {
       iterations++;
       this._accumulator -= msPerFrame;
       const nextFrame = this._currentFrame + 1;
 
-      if (nextFrame >= this._duration) {
+      if (nextFrame > effectiveEnd) {
         if (this._looping) {
-          this._setFrame(0);
+          this._setFrame(effectiveStart);
         } else {
-          this._setFrame(this._duration - 1);
+          this._setFrame(effectiveEnd);
           this.pause();
           return;
         }

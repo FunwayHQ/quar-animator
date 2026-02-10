@@ -33,6 +33,9 @@ describe('EditorStore', () => {
       selectedKeyframeIds: new Set<string>(),
       keyframeClipboard: null,
       onionSkin: { ...DEFAULT_ONION_SKIN_SETTINGS },
+      workAreaEnabled: false,
+      workAreaStart: 0,
+      workAreaEnd: 299,
       projectId: null,
       projectName: 'Untitled Project',
       isDirty: false,
@@ -552,6 +555,107 @@ describe('EditorStore', () => {
       const { setTimelineDuration } = useEditorStore.getState();
       setTimelineDuration(-10);
       expect(useEditorStore.getState().timelineDuration).toBe(1);
+    });
+  });
+
+  // ==========================================================================
+  // Work Area
+  // ==========================================================================
+
+  describe('work area', () => {
+    it('should have default work area values', () => {
+      const state = useEditorStore.getState();
+      expect(state.workAreaEnabled).toBe(false);
+      expect(state.workAreaStart).toBe(0);
+      expect(state.workAreaEnd).toBe(299);
+    });
+
+    it('setWorkAreaEnabled should toggle enabled state', () => {
+      useEditorStore.getState().setWorkAreaEnabled(true);
+      expect(useEditorStore.getState().workAreaEnabled).toBe(true);
+      useEditorStore.getState().setWorkAreaEnabled(false);
+      expect(useEditorStore.getState().workAreaEnabled).toBe(false);
+    });
+
+    it('toggleWorkArea should toggle enabled state', () => {
+      useEditorStore.getState().toggleWorkArea();
+      expect(useEditorStore.getState().workAreaEnabled).toBe(true);
+      useEditorStore.getState().toggleWorkArea();
+      expect(useEditorStore.getState().workAreaEnabled).toBe(false);
+    });
+
+    it('setWorkAreaStart should clamp to [0, end-1]', () => {
+      useEditorStore.getState().setWorkAreaStart(50);
+      expect(useEditorStore.getState().workAreaStart).toBe(50);
+      // Should clamp to end - 1
+      useEditorStore.getState().setWorkAreaStart(500);
+      expect(useEditorStore.getState().workAreaStart).toBe(298);
+      // Should clamp to 0
+      useEditorStore.getState().setWorkAreaStart(-10);
+      expect(useEditorStore.getState().workAreaStart).toBe(0);
+    });
+
+    it('setWorkAreaEnd should clamp to [start+1, duration-1]', () => {
+      useEditorStore.getState().setWorkAreaStart(50);
+      useEditorStore.getState().setWorkAreaEnd(200);
+      expect(useEditorStore.getState().workAreaEnd).toBe(200);
+      // Should clamp to start + 1
+      useEditorStore.getState().setWorkAreaEnd(10);
+      expect(useEditorStore.getState().workAreaEnd).toBe(51);
+      // Should clamp to duration - 1
+      useEditorStore.getState().setWorkAreaEnd(500);
+      expect(useEditorStore.getState().workAreaEnd).toBe(299);
+    });
+
+    it('setWorkAreaRange should set both start and end', () => {
+      useEditorStore.getState().setWorkAreaRange(30, 150);
+      expect(useEditorStore.getState().workAreaStart).toBe(30);
+      expect(useEditorStore.getState().workAreaEnd).toBe(150);
+    });
+
+    it('setWorkAreaRange should reject invalid range', () => {
+      useEditorStore.getState().setWorkAreaRange(30, 150);
+      // start >= end should be rejected (no change)
+      useEditorStore.getState().setWorkAreaRange(100, 50);
+      expect(useEditorStore.getState().workAreaStart).toBe(30);
+      expect(useEditorStore.getState().workAreaEnd).toBe(150);
+    });
+
+    it('setWorkAreaToCurrentFrame should set IN/OUT and auto-enable', () => {
+      useEditorStore.getState().setCurrentFrame(60);
+      useEditorStore.getState().setWorkAreaToCurrentFrame('start');
+      expect(useEditorStore.getState().workAreaStart).toBe(60);
+      expect(useEditorStore.getState().workAreaEnabled).toBe(true);
+
+      useEditorStore.getState().setCurrentFrame(200);
+      useEditorStore.getState().setWorkAreaToCurrentFrame('end');
+      expect(useEditorStore.getState().workAreaEnd).toBe(200);
+    });
+
+    it('clearWorkArea should reset to full range and disable', () => {
+      useEditorStore.getState().setWorkAreaEnabled(true);
+      useEditorStore.getState().setWorkAreaStart(50);
+      useEditorStore.getState().setWorkAreaEnd(200);
+      useEditorStore.getState().clearWorkArea();
+      expect(useEditorStore.getState().workAreaEnabled).toBe(false);
+      expect(useEditorStore.getState().workAreaStart).toBe(0);
+      expect(useEditorStore.getState().workAreaEnd).toBe(299);
+    });
+
+    it('setTimelineDuration should clamp work area when duration shrinks', () => {
+      useEditorStore.getState().setWorkAreaStart(50);
+      useEditorStore.getState().setWorkAreaEnd(250);
+      useEditorStore.getState().setTimelineDuration(100);
+      expect(useEditorStore.getState().workAreaEnd).toBe(99);
+      expect(useEditorStore.getState().workAreaStart).toBe(50);
+    });
+
+    it('setTimelineDuration should clamp both bounds if needed', () => {
+      useEditorStore.getState().setWorkAreaStart(200);
+      useEditorStore.getState().setWorkAreaEnd(250);
+      useEditorStore.getState().setTimelineDuration(50);
+      expect(useEditorStore.getState().workAreaEnd).toBe(49);
+      expect(useEditorStore.getState().workAreaStart).toBeLessThan(49);
     });
   });
 

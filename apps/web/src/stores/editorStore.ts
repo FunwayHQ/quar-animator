@@ -4,7 +4,19 @@
  */
 
 import { create } from 'zustand';
-import type { ToolType, Fill, Stroke, Color, Keyframe, Node, Timeline, EasingFunction, Effect, EffectType, BlendMode } from '@quar/types';
+import type {
+  ToolType,
+  Fill,
+  Stroke,
+  Color,
+  Keyframe,
+  Node,
+  Timeline,
+  EasingFunction,
+  Effect,
+  EffectType,
+  BlendMode,
+} from '@quar/types';
 import type { KeyframeClipboard } from '@quar/animation';
 import { createTimeline, KeyframeManager } from '@quar/animation';
 import { DEFAULT_ONION_SKIN_SETTINGS, createGroupNode, booleanOperation } from '@quar/core';
@@ -173,6 +185,18 @@ export interface EditorStore {
   ) => void;
   removeKeyframeAtFrame: (nodeId: string, property: string, frame: number) => void;
 
+  // Work area (loop region)
+  workAreaEnabled: boolean;
+  workAreaStart: number;
+  workAreaEnd: number;
+  setWorkAreaEnabled: (enabled: boolean) => void;
+  toggleWorkArea: () => void;
+  setWorkAreaStart: (frame: number) => void;
+  setWorkAreaEnd: (frame: number) => void;
+  setWorkAreaRange: (start: number, end: number) => void;
+  setWorkAreaToCurrentFrame: (boundary: 'start' | 'end') => void;
+  clearWorkArea: () => void;
+
   // Snap-to-grid
   snapToGrid: boolean;
   gridSize: number;
@@ -187,7 +211,9 @@ export interface EditorStore {
 
   // Gradient editing
   editingGradient: { nodeId: string; fillIndex: number; source: 'fill' | 'stroke' } | null;
-  setEditingGradient: (editing: { nodeId: string; fillIndex: number; source: 'fill' | 'stroke' } | null) => void;
+  setEditingGradient: (
+    editing: { nodeId: string; fillIndex: number; source: 'fill' | 'stroke' } | null
+  ) => void;
   clearEditingGradient: () => void;
 
   // Onion skin
@@ -211,9 +237,19 @@ export interface EditorStore {
   // Effects & blend modes
   addEffect: (sceneGraph: SceneGraphLike, nodeId: string, effectType: EffectType) => void;
   removeEffect: (sceneGraph: SceneGraphLike, nodeId: string, effectIndex: number) => void;
-  updateEffect: (sceneGraph: SceneGraphLike, nodeId: string, effectIndex: number, updates: Partial<Effect>) => void;
+  updateEffect: (
+    sceneGraph: SceneGraphLike,
+    nodeId: string,
+    effectIndex: number,
+    updates: Partial<Effect>
+  ) => void;
   toggleEffectVisibility: (sceneGraph: SceneGraphLike, nodeId: string, effectIndex: number) => void;
-  reorderEffect: (sceneGraph: SceneGraphLike, nodeId: string, fromIndex: number, toIndex: number) => void;
+  reorderEffect: (
+    sceneGraph: SceneGraphLike,
+    nodeId: string,
+    fromIndex: number,
+    toIndex: number
+  ) => void;
   setBlendMode: (sceneGraph: SceneGraphLike, nodeId: string, blendMode: BlendMode) => void;
 
   // Boolean operations
@@ -249,9 +285,10 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   setSelection: (ids: string[]) =>
     set((state) => {
       const newSet = new Set(ids);
-      const editingGradient = state.editingGradient && newSet.has(state.editingGradient.nodeId)
-        ? state.editingGradient
-        : null;
+      const editingGradient =
+        state.editingGradient && newSet.has(state.editingGradient.nodeId)
+          ? state.editingGradient
+          : null;
       return {
         selectedNodeIds: newSet,
         lastSelectedNodeId: ids.length > 0 ? ids[ids.length - 1] : null,
@@ -280,7 +317,8 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         return { selectedNodeIds: newSet, lastSelectedNodeId: id };
       }
     }),
-  clearSelection: () => set({ selectedNodeIds: new Set<string>(), lastSelectedNodeId: null, editingGradient: null }),
+  clearSelection: () =>
+    set({ selectedNodeIds: new Set<string>(), lastSelectedNodeId: null, editingGradient: null }),
   isSelected: (id: string) => get().selectedNodeIds.has(id),
   selectRange: (toId: string, sceneGraph: SceneGraphLike) => {
     const { lastSelectedNodeId } = get();
@@ -382,7 +420,12 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       mgr.removeAllKeyframesForNode(id);
       sceneGraph.removeNode(id);
     }
-    set({ selectedNodeIds: new Set<string>(), editingGradient: null, timeline: { ...timeline }, isDirty: true });
+    set({
+      selectedNodeIds: new Set<string>(),
+      editingGradient: null,
+      timeline: { ...timeline },
+      isDirty: true,
+    });
   },
   selectAll: (sceneGraph: SceneGraphLike) => {
     const allIds: string[] = [];
@@ -490,10 +533,25 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   setIsLooping: (looping: boolean) => set({ isLooping: looping }),
   setTimelineDuration: (duration: number) => {
     const d = Math.max(1, Math.round(duration));
-    set((state) => ({
-      timelineDuration: d,
-      timeline: { ...state.timeline, duration: d },
-    }));
+    set((state) => {
+      const updates: Partial<EditorStore> = {
+        timelineDuration: d,
+        timeline: { ...state.timeline, duration: d },
+      };
+      // Clamp work area bounds when duration shrinks
+      if (state.workAreaEnd >= d) {
+        updates.workAreaEnd = d - 1;
+      }
+      if (state.workAreaStart >= d) {
+        updates.workAreaStart = Math.max(0, d - 2);
+      }
+      const newEnd = (updates.workAreaEnd as number) ?? state.workAreaEnd;
+      const newStart = (updates.workAreaStart as number) ?? state.workAreaStart;
+      if (newStart >= newEnd) {
+        updates.workAreaStart = Math.max(0, newEnd - 1);
+      }
+      return updates;
+    });
   },
   setFrameRate: (rate: number) => {
     const r = Math.max(1, Math.min(120, Math.round(rate)));
@@ -504,6 +562,52 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   },
   setTimelineExpanded: (expanded: boolean) => set({ timelineExpanded: expanded }),
   toggleTimelineExpanded: () => set((state) => ({ timelineExpanded: !state.timelineExpanded })),
+
+  // Work area (loop region)
+  workAreaEnabled: false,
+  workAreaStart: 0,
+  workAreaEnd: 299, // timelineDuration - 1
+  setWorkAreaEnabled: (enabled: boolean) => set({ workAreaEnabled: enabled }),
+  toggleWorkArea: () => set((state) => ({ workAreaEnabled: !state.workAreaEnabled })),
+  setWorkAreaStart: (frame: number) =>
+    set((state) => {
+      const clamped = Math.max(0, Math.min(state.workAreaEnd - 1, Math.round(frame)));
+      return { workAreaStart: clamped };
+    }),
+  setWorkAreaEnd: (frame: number) =>
+    set((state) => {
+      const clamped = Math.max(
+        state.workAreaStart + 1,
+        Math.min(state.timelineDuration - 1, Math.round(frame))
+      );
+      return { workAreaEnd: clamped };
+    }),
+  setWorkAreaRange: (start: number, end: number) =>
+    set((state) => {
+      const s = Math.max(0, Math.round(start));
+      const e = Math.min(state.timelineDuration - 1, Math.round(end));
+      if (s >= e) return {};
+      return { workAreaStart: s, workAreaEnd: e };
+    }),
+  setWorkAreaToCurrentFrame: (boundary: 'start' | 'end') =>
+    set((state) => {
+      if (boundary === 'start') {
+        const clamped = Math.max(0, Math.min(state.workAreaEnd - 1, state.currentFrame));
+        return { workAreaStart: clamped, workAreaEnabled: true };
+      } else {
+        const clamped = Math.max(
+          state.workAreaStart + 1,
+          Math.min(state.timelineDuration - 1, state.currentFrame)
+        );
+        return { workAreaEnd: clamped, workAreaEnabled: true };
+      }
+    }),
+  clearWorkArea: () =>
+    set((state) => ({
+      workAreaEnabled: false,
+      workAreaStart: 0,
+      workAreaEnd: state.timelineDuration - 1,
+    })),
 
   // Keyframe state
   timeline: createTimeline({ duration: 300, frameRate: 30 }),
@@ -713,7 +817,7 @@ function createDefaultEffect(effectType: EffectType): Effect {
 
 function createEffectActions(
   set: (partial: Partial<EditorStore> | ((state: EditorStore) => Partial<EditorStore>)) => void,
-  _get: () => EditorStore,
+  _get: () => EditorStore
 ) {
   return {
     addEffect: (sceneGraph: SceneGraphLike, nodeId: string, effectType: EffectType) => {
@@ -728,11 +832,18 @@ function createEffectActions(
       const node = sceneGraph.getNode(nodeId);
       if (!node || !node.effects) return;
       const effects = node.effects.filter((_, i) => i !== effectIndex);
-      sceneGraph.updateNode(nodeId, { effects: effects.length > 0 ? effects : undefined } as Partial<Node>);
+      sceneGraph.updateNode(nodeId, {
+        effects: effects.length > 0 ? effects : undefined,
+      } as Partial<Node>);
       set({ isDirty: true });
     },
 
-    updateEffect: (sceneGraph: SceneGraphLike, nodeId: string, effectIndex: number, updates: Partial<Effect>) => {
+    updateEffect: (
+      sceneGraph: SceneGraphLike,
+      nodeId: string,
+      effectIndex: number,
+      updates: Partial<Effect>
+    ) => {
       const node = sceneGraph.getNode(nodeId);
       if (!node || !node.effects || !node.effects[effectIndex]) return;
       const effects = [...node.effects];
@@ -745,12 +856,20 @@ function createEffectActions(
       const node = sceneGraph.getNode(nodeId);
       if (!node || !node.effects || !node.effects[effectIndex]) return;
       const effects = [...node.effects];
-      effects[effectIndex] = { ...effects[effectIndex], visible: !effects[effectIndex].visible } as Effect;
+      effects[effectIndex] = {
+        ...effects[effectIndex],
+        visible: !effects[effectIndex].visible,
+      } as Effect;
       sceneGraph.updateNode(nodeId, { effects } as Partial<Node>);
       set({ isDirty: true });
     },
 
-    reorderEffect: (sceneGraph: SceneGraphLike, nodeId: string, fromIndex: number, toIndex: number) => {
+    reorderEffect: (
+      sceneGraph: SceneGraphLike,
+      nodeId: string,
+      fromIndex: number,
+      toIndex: number
+    ) => {
       const node = sceneGraph.getNode(nodeId);
       if (!node || !node.effects) return;
       const effects = [...node.effects];
@@ -775,7 +894,7 @@ function createEffectActions(
 
 function createZOrderActions(
   set: (partial: Partial<EditorStore> | ((state: EditorStore) => Partial<EditorStore>)) => void,
-  get: () => EditorStore,
+  get: () => EditorStore
 ) {
   function getSiblings(node: Node, sceneGraph: SceneGraphLike): string[] {
     if (node.parent) {
@@ -890,7 +1009,7 @@ function createZOrderActions(
 
 function createBooleanActions(
   set: (partial: Partial<EditorStore> | ((state: EditorStore) => Partial<EditorStore>)) => void,
-  get: () => EditorStore,
+  get: () => EditorStore
 ) {
   const SHAPE_TYPES = new Set(['rectangle', 'ellipse', 'polygon', 'path']);
 

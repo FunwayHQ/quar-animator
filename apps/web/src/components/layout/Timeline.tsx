@@ -67,6 +67,16 @@ export function Timeline({ playback }: TimelineProps = {}) {
   const onionSkinEnabled = useEditorStore((s) => s.onionSkin.enabled);
   const toggleOnionSkin = useEditorStore((s) => s.toggleOnionSkin);
 
+  const workAreaEnabled = useEditorStore((s) => s.workAreaEnabled);
+  const workAreaStart = useEditorStore((s) => s.workAreaStart);
+  const workAreaEnd = useEditorStore((s) => s.workAreaEnd);
+  const setWorkAreaStart = useEditorStore((s) => s.setWorkAreaStart);
+  const setWorkAreaEnd = useEditorStore((s) => s.setWorkAreaEnd);
+  const setWorkAreaRange = useEditorStore((s) => s.setWorkAreaRange);
+  const toggleWorkArea = useEditorStore((s) => s.toggleWorkArea);
+  const setWorkAreaToCurrentFrame = useEditorStore((s) => s.setWorkAreaToCurrentFrame);
+  const clearWorkArea = useEditorStore((s) => s.clearWorkArea);
+
   const [showOnionSkinPanel, setShowOnionSkinPanel] = useState(false);
 
   const rulerRef = useRef<HTMLDivElement>(null);
@@ -85,6 +95,15 @@ export function Timeline({ playback }: TimelineProps = {}) {
     startX: number;
     startFrame: number;
     trackWidth: number;
+  } | null>(null);
+
+  // Drag state for work area handles
+  const workAreaDragRef = useRef<{
+    type: 'start' | 'end' | 'body';
+    startX: number;
+    initialStart: number;
+    initialEnd: number;
+    rulerWidth: number;
   } | null>(null);
 
   // Track scene graph changes for layer labels
@@ -276,6 +295,53 @@ export function Timeline({ playback }: TimelineProps = {}) {
     clearKeyframeSelection();
   }, [clearKeyframeSelection]);
 
+  // ------- Work area drag handlers -------
+
+  const handleWorkAreaPointerDown = useCallback(
+    (e: React.PointerEvent, type: 'start' | 'end' | 'body') => {
+      if (e.button !== 0) return;
+      const ruler = rulerRef.current;
+      if (!ruler) return;
+      const rect = ruler.getBoundingClientRect();
+      workAreaDragRef.current = {
+        type,
+        startX: e.clientX,
+        initialStart: workAreaStart,
+        initialEnd: workAreaEnd,
+        rulerWidth: rect.width,
+      };
+      (e.target as HTMLElement).setPointerCapture(e.pointerId);
+      e.stopPropagation();
+    },
+    [workAreaStart, workAreaEnd]
+  );
+
+  const handleWorkAreaPointerMove = useCallback(
+    (e: React.PointerEvent) => {
+      const drag = workAreaDragRef.current;
+      if (!drag) return;
+      const dx = e.clientX - drag.startX;
+      const deltaFrames = Math.round((dx / drag.rulerWidth) * duration);
+      if (deltaFrames === 0) return;
+
+      if (drag.type === 'start') {
+        setWorkAreaStart(drag.initialStart + deltaFrames);
+      } else if (drag.type === 'end') {
+        setWorkAreaEnd(drag.initialEnd + deltaFrames);
+      } else {
+        // body: move both together
+        const newStart = drag.initialStart + deltaFrames;
+        const newEnd = drag.initialEnd + deltaFrames;
+        setWorkAreaRange(newStart, newEnd);
+      }
+    },
+    [duration, setWorkAreaStart, setWorkAreaEnd, setWorkAreaRange]
+  );
+
+  const handleWorkAreaPointerUp = useCallback(() => {
+    workAreaDragRef.current = null;
+  }, []);
+
   // ------- Context menu handlers -------
 
   const handleTimelineContextMenu = useCallback(
@@ -363,6 +429,34 @@ export function Timeline({ playback }: TimelineProps = {}) {
       },
     ];
 
+    // Work area items
+    items.push({ type: 'separator' });
+    items.push({
+      id: 'set-work-area-start',
+      label: `Set Work Area Start (${contextMenu.frame})`,
+      shortcut: 'I',
+      onClick: () => {
+        setWorkAreaStart(contextMenu.frame);
+        useEditorStore.getState().setWorkAreaEnabled(true);
+      },
+    });
+    items.push({
+      id: 'set-work-area-end',
+      label: `Set Work Area End (${contextMenu.frame})`,
+      shortcut: 'Shift+I',
+      onClick: () => {
+        setWorkAreaEnd(contextMenu.frame);
+        useEditorStore.getState().setWorkAreaEnabled(true);
+      },
+    });
+    if (workAreaEnabled) {
+      items.push({
+        id: 'clear-work-area',
+        label: 'Clear Work Area',
+        onClick: () => clearWorkArea(),
+      });
+    }
+
     // Add paste option if clipboard has content
     if (keyframeClipboard && selectedNodeIds.size > 0) {
       const firstNodeId = [...selectedNodeIds][0]!;
@@ -389,6 +483,10 @@ export function Timeline({ playback }: TimelineProps = {}) {
     pasteKeyframes,
     keyframeClipboard,
     selectedNodeIds,
+    workAreaEnabled,
+    setWorkAreaStart,
+    setWorkAreaEnd,
+    clearWorkArea,
   ]);
 
   // ============================================================
@@ -657,6 +755,27 @@ export function Timeline({ playback }: TimelineProps = {}) {
               <path d="M21 13v2a4 4 0 0 1-4 4H3" />
             </svg>
           </button>
+          <button
+            className={`${styles.optionButton} ${workAreaEnabled ? styles.active : ''}`}
+            onClick={toggleWorkArea}
+            title="Toggle work area (Alt+W)"
+            aria-label="Toggle work area"
+            data-testid="work-area-toggle"
+          >
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+            >
+              <path d="M3 7V5a2 2 0 0 1 2-2h2" />
+              <path d="M17 3h2a2 2 0 0 1 2 2v2" />
+              <path d="M21 17v2a2 2 0 0 1-2 2h-2" />
+              <path d="M7 21H5a2 2 0 0 1-2-2v-2" />
+            </svg>
+          </button>
           <div style={{ position: 'relative' }}>
             <button
               className={`${styles.optionButton} ${onionSkinEnabled ? styles.active : ''}`}
@@ -724,6 +843,54 @@ export function Timeline({ playback }: TimelineProps = {}) {
                 <span className={styles.rulerLabel}>{frame}</span>
               </div>
             ))}
+            {/* Work Area overlay in ruler */}
+            {workAreaEnabled && (
+              <>
+                {/* Left dimmed region */}
+                <div
+                  className={styles.workAreaDimmed}
+                  style={{ left: 0, width: `${(workAreaStart / duration) * 100}%` }}
+                />
+                {/* Right dimmed region */}
+                <div
+                  className={styles.workAreaDimmed}
+                  style={{ left: `${((workAreaEnd + 1) / duration) * 100}%`, right: 0 }}
+                />
+                {/* Active bar */}
+                {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}
+                <div
+                  className={styles.workAreaBar}
+                  style={{
+                    left: `${(workAreaStart / duration) * 100}%`,
+                    width: `${((workAreaEnd - workAreaStart + 1) / duration) * 100}%`,
+                  }}
+                  onPointerDown={(e) => handleWorkAreaPointerDown(e, 'body')}
+                  onPointerMove={handleWorkAreaPointerMove}
+                  onPointerUp={handleWorkAreaPointerUp}
+                />
+                {/* Start handle */}
+                {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}
+                <div
+                  className={styles.workAreaHandleStart}
+                  style={{
+                    left: `${(workAreaStart / duration) * 100}%`,
+                    transform: 'translateX(-100%)',
+                  }}
+                  onPointerDown={(e) => handleWorkAreaPointerDown(e, 'start')}
+                  onPointerMove={handleWorkAreaPointerMove}
+                  onPointerUp={handleWorkAreaPointerUp}
+                />
+                {/* End handle */}
+                {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}
+                <div
+                  className={styles.workAreaHandleEnd}
+                  style={{ left: `${((workAreaEnd + 1) / duration) * 100}%` }}
+                  onPointerDown={(e) => handleWorkAreaPointerDown(e, 'end')}
+                  onPointerMove={handleWorkAreaPointerMove}
+                  onPointerUp={handleWorkAreaPointerUp}
+                />
+              </>
+            )}
             {/* Playhead */}
             <div
               className={styles.playhead}
@@ -760,6 +927,20 @@ export function Timeline({ playback }: TimelineProps = {}) {
               );
             })}
             {nodes.length === 0 && <div className={styles.track} />}
+
+            {/* Work Area dimmed regions in tracks */}
+            {workAreaEnabled && (
+              <>
+                <div
+                  className={styles.workAreaTrackDimmed}
+                  style={{ left: 0, width: `${(workAreaStart / duration) * 100}%` }}
+                />
+                <div
+                  className={styles.workAreaTrackDimmed}
+                  style={{ left: `${((workAreaEnd + 1) / duration) * 100}%`, right: 0 }}
+                />
+              </>
+            )}
 
             {/* Playhead line */}
             <div

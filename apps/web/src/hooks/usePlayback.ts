@@ -4,7 +4,12 @@
  */
 
 import { useEffect, useRef, useCallback } from 'react';
-import { PlaybackController, evaluateNodeAtFrame, applyAnimatedValues, getAnimatedNodes } from '@quar/animation';
+import {
+  PlaybackController,
+  evaluateNodeAtFrame,
+  applyAnimatedValues,
+  getAnimatedNodes,
+} from '@quar/animation';
 import { useEditorStore } from '../stores/editorStore';
 import { useSceneGraph } from '../contexts/SceneGraphContext';
 
@@ -47,6 +52,8 @@ export function usePlayback() {
         applyAnimations(frame);
       },
     });
+    // Initialize work area from store
+    ctrl.setWorkArea(state.workAreaEnabled, state.workAreaStart, state.workAreaEnd);
     controllerRef.current = ctrl;
 
     const unsub = useEditorStore.subscribe((curr, prev) => {
@@ -58,6 +65,15 @@ export function usePlayback() {
       }
       if (curr.isLooping !== prev.isLooping) {
         ctrl.setLooping(curr.isLooping);
+      }
+      if (curr.workAreaEnabled !== prev.workAreaEnabled) {
+        ctrl.setWorkAreaEnabled(curr.workAreaEnabled);
+      }
+      if (curr.workAreaStart !== prev.workAreaStart) {
+        ctrl.setWorkAreaStart(curr.workAreaStart);
+      }
+      if (curr.workAreaEnd !== prev.workAreaEnd) {
+        ctrl.setWorkAreaEnd(curr.workAreaEnd);
       }
       // Apply animations for manual frame changes (scrubbing, stepping)
       // Only when NOT playing — playback applies via onFrameChange above

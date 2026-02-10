@@ -81,6 +81,10 @@ vi.mock('@quar/animation', async () => {
         setLooping: vi.fn((l: boolean) => {
           looping = l;
         }),
+        setWorkArea: vi.fn(),
+        setWorkAreaEnabled: vi.fn(),
+        setWorkAreaStart: vi.fn(),
+        setWorkAreaEnd: vi.fn(),
         dispose: vi.fn(),
       };
     }),
