@@ -1238,14 +1238,15 @@ export function Canvas() {
         onContextMenu={handleContextMenu}
         style={{ cursor: toolCursor }}
       />
-      {!isDirectSelectionActive && !editingTextNodeId && (
-        <SelectionOverlay
-          bounds={screenBounds}
-          handles={transformHandles}
-          rotation={selectionRotation}
-          onHandlePointerDown={handleOverlayPointerDown}
-        />
-      )}
+      {!editingTextNodeId &&
+        (!isDirectSelectionActive || directSelectionPathNodes.length === 0) && (
+          <SelectionOverlay
+            bounds={screenBounds}
+            handles={isDirectSelectionActive ? [] : transformHandles}
+            rotation={selectionRotation}
+            onHandlePointerDown={isDirectSelectionActive ? undefined : handleOverlayPointerDown}
+          />
+        )}
       {screenMarqueeRect && screenMarqueeRect.width > 0 && screenMarqueeRect.height > 0 && (
         <svg className={styles.marqueeOverlay}>
           <rect
@@ -1278,6 +1279,7 @@ export function Canvas() {
           pathNodes={directSelectionPathNodes}
           selectedPoints={directSelectionPoints}
           camera={cameraRef.current}
+          sceneGraph={sceneGraph}
         />
       )}
       {isPenToolDrawing && (
