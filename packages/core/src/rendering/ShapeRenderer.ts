@@ -740,12 +740,14 @@ export class ShapeRenderer {
     vertices: Float32Array,
     strokeWidth: number,
     closed: boolean,
-    align: string
+    align: string,
+    widthProfile?: number[]
   ): { outline: Float32Array; indices: number[] } | null {
     const numVertices = vertices.length / 2;
     if (numVertices < 2) return null;
 
-    const strokeKey = `${strokeWidth}:${align}`;
+    const profileKey = widthProfile ? `:wp${widthProfile.join(',')}` : '';
+    const strokeKey = `${strokeWidth}:${align}${profileKey}`;
     const cached = this.geometryCache.get(nodeId);
 
     if (cached) {
@@ -758,7 +760,8 @@ export class ShapeRenderer {
       numVertices,
       strokeWidth,
       closed,
-      align as 'center' | 'inside' | 'outside'
+      align as 'center' | 'inside' | 'outside',
+      widthProfile
     );
     const outlineCount = outline.length / 2;
     if (outlineCount < 3) return null;
@@ -1971,7 +1974,14 @@ export class ShapeRenderer {
     nodeOpacity: number = 1
   ): void {
     const align = stroke.align ?? 'center';
-    const cached = this.getCachedStrokeOutline(nodeId, vertices, stroke.width, closed, align);
+    const cached = this.getCachedStrokeOutline(
+      nodeId,
+      vertices,
+      stroke.width,
+      closed,
+      align,
+      stroke.widthProfile as number[] | undefined
+    );
     if (!cached) return;
 
     const { outline: outlineVertices, indices: strokeIndices } = cached;

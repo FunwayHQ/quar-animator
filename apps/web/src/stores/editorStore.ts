@@ -17,6 +17,7 @@ import type {
   Effect,
   EffectType,
   BlendMode,
+  BrushProfile,
 } from '@quar/types';
 import type { KeyframeClipboard } from '@quar/animation';
 import { createTimeline, KeyframeManager } from '@quar/animation';
@@ -154,6 +155,14 @@ export interface EditorStore {
   eraserMode: EraserMode;
   setEraserSize: (size: number) => void;
   setEraserMode: (mode: EraserMode) => void;
+
+  // Brush profiles
+  brushProfiles: BrushProfile[];
+  activeBrushProfileId: string | null;
+  addBrushProfile: (profile: BrushProfile) => void;
+  removeBrushProfile: (id: string) => void;
+  setActiveBrushProfile: (id: string | null) => void;
+  applyBrushProfileToSelection: (sceneGraph: SceneGraphLike) => void;
 
   // Aspect ratio lock
   aspectRatioLocked: boolean;
@@ -425,6 +434,51 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   eraserMode: 'stroke',
   setEraserSize: (size: number) => set({ eraserSize: Math.max(1, Math.min(100, size)) }),
   setEraserMode: (mode: EraserMode) => set({ eraserMode: mode }),
+
+  // Brush profiles
+  brushProfiles: [
+    { id: 'uniform', name: 'Uniform', samples: [1, 1] },
+    { id: 'taper-out', name: 'Taper Out', samples: [1, 1, 0.8, 0.5, 0.2, 0] },
+    { id: 'taper-in', name: 'Taper In', samples: [0, 0.2, 0.5, 0.8, 1, 1] },
+    { id: 'taper-both', name: 'Taper Both', samples: [0, 0.3, 0.8, 1, 1, 0.8, 0.3, 0] },
+    { id: 'bulge', name: 'Bulge', samples: [0.3, 0.7, 1, 1, 0.7, 0.3] },
+    { id: 'calligraphic', name: 'Calligraphic', samples: [0.2, 0.8, 1, 0.6, 0.3] },
+  ],
+  activeBrushProfileId: null,
+  addBrushProfile: (profile: BrushProfile) =>
+    set((state) => ({ brushProfiles: [...state.brushProfiles, profile] })),
+  removeBrushProfile: (id: string) =>
+    set((state) => ({
+      brushProfiles: state.brushProfiles.filter((p) => p.id !== id),
+      activeBrushProfileId: state.activeBrushProfileId === id ? null : state.activeBrushProfileId,
+    })),
+  setActiveBrushProfile: (id: string | null) => set({ activeBrushProfileId: id }),
+  applyBrushProfileToSelection: (sceneGraph: SceneGraphLike) => {
+    const state = get();
+    const profile = state.brushProfiles.find((p) => p.id === state.activeBrushProfileId);
+    if (!profile) return;
+
+    const selectedIds = state.selectedNodeIds;
+    if (selectedIds.size === 0) return;
+
+    // Push undo before modifying
+    const pushUndo = (get() as any).pushUndo;
+    if (pushUndo) pushUndo(sceneGraph);
+
+    for (const nodeId of selectedIds) {
+      const node = sceneGraph.getNode(nodeId);
+      if (!node) continue;
+
+      const strokes = (node as any).strokes as Stroke[] | undefined;
+      if (strokes && strokes.length > 0) {
+        const isUniform = profile.id === 'uniform';
+        const newStrokes = strokes.map((s: Stroke, i: number) =>
+          i === 0 ? { ...s, widthProfile: isUniform ? undefined : [...profile.samples] } : s
+        );
+        sceneGraph.updateNode(nodeId, { strokes: newStrokes });
+      }
+    }
+  },
 
   // Aspect ratio lock
   aspectRatioLocked: false,
@@ -1555,6 +1609,16 @@ export const useSetEraserSize = (): ((size: number) => void) =>
   useEditorStore((state: EditorStore) => state.setEraserSize);
 export const useSetEraserMode = (): ((mode: EraserMode) => void) =>
   useEditorStore((state: EditorStore) => state.setEraserMode);
+
+// Brush profile selectors
+export const useBrushProfiles = (): BrushProfile[] =>
+  useEditorStore((state: EditorStore) => state.brushProfiles);
+export const useActiveBrushProfileId = (): string | null =>
+  useEditorStore((state: EditorStore) => state.activeBrushProfileId);
+export const useSetActiveBrushProfile = (): ((id: string | null) => void) =>
+  useEditorStore((state: EditorStore) => state.setActiveBrushProfile);
+export const useApplyBrushProfileToSelection = (): ((sceneGraph: SceneGraphLike) => void) =>
+  useEditorStore((state: EditorStore) => state.applyBrushProfileToSelection);
 
 // Aspect ratio lock selectors
 export const useAspectRatioLocked = (): boolean =>

@@ -718,7 +718,8 @@ export function generateStrokeOutlineVertices(
   numVertices: number,
   width: number,
   closed: boolean,
-  align: 'center' | 'inside' | 'outside' = 'center'
+  align: 'center' | 'inside' | 'outside' = 'center',
+  widthProfile?: number[]
 ): Float32Array {
   if (numVertices < 2) return new Float32Array(0);
 
@@ -784,8 +785,23 @@ export function generateStrokeOutlineVertices(
       lastPerpY = perpY;
     }
 
-    leftSide.push(cx + perpX * leftOffset, cy + perpY * leftOffset);
-    rightSide.push(cx + perpX * rightOffset, cy + perpY * rightOffset);
+    // Apply width profile multiplier if provided
+    let effLeftOffset = leftOffset;
+    let effRightOffset = rightOffset;
+    if (widthProfile && widthProfile.length >= 2) {
+      const t = numVertices > 1 ? i / (numVertices - 1) : 0;
+      const profileLen = widthProfile.length;
+      const fi = t * (profileLen - 1);
+      const lo = Math.floor(fi);
+      const hi = Math.min(lo + 1, profileLen - 1);
+      const frac = fi - lo;
+      const multiplier = widthProfile[lo]! + frac * (widthProfile[hi]! - widthProfile[lo]!);
+      effLeftOffset = leftOffset * multiplier;
+      effRightOffset = rightOffset * multiplier;
+    }
+
+    leftSide.push(cx + perpX * effLeftOffset, cy + perpY * effLeftOffset);
+    rightSide.push(cx + perpX * effRightOffset, cy + perpY * effRightOffset);
   }
 
   // Combine: left side forward + right side reversed = closed polygon

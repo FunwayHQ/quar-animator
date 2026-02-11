@@ -83,6 +83,23 @@ function hexToColor(hex: string): Color | null {
 
 const groupBoundsManager = new SelectionManager();
 
+/** Match a stroke's widthProfile to a known BrushProfile id */
+function matchStrokeProfile(
+  stroke: Stroke,
+  profiles: import('@quar/types').BrushProfile[]
+): string {
+  if (!stroke.widthProfile || stroke.widthProfile.length === 0) return 'uniform';
+  for (const p of profiles) {
+    if (
+      p.samples.length === stroke.widthProfile.length &&
+      p.samples.every((s, i) => Math.abs(s - stroke.widthProfile![i]!) < 0.001)
+    ) {
+      return p.id;
+    }
+  }
+  return 'uniform';
+}
+
 /** Safely format a number to 1 decimal place — returns '0.0' for NaN/Infinity */
 function fmt1(v: number): string {
   if (!isFinite(v)) return '0.0';
@@ -886,6 +903,27 @@ export function PropertiesPanel() {
       const stroke = strokes[index];
       if (!stroke) return;
       strokes[index] = { ...stroke, align };
+      sceneGraph.updateNode(selectedId, { strokes } as Partial<Node>);
+    },
+    [selectedId, sceneGraph]
+  );
+
+  const handleStrokeProfileChange = useCallback(
+    (index: number, profileId: string) => {
+      if (!selectedId) return;
+      const currentNode = sceneGraph.getNode(selectedId);
+      if (!currentNode) return;
+      const strokes = [...getNodeStrokes(currentNode)];
+      const stroke = strokes[index];
+      if (!stroke) return;
+      const profiles = useEditorStore.getState().brushProfiles;
+      const profile = profiles.find((p) => p.id === profileId);
+      if (profileId === 'uniform' || !profile) {
+        const { widthProfile: _, ...rest } = stroke;
+        strokes[index] = rest;
+      } else {
+        strokes[index] = { ...stroke, widthProfile: [...profile.samples] };
+      }
       sceneGraph.updateNode(selectedId, { strokes } as Partial<Node>);
     },
     [selectedId, sceneGraph]
@@ -2281,6 +2319,30 @@ export function PropertiesPanel() {
                               </button>
                             ))}
                           </div>
+                        </div>
+                        <div className={styles.strokeSubRow}>
+                          <label
+                            className={styles.propertyLabelSmall}
+                            htmlFor={`stroke-profile-${index}`}
+                          >
+                            Profile
+                          </label>
+                          <select
+                            id={`stroke-profile-${index}`}
+                            className="select"
+                            value={matchStrokeProfile(
+                              stroke,
+                              useEditorStore.getState().brushProfiles
+                            )}
+                            onChange={(e) => handleStrokeProfileChange(index, e.target.value)}
+                            data-testid={`stroke-profile-${index}`}
+                          >
+                            {useEditorStore.getState().brushProfiles.map((p) => (
+                              <option key={p.id} value={p.id}>
+                                {p.name}
+                              </option>
+                            ))}
+                          </select>
                         </div>
                       </div>
                     );

@@ -92,6 +92,12 @@
   color: var(--color-text-tertiary);
 }
 
+.propertyLabelSmall {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-tertiary);
+  min-width: 36px;
+}
+
 .propertyInputs {
   display: flex;
   align-items: center;

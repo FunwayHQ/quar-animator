@@ -1,12 +1,17 @@
 /**
  * Brush Tool for Quar Animator
- * Creates freehand paths with optional smoothing and pressure sensitivity
+ *
+ * Creates freehand paths with Schneider curve fitting and Kalman-filtered
+ * input stabilization. Supports per-point variable width from pressure.
  */
 
 import type { CanvasPointerEvent, PathNode, PathPoint, Vector2 } from '@quar/types';
 import { BaseTool, type ToolContext } from './BaseTool';
 import { createDefaultTransform } from '../SceneGraph';
 import { vec2 } from '../math';
+import { schneiderFitCurve, curvesToPathPoints, type CubicSegment } from '../path/schneider';
+import { KalmanFilter2D, smoothingToKalmanParams } from '../path/kalmanFilter';
+import { tessellatePathToPoints } from '../path/pathUtils';
 
 // ============================================================================
 // Types
@@ -16,6 +21,7 @@ interface BrushPoint {
   position: Vector2;
   pressure: number;
   timestamp: number;
+  width: number; // size * mappedPressure at capture time
 }
 
 export interface BrushToolOptions {
@@ -32,78 +38,14 @@ export interface BrushToolOptions {
 }
 
 // ============================================================================
-// Ramer-Douglas-Peucker Smoothing Algorithm
+// Constants
 // ============================================================================
 
-/**
- * Simplify a path using the Ramer-Douglas-Peucker algorithm
- * @param points Array of points to simplify
- * @param epsilon Maximum perpendicular distance for simplification
- * @returns Simplified array of points
- */
-function simplifyPath(points: Vector2[], epsilon: number): Vector2[] {
-  if (points.length < 3) return [...points];
+/** Schneider error threshold for final curve fitting (squared world units) */
+const SCHNEIDER_ERROR = 4.0;
 
-  // Find the point with maximum distance from line between first and last
-  const first = points[0];
-  const last = points[points.length - 1];
-
-  let maxDistance = 0;
-  let maxIndex = 0;
-
-  for (let i = 1; i < points.length - 1; i++) {
-    const distance = perpendicularDistance(points[i], first, last);
-    if (distance > maxDistance) {
-      maxDistance = distance;
-      maxIndex = i;
-    }
-  }
-
-  // If max distance is greater than epsilon, recursively simplify
-  if (maxDistance > epsilon) {
-    // Recursive call on two halves
-    const left = simplifyPath(points.slice(0, maxIndex + 1), epsilon);
-    const right = simplifyPath(points.slice(maxIndex), epsilon);
-
-    // Combine results (remove duplicate point at junction)
-    return [...left.slice(0, -1), ...right];
-  }
-
-  // All points are within epsilon, return just endpoints
-  return [first, last];
-}
-
-/**
- * Calculate perpendicular distance from point to line segment
- */
-function perpendicularDistance(point: Vector2, lineStart: Vector2, lineEnd: Vector2): number {
-  const dx = lineEnd.x - lineStart.x;
-  const dy = lineEnd.y - lineStart.y;
-
-  // Handle degenerate case where line is a point
-  const lineLengthSq = dx * dx + dy * dy;
-  if (lineLengthSq === 0) {
-    return vec2.distance(point, lineStart);
-  }
-
-  // Calculate perpendicular distance using cross product
-  const numerator = Math.abs(
-    dy * point.x - dx * point.y + lineEnd.x * lineStart.y - lineEnd.y * lineStart.x
-  );
-  const denominator = Math.sqrt(lineLengthSq);
-
-  return numerator / denominator;
-}
-
-/**
- * Convert smoothing value (0-100) to epsilon for RDP algorithm
- * Higher smoothing = higher epsilon = more simplification
- */
-function smoothingToEpsilon(smoothing: number, zoom: number): number {
-  // Map 0-100 to 0.5-15 world units, adjusted for zoom
-  const baseEpsilon = 0.5 + (smoothing / 100) * 14.5;
-  return baseEpsilon / zoom;
-}
+/** Minimum number of floating points before committing a batch */
+const COMMIT_THRESHOLD = 12;
 
 // ============================================================================
 // BrushTool Class
@@ -121,9 +63,16 @@ export class BrushTool extends BaseTool {
     pressureMax: 1.0,
   };
 
-  private capturedPoints: BrushPoint[] = [];
   private isDrawing: boolean = false;
   private previewNode: PathNode | null = null;
+
+  // Pipeline state
+  private kalman: KalmanFilter2D | null = null;
+  private lastTimestamp: number = 0;
+  private committedCurves: CubicSegment[] = [];
+  private committedWidths: number[] = [];
+  private floatingPoints: BrushPoint[] = [];
+  private allPoints: BrushPoint[] = [];
 
   constructor(context: ToolContext) {
     super(context);
@@ -133,30 +82,18 @@ export class BrushTool extends BaseTool {
   // Options
   // --------------------------------------------------------------------------
 
-  /**
-   * Get current brush options
-   */
   getOptions(): Readonly<BrushToolOptions> {
     return { ...this.options };
   }
 
-  /**
-   * Set brush options
-   */
   setOptions(options: Partial<BrushToolOptions>): void {
     this.options = { ...this.options, ...options };
   }
 
-  /**
-   * Set brush size
-   */
   setSize(size: number): void {
     this.options.size = Math.max(1, Math.min(100, size));
   }
 
-  /**
-   * Set smoothing amount (0-100)
-   */
   setSmoothing(smoothing: number): void {
     this.options.smoothing = Math.max(0, Math.min(100, smoothing));
   }
@@ -166,38 +103,45 @@ export class BrushTool extends BaseTool {
   // --------------------------------------------------------------------------
 
   onPointerDown(event: CanvasPointerEvent): void {
-    // Only handle left mouse button
     if (event.button !== 0) return;
 
     this.isDrawing = true;
-    this.capturedPoints = [];
     this.state.isDragging = true;
     this.state.startWorldPos = { ...event.worldPosition };
 
-    // Capture first point
-    this.capturePoint(event);
+    // Initialize Kalman filter
+    const params = smoothingToKalmanParams(this.options.smoothing);
+    this.kalman = new KalmanFilter2D(params.processNoise, params.measurementNoise);
+    this.lastTimestamp = event.timestamp;
 
-    // Create preview node
+    // Reset pipeline
+    this.committedCurves = [];
+    this.committedWidths = [];
+    this.floatingPoints = [];
+    this.allPoints = [];
+
+    // Capture first point (no Kalman on first point — initialize)
+    this.capturePoint(event);
     this.updatePreviewNode();
   }
 
   onPointerMove(event: CanvasPointerEvent): void {
     if (!this.isDrawing) return;
 
-    // Capture point
     this.capturePoint(event);
 
-    // Update preview
+    // Commit floating points when buffer is large enough
+    if (this.floatingPoints.length >= COMMIT_THRESHOLD) {
+      this.commitFloatingPoints();
+    }
+
     this.updatePreviewNode();
   }
 
   onPointerUp(event: CanvasPointerEvent): void {
     if (!this.isDrawing) return;
 
-    // Capture final point
     this.capturePoint(event);
-
-    // Finalize the stroke
     this.finalizeStroke();
   }
 
@@ -209,7 +153,6 @@ export class BrushTool extends BaseTool {
     if (!this.isDrawing) return;
 
     if (event.key === 'Escape') {
-      // Cancel stroke
       this.cancelStroke();
     }
   }
@@ -227,64 +170,100 @@ export class BrushTool extends BaseTool {
   // --------------------------------------------------------------------------
 
   private capturePoint(event: CanvasPointerEvent): void {
-    const point: BrushPoint = {
-      position: { ...event.worldPosition },
-      pressure: this.options.pressureEnabled ? event.pressure : 1,
-      timestamp: event.timestamp,
-    };
+    const rawPos = event.worldPosition;
 
-    // Only add point if it's far enough from the last point
-    // This prevents too many points from being captured
-    if (this.capturedPoints.length > 0) {
-      const lastPoint = this.capturedPoints[this.capturedPoints.length - 1]!;
-      const minDistance = 2 / this.context.camera.zoom; // 2 screen pixels
-      if (vec2.distance(point.position, lastPoint.position) < minDistance) {
+    // Filter through Kalman
+    const dt = Math.max(0.001, (event.timestamp - this.lastTimestamp) / 1000);
+    this.lastTimestamp = event.timestamp;
+    const filteredPos = this.kalman!.filter(rawPos, dt);
+
+    // Minimum distance filter
+    if (this.allPoints.length > 0) {
+      const lastPoint = this.allPoints[this.allPoints.length - 1]!;
+      const minDistance = 2 / this.context.camera.zoom;
+      if (vec2.distance(filteredPos, lastPoint.position) < minDistance) {
         return;
       }
     }
 
-    this.capturedPoints.push(point);
+    // Compute per-point width
+    const pressure = this.options.pressureEnabled ? event.pressure : 1;
+    const mappedPressure =
+      this.options.pressureMin + pressure * (this.options.pressureMax - this.options.pressureMin);
+    const pointWidth = this.options.size * mappedPressure;
+
+    const point: BrushPoint = {
+      position: { ...filteredPos },
+      pressure,
+      timestamp: event.timestamp,
+      width: pointWidth,
+    };
+
+    this.allPoints.push(point);
+    this.floatingPoints.push(point);
+  }
+
+  /**
+   * Commit the front portion of floating points via Schneider fit,
+   * keeping the last few for overlap.
+   */
+  private commitFloatingPoints(): void {
+    if (this.floatingPoints.length < 4) return;
+
+    // Keep last 3 points for overlap with next batch
+    const toCommit = this.floatingPoints.slice(0, -3);
+    const positions = toCommit.map((p) => p.position);
+
+    const curves = schneiderFitCurve(positions, SCHNEIDER_ERROR);
+    this.committedCurves.push(...curves);
+
+    // Accumulate widths for committed points
+    for (const p of toCommit) {
+      this.committedWidths.push(p.width);
+    }
+
+    // Keep overlap
+    this.floatingPoints = this.floatingPoints.slice(-3);
   }
 
   private updatePreviewNode(): void {
-    if (this.capturedPoints.length < 2) {
+    if (this.allPoints.length < 2) {
       this.previewNode = null;
       return;
     }
 
-    // Get positions and apply minimal smoothing for preview
-    const positions = this.capturedPoints.map((p) => p.position);
+    // For preview: fit all current points
+    const positions = this.allPoints.map((p) => p.position);
+    const widths = this.allPoints.map((p) => p.width);
+    const curves = schneiderFitCurve(positions, SCHNEIDER_ERROR * 2); // looser for preview
+    const pathPoints = curvesToPathPoints(curves);
 
-    // Use light smoothing for preview (half the configured amount for responsiveness)
-    const previewSmoothing = this.options.smoothing / 2;
-    const epsilon = smoothingToEpsilon(previewSmoothing, this.context.camera.zoom);
-    const simplified = simplifyPath(positions, epsilon);
+    if (pathPoints.length < 2) {
+      this.previewNode = null;
+      return;
+    }
 
-    // Convert to path points (all corner points for now, no bezier handles)
-    const pathPoints = this.positionsToPathPoints(simplified);
-
-    // Create or update preview node
-    this.previewNode = this.createPathNode(pathPoints, false);
+    this.previewNode = this.createPathNode(pathPoints, widths);
   }
 
   private finalizeStroke(): void {
-    if (this.capturedPoints.length < 2) {
+    if (this.allPoints.length < 2) {
       this.cancelStroke();
       return;
     }
 
-    // Get positions
-    const positions = this.capturedPoints.map((p) => p.position);
+    // Final Schneider fit on all points
+    const positions = this.allPoints.map((p) => p.position);
+    const widths = this.allPoints.map((p) => p.width);
+    const curves = schneiderFitCurve(positions, SCHNEIDER_ERROR);
+    const pathPoints = curvesToPathPoints(curves);
 
-    // Apply full smoothing
-    const epsilon = smoothingToEpsilon(this.options.smoothing, this.context.camera.zoom);
-    const simplified = simplifyPath(positions, epsilon);
+    if (pathPoints.length < 2) {
+      this.cancelStroke();
+      return;
+    }
 
-    // Fit smooth curves to simplified points
-    const pathPoints = this.fitCurvesToPoints(simplified);
-
-    // Create final path node
-    const node = this.createPathNode(pathPoints, false);
+    const node = this.createPathNode(pathPoints, widths);
 
     // Add to scene graph
     this.context.onTransformStart?.();
@@ -296,7 +275,6 @@ export class BrushTool extends BaseTool {
     // Switch to selection tool
     this.context.setActiveTool('selection');
 
-    // Reset state
     this.resetBrushState();
   }
 
@@ -305,119 +283,27 @@ export class BrushTool extends BaseTool {
   }
 
   private resetBrushState(): void {
-    this.capturedPoints = [];
     this.isDrawing = false;
     this.previewNode = null;
+    this.kalman = null;
+    this.committedCurves = [];
+    this.committedWidths = [];
+    this.floatingPoints = [];
+    this.allPoints = [];
     this.resetState();
   }
 
   /**
-   * Convert positions to simple corner path points
+   * Create a filled closed outline PathNode from the spine path and per-point widths.
+   * Uses generateStrokeOutlineVertices internally with a widthProfile.
    */
-  private positionsToPathPoints(positions: Vector2[]): PathPoint[] {
-    return positions.map((pos) => ({
-      position: { ...pos },
-      handleIn: null,
-      handleOut: null,
-      type: 'corner' as const,
-    }));
-  }
-
-  /**
-   * Fit smooth curves to a series of points
-   * Creates smooth bezier handles for a natural brush stroke appearance
-   */
-  private fitCurvesToPoints(positions: Vector2[]): PathPoint[] {
-    if (positions.length < 2) {
-      return this.positionsToPathPoints(positions);
-    }
-
-    if (positions.length === 2) {
-      // Two points: just a straight line
-      return this.positionsToPathPoints(positions);
-    }
-
-    const pathPoints: PathPoint[] = [];
-
-    for (let i = 0; i < positions.length; i++) {
-      const pos = positions[i];
-      const prev = positions[i - 1];
-      const next = positions[i + 1];
-
-      if (i === 0) {
-        // First point: only handleOut toward next point
-        const handleLength = vec2.distance(pos, next) * 0.3;
-        const direction = vec2.normalize(vec2.subtract(next, pos));
-
-        pathPoints.push({
-          position: { ...pos },
-          handleIn: null,
-          handleOut: { x: direction.x * handleLength, y: direction.y * handleLength },
-          type: 'smooth',
-        });
-      } else if (i === positions.length - 1) {
-        // Last point: only handleIn from previous point
-        const handleLength = vec2.distance(pos, prev) * 0.3;
-        const direction = vec2.normalize(vec2.subtract(prev, pos));
-
-        pathPoints.push({
-          position: { ...pos },
-          handleIn: { x: direction.x * handleLength, y: direction.y * handleLength },
-          handleOut: null,
-          type: 'smooth',
-        });
-      } else {
-        // Middle point: smooth handles based on prev and next
-        const toPrev = vec2.subtract(prev, pos);
-        const toNext = vec2.subtract(next, pos);
-
-        // Calculate handle direction as average of incoming/outgoing directions
-        const prevDir = vec2.normalize(toPrev);
-        const nextDir = vec2.normalize(toNext);
-
-        // Tangent is perpendicular to the angle bisector
-        const tangent = vec2.normalize({
-          x: nextDir.x - prevDir.x,
-          y: nextDir.y - prevDir.y,
-        });
-
-        // Handle lengths proportional to distance to neighbors
-        const handleInLength = vec2.length(toPrev) * 0.3;
-        const handleOutLength = vec2.length(toNext) * 0.3;
-
-        pathPoints.push({
-          position: { ...pos },
-          handleIn: { x: -tangent.x * handleInLength, y: -tangent.y * handleInLength },
-          handleOut: { x: tangent.x * handleOutLength, y: tangent.y * handleOutLength },
-          type: 'smooth',
-        });
-      }
-    }
-
-    return pathPoints;
-  }
-
-  private createPathNode(points: PathPoint[], _closed: boolean): PathNode {
+  private createPathNode(spinePoints: PathPoint[], widths: number[]): PathNode {
     const transform = createDefaultTransform();
     transform.position = { x: 0, y: 0 };
     transform.anchor = { x: 0, y: 0 };
 
-    // Calculate stroke width based on brush size and average pressure
-    let avgPressure = 1;
-    if (this.options.pressureEnabled && this.capturedPoints.length > 0) {
-      const totalPressure = this.capturedPoints.reduce((sum, p) => sum + p.pressure, 0);
-      avgPressure = totalPressure / this.capturedPoints.length;
-      // Map pressure to range
-      avgPressure =
-        this.options.pressureMin +
-        avgPressure * (this.options.pressureMax - this.options.pressureMin);
-    }
-
-    const strokeWidth = this.options.size * avgPressure;
-
-    // Generate a closed outline path for the brush stroke
-    // This creates a filled shape since WebGL line width is limited to 1px
-    const outlinePoints = this.generateStrokeOutline(points, strokeWidth);
+    // Generate variable-width outline
+    const outlinePoints = this.generateVariableWidthOutline(spinePoints, widths);
 
     return {
       id: this.context.generateId(),
@@ -431,7 +317,7 @@ export class BrushTool extends BaseTool {
       opacity: 1,
       blendMode: 'normal',
       points: outlinePoints,
-      closed: true, // Closed path for fill rendering
+      closed: true,
       fills: [
         {
           type: 'solid',
@@ -440,55 +326,96 @@ export class BrushTool extends BaseTool {
           visible: true,
         },
       ],
-      strokes: [], // No stroke needed, using fill
+      strokes: [],
     };
   }
 
   /**
-   * Generate outline points for a stroke path
-   * Creates a closed shape by offsetting the path on both sides
+   * Generate a closed outline from spine points with variable width.
+   * Tessellates the spine, computes perpendicular offsets per sample,
+   * and returns the outline as corner PathPoints.
    */
-  private generateStrokeOutline(points: PathPoint[], width: number): PathPoint[] {
-    if (points.length < 2) return points;
+  private generateVariableWidthOutline(spinePoints: PathPoint[], widths: number[]): PathPoint[] {
+    if (spinePoints.length < 2) return spinePoints;
 
-    const halfWidth = Math.max(width / 2, 1); // Ensure minimum width
-    const leftSide: PathPoint[] = [];
-    const rightSide: PathPoint[] = [];
+    // Tessellate spine into dense sample points
+    const sampleCount = Math.max(spinePoints.length * 8, 40);
+    const samples: Vector2[] = [];
+    const sampleWidths: number[] = [];
+    const tessellated: Vector2[] = tessellatePathToPoints(spinePoints, false, 0.5);
 
-    // Track last valid perpendicular for degenerate points
+    if (tessellated.length < 2) return spinePoints;
+
+    // Resample to uniform arc-length spacing
+    const totalLength = computePolylineLength(tessellated);
+    if (totalLength < 0.001) return spinePoints;
+
+    const step = totalLength / (sampleCount - 1);
+
+    // Build cumulative distances
+    const cumDist: number[] = [0];
+    for (let i = 1; i < tessellated.length; i++) {
+      cumDist.push(cumDist[i - 1] + vec2.distance(tessellated[i - 1], tessellated[i]));
+    }
+
+    for (let s = 0; s < sampleCount; s++) {
+      const targetDist = s * step;
+      const t = targetDist / totalLength;
+
+      // Find segment in tessellated array
+      let segIdx = 0;
+      while (segIdx < cumDist.length - 2 && cumDist[segIdx + 1] < targetDist) {
+        segIdx++;
+      }
+      const segLen = cumDist[segIdx + 1] - cumDist[segIdx];
+      const localT = segLen > 0.0001 ? (targetDist - cumDist[segIdx]) / segLen : 0;
+
+      const p = vec2.lerp(
+        tessellated[segIdx],
+        tessellated[Math.min(segIdx + 1, tessellated.length - 1)],
+        localT
+      );
+      samples.push(p);
+
+      // Interpolate width at this t
+      const widthT = t * (widths.length - 1);
+      const wLo = Math.floor(widthT);
+      const wHi = Math.min(wLo + 1, widths.length - 1);
+      const wFrac = widthT - wLo;
+      const w =
+        (widths[wLo] ?? widths[0]) +
+        wFrac * ((widths[wHi] ?? widths[0]) - (widths[wLo] ?? widths[0]));
+      sampleWidths.push(w);
+    }
+
+    // Compute perpendicular offsets
+    const leftSide: Vector2[] = [];
+    const rightSide: Vector2[] = [];
     let lastPerpX = 0;
     let lastPerpY = 1;
 
-    for (let i = 0; i < points.length; i++) {
-      const curr = points[i].position;
-      const prev = i > 0 ? points[i - 1].position : null;
-      const next = i < points.length - 1 ? points[i + 1].position : null;
+    for (let i = 0; i < samples.length; i++) {
+      const curr = samples[i];
+      const prev = i > 0 ? samples[i - 1] : null;
+      const next = i < samples.length - 1 ? samples[i + 1] : null;
 
-      // Calculate direction vector
       let dx = 0;
       let dy = 0;
-
       if (prev && next) {
-        // Middle point: use direction from prev to next
         dx = next.x - prev.x;
         dy = next.y - prev.y;
       } else if (next) {
-        // First point: use direction to next
         dx = next.x - curr.x;
         dy = next.y - curr.y;
       } else if (prev) {
-        // Last point: use direction from prev
         dx = curr.x - prev.x;
         dy = curr.y - prev.y;
       }
 
-      // Normalize and get perpendicular
       const len = Math.sqrt(dx * dx + dy * dy);
       let perpX: number;
       let perpY: number;
-
       if (len < 0.001) {
-        // Degenerate point: reuse last valid perpendicular
         perpX = lastPerpX;
         perpY = lastPerpY;
       } else {
@@ -498,39 +425,52 @@ export class BrushTool extends BaseTool {
         lastPerpY = perpY;
       }
 
-      // Create offset points with validated coordinates
-      const leftX = curr.x + perpX * halfWidth;
-      const leftY = curr.y + perpY * halfWidth;
-      const rightX = curr.x - perpX * halfWidth;
-      const rightY = curr.y - perpY * halfWidth;
-
-      // Only add valid points
-      if (isFinite(leftX) && isFinite(leftY)) {
-        leftSide.push({
-          position: { x: leftX, y: leftY },
-          handleIn: null,
-          handleOut: null,
-          type: 'corner',
-        });
-      }
-
-      if (isFinite(rightX) && isFinite(rightY)) {
-        rightSide.push({
-          position: { x: rightX, y: rightY },
-          handleIn: null,
-          handleOut: null,
-          type: 'corner',
-        });
-      }
+      const halfWidth = Math.max(sampleWidths[i] / 2, 0.5);
+      leftSide.push({
+        x: curr.x + perpX * halfWidth,
+        y: curr.y + perpY * halfWidth,
+      });
+      rightSide.push({
+        x: curr.x - perpX * halfWidth,
+        y: curr.y - perpY * halfWidth,
+      });
     }
 
-    // Need at least 3 points to form a closed shape
-    if (leftSide.length < 1 || rightSide.length < 1) {
-      return points; // Fall back to original points
+    // Add round end caps
+    const capPoints = 4;
+    const startCap = generateRoundCap(samples[0], leftSide[0], rightSide[0], capPoints, true);
+    const endCap = generateRoundCap(
+      samples[samples.length - 1],
+      leftSide[leftSide.length - 1],
+      rightSide[rightSide.length - 1],
+      capPoints,
+      false
+    );
+
+    // Combine: left forward + end cap + right reversed + start cap
+    const outline: PathPoint[] = [];
+
+    // Start cap (from rightSide[0] around to leftSide[0])
+    for (const p of startCap) {
+      outline.push(cornerPoint(p));
     }
 
-    // Combine: left side forward, then right side backward to form closed outline
-    return [...leftSide, ...rightSide.reverse()];
+    // Left side forward
+    for (const p of leftSide) {
+      outline.push(cornerPoint(p));
+    }
+
+    // End cap (from leftSide[last] around to rightSide[last])
+    for (const p of endCap) {
+      outline.push(cornerPoint(p));
+    }
+
+    // Right side reversed
+    for (let i = rightSide.length - 1; i >= 0; i--) {
+      outline.push(cornerPoint(rightSide[i]));
+    }
+
+    return outline;
   }
 
   // --------------------------------------------------------------------------
@@ -538,9 +478,64 @@ export class BrushTool extends BaseTool {
   // --------------------------------------------------------------------------
 
   onDeactivate(): void {
-    // Cancel any in-progress stroke when switching tools
     if (this.isDrawing) {
       this.cancelStroke();
     }
   }
+}
+
+// ============================================================================
+// Helpers
+// ============================================================================
+
+function cornerPoint(pos: Vector2): PathPoint {
+  return {
+    position: { ...pos },
+    handleIn: null,
+    handleOut: null,
+    type: 'corner',
+  };
+}
+
+function computePolylineLength(points: Vector2[]): number {
+  let total = 0;
+  for (let i = 1; i < points.length; i++) {
+    total += vec2.distance(points[i - 1], points[i]);
+  }
+  return total;
+}
+
+/**
+ * Generate a semicircular end cap.
+ * @param center The endpoint of the stroke spine
+ * @param leftPt The left offset point at this end
+ * @param rightPt The right offset point at this end
+ * @param numPoints Number of points in the semicircle
+ * @param isStart Whether this is the start cap (rotates opposite)
+ */
+function generateRoundCap(
+  center: Vector2,
+  leftPt: Vector2,
+  rightPt: Vector2,
+  numPoints: number,
+  isStart: boolean
+): Vector2[] {
+  const radius = vec2.distance(leftPt, rightPt) / 2;
+  if (radius < 0.01) return [];
+
+  // Angle from center to the start of the arc
+  const fromPt = isStart ? rightPt : leftPt;
+  const startAngle = Math.atan2(fromPt.y - center.y, fromPt.x - center.x);
+
+  const points: Vector2[] = [];
+  for (let i = 0; i <= numPoints; i++) {
+    const t = i / numPoints;
+    const angle = startAngle + t * Math.PI; // semicircle = PI radians
+    points.push({
+      x: center.x + Math.cos(angle) * radius,
+      y: center.y + Math.sin(angle) * radius,
+    });
+  }
+
+  return points;
 }

@@ -2,10 +2,17 @@
  * Tests for EraserTool
  */
 
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { EraserTool } from './EraserTool';
 import type { ToolContext } from './BaseTool';
-import type { PathNode, RectangleNode, EllipseNode } from '@quar/types';
+import type {
+  PathNode,
+  RectangleNode,
+  EllipseNode,
+  PolygonNode,
+  ImageNode,
+  TextNode,
+} from '@quar/types';
 import { createMockToolContext, createMockPointerEvent } from '../test/setup';
 import { createDefaultTransform } from '../SceneGraph';
 
@@ -637,6 +644,460 @@ describe('EraserTool', () => {
 
       // All shapes should remain (none in eraser range)
       expect(context.sceneGraph.getNodeCount()).toBe(10);
+    });
+  });
+
+  // ==========================================================================
+  // Undo Support
+  // ==========================================================================
+
+  describe('undo support', () => {
+    beforeEach(() => {
+      tool.setMode('stroke');
+      tool.setSize(20);
+    });
+
+    it('should call onTransformStart on first deletion in stroke mode', () => {
+      const onTransformStart = vi.fn();
+      (context as any).onTransformStart = onTransformStart;
+
+      const rect = createTestRectangle(50, 50, 40, 40);
+      context.sceneGraph.addNode(rect);
+
+      const downEvent = createMockPointerEvent({
+        worldPosition: { x: 50, y: 50 },
+        button: 0,
+      });
+      tool.onPointerDown(downEvent);
+
+      const upEvent = createMockPointerEvent({
+        worldPosition: { x: 50, y: 50 },
+        button: 0,
+      });
+      tool.onPointerUp(upEvent);
+
+      expect(onTransformStart).toHaveBeenCalledTimes(1);
+      expect(context.sceneGraph.getNodeCount()).toBe(0);
+    });
+
+    it('should call onTransformStart only once per gesture', () => {
+      const onTransformStart = vi.fn();
+      (context as any).onTransformStart = onTransformStart;
+
+      const rect1 = createTestRectangle(50, 50, 40, 40);
+      const rect2 = createTestRectangle(200, 50, 40, 40);
+      context.sceneGraph.addNode(rect1);
+      context.sceneGraph.addNode(rect2);
+
+      // Start erasing near first rectangle
+      const downEvent = createMockPointerEvent({
+        worldPosition: { x: 50, y: 50 },
+        button: 0,
+      });
+      tool.onPointerDown(downEvent);
+
+      // Move to second rectangle
+      const moveEvent = createMockPointerEvent({
+        worldPosition: { x: 200, y: 50 },
+      });
+      tool.onPointerMove(moveEvent);
+
+      const upEvent = createMockPointerEvent({
+        worldPosition: { x: 200, y: 50 },
+        button: 0,
+      });
+      tool.onPointerUp(upEvent);
+
+      // Both rects should be deleted but onTransformStart called only once
+      expect(context.sceneGraph.getNodeCount()).toBe(0);
+      expect(onTransformStart).toHaveBeenCalledTimes(1);
+    });
+
+    it('should call onTransformStart on first deletion in point mode', () => {
+      const onTransformStart = vi.fn();
+      (context as any).onTransformStart = onTransformStart;
+
+      tool.setMode('point');
+
+      const path = createTestPath(0, 0, [
+        { x: 0, y: 0 },
+        { x: 50, y: 50 },
+        { x: 100, y: 0 },
+        { x: 150, y: 50 },
+      ]);
+      context.sceneGraph.addNode(path);
+
+      // Erase near first point
+      const downEvent = createMockPointerEvent({
+        worldPosition: { x: 5, y: 5 },
+        button: 0,
+      });
+      tool.onPointerDown(downEvent);
+
+      const upEvent = createMockPointerEvent({
+        worldPosition: { x: 5, y: 5 },
+        button: 0,
+      });
+      tool.onPointerUp(upEvent);
+
+      expect(onTransformStart).toHaveBeenCalledTimes(1);
+      // Path should still exist with fewer points
+      const updatedPath = context.sceneGraph.getNode(path.id) as PathNode;
+      expect(updatedPath.points.length).toBe(3);
+    });
+  });
+
+  // ==========================================================================
+  // World Transform Hit Testing
+  // ==========================================================================
+
+  describe('world transform hit testing', () => {
+    beforeEach(() => {
+      tool.setMode('stroke');
+      tool.setSize(20);
+    });
+
+    it('should erase rotated rectangle', () => {
+      // Create a 60x60 rectangle at (100,100) rotated 45 degrees
+      const rect = createTestRectangle(100, 100, 60, 60);
+      rect.transform.rotation = 45;
+      context.sceneGraph.addNode(rect);
+
+      // Point at (135, 100) is outside the axis-aligned 60x60 box
+      // (which extends from ~70 to ~130) but inside the 45-degree rotated square
+      // (diamond vertices at ~142, ~58 along each axis from center)
+      const downEvent = createMockPointerEvent({
+        worldPosition: { x: 135, y: 100 },
+        button: 0,
+      });
+      tool.onPointerDown(downEvent);
+
+      const upEvent = createMockPointerEvent({
+        worldPosition: { x: 135, y: 100 },
+        button: 0,
+      });
+      tool.onPointerUp(upEvent);
+
+      expect(context.sceneGraph.getNodeCount()).toBe(0);
+    });
+
+    it('should erase scaled node', () => {
+      // Create a small 10x10 rectangle at origin, scaled 5x
+      const rect = createTestRectangle(0, 0, 10, 10);
+      rect.transform.scale = { x: 5, y: 5 };
+      context.sceneGraph.addNode(rect);
+
+      // Erase at (20, 0) which is outside the unscaled 10x10 bounds
+      // but inside the scaled 50x50 bounds
+      const downEvent = createMockPointerEvent({
+        worldPosition: { x: 20, y: 0 },
+        button: 0,
+      });
+      tool.onPointerDown(downEvent);
+
+      const upEvent = createMockPointerEvent({
+        worldPosition: { x: 20, y: 0 },
+        button: 0,
+      });
+      tool.onPointerUp(upEvent);
+
+      expect(context.sceneGraph.getNodeCount()).toBe(0);
+    });
+
+    it('should correctly miss a rotated rectangle', () => {
+      // Create a small 20x20 rectangle at (100,100) rotated 45 degrees
+      const rect = createTestRectangle(100, 100, 20, 20);
+      rect.transform.rotation = 45;
+      context.sceneGraph.addNode(rect);
+
+      // Erase far outside at (200, 200) — well beyond rotated bounds
+      const downEvent = createMockPointerEvent({
+        worldPosition: { x: 200, y: 200 },
+        button: 0,
+      });
+      tool.onPointerDown(downEvent);
+
+      const upEvent = createMockPointerEvent({
+        worldPosition: { x: 200, y: 200 },
+        button: 0,
+      });
+      tool.onPointerUp(upEvent);
+
+      expect(context.sceneGraph.getNodeCount()).toBe(1);
+    });
+  });
+
+  // ==========================================================================
+  // Polygon Erasure
+  // ==========================================================================
+
+  describe('polygon erasure', () => {
+    // Helper to create a test polygon node
+    function createTestPolygon(
+      x: number,
+      y: number,
+      radius: number,
+      sides: number,
+      innerRadius?: number
+    ): PolygonNode {
+      const transform = createDefaultTransform();
+      transform.position = { x, y };
+      return {
+        id: context.generateId(),
+        name: 'Test Polygon',
+        type: 'polygon',
+        parent: null,
+        children: [],
+        transform,
+        visible: true,
+        locked: false,
+        opacity: 1,
+        blendMode: 'normal',
+        radius,
+        sides,
+        innerRadius,
+        fills: [context.defaultFill],
+        strokes: [context.defaultStroke],
+      };
+    }
+
+    beforeEach(() => {
+      tool.setMode('stroke');
+      tool.setSize(20);
+    });
+
+    it('should erase polygon node in stroke mode', () => {
+      const polygon = createTestPolygon(50, 50, 30, 6);
+      context.sceneGraph.addNode(polygon);
+      expect(context.sceneGraph.getNodeCount()).toBe(1);
+
+      // Erase at the polygon's center
+      const downEvent = createMockPointerEvent({
+        worldPosition: { x: 50, y: 50 },
+        button: 0,
+      });
+      tool.onPointerDown(downEvent);
+
+      const upEvent = createMockPointerEvent({
+        worldPosition: { x: 50, y: 50 },
+        button: 0,
+      });
+      tool.onPointerUp(upEvent);
+
+      expect(context.sceneGraph.getNodeCount()).toBe(0);
+    });
+
+    it('should erase star node (polygon with innerRadius)', () => {
+      const star = createTestPolygon(80, 80, 30, 5, 15);
+      context.sceneGraph.addNode(star);
+      expect(context.sceneGraph.getNodeCount()).toBe(1);
+
+      // Erase at the star's center
+      const downEvent = createMockPointerEvent({
+        worldPosition: { x: 80, y: 80 },
+        button: 0,
+      });
+      tool.onPointerDown(downEvent);
+
+      const upEvent = createMockPointerEvent({
+        worldPosition: { x: 80, y: 80 },
+        button: 0,
+      });
+      tool.onPointerUp(upEvent);
+
+      expect(context.sceneGraph.getNodeCount()).toBe(0);
+    });
+  });
+
+  // ==========================================================================
+  // Bezier Path Intersection
+  // ==========================================================================
+
+  describe('bezier path intersection', () => {
+    // Helper to create a path with bezier handles
+    function createTestPathWithHandles(): PathNode {
+      const transform = createDefaultTransform();
+      transform.position = { x: 0, y: 0 };
+      transform.anchor = { x: 0, y: 0 };
+      return {
+        id: context.generateId(),
+        name: 'Bezier Path',
+        type: 'path',
+        parent: null,
+        children: [],
+        transform,
+        visible: true,
+        locked: false,
+        opacity: 1,
+        blendMode: 'normal',
+        points: [
+          {
+            position: { x: 0, y: 0 },
+            handleIn: null,
+            handleOut: { x: 50, y: 50 },
+            type: 'smooth',
+          },
+          {
+            position: { x: 200, y: 0 },
+            handleIn: { x: -50, y: 50 },
+            handleOut: null,
+            type: 'smooth',
+          },
+        ],
+        closed: false,
+        fills: [],
+        strokes: [context.defaultStroke],
+      };
+    }
+
+    beforeEach(() => {
+      tool.setMode('stroke');
+    });
+
+    it('should erase path by bezier segment (not just points)', () => {
+      // Path from (0,0) to (200,0) with handles that make the curve bulge upward
+      // The curve passes near y=37 at x=100 (cubic bezier with symmetric handles)
+      const path = createTestPathWithHandles();
+      context.sceneGraph.addNode(path);
+      tool.setSize(30);
+
+      // Erase at (100, 40) — near the bezier curve's apex, far from endpoints
+      const downEvent = createMockPointerEvent({
+        worldPosition: { x: 100, y: 40 },
+        button: 0,
+      });
+      tool.onPointerDown(downEvent);
+
+      const upEvent = createMockPointerEvent({
+        worldPosition: { x: 100, y: 40 },
+        button: 0,
+      });
+      tool.onPointerUp(upEvent);
+
+      // Path should be deleted because eraser hits the bezier curve
+      expect(context.sceneGraph.getNodeCount()).toBe(0);
+    });
+
+    it('should miss path when eraser is far from all segments', () => {
+      // Straight horizontal path from (0,0) to (200,0) with no handles
+      const path = createTestPath(0, 0, [
+        { x: 0, y: 0 },
+        { x: 200, y: 0 },
+      ]);
+      path.transform.anchor = { x: 0, y: 0 };
+      context.sceneGraph.addNode(path);
+      tool.setSize(10);
+
+      // Erase at (100, 100) — far above the path
+      const downEvent = createMockPointerEvent({
+        worldPosition: { x: 100, y: 100 },
+        button: 0,
+      });
+      tool.onPointerDown(downEvent);
+
+      const upEvent = createMockPointerEvent({
+        worldPosition: { x: 100, y: 100 },
+        button: 0,
+      });
+      tool.onPointerUp(upEvent);
+
+      // Path should NOT be deleted
+      expect(context.sceneGraph.getNodeCount()).toBe(1);
+    });
+  });
+
+  // ==========================================================================
+  // Image and Text Erasure
+  // ==========================================================================
+
+  describe('image and text erasure', () => {
+    beforeEach(() => {
+      tool.setMode('stroke');
+      tool.setSize(20);
+    });
+
+    it('should erase image node in stroke mode', () => {
+      const transform = createDefaultTransform();
+      transform.position = { x: 100, y: 100 };
+      const imageNode: ImageNode = {
+        id: context.generateId(),
+        name: 'Test Image',
+        type: 'image',
+        parent: null,
+        children: [],
+        transform,
+        visible: true,
+        locked: false,
+        opacity: 1,
+        blendMode: 'normal',
+        src: 'data:image/png;base64,AAAA',
+        width: 80,
+        height: 60,
+        naturalWidth: 80,
+        naturalHeight: 60,
+        cornerRadius: [0, 0, 0, 0],
+      };
+      context.sceneGraph.addNode(imageNode);
+      expect(context.sceneGraph.getNodeCount()).toBe(1);
+
+      // Erase at the image's position
+      const downEvent = createMockPointerEvent({
+        worldPosition: { x: 100, y: 100 },
+        button: 0,
+      });
+      tool.onPointerDown(downEvent);
+
+      const upEvent = createMockPointerEvent({
+        worldPosition: { x: 100, y: 100 },
+        button: 0,
+      });
+      tool.onPointerUp(upEvent);
+
+      expect(context.sceneGraph.getNodeCount()).toBe(0);
+    });
+
+    it('should erase text node in stroke mode', () => {
+      const transform = createDefaultTransform();
+      transform.position = { x: 50, y: 50 };
+      const textNode: TextNode = {
+        id: context.generateId(),
+        name: 'Test Text',
+        type: 'text',
+        parent: null,
+        children: [],
+        transform,
+        visible: true,
+        locked: false,
+        opacity: 1,
+        blendMode: 'normal',
+        content: 'Hello World',
+        fontFamily: 'Inter',
+        fontSize: 16,
+        fontWeight: 400,
+        fontStyle: 'normal',
+        textAlign: 'left',
+        lineHeight: 1.2,
+        letterSpacing: 0,
+        fills: [context.defaultFill],
+        strokes: [],
+      };
+      context.sceneGraph.addNode(textNode);
+      expect(context.sceneGraph.getNodeCount()).toBe(1);
+
+      // Erase at the text's position
+      const downEvent = createMockPointerEvent({
+        worldPosition: { x: 50, y: 50 },
+        button: 0,
+      });
+      tool.onPointerDown(downEvent);
+
+      const upEvent = createMockPointerEvent({
+        worldPosition: { x: 50, y: 50 },
+        button: 0,
+      });
+      tool.onPointerUp(upEvent);
+
+      expect(context.sceneGraph.getNodeCount()).toBe(0);
     });
   });
 });

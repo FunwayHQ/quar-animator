@@ -84,6 +84,17 @@ export interface Stroke {
   gradient?: Gradient;
   visible: boolean;
   align?: 'center' | 'inside' | 'outside';
+  /** Optional width profile: multipliers [0-1] sampled uniformly along path.
+   *  If present, width varies along path as width * profile[t]. */
+  widthProfile?: number[];
+}
+
+export interface BrushProfile {
+  id: string;
+  name: string;
+  /** Width multipliers sampled at uniform t=0..1 along the path.
+   *  Values 0-1, where 1 = full stroke width, 0 = zero width. */
+  samples: number[];
 }
 
 // ============================================================================
