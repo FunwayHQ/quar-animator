@@ -3,13 +3,23 @@
  * Allows editing individual path points and bezier handles
  */
 
-import type { CanvasPointerEvent, PathNode, PathPoint, Vector2, Node } from '@quar/types';
+import type {
+  CanvasPointerEvent,
+  PathNode,
+  PathPoint,
+  Vector2,
+  Node,
+  Rect,
+  Matrix3,
+} from '@quar/types';
 import { BaseTool, type ToolContext } from './BaseTool';
-import { vec2, mat3 } from '../math';
+import { vec2, mat3, rect } from '../math';
 import {
   convertPointType as convertPointTypeUtil,
   updateHandleWithSymmetry,
 } from '../path/pointUtils';
+import { getPolygonBounds, getPathBounds } from '../path/pathUtils';
+import { getTextBounds } from '../font/textMetrics';
 
 // ============================================================================
 // Subpath Helpers
@@ -214,8 +224,72 @@ export class DirectSelectionTool extends BaseTool {
       return;
     }
 
+    // No path point/handle hit — try node-level hit testing (groups, other shapes)
+    const rawHit = this.hitTestNode(worldPos);
+    const enteredGroupId = this.context.getEnteredGroupId?.() ?? null;
+    const hitNode = rawHit ? this.resolveHitToScope(rawHit) : null;
+
+    // Click on a group that's already selected → enter it
+    if (hitNode && hitNode.type === 'group') {
+      const selectedIds = this.context.getSelectedIds();
+      if (selectedIds.has(hitNode.id)) {
+        // Already selected → enter the group
+        this.context.setEnteredGroupId?.(hitNode.id);
+        this.clearPointSelection();
+        this.context.clearSelection();
+      } else {
+        // Not selected → select the group
+        this.clearPointSelection();
+        if (event.shiftKey) {
+          this.context.addToSelection(hitNode.id);
+        } else {
+          this.context.setSelectedIds([hitNode.id]);
+        }
+      }
+      return;
+    }
+
+    // Click on a non-path node → select it
+    if (hitNode && hitNode.type !== 'path') {
+      this.clearPointSelection();
+      if (event.shiftKey) {
+        this.context.addToSelection(hitNode.id);
+      } else {
+        this.context.setSelectedIds([hitNode.id]);
+      }
+      return;
+    }
+
+    // Click on a path (node-level, not on a specific point) → select the path
+    if (hitNode && hitNode.type === 'path') {
+      this.clearPointSelection();
+      if (event.shiftKey) {
+        this.context.addToSelection(hitNode.id);
+      } else {
+        this.context.setSelectedIds([hitNode.id]);
+      }
+      return;
+    }
+
+    // Click outside the entered group → exit group, select root ancestor
+    if (rawHit && !hitNode && enteredGroupId) {
+      this.context.setEnteredGroupId?.(null);
+      this.clearPointSelection();
+      let rootNode = rawHit;
+      while (rootNode.parent) {
+        const p = this.context.sceneGraph.getNode(rootNode.parent);
+        if (!p) break;
+        rootNode = p;
+      }
+      this.context.setSelectedIds([rootNode.id]);
+      return;
+    }
+
     // Clicked on empty space - clear both point and node selection
     if (!event.shiftKey) {
+      if (enteredGroupId) {
+        this.context.setEnteredGroupId?.(null);
+      }
       this.clearPointSelection();
       this.context.clearSelection();
     }
@@ -316,14 +390,20 @@ export class DirectSelectionTool extends BaseTool {
         this.deleteSelectedPoints();
         break;
 
-      case 'Escape':
+      case 'Escape': {
+        const groupId = this.context.getEnteredGroupId?.() ?? null;
         if (this.selectedPoints.length > 0) {
           this.clearPointSelection();
+        } else if (groupId) {
+          // Exit group and select the group itself
+          this.context.setEnteredGroupId?.(null);
+          this.context.setSelectedIds([groupId]);
         } else {
-          // No points selected — return to selection tool
+          // No points selected, not in group — return to selection tool
           this.context.setActiveTool('selection');
         }
         break;
+      }
 
       case 'a':
         if (event.ctrlKey || event.metaKey) {
@@ -644,21 +724,188 @@ export class DirectSelectionTool extends BaseTool {
   // Helper Methods
   // --------------------------------------------------------------------------
 
+  /**
+   * Get path nodes that are in the current scope (respects group entry).
+   * At root level: only root-level paths. Inside a group: only children of that group.
+   */
   private getPathNodes(): PathNode[] {
     const paths: PathNode[] = [];
     this.context.sceneGraph.traverseVisible((node: Node) => {
       if (node.type === 'path') {
-        paths.push(node);
+        const resolved = this.resolveHitToScope(node);
+        if (resolved && resolved.id === node.id) {
+          paths.push(node);
+        }
       }
     });
     return paths;
   }
 
+  // --------------------------------------------------------------------------
+  // Node-Level Hit Testing (for groups and non-path nodes)
+  // --------------------------------------------------------------------------
+
   /**
-   * Get the world transform matrix for a node (position + rotation + scale).
+   * Walk a hit node up to the appropriate scope level based on enteredGroupId.
+   */
+  private resolveHitToScope(hitNode: Node): Node | null {
+    const enteredGroupId = this.context.getEnteredGroupId?.() ?? null;
+
+    if (enteredGroupId === null) {
+      let current = hitNode;
+      while (current.parent !== null) {
+        const parent = this.context.sceneGraph.getNode(current.parent);
+        if (!parent) break;
+        current = parent;
+      }
+      return current;
+    }
+
+    let current = hitNode;
+    if (current.id === enteredGroupId) return null;
+
+    while (current.parent !== enteredGroupId) {
+      if (current.parent === null) return null;
+      const parent = this.context.sceneGraph.getNode(current.parent);
+      if (!parent) return null;
+      current = parent;
+    }
+    return current;
+  }
+
+  /**
+   * Find the topmost node at the given world position (any type, not just paths).
+   */
+  private hitTestNode(worldPos: Vector2): Node | null {
+    let hitNode: Node | null = null;
+    const hitTolerance = 8 / this.context.camera.zoom;
+
+    this.context.sceneGraph.traverseVisible((node: Node) => {
+      if (node.type === 'group') return; // Skip groups — hit children, resolve up
+
+      const localBounds = this.getLocalBoundsForNode(node);
+      if (!localBounds) return;
+
+      const worldMatrix: Matrix3 = node.parent
+        ? this.context.sceneGraph.getWorldTransform(node.id)
+        : mat3.compose(node.transform.position, node.transform.rotation, node.transform.scale);
+
+      const worldBounds = this.transformBoundsToWorld(localBounds, worldMatrix);
+
+      let testBounds = worldBounds;
+      if (node.type === 'path') {
+        testBounds = {
+          x: worldBounds.x - hitTolerance,
+          y: worldBounds.y - hitTolerance,
+          width: Math.max(worldBounds.width, hitTolerance * 2) + hitTolerance * 2,
+          height: Math.max(worldBounds.height, hitTolerance * 2) + hitTolerance * 2,
+        };
+      }
+
+      if (rect.contains(testBounds, worldPos)) {
+        hitNode = node;
+      }
+    });
+
+    return hitNode;
+  }
+
+  /**
+   * Get local-space AABB for any node type.
+   */
+  private getLocalBoundsForNode(node: Node): Rect | null {
+    switch (node.type) {
+      case 'rectangle': {
+        const anchor = node.transform.anchor;
+        return {
+          x: -node.width * anchor.x,
+          y: -node.height * anchor.y,
+          width: node.width,
+          height: node.height,
+        };
+      }
+      case 'ellipse':
+        return {
+          x: -node.radiusX,
+          y: -node.radiusY,
+          width: node.radiusX * 2,
+          height: node.radiusY * 2,
+        };
+      case 'polygon':
+        return getPolygonBounds(0, 0, node.radius, node.sides, 1, 1, node.innerRadius);
+      case 'path': {
+        const primaryBounds = getPathBounds(node.points, node.closed);
+        if (!primaryBounds) return null;
+        if (!node.subpaths || node.subpaths.length === 0) return primaryBounds;
+        const allBounds = [primaryBounds];
+        for (const sp of node.subpaths) {
+          const spBounds = getPathBounds(sp, true);
+          if (spBounds) allBounds.push(spBounds);
+        }
+        return allBounds.length === 1
+          ? primaryBounds
+          : allBounds.reduce((a, b) => rect.union(a, b));
+      }
+      case 'text':
+        return getTextBounds(
+          node.content,
+          node.fontFamily,
+          node.fontSize,
+          node.lineHeight,
+          node.letterSpacing,
+          node.textAlign
+        );
+      case 'image': {
+        const anchor = node.transform.anchor;
+        return {
+          x: -node.width * anchor.x,
+          y: -node.height * anchor.y,
+          width: node.width,
+          height: node.height,
+        };
+      }
+      default:
+        return null;
+    }
+  }
+
+  /**
+   * Transform local bounds through a world matrix to get world-space AABB.
+   */
+  private transformBoundsToWorld(localBounds: Rect, worldMatrix: Matrix3): Rect {
+    const { x, y, width, height } = localBounds;
+    const corners = [
+      mat3.transformPoint(worldMatrix, { x, y }),
+      mat3.transformPoint(worldMatrix, { x: x + width, y }),
+      mat3.transformPoint(worldMatrix, { x: x + width, y: y + height }),
+      mat3.transformPoint(worldMatrix, { x, y: y + height }),
+    ];
+    let minX = corners[0].x,
+      minY = corners[0].y,
+      maxX = corners[0].x,
+      maxY = corners[0].y;
+    for (let i = 1; i < 4; i++) {
+      if (corners[i].x < minX) minX = corners[i].x;
+      if (corners[i].y < minY) minY = corners[i].y;
+      if (corners[i].x > maxX) maxX = corners[i].x;
+      if (corners[i].y > maxY) maxY = corners[i].y;
+    }
+    return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
+  }
+
+  /**
+   * Get the world transform matrix for a node, including parent chain.
+   * Excludes the node's own anchor to keep local-space math consistent.
    */
   private getNodeWorldMatrix(node: PathNode) {
-    return mat3.compose(node.transform.position, node.transform.rotation, node.transform.scale);
+    const local = mat3.compose(
+      node.transform.position,
+      node.transform.rotation,
+      node.transform.scale
+    );
+    if (!node.parent) return local;
+    const parentWorld = this.context.sceneGraph.getWorldTransform(node.parent);
+    return mat3.multiply(parentWorld, local);
   }
 
   /**
@@ -748,6 +995,7 @@ export class DirectSelectionTool extends BaseTool {
 
   onDeactivate(): void {
     this.clearPointSelection();
+    this.context.setEnteredGroupId?.(null);
     this.dragMode = 'idle';
     this.dragStartPoint = null;
     this.dragHandle = null;
