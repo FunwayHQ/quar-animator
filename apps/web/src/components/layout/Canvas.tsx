@@ -427,7 +427,8 @@ export function Canvas() {
           shapeRenderer.render(
             sceneGraphRef.current,
             viewProjectionMatrix,
-            selectedNodeIdsRef.current
+            selectedNodeIdsRef.current,
+            useEditorStore.getState().editingTextNodeId
           );
         }
 

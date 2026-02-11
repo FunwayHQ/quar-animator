@@ -798,7 +798,8 @@ export class ShapeRenderer {
   render(
     sceneGraph: SceneGraph,
     viewProjectionMatrix: Matrix3,
-    _selectedIds: Set<string> = new Set()
+    _selectedIds: Set<string> = new Set(),
+    skipNodeId?: string | null
   ): void {
     if (!this.program || !this.vao) return;
 
@@ -828,6 +829,9 @@ export class ShapeRenderer {
 
     // Traverse and render visible shapes
     sceneGraph.traverseVisible((node) => {
+      // Skip node being edited (e.g. text node with active overlay)
+      if (skipNodeId && node.id === skipNodeId) return;
+
       const worldTransform = sceneGraph.getWorldTransform(node.id);
       this.currentEffectiveOpacity = sceneGraph.getEffectiveOpacity(node.id);
 

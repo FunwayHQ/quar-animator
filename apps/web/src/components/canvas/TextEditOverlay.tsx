@@ -6,6 +6,7 @@
 import { useEffect, useRef, useCallback } from 'react';
 import type { TextNode } from '@quar/types';
 import type { Camera } from '@quar/core';
+import { getTextBounds } from '@quar/core';
 import styles from './TextEditOverlay.module.css';
 
 export interface TextEditOverlayProps {
@@ -18,11 +19,25 @@ export interface TextEditOverlayProps {
 export function TextEditOverlay({ node, camera, onCommit, onCancel }: TextEditOverlayProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Position the overlay at the node's screen coordinates
-  const screenPos = camera.worldToScreen(node.transform.position);
   const zoom = camera.zoom;
 
-  const scaledFontSize = node.fontSize * zoom * node.transform.scale.y;
+  // Compute the visual top-left of the text in world coordinates.
+  // Text origin (anchor 0,0) is at the baseline. The ascender goes into
+  // positive Y (up in world). getTextBounds returns the local-space AABB
+  // where bounds.y + bounds.height = ascender (visual top in Y-up).
+  const bounds = getTextBounds(
+    node.content || 'X', // use placeholder for empty text to get correct ascender
+    node.fontFamily,
+    node.fontSize,
+    node.lineHeight,
+    node.letterSpacing,
+    node.textAlign
+  );
+  const worldTopLeft = {
+    x: node.transform.position.x + bounds.x * node.transform.scale.x,
+    y: node.transform.position.y + (bounds.y + bounds.height) * node.transform.scale.y,
+  };
+  const screenPos = camera.worldToScreen(worldTopLeft);
 
   useEffect(() => {
     const el = textareaRef.current;
