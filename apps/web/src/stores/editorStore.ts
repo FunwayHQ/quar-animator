@@ -30,6 +30,7 @@ import {
   convertTextToPathGroup as convertTextToPathGroupFn,
   outlineStroke as outlineStrokeFn,
   generateBrushOutline,
+  tessellatePathToPoints,
 } from '@quar/core';
 import type { OnionSkinSettings, BooleanOp } from '@quar/core';
 import { toast } from '../components/common/Toast';
@@ -516,24 +517,62 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     const selectedIds = state.selectedNodeIds;
     if (selectedIds.size === 0) return null;
 
-    // Find first selected node with brushData
-    let brushNode: any = null;
+    // Find first selected path node
+    let pathNode: any = null;
     for (const nodeId of selectedIds) {
       const node = sceneGraph.getNode(nodeId);
-      if (node && node.type === 'path' && (node as any).brushData) {
-        brushNode = node;
+      if (node && node.type === 'path') {
+        pathNode = node;
         break;
       }
     }
-    if (!brushNode) return null;
+    if (!pathNode) return null;
 
-    const { widths } = brushNode.brushData;
-    if (!widths || widths.length < 2) return null;
+    // Tessellate path points into dense samples
+    const points = pathNode.points as {
+      position: { x: number; y: number };
+      handleIn: { x: number; y: number } | null;
+      handleOut: { x: number; y: number } | null;
+      type: string;
+    }[];
+    if (!points || points.length < 2) return null;
 
-    // Normalize widths to 0-1 range (relative to max width)
-    const maxW = Math.max(...widths);
-    if (maxW <= 0) return null;
-    const samples = widths.map((w: number) => w / maxW);
+    const tessellated = tessellatePathToPoints(points, !!pathNode.closed, 0.5);
+    if (tessellated.length < 2) return null;
+
+    // Compute bounding box
+    let minX = Infinity,
+      maxX = -Infinity,
+      minY = Infinity,
+      maxY = -Infinity;
+    for (const pt of tessellated) {
+      if (pt.x < minX) minX = pt.x;
+      if (pt.x > maxX) maxX = pt.x;
+      if (pt.y < minY) minY = pt.y;
+      if (pt.y > maxY) maxY = pt.y;
+    }
+    const rangeX = maxX - minX;
+    const rangeY = maxY - minY;
+    if (rangeX < 0.001 || rangeY < 0.001) return null;
+
+    // Sort points by X to get left-to-right profile
+    const sorted = [...tessellated].sort((a, b) => a.x - b.x);
+
+    // Resample at uniform X intervals (32 samples)
+    const sampleCount = 32;
+    const samples: number[] = [];
+    let si = 0;
+    for (let i = 0; i < sampleCount; i++) {
+      const targetX = minX + (i / (sampleCount - 1)) * rangeX;
+      while (si < sorted.length - 1 && sorted[si + 1].x < targetX) si++;
+      // Interpolate Y between sorted[si] and sorted[si+1]
+      const p0 = sorted[si];
+      const p1 = sorted[Math.min(si + 1, sorted.length - 1)];
+      const dx = p1.x - p0.x;
+      const localT = dx > 0.0001 ? (targetX - p0.x) / dx : 0;
+      const y = p0.y + localT * (p1.y - p0.y);
+      samples.push((y - minY) / rangeY);
+    }
 
     const id = `custom-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
     const profile: BrushProfile = { id, name, samples };

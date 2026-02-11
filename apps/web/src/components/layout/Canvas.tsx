@@ -955,15 +955,10 @@ export function Canvas() {
             return n && n.type === 'path';
           });
           if (!hasPath) return [];
-          const hasBrushData = Array.from(selectedNodeIds).some((id) => {
-            const n = sceneGraph.getNode(id);
-            return n && n.type === 'path' && (n as any).brushData;
-          });
           return [
             {
               id: 'create-brush-profile',
-              label: 'Create Profile from Stroke',
-              disabled: !hasBrushData,
+              label: 'Create Profile from Selection',
               onClick: () => {
                 const profileName = prompt('Profile name:');
                 if (profileName) {
