@@ -126,9 +126,9 @@ describe('Camera', () => {
       const initialPos = { ...camera.position };
       camera.pan({ x: 100, y: 50 });
 
-      // Pan moves camera in opposite direction of screen drag
+      // Pan moves camera: X opposite to screen drag, Y same direction (Y-up world)
       expect(camera.position.x).toBeLessThan(initialPos.x);
-      expect(camera.position.y).toBeLessThan(initialPos.y);
+      expect(camera.position.y).toBeGreaterThan(initialPos.y);
     });
 
     it('scales pan by zoom level', () => {
@@ -179,12 +179,15 @@ describe('Camera', () => {
       const camera = new Camera();
       camera.setViewport(800, 600);
 
-      camera.fitBounds({
-        x: -500,
-        y: -500,
-        width: 1000,
-        height: 1000,
-      }, 0);
+      camera.fitBounds(
+        {
+          x: -500,
+          y: -500,
+          width: 1000,
+          height: 1000,
+        },
+        0
+      );
 
       // Camera should be centered on bounds
       expect(camera.position.x).toBeCloseTo(0);

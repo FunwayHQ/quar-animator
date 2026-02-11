@@ -156,7 +156,7 @@ export class Camera {
   pan(screenDelta: Vector2): void {
     const worldDelta = {
       x: -screenDelta.x / this._zoom,
-      y: -screenDelta.y / this._zoom,
+      y: screenDelta.y / this._zoom,
     };
 
     // Apply rotation to delta if camera is rotated
@@ -188,10 +188,7 @@ export class Camera {
     const worldAfter = this.screenToWorld(screenPoint);
 
     // Adjust position to keep worldBefore at the same screen position
-    this._position = vec2.add(
-      this._position,
-      vec2.subtract(worldBefore, worldAfter)
-    );
+    this._position = vec2.add(this._position, vec2.subtract(worldBefore, worldAfter));
     this.invalidateMatrices();
 
     this.emit('zoomChange');
@@ -212,10 +209,7 @@ export class Camera {
     this.invalidateMatrices();
     const worldAfter = this.screenToWorld(center);
 
-    this._position = vec2.add(
-      this._position,
-      vec2.subtract(worldBefore, worldAfter)
-    );
+    this._position = vec2.add(this._position, vec2.subtract(worldBefore, worldAfter));
     this.invalidateMatrices();
 
     this.emit('zoomChange');
@@ -232,11 +226,7 @@ export class Camera {
     const scaleX = viewWidth / bounds.width;
     const scaleY = viewHeight / bounds.height;
 
-    this._zoom = clamp(
-      Math.min(scaleX, scaleY),
-      this.config.minZoom,
-      this.config.maxZoom
-    );
+    this._zoom = clamp(Math.min(scaleX, scaleY), this.config.minZoom, this.config.maxZoom);
 
     this._position = {
       x: bounds.x + bounds.width / 2,
@@ -302,19 +292,14 @@ export class Camera {
 
   getViewProjectionMatrix(): Matrix3 {
     if (!this._viewProjectionMatrix) {
-      this._viewProjectionMatrix = mat3.multiply(
-        this.getProjectionMatrix(),
-        this.getViewMatrix()
-      );
+      this._viewProjectionMatrix = mat3.multiply(this.getProjectionMatrix(), this.getViewMatrix());
     }
     return this._viewProjectionMatrix;
   }
 
   getInverseViewProjectionMatrix(): Matrix3 | null {
     if (!this._inverseViewProjectionMatrix) {
-      this._inverseViewProjectionMatrix = mat3.invert(
-        this.getViewProjectionMatrix()
-      );
+      this._inverseViewProjectionMatrix = mat3.invert(this.getViewProjectionMatrix());
     }
     return this._inverseViewProjectionMatrix;
   }
