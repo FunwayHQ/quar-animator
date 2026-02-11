@@ -553,25 +553,70 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     }
     const rangeX = maxX - minX;
     const rangeY = maxY - minY;
-    if (rangeX < 0.001 || rangeY < 0.001) return null;
+    if (rangeX < 0.001 && rangeY < 0.001) return null;
 
-    // Sort points by X to get left-to-right profile
-    const sorted = [...tessellated].sort((a, b) => a.x - b.x);
-
-    // Resample at uniform X intervals (32 samples)
+    // Determine major axis: slice along the longer dimension,
+    // measure cross-sectional width in the shorter dimension
+    const vertical = rangeY >= rangeX;
     const sampleCount = 32;
     const samples: number[] = [];
-    let si = 0;
+
+    // Bin points along major axis, measure minor-axis extent per bin
+    const majorMin = vertical ? minY : minX;
+    const majorRange = vertical ? rangeY : rangeX;
+
     for (let i = 0; i < sampleCount; i++) {
-      const targetX = minX + (i / (sampleCount - 1)) * rangeX;
-      while (si < sorted.length - 1 && sorted[si + 1].x < targetX) si++;
-      // Interpolate Y between sorted[si] and sorted[si+1]
-      const p0 = sorted[si];
-      const p1 = sorted[Math.min(si + 1, sorted.length - 1)];
-      const dx = p1.x - p0.x;
-      const localT = dx > 0.0001 ? (targetX - p0.x) / dx : 0;
-      const y = p0.y + localT * (p1.y - p0.y);
-      samples.push((y - minY) / rangeY);
+      const t = i / (sampleCount - 1);
+      const slicePos = majorMin + t * majorRange;
+      const halfBin = majorRange / sampleCount / 2 + 0.5;
+
+      // Collect all points within this slice
+      let crossMin = Infinity;
+      let crossMax = -Infinity;
+      for (const pt of tessellated) {
+        const major = vertical ? pt.y : pt.x;
+        if (Math.abs(major - slicePos) <= halfBin) {
+          const cross = vertical ? pt.x : pt.y;
+          if (cross < crossMin) crossMin = cross;
+          if (cross > crossMax) crossMax = cross;
+        }
+      }
+
+      if (crossMin <= crossMax) {
+        samples.push(crossMax - crossMin);
+      } else {
+        // No points in this bin — interpolate from neighbors later
+        samples.push(0);
+      }
+    }
+
+    // Fill any zero-gaps by linear interpolation from neighbors
+    for (let i = 0; i < samples.length; i++) {
+      if (samples[i] === 0) {
+        let prev = 0;
+        let next = 0;
+        for (let j = i - 1; j >= 0; j--) {
+          if (samples[j] > 0) {
+            prev = samples[j];
+            break;
+          }
+        }
+        for (let j = i + 1; j < samples.length; j++) {
+          if (samples[j] > 0) {
+            next = samples[j];
+            break;
+          }
+        }
+        samples[i] = (prev + next) / 2;
+      }
+    }
+
+    // Normalize to 0-1 range
+    const maxW = Math.max(...samples);
+    if (maxW > 0) {
+      for (let i = 0; i < samples.length; i++) {
+        samples[i] = samples[i] / maxW;
+      }
     }
 
     const id = `custom-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
