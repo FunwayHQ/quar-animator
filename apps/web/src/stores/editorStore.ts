@@ -166,6 +166,7 @@ export interface EditorStore {
   setActiveBrushProfile: (id: string | null) => void;
   applyBrushProfileToSelection: (sceneGraph: SceneGraphLike) => void;
   applyBrushStrokeProfile: (sceneGraph: SceneGraphLike, profileId: string | null) => void;
+  setBrushStrokeBaseWidth: (sceneGraph: SceneGraphLike, baseWidth: number) => void;
   createBrushProfileFromSelection: (
     sceneGraph: SceneGraphLike,
     name: string
@@ -500,11 +501,50 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     for (const nodeId of selectedIds) {
       const node = sceneGraph.getNode(nodeId);
       if (!node || node.type !== 'path' || !(node as any).brushData) continue;
-      const { spine, widths } = (node as any).brushData;
-      const newOutline = generateBrushOutline(spine, widths, profile);
+      const bd = (node as any).brushData as {
+        spine: any[];
+        widths: number[];
+        baseWidth?: number;
+        profileId: string | null;
+      };
+      const { spine, widths } = bd;
+      // If baseWidth is set, use uniform widths array instead of pressure-based widths
+      const effectiveWidths =
+        bd.baseWidth != null && bd.baseWidth > 0 ? spine.map(() => bd.baseWidth as number) : widths;
+      const newOutline = generateBrushOutline(spine, effectiveWidths, profile);
       sceneGraph.updateNode(nodeId, {
         points: newOutline,
-        brushData: { spine, widths, profileId },
+        brushData: { ...bd, profileId },
+      } as any);
+    }
+    set({ isDirty: true });
+  },
+  setBrushStrokeBaseWidth: (sceneGraph: SceneGraphLike, baseWidth: number) => {
+    const state = get();
+    const selectedIds = state.selectedNodeIds;
+    if (selectedIds.size === 0) return;
+
+    const pushUndo = (get() as any).pushUndo;
+    if (pushUndo) pushUndo(sceneGraph);
+
+    for (const nodeId of selectedIds) {
+      const node = sceneGraph.getNode(nodeId);
+      if (!node || node.type !== 'path' || !(node as any).brushData) continue;
+      const bd = (node as any).brushData as {
+        spine: any[];
+        widths: number[];
+        baseWidth?: number;
+        profileId: string | null;
+      };
+      const { spine } = bd;
+      const profile = bd.profileId
+        ? (state.brushProfiles.find((p) => p.id === bd.profileId) ?? null)
+        : null;
+      const effectiveWidths = spine.map(() => baseWidth);
+      const newOutline = generateBrushOutline(spine, effectiveWidths, profile);
+      sceneGraph.updateNode(nodeId, {
+        points: newOutline,
+        brushData: { ...bd, baseWidth },
       } as any);
     }
     set({ isDirty: true });

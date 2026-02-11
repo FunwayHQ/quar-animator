@@ -101,6 +101,7 @@ export interface BrushData {
   spine: PathPoint[]; // The fitted center curve
   widths: number[]; // Per-spine-point width values (world units)
   profileId: string | null; // Currently applied profile ID (null = uniform)
+  baseWidth?: number; // Override: uniform width for profile shaping (world units)
 }
 
 // ============================================================================
