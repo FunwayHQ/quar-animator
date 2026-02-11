@@ -140,23 +140,24 @@ export function generateBrushOutline(
     });
   }
 
-  // Add round end caps
+  // Only add round caps at narrow (tapered) ends. At wide ends the semicircular
+  // cap can curve inward and create a concave artifact. A flat connection
+  // (left↔right) looks clean for wide ends.
   const capPoints = 4;
-  const startCap = generateRoundCap(samples[0], leftSide[0], rightSide[0], capPoints, true);
-  const endCap = generateRoundCap(
-    samples[samples.length - 1],
-    leftSide[leftSide.length - 1],
-    rightSide[rightSide.length - 1],
-    capPoints,
-    false
-  );
+  const maxSampleWidth = Math.max(...sampleWidths);
+  const capThreshold = maxSampleWidth * 0.3;
+  const startWidth = sampleWidths[0];
+  const endWidth = sampleWidths[sampleWidths.length - 1];
 
-  // Combine: start cap + left forward + end cap + right reversed
+  // Combine: [start cap] + left forward + [end cap] + right reversed
   const outline: PathPoint[] = [];
 
-  // Start cap (from rightSide[0] around to leftSide[0])
-  for (const p of startCap) {
-    outline.push(cornerPoint(p));
+  // Start cap — only for narrow starts
+  if (startWidth < capThreshold) {
+    const startCap = generateRoundCap(samples[0], leftSide[0], rightSide[0], capPoints, true);
+    for (const p of startCap) {
+      outline.push(cornerPoint(p));
+    }
   }
 
   // Left side forward
@@ -164,9 +165,18 @@ export function generateBrushOutline(
     outline.push(cornerPoint(p));
   }
 
-  // End cap (from leftSide[last] around to rightSide[last])
-  for (const p of endCap) {
-    outline.push(cornerPoint(p));
+  // End cap — only for narrow ends
+  if (endWidth < capThreshold) {
+    const endCap = generateRoundCap(
+      samples[samples.length - 1],
+      leftSide[leftSide.length - 1],
+      rightSide[rightSide.length - 1],
+      capPoints,
+      false
+    );
+    for (const p of endCap) {
+      outline.push(cornerPoint(p));
+    }
   }
 
   // Right side reversed
