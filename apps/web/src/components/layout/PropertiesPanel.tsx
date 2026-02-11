@@ -1990,50 +1990,54 @@ export function PropertiesPanel() {
             </div>
             <div className={styles.sectionContent}>
               <div className={styles.propertyRow}>
-                <ScrubLabel
-                  onScrubStart={handleScrubStart}
-                  label="Width"
-                  value={Math.round(
-                    (node as PathNode).brushData?.baseWidth ??
-                      Math.max(...((node as PathNode).brushData?.widths ?? [10]))
-                  )}
-                  onChange={(v) => {
-                    const w = Math.max(1, Math.round(v));
-                    useEditorStore.getState().setBrushStrokeBaseWidth(sceneGraph, w);
-                  }}
-                  sensitivity={0.5}
-                  min={1}
-                  max={500}
-                />
-                <input
-                  id="brush-stroke-width"
-                  className={styles.propertyInput}
-                  type="text"
-                  value={Math.round(
-                    (node as PathNode).brushData?.baseWidth ??
-                      Math.max(...((node as PathNode).brushData?.widths ?? [10]))
-                  )}
-                  onChange={(e) => {
-                    const v = parseFloat(e.target.value);
-                    if (!isNaN(v) && v >= 1) {
-                      useEditorStore.getState().setBrushStrokeBaseWidth(sceneGraph, Math.round(v));
-                    }
-                  }}
-                  {...numericInputProps(
-                    () =>
-                      Math.round(
-                        (node as PathNode).brushData?.baseWidth ??
-                          Math.max(...((node as PathNode).brushData?.widths ?? [10]))
-                      ),
-                    (v) => {
-                      const w = Math.max(1, Math.round(parseFloat(v)));
-                      if (!isNaN(w)) {
-                        useEditorStore.getState().setBrushStrokeBaseWidth(sceneGraph, w);
+                <div className={`${styles.inputGroup} ${styles.inputGroupFlex}`}>
+                  <ScrubLabel
+                    onScrubStart={handleScrubStart}
+                    label="Width"
+                    value={Math.round(
+                      (node as PathNode).brushData?.baseWidth ??
+                        Math.max(...((node as PathNode).brushData?.widths ?? [10]))
+                    )}
+                    onChange={(v) => {
+                      const w = Math.max(1, Math.round(v));
+                      useEditorStore.getState().setBrushStrokeBaseWidth(sceneGraph, w);
+                    }}
+                    sensitivity={0.5}
+                    min={1}
+                    max={500}
+                  />
+                  <input
+                    id="brush-stroke-width"
+                    className={styles.input}
+                    type="text"
+                    value={Math.round(
+                      (node as PathNode).brushData?.baseWidth ??
+                        Math.max(...((node as PathNode).brushData?.widths ?? [10]))
+                    )}
+                    onChange={(e) => {
+                      const v = parseFloat(e.target.value);
+                      if (!isNaN(v) && v >= 1) {
+                        useEditorStore
+                          .getState()
+                          .setBrushStrokeBaseWidth(sceneGraph, Math.round(v));
                       }
-                    }
-                  )}
-                  data-testid="brush-stroke-width"
-                />
+                    }}
+                    {...numericInputProps(
+                      () =>
+                        Math.round(
+                          (node as PathNode).brushData?.baseWidth ??
+                            Math.max(...((node as PathNode).brushData?.widths ?? [10]))
+                        ),
+                      (v) => {
+                        const w = Math.max(1, Math.round(parseFloat(v)));
+                        if (!isNaN(w)) {
+                          useEditorStore.getState().setBrushStrokeBaseWidth(sceneGraph, w);
+                        }
+                      }
+                    )}
+                    data-testid="brush-stroke-width"
+                  />
+                </div>
               </div>
               <div className={styles.propertyRow}>
                 <label className={styles.propertyLabel} htmlFor="brush-stroke-profile">
