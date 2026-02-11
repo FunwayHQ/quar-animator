@@ -43,6 +43,8 @@ import { GradientEditor } from '../common/GradientEditor';
 import type { FillType } from '../common/GradientEditor';
 import { ImageAdjustments, DEFAULT_ADJUSTMENTS } from '../common/ImageAdjustments';
 import type { ImageAdjustments as ImageAdjustmentsType } from '@quar/types';
+import { hasGoogleFontsConsent } from '../common/ConsentBanner';
+import { toast } from '../common/Toast';
 import {
   createDefaultGradient,
   SelectionManager,
@@ -50,6 +52,7 @@ import {
   getTextBounds,
   WEB_SAFE_FONTS,
   getFontManager,
+  GOOGLE_FONTS_CATALOG,
 } from '@quar/core';
 import type { SceneGraph } from '@quar/core';
 import { getKeyframeState } from '../../hooks/useKeyframeState';
@@ -1643,7 +1646,12 @@ export function PropertiesPanel() {
                 const textNode = node as TextNode;
                 const fm = getFontManager();
                 const loadedFonts = fm.getLoadedFamilies();
-                const allFonts = [...new Set([...loadedFonts, ...WEB_SAFE_FONTS])].sort();
+                const googleConsent = hasGoogleFontsConsent();
+                // Build font list: loaded fonts + Google catalog (if consent)
+                const googleFamilies = googleConsent
+                  ? GOOGLE_FONTS_CATALOG.map((e) => e.family)
+                  : [];
+                const allFonts = [...new Set([...loadedFonts, ...googleFamilies])].sort();
                 return (
                   <>
                     <div className={styles.propertyRow}>
@@ -1653,20 +1661,37 @@ export function PropertiesPanel() {
                           className={styles.select}
                           value={textNode.fontFamily}
                           onChange={(e) => {
+                            const family = e.target.value;
+                            // If font isn't loaded yet, load from Google Fonts
+                            if (!fm.hasFont(family)) {
+                              if (!googleConsent) {
+                                toast.info(
+                                  'Enable Google Fonts in the consent banner to use this font'
+                                );
+                                return;
+                              }
+                              fm.loadGoogleFont(family, textNode.fontWeight)
+                                .then(() => {
+                                  pushUndo();
+                                  sceneGraph.updateNode(nodeId, { fontFamily: family });
+                                  if (autoKeyframe)
+                                    addKeyframeAtFrame(nodeId, 'fontFamily', currentFrame, family);
+                                })
+                                .catch(() => {
+                                  toast.error(`Failed to load font: ${family}`);
+                                });
+                              return;
+                            }
                             pushUndo();
-                            sceneGraph.updateNode(nodeId, { fontFamily: e.target.value });
+                            sceneGraph.updateNode(nodeId, { fontFamily: family });
                             if (autoKeyframe)
-                              addKeyframeAtFrame(
-                                nodeId,
-                                'fontFamily',
-                                currentFrame,
-                                e.target.value
-                              );
+                              addKeyframeAtFrame(nodeId, 'fontFamily', currentFrame, family);
                           }}
                         >
                           {allFonts.map((f) => (
                             <option key={f} value={f}>
                               {f}
+                              {!fm.hasFont(f) ? ' ⬇' : ''}
                             </option>
                           ))}
                         </select>
@@ -1730,8 +1755,26 @@ export function PropertiesPanel() {
                           className={styles.select}
                           value={textNode.fontWeight}
                           onChange={(e) => {
-                            pushUndo();
                             const w = parseInt(e.target.value);
+                            const family = textNode.fontFamily;
+                            // Check if the weight is loaded; if not, try loading it
+                            if (!fm.hasFontWeight(family, w)) {
+                              const catalogEntry = GOOGLE_FONTS_CATALOG.find(
+                                (g) => g.family === family
+                              );
+                              if (catalogEntry && hasGoogleFontsConsent()) {
+                                fm.loadGoogleFont(family, w)
+                                  .then(() => {
+                                    pushUndo();
+                                    sceneGraph.updateNode(nodeId, { fontWeight: w });
+                                  })
+                                  .catch(() => {
+                                    toast.error(`Failed to load ${family} weight ${w}`);
+                                  });
+                                return;
+                              }
+                            }
+                            pushUndo();
                             sceneGraph.updateNode(nodeId, { fontWeight: w });
                           }}
                         >

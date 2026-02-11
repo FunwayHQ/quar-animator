@@ -30,7 +30,10 @@ export function TextEditOverlay({ node, camera, onCommit, onCancel }: TextEditOv
 
     el.value = node.content;
     el.focus();
-    el.select();
+    // Only select all if there's existing content (re-edit); for new empty nodes just focus
+    if (node.content) {
+      el.select();
+    }
   }, [node.content]);
 
   const handleKeyDown = useCallback(
@@ -88,6 +91,7 @@ export function TextEditOverlay({ node, camera, onCommit, onCancel }: TextEditOv
           letterSpacing: `${node.letterSpacing * zoom}px`,
         }}
         defaultValue={node.content}
+        placeholder="Type something..."
         onKeyDown={handleKeyDown}
         onBlur={handleBlur}
         onInput={handleInput}

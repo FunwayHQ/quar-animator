@@ -115,7 +115,7 @@ export class TextTool extends BaseTool {
       locked: false,
       opacity: 1,
       blendMode: 'normal',
-      content: 'Text',
+      content: '',
       fontFamily: 'Inter',
       fontSize,
       fontWeight: 400,

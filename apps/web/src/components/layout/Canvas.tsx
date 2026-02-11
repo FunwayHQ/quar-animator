@@ -1299,11 +1299,29 @@ export function Canvas() {
               node={textNode as TextNode}
               camera={cameraRef.current}
               onCommit={(content: string) => {
-                useEditorStore.getState().pushUndo(sceneGraph);
-                sceneGraph.updateNode(editingTextNodeId, { content });
+                if (content.trim() === '') {
+                  // Empty text — remove the node instead of keeping an invisible node
+                  useEditorStore.getState().pushUndo(sceneGraph);
+                  sceneGraph.removeNode(editingTextNodeId);
+                  useEditorStore.getState().setSelectedIds([]);
+                } else {
+                  useEditorStore.getState().pushUndo(sceneGraph);
+                  sceneGraph.updateNode(editingTextNodeId, { content });
+                }
                 setEditingTextNodeId(null);
+                useEditorStore.getState().setActiveTool('selection');
               }}
-              onCancel={() => setEditingTextNodeId(null)}
+              onCancel={() => {
+                // If the node has no content (new node that was never edited), remove it
+                const n = sceneGraph.getNode(editingTextNodeId);
+                if (n && n.type === 'text' && !(n as TextNode).content) {
+                  useEditorStore.getState().pushUndo(sceneGraph);
+                  sceneGraph.removeNode(editingTextNodeId);
+                  useEditorStore.getState().setSelectedIds([]);
+                }
+                setEditingTextNodeId(null);
+                useEditorStore.getState().setActiveTool('selection');
+              }}
             />
           );
         })()}

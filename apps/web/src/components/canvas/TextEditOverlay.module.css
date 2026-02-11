@@ -20,3 +20,8 @@
   caret-color: var(--color-primary, #a855f7);
   box-sizing: border-box;
 }
+
+.textEditArea::placeholder {
+  color: rgba(255, 255, 255, 0.35);
+  font-style: italic;
+}

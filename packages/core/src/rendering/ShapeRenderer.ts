@@ -288,6 +288,8 @@ interface TessellationCacheEntry {
   fillIndices: number[];
   /** Cached stroke outline vertices per stroke key (width+align) */
   strokeCache: Map<string, { outline: Float32Array; indices: number[] }>;
+  /** Original per-contour vertex arrays (for text stroke rendering) */
+  contours?: Float32Array[];
 }
 
 /** Build a cache key string from node geometry properties */
@@ -1375,7 +1377,7 @@ export class ShapeRenderer {
 
     const fm = getFontManager();
     // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-    const font = fm.getFontOrFallback(node.fontFamily);
+    const font = fm.getFontOrFallback(node.fontFamily, node.fontWeight);
     if (!font) return; // Font not loaded yet
 
     const gl = this.renderer.context;
@@ -1390,15 +1392,33 @@ export class ShapeRenderer {
     const cached = this.geometryCache.get(node.id);
 
     if (cached && cached.geoKey === geoKey) {
+      // Render fills with combined vertices
       this.renderFillsAndStrokes(
         node.id,
         cached.vertices,
         cached.fillIndices,
         node.fills,
-        node.strokes,
+        [], // strokes rendered per-contour below
         true,
         this.currentEffectiveOpacity
       );
+      // Render strokes per original contour (not from combined earcut triangles)
+      if (cached.contours) {
+        for (let ci = 0; ci < cached.contours.length; ci++) {
+          const contourVerts = cached.contours[ci]!;
+          for (const stroke of node.strokes) {
+            if (stroke.visible && stroke.width > 0) {
+              this.renderStroke(
+                node.id + `_tc${ci}`,
+                contourVerts,
+                stroke,
+                true,
+                this.currentEffectiveOpacity
+              );
+            }
+          }
+        }
+      }
       return;
     }
 
@@ -1472,23 +1492,41 @@ export class ShapeRenderer {
       }
     }
 
-    // Cache tessellation
+    // Cache tessellation with original contours for stroke rendering
     this.geometryCache.set(node.id, {
       geoKey,
       vertices: combined,
       fillIndices,
       strokeCache: new Map(),
+      contours: contourArrays,
     });
 
+    // Render fills with combined vertices
     this.renderFillsAndStrokes(
       node.id,
       combined,
       fillIndices,
       node.fills,
-      node.strokes,
+      [], // strokes rendered per-contour below
       true,
       this.currentEffectiveOpacity
     );
+
+    // Render strokes per original contour outline
+    for (let ci = 0; ci < contourArrays.length; ci++) {
+      const contourVerts = contourArrays[ci]!;
+      for (const stroke of node.strokes) {
+        if (stroke.visible && stroke.width > 0) {
+          this.renderStroke(
+            node.id + `_tc${ci}`,
+            contourVerts,
+            stroke,
+            true,
+            this.currentEffectiveOpacity
+          );
+        }
+      }
+    }
   }
 
   // --------------------------------------------------------------------------
@@ -2515,7 +2553,7 @@ export class ShapeRenderer {
 
     const fm = getFontManager();
     // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-    const font = fm.getFontOrFallback(node.fontFamily);
+    const font = fm.getFontOrFallback(node.fontFamily, node.fontWeight);
     if (!font) return;
 
     const result = textToSubpaths(node.content, font, node.fontSize, {
