@@ -605,23 +605,29 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     const rangeY = maxY - minY;
     if (rangeX < 0.001 && rangeY < 0.001) return null;
 
-    // Profile convention: shape is read left-to-right where height = stroke width.
-    // Always slice along X, measure Y extent at each X position.
+    // Slice along the major axis (longer dimension) and measure
+    // cross-sectional width in the minor axis.
+    // For vertical shapes, reverse so top→bottom = profile start→end.
+    const vertical = rangeY > rangeX;
+    const majorMin = vertical ? minY : minX;
+    const majorRange = vertical ? rangeY : rangeX;
     const sampleCount = 48;
     const samples: number[] = [];
-    const halfBin = (rangeX / sampleCount) * 0.75;
+    const halfBin = (majorRange / sampleCount) * 0.75;
 
     for (let i = 0; i < sampleCount; i++) {
       const t = i / (sampleCount - 1);
-      const sliceX = minX + t * rangeX;
+      const slicePos = majorMin + t * majorRange;
 
-      // Collect all points within this vertical slice
+      // Collect all points within this slice
       let crossMin = Infinity;
       let crossMax = -Infinity;
       for (const pt of tessellated) {
-        if (Math.abs(pt.x - sliceX) <= halfBin) {
-          if (pt.y < crossMin) crossMin = pt.y;
-          if (pt.y > crossMax) crossMax = pt.y;
+        const major = vertical ? pt.y : pt.x;
+        if (Math.abs(major - slicePos) <= halfBin) {
+          const cross = vertical ? pt.x : pt.y;
+          if (cross < crossMin) crossMin = cross;
+          if (cross > crossMax) crossMax = cross;
         }
       }
 
@@ -630,6 +636,12 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       } else {
         samples.push(0);
       }
+    }
+
+    // For vertical shapes, reverse so visual top = profile start
+    // (Y-up: maxY is top, but we sampled minY→maxY, so reverse)
+    if (vertical) {
+      samples.reverse();
     }
 
     // Fill any zero-gaps by linear interpolation from neighbors
