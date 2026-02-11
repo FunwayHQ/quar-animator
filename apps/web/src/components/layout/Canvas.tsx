@@ -1238,7 +1238,7 @@ export function Canvas() {
         onContextMenu={handleContextMenu}
         style={{ cursor: toolCursor }}
       />
-      {!isDirectSelectionActive && (
+      {!isDirectSelectionActive && !editingTextNodeId && (
         <SelectionOverlay
           bounds={screenBounds}
           handles={transformHandles}
