@@ -34,6 +34,16 @@ export function TextEditOverlay({ node, camera, onCommit, onCancel }: TextEditOv
     if (node.content) {
       el.select();
     }
+    // Re-focus after browser click/dblclick events settle (prevents canvas focus steal
+    // when the overlay mounts during a double-click — the remaining click events in the
+    // browser's event queue can steal focus from the textarea to the canvas)
+    const timer = setTimeout(() => {
+      if (el && document.activeElement !== el) {
+        el.focus();
+        if (node.content) el.select();
+      }
+    }, 0);
+    return () => clearTimeout(timer);
   }, [node.content]);
 
   const handleKeyDown = useCallback(
@@ -53,7 +63,16 @@ export function TextEditOverlay({ node, camera, onCommit, onCancel }: TextEditOv
   );
 
   const handleBlur = useCallback(() => {
-    onCommit(textareaRef.current?.value ?? node.content);
+    // Delay commit to let the setTimeout re-focus in useEffect settle first.
+    // During double-click mount, remaining browser events steal focus from the
+    // textarea to the canvas, triggering blur. The useEffect setTimeout will
+    // re-focus the textarea. If it regains focus, we should NOT commit/close.
+    setTimeout(() => {
+      if (textareaRef.current && document.activeElement === textareaRef.current) {
+        return; // textarea regained focus — don't close
+      }
+      onCommit(textareaRef.current?.value ?? node.content);
+    }, 50);
   }, [onCommit, node.content]);
 
   // Auto-resize textarea to fit content

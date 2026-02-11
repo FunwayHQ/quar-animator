@@ -3,16 +3,7 @@
  * Selects, moves, and resizes shapes
  */
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars -- ImageNode/TextNode used in type casts
-import type {
-  CanvasPointerEvent,
-  Node,
-  ImageNode,
-  TextNode,
-  Vector2,
-  Rect,
-  Matrix3,
-} from '@quar/types';
+import type { CanvasPointerEvent, Node, Vector2, Rect, Matrix3 } from '@quar/types';
 import { BaseTool, type ToolContext } from './BaseTool';
 import { vec2, rect, mat3 } from '../math';
 import { SelectionManager } from '../selection/SelectionManager';
@@ -122,8 +113,9 @@ export class SelectionTool extends BaseTool {
     this.state.startWorldPos = worldPos;
 
     // First, check if clicking on a transform handle (if there's a selection)
+    // Skip transform handle check on double-click — double-click should enter group/text edit
     const selectedIds = this.context.getSelectedIds();
-    if (selectedIds.size > 0) {
+    if (selectedIds.size > 0 && event.clickCount !== 2) {
       const displayResult = this.selectionManager.getSelectionBoundsForDisplay(
         selectedIds,
         this.context.sceneGraph

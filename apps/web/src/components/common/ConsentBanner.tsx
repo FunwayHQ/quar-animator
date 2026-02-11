@@ -39,9 +39,12 @@ export function setGoogleFontsConsent(enabled: boolean): void {
 }
 
 export function ConsentBanner() {
-  const [visible, setVisible] = useState(() => localStorage.getItem(STORAGE_KEY) !== 'true');
+  // Show banner if either: never accepted OR Google Fonts consent not yet granted
+  const [visible, setVisible] = useState(
+    () => localStorage.getItem(STORAGE_KEY) !== 'true' || !hasGoogleFontsConsent()
+  );
   const [exiting, setExiting] = useState(false);
-  const [googleFonts, setGoogleFonts] = useState(false);
+  const [googleFonts, setGoogleFonts] = useState(hasGoogleFontsConsent);
 
   const handleAccept = useCallback(() => {
     localStorage.setItem(STORAGE_KEY, 'true');

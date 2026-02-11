@@ -498,6 +498,9 @@ export function Canvas() {
         return;
       }
 
+      // Don't pass clicks to tool system while text editing overlay is active
+      if (useEditorStore.getState().editingTextNodeId) return;
+
       // Pass to tool system
       if (e.button === 0) {
         const positions = getCanvasPositions(e);
@@ -561,6 +564,9 @@ export function Canvas() {
         canvas.style.cursor = isSpaceHeldRef.current ? 'grab' : toolCursor;
         return;
       }
+
+      // Don't pass events to tool system while text editing overlay is active
+      if (useEditorStore.getState().editingTextNodeId) return;
 
       // Pass to tool system
       const positions = getCanvasPositions(e);
@@ -1220,7 +1226,7 @@ export function Canvas() {
       <canvas
         ref={canvasRef}
         className={styles.canvas}
-        tabIndex={0}
+        tabIndex={editingTextNodeId ? -1 : 0}
         aria-label="Drawing canvas"
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}

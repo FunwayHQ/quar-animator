@@ -1647,10 +1647,8 @@ export function PropertiesPanel() {
                 const fm = getFontManager();
                 const loadedFonts = fm.getLoadedFamilies();
                 const googleConsent = hasGoogleFontsConsent();
-                // Build font list: loaded fonts + Google catalog (if consent)
-                const googleFamilies = googleConsent
-                  ? GOOGLE_FONTS_CATALOG.map((e) => e.family)
-                  : [];
+                // Always show Google Fonts in dropdown; consent checked on select
+                const googleFamilies = GOOGLE_FONTS_CATALOG.map((e) => e.family);
                 const allFonts = [...new Set([...loadedFonts, ...googleFamilies])].sort();
                 return (
                   <>
