@@ -29,6 +29,7 @@ import {
   computeBooleanGroupResult,
   convertTextToPathGroup as convertTextToPathGroupFn,
   outlineStroke as outlineStrokeFn,
+  generateBrushOutline,
 } from '@quar/core';
 import type { OnionSkinSettings, BooleanOp } from '@quar/core';
 import { toast } from '../components/common/Toast';
@@ -163,6 +164,11 @@ export interface EditorStore {
   removeBrushProfile: (id: string) => void;
   setActiveBrushProfile: (id: string | null) => void;
   applyBrushProfileToSelection: (sceneGraph: SceneGraphLike) => void;
+  applyBrushStrokeProfile: (sceneGraph: SceneGraphLike, profileId: string | null) => void;
+  createBrushProfileFromSelection: (
+    sceneGraph: SceneGraphLike,
+    name: string
+  ) => BrushProfile | null;
 
   // Aspect ratio lock
   aspectRatioLocked: boolean;
@@ -478,6 +484,62 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         sceneGraph.updateNode(nodeId, { strokes: newStrokes });
       }
     }
+  },
+  applyBrushStrokeProfile: (sceneGraph: SceneGraphLike, profileId: string | null) => {
+    const state = get();
+    const selectedIds = state.selectedNodeIds;
+    if (selectedIds.size === 0) return;
+    const profile = profileId
+      ? (state.brushProfiles.find((p) => p.id === profileId) ?? null)
+      : null;
+
+    const pushUndo = (get() as any).pushUndo;
+    if (pushUndo) pushUndo(sceneGraph);
+
+    for (const nodeId of selectedIds) {
+      const node = sceneGraph.getNode(nodeId);
+      if (!node || node.type !== 'path' || !(node as any).brushData) continue;
+      const { spine, widths } = (node as any).brushData;
+      const newOutline = generateBrushOutline(spine, widths, profile);
+      sceneGraph.updateNode(nodeId, {
+        points: newOutline,
+        brushData: { spine, widths, profileId },
+      } as any);
+    }
+    set({ isDirty: true });
+  },
+  createBrushProfileFromSelection: (
+    sceneGraph: SceneGraphLike,
+    name: string
+  ): BrushProfile | null => {
+    const state = get();
+    const selectedIds = state.selectedNodeIds;
+    if (selectedIds.size === 0) return null;
+
+    // Find first selected node with brushData
+    let brushNode: any = null;
+    for (const nodeId of selectedIds) {
+      const node = sceneGraph.getNode(nodeId);
+      if (node && node.type === 'path' && (node as any).brushData) {
+        brushNode = node;
+        break;
+      }
+    }
+    if (!brushNode) return null;
+
+    const { widths } = brushNode.brushData;
+    if (!widths || widths.length < 2) return null;
+
+    // Normalize widths to 0-1 range (relative to max width)
+    const maxW = Math.max(...widths);
+    if (maxW <= 0) return null;
+    const samples = widths.map((w: number) => w / maxW);
+
+    const id = `custom-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    const profile: BrushProfile = { id, name, samples };
+
+    set((s) => ({ brushProfiles: [...s.brushProfiles, profile] }));
+    return profile;
   },
 
   // Aspect ratio lock
@@ -1619,6 +1681,15 @@ export const useSetActiveBrushProfile = (): ((id: string | null) => void) =>
   useEditorStore((state: EditorStore) => state.setActiveBrushProfile);
 export const useApplyBrushProfileToSelection = (): ((sceneGraph: SceneGraphLike) => void) =>
   useEditorStore((state: EditorStore) => state.applyBrushProfileToSelection);
+export const useApplyBrushStrokeProfile = (): ((
+  sceneGraph: SceneGraphLike,
+  profileId: string | null
+) => void) => useEditorStore((state: EditorStore) => state.applyBrushStrokeProfile);
+export const useCreateBrushProfileFromSelection = (): ((
+  sceneGraph: SceneGraphLike,
+  name: string
+) => BrushProfile | null) =>
+  useEditorStore((state: EditorStore) => state.createBrushProfileFromSelection);
 
 // Aspect ratio lock selectors
 export const useAspectRatioLocked = (): boolean =>

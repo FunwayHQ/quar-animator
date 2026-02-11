@@ -102,6 +102,9 @@ export function Canvas() {
   const showRulers = useEditorStore((state) => state.showRulers);
   const editingTextNodeId = useEditorStore((state) => state.editingTextNodeId);
   const setEditingTextNodeId = useEditorStore((state) => state.setEditingTextNodeId);
+  const createBrushProfileFromSelection = useEditorStore(
+    (state) => state.createBrushProfileFromSelection
+  );
 
   // Get shared SceneGraph from context
   const sceneGraph = useSceneGraph();
@@ -946,6 +949,30 @@ export function Canvas() {
           }),
           onClick: () => outlineStroke(sceneGraph),
         },
+        ...((): ContextMenuEntry[] => {
+          const hasPath = Array.from(selectedNodeIds).some((id) => {
+            const n = sceneGraph.getNode(id);
+            return n && n.type === 'path';
+          });
+          if (!hasPath) return [];
+          const hasBrushData = Array.from(selectedNodeIds).some((id) => {
+            const n = sceneGraph.getNode(id);
+            return n && n.type === 'path' && (n as any).brushData;
+          });
+          return [
+            {
+              id: 'create-brush-profile',
+              label: 'Create Profile from Stroke',
+              disabled: !hasBrushData,
+              onClick: () => {
+                const profileName = prompt('Profile name:');
+                if (profileName) {
+                  createBrushProfileFromSelection(sceneGraph, profileName);
+                }
+              },
+            },
+          ];
+        })(),
         { type: 'separator' },
         {
           id: 'toggle-visibility',
@@ -1018,6 +1045,7 @@ export function Canvas() {
     changeBooleanOp,
     convertTextToPath,
     outlineStroke,
+    createBrushProfileFromSelection,
   ]);
 
   // --------------------------------------------------------------------------

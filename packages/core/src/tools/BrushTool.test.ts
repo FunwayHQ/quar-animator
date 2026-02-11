@@ -1391,4 +1391,63 @@ describe('BrushTool', () => {
       expect(path.fills[0].opacity).toBe(context.defaultFill.opacity);
     });
   });
+
+  // ==========================================================================
+  // BrushData Storage
+  // ==========================================================================
+
+  describe('brushData storage', () => {
+    function drawStroke(): any {
+      const downEvent = createMockPointerEvent({
+        worldPosition: { x: 0, y: 0 },
+        button: 0,
+      });
+      tool.onPointerDown(downEvent);
+
+      tool.onPointerMove(createMockPointerEvent({ worldPosition: { x: 50, y: 25 } }));
+      tool.onPointerMove(createMockPointerEvent({ worldPosition: { x: 100, y: 0 } }));
+
+      tool.onPointerUp(createMockPointerEvent({ worldPosition: { x: 100, y: 0 }, button: 0 }));
+
+      const nodes = Array.from(context.sceneGraph.getNodes());
+      return nodes[0];
+    }
+
+    it('should store brushData on created path node', () => {
+      const path = drawStroke();
+      expect(path).toBeDefined();
+      expect(path.brushData).toBeDefined();
+    });
+
+    it('should store spine points in brushData', () => {
+      const path = drawStroke();
+      expect(path.brushData.spine).toBeDefined();
+      expect(Array.isArray(path.brushData.spine)).toBe(true);
+      expect(path.brushData.spine.length).toBeGreaterThanOrEqual(2);
+      // Spine points should have position, handleIn, handleOut, type
+      for (const p of path.brushData.spine) {
+        expect(p.position).toBeDefined();
+        expect(p.position.x).toBeDefined();
+        expect(p.position.y).toBeDefined();
+        expect(p.type).toBeDefined();
+      }
+    });
+
+    it('should store widths array in brushData', () => {
+      const path = drawStroke();
+      expect(path.brushData.widths).toBeDefined();
+      expect(Array.isArray(path.brushData.widths)).toBe(true);
+      expect(path.brushData.widths.length).toBeGreaterThanOrEqual(2);
+      // All widths should be positive numbers
+      for (const w of path.brushData.widths) {
+        expect(typeof w).toBe('number');
+        expect(w).toBeGreaterThan(0);
+      }
+    });
+
+    it('should set profileId to null initially', () => {
+      const path = drawStroke();
+      expect(path.brushData.profileId).toBeNull();
+    });
+  });
 });

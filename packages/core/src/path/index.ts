@@ -9,3 +9,4 @@ export * from './shapeToPath';
 export * from './outlineStroke';
 export * from './schneider';
 export * from './kalmanFilter';
+export * from './brushOutline';

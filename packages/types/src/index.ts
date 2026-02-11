@@ -97,6 +97,12 @@ export interface BrushProfile {
   samples: number[];
 }
 
+export interface BrushData {
+  spine: PathPoint[]; // The fitted center curve
+  widths: number[]; // Per-spine-point width values (world units)
+  profileId: string | null; // Currently applied profile ID (null = uniform)
+}
+
 // ============================================================================
 // Transform
 // ============================================================================
@@ -241,6 +247,7 @@ export interface PathNode extends BaseNode {
   fillRule?: 'nonzero' | 'evenodd'; // Default: 'nonzero'
   fills: Fill[];
   strokes: Stroke[];
+  brushData?: BrushData; // Present for brush strokes — stores spine + widths for profile reshaping
 }
 
 export interface TextNode extends BaseNode {
