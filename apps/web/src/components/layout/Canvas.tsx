@@ -1303,7 +1303,7 @@ export function Canvas() {
                   // Empty text — remove the node instead of keeping an invisible node
                   useEditorStore.getState().pushUndo(sceneGraph);
                   sceneGraph.removeNode(editingTextNodeId);
-                  useEditorStore.getState().setSelectedIds([]);
+                  useEditorStore.getState().setSelection([]);
                 } else {
                   useEditorStore.getState().pushUndo(sceneGraph);
                   sceneGraph.updateNode(editingTextNodeId, { content });
@@ -1317,7 +1317,7 @@ export function Canvas() {
                 if (n && n.type === 'text' && !(n as TextNode).content) {
                   useEditorStore.getState().pushUndo(sceneGraph);
                   sceneGraph.removeNode(editingTextNodeId);
-                  useEditorStore.getState().setSelectedIds([]);
+                  useEditorStore.getState().setSelection([]);
                 }
                 setEditingTextNodeId(null);
                 useEditorStore.getState().setActiveTool('selection');
