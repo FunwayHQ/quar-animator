@@ -138,21 +138,25 @@ export class SelectionManager {
         return { bounds, rotation: 0 };
       }
 
-      const nodeBounds = this.getNodeBoundsUnrotated(node);
-      if (!nodeBounds) return null;
+      // For nested nodes (children of groups), the node's transform.position
+      // is relative to the parent, so we must include the parent's world transform.
+      let nodeBounds: Rect | null;
+      let rotationCenter: { x: number; y: number };
 
-      // Use the node's transform.position as the rotation center — this is
-      // the actual rotation pivot used by the renderer (translate(pos) then
-      // rotate). For polygons/stars with odd sides, the AABB center differs
-      // from the node position, causing the selection box to drift if we
-      // used rect.center() instead.
-      // For root nodes, position IS the world-space pivot.
-      // For nested nodes, transform through the parent's world matrix.
-      let rotationCenter = node.transform.position;
       if (node.parent) {
+        const localBounds = this.getLocalBounds(node);
+        if (!localBounds) return null;
         const parentWorld = sceneGraph.getWorldTransform(node.parent);
+        // Compose child's local transform WITHOUT rotation (overlay applies rotation visually)
+        const localNoRot = mat3.compose(node.transform.position, 0, node.transform.scale);
+        const worldNoRot = mat3.multiply(parentWorld, localNoRot);
+        nodeBounds = transformBoundsToWorld(localBounds, worldNoRot);
         rotationCenter = mat3.transformPoint(parentWorld, node.transform.position);
+      } else {
+        nodeBounds = this.getNodeBoundsUnrotated(node);
+        rotationCenter = node.transform.position;
       }
+      if (!nodeBounds) return null;
 
       return {
         bounds: {
@@ -187,6 +191,13 @@ export class SelectionManager {
         if (localBounds) {
           out.push(transformBoundsToWorld(localBounds, worldTransform));
         }
+      }
+    } else if (node.parent) {
+      // Nested node: use world transform so position is correctly mapped
+      const worldTransform = sceneGraph.getWorldTransform(node.id);
+      const localBounds = this.getLocalBounds(node);
+      if (localBounds) {
+        out.push(transformBoundsToWorld(localBounds, worldTransform));
       }
     } else {
       const nodeBounds = this.getNodeBounds(node);
