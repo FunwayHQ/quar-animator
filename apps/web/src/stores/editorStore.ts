@@ -31,6 +31,7 @@ import {
   outlineStroke as outlineStrokeFn,
   generateBrushOutline,
   tessellatePathToPoints,
+  getShapeOutlinePoints,
 } from '@quar/core';
 import type { OnionSkinSettings, BooleanOp } from '@quar/core';
 import { toast } from '../components/common/Toast';
@@ -557,27 +558,36 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     const selectedIds = state.selectedNodeIds;
     if (selectedIds.size === 0) return null;
 
-    // Find first selected path node
-    let pathNode: any = null;
+    // Find first selected shape node (path, rectangle, ellipse, polygon)
+    let shapeNode: Node | null = null;
     for (const nodeId of selectedIds) {
       const node = sceneGraph.getNode(nodeId);
-      if (node && node.type === 'path') {
-        pathNode = node;
+      if (
+        node &&
+        (node.type === 'path' ||
+          node.type === 'rectangle' ||
+          node.type === 'ellipse' ||
+          node.type === 'polygon')
+      ) {
+        shapeNode = node;
         break;
       }
     }
-    if (!pathNode) return null;
+    if (!shapeNode) return null;
 
-    // Tessellate path points into dense samples
-    const points = pathNode.points as {
-      position: { x: number; y: number };
-      handleIn: { x: number; y: number } | null;
-      handleOut: { x: number; y: number } | null;
-      type: string;
-    }[];
-    if (!points || points.length < 2) return null;
+    // Extract outline points from any shape type via getShapeOutlinePoints
+    const outline = getShapeOutlinePoints(shapeNode);
+    if (!outline || outline.points.length < 2) return null;
 
-    const tessellated = tessellatePathToPoints(points, !!pathNode.closed, 0.5);
+    // Tessellate outline into dense point samples (0.25 step for higher density)
+    const tessellated = tessellatePathToPoints(outline.points, outline.closed, 0.25);
+    // Also tessellate subpaths if present (compound paths)
+    if (outline.subpaths) {
+      for (const sp of outline.subpaths) {
+        const sub = tessellatePathToPoints(sp, true, 0.25);
+        tessellated.push(...sub);
+      }
+    }
     if (tessellated.length < 2) return null;
 
     // Compute bounding box
@@ -595,37 +605,29 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     const rangeY = maxY - minY;
     if (rangeX < 0.001 && rangeY < 0.001) return null;
 
-    // Determine major axis: slice along the longer dimension,
-    // measure cross-sectional width in the shorter dimension
-    const vertical = rangeY >= rangeX;
-    const sampleCount = 32;
+    // Profile convention: shape is read left-to-right where height = stroke width.
+    // Always slice along X, measure Y extent at each X position.
+    const sampleCount = 48;
     const samples: number[] = [];
-
-    // Bin points along major axis, measure minor-axis extent per bin
-    const majorMin = vertical ? minY : minX;
-    const majorRange = vertical ? rangeY : rangeX;
+    const halfBin = (rangeX / sampleCount) * 0.75;
 
     for (let i = 0; i < sampleCount; i++) {
       const t = i / (sampleCount - 1);
-      const slicePos = majorMin + t * majorRange;
-      const halfBin = majorRange / sampleCount / 2 + 0.5;
+      const sliceX = minX + t * rangeX;
 
-      // Collect all points within this slice
+      // Collect all points within this vertical slice
       let crossMin = Infinity;
       let crossMax = -Infinity;
       for (const pt of tessellated) {
-        const major = vertical ? pt.y : pt.x;
-        if (Math.abs(major - slicePos) <= halfBin) {
-          const cross = vertical ? pt.x : pt.y;
-          if (cross < crossMin) crossMin = cross;
-          if (cross > crossMax) crossMax = cross;
+        if (Math.abs(pt.x - sliceX) <= halfBin) {
+          if (pt.y < crossMin) crossMin = pt.y;
+          if (pt.y > crossMax) crossMax = pt.y;
         }
       }
 
       if (crossMin <= crossMax) {
         samples.push(crossMax - crossMin);
       } else {
-        // No points in this bin — interpolate from neighbors later
         samples.push(0);
       }
     }

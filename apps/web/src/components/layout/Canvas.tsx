@@ -951,11 +951,17 @@ export function Canvas() {
           onClick: () => outlineStroke(sceneGraph),
         },
         ...((): ContextMenuEntry[] => {
-          const hasPath = Array.from(selectedNodeIds).some((id) => {
+          const hasShape = Array.from(selectedNodeIds).some((id) => {
             const n = sceneGraph.getNode(id);
-            return n && n.type === 'path';
+            return (
+              n &&
+              (n.type === 'path' ||
+                n.type === 'rectangle' ||
+                n.type === 'ellipse' ||
+                n.type === 'polygon')
+            );
           });
-          if (!hasPath) return [];
+          if (!hasShape) return [];
           return [
             {
               id: 'create-brush-profile',
