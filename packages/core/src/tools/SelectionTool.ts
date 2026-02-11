@@ -628,9 +628,15 @@ export class SelectionTool extends BaseTool {
 
     if (!localBounds) return null;
 
-    // Build world matrix for bounds (skip anchor offset since local geometry
-    // already accounts for it via explicit offsets like -width*anchor.x)
-    const worldMatrix = mat3.compose(transform.position, transform.rotation, transform.scale);
+    // For nested nodes (children of groups), use full world transform so
+    // bounds are in world space. For root nodes, skip anchor offset since
+    // local geometry already accounts for it via explicit offsets like -width*anchor.x.
+    let worldMatrix: Matrix3;
+    if (node.parent) {
+      worldMatrix = this.context.sceneGraph.getWorldTransform(node.id);
+    } else {
+      worldMatrix = mat3.compose(transform.position, transform.rotation, transform.scale);
+    }
 
     return transformBoundsToWorld(localBounds, worldMatrix);
   }
