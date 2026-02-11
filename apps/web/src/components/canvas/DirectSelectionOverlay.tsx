@@ -17,6 +17,38 @@ export interface DirectSelectionOverlayProps {
 }
 
 // ============================================================================
+// Subpath Helpers
+// ============================================================================
+
+/** Merge node.points + node.subpaths[] into a single flat array. */
+function getAllPoints(node: PathNode): PathPoint[] {
+  if (!node.subpaths || node.subpaths.length === 0) return node.points;
+  const result: PathPoint[] = [...node.points];
+  for (const sp of node.subpaths) result.push(...sp);
+  return result;
+}
+
+/** Return start indices of each contour: [0, points.length, ...] */
+function getSubpathBoundaries(node: PathNode): number[] {
+  const b = [0, node.points.length];
+  if (node.subpaths) {
+    for (const sp of node.subpaths) b.push(b[b.length - 1] + sp.length);
+  }
+  return b;
+}
+
+/** Split getAllPoints into individual contour arrays. */
+function getContours(node: PathNode): PathPoint[][] {
+  const allPts = getAllPoints(node);
+  const boundaries = getSubpathBoundaries(node);
+  const contours: PathPoint[][] = [];
+  for (let c = 0; c < boundaries.length - 1; c++) {
+    contours.push(allPts.slice(boundaries[c], boundaries[c + 1]));
+  }
+  return contours;
+}
+
+// ============================================================================
 // Helpers
 // ============================================================================
 
@@ -67,102 +99,118 @@ export function DirectSelectionOverlay({
 
   return (
     <svg className={styles.overlay}>
-      {pathNodes.map((node) => (
-        <g key={node.id}>
-          {/* Path outline connecting points */}
-          {node.points.length >= 2 && (
-            <path className={styles.pathOutline} d={buildPathD(node, toScreen, zoom)} />
-          )}
+      {pathNodes.map((node) => {
+        const allPts = getAllPoints(node);
+        const contours = getContours(node);
 
-          {/* Bezier handle lines and circles for selected points */}
-          {node.points.map((point: PathPoint, index: number) => {
-            const selected = isPointSelected(selectedPoints, node.id, index);
-            if (!selected) return null;
+        return (
+          <g key={node.id}>
+            {/* Path outline connecting points — one <path> per contour */}
+            {contours.map((contour, ci) =>
+              contour.length >= 2 ? (
+                <path
+                  key={`outline-${ci}`}
+                  className={styles.pathOutline}
+                  d={buildContourD(node, contour, node.closed, toScreen, zoom)}
+                />
+              ) : null
+            )}
 
-            const screenPos = toScreen(getPointWorldPos(node, point));
+            {/* Bezier handle lines and circles for selected points */}
+            {allPts.map((point: PathPoint, index: number) => {
+              const selected = isPointSelected(selectedPoints, node.id, index);
+              if (!selected) return null;
 
-            return (
-              <g key={`handles-${index}`}>
-                {point.handleIn &&
-                  (() => {
-                    const wo = getHandleWorldOffset(node, point.handleIn);
-                    const hx = screenPos.x + wo.x * zoom;
-                    const hy = screenPos.y - wo.y * zoom;
-                    return (
-                      <>
-                        <line
-                          className={styles.handleLine}
-                          x1={screenPos.x}
-                          y1={screenPos.y}
-                          x2={hx}
-                          y2={hy}
-                        />
-                        <circle className={styles.handle} cx={hx} cy={hy} r={4} />
-                      </>
-                    );
-                  })()}
-                {point.handleOut &&
-                  (() => {
-                    const wo = getHandleWorldOffset(node, point.handleOut);
-                    const hx = screenPos.x + wo.x * zoom;
-                    const hy = screenPos.y - wo.y * zoom;
-                    return (
-                      <>
-                        <line
-                          className={styles.handleLine}
-                          x1={screenPos.x}
-                          y1={screenPos.y}
-                          x2={hx}
-                          y2={hy}
-                        />
-                        <circle className={styles.handle} cx={hx} cy={hy} r={4} />
-                      </>
-                    );
-                  })()}
-              </g>
-            );
-          })}
+              const screenPos = toScreen(getPointWorldPos(node, point));
 
-          {/* Control points (rendered on top of handles) */}
-          {node.points.map((point: PathPoint, index: number) => {
-            const selected = isPointSelected(selectedPoints, node.id, index);
-            const screenPos = toScreen(getPointWorldPos(node, point));
+              return (
+                <g key={`handles-${index}`}>
+                  {point.handleIn &&
+                    (() => {
+                      const wo = getHandleWorldOffset(node, point.handleIn);
+                      const hx = screenPos.x + wo.x * zoom;
+                      const hy = screenPos.y - wo.y * zoom;
+                      return (
+                        <>
+                          <line
+                            className={styles.handleLine}
+                            x1={screenPos.x}
+                            y1={screenPos.y}
+                            x2={hx}
+                            y2={hy}
+                          />
+                          <circle className={styles.handle} cx={hx} cy={hy} r={4} />
+                        </>
+                      );
+                    })()}
+                  {point.handleOut &&
+                    (() => {
+                      const wo = getHandleWorldOffset(node, point.handleOut);
+                      const hx = screenPos.x + wo.x * zoom;
+                      const hy = screenPos.y - wo.y * zoom;
+                      return (
+                        <>
+                          <line
+                            className={styles.handleLine}
+                            x1={screenPos.x}
+                            y1={screenPos.y}
+                            x2={hx}
+                            y2={hy}
+                          />
+                          <circle className={styles.handle} cx={hx} cy={hy} r={4} />
+                        </>
+                      );
+                    })()}
+                </g>
+              );
+            })}
 
-            return (
-              <rect
-                key={`point-${index}`}
-                className={selected ? styles.pointSelected : styles.point}
-                x={screenPos.x - 4}
-                y={screenPos.y - 4}
-                width={8}
-                height={8}
-                transform={`rotate(45 ${screenPos.x} ${screenPos.y})`}
-              />
-            );
-          })}
-        </g>
-      ))}
+            {/* Control points (rendered on top of handles) */}
+            {allPts.map((point: PathPoint, index: number) => {
+              const selected = isPointSelected(selectedPoints, node.id, index);
+              const screenPos = toScreen(getPointWorldPos(node, point));
+
+              return (
+                <rect
+                  key={`point-${index}`}
+                  className={selected ? styles.pointSelected : styles.point}
+                  x={screenPos.x - 4}
+                  y={screenPos.y - 4}
+                  width={8}
+                  height={8}
+                  transform={`rotate(45 ${screenPos.x} ${screenPos.y})`}
+                />
+              );
+            })}
+          </g>
+        );
+      })}
     </svg>
   );
 }
 
 /**
- * Build SVG path d attribute for the path outline (for visual reference)
+ * Build SVG path d attribute for a single contour (for visual reference).
  */
-function buildPathD(node: PathNode, toScreen: (pos: Vector2) => Vector2, zoom: number): string {
-  const points = node.points;
-  if (points.length < 2) return '';
+function buildContourD(
+  node: PathNode,
+  contour: PathPoint[],
+  closed: boolean,
+  toScreen: (pos: Vector2) => Vector2,
+  zoom: number
+): string {
+  if (contour.length < 2) return '';
 
   const parts: string[] = [];
 
-  for (let i = 0; i < points.length; i++) {
-    const p = points[i];
+  for (let i = 0; i < contour.length; i++) {
+    const p = contour[i];
     const screen = toScreen(getPointWorldPos(node, p));
 
     if (i === 0) {
       parts.push(`M ${screen.x} ${screen.y}`);
     } else {
-      const prev = points[i - 1];
+      const prev = contour[i - 1];
       const prevScreen = toScreen(getPointWorldPos(node, prev));
 
       if (prev.handleOut || p.handleIn) {
@@ -181,9 +229,9 @@ function buildPathD(node: PathNode, toScreen: (pos: Vector2) => Vector2, zoom: n
   }
 
   // Close path if needed
-  if (node.closed && points.length >= 3) {
-    const first = points[0];
-    const last = points[points.length - 1];
+  if (closed && contour.length >= 3) {
+    const first = contour[0];
+    const last = contour[contour.length - 1];
     const firstScreen = toScreen(getPointWorldPos(node, first));
     const lastScreen = toScreen(getPointWorldPos(node, last));
 

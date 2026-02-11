@@ -40,6 +40,39 @@ function createTestPath(
   return node;
 }
 
+// Helper to create a test path node with subpaths (compound path / text-to-path)
+function createTestPathWithSubpaths(
+  context: ToolContext,
+  points: PathPoint[],
+  subpaths: PathPoint[][],
+  closed: boolean = true,
+  position: { x: number; y: number } = { x: 0, y: 0 }
+): PathNode {
+  const transform = createDefaultTransform();
+  transform.position = position;
+
+  const node: PathNode = {
+    id: context.generateId(),
+    name: 'Test Compound Path',
+    type: 'path',
+    parent: null,
+    children: [],
+    transform,
+    visible: true,
+    locked: false,
+    opacity: 1,
+    blendMode: 'normal',
+    points,
+    subpaths,
+    closed,
+    fills: [],
+    strokes: [context.defaultStroke],
+  };
+
+  context.sceneGraph.addNode(node);
+  return node;
+}
+
 // Helper to create a simple path point
 function createPoint(
   x: number,
@@ -147,6 +180,32 @@ describe('DirectSelectionTool', () => {
       tool.onPointerUp(createMockPointerEvent({ worldPosition: { x: 500, y: 500 } }));
 
       expect(tool.getSelectedPoints().length).toBe(0);
+    });
+
+    it('should clear node selection when clicking empty space', () => {
+      const path = createTestPath(context, [createPoint(0, 0), createPoint(100, 0)]);
+
+      // Select first point (this also selects the node)
+      tool.onPointerDown(
+        createMockPointerEvent({
+          worldPosition: { x: 0, y: 0 },
+          button: 0,
+        })
+      );
+      tool.onPointerUp(createMockPointerEvent({ worldPosition: { x: 0, y: 0 } }));
+
+      expect(context.getSelectedIds().has(path.id)).toBe(true);
+
+      // Click on empty space
+      tool.onPointerDown(
+        createMockPointerEvent({
+          worldPosition: { x: 500, y: 500 },
+          button: 0,
+        })
+      );
+      tool.onPointerUp(createMockPointerEvent({ worldPosition: { x: 500, y: 500 } }));
+
+      expect(context.getSelectedIds().size).toBe(0);
     });
 
     it('should add to selection with shift+click', () => {
@@ -1068,6 +1127,462 @@ describe('DirectSelectionTool', () => {
       const updatedNode = context.sceneGraph.getNode(path.id) as PathNode;
       expect(updatedNode.points[0].position.x).toBe(20);
       expect(updatedNode.points[0].position.y).toBe(20);
+    });
+  });
+
+  // ==========================================================================
+  // Multi-Subpath (Compound Path) Support
+  // ==========================================================================
+
+  describe('multi-subpath support', () => {
+    // Compound path layout:
+    //   Main contour (indices 0-2): triangle at (0,0), (100,0), (50,100)
+    //   Subpath 1 (indices 3-5): triangle at (200,0), (300,0), (250,100)
+
+    function createCompoundPath(ctx: ToolContext) {
+      return createTestPathWithSubpaths(
+        ctx,
+        [createPoint(0, 0), createPoint(100, 0), createPoint(50, 100)],
+        [[createPoint(200, 0), createPoint(300, 0), createPoint(250, 100)]],
+        true
+      );
+    }
+
+    // --- Point Selection ---
+
+    it('should select a point in a subpath by flat index', () => {
+      const path = createCompoundPath(context);
+
+      // Click on first point of subpath (200, 0) → flat index 3
+      tool.onPointerDown(createMockPointerEvent({ worldPosition: { x: 200, y: 0 }, button: 0 }));
+      tool.onPointerUp(createMockPointerEvent({ worldPosition: { x: 200, y: 0 } }));
+
+      const selected = tool.getSelectedPoints();
+      expect(selected.length).toBe(1);
+      expect(selected[0].nodeId).toBe(path.id);
+      expect(selected[0].pointIndex).toBe(3);
+    });
+
+    it('should select a point in the main contour of a compound path', () => {
+      const path = createCompoundPath(context);
+
+      // Click on second point of main contour (100, 0) → flat index 1
+      tool.onPointerDown(createMockPointerEvent({ worldPosition: { x: 100, y: 0 }, button: 0 }));
+      tool.onPointerUp(createMockPointerEvent({ worldPosition: { x: 100, y: 0 } }));
+
+      const selected = tool.getSelectedPoints();
+      expect(selected.length).toBe(1);
+      expect(selected[0].pointIndex).toBe(1);
+    });
+
+    it('should shift+click to select points across different contours', () => {
+      const path = createCompoundPath(context);
+
+      // Select point in main contour
+      tool.onPointerDown(createMockPointerEvent({ worldPosition: { x: 0, y: 0 }, button: 0 }));
+      tool.onPointerUp(createMockPointerEvent({ worldPosition: { x: 0, y: 0 } }));
+
+      // Shift+select point in subpath
+      tool.onPointerDown(
+        createMockPointerEvent({ worldPosition: { x: 300, y: 0 }, button: 0, shiftKey: true })
+      );
+      tool.onPointerUp(createMockPointerEvent({ worldPosition: { x: 300, y: 0 }, shiftKey: true }));
+
+      const selected = tool.getSelectedPoints();
+      expect(selected.length).toBe(2);
+      expect(selected[0].pointIndex).toBe(0); // main contour
+      expect(selected[1].pointIndex).toBe(4); // subpath
+    });
+
+    // --- Select All ---
+
+    it('should select all points including subpaths with Ctrl+A', () => {
+      const path = createCompoundPath(context);
+      context.setSelectedIds([path.id]);
+
+      tool.onKeyDown({
+        key: 'a',
+        ctrlKey: true,
+        preventDefault: () => {},
+      } as unknown as KeyboardEvent);
+
+      const selected = tool.getSelectedPoints();
+      expect(selected.length).toBe(6); // 3 main + 3 subpath
+    });
+
+    // --- Point Movement ---
+
+    it('should move a point in a subpath', () => {
+      const path = createCompoundPath(context);
+
+      // Select subpath point at (200, 0) → flat index 3
+      tool.onPointerDown(createMockPointerEvent({ worldPosition: { x: 200, y: 0 }, button: 0 }));
+
+      // Drag to new position
+      tool.onPointerMove(createMockPointerEvent({ worldPosition: { x: 220, y: 20 } }));
+      tool.onPointerUp(createMockPointerEvent({ worldPosition: { x: 220, y: 20 } }));
+
+      const updated = context.sceneGraph.getNode(path.id) as PathNode;
+      // Main contour should be unchanged
+      expect(updated.points[0].position).toEqual({ x: 0, y: 0 });
+      expect(updated.points[1].position).toEqual({ x: 100, y: 0 });
+      expect(updated.points[2].position).toEqual({ x: 50, y: 100 });
+      // Subpath point should be moved
+      expect(updated.subpaths).toBeDefined();
+      expect(updated.subpaths![0][0].position.x).toBe(220);
+      expect(updated.subpaths![0][0].position.y).toBe(20);
+      // Other subpath points unchanged
+      expect(updated.subpaths![0][1].position).toEqual({ x: 300, y: 0 });
+      expect(updated.subpaths![0][2].position).toEqual({ x: 250, y: 100 });
+    });
+
+    it('should move points across contours together', () => {
+      const path = createCompoundPath(context);
+
+      // Select main point (0, 0)
+      tool.onPointerDown(createMockPointerEvent({ worldPosition: { x: 0, y: 0 }, button: 0 }));
+      tool.onPointerUp(createMockPointerEvent({ worldPosition: { x: 0, y: 0 } }));
+
+      // Shift+select subpath point (200, 0)
+      tool.onPointerDown(
+        createMockPointerEvent({ worldPosition: { x: 200, y: 0 }, button: 0, shiftKey: true })
+      );
+      tool.onPointerUp(createMockPointerEvent({ worldPosition: { x: 200, y: 0 }, shiftKey: true }));
+
+      expect(tool.getSelectedPoints().length).toBe(2);
+
+      // Drag from first selected point
+      tool.onPointerDown(createMockPointerEvent({ worldPosition: { x: 0, y: 0 }, button: 0 }));
+      tool.onPointerMove(createMockPointerEvent({ worldPosition: { x: 10, y: 10 } }));
+      tool.onPointerUp(createMockPointerEvent({ worldPosition: { x: 10, y: 10 } }));
+
+      const updated = context.sceneGraph.getNode(path.id) as PathNode;
+      expect(updated.points[0].position).toEqual({ x: 10, y: 10 });
+      expect(updated.subpaths![0][0].position).toEqual({ x: 210, y: 10 });
+    });
+
+    // --- Point Deletion ---
+
+    it('should delete a point from a subpath', () => {
+      const path = createCompoundPath(context);
+
+      // Select first subpath point (200, 0) → flat index 3
+      tool.onPointerDown(createMockPointerEvent({ worldPosition: { x: 200, y: 0 }, button: 0 }));
+      tool.onPointerUp(createMockPointerEvent({ worldPosition: { x: 200, y: 0 } }));
+
+      tool.onKeyDown({ key: 'Delete' } as KeyboardEvent);
+
+      const updated = context.sceneGraph.getNode(path.id) as PathNode;
+      // Main contour unchanged
+      expect(updated.points.length).toBe(3);
+      // Subpath lost one point
+      expect(updated.subpaths).toBeDefined();
+      expect(updated.subpaths![0].length).toBe(2);
+      expect(updated.subpaths![0][0].position).toEqual({ x: 300, y: 0 });
+      expect(updated.subpaths![0][1].position).toEqual({ x: 250, y: 100 });
+    });
+
+    it('should remove an entire subpath contour when all its points are deleted', () => {
+      const path = createCompoundPath(context);
+
+      // Select all three subpath points via shift+click
+      tool.onPointerDown(createMockPointerEvent({ worldPosition: { x: 200, y: 0 }, button: 0 }));
+      tool.onPointerUp(createMockPointerEvent({ worldPosition: { x: 200, y: 0 } }));
+
+      tool.onPointerDown(
+        createMockPointerEvent({ worldPosition: { x: 300, y: 0 }, button: 0, shiftKey: true })
+      );
+      tool.onPointerUp(createMockPointerEvent({ worldPosition: { x: 300, y: 0 }, shiftKey: true }));
+
+      tool.onPointerDown(
+        createMockPointerEvent({ worldPosition: { x: 250, y: 100 }, button: 0, shiftKey: true })
+      );
+      tool.onPointerUp(
+        createMockPointerEvent({ worldPosition: { x: 250, y: 100 }, shiftKey: true })
+      );
+
+      expect(tool.getSelectedPoints().length).toBe(3);
+
+      tool.onKeyDown({ key: 'Delete' } as KeyboardEvent);
+
+      const updated = context.sceneGraph.getNode(path.id) as PathNode;
+      // Main contour unchanged
+      expect(updated.points.length).toBe(3);
+      // Subpaths should be gone
+      expect(updated.subpaths).toBeUndefined();
+    });
+
+    it('should delete points from both contours simultaneously', () => {
+      const path = createCompoundPath(context);
+
+      // Select one main point and one subpath point
+      tool.onPointerDown(createMockPointerEvent({ worldPosition: { x: 50, y: 100 }, button: 0 }));
+      tool.onPointerUp(createMockPointerEvent({ worldPosition: { x: 50, y: 100 } }));
+
+      tool.onPointerDown(
+        createMockPointerEvent({ worldPosition: { x: 250, y: 100 }, button: 0, shiftKey: true })
+      );
+      tool.onPointerUp(
+        createMockPointerEvent({ worldPosition: { x: 250, y: 100 }, shiftKey: true })
+      );
+
+      expect(tool.getSelectedPoints().length).toBe(2);
+
+      tool.onKeyDown({ key: 'Delete' } as KeyboardEvent);
+
+      const updated = context.sceneGraph.getNode(path.id) as PathNode;
+      expect(updated.points.length).toBe(2); // main lost 1
+      expect(updated.subpaths).toBeDefined();
+      expect(updated.subpaths![0].length).toBe(2); // subpath lost 1
+    });
+
+    it('should remove entire node when total remaining points < 2', () => {
+      // Small compound path: 1 main + 1 subpath point (2 total)
+      const path = createTestPathWithSubpaths(
+        context,
+        [createPoint(0, 0)],
+        [[createPoint(100, 0)]],
+        false
+      );
+
+      // Select both
+      tool.onPointerDown(createMockPointerEvent({ worldPosition: { x: 0, y: 0 }, button: 0 }));
+      tool.onPointerUp(createMockPointerEvent({ worldPosition: { x: 0, y: 0 } }));
+
+      tool.onPointerDown(
+        createMockPointerEvent({ worldPosition: { x: 100, y: 0 }, button: 0, shiftKey: true })
+      );
+      tool.onPointerUp(createMockPointerEvent({ worldPosition: { x: 100, y: 0 }, shiftKey: true }));
+
+      tool.onKeyDown({ key: 'Delete' } as KeyboardEvent);
+
+      expect(context.sceneGraph.getNode(path.id)).toBeUndefined();
+    });
+
+    // --- Handle Manipulation ---
+
+    it('should drag a handle on a subpath point', () => {
+      const path = createTestPathWithSubpaths(
+        context,
+        [createPoint(0, 0), createPoint(100, 0)],
+        [[createSmoothPoint(200, 0, { x: -20, y: 0 }, { x: 20, y: 0 }), createPoint(300, 0)]],
+        false
+      );
+
+      // Select the subpath smooth point at (200, 0) → flat index 2
+      tool.onPointerDown(createMockPointerEvent({ worldPosition: { x: 200, y: 0 }, button: 0 }));
+      tool.onPointerUp(createMockPointerEvent({ worldPosition: { x: 200, y: 0 } }));
+
+      expect(tool.getSelectedPoints().length).toBe(1);
+      expect(tool.getSelectedPoints()[0].pointIndex).toBe(2);
+
+      // Now drag handle-out at (220, 0)
+      tool.onPointerDown(createMockPointerEvent({ worldPosition: { x: 220, y: 0 }, button: 0 }));
+      tool.onPointerMove(createMockPointerEvent({ worldPosition: { x: 230, y: 15 } }));
+      tool.onPointerUp(createMockPointerEvent({ worldPosition: { x: 230, y: 15 } }));
+
+      const updated = context.sceneGraph.getNode(path.id) as PathNode;
+      // Main contour unchanged
+      expect(updated.points[0].position).toEqual({ x: 0, y: 0 });
+      expect(updated.points[1].position).toEqual({ x: 100, y: 0 });
+      // Subpath handle should be updated
+      expect(updated.subpaths![0][0].handleOut).not.toBeNull();
+      expect(updated.subpaths![0][0].handleOut!.x).toBe(30);
+      expect(updated.subpaths![0][0].handleOut!.y).toBe(15);
+    });
+
+    // --- Alt-Click Point Type Conversion ---
+
+    it('should convert point type in subpath with correct contour-local neighbors', () => {
+      const path = createCompoundPath(context);
+
+      // Alt+click on middle subpath point at (300, 0) → flat index 4
+      // Its contour neighbors are (200,0) at index 3 and (250,100) at index 5
+      tool.onPointerDown(
+        createMockPointerEvent({ worldPosition: { x: 300, y: 0 }, button: 0, altKey: true })
+      );
+
+      const updated = context.sceneGraph.getNode(path.id) as PathNode;
+      const convertedPoint = updated.subpaths![0][1]; // second point in subpath
+      expect(convertedPoint.type).toBe('smooth');
+      expect(convertedPoint.handleIn).not.toBeNull();
+      expect(convertedPoint.handleOut).not.toBeNull();
+
+      // Main contour should be untouched
+      expect(updated.points[0].type).toBe('corner');
+      expect(updated.points[1].type).toBe('corner');
+      expect(updated.points[2].type).toBe('corner');
+    });
+
+    it('should wrap neighbors within contour for closed compound path', () => {
+      const path = createCompoundPath(context);
+
+      // Alt+click on first subpath point (200, 0) → flat index 3
+      // For a closed contour, prev neighbor should be last subpath point (250,100),
+      // NOT the last point of the main contour (50,100)
+      tool.onPointerDown(
+        createMockPointerEvent({ worldPosition: { x: 200, y: 0 }, button: 0, altKey: true })
+      );
+
+      const updated = context.sceneGraph.getNode(path.id) as PathNode;
+      const converted = updated.subpaths![0][0];
+      expect(converted.type).toBe('smooth');
+
+      // Handles should be based on neighbors (250,100) and (300,0), not (50,100)
+      // Just verify handles exist and are non-zero — exact values depend on convertPointTypeUtil
+      expect(converted.handleIn).not.toBeNull();
+      expect(converted.handleOut).not.toBeNull();
+    });
+
+    // --- Add Point to Segment ---
+
+    it('should add a point to a segment within a subpath', () => {
+      const path = createCompoundPath(context);
+
+      // The segment from (200,0) to (300,0) is on the subpath (flat indices 3→4)
+      // Double-click at midpoint (250, 0)
+      const mid = { x: 250, y: 0 };
+      tool.onPointerDown(createMockPointerEvent({ worldPosition: mid, button: 0 }));
+      tool.onPointerUp(createMockPointerEvent({ worldPosition: mid }));
+
+      tool.onPointerDown(createMockPointerEvent({ worldPosition: mid, button: 0 }));
+
+      const updated = context.sceneGraph.getNode(path.id) as PathNode;
+      // Main contour should be unchanged
+      expect(updated.points.length).toBe(3);
+      // Subpath should have gained one point
+      expect(updated.subpaths).toBeDefined();
+      expect(updated.subpaths![0].length).toBe(4);
+    });
+
+    it('should add a point to a segment within the main contour of a compound path', () => {
+      const path = createCompoundPath(context);
+
+      // The segment from (0,0) to (100,0) is on the main contour (flat indices 0→1)
+      // Double-click at midpoint (50, 0)
+      const mid = { x: 50, y: 0 };
+      tool.onPointerDown(createMockPointerEvent({ worldPosition: mid, button: 0 }));
+      tool.onPointerUp(createMockPointerEvent({ worldPosition: mid }));
+
+      tool.onPointerDown(createMockPointerEvent({ worldPosition: mid, button: 0 }));
+
+      const updated = context.sceneGraph.getNode(path.id) as PathNode;
+      // Main contour should have gained one point
+      expect(updated.points.length).toBe(4);
+      // Subpath should be unchanged
+      expect(updated.subpaths).toBeDefined();
+      expect(updated.subpaths![0].length).toBe(3);
+    });
+
+    // --- Closing Segment Stays Within Contour ---
+
+    it('should not hit test a segment crossing from main contour to subpath', () => {
+      // Compound path: main has (0,0)→(100,0), subpath has (200,0)→(300,0)
+      // There should be no segment between (100,0) and (200,0) — the closing segment
+      // of the main contour wraps from (50,100) back to (0,0), not to (200,0)
+      const path = createCompoundPath(context);
+
+      // Try to double-click at (150, 0) — between last main and first subpath point
+      // This should NOT add a point because there's no segment there
+      const pos = { x: 150, y: 0 };
+      tool.onPointerDown(createMockPointerEvent({ worldPosition: pos, button: 0 }));
+      tool.onPointerUp(createMockPointerEvent({ worldPosition: pos }));
+      tool.onPointerDown(createMockPointerEvent({ worldPosition: pos, button: 0 }));
+      tool.onPointerUp(createMockPointerEvent({ worldPosition: pos }));
+
+      const updated = context.sceneGraph.getNode(path.id) as PathNode;
+      // No point should have been added
+      expect(updated.points.length).toBe(3);
+      expect(updated.subpaths![0].length).toBe(3);
+    });
+
+    // --- Cursor Feedback ---
+
+    it('should show move cursor when hovering over a subpath point', () => {
+      createCompoundPath(context);
+
+      tool.onPointerMove(createMockPointerEvent({ worldPosition: { x: 250, y: 100 } }));
+
+      expect(tool.getCursor()).toBe('move');
+    });
+
+    // --- Multiple Subpaths ---
+
+    it('should handle paths with multiple subpaths', () => {
+      const path = createTestPathWithSubpaths(
+        context,
+        [createPoint(0, 0), createPoint(100, 0)],
+        [
+          [createPoint(200, 0), createPoint(300, 0)],
+          [createPoint(400, 0), createPoint(500, 0)],
+        ],
+        false
+      );
+
+      context.setSelectedIds([path.id]);
+
+      tool.onKeyDown({
+        key: 'a',
+        ctrlKey: true,
+        preventDefault: () => {},
+      } as unknown as KeyboardEvent);
+
+      // 2 main + 2 subpath1 + 2 subpath2 = 6
+      expect(tool.getSelectedPoints().length).toBe(6);
+    });
+
+    it('should move a point in the second subpath correctly', () => {
+      const path = createTestPathWithSubpaths(
+        context,
+        [createPoint(0, 0), createPoint(100, 0)],
+        [
+          [createPoint(200, 0), createPoint(300, 0)],
+          [createPoint(400, 0), createPoint(500, 0)],
+        ],
+        false
+      );
+
+      // Click on (400, 0) → flat index 4 (2 main + 2 subpath1 + 0)
+      tool.onPointerDown(createMockPointerEvent({ worldPosition: { x: 400, y: 0 }, button: 0 }));
+      tool.onPointerMove(createMockPointerEvent({ worldPosition: { x: 410, y: 10 } }));
+      tool.onPointerUp(createMockPointerEvent({ worldPosition: { x: 410, y: 10 } }));
+
+      const updated = context.sceneGraph.getNode(path.id) as PathNode;
+      // Main and first subpath unchanged
+      expect(updated.points[0].position).toEqual({ x: 0, y: 0 });
+      expect(updated.subpaths![0][0].position).toEqual({ x: 200, y: 0 });
+      // Second subpath point moved
+      expect(updated.subpaths![1][0].position).toEqual({ x: 410, y: 10 });
+      expect(updated.subpaths![1][1].position).toEqual({ x: 500, y: 0 });
+    });
+
+    // --- No Subpaths Backward Compatibility ---
+
+    it('should behave identically for paths without subpaths', () => {
+      const path = createTestPath(
+        context,
+        [createPoint(0, 0), createPoint(100, 0), createPoint(50, 100)],
+        true
+      );
+
+      context.setSelectedIds([path.id]);
+
+      tool.onKeyDown({
+        key: 'a',
+        ctrlKey: true,
+        preventDefault: () => {},
+      } as unknown as KeyboardEvent);
+
+      expect(tool.getSelectedPoints().length).toBe(3);
+
+      // Move first point
+      tool.onPointerDown(createMockPointerEvent({ worldPosition: { x: 0, y: 0 }, button: 0 }));
+      tool.onPointerMove(createMockPointerEvent({ worldPosition: { x: 5, y: 5 } }));
+      tool.onPointerUp(createMockPointerEvent({ worldPosition: { x: 5, y: 5 } }));
+
+      const updated = context.sceneGraph.getNode(path.id) as PathNode;
+      expect(updated.points[0].position).toEqual({ x: 5, y: 5 });
+      expect(updated.subpaths).toBeUndefined();
     });
   });
 });

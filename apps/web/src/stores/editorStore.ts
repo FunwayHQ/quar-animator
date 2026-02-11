@@ -26,7 +26,7 @@ import {
   booleanOperation,
   createBooleanResultNode,
   computeBooleanGroupResult,
-  convertTextToPath as convertTextToPathFn,
+  convertTextToPathGroup as convertTextToPathGroupFn,
   outlineStroke as outlineStrokeFn,
 } from '@quar/core';
 import type { OnionSkinSettings, BooleanOp } from '@quar/core';
@@ -1306,8 +1306,8 @@ function createBooleanActions(
         const node = sceneGraph.getNode(id);
         if (!node || node.type !== 'text') continue;
 
-        const pathNode = convertTextToPathFn(node, generateId);
-        if (!pathNode) {
+        const result = convertTextToPathGroupFn(node, generateId);
+        if (!result) {
           toast.error(`Could not convert "${node.name}" — font not loaded`);
           continue;
         }
@@ -1319,13 +1319,16 @@ function createBooleanActions(
           : sceneGraph.getRootNodes().map((n) => n.id);
         const insertIndex = siblings.indexOf(id);
 
-        // Add result, remove original
-        sceneGraph.addNode(pathNode, parentId ?? undefined);
+        // Add group, then children
+        sceneGraph.addNode(result.group, parentId ?? undefined);
+        for (const child of result.children) {
+          sceneGraph.addNode(child, result.group.id);
+        }
         if (insertIndex >= 0) {
-          sceneGraph.moveNode(pathNode.id, parentId ?? null, insertIndex);
+          sceneGraph.moveNode(result.group.id, parentId ?? null, insertIndex);
         }
         sceneGraph.removeNode(id);
-        newIds.push(pathNode.id);
+        newIds.push(result.group.id);
       }
 
       if (newIds.length > 0) {

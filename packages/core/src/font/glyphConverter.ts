@@ -154,8 +154,16 @@ export interface TextLayoutOptions {
   letterSpacing?: number;
 }
 
+/** Per-glyph grouping of contours for text-to-path group conversion. */
+export interface GlyphSubpathGroup {
+  char: string;
+  subpaths: PathPoint[][];
+}
+
 export interface TextToSubpathsResult {
   subpaths: PathPoint[][];
+  /** Per-glyph contour groupings (same data as subpaths, but grouped by character). */
+  glyphs: GlyphSubpathGroup[];
   bounds: Rect;
 }
 
@@ -175,6 +183,7 @@ export function textToSubpaths(
   const scale = fontSize / font.unitsPerEm;
   const lineHeightPx = fontSize * lineHeightMultiplier;
   const allSubpaths: PathPoint[][] = [];
+  const allGlyphs: GlyphSubpathGroup[] = [];
 
   // Measure all line widths for alignment
   const lineWidths: number[] = [];
@@ -216,12 +225,15 @@ export function textToSubpaths(
     }
 
     const glyphs = font.stringToGlyphs(line);
+    const chars = [...line];
     let advanceX = xOffset;
 
     for (let i = 0; i < glyphs.length; i++) {
       const glyph = glyphs[i]!;
       const path = glyph.getPath(advanceX / scale, 0, font.unitsPerEm);
       const subpaths = glyphPathToSubpaths(path);
+
+      const glyphGroup: GlyphSubpathGroup = { char: chars[i] ?? '', subpaths: [] };
 
       // Scale subpath points
       for (const sp of subpaths) {
@@ -238,6 +250,12 @@ export function textToSubpaths(
           }
         }
         allSubpaths.push(sp);
+        glyphGroup.subpaths.push(sp);
+      }
+
+      // Only include glyphs that produced contours (skip spaces)
+      if (glyphGroup.subpaths.length > 0) {
+        allGlyphs.push(glyphGroup);
       }
 
       advanceX += (glyph.advanceWidth ?? 0) * scale;
@@ -254,7 +272,7 @@ export function textToSubpaths(
   // Compute bounds
   const bounds = computeSubpathsBounds(allSubpaths);
 
-  return { subpaths: allSubpaths, bounds };
+  return { subpaths: allSubpaths, glyphs: allGlyphs, bounds };
 }
 
 /**

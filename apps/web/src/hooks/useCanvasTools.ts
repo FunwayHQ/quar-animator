@@ -335,10 +335,11 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
       setIsDirectSelectionActive(true);
       setDirectSelectionPoints(dsTool.getSelectedPoints());
 
-      // Collect all visible path nodes
+      // Collect only selected path nodes for overlay rendering
+      const selected = selectedNodeIdsRef.current;
       const paths: PathNode[] = [];
       sceneGraphRef.current.traverseVisible((node: Node) => {
-        if (node.type === 'path') {
+        if (node.type === 'path' && selected.has(node.id)) {
           paths.push(node);
         }
       });

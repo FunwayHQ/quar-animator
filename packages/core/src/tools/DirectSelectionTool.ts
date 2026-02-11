@@ -12,6 +12,51 @@ import {
 } from '../path/pointUtils';
 
 // ============================================================================
+// Subpath Helpers
+// ============================================================================
+
+/** Merge node.points + node.subpaths[] into a single flat array. */
+function getAllPoints(node: PathNode): PathPoint[] {
+  if (!node.subpaths || node.subpaths.length === 0) return node.points;
+  const result: PathPoint[] = [...node.points];
+  for (const sp of node.subpaths) result.push(...sp);
+  return result;
+}
+
+/** Return start indices of each contour: [0, points.length, points.length+subpaths[0].length, ...] */
+function getSubpathBoundaries(node: PathNode): number[] {
+  const b = [0, node.points.length];
+  if (node.subpaths) {
+    for (const sp of node.subpaths) b.push(b[b.length - 1] + sp.length);
+  }
+  return b;
+}
+
+/** Split a flat array back into points + subpaths using the original node boundaries. */
+function setAllPoints(
+  node: PathNode,
+  all: PathPoint[]
+): { points: PathPoint[]; subpaths?: PathPoint[][] } {
+  const b = getSubpathBoundaries(node);
+  const points = all.slice(0, b[1]);
+  const subpaths: PathPoint[][] = [];
+  for (let i = 1; i < b.length - 1; i++) {
+    subpaths.push(all.slice(b[i], b[i + 1]));
+  }
+  return { points, subpaths: subpaths.length ? subpaths : undefined };
+}
+
+/** Find the contour range [start, end) for a given flat index. */
+function getContourRange(boundaries: number[], flatIndex: number): { start: number; end: number } {
+  for (let c = 0; c < boundaries.length - 1; c++) {
+    if (flatIndex >= boundaries[c] && flatIndex < boundaries[c + 1]) {
+      return { start: boundaries[c], end: boundaries[c + 1] };
+    }
+  }
+  return { start: 0, end: boundaries[1] || 0 };
+}
+
+// ============================================================================
 // Types
 // ============================================================================
 
@@ -158,17 +203,21 @@ export class DirectSelectionTool extends BaseTool {
       this.initialPointPositions.clear();
       for (const sel of this.selectedPoints) {
         const node = this.context.sceneGraph.getNode(sel.nodeId) as PathNode;
-        if (node && node.points[sel.pointIndex]) {
-          const key = `${sel.nodeId}:${sel.pointIndex}`;
-          this.initialPointPositions.set(key, { ...node.points[sel.pointIndex].position });
+        if (node) {
+          const allPts = getAllPoints(node);
+          if (allPts[sel.pointIndex]) {
+            const key = `${sel.nodeId}:${sel.pointIndex}`;
+            this.initialPointPositions.set(key, { ...allPts[sel.pointIndex].position });
+          }
         }
       }
       return;
     }
 
-    // Clicked on empty space - clear selection
+    // Clicked on empty space - clear both point and node selection
     if (!event.shiftKey) {
       this.clearPointSelection();
+      this.context.clearSelection();
     }
   }
 
@@ -201,20 +250,26 @@ export class DirectSelectionTool extends BaseTool {
         const invLinear = mat3.invert(linearMatrix);
         const localDelta = invLinear ? mat3.transformPoint(invLinear, worldDelta) : worldDelta;
 
-        const newPoints = [...node.points];
-        newPoints[sel.pointIndex] = {
-          ...newPoints[sel.pointIndex],
+        const allPts = getAllPoints(node);
+        const newAll = [...allPts];
+        newAll[sel.pointIndex] = {
+          ...newAll[sel.pointIndex],
           position: vec2.add(initialPos, localDelta),
         };
 
-        this.context.sceneGraph.updateNode(sel.nodeId, { points: newPoints });
+        const split = setAllPoints(node, newAll);
+        this.context.sceneGraph.updateNode(sel.nodeId, {
+          points: split.points,
+          subpaths: split.subpaths,
+        });
       }
     } else if (this.dragMode === 'dragging-handle' && this.dragHandle) {
       // Move handle — convert world position to local-space handle offset
       const node = this.context.sceneGraph.getNode(this.dragHandle.nodeId) as PathNode;
       if (!node) return;
 
-      const point = node.points[this.dragHandle.pointIndex];
+      const allPts = getAllPoints(node);
+      const point = allPts[this.dragHandle.pointIndex];
       // Get the point's world position and compute handle offset in world space
       const pointWorldPos = this.getPointWorldPosition(node, point);
       const worldHandleOffset = vec2.subtract(worldPos, pointWorldPos);
@@ -228,13 +283,17 @@ export class DirectSelectionTool extends BaseTool {
 
       const handleType = this.dragHandle.type === 'handle-out' ? 'out' : 'in';
 
-      const newPoints = [...node.points];
-      newPoints[this.dragHandle.pointIndex] = updateHandleWithSymmetry(
+      const newAll = [...allPts];
+      newAll[this.dragHandle.pointIndex] = updateHandleWithSymmetry(
         point,
         handleType,
         localHandleOffset
       );
-      this.context.sceneGraph.updateNode(this.dragHandle.nodeId, { points: newPoints });
+      const split = setAllPoints(node, newAll);
+      this.context.sceneGraph.updateNode(this.dragHandle.nodeId, {
+        points: split.points,
+        subpaths: split.subpaths,
+      });
     }
   }
 
@@ -287,8 +346,9 @@ export class DirectSelectionTool extends BaseTool {
     const paths = this.getPathNodes();
 
     for (const node of paths) {
-      for (let i = 0; i < node.points.length; i++) {
-        const point = node.points[i];
+      const allPts = getAllPoints(node);
+      for (let i = 0; i < allPts.length; i++) {
+        const point = allPts[i];
         const pointWorldPos = this.getPointWorldPosition(node, point);
 
         if (vec2.distance(worldPos, pointWorldPos) < hitRadius) {
@@ -308,7 +368,7 @@ export class DirectSelectionTool extends BaseTool {
       const node = this.context.sceneGraph.getNode(sel.nodeId) as PathNode;
       if (!node || node.type !== 'path') continue;
 
-      const point = node.points[sel.pointIndex];
+      const point = getAllPoints(node)[sel.pointIndex];
       if (!point) continue;
 
       const pointWorldPos = this.getPointWorldPosition(node, point);
@@ -342,22 +402,33 @@ export class DirectSelectionTool extends BaseTool {
     const paths = this.getPathNodes();
 
     for (const node of paths) {
-      const numSegments = node.closed ? node.points.length : node.points.length - 1;
+      const allPts = getAllPoints(node);
+      const boundaries = getSubpathBoundaries(node);
 
-      for (let i = 0; i < numSegments; i++) {
-        const p1 = node.points[i];
-        const p2 = node.points[(i + 1) % node.points.length];
+      for (let c = 0; c < boundaries.length - 1; c++) {
+        const start = boundaries[c];
+        const end = boundaries[c + 1];
+        const contourLen = end - start;
+        const numSegments = node.closed ? contourLen : contourLen - 1;
 
-        const p1World = this.getPointWorldPosition(node, p1);
-        const p2World = this.getPointWorldPosition(node, p2);
+        for (let local = 0; local < numSegments; local++) {
+          const flatIdx = start + local;
+          const nextFlatIdx = start + ((local + 1) % contourLen);
 
-        // Simple line segment distance (ignoring bezier for now)
-        const dist = this.pointToLineDistance(worldPos, p1World, p2World);
+          const p1 = allPts[flatIdx];
+          const p2 = allPts[nextFlatIdx];
 
-        if (dist < hitRadius) {
-          // Calculate t parameter
-          const t = this.getParameterOnLine(worldPos, p1World, p2World);
-          return { type: 'segment', nodeId: node.id, segmentIndex: i, t };
+          const p1World = this.getPointWorldPosition(node, p1);
+          const p2World = this.getPointWorldPosition(node, p2);
+
+          // Simple line segment distance (ignoring bezier for now)
+          const dist = this.pointToLineDistance(worldPos, p1World, p2World);
+
+          if (dist < hitRadius) {
+            // Calculate t parameter
+            const t = this.getParameterOnLine(worldPos, p1World, p2World);
+            return { type: 'segment', nodeId: node.id, segmentIndex: flatIdx, t };
+          }
         }
       }
     }
@@ -410,7 +481,8 @@ export class DirectSelectionTool extends BaseTool {
     for (const nodeId of selectedNodeIds) {
       const node = this.context.sceneGraph.getNode(nodeId);
       if (node?.type === 'path') {
-        for (let i = 0; i < node.points.length; i++) {
+        const allPts = getAllPoints(node);
+        for (let i = 0; i < allPts.length; i++) {
           this.selectedPoints.push({ nodeId, pointIndex: i });
         }
       }
@@ -432,24 +504,32 @@ export class DirectSelectionTool extends BaseTool {
       pointsByNode.set(sel.nodeId, indices);
     }
 
-    // Delete points from each node (in reverse order to maintain indices)
+    // Delete points from each node, respecting contour boundaries
     for (const [nodeId, indices] of pointsByNode) {
       const node = this.context.sceneGraph.getNode(nodeId) as PathNode;
       if (!node || node.type !== 'path') continue;
 
-      // Sort indices in descending order
-      const sortedIndices = [...indices].sort((a, b) => b - a);
+      const allPts = getAllPoints(node);
+      const boundaries = getSubpathBoundaries(node);
+      const deleteSet = new Set(indices);
 
-      const newPoints = [...node.points];
-      for (const index of sortedIndices) {
-        newPoints.splice(index, 1);
+      // Split into contours, remove marked points, drop empty contours
+      const newContours: PathPoint[][] = [];
+      for (let c = 0; c < boundaries.length - 1; c++) {
+        const start = boundaries[c] ?? 0;
+        const end = boundaries[c + 1] ?? allPts.length;
+        const contour = allPts.slice(start, end).filter((_pt, idx) => !deleteSet.has(start + idx));
+        if (contour.length > 0) newContours.push(contour);
       }
 
-      if (newPoints.length < 2) {
+      const totalRemaining = newContours.reduce((sum, c) => sum + c.length, 0);
+      if (totalRemaining < 2) {
         // Remove the entire path if less than 2 points remain
         this.context.sceneGraph.removeNode(nodeId);
       } else {
-        this.context.sceneGraph.updateNode(nodeId, { points: newPoints });
+        const points = newContours[0];
+        const subpaths = newContours.length > 1 ? newContours.slice(1) : undefined;
+        this.context.sceneGraph.updateNode(nodeId, { points, subpaths });
       }
     }
 
@@ -460,9 +540,15 @@ export class DirectSelectionTool extends BaseTool {
     const node = this.context.sceneGraph.getNode(hit.nodeId) as PathNode;
     if (!node || node.type !== 'path') return;
 
-    const p1 = node.points[hit.segmentIndex];
-    const p2Idx = (hit.segmentIndex + 1) % node.points.length;
-    const p2 = node.points[p2Idx];
+    const allPts = getAllPoints(node);
+    const boundaries = getSubpathBoundaries(node);
+    const { start, end } = getContourRange(boundaries, hit.segmentIndex);
+    const contourLen = end - start;
+    const localIdx = hit.segmentIndex - start;
+    const nextLocalIdx = (localIdx + 1) % contourLen;
+
+    const p1 = allPts[hit.segmentIndex];
+    const p2 = allPts[start + nextLocalIdx];
 
     const p1World = this.getPointWorldPosition(node, p1);
     const p2World = this.getPointWorldPosition(node, p2);
@@ -490,13 +576,26 @@ export class DirectSelectionTool extends BaseTool {
       type: 'corner',
     };
 
-    // Insert the new point
-    const newPoints = [...node.points];
-    newPoints.splice(hit.segmentIndex + 1, 0, newPoint);
+    // Insert the new point after the segment start within the flat array
+    const newAll = [...allPts];
+    newAll.splice(hit.segmentIndex + 1, 0, newPoint);
 
-    this.context.sceneGraph.updateNode(hit.nodeId, { points: newPoints });
+    // Rebuild points + subpaths — boundaries shifted by 1 for contours after insertion
+    const newContours: PathPoint[][] = [];
+    let offset = 0;
+    for (let c = 0; c < boundaries.length - 1; c++) {
+      const cStart = boundaries[c];
+      const cEnd = boundaries[c + 1];
+      const extra = cStart <= hit.segmentIndex && hit.segmentIndex < cEnd ? 1 : 0;
+      newContours.push(newAll.slice(offset, offset + (cEnd - cStart) + extra));
+      offset += cEnd - cStart + extra;
+    }
 
-    // Select the new point
+    const points = newContours[0];
+    const subpaths = newContours.length > 1 ? newContours.slice(1) : undefined;
+    this.context.sceneGraph.updateNode(hit.nodeId, { points, subpaths });
+
+    // Select the new point (flat index = hit.segmentIndex + 1)
     this.selectPoint(hit.nodeId, hit.segmentIndex + 1, false);
   }
 
@@ -509,24 +608,33 @@ export class DirectSelectionTool extends BaseTool {
     const node = this.context.sceneGraph.getNode(nodeId) as PathNode;
     if (!node || node.type !== 'path') return;
 
-    const points = node.points;
-    const point = points[pointIndex];
+    const allPts = getAllPoints(node);
+    const point = allPts[pointIndex];
     if (!point) return;
 
-    // Resolve neighbors, wrapping around for closed paths
-    const prevIdx = pointIndex > 0 ? pointIndex - 1 : node.closed ? points.length - 1 : -1;
-    const nextIdx = pointIndex < points.length - 1 ? pointIndex + 1 : node.closed ? 0 : -1;
+    // Resolve neighbors within the same contour
+    const boundaries = getSubpathBoundaries(node);
+    const { start, end } = getContourRange(boundaries, pointIndex);
+    const contourLen = end - start;
+    const localIdx = pointIndex - start;
 
-    const prevPoint = prevIdx >= 0 ? points[prevIdx] : null;
-    const nextPoint = nextIdx >= 0 && nextIdx !== pointIndex ? points[nextIdx] : null;
+    const prevIdx = localIdx > 0 ? pointIndex - 1 : node.closed ? end - 1 : -1;
+    const nextIdx = localIdx < contourLen - 1 ? pointIndex + 1 : node.closed ? start : -1;
 
-    const newPoints = [...points];
-    newPoints[pointIndex] = convertPointTypeUtil(
+    const prevPoint = prevIdx >= 0 ? allPts[prevIdx] : null;
+    const nextPoint = nextIdx >= 0 && nextIdx !== pointIndex ? allPts[nextIdx] : null;
+
+    const newAll = [...allPts];
+    newAll[pointIndex] = convertPointTypeUtil(
       point,
       prevPoint ? prevPoint.position : null,
       nextPoint ? nextPoint.position : null
     );
-    this.context.sceneGraph.updateNode(nodeId, { points: newPoints });
+    const split = setAllPoints(node, newAll);
+    this.context.sceneGraph.updateNode(nodeId, {
+      points: split.points,
+      subpaths: split.subpaths,
+    });
 
     // Select the converted point
     this.selectPoint(nodeId, pointIndex, false);
