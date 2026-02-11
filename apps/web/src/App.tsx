@@ -4,6 +4,7 @@ import { Editor } from './pages/Editor';
 import { Projects } from './pages/Projects';
 import { ToastContainer } from './components/common/Toast';
 import { ConsentBanner } from './components/common/ConsentBanner';
+import { PromptDialogHost } from './components/common/PromptDialog';
 import { getFontManager } from '@quar/core';
 import interFontUrl400 from '@fontsource/inter/files/inter-latin-400-normal.woff?url';
 import interFontUrl700 from '@fontsource/inter/files/inter-latin-700-normal.woff?url';
@@ -30,6 +31,7 @@ export function App() {
     <BrowserRouter>
       <ToastContainer />
       <ConsentBanner />
+      <PromptDialogHost />
       <Routes>
         <Route path="/" element={<Projects />} />
         <Route path="/editor" element={<Editor />} />

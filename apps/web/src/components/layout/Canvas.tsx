@@ -22,6 +22,7 @@ import { CanvasRuler } from '../canvas/CanvasRuler';
 import { TextEditOverlay } from '../canvas/TextEditOverlay';
 import { ContextMenu } from '../common/ContextMenu';
 import type { ContextMenuEntry } from '../common/ContextMenu';
+import { promptDialog } from '../common/PromptDialog';
 import styles from './Canvas.module.css';
 
 // ============================================================================
@@ -960,10 +961,15 @@ export function Canvas() {
               id: 'create-brush-profile',
               label: 'Create Profile from Selection',
               onClick: () => {
-                const profileName = prompt('Profile name:');
-                if (profileName) {
-                  createBrushProfileFromSelection(sceneGraph, profileName);
-                }
+                void promptDialog({
+                  title: 'New Brush Profile',
+                  placeholder: 'Profile name',
+                  confirmLabel: 'Create',
+                }).then((profileName) => {
+                  if (profileName) {
+                    createBrushProfileFromSelection(sceneGraph, profileName);
+                  }
+                });
               },
             },
           ];
