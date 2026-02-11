@@ -1995,7 +1995,7 @@ export function PropertiesPanel() {
                 </label>
                 <select
                   id="brush-stroke-profile"
-                  className="select"
+                  className={styles.select}
                   value={(node as PathNode).brushData?.profileId ?? 'uniform'}
                   onChange={(e) => {
                     const val = e.target.value;
