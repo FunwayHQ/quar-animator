@@ -4,7 +4,9 @@
   pointer-events: auto;
 }
 
-.textEditArea {
+.textEditArea,
+.textEditArea:focus,
+.textEditArea:focus-visible {
   background: transparent;
   border: none;
   outline: none;
