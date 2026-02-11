@@ -954,7 +954,7 @@ describe('BrushTool', () => {
         { x: 100, y: 0 },
       ];
 
-      // With pressureMin=0.5, pressureMax=1.0 and pressure=0 → mapped = 0.5
+      // With pressureMin=0.5, pressureMax=1.0 and pressure=0 → defaults to 0.5 → mapped = 0.75
       tool.setSize(20);
       tool.setOptions({ pressureEnabled: true, pressureMin: 0.5, pressureMax: 1.0 });
 
@@ -1387,8 +1387,8 @@ describe('BrushTool', () => {
 
       const path = nodes[0] as any;
       expect(path.fills.length).toBe(1);
-      expect(path.fills[0].color).toEqual(context.defaultStroke.color);
-      expect(path.fills[0].opacity).toBe(context.defaultStroke.opacity);
+      expect(path.fills[0].color).toEqual(context.defaultFill.color);
+      expect(path.fills[0].opacity).toBe(context.defaultFill.opacity);
     });
   });
 });

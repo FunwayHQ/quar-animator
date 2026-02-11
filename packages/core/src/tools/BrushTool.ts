@@ -187,7 +187,15 @@ export class BrushTool extends BaseTool {
     }
 
     // Compute per-point width
-    const pressure = this.options.pressureEnabled ? event.pressure : 1;
+    // When pressure is disabled, use full pressure (1.0).
+    // When enabled, event.pressure may be 0 (mouse) or undefined (synthetic events) —
+    // default to 0.5 so widths don't become NaN.
+    const rawPressure = event.pressure;
+    const pressure = !this.options.pressureEnabled
+      ? 1.0
+      : rawPressure != null && rawPressure > 0
+        ? rawPressure
+        : 0.5;
     const mappedPressure =
       this.options.pressureMin + pressure * (this.options.pressureMax - this.options.pressureMin);
     const pointWidth = this.options.size * mappedPressure;
@@ -318,14 +326,7 @@ export class BrushTool extends BaseTool {
       blendMode: 'normal',
       points: outlinePoints,
       closed: true,
-      fills: [
-        {
-          type: 'solid',
-          color: this.context.defaultStroke.color,
-          opacity: this.context.defaultStroke.opacity,
-          visible: true,
-        },
-      ],
+      fills: [this.context.defaultFill],
       strokes: [],
     };
   }
