@@ -1371,6 +1371,13 @@ function createBooleanActions(
           continue;
         }
 
+        // Remove the outlined stroke from the original node
+        const updatedStrokes = [...strokes];
+        updatedStrokes.splice(strokeIdx, 1);
+        sceneGraph.updateNode(id, { strokes: updatedStrokes } as Partial<
+          import('@quar/types').Node
+        >);
+
         // Add as sibling after original
         const parentId = node.parent;
         const siblings = parentId
