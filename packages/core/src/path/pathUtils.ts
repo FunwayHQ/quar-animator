@@ -182,19 +182,21 @@ export function tessellatePathToVertices(
     }
   });
 
-  // Close the path if needed
-  if (closed && vertices.length >= 4) {
-    // Add closing point if not already at start
+  // For closed paths, remove the duplicate closing vertex that the closing
+  // segment tessellation produces. Earcut assumes closed polygons and connects
+  // last→first automatically; having a duplicate vertex creates a zero-length
+  // edge that can produce incorrect triangulation (black artifacts).
+  if (closed && vertices.length >= 6) {
     const firstX = vertices[0] as number;
     const firstY = vertices[1] as number;
     const lastX = vertices[vertices.length - 2] as number;
     const lastY = vertices[vertices.length - 1] as number;
 
     if (
-      Math.abs(lastX - firstX) > GEOMETRY_EPSILON ||
-      Math.abs(lastY - firstY) > GEOMETRY_EPSILON
+      Math.abs(lastX - firstX) <= GEOMETRY_EPSILON &&
+      Math.abs(lastY - firstY) <= GEOMETRY_EPSILON
     ) {
-      vertices.push(firstX, firstY);
+      vertices.splice(vertices.length - 2, 2);
     }
   }
 

@@ -36,6 +36,7 @@ export function createMockWebGL2Context(): WebGL2RenderingContext {
     UNSIGNED_SHORT: 5123,
     LINES: 1,
     TRIANGLES: 4,
+    TRIANGLE_STRIP: 5,
     TRIANGLE_FAN: 6,
 
     // State management

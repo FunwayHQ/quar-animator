@@ -60,12 +60,7 @@ function createMockRenderer(): { renderer: WebGLRenderer; gl: WebGL2RenderingCon
   return { renderer, gl: mockGL };
 }
 
-function createImageNode(
-  id: string,
-  src: string,
-  width: number,
-  height: number
-): ImageNode {
+function createImageNode(id: string, src: string, width: number, height: number): ImageNode {
   return {
     id,
     name: `Image ${id}`,
@@ -397,8 +392,9 @@ describe('ShapeRenderer - Image Rendering', () => {
       vi.clearAllMocks();
       shapeRenderer.render(sceneGraph, vpMatrix);
 
-      // Rectangle should render (fill + stroke), image should be skipped
-      expect(gl.drawElements).toHaveBeenCalledTimes(2); // fill + stroke for rect
+      // Rectangle should render (fill via drawElements + stroke via drawArrays), image should be skipped
+      expect(gl.drawElements).toHaveBeenCalledTimes(1); // fill for rect
+      expect(gl.drawArrays).toHaveBeenCalledTimes(1); // stroke for rect
     });
   });
 

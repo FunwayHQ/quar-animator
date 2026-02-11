@@ -1603,13 +1603,14 @@ export class ShapeRenderer {
           const ringIndices: number[] = [];
           for (const ring of polygon) {
             // polygon-clipping returns closed rings (first==last); remove duplicate
+            // Use epsilon comparison — floating-point results may not be exactly equal
             let pts = ring;
-            if (
-              pts.length > 1 &&
-              pts[0]![0] === pts[pts.length - 1]![0] &&
-              pts[0]![1] === pts[pts.length - 1]![1]
-            ) {
-              pts = pts.slice(0, -1);
+            if (pts.length > 1) {
+              const f = pts[0]!;
+              const l = pts[pts.length - 1]!;
+              if (Math.abs(f[0] - l[0]) < 1e-6 && Math.abs(f[1] - l[1]) < 1e-6) {
+                pts = pts.slice(0, -1);
+              }
             }
             if (pts.length < 3) continue;
             const flat = new Float32Array(pts.length * 2);
@@ -1717,8 +1718,7 @@ export class ShapeRenderer {
     }
 
     // Render strokes PER-RING to avoid bridge lines between disjoint contours.
-    // Cannot use renderStroke() here because getCachedStrokeOutline uses the same
-    // cacheKey for all rings, so ring 2+ would get ring 1's cached outline.
+    // Uses triangle strip instead of earcut to avoid artifacts on concave outlines.
     const ringArrays = this.booleanRingCache.get(cacheKey);
     if (ringArrays) {
       for (const stroke of strokes) {
@@ -1734,10 +1734,10 @@ export class ShapeRenderer {
               stroke.align ?? 'center'
             );
             if (outline.length / 2 < 3) continue;
-            const strokeIndices = earcut(outline);
-            if (strokeIndices.length === 0) continue;
 
             if (stroke.gradient) {
+              const strokeIndices = earcut(outline);
+              if (strokeIndices.length === 0) continue;
               this.renderFillGradient(
                 outline,
                 Array.from(strokeIndices),
@@ -1745,15 +1745,8 @@ export class ShapeRenderer {
                 stroke.opacity * nodeOpacity
               );
             } else {
-              this.renderer.useProgram(this.program);
               const color = this.getStrokeColor(stroke, nodeOpacity);
-              gl.uniform4fv(this.program.uniforms.u_color ?? null, color);
-              gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
-              gl.bufferSubData(gl.ARRAY_BUFFER, 0, outline);
-              const idxArr = new Uint16Array(strokeIndices);
-              gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indexBuffer);
-              gl.bufferSubData(gl.ELEMENT_ARRAY_BUFFER, 0, idxArr);
-              gl.drawElements(gl.TRIANGLES, strokeIndices.length, gl.UNSIGNED_SHORT, 0);
+              this.renderStrokeStrip(outline, color, true);
             }
           }
         }
@@ -1983,7 +1976,7 @@ export class ShapeRenderer {
 
     const { outline: outlineVertices, indices: strokeIndices } = cached;
 
-    // Use gradient shader for stroke gradient
+    // Use gradient shader for stroke gradient (still uses earcut indices)
     if (stroke.gradient) {
       this.renderFillGradient(
         outlineVertices,
@@ -1994,29 +1987,61 @@ export class ShapeRenderer {
       return;
     }
 
+    // Use triangle strip for solid strokes — avoids earcut artifacts on concave shapes
+    const color = this.getStrokeColor(stroke, nodeOpacity);
+    this.renderStrokeStrip(outlineVertices, color, closed);
+  }
+
+  /**
+   * Convert a stroke outline polygon (left forward + right reversed) to
+   * triangle strip vertex order (interleaved left/right pairs).
+   * This avoids earcut on self-intersecting outlines from concave shapes.
+   */
+  private outlineToTriangleStrip(outline: Float32Array, closed: boolean): Float32Array | null {
+    const totalOutlineVerts = outline.length / 2;
+    if (totalOutlineVerts < 4 || totalOutlineVerts % 2 !== 0) return null;
+
+    const N = totalOutlineVerts / 2; // vertices per side
+    const stripPairs = closed ? N + 1 : N;
+    const strip = new Float32Array(stripPairs * 4); // 2 vertices per pair, 2 coords each
+
+    for (let i = 0; i < N; i++) {
+      // left[i]: outline vertex at index i
+      strip[i * 4] = outline[i * 2]!;
+      strip[i * 4 + 1] = outline[i * 2 + 1]!;
+      // right[i]: outline vertex at index (2N - 1 - i) (right side is reversed)
+      const ri = 2 * N - 1 - i;
+      strip[i * 4 + 2] = outline[ri * 2]!;
+      strip[i * 4 + 3] = outline[ri * 2 + 1]!;
+    }
+
+    if (closed) {
+      // Close the strip by repeating the first pair
+      strip[N * 4] = outline[0]!;
+      strip[N * 4 + 1] = outline[1]!;
+      const ri = 2 * N - 1;
+      strip[N * 4 + 2] = outline[ri * 2]!;
+      strip[N * 4 + 3] = outline[ri * 2 + 1]!;
+    }
+
+    return strip;
+  }
+
+  /**
+   * Render stroke as a triangle strip from the outline polygon.
+   * More robust than earcut for concave shapes where the outline self-intersects.
+   */
+  private renderStrokeStrip(outline: Float32Array, color: Float32Array, closed: boolean): void {
     if (!this.program) return;
+    const strip = this.outlineToTriangleStrip(outline, closed);
+    if (!strip) return;
 
     const gl = this.renderer.context;
-
-    // Ensure flat-color program is active
     this.renderer.useProgram(this.program);
-
-    // Set stroke color
-    const color = this.getStrokeColor(stroke, nodeOpacity);
     gl.uniform4fv(this.program.uniforms.u_color ?? null, color);
-
-    // Upload outline vertices
     gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
-    gl.bufferSubData(gl.ARRAY_BUFFER, 0, outlineVertices);
-
-    if (strokeIndices.length === 0) return;
-
-    // Upload cached indices and draw
-    const indicesArray = new Uint16Array(strokeIndices);
-    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indexBuffer);
-    gl.bufferSubData(gl.ELEMENT_ARRAY_BUFFER, 0, indicesArray);
-
-    gl.drawElements(gl.TRIANGLES, strokeIndices.length, gl.UNSIGNED_SHORT, 0);
+    gl.bufferSubData(gl.ARRAY_BUFFER, 0, strip);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, strip.length / 2);
   }
 
   // --------------------------------------------------------------------------
@@ -2246,12 +2271,12 @@ export class ShapeRenderer {
       const idxs: number[] = [];
       for (const ring of polygon) {
         let pts = ring;
-        if (
-          pts.length > 1 &&
-          pts[0]![0] === pts[pts.length - 1]![0] &&
-          pts[0]![1] === pts[pts.length - 1]![1]
-        ) {
-          pts = pts.slice(0, -1);
+        if (pts.length > 1) {
+          const f = pts[0]!;
+          const l = pts[pts.length - 1]!;
+          if (Math.abs(f[0] - l[0]) < 1e-6 && Math.abs(f[1] - l[1]) < 1e-6) {
+            pts = pts.slice(0, -1);
+          }
         }
         if (pts.length < 3) continue;
         const flat = new Float32Array(pts.length * 2);
@@ -2713,7 +2738,6 @@ export class ShapeRenderer {
     color: Float32Array
   ): void {
     if (!this.program) return;
-    const gl = this.renderer.context;
     const numVertices = vertices.length / 2;
     if (numVertices < 2) return;
     const outlineVertices = generateStrokeOutlineVertices(
@@ -2723,17 +2747,8 @@ export class ShapeRenderer {
       closed,
       stroke.align ?? 'center'
     );
-    const outlineCount = outlineVertices.length / 2;
-    if (outlineCount < 3) return;
-    gl.uniform4fv(this.program.uniforms.u_color ?? null, color);
-    gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
-    gl.bufferSubData(gl.ARRAY_BUFFER, 0, outlineVertices);
-    const indices = earcut(outlineVertices);
-    if (indices.length === 0) return;
-    const indicesArray = new Uint16Array(indices);
-    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indexBuffer);
-    gl.bufferSubData(gl.ELEMENT_ARRAY_BUFFER, 0, indicesArray);
-    gl.drawElements(gl.TRIANGLES, indices.length, gl.UNSIGNED_SHORT, 0);
+    if (outlineVertices.length / 2 < 3) return;
+    this.renderStrokeStrip(outlineVertices, color, closed);
   }
 
   // --------------------------------------------------------------------------

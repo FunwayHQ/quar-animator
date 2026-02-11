@@ -198,11 +198,16 @@ describe('Path Tessellation', () => {
         createCornerPoint({ x: 50, y: 100 }),
       ];
       const vertices = tessellatePathToVertices(points, true);
-      // Last point should equal first point
+      // Earcut handles closing automatically (connects last→first),
+      // so the duplicate closing vertex should be removed.
+      // Last unique vertex should be the third point (50, 100).
       const lastX = vertices[vertices.length - 2];
       const lastY = vertices[vertices.length - 1];
-      expect(lastX).toBeCloseTo(0);
-      expect(lastY).toBeCloseTo(0);
+      expect(lastX).toBeCloseTo(50);
+      expect(lastY).toBeCloseTo(100);
+      // First vertex should still be (0, 0)
+      expect(vertices[0]).toBeCloseTo(0);
+      expect(vertices[1]).toBeCloseTo(0);
     });
 
     it('should produce more vertices for curved paths', () => {

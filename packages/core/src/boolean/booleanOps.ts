@@ -134,6 +134,16 @@ function tessellateToVector2(points: PathPoint[], closed: boolean, tolerance: nu
   for (let i = 0; i < flat.length; i += 2) {
     result.push({ x: flat[i]!, y: flat[i + 1]! });
   }
+  // polygon-clipping expects closed rings (first == last point).
+  // tessellatePathToVertices removes the duplicate closing vertex (earcut needs it removed),
+  // so re-add it here for polygon-clipping input.
+  if (closed && result.length >= 3) {
+    const first = result[0]!;
+    const last = result[result.length - 1]!;
+    if (Math.abs(first.x - last.x) > 1e-10 || Math.abs(first.y - last.y) > 1e-10) {
+      result.push({ x: first.x, y: first.y });
+    }
+  }
   return result;
 }
 

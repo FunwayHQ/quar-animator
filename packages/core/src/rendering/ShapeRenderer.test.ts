@@ -285,9 +285,9 @@ describe('ShapeRenderer', () => {
       vi.clearAllMocks();
       shapeRenderer.render(sceneGraph, vpMatrix);
 
-      // Both fill and stroke use drawElements (filled outline triangulation)
-      expect(gl.drawElements).toHaveBeenCalledTimes(2); // fill + stroke
-      expect(gl.drawArrays).not.toHaveBeenCalled();
+      // Fill uses drawElements, stroke uses drawArrays (triangle strip)
+      expect(gl.drawElements).toHaveBeenCalledTimes(1); // fill only
+      expect(gl.drawArrays).toHaveBeenCalled(); // stroke
     });
 
     it('should not render fill when fill is none', () => {
@@ -362,9 +362,9 @@ describe('ShapeRenderer', () => {
       vi.clearAllMocks();
       shapeRenderer.render(sceneGraph, vpMatrix);
 
-      // Both fill and stroke use drawElements (filled outline triangulation)
-      expect(gl.drawElements).toHaveBeenCalledTimes(2); // fill + stroke
-      expect(gl.drawArrays).not.toHaveBeenCalled();
+      // Fill uses drawElements, stroke uses drawArrays (triangle strip)
+      expect(gl.drawElements).toHaveBeenCalledTimes(1); // fill only
+      expect(gl.drawArrays).toHaveBeenCalled(); // stroke
     });
 
     it('should render circle when radiusX equals radiusY', () => {
@@ -396,7 +396,7 @@ describe('ShapeRenderer', () => {
       );
     });
 
-    it('should use filled outline for stroke', () => {
+    it('should use triangle strip for stroke', () => {
       const ellipse = createEllipseNode('ellipse1', 50, 30);
       ellipse.fills = [{ type: 'none', opacity: 0, visible: true }];
       sceneGraph.addNode(ellipse);
@@ -405,11 +405,10 @@ describe('ShapeRenderer', () => {
       vi.clearAllMocks();
       shapeRenderer.render(sceneGraph, vpMatrix);
 
-      // Stroke rendered as filled outline polygon via drawElements
-      expect(gl.drawElements).toHaveBeenCalledWith(
-        gl.TRIANGLES,
+      // Stroke rendered as triangle strip via drawArrays
+      expect(gl.drawArrays).toHaveBeenCalledWith(
+        gl.TRIANGLE_STRIP,
         expect.any(Number),
-        gl.UNSIGNED_SHORT,
         expect.any(Number)
       );
     });
@@ -449,9 +448,9 @@ describe('ShapeRenderer', () => {
       vi.clearAllMocks();
       shapeRenderer.render(sceneGraph, vpMatrix);
 
-      // Both fill and stroke use drawElements (filled outline triangulation)
-      expect(gl.drawElements).toHaveBeenCalledTimes(2); // fill + stroke
-      expect(gl.drawArrays).not.toHaveBeenCalled();
+      // Fill uses drawElements, stroke uses drawArrays (triangle strip)
+      expect(gl.drawElements).toHaveBeenCalledTimes(1); // fill only
+      expect(gl.drawArrays).toHaveBeenCalled(); // stroke
     });
 
     it('should render triangle (3 sides)', () => {
@@ -527,7 +526,7 @@ describe('ShapeRenderer', () => {
       );
     });
 
-    it('should use filled outline for polygon stroke', () => {
+    it('should use triangle strip for polygon stroke', () => {
       const polygon = createPolygonNode('poly1', 6, 50);
       polygon.fills = [{ type: 'none', opacity: 0, visible: true }];
       sceneGraph.addNode(polygon);
@@ -536,11 +535,10 @@ describe('ShapeRenderer', () => {
       vi.clearAllMocks();
       shapeRenderer.render(sceneGraph, vpMatrix);
 
-      // Stroke rendered as filled outline polygon via drawElements
-      expect(gl.drawElements).toHaveBeenCalledWith(
-        gl.TRIANGLES,
+      // Stroke rendered as triangle strip via drawArrays
+      expect(gl.drawArrays).toHaveBeenCalledWith(
+        gl.TRIANGLE_STRIP,
         expect.any(Number),
-        gl.UNSIGNED_SHORT,
         expect.any(Number)
       );
     });
@@ -610,9 +608,9 @@ describe('ShapeRenderer', () => {
       vi.clearAllMocks();
       shapeRenderer.render(sceneGraph, vpMatrix);
 
-      // Only stroke (as filled outline), no fill
-      expect(gl.drawElements).toHaveBeenCalledTimes(1);
-      expect(gl.drawArrays).not.toHaveBeenCalled();
+      // Only stroke (as triangle strip), no fill
+      expect(gl.drawElements).not.toHaveBeenCalled();
+      expect(gl.drawArrays).toHaveBeenCalled(); // stroke via triangle strip
     });
 
     it('should render path stroke', () => {
@@ -624,11 +622,11 @@ describe('ShapeRenderer', () => {
       vi.clearAllMocks();
       shapeRenderer.render(sceneGraph, vpMatrix);
 
-      // Stroke rendered as filled outline via drawElements
-      expect(gl.drawElements).toHaveBeenCalled();
+      // Stroke rendered as triangle strip via drawArrays
+      expect(gl.drawArrays).toHaveBeenCalled();
     });
 
-    it('should use filled outline for open path stroke', () => {
+    it('should use triangle strip for open path stroke', () => {
       const path = createPathNode('path1');
       path.closed = false;
       path.fills = [];
@@ -638,11 +636,10 @@ describe('ShapeRenderer', () => {
       vi.clearAllMocks();
       shapeRenderer.render(sceneGraph, vpMatrix);
 
-      // Stroke rendered as filled outline polygon via drawElements
-      expect(gl.drawElements).toHaveBeenCalledWith(
-        gl.TRIANGLES,
+      // Stroke rendered as triangle strip via drawArrays
+      expect(gl.drawArrays).toHaveBeenCalledWith(
+        gl.TRIANGLE_STRIP,
         expect.any(Number),
-        gl.UNSIGNED_SHORT,
         expect.any(Number)
       );
     });
@@ -672,8 +669,8 @@ describe('ShapeRenderer', () => {
       const vpMatrix = mat3.identity();
       shapeRenderer.render(sceneGraph, vpMatrix);
 
-      // Stroke rendered as filled outline via drawElements
-      expect(gl.drawElements).toHaveBeenCalled();
+      // Stroke rendered as triangle strip via drawArrays
+      expect(gl.drawArrays).toHaveBeenCalled();
     });
   });
 
@@ -746,9 +743,9 @@ describe('ShapeRenderer', () => {
       vi.clearAllMocks();
       shapeRenderer.render(sceneGraph, vpMatrix);
 
-      // Both fill and stroke use drawElements (2 shapes x 2 passes = 4)
-      expect(gl.drawElements).toHaveBeenCalledTimes(4); // 2 fills + 2 strokes
-      expect(gl.drawArrays).not.toHaveBeenCalled();
+      // Fills use drawElements, strokes use drawArrays
+      expect(gl.drawElements).toHaveBeenCalledTimes(2); // 2 fills
+      expect(gl.drawArrays).toHaveBeenCalledTimes(2); // 2 strokes
     });
   });
 
