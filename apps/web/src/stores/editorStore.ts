@@ -579,13 +579,36 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     const outline = getShapeOutlinePoints(shapeNode);
     if (!outline || outline.points.length < 2) return null;
 
-    // Tessellate outline into dense point samples (0.25 step for higher density)
-    const tessellated = tessellatePathToPoints(outline.points, outline.closed, 0.25);
-    // Also tessellate subpaths if present (compound paths)
+    // Tessellate outline into point samples
+    const rawPoints = tessellatePathToPoints(outline.points, outline.closed, 0.25);
     if (outline.subpaths) {
       for (const sp of outline.subpaths) {
         const sub = tessellatePathToPoints(sp, true, 0.25);
-        tessellated.push(...sub);
+        rawPoints.push(...sub);
+      }
+    }
+    if (rawPoints.length < 2) return null;
+
+    // Densify: tessellatePathToPoints only returns endpoints for straight-line
+    // segments (no handles). For shapes like triangles this gives just 3 points,
+    // making cross-sectional analysis impossible. Add intermediate points along
+    // every edge so we have dense coverage.
+    const tessellated: { x: number; y: number }[] = [];
+    const maxSegLen = 2; // add a point every ~2 units
+    for (let i = 0; i < rawPoints.length; i++) {
+      const curr = rawPoints[i];
+      const next = rawPoints[(i + 1) % rawPoints.length];
+      tessellated.push(curr);
+      // Only densify between consecutive points (not wrap-around for open paths)
+      if (i < rawPoints.length - 1 || outline.closed) {
+        const dx = next.x - curr.x;
+        const dy = next.y - curr.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        const steps = Math.max(1, Math.ceil(dist / maxSegLen));
+        for (let s = 1; s < steps; s++) {
+          const t = s / steps;
+          tessellated.push({ x: curr.x + t * dx, y: curr.y + t * dy });
+        }
       }
     }
     if (tessellated.length < 2) return null;
