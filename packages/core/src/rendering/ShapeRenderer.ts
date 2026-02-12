@@ -2308,6 +2308,7 @@ export class ShapeRenderer {
     );
 
     const vertices = this.buildBoneVertices(node.length, node.boneStyle);
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
     gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.DYNAMIC_DRAW);
     gl.drawArrays(gl.TRIANGLES, 0, vertices.length / 2);
 
@@ -2359,6 +2360,7 @@ export class ShapeRenderer {
       ]);
     }
 
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
     gl.bufferData(gl.ARRAY_BUFFER, outlineVerts, gl.DYNAMIC_DRAW);
     gl.drawArrays(gl.LINES, 0, outlineVerts.length / 2);
   }
@@ -2391,6 +2393,7 @@ export class ShapeRenderer {
     );
 
     const vertices = this.buildBoneVertices(node.length, node.boneStyle);
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
     gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.DYNAMIC_DRAW);
     gl.drawArrays(gl.TRIANGLES, 0, vertices.length / 2);
   }

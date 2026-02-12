@@ -121,6 +121,7 @@ module.exports = {
         'packages/core/src/selection/SelectionManager.ts',
         'packages/core/src/SceneGraph.ts',
         'packages/core/src/tools/BoneTool.ts',
+        'packages/core/src/tools/SelectionTool.ts',
         'packages/rigging/src/**/*.ts',
       ],
       rules: {

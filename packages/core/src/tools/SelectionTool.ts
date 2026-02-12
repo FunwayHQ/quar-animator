@@ -622,6 +622,11 @@ export class SelectionTool extends BaseTool {
         };
         break;
       }
+      case 'bone': {
+        const halfH = Math.max(node.length * 0.15, 4);
+        localBounds = { x: 0, y: -halfH, width: node.length, height: halfH * 2 };
+        break;
+      }
       default:
         return null;
     }
