@@ -326,6 +326,8 @@ interface TessellationCacheEntry {
   strokeCache: Map<string, { outline: Float32Array; indices: number[] }>;
   /** Original per-contour vertex arrays (for text stroke rendering) */
   contours?: Float32Array[];
+  /** Number of tessellated vertices per contour (for compound path skinned stroke rendering) */
+  contourVertexCounts?: number[];
 }
 
 /** Build a cache key string from node geometry properties */
@@ -359,6 +361,13 @@ function buildGeometryKey(node: Node): string {
     }
     case 'text':
       return `T:${node.content}:${node.fontFamily}:${node.fontSize}:${node.fontWeight}:${node.fontStyle}:${node.textAlign}:${node.lineHeight}:${node.letterSpacing}`;
+    case 'image': {
+      const vo = node.vertexOffsets;
+      const voStr = vo
+        ? `:${vo[0].x},${vo[0].y}:${vo[1].x},${vo[1].y}:${vo[2].x},${vo[2].y}:${vo[3].x},${vo[3].y}`
+        : '';
+      return `I:${node.width}:${node.height}:${node.transform.anchor.x}:${node.transform.anchor.y}${voStr}`;
+    }
     case 'bone':
       return `B:${node.length}:${node.boneStyle}`;
     default:
@@ -966,11 +975,14 @@ export class ShapeRenderer {
           node.type !== 'bone' &&
           node.type !== 'group' &&
           node.type !== 'text' &&
-          node.type !== 'image' &&
           'skinData' in node &&
           (node as any).skinData
         ) {
-          this.renderSkinnedNode(node, sceneGraph);
+          if (node.type === 'image') {
+            this.renderSkinnedImage(node as ImageNode, sceneGraph);
+          } else {
+            this.renderSkinnedNode(node, sceneGraph);
+          }
           return;
         }
 
@@ -1327,22 +1339,47 @@ export class ShapeRenderer {
     const x1 = x0 + node.width;
     const y1 = y0 + node.height;
 
+    // Apply vertex offsets for free-form distortion [BL, BR, TL, TR]
+    const vo = node.vertexOffsets;
+    const blX = x0 + (vo?.[0]?.x ?? 0),
+      blY = y0 + (vo?.[0]?.y ?? 0);
+    const brX = x1 + (vo?.[1]?.x ?? 0),
+      brY = y0 + (vo?.[1]?.y ?? 0);
+    const tlX = x0 + (vo?.[2]?.x ?? 0),
+      tlY = y1 + (vo?.[2]?.y ?? 0);
+    const trX = x1 + (vo?.[3]?.x ?? 0),
+      trY = y1 + (vo?.[3]?.y ?? 0);
+
+    // Cache image quad positions in geometry cache (for skinning/getTessellatedVertices)
+    const geoKey = buildGeometryKey(node);
+    const existingCache = this.geometryCache.get(node.id);
+    if (!existingCache || existingCache.geoKey !== geoKey) {
+      const quadPositions = new Float32Array([blX, blY, brX, brY, tlX, tlY, trX, trY]);
+      const fillIndices = [0, 1, 2, 2, 1, 3]; // Two triangles
+      this.geometryCache.set(node.id, {
+        geoKey,
+        vertices: quadPositions,
+        fillIndices,
+        strokeCache: new Map(),
+      });
+    }
+
     // UV: Y inverted because texImage2D loads top-to-bottom but world is Y-up
     const quadData = new Float32Array([
-      x0,
-      y0,
+      blX,
+      blY,
       0,
       1, // bottom-left  → UV (0,1)
-      x1,
-      y0,
+      brX,
+      brY,
       1,
       1, // bottom-right → UV (1,1)
-      x0,
-      y1,
+      tlX,
+      tlY,
       0,
       0, // top-left     → UV (0,0)
-      x1,
-      y1,
+      trX,
+      trY,
       1,
       0, // top-right    → UV (1,0)
     ]);
@@ -1992,11 +2029,15 @@ export class ShapeRenderer {
       }
     }
 
+    // Store per-contour vertex counts for skinned compound path stroke rendering
+    const contourVertexCounts = contourArrays.map((arr) => arr.length / 2);
+
     const entry: TessellationCacheEntry = {
       geoKey,
       vertices: combined,
       fillIndices: allFillIndices,
       strokeCache: new Map(),
+      contourVertexCounts,
     };
     this.geometryCache.set(nodeId, entry);
 
@@ -2542,33 +2583,180 @@ export class ShapeRenderer {
     // We CANNOT use renderStroke() here because it delegates to getCachedStrokeOutline()
     // which caches by stroke properties only (not vertex positions), returning stale
     // bind-pose outlines for deformed vertices.
-    const numDeformedVerts = deformed.length / 2;
-    if (numDeformedVerts >= 2) {
-      for (const stroke of strokes) {
-        if (!stroke.visible || stroke.width <= 0) continue;
-        const align = stroke.align ?? 'center';
-        const outlineVertices = generateStrokeOutlineVertices(
-          deformed,
-          numDeformedVerts,
-          stroke.width,
-          closed,
-          align,
-          stroke.widthProfile as number[] | undefined
-        );
-        if (outlineVertices.length / 2 < 3) continue;
-
-        if (stroke.gradient) {
-          this.renderStrokeStripGradient(
-            outlineVertices,
-            stroke.gradient,
-            stroke.opacity * this.currentEffectiveOpacity,
-            closed
-          );
-        } else {
-          const color = this.getStrokeColor(stroke, this.currentEffectiveOpacity);
-          this.renderStrokeStrip(outlineVertices, color, closed);
+    if (strokes.length > 0) {
+      // For compound paths (multiple contours), render each contour's stroke independently.
+      // Otherwise self-intersecting outline from combined vertices produces artifacts.
+      const contourVertexCounts = cached.contourVertexCounts;
+      if (contourVertexCounts && contourVertexCounts.length > 1) {
+        // Per-contour stroke rendering
+        let vertOffset = 0;
+        for (const contourVCount of contourVertexCounts) {
+          if (contourVCount < 2) {
+            vertOffset += contourVCount * 2;
+            continue;
+          }
+          const contourDeformed = deformed.subarray(vertOffset, vertOffset + contourVCount * 2);
+          for (const stroke of strokes) {
+            if (!stroke.visible || stroke.width <= 0) continue;
+            const align = stroke.align ?? 'center';
+            const outlineVertices = generateStrokeOutlineVertices(
+              contourDeformed,
+              contourVCount,
+              stroke.width,
+              true, // contours in compound paths are always closed
+              align,
+              stroke.widthProfile as number[] | undefined
+            );
+            if (outlineVertices.length / 2 < 3) continue;
+            if (stroke.gradient) {
+              this.renderStrokeStripGradient(
+                outlineVertices,
+                stroke.gradient,
+                stroke.opacity * this.currentEffectiveOpacity,
+                true
+              );
+            } else {
+              const color = this.getStrokeColor(stroke, this.currentEffectiveOpacity);
+              this.renderStrokeStrip(outlineVertices, color, true);
+            }
+          }
+          vertOffset += contourVCount * 2;
+        }
+      } else {
+        // Single contour — generate one stroke outline from all deformed vertices
+        const numDeformedVerts = deformed.length / 2;
+        if (numDeformedVerts >= 2) {
+          for (const stroke of strokes) {
+            if (!stroke.visible || stroke.width <= 0) continue;
+            const align = stroke.align ?? 'center';
+            const outlineVertices = generateStrokeOutlineVertices(
+              deformed,
+              numDeformedVerts,
+              stroke.width,
+              closed,
+              align,
+              stroke.widthProfile as number[] | undefined
+            );
+            if (outlineVertices.length / 2 < 3) continue;
+            if (stroke.gradient) {
+              this.renderStrokeStripGradient(
+                outlineVertices,
+                stroke.gradient,
+                stroke.opacity * this.currentEffectiveOpacity,
+                closed
+              );
+            } else {
+              const color = this.getStrokeColor(stroke, this.currentEffectiveOpacity);
+              this.renderStrokeStrip(outlineVertices, color, closed);
+            }
+          }
         }
       }
+    }
+  }
+
+  /**
+   * Render a skinned image node — deforms the textured quad via CPU skinning.
+   */
+  private renderSkinnedImage(node: ImageNode, sceneGraph: SceneGraph): void {
+    if (!this.textureProgram || !this.textureVAO || !this.textureVertexBuffer) return;
+
+    const skinData = node.skinData as SkinData;
+    if (!skinData) return;
+
+    const texture = this.getTexture(node.src);
+    if (!texture) return;
+
+    // Get bind-pose quad from geometry cache
+    const cached = this.geometryCache.get(node.id);
+    if (!cached) return;
+
+    const gl = this.renderer.context;
+
+    // Collect current bone world transforms
+    const boneWorldTransforms: Record<string, AffineTransform2D> = {};
+    for (const boneId of Object.keys(skinData.inverseBindMatrices)) {
+      const boneNode = sceneGraph.getNode(boneId);
+      if (!boneNode) continue;
+      const bw = sceneGraph.getWorldTransform(boneId);
+      boneWorldTransforms[boneId] = { a: bw.a, b: bw.b, c: bw.c, d: bw.d, tx: bw.tx, ty: bw.ty };
+    }
+
+    // Deform quad vertices via CPU linear blend skinning — result is in world space
+    const deformed = deformVertices(cached.vertices, skinData, boneWorldTransforms);
+
+    // Build interleaved position+UV buffer from deformed quad
+    // Bind-pose vertex order: [BL, BR, TL, TR] (matches renderImage)
+    // UV order: BL=(0,1), BR=(1,1), TL=(0,0), TR=(1,0)
+    const quadData = new Float32Array([
+      deformed[0],
+      deformed[1],
+      0,
+      1, // bottom-left
+      deformed[2],
+      deformed[3],
+      1,
+      1, // bottom-right
+      deformed[4],
+      deformed[5],
+      0,
+      0, // top-left
+      deformed[6],
+      deformed[7],
+      1,
+      0, // top-right
+    ]);
+
+    // Switch to texture program
+    this.renderer.useProgram(this.textureProgram);
+    this.renderer.bindVAO(this.textureVAO);
+
+    if (this.currentVPArray) {
+      gl.uniformMatrix3fv(
+        this.textureProgram.uniforms.u_viewProjection ?? null,
+        false,
+        this.currentVPArray
+      );
+    }
+
+    // Identity model matrix — deformed vertices are already in world space
+    const identityMatrix = mat3.toFloat32Array(mat3.create());
+    gl.uniformMatrix3fv(this.textureProgram.uniforms.u_model ?? null, false, identityMatrix);
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.textureVertexBuffer);
+    gl.bufferSubData(gl.ARRAY_BUFFER, 0, quadData);
+
+    // Bind texture
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.uniform1i(this.textureProgram.uniforms.u_texture ?? null, 0);
+
+    gl.uniform1f(this.textureProgram.uniforms.u_opacity ?? null, this.currentEffectiveOpacity);
+    gl.uniform4fv(this.textureProgram.uniforms.u_tintColor ?? null, new Float32Array([0, 0, 0, 0]));
+
+    // Image adjustments
+    const adj = node.adjustments;
+    gl.uniform1f(this.textureProgram.uniforms.u_brightness ?? null, (adj?.brightness ?? 0) / 100);
+    gl.uniform1f(this.textureProgram.uniforms.u_contrast ?? null, (adj?.contrast ?? 0) / 100);
+    gl.uniform1f(this.textureProgram.uniforms.u_saturation ?? null, (adj?.saturation ?? 0) / 100);
+    gl.uniform1f(this.textureProgram.uniforms.u_hue ?? null, ((adj?.hue ?? 0) * Math.PI) / 180);
+    gl.uniform1f(this.textureProgram.uniforms.u_exposure ?? null, (adj?.exposure ?? 0) / 100);
+    gl.uniform1f(this.textureProgram.uniforms.u_temperature ?? null, (adj?.temperature ?? 0) / 100);
+
+    // Corner radius SDF — disable for skinned (deformed quad breaks SDF)
+    gl.uniform2f(this.textureProgram.uniforms.u_rectSize ?? null, node.width, node.height);
+    gl.uniform4fv(
+      this.textureProgram.uniforms.u_cornerRadius ?? null,
+      new Float32Array([0, 0, 0, 0])
+    );
+
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    gl.bindTexture(gl.TEXTURE_2D, null);
+
+    // Restore shape program + VAO
+    if (this.program && this.vao) {
+      this.renderer.useProgram(this.program);
+      this.renderer.bindVAO(this.vao);
     }
   }
 

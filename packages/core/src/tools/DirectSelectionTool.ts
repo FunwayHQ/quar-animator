@@ -11,6 +11,7 @@ import type {
   Node,
   Rect,
   Matrix3,
+  ImageNode,
 } from '@quar/types';
 import { BaseTool, type ToolContext } from './BaseTool';
 import { vec2, mat3, rect } from '../math';
@@ -27,6 +28,77 @@ import {
   getContourRange,
 } from '../path/pathUtils';
 import { getTextBounds } from '../font/textMetrics';
+
+// ============================================================================
+// Image Vertex Helpers
+// ============================================================================
+
+/** Get the 4 corner positions of an image node as virtual PathPoints [BL, BR, TL, TR]. */
+function getImagePoints(node: ImageNode): PathPoint[] {
+  const ax = node.transform.anchor.x;
+  const ay = node.transform.anchor.y;
+  const x0 = -node.width * ax;
+  const y0 = -node.height * ay;
+  const x1 = x0 + node.width;
+  const y1 = y0 + node.height;
+  /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return */
+  const vo = node.vertexOffsets;
+  const ox = (i: number): number => (vo ? (vo[i]?.x ?? 0) : 0);
+  const oy = (i: number): number => (vo ? (vo[i]?.y ?? 0) : 0);
+  /* eslint-enable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return */
+  return [
+    {
+      position: { x: x0 + ox(0), y: y0 + oy(0) },
+      handleIn: null,
+      handleOut: null,
+      type: 'corner' as const,
+    },
+    {
+      position: { x: x1 + ox(1), y: y0 + oy(1) },
+      handleIn: null,
+      handleOut: null,
+      type: 'corner' as const,
+    },
+    {
+      position: { x: x0 + ox(2), y: y1 + oy(2) },
+      handleIn: null,
+      handleOut: null,
+      type: 'corner' as const,
+    },
+    {
+      position: { x: x1 + ox(3), y: y1 + oy(3) },
+      handleIn: null,
+      handleOut: null,
+      type: 'corner' as const,
+    },
+  ];
+}
+
+/** Convert absolute point positions back to vertexOffsets for an image node. */
+function imagePointsToOffsets(
+  node: ImageNode,
+  points: PathPoint[]
+): [Vector2, Vector2, Vector2, Vector2] {
+  const ax = node.transform.anchor.x;
+  const ay = node.transform.anchor.y;
+  const x0 = -node.width * ax;
+  const y0 = -node.height * ay;
+  const x1 = x0 + node.width;
+  const y1 = y0 + node.height;
+  // Base positions: BL, BR, TL, TR
+  const bases = [
+    { x: x0, y: y0 },
+    { x: x1, y: y0 },
+    { x: x0, y: y1 },
+    { x: x1, y: y1 },
+  ];
+  return [
+    { x: points[0].position.x - bases[0].x, y: points[0].position.y - bases[0].y },
+    { x: points[1].position.x - bases[1].x, y: points[1].position.y - bases[1].y },
+    { x: points[2].position.x - bases[2].x, y: points[2].position.y - bases[2].y },
+    { x: points[3].position.x - bases[3].x, y: points[3].position.y - bases[3].y },
+  ];
+}
 
 // ============================================================================
 // Types
@@ -179,9 +251,10 @@ export class DirectSelectionTool extends BaseTool {
       // Store initial positions of all selected points
       this.initialPointPositions.clear();
       for (const sel of this.selectedPoints) {
-        const node = this.context.sceneGraph.getNode(sel.nodeId) as PathNode;
+        const node = this.context.sceneGraph.getNode(sel.nodeId);
         if (node) {
-          const allPts = getAllPoints(node);
+          const allPts =
+            node.type === 'image' ? getImagePoints(node) : getAllPoints(node as PathNode);
           if (allPts[sel.pointIndex]) {
             const key = `${sel.nodeId}:${sel.pointIndex}`;
             this.initialPointPositions.set(key, { ...allPts[sel.pointIndex].position });
@@ -280,7 +353,7 @@ export class DirectSelectionTool extends BaseTool {
       const worldDelta = vec2.subtract(worldPos, this.dragStartPoint);
 
       for (const sel of this.selectedPoints) {
-        const node = this.context.sceneGraph.getNode(sel.nodeId) as PathNode;
+        const node = this.context.sceneGraph.getNode(sel.nodeId);
         if (!node) continue;
 
         const key = `${sel.nodeId}:${sel.pointIndex}`;
@@ -292,18 +365,32 @@ export class DirectSelectionTool extends BaseTool {
         const invLinear = mat3.invert(linearMatrix);
         const localDelta = invLinear ? mat3.transformPoint(invLinear, worldDelta) : worldDelta;
 
-        const allPts = getAllPoints(node);
-        const newAll = [...allPts];
-        newAll[sel.pointIndex] = {
-          ...newAll[sel.pointIndex],
-          position: vec2.add(initialPos, localDelta),
-        };
+        if (node.type === 'image') {
+          // Image vertex editing — update vertexOffsets
+          const imgNode = node;
+          const pts = getImagePoints(imgNode);
+          pts[sel.pointIndex] = {
+            ...pts[sel.pointIndex],
+            position: vec2.add(initialPos, localDelta),
+          };
+          const offsets = imagePointsToOffsets(imgNode, pts);
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-explicit-any
+          this.context.sceneGraph.updateNode(sel.nodeId, { vertexOffsets: offsets } as any);
+        } else {
+          const pathNode = node as PathNode;
+          const allPts = getAllPoints(pathNode);
+          const newAll = [...allPts];
+          newAll[sel.pointIndex] = {
+            ...newAll[sel.pointIndex],
+            position: vec2.add(initialPos, localDelta),
+          };
 
-        const split = setAllPoints(node, newAll);
-        this.context.sceneGraph.updateNode(sel.nodeId, {
-          points: split.points,
-          subpaths: split.subpaths,
-        });
+          const split = setAllPoints(pathNode, newAll);
+          this.context.sceneGraph.updateNode(sel.nodeId, {
+            points: split.points,
+            subpaths: split.subpaths,
+          });
+        }
       }
     } else if (this.dragMode === 'dragging-handle' && this.dragHandle) {
       this.hasDragged = true;
@@ -413,15 +500,25 @@ export class DirectSelectionTool extends BaseTool {
   private hitTestPoint(worldPos: Vector2): PointHit | null {
     const hitRadius = 8 / this.context.camera.zoom;
 
-    // Only test path nodes
+    // Test path nodes
     const paths = this.getPathNodes();
-
     for (const node of paths) {
       const allPts = getAllPoints(node);
       for (let i = 0; i < allPts.length; i++) {
         const point = allPts[i];
         const pointWorldPos = this.getPointWorldPosition(node, point);
+        if (vec2.distance(worldPos, pointWorldPos) < hitRadius) {
+          return { type: 'point', nodeId: node.id, pointIndex: i };
+        }
+      }
+    }
 
+    // Test image nodes (4 corner vertices)
+    const images = this.getImageNodes();
+    for (const node of images) {
+      const pts = getImagePoints(node);
+      for (let i = 0; i < pts.length; i++) {
+        const pointWorldPos = this.getPointWorldPosition(node as unknown as PathNode, pts[i]);
         if (vec2.distance(worldPos, pointWorldPos) < hitRadius) {
           return { type: 'point', nodeId: node.id, pointIndex: i };
         }
@@ -735,6 +832,20 @@ export class DirectSelectionTool extends BaseTool {
     return paths;
   }
 
+  /** Get image nodes in scope that support vertex editing. */
+  private getImageNodes(): ImageNode[] {
+    const images: ImageNode[] = [];
+    this.context.sceneGraph.traverseVisible((node: Node) => {
+      if (node.type === 'image') {
+        const resolved = this.resolveHitToScope(node);
+        if (resolved && resolved.id === node.id) {
+          images.push(node);
+        }
+      }
+    });
+    return images;
+  }
+
   // --------------------------------------------------------------------------
   // Node-Level Hit Testing (for groups and non-path nodes)
   // --------------------------------------------------------------------------
@@ -891,7 +1002,7 @@ export class DirectSelectionTool extends BaseTool {
    * Get the world transform matrix for a node, including parent chain.
    * Excludes the node's own anchor to keep local-space math consistent.
    */
-  private getNodeWorldMatrix(node: PathNode) {
+  private getNodeWorldMatrix(node: PathNode | Node) {
     const local = mat3.compose(
       node.transform.position,
       node.transform.rotation,
@@ -906,12 +1017,12 @@ export class DirectSelectionTool extends BaseTool {
    * Get the linear part of the world matrix (rotation + scale, no translation).
    * Used for transforming direction vectors / offsets (handles).
    */
-  private getNodeLinearMatrix(node: PathNode) {
+  private getNodeLinearMatrix(node: PathNode | Node) {
     const m = this.getNodeWorldMatrix(node);
     return { a: m.a, b: m.b, c: m.c, d: m.d, tx: 0, ty: 0 };
   }
 
-  private getPointWorldPosition(node: PathNode, point: PathPoint): Vector2 {
+  private getPointWorldPosition(node: PathNode | Node, point: PathPoint): Vector2 {
     const worldMatrix = this.getNodeWorldMatrix(node);
     return mat3.transformPoint(worldMatrix, point.position);
   }

@@ -2,7 +2,7 @@
  * DirectSelectionOverlay - Renders control points and bezier handles for path editing
  */
 
-import type { PathNode, PathPoint, Vector2, Matrix3 } from '@quar/types';
+import type { PathNode, PathPoint, Vector2, Matrix3, ImageNode } from '@quar/types';
 import { type Camera, type SceneGraph, mat3 } from '@quar/core';
 import styles from './DirectSelectionOverlay.module.css';
 
@@ -12,6 +12,7 @@ import styles from './DirectSelectionOverlay.module.css';
 
 export interface DirectSelectionOverlayProps {
   pathNodes: PathNode[];
+  imageNodes?: ImageNode[];
   selectedPoints: Array<{ nodeId: string; pointIndex: number }>;
   camera: Camera | null;
   sceneGraph: SceneGraph | null;
@@ -105,13 +106,31 @@ function getHandleWorldOffset(
 // Component
 // ============================================================================
 
+/** Get 4 virtual corner PathPoints for an image node [BL, BR, TL, TR]. */
+function getImagePoints(node: ImageNode): PathPoint[] {
+  const ax = node.transform.anchor.x;
+  const ay = node.transform.anchor.y;
+  const x0 = -node.width * ax;
+  const y0 = -node.height * ay;
+  const x1 = x0 + node.width;
+  const y1 = y0 + node.height;
+  const vo = node.vertexOffsets;
+  return [
+    { position: { x: x0 + (vo?.[0]?.x ?? 0), y: y0 + (vo?.[0]?.y ?? 0) }, type: 'corner' },
+    { position: { x: x1 + (vo?.[1]?.x ?? 0), y: y0 + (vo?.[1]?.y ?? 0) }, type: 'corner' },
+    { position: { x: x0 + (vo?.[2]?.x ?? 0), y: y1 + (vo?.[2]?.y ?? 0) }, type: 'corner' },
+    { position: { x: x1 + (vo?.[3]?.x ?? 0), y: y1 + (vo?.[3]?.y ?? 0) }, type: 'corner' },
+  ];
+}
+
 export function DirectSelectionOverlay({
   pathNodes,
+  imageNodes,
   selectedPoints,
   camera,
   sceneGraph,
 }: DirectSelectionOverlayProps) {
-  if (!camera || pathNodes.length === 0) return null;
+  if (!camera || (pathNodes.length === 0 && (!imageNodes || imageNodes.length === 0))) return null;
 
   const toScreen = (pos: Vector2): Vector2 => camera.worldToScreen(pos);
   const zoom = camera.zoom;
@@ -192,6 +211,49 @@ export function DirectSelectionOverlay({
               return (
                 <rect
                   key={`point-${index}`}
+                  className={selected ? styles.pointSelected : styles.point}
+                  x={screenPos.x - 4}
+                  y={screenPos.y - 4}
+                  width={8}
+                  height={8}
+                  transform={`rotate(45 ${screenPos.x} ${screenPos.y})`}
+                />
+              );
+            })}
+          </g>
+        );
+      })}
+
+      {/* Image node vertices — 4 corner control points */}
+      {imageNodes?.map((node) => {
+        const pts = getImagePoints(node);
+        const worldMatrix = getNodeWorldMatrix(node as unknown as PathNode, sceneGraph);
+
+        return (
+          <g key={node.id}>
+            {/* Quad outline */}
+            {(() => {
+              const transformPt = (p: PathPoint) =>
+                toScreen(mat3.transformPoint(worldMatrix, p.position));
+              const bl = transformPt(pts[0]);
+              const br = transformPt(pts[1]);
+              const tl = transformPt(pts[2]);
+              const tr = transformPt(pts[3]);
+              return (
+                <path
+                  className={styles.pathOutline}
+                  d={`M ${bl.x} ${bl.y} L ${br.x} ${br.y} L ${tr.x} ${tr.y} L ${tl.x} ${tl.y} Z`}
+                />
+              );
+            })()}
+
+            {/* Corner control points */}
+            {pts.map((point, index) => {
+              const selected = isPointSelected(selectedPoints, node.id, index);
+              const screenPos = toScreen(mat3.transformPoint(worldMatrix, point.position));
+              return (
+                <rect
+                  key={`img-point-${index}`}
                   className={selected ? styles.pointSelected : styles.point}
                   x={screenPos.x - 4}
                   y={screenPos.y - 4}

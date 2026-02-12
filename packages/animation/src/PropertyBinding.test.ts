@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import type { RectangleNode } from '@quar/types';
+import type { RectangleNode, ImageNode } from '@quar/types';
 import {
   getProperty,
   setProperty,
@@ -496,5 +496,121 @@ describe('corner radius animation support', () => {
     const updated = setProperty(node, 'points.0.cornerRadius', 12);
     expect(getProperty(updated, 'points.0.cornerRadius')).toBe(12);
     expect(getProperty(updated, 'points.0.position.x')).toBe(10); // unchanged
+  });
+});
+
+// ============================================================================
+// Image vertexOffsets Animation Properties
+// ============================================================================
+
+function makeImageNode(overrides: Partial<ImageNode> = {}): ImageNode {
+  return {
+    id: 'img1',
+    name: 'Image',
+    type: 'image',
+    parent: null,
+    children: [],
+    transform: {
+      position: { x: 100, y: 200 },
+      rotation: 0,
+      scale: { x: 1, y: 1 },
+      anchor: { x: 0.5, y: 0.5 },
+      skew: { x: 0, y: 0 },
+    },
+    visible: true,
+    locked: false,
+    opacity: 1,
+    blendMode: 'normal',
+    src: 'data:image/png;base64,test',
+    width: 100,
+    height: 100,
+    naturalWidth: 100,
+    naturalHeight: 100,
+    cornerRadius: [0, 0, 0, 0],
+    ...overrides,
+  };
+}
+
+describe('image vertexOffsets properties', () => {
+  it('getAnimatableProperties includes vertexOffsets for image nodes', () => {
+    const props = getAnimatableProperties('image');
+    const voProps = props.filter((p) => p.path.startsWith('vertexOffsets.'));
+    expect(voProps.length).toBe(8); // 4 corners × 2 (x, y)
+  });
+
+  it('vertexOffsets property paths have correct display names', () => {
+    const props = getAnimatableProperties('image');
+    const voProps = props.filter((p) => p.path.startsWith('vertexOffsets.'));
+    const names = voProps.map((p) => p.displayName);
+    expect(names).toContain('Vertex BL X');
+    expect(names).toContain('Vertex BL Y');
+    expect(names).toContain('Vertex BR X');
+    expect(names).toContain('Vertex BR Y');
+    expect(names).toContain('Vertex TL X');
+    expect(names).toContain('Vertex TL Y');
+    expect(names).toContain('Vertex TR X');
+    expect(names).toContain('Vertex TR Y');
+  });
+
+  it('detectInterpolationType recognizes vertexOffsets paths as number', () => {
+    expect(detectInterpolationType('vertexOffsets.0.x')).toBe('number');
+    expect(detectInterpolationType('vertexOffsets.0.y')).toBe('number');
+    expect(detectInterpolationType('vertexOffsets.1.x')).toBe('number');
+    expect(detectInterpolationType('vertexOffsets.2.y')).toBe('number');
+    expect(detectInterpolationType('vertexOffsets.3.x')).toBe('number');
+    expect(detectInterpolationType('vertexOffsets.3.y')).toBe('number');
+  });
+
+  it('getProperty reads vertexOffsets values', () => {
+    const node = makeImageNode({
+      vertexOffsets: [
+        { x: 5, y: 10 },
+        { x: -5, y: 0 },
+        { x: 0, y: -5 },
+        { x: 15, y: 20 },
+      ],
+    });
+    expect(getProperty(node, 'vertexOffsets.0.x')).toBe(5);
+    expect(getProperty(node, 'vertexOffsets.0.y')).toBe(10);
+    expect(getProperty(node, 'vertexOffsets.1.x')).toBe(-5);
+    expect(getProperty(node, 'vertexOffsets.3.y')).toBe(20);
+  });
+
+  it('getProperty returns undefined for missing vertexOffsets', () => {
+    const node = makeImageNode(); // no vertexOffsets
+    expect(getProperty(node, 'vertexOffsets.0.x')).toBeUndefined();
+  });
+
+  it('setProperty sets vertexOffsets values immutably', () => {
+    const node = makeImageNode({
+      vertexOffsets: [
+        { x: 0, y: 0 },
+        { x: 0, y: 0 },
+        { x: 0, y: 0 },
+        { x: 0, y: 0 },
+      ],
+    });
+    const updated = setProperty(node, 'vertexOffsets.2.x', 25);
+    expect(getProperty(updated, 'vertexOffsets.2.x')).toBe(25);
+    expect(getProperty(node, 'vertexOffsets.2.x')).toBe(0); // original unchanged
+  });
+
+  it('evaluateTrack interpolates vertexOffsets', () => {
+    const track = createTrack<number>('img1', 'vertexOffsets.0.x');
+    addKeyframe(track, 0, 0);
+    addKeyframe(track, 10, 50);
+    expect(evaluateTrack(track, 5)).toBe(25);
+  });
+
+  it('getAnimatableProperties includes skinData-independent properties for images', () => {
+    const props = getAnimatableProperties('image');
+    const paths = props.map((p) => p.path);
+    // Standard image properties should also be present
+    expect(paths).toContain('width');
+    expect(paths).toContain('height');
+    expect(paths).toContain('cornerRadius.0');
+    // Plus the common ones
+    expect(paths).toContain('transform.position.x');
+    expect(paths).toContain('opacity');
   });
 });

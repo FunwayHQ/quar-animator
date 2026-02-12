@@ -19,6 +19,7 @@ import type {
   CanvasPointerEvent,
   Node,
   PathNode,
+  ImageNode,
   PathPoint,
   Rect,
   ToolType,
@@ -74,6 +75,8 @@ export interface UseCanvasToolsReturn {
   directSelectionPoints: Array<{ nodeId: string; pointIndex: number }>;
   /** All visible path nodes (for DirectSelection overlay) */
   directSelectionPathNodes: PathNode[];
+  /** All visible image nodes with vertex editing (for DirectSelection overlay) */
+  directSelectionImageNodes: ImageNode[];
   /** Current marquee selection rectangle in world coordinates (null when not marquee-selecting) */
   marqueeRect: Rect | null;
 }
@@ -141,6 +144,7 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
     Array<{ nodeId: string; pointIndex: number }>
   >([]);
   const [directSelectionPathNodes, setDirectSelectionPathNodes] = useState<PathNode[]>([]);
+  const [directSelectionImageNodes, setDirectSelectionImageNodes] = useState<ImageNode[]>([]);
 
   // Get store methods and state
   const activeTool = useEditorStore((state) => state.activeTool);
@@ -309,6 +313,16 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
               }
             }
           }
+        } else if (node.type === 'image') {
+          // Keyframe all 4 vertex offsets for image distortion
+          const imgNode = node as ImageNode;
+          const vo = imgNode.vertexOffsets;
+          if (vo) {
+            for (let i = 0; i < 4; i++) {
+              addKf(nodeId, `vertexOffsets.${i}.x`, frame, vo[i].x);
+              addKf(nodeId, `vertexOffsets.${i}.y`, frame, vo[i].y);
+            }
+          }
         }
       }
     }
@@ -413,19 +427,24 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
       // Push to editor store so PropertiesPanel can access vertex selection
       useEditorStore.getState().setDirectSelectionPoints(selPts);
 
-      // Collect only selected path nodes for overlay rendering
+      // Collect only selected path/image nodes for overlay rendering
       const selected = selectedNodeIdsRef.current;
       const paths: PathNode[] = [];
+      const images: ImageNode[] = [];
       sceneGraphRef.current.traverseVisible((node: Node) => {
         if (node.type === 'path' && selected.has(node.id)) {
           paths.push(node);
+        } else if (node.type === 'image' && selected.has(node.id)) {
+          images.push(node);
         }
       });
       setDirectSelectionPathNodes(paths);
+      setDirectSelectionImageNodes(images);
     } else {
       setIsDirectSelectionActive(false);
       setDirectSelectionPoints([]);
       setDirectSelectionPathNodes([]);
+      setDirectSelectionImageNodes([]);
       useEditorStore.getState().setDirectSelectionPoints([]);
     }
   }, []);
@@ -598,6 +617,7 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
     isDirectSelectionActive,
     directSelectionPoints,
     directSelectionPathNodes,
+    directSelectionImageNodes,
     deleteDirectSelectionPoints,
     marqueeRect,
   };

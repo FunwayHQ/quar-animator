@@ -1763,15 +1763,19 @@ export function PropertiesPanel() {
                   </>
                 );
               })()}
-            {/* Rigging Section — shown for shape nodes with skinData */}
+            {/* Rigging Section — shown for nodes with skinData (shapes + images) */}
             {node.type !== 'bone' &&
-              node.type !== 'group' &&
               node.type !== 'text' &&
-              node.type !== 'image' &&
-              'skinData' in node &&
-              (node as any).skinData != null &&
+              ((node.type !== 'group' && 'skinData' in node && (node as any).skinData != null) ||
+                (node.type === 'group' &&
+                  sceneGraph.getChildren(node.id).some((c) => c.skinData != null))) &&
               (() => {
-                const skinData = (node as any).skinData;
+                // For groups, use skinData from first skinned child
+                const skinData =
+                  node.type === 'group'
+                    ? (sceneGraph.getChildren(node.id).find((c) => c.skinData) as any)?.skinData
+                    : (node as any).skinData;
+                if (!skinData) return null;
                 const boneCount = Object.keys(skinData.inverseBindMatrices || {}).length;
                 const boneIds = Object.keys(skinData.inverseBindMatrices || {});
                 return (
@@ -1842,7 +1846,17 @@ export function PropertiesPanel() {
                             cursor: 'pointer',
                           }}
                           onClick={() => {
-                            useEditorStore.getState().unbindMesh(sceneGraph, nodeId);
+                            const store = useEditorStore.getState();
+                            if (node.type === 'group') {
+                              // Unbind all skinned children
+                              for (const child of sceneGraph.getChildren(node.id)) {
+                                if ((child as any).skinData) {
+                                  store.unbindMesh(sceneGraph, child.id);
+                                }
+                              }
+                            } else {
+                              store.unbindMesh(sceneGraph, nodeId);
+                            }
                           }}
                         >
                           Unbind

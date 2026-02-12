@@ -297,6 +297,9 @@ export interface ImageNode extends BaseNode {
   naturalHeight: number;
   cornerRadius: [number, number, number, number]; // [TL, TR, BR, BL]
   adjustments?: ImageAdjustments;
+  skinData?: SkinData;
+  /** Optional per-vertex offsets for free-form distortion [BL, BR, TL, TR] */
+  vertexOffsets?: [Vector2, Vector2, Vector2, Vector2];
 }
 
 export type BoneStyle = 'stick' | 'octahedral';
@@ -348,7 +351,7 @@ export type Node =
   | BoneNode;
 
 /** Node types that can have skin bindings */
-export type SkinnableNode = RectangleNode | EllipseNode | PolygonNode | PathNode;
+export type SkinnableNode = RectangleNode | EllipseNode | PolygonNode | PathNode | ImageNode;
 
 // ============================================================================
 // Animation Types

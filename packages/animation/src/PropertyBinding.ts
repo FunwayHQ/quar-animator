@@ -312,7 +312,16 @@ export function getAnimatableProperties(nodeType: string): AnimatableProperty[] 
           interpolationType: 'number',
         },
         { path: 'adjustments.tint', displayName: 'Tint', interpolationType: 'number' },
-        { path: 'adjustments.blur', displayName: 'Blur', interpolationType: 'number' }
+        { path: 'adjustments.blur', displayName: 'Blur', interpolationType: 'number' },
+        // Vertex offsets for free-form distortion [BL, BR, TL, TR]
+        { path: 'vertexOffsets.0.x', displayName: 'Vertex BL X', interpolationType: 'number' },
+        { path: 'vertexOffsets.0.y', displayName: 'Vertex BL Y', interpolationType: 'number' },
+        { path: 'vertexOffsets.1.x', displayName: 'Vertex BR X', interpolationType: 'number' },
+        { path: 'vertexOffsets.1.y', displayName: 'Vertex BR Y', interpolationType: 'number' },
+        { path: 'vertexOffsets.2.x', displayName: 'Vertex TL X', interpolationType: 'number' },
+        { path: 'vertexOffsets.2.y', displayName: 'Vertex TL Y', interpolationType: 'number' },
+        { path: 'vertexOffsets.3.x', displayName: 'Vertex TR X', interpolationType: 'number' },
+        { path: 'vertexOffsets.3.y', displayName: 'Vertex TR Y', interpolationType: 'number' }
       );
       break;
     case 'group':

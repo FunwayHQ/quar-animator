@@ -220,5 +220,107 @@ describe('cpuSkinning', () => {
       expect(result[0]).toBeCloseTo(75);
       expect(result[1]).toBeCloseTo(25);
     });
+
+    it('deforms a 4-vertex image quad with bone translation', () => {
+      // Simulates an image node: 4 vertices forming a quad [BL, BR, TL, TR]
+      const skinData: SkinData = {
+        vertices: [
+          { influences: [{ boneId: 'b1', weight: 1.0 }] },
+          { influences: [{ boneId: 'b1', weight: 1.0 }] },
+          { influences: [{ boneId: 'b1', weight: 1.0 }] },
+          { influences: [{ boneId: 'b1', weight: 1.0 }] },
+        ],
+        inverseBindMatrices: { b1: [1, 0, 0, 1, 0, 0] },
+        meshBindMatrix: [1, 0, 0, 1, 0, 0],
+        vertexCount: 4,
+      };
+
+      // Image quad: BL(-50,-50), BR(50,-50), TL(-50,50), TR(50,50)
+      const vertices = new Float32Array([-50, -50, 50, -50, -50, 50, 50, 50]);
+      const boneTransforms: Record<string, AffineTransform2D> = {
+        b1: translationTransform(30, 20),
+      };
+
+      const result = deformVertices(vertices, skinData, boneTransforms);
+
+      // All vertices shifted by (30, 20)
+      expect(result[0]).toBeCloseTo(-20); // BL x
+      expect(result[1]).toBeCloseTo(-30); // BL y
+      expect(result[2]).toBeCloseTo(80); // BR x
+      expect(result[3]).toBeCloseTo(-30); // BR y
+      expect(result[4]).toBeCloseTo(-20); // TL x
+      expect(result[5]).toBeCloseTo(70); // TL y
+      expect(result[6]).toBeCloseTo(80); // TR x
+      expect(result[7]).toBeCloseTo(70); // TR y
+    });
+
+    it('deforms a 4-vertex image quad with two-bone split weights', () => {
+      // Left two vertices bound to bone1, right two to bone2
+      const skinData: SkinData = {
+        vertices: [
+          { influences: [{ boneId: 'b1', weight: 1.0 }] }, // BL
+          { influences: [{ boneId: 'b2', weight: 1.0 }] }, // BR
+          { influences: [{ boneId: 'b1', weight: 1.0 }] }, // TL
+          { influences: [{ boneId: 'b2', weight: 1.0 }] }, // TR
+        ],
+        inverseBindMatrices: {
+          b1: [1, 0, 0, 1, 0, 0],
+          b2: [1, 0, 0, 1, 0, 0],
+        },
+        meshBindMatrix: [1, 0, 0, 1, 0, 0],
+        vertexCount: 4,
+      };
+
+      const vertices = new Float32Array([-50, -50, 50, -50, -50, 50, 50, 50]);
+      const boneTransforms: Record<string, AffineTransform2D> = {
+        b1: translationTransform(0, 0), // bone1 stays in place
+        b2: translationTransform(20, 0), // bone2 moves right by 20
+      };
+
+      const result = deformVertices(vertices, skinData, boneTransforms);
+
+      // Left vertices (bone1) unchanged
+      expect(result[0]).toBeCloseTo(-50);
+      expect(result[1]).toBeCloseTo(-50);
+      expect(result[4]).toBeCloseTo(-50);
+      expect(result[5]).toBeCloseTo(50);
+      // Right vertices (bone2) shifted right by 20
+      expect(result[2]).toBeCloseTo(70);
+      expect(result[3]).toBeCloseTo(-50);
+      expect(result[6]).toBeCloseTo(70);
+      expect(result[7]).toBeCloseTo(50);
+    });
+
+    it('deforms a 4-vertex image quad with rotation', () => {
+      const skinData: SkinData = {
+        vertices: [
+          { influences: [{ boneId: 'b1', weight: 1.0 }] },
+          { influences: [{ boneId: 'b1', weight: 1.0 }] },
+          { influences: [{ boneId: 'b1', weight: 1.0 }] },
+          { influences: [{ boneId: 'b1', weight: 1.0 }] },
+        ],
+        inverseBindMatrices: { b1: [1, 0, 0, 1, 0, 0] },
+        meshBindMatrix: [1, 0, 0, 1, 0, 0],
+        vertexCount: 4,
+      };
+
+      // Simple quad: unit square at origin
+      const vertices = new Float32Array([0, 0, 1, 0, 0, 1, 1, 1]);
+      const boneTransforms: Record<string, AffineTransform2D> = {
+        b1: rotationTransform(90),
+      };
+
+      const result = deformVertices(vertices, skinData, boneTransforms);
+
+      // 90° rotation: (x,y) → (-y, x)
+      expect(result[0]).toBeCloseTo(0); // (0,0) → (0,0)
+      expect(result[1]).toBeCloseTo(0);
+      expect(result[2]).toBeCloseTo(0); // (1,0) → (0,1)
+      expect(result[3]).toBeCloseTo(1);
+      expect(result[4]).toBeCloseTo(-1); // (0,1) → (-1,0)
+      expect(result[5]).toBeCloseTo(0);
+      expect(result[6]).toBeCloseTo(-1); // (1,1) → (-1,1)
+      expect(result[7]).toBeCloseTo(1);
+    });
   });
 });

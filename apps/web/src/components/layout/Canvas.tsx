@@ -133,6 +133,7 @@ export function Canvas() {
     isDirectSelectionActive,
     directSelectionPoints,
     directSelectionPathNodes,
+    directSelectionImageNodes,
     deleteDirectSelectionPoints,
     marqueeRect,
   } = useCanvasTools({
@@ -258,26 +259,66 @@ export function Canvas() {
   const selectionDisplay = useMemo(() => {
     if (!sceneGraphRef.current || selectedNodeIds.size === 0) return null;
 
-    // For a single skinned node, compute bounds from deformed vertices
+    // For a single skinned node (or group with skinned children), compute bounds from deformed vertices
     if (selectedNodeIds.size === 1 && shapeRendererRef.current) {
       const nodeId = [...selectedNodeIds][0]!;
       const node = sceneGraphRef.current.getNode(nodeId);
-      if (node && (node as any).skinData) {
-        const deformedRect = shapeRendererRef.current.getDeformedBounds(
-          node,
-          sceneGraphRef.current
-        );
-        if (deformedRect) {
-          return {
-            bounds: {
-              rect: deformedRect,
-              center: {
-                x: deformedRect.x + deformedRect.width / 2,
-                y: deformedRect.y + deformedRect.height / 2,
+      if (node) {
+        // Direct skinned node
+        if ((node as any).skinData) {
+          const deformedRect = shapeRendererRef.current.getDeformedBounds(
+            node,
+            sceneGraphRef.current
+          );
+          if (deformedRect) {
+            return {
+              bounds: {
+                rect: deformedRect,
+                center: {
+                  x: deformedRect.x + deformedRect.width / 2,
+                  y: deformedRect.y + deformedRect.height / 2,
+                },
               },
-            },
-            rotation: 0,
-          };
+              rotation: 0,
+            };
+          }
+        }
+        // Group with skinned children — compute combined deformed bounds
+        if (node.type === 'group') {
+          const children = sceneGraphRef.current.getChildren(node.id);
+          let hasAnySkin = false;
+          let minX = Infinity,
+            minY = Infinity,
+            maxX = -Infinity,
+            maxY = -Infinity;
+          for (const child of children) {
+            if ((child as any).skinData) {
+              const childRect = shapeRendererRef.current.getDeformedBounds(
+                child,
+                sceneGraphRef.current
+              );
+              if (childRect) {
+                hasAnySkin = true;
+                if (childRect.x < minX) minX = childRect.x;
+                if (childRect.y < minY) minY = childRect.y;
+                if (childRect.x + childRect.width > maxX) maxX = childRect.x + childRect.width;
+                if (childRect.y + childRect.height > maxY) maxY = childRect.y + childRect.height;
+              }
+            }
+          }
+          if (hasAnySkin) {
+            const deformedRect = { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
+            return {
+              bounds: {
+                rect: deformedRect,
+                center: {
+                  x: deformedRect.x + deformedRect.width / 2,
+                  y: deformedRect.y + deformedRect.height / 2,
+                },
+              },
+              rotation: 0,
+            };
+          }
         }
       }
     }
@@ -1094,14 +1135,35 @@ export function Canvas() {
           const selNode = sceneGraph.getNode(selectedArr[0]!);
           if (!selNode) return [];
 
-          const isShapeNode =
+          const isBindableShape =
             selNode.type === 'rectangle' ||
             selNode.type === 'ellipse' ||
             selNode.type === 'polygon' ||
-            selNode.type === 'path';
-          if (!isShapeNode) return [];
+            selNode.type === 'path' ||
+            selNode.type === 'image';
+          const isGroup = selNode.type === 'group';
 
-          const hasSkinData = 'skinData' in selNode && (selNode as any).skinData != null;
+          if (!isBindableShape && !isGroup) return [];
+
+          // For groups: check if has shape/image children that can be bound
+          const getBindableChildren = (): import('@quar/types').Node[] => {
+            if (!isGroup) return [];
+            return sceneGraph
+              .getChildren(selNode.id)
+              .filter(
+                (c) =>
+                  c.type === 'rectangle' ||
+                  c.type === 'ellipse' ||
+                  c.type === 'polygon' ||
+                  c.type === 'path' ||
+                  c.type === 'image'
+              );
+          };
+
+          // hasSkinData: direct node or any group child
+          const hasSkinData = isBindableShape
+            ? (selNode as any).skinData != null
+            : getBindableChildren().some((c) => (c as any).skinData != null);
 
           // Find bone nodes in scene
           const boneIds: string[] = [];
@@ -1116,11 +1178,19 @@ export function Canvas() {
               id: 'bind-to-bones',
               label: 'Bind to Bones',
               onClick: () => {
-                // Pass actual tessellated vertices from ShapeRenderer so that
-                // skinData.vertexCount matches the real geometry cache entry
-                const tessVerts =
-                  shapeRendererRef.current?.getTessellatedVertices(selNode.id) ?? undefined;
-                bindMeshToBones(sceneGraph, selNode.id, boneIds, tessVerts);
+                if (isGroup) {
+                  // Bind each shape/image child individually
+                  const children = getBindableChildren();
+                  for (const child of children) {
+                    const tessVerts =
+                      shapeRendererRef.current?.getTessellatedVertices(child.id) ?? undefined;
+                    bindMeshToBones(sceneGraph, child.id, boneIds, tessVerts);
+                  }
+                } else {
+                  const tessVerts =
+                    shapeRendererRef.current?.getTessellatedVertices(selNode.id) ?? undefined;
+                  bindMeshToBones(sceneGraph, selNode.id, boneIds, tessVerts);
+                }
               },
             });
           }
@@ -1129,7 +1199,18 @@ export function Canvas() {
             items.push({
               id: 'unbind-mesh',
               label: 'Unbind Mesh',
-              onClick: () => unbindMesh(sceneGraph, selNode.id),
+              onClick: () => {
+                if (isGroup) {
+                  // Unbind all skinned children
+                  for (const child of getBindableChildren()) {
+                    if ((child as any).skinData) {
+                      unbindMesh(sceneGraph, child.id);
+                    }
+                  }
+                } else {
+                  unbindMesh(sceneGraph, selNode.id);
+                }
+              },
             });
             items.push({
               id: 'weight-paint',
@@ -1441,7 +1522,8 @@ export function Canvas() {
         style={{ cursor: toolCursor }}
       />
       {!editingTextNodeId &&
-        (!isDirectSelectionActive || directSelectionPathNodes.length === 0) && (
+        (!isDirectSelectionActive ||
+          (directSelectionPathNodes.length === 0 && directSelectionImageNodes.length === 0)) && (
           <SelectionOverlay
             bounds={screenBounds}
             handles={isDirectSelectionActive ? [] : transformHandles}
@@ -1479,6 +1561,7 @@ export function Canvas() {
       {isDirectSelectionActive && (
         <DirectSelectionOverlay
           pathNodes={directSelectionPathNodes}
+          imageNodes={directSelectionImageNodes}
           selectedPoints={directSelectionPoints}
           camera={cameraRef.current}
           sceneGraph={sceneGraph}

@@ -5,7 +5,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { DirectSelectionTool } from './DirectSelectionTool';
 import type { ToolContext } from './BaseTool';
-import type { PathNode, PathPoint } from '@quar/types';
+import type { PathNode, PathPoint, ImageNode } from '@quar/types';
 import { createMockToolContext, createMockPointerEvent } from '../test/setup';
 import { createDefaultTransform } from '../SceneGraph';
 
@@ -1614,6 +1614,212 @@ describe('DirectSelectionTool', () => {
       const updated = context.sceneGraph.getNode(path.id) as PathNode;
       expect(updated.points[0].position).toEqual({ x: 5, y: 5 });
       expect(updated.subpaths).toBeUndefined();
+    });
+  });
+
+  // ==========================================================================
+  // Image Vertex Editing
+  // ==========================================================================
+
+  describe('image vertex editing', () => {
+    // Helper to create a test image node
+    function createTestImage(
+      ctx: ToolContext,
+      width: number = 100,
+      height: number = 100,
+      position: { x: number; y: number } = { x: 0, y: 0 },
+      vertexOffsets?: [
+        { x: number; y: number },
+        { x: number; y: number },
+        { x: number; y: number },
+        { x: number; y: number },
+      ]
+    ): ImageNode {
+      const transform = createDefaultTransform();
+      transform.position = position;
+
+      const node: ImageNode = {
+        id: ctx.generateId(),
+        name: 'Test Image',
+        type: 'image',
+        parent: null,
+        children: [],
+        transform,
+        visible: true,
+        locked: false,
+        opacity: 1,
+        blendMode: 'normal',
+        src: 'data:image/png;base64,test',
+        width,
+        height,
+        naturalWidth: width,
+        naturalHeight: height,
+        cornerRadius: [0, 0, 0, 0],
+        vertexOffsets,
+      };
+
+      ctx.sceneGraph.addNode(node);
+      return node;
+    }
+
+    it('should select an image vertex on click', () => {
+      // Image at (0,0) with anchor (0.5,0.5), so BL corner = (-50, -50)
+      const img = createTestImage(context, 100, 100);
+
+      // Click on bottom-left corner
+      tool.onPointerDown(createMockPointerEvent({ worldPosition: { x: -50, y: -50 }, button: 0 }));
+      tool.onPointerUp(createMockPointerEvent({ worldPosition: { x: -50, y: -50 } }));
+
+      const selected = tool.getSelectedPoints();
+      expect(selected.length).toBe(1);
+      expect(selected[0].nodeId).toBe(img.id);
+      expect(selected[0].pointIndex).toBe(0); // BL = index 0
+    });
+
+    it('should select different image corners', () => {
+      const img = createTestImage(context, 100, 100);
+
+      // Click on bottom-right corner (50, -50)
+      tool.onPointerDown(createMockPointerEvent({ worldPosition: { x: 50, y: -50 }, button: 0 }));
+      tool.onPointerUp(createMockPointerEvent({ worldPosition: { x: 50, y: -50 } }));
+
+      const selected = tool.getSelectedPoints();
+      expect(selected.length).toBe(1);
+      expect(selected[0].pointIndex).toBe(1); // BR = index 1
+    });
+
+    it('should drag an image vertex and update vertexOffsets', () => {
+      const img = createTestImage(context, 100, 100);
+
+      // Select BL corner at (-50, -50)
+      tool.onPointerDown(createMockPointerEvent({ worldPosition: { x: -50, y: -50 }, button: 0 }));
+
+      // Drag to new position
+      tool.onPointerMove(createMockPointerEvent({ worldPosition: { x: -40, y: -40 } }));
+      tool.onPointerUp(createMockPointerEvent({ worldPosition: { x: -40, y: -40 } }));
+
+      const updated = context.sceneGraph.getNode(img.id) as ImageNode;
+      expect(updated.vertexOffsets).toBeDefined();
+      // BL offset should be (10, 10) from base (-50, -50)
+      expect(updated.vertexOffsets![0].x).toBeCloseTo(10);
+      expect(updated.vertexOffsets![0].y).toBeCloseTo(10);
+      // Other corners should be zero
+      expect(updated.vertexOffsets![1].x).toBeCloseTo(0);
+      expect(updated.vertexOffsets![1].y).toBeCloseTo(0);
+      expect(updated.vertexOffsets![2].x).toBeCloseTo(0);
+      expect(updated.vertexOffsets![2].y).toBeCloseTo(0);
+      expect(updated.vertexOffsets![3].x).toBeCloseTo(0);
+      expect(updated.vertexOffsets![3].y).toBeCloseTo(0);
+    });
+
+    it('should preserve existing vertexOffsets when dragging', () => {
+      const img = createTestImage(context, 100, 100, { x: 0, y: 0 }, [
+        { x: 5, y: 5 }, // BL
+        { x: -5, y: 0 }, // BR
+        { x: 0, y: -5 }, // TL
+        { x: 10, y: 10 }, // TR
+      ]);
+
+      // The TR corner base position is (50, 50), with offset (10,10) = (60, 60)
+      tool.onPointerDown(createMockPointerEvent({ worldPosition: { x: 60, y: 60 }, button: 0 }));
+      tool.onPointerMove(createMockPointerEvent({ worldPosition: { x: 65, y: 65 } }));
+      tool.onPointerUp(createMockPointerEvent({ worldPosition: { x: 65, y: 65 } }));
+
+      const updated = context.sceneGraph.getNode(img.id) as ImageNode;
+      expect(updated.vertexOffsets).toBeDefined();
+      // TR offset should be (15, 15) — base is (50,50), new absolute is (65,65)
+      expect(updated.vertexOffsets![3].x).toBeCloseTo(15);
+      expect(updated.vertexOffsets![3].y).toBeCloseTo(15);
+      // Other offsets should remain unchanged
+      expect(updated.vertexOffsets![0].x).toBeCloseTo(5);
+      expect(updated.vertexOffsets![0].y).toBeCloseTo(5);
+    });
+
+    it('should shift+click to select multiple image vertices', () => {
+      const img = createTestImage(context, 100, 100);
+
+      // Select BL corner
+      tool.onPointerDown(createMockPointerEvent({ worldPosition: { x: -50, y: -50 }, button: 0 }));
+      tool.onPointerUp(createMockPointerEvent({ worldPosition: { x: -50, y: -50 } }));
+
+      // Shift+select TR corner (50, 50)
+      tool.onPointerDown(
+        createMockPointerEvent({ worldPosition: { x: 50, y: 50 }, button: 0, shiftKey: true })
+      );
+      tool.onPointerUp(createMockPointerEvent({ worldPosition: { x: 50, y: 50 }, shiftKey: true }));
+
+      const selected = tool.getSelectedPoints();
+      expect(selected.length).toBe(2);
+      expect(selected[0].pointIndex).toBe(0); // BL
+      expect(selected[1].pointIndex).toBe(3); // TR
+    });
+
+    it('should show move cursor when hovering over image vertex', () => {
+      createTestImage(context, 100, 100);
+
+      tool.onPointerMove(createMockPointerEvent({ worldPosition: { x: -50, y: -50 } }));
+
+      expect(tool.getCursor()).toBe('move');
+    });
+
+    it('should fire onTransformComplete with vertex-move after image drag', () => {
+      const completeCalls: Array<{ nodeIds: Set<string>; type: string }> = [];
+      context.onTransformComplete = (nodeIds, type) => {
+        completeCalls.push({ nodeIds, type });
+      };
+
+      const img = createTestImage(context, 100, 100);
+      context.setSelectedIds([img.id]);
+
+      // Select BL corner
+      tool.onPointerDown(createMockPointerEvent({ worldPosition: { x: -50, y: -50 }, button: 0 }));
+      tool.onPointerUp(createMockPointerEvent({ worldPosition: { x: -50, y: -50 } }));
+
+      // Drag the selected vertex
+      tool.onPointerDown(createMockPointerEvent({ worldPosition: { x: -50, y: -50 }, button: 0 }));
+      tool.onPointerMove(createMockPointerEvent({ worldPosition: { x: -40, y: -40 } }));
+      tool.onPointerUp(createMockPointerEvent({ worldPosition: { x: -40, y: -40 } }));
+
+      expect(completeCalls.length).toBe(1);
+      expect(completeCalls[0].type).toBe('vertex-move');
+      expect(completeCalls[0].nodeIds.has(img.id)).toBe(true);
+
+      delete context.onTransformComplete;
+    });
+
+    it('should select image and path vertices together with shift+click', () => {
+      const path = createTestPath(context, [createPoint(0, 0), createPoint(100, 0)]);
+      const img = createTestImage(context, 100, 100, { x: 200, y: 0 });
+
+      // Select path point at (0, 0)
+      tool.onPointerDown(createMockPointerEvent({ worldPosition: { x: 0, y: 0 }, button: 0 }));
+      tool.onPointerUp(createMockPointerEvent({ worldPosition: { x: 0, y: 0 } }));
+
+      // Shift+select image BL corner at (150, -50)
+      tool.onPointerDown(
+        createMockPointerEvent({ worldPosition: { x: 150, y: -50 }, button: 0, shiftKey: true })
+      );
+      tool.onPointerUp(
+        createMockPointerEvent({ worldPosition: { x: 150, y: -50 }, shiftKey: true })
+      );
+
+      const selected = tool.getSelectedPoints();
+      expect(selected.length).toBe(2);
+      expect(selected[0].nodeId).toBe(path.id);
+      expect(selected[1].nodeId).toBe(img.id);
+    });
+
+    it('should handle image at offset position', () => {
+      const img = createTestImage(context, 100, 100, { x: 200, y: 100 });
+
+      // BL corner should be at (200-50, 100-50) = (150, 50)
+      tool.onPointerDown(createMockPointerEvent({ worldPosition: { x: 150, y: 50 }, button: 0 }));
+      tool.onPointerUp(createMockPointerEvent({ worldPosition: { x: 150, y: 50 } }));
+
+      const selected = tool.getSelectedPoints();
+      expect(selected.length).toBe(1);
+      expect(selected[0].nodeId).toBe(img.id);
+      expect(selected[0].pointIndex).toBe(0); // BL
     });
   });
 });
