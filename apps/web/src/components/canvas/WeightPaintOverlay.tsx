@@ -2,7 +2,7 @@
  * WeightPaintOverlay — shows brush circle and mode indicator during weight painting.
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useEditorStore } from '../../stores/editorStore';
 import type { Camera } from '@quar/core';
 
@@ -20,6 +20,7 @@ export const WeightPaintOverlay: React.FC<WeightPaintOverlayProps> = ({
   const activeTool = useEditorStore((s) => s.activeTool);
   const weightPaintBoneId = useEditorStore((s) => s.weightPaintBoneId);
   const brushSize = useEditorStore((s) => s.weightPaintBrushSize);
+  const svgRef = useRef<SVGSVGElement>(null);
 
   const [mousePos, setMousePos] = useState<{ x: number; y: number } | null>(null);
 
@@ -27,7 +28,13 @@ export const WeightPaintOverlay: React.FC<WeightPaintOverlayProps> = ({
     if (activeTool !== 'weight-paint') return;
 
     const handleMouseMove = (e: MouseEvent) => {
-      setMousePos({ x: e.clientX, y: e.clientY });
+      const svg = svgRef.current;
+      if (svg) {
+        const rect = svg.getBoundingClientRect();
+        setMousePos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+      } else {
+        setMousePos({ x: e.clientX, y: e.clientY });
+      }
     };
 
     window.addEventListener('mousemove', handleMouseMove);
@@ -41,6 +48,7 @@ export const WeightPaintOverlay: React.FC<WeightPaintOverlayProps> = ({
 
   return (
     <svg
+      ref={svgRef}
       style={{
         position: 'absolute',
         top: 0,
