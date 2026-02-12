@@ -2542,6 +2542,16 @@ export class ShapeRenderer {
   }
 
   /**
+   * Get tessellated vertex positions for a node (from the geometry cache).
+   * Returns world-space Float32Array of xy pairs, or null if not cached.
+   */
+  getTessellatedVertices(nodeId: string): Float32Array | null {
+    const cached = this.geometryCache.get(nodeId);
+    if (!cached) return null;
+    return cached.vertices;
+  }
+
+  /**
    * Render weight visualization overlay — heat map showing bone influence per vertex.
    * Call this after normal rendering when weight paint tool is active.
    */

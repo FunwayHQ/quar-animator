@@ -31,6 +31,7 @@ export interface ToolContext {
   getEnteredGroupId?: () => string | null;
   setEnteredGroupId?: (id: string | null) => void;
   onEnterTextEdit?: (nodeId: string) => void;
+  getTessellatedVertices?: (nodeId: string) => Float32Array | null;
 }
 
 export interface ToolState {

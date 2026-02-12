@@ -169,14 +169,14 @@ export class WeightPaintTool extends BaseTool {
     }
 
     // Paint at current position
-    this.paintAtPosition();
+    this.paintAtWorldPosition(event.worldPosition.x, event.worldPosition.y);
   }
 
-  onPointerMove(_event: CanvasPointerEvent): void {
+  onPointerMove(event: CanvasPointerEvent): void {
     if (!this.isPainting) return;
     if (!this.boundNodeId || !this.activeBoneId) return;
 
-    this.paintAtPosition();
+    this.paintAtWorldPosition(event.worldPosition.x, event.worldPosition.y);
   }
 
   onPointerUp(_event: CanvasPointerEvent): void {
@@ -212,8 +212,9 @@ export class WeightPaintTool extends BaseTool {
 
   /**
    * Paint weights on vertices within brush radius of the given world position.
+   * Uses the node's world transform to convert local tessellation vertices to world space.
    */
-  private paintAtPosition(): void {
+  private paintAtWorldPosition(worldX: number, worldY: number): void {
     if (!this.boundNodeId || !this.activeBoneId) return;
 
     const node = this.context.sceneGraph.getNode(this.boundNodeId);
@@ -222,20 +223,24 @@ export class WeightPaintTool extends BaseTool {
     const skinData = getSkinData(node);
     if (!skinData?.vertices) return;
 
-    const vertexCount = skinData.vertexCount;
-    let modified = false;
-
-    // Paint all vertices — the UI layer will provide vertex positions via paintAtPositionWithVertices
-    for (let i = 0; i < vertexCount; i++) {
-      paintWeight(skinData, i, this.activeBoneId, this.brushStrength, this.paintMode);
-      modified = true;
-    }
-
-    if (modified) {
-      // Update node with modified skin data
-      this.context.sceneGraph.updateNode(this.boundNodeId, {
-        skinData: { ...skinData },
-      } as Partial<Node>);
+    // Get tessellated vertex positions from the geometry cache via the context
+    const vertexPositions = this.context.getTessellatedVertices?.(this.boundNodeId);
+    if (vertexPositions && vertexPositions.length >= 2) {
+      // Use spatial brush with falloff
+      this.paintAtPositionWithVertices(worldX, worldY, vertexPositions);
+    } else {
+      // Fallback: paint all vertices (no spatial filtering)
+      const vertexCount = skinData.vertexCount;
+      let modified = false;
+      for (let i = 0; i < vertexCount; i++) {
+        paintWeight(skinData, i, this.activeBoneId, this.brushStrength, this.paintMode);
+        modified = true;
+      }
+      if (modified) {
+        this.context.sceneGraph.updateNode(this.boundNodeId, {
+          skinData: { ...skinData },
+        } as Partial<Node>);
+      }
     }
   }
 

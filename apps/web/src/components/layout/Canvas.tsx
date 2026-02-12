@@ -135,7 +135,12 @@ export function Canvas() {
     directSelectionPathNodes,
     deleteDirectSelectionPoints,
     marqueeRect,
-  } = useCanvasTools({ camera: cameraReady ? cameraRef.current : null, sceneGraph });
+  } = useCanvasTools({
+    camera: cameraReady ? cameraRef.current : null,
+    sceneGraph,
+    getTessellatedVertices: (nodeId: string) =>
+      shapeRendererRef.current?.getTessellatedVertices(nodeId) ?? null,
+  });
 
   // Subscribe to scene graph changes to update selection bounds
   useEffect(() => {
@@ -467,6 +472,32 @@ export function Canvas() {
         // Render preview node (if drawing)
         if (previewNodeRef.current && shapeRenderer) {
           shapeRenderer.renderNode(previewNodeRef.current, viewProjectionMatrix);
+        }
+
+        // Render weight paint visualization overlay
+        const edState = useEditorStore.getState();
+        if (
+          edState.activeTool === 'weight-paint' &&
+          edState.weightPaintBoneId &&
+          sceneGraphRef.current &&
+          shapeRenderer
+        ) {
+          // Get bound node from WeightPaintTool, fallback to selection
+          const wpTool = _toolManagerRef.current?.getActiveTool();
+          const boundNodeId =
+            wpTool?.type === 'weight-paint' ? (wpTool as any).getBoundNodeId?.() : null;
+          const nodeIds = boundNodeId ? [boundNodeId] : [...edState.selectedNodeIds];
+          for (const nodeId of nodeIds) {
+            const node = sceneGraphRef.current.getNode(nodeId);
+            if (node) {
+              shapeRenderer.renderWeightVisualization(
+                node,
+                edState.weightPaintBoneId,
+                viewProjectionMatrix,
+                sceneGraphRef.current
+              );
+            }
+          }
         }
 
         animationFrameRef.current = requestAnimationFrame(render);

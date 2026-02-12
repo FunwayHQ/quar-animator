@@ -1820,7 +1820,13 @@ export function PropertiesPanel() {
                             cursor: 'pointer',
                           }}
                           onClick={() => {
-                            useEditorStore.getState().setActiveTool('weight-paint');
+                            // Set the bone ID first so visualization works immediately
+                            const store = useEditorStore.getState();
+                            const boneId = store.weightPaintBoneId || boneIds[0] || null;
+                            if (boneId) {
+                              store.setWeightPaintBoneId(boneId);
+                            }
+                            store.setActiveTool('weight-paint');
                           }}
                         >
                           Weight Paint

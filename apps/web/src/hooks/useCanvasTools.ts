@@ -11,6 +11,7 @@ import {
   PenTool,
   DirectSelectionTool,
   SelectionTool,
+  WeightPaintTool,
   getAllPoints,
 } from '@quar/core';
 import type { TransformType } from '@quar/core';
@@ -32,6 +33,7 @@ import { useEditorStore } from '../stores/editorStore';
 export interface UseCanvasToolsOptions {
   camera: Camera | null;
   sceneGraph: SceneGraph;
+  getTessellatedVertices?: (nodeId: string) => Float32Array | null;
 }
 
 export interface UseCanvasToolsReturn {
@@ -115,7 +117,7 @@ function createCanvasPointerEvent(
  * @returns Tool management handlers and state
  */
 export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsReturn {
-  const { camera, sceneGraph } = options;
+  const { camera, sceneGraph, getTessellatedVertices } = options;
 
   // Use the externally-provided SceneGraph
   const sceneGraphRef = useRef<SceneGraph>(sceneGraph);
@@ -346,6 +348,9 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
       onEnterTextEdit: (nodeId: string) => {
         useEditorStore.getState().setEditingTextNodeId(nodeId);
       },
+      getTessellatedVertices: (nodeId: string) => {
+        return getTessellatedVertices?.(nodeId) ?? null;
+      },
     });
 
     // Set the active tool from EditorStore (ToolManager defaults to 'selection')
@@ -431,6 +436,22 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
       toolManagerRef.current.setActiveTool(activeTool);
       setCursor(toolManagerRef.current.getCursor() as string);
       syncDirectSelectionState();
+
+      // Sync weight paint tool state to store
+      if (activeTool === 'weight-paint') {
+        const wpTool = toolManagerRef.current.getActiveTool();
+        if (wpTool && wpTool.type === 'weight-paint') {
+          const boneId = wpTool.getActiveBoneId();
+          if (boneId) {
+            useEditorStore.getState().setWeightPaintBoneId(boneId);
+          }
+        }
+      } else {
+        // Clear weight paint bone when leaving weight paint mode
+        if (useEditorStore.getState().weightPaintBoneId) {
+          useEditorStore.getState().setWeightPaintBoneId(null);
+        }
+      }
     }
   }, [activeTool, syncDirectSelectionState]);
 
