@@ -327,6 +327,8 @@ export function PropertiesPanel() {
   const setBlendMode = useEditorStore((state) => state.setBlendMode);
   const pushUndo = useEditorStore((state) => state.pushUndo);
   const activeTool = useEditorStore((state) => state.activeTool);
+  const ikChains = useEditorStore((state) => state.ikChains);
+  const setIKChainEnabled = useEditorStore((state) => state.setIKChainEnabled);
   const dsPoints = useEditorStore((state) => state.directSelectionPoints);
 
   // Undo snapshot before scrub or input commit
@@ -1767,9 +1769,7 @@ export function PropertiesPanel() {
             {node.type === 'ik-target' &&
               (() => {
                 const ikTarget = node;
-                const chain = useEditorStore
-                  .getState()
-                  .ikChains.find((c) => c.id === ikTarget.ikChainId);
+                const chain = ikChains.find((c) => c.id === ikTarget.ikChainId);
                 return (
                   <>
                     <div className={styles.sectionTitle}>IK Chain</div>
@@ -1797,9 +1797,7 @@ export function PropertiesPanel() {
                             type="checkbox"
                             checked={chain.enabled}
                             onChange={(e) => {
-                              useEditorStore
-                                .getState()
-                                .setIKChainEnabled(chain.id, e.target.checked);
+                              setIKChainEnabled(chain.id, e.target.checked);
                             }}
                           />
                         </div>

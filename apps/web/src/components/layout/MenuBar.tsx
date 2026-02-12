@@ -211,6 +211,13 @@ export function MenuBar({ projectActions }: MenuBarProps) {
     });
   }, [selectedNodeIds, sceneGraph]);
 
+  const hasBoneOrIKTargetSelected = useMemo(() => {
+    return Array.from(selectedNodeIds).some((id) => {
+      const n = sceneGraph.getNode(id);
+      return n && (n.type === 'bone' || n.type === 'ik-target');
+    });
+  }, [selectedNodeIds, sceneGraph]);
+
   const hasSkinnedSelected = useMemo(() => {
     return Array.from(selectedNodeIds).some((id) => {
       const n = sceneGraph.getNode(id);
@@ -807,7 +814,7 @@ export function MenuBar({ projectActions }: MenuBarProps) {
                 />
                 <MenuItem
                   label="Remove IK Chain"
-                  disabled={!hasBoneSelected}
+                  disabled={!hasBoneOrIKTargetSelected}
                   onClick={() => {
                     closeMenu();
                     window.dispatchEvent(new CustomEvent('menubar:remove-ik-chain'));
