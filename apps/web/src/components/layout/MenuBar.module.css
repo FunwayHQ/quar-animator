@@ -263,11 +263,11 @@
 .saveAsDialog {
   position: fixed;
   z-index: 501;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
+  inset: 0;
+  margin: auto;
   width: 360px;
   max-width: 90vw;
+  height: fit-content;
   background: var(--color-bg-elevated);
   border: 1px solid var(--color-border-default);
   border-radius: 12px;
@@ -349,19 +349,21 @@
 .shortcutsDialog {
   position: fixed;
   z-index: 501;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
+  inset: 0;
+  margin: auto;
   width: 640px;
   max-width: 90vw;
-  max-height: 80vh;
+  height: fit-content;
+  max-height: min(80vh, 600px);
   background: var(--color-bg-elevated);
   border: 1px solid var(--color-border-default);
   border-radius: 12px;
   box-shadow: var(--shadow-xl);
   padding: 20px;
   animation: dropdownIn 0.15s var(--easing-default) both;
-  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .shortcutsHeader {
@@ -391,6 +393,9 @@
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 24px;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
 }
 
 .shortcutsColumn {
