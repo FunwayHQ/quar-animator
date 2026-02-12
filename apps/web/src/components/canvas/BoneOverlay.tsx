@@ -34,8 +34,8 @@ export function BoneOverlay({ boneNodes, selectedNodeIds, camera, sceneGraph }: 
       const tipWorldY = worldTransform.b * tipX + worldTransform.ty;
 
       // Convert to screen space
-      const rootScreen = camera.worldToScreen(rootWorld.x, rootWorld.y);
-      const tipScreen = camera.worldToScreen(tipWorldX, tipWorldY);
+      const rootScreen = camera.worldToScreen(rootWorld);
+      const tipScreen = camera.worldToScreen({ x: tipWorldX, y: tipWorldY });
 
       const isSelected = selectedNodeIds.has(bone.id);
 

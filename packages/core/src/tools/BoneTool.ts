@@ -244,7 +244,7 @@ export class BoneTool extends BaseTool {
       if (!tipWorld) return;
 
       // Convert tip to screen space for distance check
-      const tipScreen = this.context.camera.worldToScreen(tipWorld.x, tipWorld.y);
+      const tipScreen = this.context.camera.worldToScreen(tipWorld);
       const dx = tipScreen.x - event.screenPosition.x;
       const dy = tipScreen.y - event.screenPosition.y;
       const dist = Math.sqrt(dx * dx + dy * dy);
