@@ -594,6 +594,95 @@ export function Canvas() {
   }, []);
 
   // --------------------------------------------------------------------------
+  // MenuBar View Event Listeners
+  // --------------------------------------------------------------------------
+
+  useEffect(() => {
+    const camera = cameraRef.current;
+    if (!camera) return;
+
+    const handleZoomIn = () => camera.zoomTo(camera.zoom * 1.25);
+    const handleZoomOut = () => camera.zoomTo(camera.zoom * 0.8);
+    const handleZoom100 = () => camera.zoomTo(1);
+    const handleFitToWindow = () => camera.reset();
+
+    window.addEventListener('menubar:zoom-in', handleZoomIn);
+    window.addEventListener('menubar:zoom-out', handleZoomOut);
+    window.addEventListener('menubar:zoom-100', handleZoom100);
+    window.addEventListener('menubar:fit-to-window', handleFitToWindow);
+
+    // Rigging commands from MenuBar
+    const handleBindToBones = () => {
+      const state = useEditorStore.getState();
+      const selectedArr = Array.from(state.selectedNodeIds);
+      const boneIds: string[] = [];
+      sceneGraphRef.current?.traverse((n) => {
+        if (n.type === 'bone') boneIds.push(n.id);
+      });
+      if (boneIds.length === 0) return;
+
+      for (const nodeId of selectedArr) {
+        const node = sceneGraphRef.current?.getNode(nodeId);
+        if (!node) continue;
+        const isShape = ['rectangle', 'ellipse', 'polygon', 'path', 'image'].includes(node.type);
+        const isGroup = node.type === 'group';
+
+        if (isShape) {
+          const tessVerts = shapeRendererRef.current?.getTessellatedVertices(nodeId) ?? undefined;
+          bindMeshToBones(sceneGraphRef.current, nodeId, boneIds, tessVerts);
+        } else if (isGroup) {
+          const children = sceneGraphRef
+            .current!.getChildren(nodeId)
+            .filter(
+              (c: Node) =>
+                c.type === 'rectangle' ||
+                c.type === 'ellipse' ||
+                c.type === 'polygon' ||
+                c.type === 'path' ||
+                c.type === 'image'
+            );
+          for (const child of children) {
+            const tessVerts =
+              shapeRendererRef.current?.getTessellatedVertices(child.id) ?? undefined;
+            bindMeshToBones(sceneGraphRef.current, child.id, boneIds, tessVerts);
+          }
+        }
+      }
+    };
+
+    const handleUnbindMesh = () => {
+      const state = useEditorStore.getState();
+      const selectedArr = Array.from(state.selectedNodeIds);
+      for (const nodeId of selectedArr) {
+        const node = sceneGraphRef.current?.getNode(nodeId);
+        if (!node) continue;
+        if ((node as any).skinData) {
+          unbindMesh(sceneGraphRef.current, nodeId);
+        } else if (node.type === 'group') {
+          const children = sceneGraphRef.current!.getChildren(nodeId);
+          for (const child of children) {
+            if ((child as any).skinData) {
+              unbindMesh(sceneGraphRef.current, child.id);
+            }
+          }
+        }
+      }
+    };
+
+    window.addEventListener('menubar:bind-to-bones', handleBindToBones);
+    window.addEventListener('menubar:unbind-mesh', handleUnbindMesh);
+
+    return () => {
+      window.removeEventListener('menubar:zoom-in', handleZoomIn);
+      window.removeEventListener('menubar:zoom-out', handleZoomOut);
+      window.removeEventListener('menubar:zoom-100', handleZoom100);
+      window.removeEventListener('menubar:fit-to-window', handleFitToWindow);
+      window.removeEventListener('menubar:bind-to-bones', handleBindToBones);
+      window.removeEventListener('menubar:unbind-mesh', handleUnbindMesh);
+    };
+  }, [cameraReady, bindMeshToBones, unbindMesh]); // Re-attach when camera becomes ready
+
+  // --------------------------------------------------------------------------
   // Mouse Handlers
   // --------------------------------------------------------------------------
 
