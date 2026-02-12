@@ -65,17 +65,46 @@ export function outlineStroke(
 
     if (outlineVerts.length < 6) continue; // Need at least 3 points
 
-    // Convert Float32Array vertices back to PathPoints (corner points)
-    const points: PathPoint[] = [];
-    for (let i = 0; i < outlineVerts.length; i += 2) {
-      points.push(
-        createCornerPoint({
-          x: outlineVerts[i],
-          y: outlineVerts[i + 1],
-        })
-      );
+    if (outline.closed) {
+      // For closed paths, generateStrokeOutlineVertices returns
+      // [leftSide(outer)... rightSideReversed(inner)...] as one polygon.
+      // This creates a seam gap at the start/end vertex. Split into two
+      // separate closed contours (outer ring + inner ring) for correct fill.
+      const outerPoints: PathPoint[] = [];
+      const innerPoints: PathPoint[] = [];
+      for (let i = 0; i < numVertices; i++) {
+        outerPoints.push(
+          createCornerPoint({
+            x: outlineVerts[i * 2],
+            y: outlineVerts[i * 2 + 1],
+          })
+        );
+      }
+      for (let i = numVertices; i < outlineVerts.length / 2; i++) {
+        innerPoints.push(
+          createCornerPoint({
+            x: outlineVerts[i * 2],
+            y: outlineVerts[i * 2 + 1],
+          })
+        );
+      }
+      resultContours.push(outerPoints);
+      if (innerPoints.length >= 3) {
+        resultContours.push(innerPoints);
+      }
+    } else {
+      // Open paths: single combined polygon is correct (ribbon shape)
+      const points: PathPoint[] = [];
+      for (let i = 0; i < outlineVerts.length; i += 2) {
+        points.push(
+          createCornerPoint({
+            x: outlineVerts[i],
+            y: outlineVerts[i + 1],
+          })
+        );
+      }
+      resultContours.push(points);
     }
-    resultContours.push(points);
   }
 
   if (resultContours.length === 0) return null;
