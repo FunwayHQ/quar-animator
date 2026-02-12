@@ -599,7 +599,25 @@ export class SelectionTool extends BaseTool {
         break;
       }
       case 'path': {
-        localBounds = getPathBounds(node.points, node.closed);
+        const primaryBounds = getPathBounds(node.points, node.closed);
+        if (primaryBounds && node.subpaths && node.subpaths.length > 0) {
+          let minX = primaryBounds.x,
+            maxX = primaryBounds.x + primaryBounds.width;
+          let minY = primaryBounds.y,
+            maxY = primaryBounds.y + primaryBounds.height;
+          for (const sp of node.subpaths) {
+            const spB = getPathBounds(sp, true);
+            if (spB) {
+              minX = Math.min(minX, spB.x);
+              maxX = Math.max(maxX, spB.x + spB.width);
+              minY = Math.min(minY, spB.y);
+              maxY = Math.max(maxY, spB.y + spB.height);
+            }
+          }
+          localBounds = { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
+        } else {
+          localBounds = primaryBounds;
+        }
         break;
       }
       case 'text': {
