@@ -327,11 +327,24 @@ export class DirectSelectionTool extends BaseTool {
       const handleType = this.dragHandle.type === 'handle-out' ? 'out' : 'in';
 
       const newAll = [...allPts];
-      newAll[this.dragHandle.pointIndex] = updateHandleWithSymmetry(
-        point,
-        handleType,
-        localHandleOffset
-      );
+      // Ctrl+drag: break symmetry, move only the dragged handle
+      if (event.ctrlKey) {
+        const updated = { ...point };
+        if (handleType === 'out') {
+          updated.handleOut = localHandleOffset;
+        } else {
+          updated.handleIn = localHandleOffset;
+        }
+        // Convert to corner point since handles are now independent
+        updated.type = 'corner';
+        newAll[this.dragHandle.pointIndex] = updated;
+      } else {
+        newAll[this.dragHandle.pointIndex] = updateHandleWithSymmetry(
+          point,
+          handleType,
+          localHandleOffset
+        );
+      }
       const split = setAllPoints(node, newAll);
       this.context.sceneGraph.updateNode(this.dragHandle.nodeId, {
         points: split.points,
