@@ -917,9 +917,9 @@ describe('ShapeRenderer', () => {
       vi.clearAllMocks();
       shapeRenderer.render(sceneGraph, vpMatrix);
 
-      // Stroke gradient should use gradient program (uniform1i)
+      // Stroke gradient should use gradient program (uniform1i) with triangle strip
       expect(gl.uniform1i).toHaveBeenCalled();
-      expect(gl.drawElements).toHaveBeenCalled();
+      expect(gl.drawArrays).toHaveBeenCalled();
     });
 
     it('should render gradient fill for polygon', () => {

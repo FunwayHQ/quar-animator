@@ -1674,7 +1674,7 @@ export function PropertiesPanel() {
                               }
                               fm.loadGoogleFont(family, textNode.fontWeight)
                                 .then(() => {
-                                  pushUndo();
+                                  pushUndo(sceneGraph);
                                   sceneGraph.updateNode(nodeId, { fontFamily: family });
                                   if (autoKeyframe)
                                     addKeyframeAtFrame(nodeId, 'fontFamily', currentFrame, family);
@@ -1684,7 +1684,7 @@ export function PropertiesPanel() {
                                 });
                               return;
                             }
-                            pushUndo();
+                            pushUndo(sceneGraph);
                             sceneGraph.updateNode(nodeId, { fontFamily: family });
                             if (autoKeyframe)
                               addKeyframeAtFrame(nodeId, 'fontFamily', currentFrame, family);
@@ -1729,7 +1729,7 @@ export function PropertiesPanel() {
                             onChange={(e) => {
                               const val = parseInt(e.target.value);
                               if (!isNaN(val) && val > 0) {
-                                pushUndo();
+                                pushUndo(sceneGraph);
                                 sceneGraph.updateNode(nodeId, { fontSize: val });
                                 if (autoKeyframe)
                                   addKeyframeAtFrame(nodeId, 'fontSize', currentFrame, val);
@@ -1769,7 +1769,7 @@ export function PropertiesPanel() {
                               }
                               fm.loadGoogleFont(family, w)
                                 .then(() => {
-                                  pushUndo();
+                                  pushUndo(sceneGraph);
                                   sceneGraph.updateNode(nodeId, { fontWeight: w });
                                   if (autoKeyframe)
                                     addKeyframeAtFrame(nodeId, 'fontWeight', currentFrame, w);
@@ -1779,7 +1779,7 @@ export function PropertiesPanel() {
                                 });
                               return;
                             }
-                            pushUndo();
+                            pushUndo(sceneGraph);
                             sceneGraph.updateNode(nodeId, { fontWeight: w });
                             if (autoKeyframe)
                               addKeyframeAtFrame(nodeId, 'fontWeight', currentFrame, w);
@@ -1817,7 +1817,7 @@ export function PropertiesPanel() {
                                   : 'transparent',
                             }}
                             onClick={() => {
-                              pushUndo();
+                              pushUndo(sceneGraph);
                               sceneGraph.updateNode(nodeId, { textAlign: align });
                             }}
                           >
@@ -1857,7 +1857,7 @@ export function PropertiesPanel() {
                             onChange={(e) => {
                               const val = parseFloat(e.target.value);
                               if (!isNaN(val) && val > 0) {
-                                pushUndo();
+                                pushUndo(sceneGraph);
                                 sceneGraph.updateNode(nodeId, { lineHeight: val });
                                 if (autoKeyframe)
                                   addKeyframeAtFrame(nodeId, 'lineHeight', currentFrame, val);
@@ -1902,7 +1902,7 @@ export function PropertiesPanel() {
                             onChange={(e) => {
                               const val = parseFloat(e.target.value);
                               if (!isNaN(val)) {
-                                pushUndo();
+                                pushUndo(sceneGraph);
                                 sceneGraph.updateNode(nodeId, { letterSpacing: val });
                                 if (autoKeyframe)
                                   addKeyframeAtFrame(nodeId, 'letterSpacing', currentFrame, val);

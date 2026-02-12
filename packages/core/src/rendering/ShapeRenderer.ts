@@ -1739,13 +1739,11 @@ export class ShapeRenderer {
             if (outline.length / 2 < 3) continue;
 
             if (stroke.gradient) {
-              const strokeIndices = earcut(outline);
-              if (strokeIndices.length === 0) continue;
-              this.renderFillGradient(
+              this.renderStrokeStripGradient(
                 outline,
-                Array.from(strokeIndices),
                 stroke.gradient,
-                stroke.opacity * nodeOpacity
+                stroke.opacity * nodeOpacity,
+                true
               );
             } else {
               const color = this.getStrokeColor(stroke, nodeOpacity);
@@ -1984,15 +1982,14 @@ export class ShapeRenderer {
     );
     if (!cached) return;
 
-    const { outline: outlineVertices, indices: strokeIndices } = cached;
+    const { outline: outlineVertices } = cached;
 
-    // Use gradient shader for stroke gradient (still uses earcut indices)
     if (stroke.gradient) {
-      this.renderFillGradient(
+      this.renderStrokeStripGradient(
         outlineVertices,
-        strokeIndices,
         stroke.gradient,
-        stroke.opacity * nodeOpacity
+        stroke.opacity * nodeOpacity,
+        closed
       );
       return;
     }
@@ -2052,6 +2049,41 @@ export class ShapeRenderer {
     gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
     gl.bufferSubData(gl.ARRAY_BUFFER, 0, strip);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, strip.length / 2);
+  }
+
+  /**
+   * Render stroke as a triangle strip with gradient coloring.
+   * Uses the same strip generation as solid strokes but renders with the gradient shader.
+   */
+  private renderStrokeStripGradient(
+    outline: Float32Array,
+    gradient: Gradient,
+    opacity: number,
+    closed: boolean
+  ): void {
+    if (!this.gradientProgram) return;
+    const strip = this.outlineToTriangleStrip(outline, closed);
+    if (!strip) return;
+
+    const gl = this.renderer.context;
+    this.renderer.useProgram(this.gradientProgram);
+    try {
+      if (this.currentModelMatrix) {
+        gl.uniformMatrix3fv(
+          this.gradientProgram.uniforms.u_model ?? null,
+          false,
+          this.currentModelMatrix
+        );
+      }
+      this.setGradientUniforms(gradient, computeBounds(outline), opacity);
+      gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
+      gl.bufferSubData(gl.ARRAY_BUFFER, 0, strip);
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, strip.length / 2);
+    } finally {
+      if (this.program) {
+        this.renderer.useProgram(this.program);
+      }
+    }
   }
 
   // --------------------------------------------------------------------------
