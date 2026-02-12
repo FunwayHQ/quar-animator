@@ -254,8 +254,34 @@ export function Canvas() {
 
   // Selection bounds for display: un-rotated bounds + rotation angle for single selection,
   // AABB + rotation 0 for multi-selection.
+  // For skinned nodes, use deformed vertex bounds instead of the node's own transform.
   const selectionDisplay = useMemo(() => {
     if (!sceneGraphRef.current || selectedNodeIds.size === 0) return null;
+
+    // For a single skinned node, compute bounds from deformed vertices
+    if (selectedNodeIds.size === 1 && shapeRendererRef.current) {
+      const nodeId = [...selectedNodeIds][0]!;
+      const node = sceneGraphRef.current.getNode(nodeId);
+      if (node && (node as any).skinData) {
+        const deformedRect = shapeRendererRef.current.getDeformedBounds(
+          node,
+          sceneGraphRef.current
+        );
+        if (deformedRect) {
+          return {
+            bounds: {
+              rect: deformedRect,
+              center: {
+                x: deformedRect.x + deformedRect.width / 2,
+                y: deformedRect.y + deformedRect.height / 2,
+              },
+            },
+            rotation: 0,
+          };
+        }
+      }
+    }
+
     return selectionManagerRef.current.getSelectionBoundsForDisplay(
       selectedNodeIds,
       sceneGraphRef.current
@@ -1089,7 +1115,13 @@ export function Canvas() {
             items.push({
               id: 'bind-to-bones',
               label: 'Bind to Bones',
-              onClick: () => bindMeshToBones(sceneGraph, selNode.id, boneIds),
+              onClick: () => {
+                // Pass actual tessellated vertices from ShapeRenderer so that
+                // skinData.vertexCount matches the real geometry cache entry
+                const tessVerts =
+                  shapeRendererRef.current?.getTessellatedVertices(selNode.id) ?? undefined;
+                bindMeshToBones(sceneGraph, selNode.id, boneIds, tessVerts);
+              },
             });
           }
 

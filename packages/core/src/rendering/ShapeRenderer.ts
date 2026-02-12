@@ -2531,15 +2531,45 @@ export class ShapeRenderer {
     this.currentModelMatrix = identityMatrix;
     gl.uniformMatrix3fv(this.program.uniforms.u_model ?? null, false, identityMatrix);
 
-    this.renderFillsAndStrokes(
-      node.id,
-      deformed,
-      fillIndices,
-      fills,
-      strokes,
-      closed,
-      this.currentEffectiveOpacity
-    );
+    // Render fills normally — fill indices from bind-pose tessellation are still valid
+    for (const fill of fills) {
+      if (fill.visible && fill.type !== 'none') {
+        this.renderFill(deformed, fillIndices, fill, this.currentEffectiveOpacity);
+      }
+    }
+
+    // Render strokes by generating outline fresh from deformed vertices each frame.
+    // We CANNOT use renderStroke() here because it delegates to getCachedStrokeOutline()
+    // which caches by stroke properties only (not vertex positions), returning stale
+    // bind-pose outlines for deformed vertices.
+    const numDeformedVerts = deformed.length / 2;
+    if (numDeformedVerts >= 2) {
+      for (const stroke of strokes) {
+        if (!stroke.visible || stroke.width <= 0) continue;
+        const align = stroke.align ?? 'center';
+        const outlineVertices = generateStrokeOutlineVertices(
+          deformed,
+          numDeformedVerts,
+          stroke.width,
+          closed,
+          align,
+          stroke.widthProfile as number[] | undefined
+        );
+        if (outlineVertices.length / 2 < 3) continue;
+
+        if (stroke.gradient) {
+          this.renderStrokeStripGradient(
+            outlineVertices,
+            stroke.gradient,
+            stroke.opacity * this.currentEffectiveOpacity,
+            closed
+          );
+        } else {
+          const color = this.getStrokeColor(stroke, this.currentEffectiveOpacity);
+          this.renderStrokeStrip(outlineVertices, color, closed);
+        }
+      }
+    }
   }
 
   /**
@@ -2550,6 +2580,48 @@ export class ShapeRenderer {
     const cached = this.geometryCache.get(nodeId);
     if (!cached) return null;
     return cached.vertices;
+  }
+
+  /**
+   * Get the axis-aligned bounding box of a skinned node's deformed vertices in world space.
+   * Returns {x, y, width, height} or null if the node has no skinData or no cached geometry.
+   */
+  getDeformedBounds(
+    node: Node,
+    sceneGraph: SceneGraph
+  ): { x: number; y: number; width: number; height: number } | null {
+    const skinData = (node as any).skinData as SkinData | undefined;
+    if (!skinData) return null;
+
+    const cached = this.geometryCache.get(node.id);
+    if (!cached) return null;
+
+    // Collect current bone world transforms
+    const boneWorldTransforms: Record<string, AffineTransform2D> = {};
+    for (const boneId of Object.keys(skinData.inverseBindMatrices)) {
+      const boneNode = sceneGraph.getNode(boneId);
+      if (!boneNode) continue;
+      const bw = sceneGraph.getWorldTransform(boneId);
+      boneWorldTransforms[boneId] = { a: bw.a, b: bw.b, c: bw.c, d: bw.d, tx: bw.tx, ty: bw.ty };
+    }
+
+    const deformed = deformVertices(cached.vertices, skinData, boneWorldTransforms);
+    if (deformed.length < 2) return null;
+
+    let minX = deformed[0];
+    let minY = deformed[1];
+    let maxX = deformed[0];
+    let maxY = deformed[1];
+    for (let i = 2; i < deformed.length; i += 2) {
+      const x = deformed[i];
+      const y = deformed[i + 1];
+      if (x < minX) minX = x;
+      if (y < minY) minY = y;
+      if (x > maxX) maxX = x;
+      if (y > maxY) maxY = y;
+    }
+
+    return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
   }
 
   /**

@@ -186,7 +186,12 @@ export interface EditorStore {
   setWeightPaintBrushSize: (size: number) => void;
   weightPaintBrushStrength: number;
   setWeightPaintBrushStrength: (strength: number) => void;
-  bindMeshToBones: (sceneGraph: SceneGraphLike, nodeId: string, boneIds: string[]) => void;
+  bindMeshToBones: (
+    sceneGraph: SceneGraphLike,
+    nodeId: string,
+    boneIds: string[],
+    tessellatedVertices?: Float32Array
+  ) => void;
   unbindMesh: (sceneGraph: SceneGraphLike, nodeId: string) => void;
 
   // Aspect ratio lock
@@ -733,18 +738,31 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   weightPaintBrushStrength: 0.3,
   setWeightPaintBrushStrength: (strength: number) =>
     set({ weightPaintBrushStrength: Math.max(0.01, Math.min(1.0, strength)) }),
-  bindMeshToBones: (sceneGraph: SceneGraphLike, nodeId: string, boneIds: string[]) => {
+  bindMeshToBones: (
+    sceneGraph: SceneGraphLike,
+    nodeId: string,
+    boneIds: string[],
+    tessellatedVertices?: Float32Array
+  ) => {
     const node = sceneGraph.getNode(nodeId);
     if (!node) return;
     if (boneIds.length === 0) return;
     get().pushUndo(sceneGraph);
 
-    // Get tessellation vertex count — approximate from node geometry
-    let vertexCount = 4; // default for rectangles
-    if (node.type === 'ellipse') vertexCount = 64;
-    else if (node.type === 'polygon')
-      vertexCount = (node as any).sides * (((node as any).innerRadius ?? 0) > 0 ? 2 : 1);
-    else if (node.type === 'path') vertexCount = (node as any).points?.length ?? 4;
+    // Use actual tessellated vertex count if available (from ShapeRenderer geometry cache).
+    // This is critical for path nodes where tessellation subdivides bezier curves into
+    // many more vertices than the control point count.
+    let vertexCount: number;
+    if (tessellatedVertices) {
+      vertexCount = tessellatedVertices.length / 2;
+    } else {
+      // Fallback: approximate from node geometry
+      vertexCount = 4; // default for rectangles
+      if (node.type === 'ellipse') vertexCount = 64;
+      else if (node.type === 'polygon')
+        vertexCount = (node as any).sides * (((node as any).innerRadius ?? 0) > 0 ? 2 : 1);
+      else if (node.type === 'path') vertexCount = (node as any).points?.length ?? 4;
+    }
 
     const skin = createSkinBinding(nodeId, boneIds, vertexCount, sceneGraph);
     if (!skin) return;
@@ -769,15 +787,27 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       }
     }
 
-    // Generate approximate vertex world positions for auto-weighting
-    const meshWorld = sceneGraph.getWorldTransform(nodeId);
-    const positions = new Float32Array(vertexCount * 2);
-    // Distribute vertices roughly across the node's bounding area
-    for (let i = 0; i < vertexCount; i++) {
-      const t = vertexCount > 1 ? i / (vertexCount - 1) : 0.5;
-      // Simple linear distribution along the mesh
-      positions[i * 2] = meshWorld.tx + (t - 0.5) * 100;
-      positions[i * 2 + 1] = meshWorld.ty;
+    // Use actual tessellated vertex positions (in local space, need world transform)
+    // or generate approximate positions for auto-weighting
+    let positions: Float32Array;
+    if (tessellatedVertices) {
+      // Transform tessellated vertices (local space) to world space for auto-weighting
+      const meshWorld = sceneGraph.getWorldTransform(nodeId);
+      positions = new Float32Array(tessellatedVertices.length);
+      for (let i = 0; i < vertexCount; i++) {
+        const lx = tessellatedVertices[i * 2];
+        const ly = tessellatedVertices[i * 2 + 1];
+        positions[i * 2] = meshWorld.a * lx + meshWorld.c * ly + meshWorld.tx;
+        positions[i * 2 + 1] = meshWorld.b * lx + meshWorld.d * ly + meshWorld.ty;
+      }
+    } else {
+      const meshWorld = sceneGraph.getWorldTransform(nodeId);
+      positions = new Float32Array(vertexCount * 2);
+      for (let i = 0; i < vertexCount; i++) {
+        const t = vertexCount > 1 ? i / (vertexCount - 1) : 0.5;
+        positions[i * 2] = meshWorld.tx + (t - 0.5) * 100;
+        positions[i * 2 + 1] = meshWorld.ty;
+      }
     }
 
     const weighted = computeAutoWeights(skin, positions, allStates);
