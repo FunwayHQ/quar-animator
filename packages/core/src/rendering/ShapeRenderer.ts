@@ -19,6 +19,7 @@ import type {
   Color,
   Gradient,
   BooleanOp,
+  SkinData,
 } from '@quar/types';
 import { WebGLRenderer, type ShaderProgram } from './WebGLRenderer';
 import { EffectRenderer } from './EffectRenderer';
@@ -43,6 +44,8 @@ import {
 import earcut from 'earcut';
 import { getFontManager } from '../font/FontManager';
 import { textToSubpaths } from '../font/glyphConverter';
+import { deformVertices } from '@quar/rigging';
+import type { AffineTransform2D } from '@quar/rigging';
 
 // ============================================================================
 // Shaders
@@ -262,6 +265,38 @@ void main() {
 }
 `;
 
+// Weight visualization shaders — vertex color heat map for weight painting
+const WEIGHT_VERTEX_SHADER = `#version 300 es
+precision highp float;
+
+in vec2 a_position;
+in vec3 a_color;
+
+uniform mat3 u_viewProjection;
+uniform mat3 u_model;
+
+out vec3 v_color;
+
+void main() {
+  v_color = a_color;
+  vec3 worldPos = u_model * vec3(a_position, 1.0);
+  vec3 clipPos = u_viewProjection * worldPos;
+  gl_Position = vec4(clipPos.xy, 0.0, 1.0);
+}
+`;
+
+const WEIGHT_FRAGMENT_SHADER = `#version 300 es
+precision highp float;
+
+in vec3 v_color;
+out vec4 fragColor;
+uniform float u_alpha;
+
+void main() {
+  fragColor = vec4(v_color, u_alpha);
+}
+`;
+
 // ============================================================================
 // Configuration
 // ============================================================================
@@ -469,6 +504,10 @@ export class ShapeRenderer {
   private program: ShaderProgram | null = null;
   private gradientProgram: ShaderProgram | null = null;
   private textureProgram: ShaderProgram | null = null;
+  private weightProgram: ShaderProgram | null = null;
+  private weightVAO: WebGLVertexArrayObject | null = null;
+  private weightVertexBuffer: WebGLBuffer | null = null;
+  private weightColorBuffer: WebGLBuffer | null = null;
   private vao: WebGLVertexArrayObject | null = null;
   private vertexBuffer: WebGLBuffer | null = null;
   private indexBuffer: WebGLBuffer | null = null;
@@ -505,6 +544,7 @@ export class ShapeRenderer {
 
     this.initializeShaders();
     this.initializeBuffers();
+    this.initializeWeightBuffers();
     this.initializeTextureBuffers();
     this.effectRenderer = new EffectRenderer(renderer);
   }
@@ -542,6 +582,14 @@ export class ShapeRenderer {
         ...Array.from({ length: MAX_GRADIENT_STOPS }, (_, i) => `u_stops[${i}]`),
         ...Array.from({ length: MAX_GRADIENT_STOPS }, (_, i) => `u_offsets[${i}]`),
       ]
+    );
+
+    this.weightProgram = this.renderer.createShaderProgram(
+      'shape-weight',
+      WEIGHT_VERTEX_SHADER,
+      WEIGHT_FRAGMENT_SHADER,
+      ['a_position', 'a_color'],
+      ['u_viewProjection', 'u_model', 'u_alpha']
     );
 
     this.textureProgram = this.renderer.createShaderProgram(
@@ -588,6 +636,28 @@ export class ShapeRenderer {
       gl.enableVertexAttribArray(this.program.attributes.a_position!);
       gl.vertexAttribPointer(this.program.attributes.a_position!, 2, gl.FLOAT, false, 0, 0);
     }
+
+    this.renderer.bindVAO(null);
+  }
+
+  private initializeWeightBuffers(): void {
+    const gl = this.renderer.context;
+    if (!this.weightProgram) return;
+
+    this.weightVAO = this.renderer.createVAO();
+    this.renderer.bindVAO(this.weightVAO);
+
+    this.weightVertexBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.weightVertexBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, MAX_VERTICES * 2 * 4, gl.DYNAMIC_DRAW);
+    gl.enableVertexAttribArray(this.weightProgram.attributes.a_position!);
+    gl.vertexAttribPointer(this.weightProgram.attributes.a_position!, 2, gl.FLOAT, false, 0, 0);
+
+    this.weightColorBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.weightColorBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, MAX_VERTICES * 3 * 4, gl.DYNAMIC_DRAW);
+    gl.enableVertexAttribArray(this.weightProgram.attributes.a_color!);
+    gl.vertexAttribPointer(this.weightProgram.attributes.a_color!, 3, gl.FLOAT, false, 0, 0);
 
     this.renderer.bindVAO(null);
   }
@@ -891,6 +961,19 @@ export class ShapeRenderer {
       }
 
       const renderShape = () => {
+        // Check for skinned mesh — deform vertices via CPU skinning
+        if (
+          node.type !== 'bone' &&
+          node.type !== 'group' &&
+          node.type !== 'text' &&
+          node.type !== 'image' &&
+          'skinData' in node &&
+          (node as any).skinData
+        ) {
+          this.renderSkinnedNode(node, sceneGraph);
+          return;
+        }
+
         switch (node.type) {
           case 'rectangle':
             this.renderRectangle(node, worldTransform);
@@ -2398,6 +2481,169 @@ export class ShapeRenderer {
     gl.drawArrays(gl.TRIANGLES, 0, vertices.length / 2);
   }
 
+  // --------------------------------------------------------------------------
+  // Skinned Mesh Rendering
+  // --------------------------------------------------------------------------
+
+  /**
+   * Render a skinned node by deforming bind-pose vertices through CPU skinning.
+   * Deformed vertices are already in world space, so we use identity model matrix.
+   */
+  private renderSkinnedNode(node: Node, sceneGraph: SceneGraph): void {
+    if (!this.program) return;
+
+    const skinData = (node as any).skinData as SkinData;
+    if (!skinData) return;
+
+    const gl = this.renderer.context;
+
+    // Get bind-pose tessellation
+    const cached = this.geometryCache.get(node.id);
+    if (!cached) {
+      // Fall through to normal rendering if no cached tessellation yet
+      // (first frame may not have cache — the normal render path populates it)
+      return;
+    }
+
+    const bindPoseVertices = cached.vertices;
+    const fillIndices = cached.fillIndices;
+
+    // Collect current bone world transforms
+    const boneWorldTransforms: Record<string, AffineTransform2D> = {};
+    for (const boneId of Object.keys(skinData.inverseBindMatrices)) {
+      const boneNode = sceneGraph.getNode(boneId);
+      if (!boneNode) continue;
+      const bw = sceneGraph.getWorldTransform(boneId);
+      boneWorldTransforms[boneId] = { a: bw.a, b: bw.b, c: bw.c, d: bw.d, tx: bw.tx, ty: bw.ty };
+    }
+
+    // Deform vertices — result is in world space
+    const deformed = deformVertices(bindPoseVertices, skinData, boneWorldTransforms);
+
+    // Use identity model matrix since vertices are already in world space
+    const identityMatrix = mat3.toFloat32Array(mat3.create());
+    this.currentModelMatrix = identityMatrix;
+    gl.uniformMatrix3fv(this.program.uniforms.u_model ?? null, false, identityMatrix);
+
+    // Get fills/strokes from node
+    const fills: Fill[] = 'fills' in node ? (node as any).fills : [];
+    const strokes: Stroke[] = 'strokes' in node ? (node as any).strokes : [];
+    const closed = 'closed' in node ? (node as any).closed : true;
+
+    this.renderFillsAndStrokes(
+      node.id,
+      deformed,
+      fillIndices,
+      fills,
+      strokes,
+      closed,
+      this.currentEffectiveOpacity
+    );
+  }
+
+  /**
+   * Render weight visualization overlay — heat map showing bone influence per vertex.
+   * Call this after normal rendering when weight paint tool is active.
+   */
+  renderWeightVisualization(
+    node: Node,
+    activeBoneId: string,
+    viewProjectionMatrix: Matrix3,
+    sceneGraph: SceneGraph
+  ): void {
+    if (
+      !this.weightProgram ||
+      !this.weightVAO ||
+      !this.weightVertexBuffer ||
+      !this.weightColorBuffer
+    )
+      return;
+
+    const skinData = (node as any).skinData as SkinData;
+    if (!skinData) return;
+
+    const gl = this.renderer.context;
+
+    // Get tessellation
+    const cached = this.geometryCache.get(node.id);
+    if (!cached) return;
+
+    const vertices = cached.vertices;
+    const fillIndices = cached.fillIndices;
+    const numVertices = vertices.length / 2;
+    if (numVertices === 0 || fillIndices.length === 0) return;
+
+    // Build vertex colors based on weights for activeBoneId
+    const colors = new Float32Array(numVertices * 3);
+    for (let i = 0; i < numVertices; i++) {
+      const entry = i < skinData.vertices.length ? skinData.vertices[i] : null;
+      const weight = entry
+        ? (entry.influences.find((inf) => inf.boneId === activeBoneId)?.weight ?? 0)
+        : 0;
+
+      // Heat map: 0=blue, 0.5=green, 1.0=red
+      let r: number, g: number, b: number;
+      if (weight <= 0.5) {
+        const t = weight * 2;
+        r = 0;
+        g = t;
+        b = 1 - t;
+      } else {
+        const t = (weight - 0.5) * 2;
+        r = t;
+        g = 1 - t;
+        b = 0;
+      }
+      colors[i * 3] = r;
+      colors[i * 3 + 1] = g;
+      colors[i * 3 + 2] = b;
+    }
+
+    // Get world-space vertex positions (may be deformed)
+    let worldVertices: Float32Array;
+    if (Object.keys(skinData.inverseBindMatrices).length > 0) {
+      const boneWorldTransforms: Record<string, AffineTransform2D> = {};
+      for (const boneId of Object.keys(skinData.inverseBindMatrices)) {
+        const bw = sceneGraph.getWorldTransform(boneId);
+        boneWorldTransforms[boneId] = { a: bw.a, b: bw.b, c: bw.c, d: bw.d, tx: bw.tx, ty: bw.ty };
+      }
+      worldVertices = deformVertices(vertices, skinData, boneWorldTransforms);
+    } else {
+      worldVertices = vertices;
+    }
+
+    // Setup weight shader
+    this.renderer.useProgram(this.weightProgram);
+    this.renderer.bindVAO(this.weightVAO);
+
+    const vpArray = mat3.toFloat32Array(viewProjectionMatrix);
+    gl.uniformMatrix3fv(this.weightProgram.uniforms.u_viewProjection ?? null, false, vpArray);
+
+    const identityMatrix = mat3.toFloat32Array(mat3.create());
+    gl.uniformMatrix3fv(this.weightProgram.uniforms.u_model ?? null, false, identityMatrix);
+    gl.uniform1f(this.weightProgram.uniforms.u_alpha ?? null, 0.6);
+
+    // Upload positions
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.weightVertexBuffer);
+    gl.bufferSubData(gl.ARRAY_BUFFER, 0, worldVertices);
+
+    // Upload colors
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.weightColorBuffer);
+    gl.bufferSubData(gl.ARRAY_BUFFER, 0, colors);
+
+    // Draw using fill indices
+    if (fillIndices.length > 0) {
+      const indexData = new Uint16Array(fillIndices);
+      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indexBuffer);
+      gl.bufferSubData(gl.ELEMENT_ARRAY_BUFFER, 0, indexData);
+      gl.drawElements(gl.TRIANGLES, fillIndices.length, gl.UNSIGNED_SHORT, 0);
+    }
+
+    // Restore normal shader state
+    this.renderer.useProgram(this.program!);
+    this.renderer.bindVAO(this.vao);
+  }
+
   /**
    * Render a single node as a ghost frame with tint color and alpha override.
    * Used by OnionSkinRenderer for onion skinning.
@@ -3044,13 +3290,29 @@ export class ShapeRenderer {
     this.textureCache.clear();
     this.pendingImages.clear();
 
+    // Weight visualization resources
+    if (this.weightVertexBuffer) {
+      gl.deleteBuffer(this.weightVertexBuffer);
+      this.weightVertexBuffer = null;
+    }
+    if (this.weightColorBuffer) {
+      gl.deleteBuffer(this.weightColorBuffer);
+      this.weightColorBuffer = null;
+    }
+    if (this.weightVAO) {
+      gl.deleteVertexArray(this.weightVAO);
+      this.weightVAO = null;
+    }
+
     // Clean up shader programs from WebGLRenderer
     this.renderer.deleteProgram('shape');
     this.renderer.deleteProgram('shape-gradient');
     this.renderer.deleteProgram('shape-texture');
+    this.renderer.deleteProgram('shape-weight');
     this.program = null;
     this.gradientProgram = null;
     this.textureProgram = null;
+    this.weightProgram = null;
 
     this.geometryCache.clear();
 

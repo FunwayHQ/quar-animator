@@ -220,6 +220,7 @@ export interface RectangleNode extends BaseNode {
   cornerRadius: [number, number, number, number];
   fills: Fill[];
   strokes: Stroke[];
+  skinData?: SkinData;
 }
 
 export interface EllipseNode extends BaseNode {
@@ -228,6 +229,7 @@ export interface EllipseNode extends BaseNode {
   radiusY: number;
   fills: Fill[];
   strokes: Stroke[];
+  skinData?: SkinData;
 }
 
 export interface PolygonNode extends BaseNode {
@@ -238,6 +240,7 @@ export interface PolygonNode extends BaseNode {
   cornerRadius?: number; // Uniform corner rounding for all vertices
   fills: Fill[];
   strokes: Stroke[];
+  skinData?: SkinData;
 }
 
 export interface PathPoint {
@@ -257,6 +260,7 @@ export interface PathNode extends BaseNode {
   fills: Fill[];
   strokes: Stroke[];
   brushData?: BrushData; // Present for brush strokes — stores spine + widths for profile reshaping
+  skinData?: SkinData;
 }
 
 export interface TextNode extends BaseNode {
@@ -306,6 +310,33 @@ export interface BoneNode extends BaseNode {
   angleMax?: number; // FK rotation constraint (degrees)
 }
 
+// ============================================================================
+// Skin Binding Types (Mesh Deformation)
+// ============================================================================
+
+/** Per-vertex bone influence (bone ID + weight) */
+export interface VertexBoneWeight {
+  boneId: string;
+  weight: number; // 0..1
+}
+
+/** Per-vertex skin entry: up to 4 bone influences */
+export interface VertexSkinEntry {
+  influences: VertexBoneWeight[]; // max 4, sorted by weight descending
+}
+
+/** Skin binding data stored on shape nodes */
+export interface SkinData {
+  /** Per-vertex weights, indexed by tessellated vertex index */
+  vertices: VertexSkinEntry[];
+  /** Inverse bind matrices per bone (bone ID → 6-element [a,b,c,d,tx,ty]) */
+  inverseBindMatrices: Record<string, number[]>;
+  /** World matrix of mesh at bind time (6 elements) */
+  meshBindMatrix: number[];
+  /** Number of vertices at bind time (for validation) */
+  vertexCount: number;
+}
+
 export type Node =
   | GroupNode
   | RectangleNode
@@ -315,6 +346,9 @@ export type Node =
   | TextNode
   | ImageNode
   | BoneNode;
+
+/** Node types that can have skin bindings */
+export type SkinnableNode = RectangleNode | EllipseNode | PolygonNode | PathNode;
 
 // ============================================================================
 // Animation Types

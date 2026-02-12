@@ -163,9 +163,9 @@ describe('ShapeRenderer', () => {
     });
 
     it('should compile vertex and fragment shaders', () => {
-      // 2 shaders per program (vertex + fragment) x 7 programs (flat + gradient + texture + blur + blend + shadow + composite)
-      expect(gl.shaderSource).toHaveBeenCalledTimes(14);
-      expect(gl.compileShader).toHaveBeenCalledTimes(14);
+      // 2 shaders per program (vertex + fragment) x 8 programs (flat + gradient + texture + blur + blend + shadow + composite + weight)
+      expect(gl.shaderSource).toHaveBeenCalledTimes(16);
+      expect(gl.compileShader).toHaveBeenCalledTimes(16);
     });
 
     it('should link shader program', () => {

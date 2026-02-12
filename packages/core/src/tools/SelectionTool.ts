@@ -516,6 +516,8 @@ export class SelectionTool extends BaseTool {
       while (current.parent !== null) {
         const parent = this.context.sceneGraph.getNode(current.parent);
         if (!parent) break;
+        // Bones are NOT groups — don't walk through bone parents
+        if (parent.type === 'bone') break;
         current = parent;
       }
       return current;

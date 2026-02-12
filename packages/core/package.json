@@ -15,6 +15,7 @@
     "clean": "rimraf dist"
   },
   "dependencies": {
+    "@quar/rigging": "workspace:*",
     "@quar/types": "workspace:*",
     "earcut": "^3.0.2",
     "opentype.js": "^1.3.4",

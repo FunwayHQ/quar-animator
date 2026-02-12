@@ -34,6 +34,8 @@ import {
   getShapeOutlinePoints,
 } from '@quar/core';
 import type { OnionSkinSettings, BooleanOp } from '@quar/core';
+import { createSkinBinding, computeAutoWeights, computeFKChain } from '@quar/rigging';
+import type { FKBoneState } from '@quar/rigging';
 import { toast } from '../components/common/Toast';
 
 // ============================================================================
@@ -176,6 +178,16 @@ export interface EditorStore {
     sceneGraph: SceneGraphLike,
     name: string
   ) => BrushProfile | null;
+
+  // Weight painting
+  weightPaintBoneId: string | null;
+  setWeightPaintBoneId: (id: string | null) => void;
+  weightPaintBrushSize: number;
+  setWeightPaintBrushSize: (size: number) => void;
+  weightPaintBrushStrength: number;
+  setWeightPaintBrushStrength: (strength: number) => void;
+  bindMeshToBones: (sceneGraph: SceneGraphLike, nodeId: string, boneIds: string[]) => void;
+  unbindMesh: (sceneGraph: SceneGraphLike, nodeId: string) => void;
 
   // Aspect ratio lock
   aspectRatioLocked: boolean;
@@ -710,6 +722,75 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
     set((s) => ({ brushProfiles: [...s.brushProfiles, profile] }));
     return profile;
+  },
+
+  // Weight painting
+  weightPaintBoneId: null,
+  setWeightPaintBoneId: (id: string | null) => set({ weightPaintBoneId: id }),
+  weightPaintBrushSize: 30,
+  setWeightPaintBrushSize: (size: number) =>
+    set({ weightPaintBrushSize: Math.max(5, Math.min(200, size)) }),
+  weightPaintBrushStrength: 0.3,
+  setWeightPaintBrushStrength: (strength: number) =>
+    set({ weightPaintBrushStrength: Math.max(0.01, Math.min(1.0, strength)) }),
+  bindMeshToBones: (sceneGraph: SceneGraphLike, nodeId: string, boneIds: string[]) => {
+    const node = sceneGraph.getNode(nodeId);
+    if (!node) return;
+    if (boneIds.length === 0) return;
+    get().pushUndo(sceneGraph);
+
+    // Get tessellation vertex count — approximate from node geometry
+    let vertexCount = 4; // default for rectangles
+    if (node.type === 'ellipse') vertexCount = 64;
+    else if (node.type === 'polygon')
+      vertexCount = (node as any).sides * (((node as any).innerRadius ?? 0) > 0 ? 2 : 1);
+    else if (node.type === 'path') vertexCount = (node as any).points?.length ?? 4;
+
+    const skin = createSkinBinding(nodeId, boneIds, vertexCount, sceneGraph);
+    if (!skin) return;
+
+    // Auto-weight based on bone positions
+    // Compute bone states for all bones
+    const allStates: FKBoneState[] = [];
+    const rootBones = new Set<string>();
+    for (const boneId of boneIds) {
+      // Walk to root bone
+      let rootId = boneId;
+      let boneNode = sceneGraph.getNode(rootId);
+      while (boneNode && boneNode.parent) {
+        const parent = sceneGraph.getNode(boneNode.parent);
+        if (!parent || parent.type !== 'bone') break;
+        rootId = boneNode.parent;
+        boneNode = parent;
+      }
+      if (!rootBones.has(rootId)) {
+        rootBones.add(rootId);
+        allStates.push(...computeFKChain(rootId, sceneGraph));
+      }
+    }
+
+    // Generate approximate vertex world positions for auto-weighting
+    const meshWorld = sceneGraph.getWorldTransform(nodeId);
+    const positions = new Float32Array(vertexCount * 2);
+    // Distribute vertices roughly across the node's bounding area
+    for (let i = 0; i < vertexCount; i++) {
+      const t = vertexCount > 1 ? i / (vertexCount - 1) : 0.5;
+      // Simple linear distribution along the mesh
+      positions[i * 2] = meshWorld.tx + (t - 0.5) * 100;
+      positions[i * 2 + 1] = meshWorld.ty;
+    }
+
+    const weighted = computeAutoWeights(skin, positions, allStates);
+
+    sceneGraph.updateNode(nodeId, { skinData: weighted } as any);
+    set({ isDirty: true });
+  },
+  unbindMesh: (sceneGraph: SceneGraphLike, nodeId: string) => {
+    const node = sceneGraph.getNode(nodeId);
+    if (!node) return;
+    get().pushUndo(sceneGraph);
+    sceneGraph.updateNode(nodeId, { skinData: undefined } as any);
+    set({ isDirty: true });
   },
 
   // Aspect ratio lock
@@ -2000,3 +2081,20 @@ export const useEditingTextNodeId = (): string | null =>
   useEditorStore((state: EditorStore) => state.editingTextNodeId);
 export const useSetEditingTextNodeId = (): ((id: string | null) => void) =>
   useEditorStore((state: EditorStore) => state.setEditingTextNodeId);
+
+// Weight painting selectors
+export const useWeightPaintBoneId = (): string | null =>
+  useEditorStore((state: EditorStore) => state.weightPaintBoneId);
+export const useSetWeightPaintBoneId = (): ((id: string | null) => void) =>
+  useEditorStore((state: EditorStore) => state.setWeightPaintBoneId);
+export const useWeightPaintBrushSize = (): number =>
+  useEditorStore((state: EditorStore) => state.weightPaintBrushSize);
+export const useWeightPaintBrushStrength = (): number =>
+  useEditorStore((state: EditorStore) => state.weightPaintBrushStrength);
+export const useBindMeshToBones = (): ((
+  sceneGraph: SceneGraphLike,
+  nodeId: string,
+  boneIds: string[]
+) => void) => useEditorStore((state: EditorStore) => state.bindMeshToBones);
+export const useUnbindMesh = (): ((sceneGraph: SceneGraphLike, nodeId: string) => void) =>
+  useEditorStore((state: EditorStore) => state.unbindMesh);

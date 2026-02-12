@@ -21,6 +21,7 @@ import { GradientHandleOverlay } from '../canvas/GradientHandleOverlay';
 import { CanvasRuler } from '../canvas/CanvasRuler';
 import { TextEditOverlay } from '../canvas/TextEditOverlay';
 import { BoneOverlay } from '../canvas/BoneOverlay';
+import { WeightPaintOverlay } from '../canvas/WeightPaintOverlay';
 import { ContextMenu } from '../common/ContextMenu';
 import type { ContextMenuEntry } from '../common/ContextMenu';
 import { promptDialog } from '../common/PromptDialog';
@@ -108,6 +109,8 @@ export function Canvas() {
   const createBrushProfileFromSelection = useEditorStore(
     (state) => state.createBrushProfileFromSelection
   );
+  const bindMeshToBones = useEditorStore((state) => state.bindMeshToBones);
+  const unbindMesh = useEditorStore((state) => state.unbindMesh);
 
   // Get shared SceneGraph from context
   const sceneGraph = useSceneGraph();
@@ -1027,6 +1030,55 @@ export function Canvas() {
             },
           ];
         })(),
+        // Rigging context menu items
+        ...((): ContextMenuEntry[] => {
+          const selectedArr = Array.from(selectedNodeIds);
+          if (selectedArr.length !== 1) return [];
+          const selNode = sceneGraph.getNode(selectedArr[0]!);
+          if (!selNode) return [];
+
+          const isShapeNode =
+            selNode.type === 'rectangle' ||
+            selNode.type === 'ellipse' ||
+            selNode.type === 'polygon' ||
+            selNode.type === 'path';
+          if (!isShapeNode) return [];
+
+          const hasSkinData = 'skinData' in selNode && (selNode as any).skinData != null;
+
+          // Find bone nodes in scene
+          const boneIds: string[] = [];
+          sceneGraph.traverse((n) => {
+            if (n.type === 'bone') boneIds.push(n.id);
+          });
+
+          const items: ContextMenuEntry[] = [];
+
+          if (!hasSkinData && boneIds.length > 0) {
+            items.push({
+              id: 'bind-to-bones',
+              label: 'Bind to Bones',
+              onClick: () => bindMeshToBones(sceneGraph, selNode.id, boneIds),
+            });
+          }
+
+          if (hasSkinData) {
+            items.push({
+              id: 'unbind-mesh',
+              label: 'Unbind Mesh',
+              onClick: () => unbindMesh(sceneGraph, selNode.id),
+            });
+            items.push({
+              id: 'weight-paint',
+              label: 'Weight Paint',
+              onClick: () => {
+                useEditorStore.getState().setActiveTool('weight-paint');
+              },
+            });
+          }
+
+          return items.length > 0 ? [{ type: 'separator' }, ...items] : [];
+        })(),
         { type: 'separator' },
         {
           id: 'toggle-visibility',
@@ -1100,6 +1152,8 @@ export function Canvas() {
     convertTextToPath,
     outlineStroke,
     createBrushProfileFromSelection,
+    bindMeshToBones,
+    unbindMesh,
     isDirectSelectionActive,
     directSelectionPoints,
     deleteDirectSelectionPoints,
@@ -1376,6 +1430,13 @@ export function Canvas() {
             sceneGraph={sceneGraph}
           />
         )}
+      {activeTool === 'weight-paint' && cameraRef.current && (
+        <WeightPaintOverlay
+          camera={cameraRef.current}
+          canvasWidth={viewportSize.width}
+          canvasHeight={viewportSize.height}
+        />
+      )}
       {isPenToolDrawing && (
         <PenToolOverlay
           points={penToolPath}

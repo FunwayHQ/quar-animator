@@ -7,3 +7,5 @@ export const RIGGING_VERSION = '0.1.0';
 
 export * from './boneHelpers';
 export * from './fk';
+export * from './skinBinding';
+export * from './cpuSkinning';

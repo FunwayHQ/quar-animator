@@ -167,6 +167,9 @@ importers:
 
   packages/core:
     dependencies:
+      '@quar/rigging':
+        specifier: workspace:*
+        version: link:../rigging
       '@quar/types':
         specifier: workspace:*
         version: link:../types

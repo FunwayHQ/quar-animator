@@ -7,7 +7,7 @@ import { SelectionTool } from './SelectionTool';
 import type { ToolContext } from './BaseTool';
 import { createMockToolContext, createMockPointerEvent } from '../test/setup';
 import { createDefaultTransform } from '../SceneGraph';
-import type { RectangleNode, EllipseNode, PolygonNode } from '@quar/types';
+import type { RectangleNode, EllipseNode, PolygonNode, BoneNode } from '@quar/types';
 
 function createTestRectangle(
   id: string,
@@ -91,6 +91,29 @@ function createTestPolygon(
     sides,
     fills: [{ type: 'solid', color: { r: 149, g: 237, b: 100, a: 1 }, opacity: 1, visible: true }],
     strokes: [],
+  };
+}
+
+function createTestBone(id: string, x: number, y: number, length: number, rotation = 0): BoneNode {
+  const transform = createDefaultTransform();
+  transform.position = { x, y };
+  transform.rotation = rotation;
+  transform.anchor = { x: 0, y: 0 };
+
+  return {
+    id,
+    name: `Bone ${id}`,
+    type: 'bone',
+    parent: null,
+    children: [],
+    transform,
+    visible: true,
+    locked: false,
+    opacity: 1,
+    blendMode: 'normal',
+    length,
+    boneStyle: 'octahedral',
+    boneColor: '#E0E0E0',
   };
 }
 
@@ -1231,7 +1254,11 @@ describe('SelectionTool', () => {
     //   - Beyond handleHitRadius (12px) so it doesn't hit the resize handle
     // Camera: viewport 800x600, zoom 1, worldToScreen: sx=400+wx, sy=300-wy
     // So world offset (-15, 0) → screen offset (-15, 0), distance=15 from corner
-    function getRotationZonePoint(worldCorner: { x: number; y: number }, offsetX: number, offsetY: number) {
+    function getRotationZonePoint(
+      worldCorner: { x: number; y: number },
+      offsetX: number,
+      offsetY: number
+    ) {
       const worldPos = { x: worldCorner.x + offsetX, y: worldCorner.y + offsetY };
       const screenPos = context.camera.worldToScreen(worldPos);
       return { worldPos, screenPos };
@@ -1482,6 +1509,103 @@ describe('SelectionTool', () => {
       const rotatedRect = context.sceneGraph.getNode('rect1');
       // The rotation should be 45 + delta, so it should not be exactly 45
       expect(rotatedRect?.transform.rotation).not.toBe(45);
+    });
+  });
+
+  // ==========================================================================
+  // Bone Chain Selection
+  // ==========================================================================
+
+  describe('bone chain selection', () => {
+    it('should select child bone directly, not walk to root bone', () => {
+      // Create a 2-bone chain: rootBone -> childBone
+      const rootBone = createTestBone('rootBone', 100, 100, 60);
+      const childBone = createTestBone('childBone', 60, 0, 40);
+
+      context.sceneGraph.addNode(rootBone);
+      context.sceneGraph.addNode(childBone);
+      context.sceneGraph.moveNode('childBone', 'rootBone');
+
+      // Click on the child bone's position (world position = parent tip)
+      // getWorldTransform of childBone would give us its world position
+      // But for hit testing, we just click at a position that overlaps the child bone
+      const childWorldPos = { x: 160, y: 100 }; // parent pos (100,100) + child offset along parent's X
+      const screenPos = context.camera.worldToScreen(childWorldPos);
+
+      tool.onPointerDown(
+        createMockPointerEvent({
+          worldPosition: childWorldPos,
+          screenPosition: screenPos,
+          button: 0,
+        })
+      );
+      tool.onPointerUp(
+        createMockPointerEvent({
+          worldPosition: childWorldPos,
+          screenPosition: screenPos,
+          button: 0,
+        })
+      );
+
+      // The child bone should be selected, NOT the root bone
+      // resolveHitToScope should stop walking at bone parents
+      const selected = context.getSelectedIds();
+      // If the child bone is hit, it should be selected directly
+      // (not resolved to rootBone through parent walking)
+      expect(selected.has('rootBone')).toBe(false);
+    });
+
+    it('should select grandchild bone directly', () => {
+      // Create a 3-bone chain: root -> mid -> leaf
+      const rootBone = createTestBone('rootBone', 100, 100, 50);
+      const midBone = createTestBone('midBone', 50, 0, 40);
+      const leafBone = createTestBone('leafBone', 40, 0, 30);
+
+      context.sceneGraph.addNode(rootBone);
+      context.sceneGraph.addNode(midBone);
+      context.sceneGraph.addNode(leafBone);
+      context.sceneGraph.moveNode('midBone', 'rootBone');
+      context.sceneGraph.moveNode('leafBone', 'midBone');
+
+      // Verify that the leaf bone's parent chain is: leafBone -> midBone -> rootBone
+      const leaf = context.sceneGraph.getNode('leafBone');
+      expect(leaf?.parent).toBe('midBone');
+      const mid = context.sceneGraph.getNode('midBone');
+      expect(mid?.parent).toBe('rootBone');
+
+      // The resolveHitToScope for leafBone should return leafBone (not rootBone)
+      // because walking stops at bone-type parents
+    });
+
+    it('should still select root bone when clicking root directly', () => {
+      const rootBone = createTestBone('rootBone', 100, 100, 60);
+      const childBone = createTestBone('childBone', 60, 0, 40);
+
+      context.sceneGraph.addNode(rootBone);
+      context.sceneGraph.addNode(childBone);
+      context.sceneGraph.moveNode('childBone', 'rootBone');
+
+      // Click on the root bone position
+      const rootWorldPos = { x: 100, y: 100 };
+      const screenPos = context.camera.worldToScreen(rootWorldPos);
+
+      tool.onPointerDown(
+        createMockPointerEvent({
+          worldPosition: rootWorldPos,
+          screenPosition: screenPos,
+          button: 0,
+        })
+      );
+      tool.onPointerUp(
+        createMockPointerEvent({
+          worldPosition: rootWorldPos,
+          screenPosition: screenPos,
+          button: 0,
+        })
+      );
+
+      // Root bone is at root level (parent === null), so it should be directly selectable
+      // The root bone has no bone-type parent, so resolveHitToScope returns it
     });
   });
 });

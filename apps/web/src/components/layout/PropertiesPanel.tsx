@@ -1763,6 +1763,89 @@ export function PropertiesPanel() {
                   </>
                 );
               })()}
+            {/* Rigging Section — shown for shape nodes with skinData */}
+            {node.type !== 'bone' &&
+              node.type !== 'group' &&
+              node.type !== 'text' &&
+              node.type !== 'image' &&
+              'skinData' in node &&
+              (node as any).skinData != null &&
+              (() => {
+                const skinData = (node as any).skinData;
+                const boneCount = Object.keys(skinData.inverseBindMatrices || {}).length;
+                const boneIds = Object.keys(skinData.inverseBindMatrices || {});
+                return (
+                  <>
+                    <div className={styles.sectionTitle}>Rigging</div>
+                    <div className={styles.propertyRow}>
+                      <span className={styles.propertyLabel}>Bound</span>
+                      <div className={styles.propertyInputs}>
+                        <span style={{ fontSize: '11px', color: '#aaa' }}>
+                          {boneCount} bone{boneCount !== 1 ? 's' : ''}
+                        </span>
+                      </div>
+                    </div>
+                    <div className={styles.propertyRow}>
+                      <span className={styles.propertyLabel}>Bone</span>
+                      <div className={styles.propertyInputs}>
+                        <select
+                          className={styles.select}
+                          value={useEditorStore.getState().weightPaintBoneId ?? ''}
+                          onChange={(e) => {
+                            useEditorStore.getState().setWeightPaintBoneId(e.target.value || null);
+                          }}
+                        >
+                          <option value="">Select bone...</option>
+                          {boneIds.map((bId: string) => {
+                            const bNode = sceneGraph.getNode(bId);
+                            return (
+                              <option key={bId} value={bId}>
+                                {bNode?.name ?? bId}
+                              </option>
+                            );
+                          })}
+                        </select>
+                      </div>
+                    </div>
+                    <div className={styles.propertyRow}>
+                      <div className={styles.propertyInputs} style={{ gap: '4px' }}>
+                        <button
+                          style={{
+                            fontSize: '11px',
+                            padding: '3px 8px',
+                            background: 'var(--color-accent-primary)',
+                            color: '#fff',
+                            border: 'none',
+                            borderRadius: '3px',
+                            cursor: 'pointer',
+                          }}
+                          onClick={() => {
+                            useEditorStore.getState().setActiveTool('weight-paint');
+                          }}
+                        >
+                          Weight Paint
+                        </button>
+                        <button
+                          style={{
+                            fontSize: '11px',
+                            padding: '3px 8px',
+                            background: 'var(--color-danger, #e53e3e)',
+                            color: '#fff',
+                            border: 'none',
+                            borderRadius: '3px',
+                            cursor: 'pointer',
+                          }}
+                          onClick={() => {
+                            useEditorStore.getState().unbindMesh(sceneGraph, nodeId);
+                          }}
+                        >
+                          Unbind
+                        </button>
+                      </div>
+                    </div>
+                  </>
+                );
+              })()}
             {node.type === 'text' &&
               (() => {
                 const textNode = node as TextNode;
