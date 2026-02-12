@@ -2497,13 +2497,12 @@ export class ShapeRenderer {
 
     const gl = this.renderer.context;
 
-    // Get bind-pose tessellation
+    // Get bind-pose tessellation from geometry cache.
+    // The cache is populated by the normal render path (renderRectangle, etc.)
+    // on frames before skinData was added. If not yet cached, skip this frame —
+    // the first frame after skinData is removed will repopulate it.
     const cached = this.geometryCache.get(node.id);
-    if (!cached) {
-      // Fall through to normal rendering if no cached tessellation yet
-      // (first frame may not have cache — the normal render path populates it)
-      return;
-    }
+    if (!cached) return;
 
     const bindPoseVertices = cached.vertices;
     const fillIndices = cached.fillIndices;
@@ -2517,18 +2516,20 @@ export class ShapeRenderer {
       boneWorldTransforms[boneId] = { a: bw.a, b: bw.b, c: bw.c, d: bw.d, tx: bw.tx, ty: bw.ty };
     }
 
-    // Deform vertices — result is in world space
+    // Deform vertices via CPU linear blend skinning — result is in world space
     const deformed = deformVertices(bindPoseVertices, skinData, boneWorldTransforms);
-
-    // Use identity model matrix since vertices are already in world space
-    const identityMatrix = mat3.toFloat32Array(mat3.create());
-    this.currentModelMatrix = identityMatrix;
-    gl.uniformMatrix3fv(this.program.uniforms.u_model ?? null, false, identityMatrix);
 
     // Get fills/strokes from node
     const fills: Fill[] = 'fills' in node ? (node as any).fills : [];
     const strokes: Stroke[] = 'strokes' in node ? (node as any).strokes : [];
     const closed = 'closed' in node ? (node as any).closed : true;
+
+    // Ensure flat-color program is active and set identity model matrix
+    // (deformed vertices are already in world space)
+    this.renderer.useProgram(this.program);
+    const identityMatrix = mat3.toFloat32Array(mat3.create());
+    this.currentModelMatrix = identityMatrix;
+    gl.uniformMatrix3fv(this.program.uniforms.u_model ?? null, false, identityMatrix);
 
     this.renderFillsAndStrokes(
       node.id,
