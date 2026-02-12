@@ -128,6 +128,7 @@ export function Canvas() {
     isDirectSelectionActive,
     directSelectionPoints,
     directSelectionPathNodes,
+    deleteDirectSelectionPoints,
     marqueeRect,
   } = useCanvasTools({ camera: cameraReady ? cameraRef.current : null, sceneGraph });
 
@@ -736,7 +737,13 @@ export function Canvas() {
       }
 
       // Delete/Backspace: delete selection (skip if input)
+      // When Direct Selection Tool has selected points, let the tool handle deletion
       if (!isInput && (e.key === 'Delete' || e.key === 'Backspace')) {
+        if (isDirectSelectionActive && directSelectionPoints.length > 0) {
+          // Let tool system handle point deletion
+          toolKeyDown(e);
+          return;
+        }
         deleteSelection(sceneGraph);
         return;
       }
@@ -761,6 +768,8 @@ export function Canvas() {
       undo,
       redo,
       cutSelection,
+      isDirectSelectionActive,
+      directSelectionPoints,
     ]
   );
 
@@ -791,6 +800,20 @@ export function Canvas() {
   }, []);
 
   const contextMenuItems = useMemo((): ContextMenuEntry[] => {
+    // Direct Selection Tool with selected points — show point-specific menu
+    if (isDirectSelectionActive && directSelectionPoints.length > 0) {
+      const pointCount = directSelectionPoints.length;
+      return [
+        {
+          id: 'delete-point',
+          label: pointCount === 1 ? 'Delete Point' : `Delete ${pointCount} Points`,
+          shortcut: 'Del',
+          danger: true,
+          onClick: () => deleteDirectSelectionPoints(),
+        },
+      ];
+    }
+
     const hasSelection = selectedNodeIds.size > 0;
 
     if (hasSelection) {
@@ -1053,6 +1076,9 @@ export function Canvas() {
     convertTextToPath,
     outlineStroke,
     createBrushProfileFromSelection,
+    isDirectSelectionActive,
+    directSelectionPoints,
+    deleteDirectSelectionPoints,
   ]);
 
   // --------------------------------------------------------------------------

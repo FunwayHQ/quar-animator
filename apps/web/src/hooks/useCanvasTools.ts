@@ -475,6 +475,17 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
     [syncPenToolState]
   );
 
+  // Delete selected points in DirectSelectionTool (for context menu)
+  const deleteDirectSelectionPoints = useCallback(() => {
+    if (!toolManagerRef.current) return;
+    const activeTool = toolManagerRef.current.getActiveTool();
+    if (activeTool?.type === 'direct-selection') {
+      // Dispatch a synthetic Delete key event to the tool
+      toolManagerRef.current.handleKeyDown(new KeyboardEvent('keydown', { key: 'Delete' }));
+      syncDirectSelectionState();
+    }
+  }, [syncDirectSelectionState]);
+
   return {
     toolManagerRef,
     sceneGraphRef,
@@ -492,6 +503,7 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
     isDirectSelectionActive,
     directSelectionPoints,
     directSelectionPathNodes,
+    deleteDirectSelectionPoints,
     marqueeRect,
   };
 }

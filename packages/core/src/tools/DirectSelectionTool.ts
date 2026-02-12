@@ -178,6 +178,7 @@ export class DirectSelectionTool extends BaseTool {
     const handleHit = this.hitTestHandle(worldPos);
     if (handleHit) {
       // Start dragging handle
+      this.context.onTransformStart?.();
       this.dragMode = 'dragging-handle';
       this.dragHandle = handleHit;
       this.state.isDragging = true;
@@ -206,6 +207,7 @@ export class DirectSelectionTool extends BaseTool {
       }
 
       // Start dragging selected points
+      this.context.onTransformStart?.();
       this.dragMode = 'dragging-point';
       this.state.isDragging = true;
 
@@ -575,6 +577,9 @@ export class DirectSelectionTool extends BaseTool {
 
   private deleteSelectedPoints(): void {
     if (this.selectedPoints.length === 0) return;
+
+    // Push undo snapshot before deleting
+    this.context.onTransformStart?.();
 
     // Group by node
     const pointsByNode = new Map<string, number[]>();
