@@ -279,6 +279,11 @@ export class SelectionManager {
           height: imgNode.height,
         };
       }
+      case 'bone': {
+        // Bone anchor is (0,0), extends along +X for length
+        const halfH = Math.max(node.length * 0.15, 4);
+        return { x: 0, y: -halfH, width: node.length, height: halfH * 2 };
+      }
       default:
         return null;
     }

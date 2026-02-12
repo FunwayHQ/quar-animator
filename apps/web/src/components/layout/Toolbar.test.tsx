@@ -16,7 +16,7 @@ describe('Toolbar', () => {
       'Brush (B)',
       'Eraser (E)',
       'Text (T)',
-      'Bone (Shift+B)',
+      'Bone (J)',
     ];
 
     toolLabels.forEach((label) => {

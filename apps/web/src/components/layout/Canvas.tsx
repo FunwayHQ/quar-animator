@@ -20,6 +20,7 @@ import { DirectSelectionOverlay } from '../canvas/DirectSelectionOverlay';
 import { GradientHandleOverlay } from '../canvas/GradientHandleOverlay';
 import { CanvasRuler } from '../canvas/CanvasRuler';
 import { TextEditOverlay } from '../canvas/TextEditOverlay';
+import { BoneOverlay } from '../canvas/BoneOverlay';
 import { ContextMenu } from '../common/ContextMenu';
 import type { ContextMenuEntry } from '../common/ContextMenu';
 import { promptDialog } from '../common/PromptDialog';
@@ -103,6 +104,7 @@ export function Canvas() {
   const showRulers = useEditorStore((state) => state.showRulers);
   const editingTextNodeId = useEditorStore((state) => state.editingTextNodeId);
   const setEditingTextNodeId = useEditorStore((state) => state.setEditingTextNodeId);
+  const activeTool = useEditorStore((state) => state.activeTool);
   const createBrushProfileFromSelection = useEditorStore(
     (state) => state.createBrushProfileFromSelection
   );
@@ -255,6 +257,28 @@ export function Canvas() {
 
   const selectionBounds = selectionDisplay?.bounds ?? null;
   const selectionRotation = selectionDisplay?.rotation ?? 0;
+
+  // Collect bone nodes for overlay
+  const boneNodes = useMemo(() => {
+    if (!sceneGraphRef.current) return [];
+    const bones: import('@quar/types').BoneNode[] = [];
+    const collectBones = (nodes: Node[]) => {
+      for (const node of nodes) {
+        if (node.type === 'bone') {
+          bones.push(node as import('@quar/types').BoneNode);
+        }
+        if (node.children.length > 0) {
+          const children = node.children
+            .map((id) => sceneGraphRef.current!.getNode(id))
+            .filter(Boolean) as Node[];
+          collectBones(children);
+        }
+      }
+    };
+    collectBones(sceneGraphRef.current.getRootNodes());
+    return bones;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sceneGraphVersion]);
 
   const transformHandles = useMemo(() => {
     if (!transformHandlesRef.current || !selectionBounds || !cameraRef.current) return [];
@@ -1343,6 +1367,15 @@ export function Canvas() {
           sceneGraph={sceneGraph}
         />
       )}
+      {(activeTool === 'bone' || boneNodes.some((b) => selectedNodeIds.has(b.id))) &&
+        boneNodes.length > 0 && (
+          <BoneOverlay
+            boneNodes={boneNodes}
+            selectedNodeIds={selectedNodeIds}
+            camera={cameraRef.current}
+            sceneGraph={sceneGraph}
+          />
+        )}
       {isPenToolDrawing && (
         <PenToolOverlay
           points={penToolPath}

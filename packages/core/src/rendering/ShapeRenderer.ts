@@ -12,6 +12,7 @@ import type {
   TextNode,
   ImageNode,
   GroupNode,
+  BoneNode,
   Node,
   Fill,
   Stroke,
@@ -323,6 +324,8 @@ function buildGeometryKey(node: Node): string {
     }
     case 'text':
       return `T:${node.content}:${node.fontFamily}:${node.fontSize}:${node.fontWeight}:${node.fontStyle}:${node.textAlign}:${node.lineHeight}:${node.letterSpacing}`;
+    case 'bone':
+      return `B:${node.length}:${node.boneStyle}`;
     default:
       return '';
   }
@@ -907,6 +910,9 @@ export class ShapeRenderer {
           case 'image':
             this.renderImage(node, worldTransform);
             break;
+          case 'bone':
+            this.renderBone(node, worldTransform);
+            break;
         }
       };
 
@@ -1012,6 +1018,9 @@ export class ShapeRenderer {
         break;
       case 'image':
         this.renderImage(node, worldMatrix);
+        break;
+      case 'bone':
+        this.renderBone(node as BoneNode, worldMatrix);
         break;
     }
 
@@ -2217,6 +2226,175 @@ export class ShapeRenderer {
   // Ghost Rendering (for onion skinning)
   // --------------------------------------------------------------------------
 
+  // --------------------------------------------------------------------------
+  // Bone Rendering
+  // --------------------------------------------------------------------------
+
+  /**
+   * Parse a hex color string to [r, g, b, a] float array.
+   */
+  private parseBoneColor(hex: string): [number, number, number, number] {
+    const cleaned = hex.replace('#', '');
+    const r = parseInt(cleaned.slice(0, 2), 16) / 255;
+    const g = parseInt(cleaned.slice(2, 4), 16) / 255;
+    const b = parseInt(cleaned.slice(4, 6), 16) / 255;
+    return [r, g, b, 1.0];
+  }
+
+  /**
+   * Build bone geometry vertices based on style.
+   * Stick: thin quad from (0,0) to (length,0)
+   * Octahedral: diamond shape
+   */
+  private buildBoneVertices(length: number, style: string): Float32Array {
+    if (style === 'stick') {
+      const halfH = Math.max(length * 0.04, 1);
+      // Simple quad: 2 triangles
+      return new Float32Array([
+        0,
+        -halfH,
+        length,
+        -halfH,
+        length,
+        halfH,
+        0,
+        -halfH,
+        length,
+        halfH,
+        0,
+        halfH,
+      ]);
+    }
+
+    // Octahedral (diamond) style
+    const midX = length * 0.25;
+    const halfW = length * 0.1;
+    // 4 triangles forming a diamond: root → mid-top → tip, root → mid-bottom → tip
+    return new Float32Array([
+      // Top half: root → mid-top → tip
+      0,
+      0,
+      midX,
+      halfW,
+      length,
+      0,
+      // Bottom half: root → tip → mid-bottom
+      0,
+      0,
+      length,
+      0,
+      midX,
+      -halfW,
+    ]);
+  }
+
+  /**
+   * Render a bone node.
+   */
+  private renderBone(node: BoneNode, worldTransform: Float32Array | Matrix3): void {
+    if (!this.program) return;
+    const gl = this.renderer.context;
+
+    const modelMatrix =
+      worldTransform instanceof Float32Array ? worldTransform : mat3.toFloat32Array(worldTransform);
+
+    gl.uniformMatrix3fv(this.program.uniforms.u_model ?? null, false, modelMatrix);
+
+    const color = this.parseBoneColor(node.boneColor);
+    const effectiveOpacity = this.currentEffectiveOpacity ?? node.opacity;
+    gl.uniform4fv(
+      this.program.uniforms.u_color ?? null,
+      new Float32Array([color[0], color[1], color[2], color[3] * effectiveOpacity])
+    );
+
+    const vertices = this.buildBoneVertices(node.length, node.boneStyle);
+    gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.DYNAMIC_DRAW);
+    gl.drawArrays(gl.TRIANGLES, 0, vertices.length / 2);
+
+    // Draw outline for visibility
+    const outlineColor = [color[0] * 0.6, color[1] * 0.6, color[2] * 0.6, effectiveOpacity];
+    gl.uniform4fv(this.program.uniforms.u_color ?? null, new Float32Array(outlineColor));
+
+    let outlineVerts: Float32Array;
+    if (node.boneStyle === 'stick') {
+      const halfH = Math.max(node.length * 0.04, 1);
+      outlineVerts = new Float32Array([
+        0,
+        -halfH,
+        node.length,
+        -halfH,
+        node.length,
+        -halfH,
+        node.length,
+        halfH,
+        node.length,
+        halfH,
+        0,
+        halfH,
+        0,
+        halfH,
+        0,
+        -halfH,
+      ]);
+    } else {
+      const midX = node.length * 0.25;
+      const halfW = node.length * 0.1;
+      outlineVerts = new Float32Array([
+        0,
+        0,
+        midX,
+        halfW,
+        midX,
+        halfW,
+        node.length,
+        0,
+        node.length,
+        0,
+        midX,
+        -halfW,
+        midX,
+        -halfW,
+        0,
+        0,
+      ]);
+    }
+
+    gl.bufferData(gl.ARRAY_BUFFER, outlineVerts, gl.DYNAMIC_DRAW);
+    gl.drawArrays(gl.LINES, 0, outlineVerts.length / 2);
+  }
+
+  /**
+   * Render a bone with color override (for ghost/onion skinning).
+   */
+  private renderBoneWithOverride(
+    node: BoneNode,
+    worldTransform: Float32Array | Matrix3,
+    override: { tint: [number, number, number]; alpha: number }
+  ): void {
+    if (!this.program) return;
+    const gl = this.renderer.context;
+
+    const modelMatrix =
+      worldTransform instanceof Float32Array ? worldTransform : mat3.toFloat32Array(worldTransform);
+
+    gl.uniformMatrix3fv(this.program.uniforms.u_model ?? null, false, modelMatrix);
+
+    const baseColor = this.parseBoneColor(node.boneColor);
+    // Apply tint: 50% mix
+    const r = baseColor[0] * 0.5 + override.tint[0] * 0.5;
+    const g = baseColor[1] * 0.5 + override.tint[1] * 0.5;
+    const b = baseColor[2] * 0.5 + override.tint[2] * 0.5;
+
+    gl.uniform4fv(
+      this.program.uniforms.u_color ?? null,
+      new Float32Array([r, g, b, override.alpha])
+    );
+
+    const vertices = this.buildBoneVertices(node.length, node.boneStyle);
+    gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.DYNAMIC_DRAW);
+    gl.drawArrays(gl.TRIANGLES, 0, vertices.length / 2);
+  }
+
   /**
    * Render a single node as a ghost frame with tint color and alpha override.
    * Used by OnionSkinRenderer for onion skinning.
@@ -2270,6 +2448,9 @@ export class ShapeRenderer {
         break;
       case 'image':
         this.renderImageWithOverride(node, worldMatrix, colorOverride);
+        break;
+      case 'bone':
+        this.renderBoneWithOverride(node as BoneNode, worldMatrix, colorOverride);
         break;
     }
 

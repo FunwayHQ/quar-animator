@@ -200,7 +200,7 @@ const tools: Array<{ type: ToolType; icon: React.ReactNode; label: string; short
   { type: 'brush', icon: icons.brush, label: 'Brush', shortcut: 'B' },
   { type: 'eraser', icon: icons.eraser, label: 'Eraser', shortcut: 'E' },
   { type: 'text', icon: icons.text, label: 'Text', shortcut: 'T' },
-  { type: 'bone', icon: icons.bone, label: 'Bone', shortcut: 'Shift+B' },
+  { type: 'bone', icon: icons.bone, label: 'Bone', shortcut: 'J' },
 ];
 
 export function Toolbar() {

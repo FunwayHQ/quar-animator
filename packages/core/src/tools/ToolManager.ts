@@ -15,6 +15,7 @@ import { BrushTool } from './BrushTool';
 import { EraserTool } from './EraserTool';
 import { HandTool } from './HandTool';
 import { TextTool } from './TextTool';
+import { BoneTool } from './BoneTool';
 import type { SceneGraph } from '../SceneGraph';
 import type { Camera } from '../Camera';
 
@@ -75,6 +76,7 @@ export class ToolManager {
     this.tools.set('brush', new BrushTool(context));
     this.tools.set('eraser', new EraserTool(context));
     this.tools.set('text', new TextTool(context));
+    this.tools.set('bone', new BoneTool(context));
 
     // Set default tool
     this.setActiveTool('selection');
@@ -255,6 +257,7 @@ export class ToolManager {
       b: 'brush',
       e: 'eraser',
       t: 'text',
+      j: 'bone',
     };
 
     return shortcuts[key.toLowerCase()] ?? null;

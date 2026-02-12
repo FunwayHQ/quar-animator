@@ -8,6 +8,7 @@ import type {
   TextNode,
   ImageNode,
   GroupNode,
+  BoneNode,
   Color,
   Gradient,
   Fill,
@@ -1639,6 +1640,123 @@ export function PropertiesPanel() {
                               </>
                             );
                           })()}
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                );
+              })()}
+            {node.type === 'bone' &&
+              (() => {
+                const bone = node as BoneNode;
+                return (
+                  <>
+                    <div className={styles.propertyRow}>
+                      <div className={styles.propertyHeader}>
+                        <span className={styles.propertyLabel}>Length</span>
+                        <KeyframeIndicator
+                          state={getKeyframeState(timeline, nodeId, 'length', currentFrame)}
+                          onToggle={() => toggleKeyframe('length', bone.length)}
+                        />
+                      </div>
+                      <div className={styles.propertyInputs}>
+                        <div className={styles.inputGroup}>
+                          <ScrubLabel
+                            onScrubStart={handleScrubStart}
+                            label="L"
+                            value={Math.round(bone.length)}
+                            onChange={(v) => {
+                              const val = Math.max(1, v);
+                              pushUndo(sceneGraph);
+                              sceneGraph.updateNode(nodeId, { length: val } as Partial<BoneNode>);
+                              if (autoKeyframe)
+                                addKeyframeAtFrame(nodeId, 'length', currentFrame, val);
+                            }}
+                            min={1}
+                          />
+                          <input
+                            type="text"
+                            className={styles.input}
+                            value={fmt1(bone.length)}
+                            onChange={(e) => {
+                              const val = parseFloat(e.target.value);
+                              if (!isNaN(val) && val > 0) {
+                                pushUndo(sceneGraph);
+                                sceneGraph.updateNode(nodeId, { length: val } as Partial<BoneNode>);
+                                if (autoKeyframe)
+                                  addKeyframeAtFrame(nodeId, 'length', currentFrame, val);
+                              }
+                            }}
+                            {...numericInputProps(
+                              () => Math.round(bone.length),
+                              (v) => {
+                                const val = Math.max(1, parseFloat(v));
+                                if (!isNaN(val)) {
+                                  pushUndo(sceneGraph);
+                                  sceneGraph.updateNode(nodeId, {
+                                    length: val,
+                                  } as Partial<BoneNode>);
+                                  if (autoKeyframe)
+                                    addKeyframeAtFrame(nodeId, 'length', currentFrame, val);
+                                }
+                              }
+                            )}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                    <div className={styles.propertyRow}>
+                      <span className={styles.propertyLabel}>Style</span>
+                      <div className={styles.propertyInputs}>
+                        <select
+                          className={styles.select}
+                          value={bone.boneStyle}
+                          onChange={(e) => {
+                            pushUndo(sceneGraph);
+                            sceneGraph.updateNode(nodeId, {
+                              boneStyle: e.target.value as 'stick' | 'octahedral',
+                            } as Partial<BoneNode>);
+                          }}
+                        >
+                          <option value="octahedral">Octahedral</option>
+                          <option value="stick">Stick</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div className={styles.propertyRow}>
+                      <span className={styles.propertyLabel}>Color</span>
+                      <div className={styles.propertyInputs}>
+                        <div className={styles.inputGroup}>
+                          <div
+                            className={styles.colorSwatch}
+                            style={{ background: bone.boneColor }}
+                            onClick={() => {
+                              const input = document.createElement('input');
+                              input.type = 'color';
+                              input.value = bone.boneColor;
+                              input.addEventListener('input', () => {
+                                pushUndo(sceneGraph);
+                                sceneGraph.updateNode(nodeId, {
+                                  boneColor: input.value,
+                                } as Partial<BoneNode>);
+                              });
+                              input.click();
+                            }}
+                          />
+                          <input
+                            type="text"
+                            className={styles.input}
+                            value={bone.boneColor.toUpperCase()}
+                            onChange={(e) => {
+                              const hex = e.target.value;
+                              if (/^#[0-9a-fA-F]{6}$/.test(hex)) {
+                                pushUndo(sceneGraph);
+                                sceneGraph.updateNode(nodeId, {
+                                  boneColor: hex,
+                                } as Partial<BoneNode>);
+                              }
+                            }}
+                          />
                         </div>
                       </div>
                     </div>

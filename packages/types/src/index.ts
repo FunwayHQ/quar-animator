@@ -158,7 +158,15 @@ export type EffectType = Effect['type'];
 // Node Types
 // ============================================================================
 
-export type NodeType = 'group' | 'rectangle' | 'ellipse' | 'polygon' | 'path' | 'text' | 'image';
+export type NodeType =
+  | 'group'
+  | 'rectangle'
+  | 'ellipse'
+  | 'polygon'
+  | 'path'
+  | 'text'
+  | 'image'
+  | 'bone';
 
 export interface BaseNode {
   id: string;
@@ -287,6 +295,17 @@ export interface ImageNode extends BaseNode {
   adjustments?: ImageAdjustments;
 }
 
+export type BoneStyle = 'stick' | 'octahedral';
+
+export interface BoneNode extends BaseNode {
+  type: 'bone';
+  length: number; // Extends along local +X axis
+  boneStyle: BoneStyle;
+  boneColor: string; // Hex color e.g. '#E0E0E0'
+  angleMin?: number; // FK rotation constraint (degrees)
+  angleMax?: number; // FK rotation constraint (degrees)
+}
+
 export type Node =
   | GroupNode
   | RectangleNode
@@ -294,7 +313,8 @@ export type Node =
   | PolygonNode
   | PathNode
   | TextNode
-  | ImageNode;
+  | ImageNode
+  | BoneNode;
 
 // ============================================================================
 // Animation Types

@@ -51,6 +51,8 @@ function nodeTypeIcon(type: string, node?: Node): string {
       return '\u25FC'; // filled square
     case 'path':
       return '\u2669'; // path-like symbol
+    case 'bone':
+      return '\u22A5'; // ⊥ perpendicular symbol
     default:
       return '\u25FC';
   }

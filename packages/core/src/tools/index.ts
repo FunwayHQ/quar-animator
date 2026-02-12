@@ -13,4 +13,5 @@ export * from './BrushTool';
 export * from './EraserTool';
 export * from './HandTool';
 export * from './TextTool';
+export * from './BoneTool';
 export * from './ToolManager';

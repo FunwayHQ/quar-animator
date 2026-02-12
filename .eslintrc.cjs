@@ -117,8 +117,11 @@ module.exports = {
         'apps/web/src/components/layout/Timeline.tsx',
         'apps/web/src/services/projectSerializer.ts',
         'packages/animation/src/**/*.ts',
+        'packages/core/src/rendering/ShapeRenderer.ts',
         'packages/core/src/selection/SelectionManager.ts',
         'packages/core/src/SceneGraph.ts',
+        'packages/core/src/tools/BoneTool.ts',
+        'packages/rigging/src/**/*.ts',
       ],
       rules: {
         '@typescript-eslint/no-unsafe-assignment': 'off',

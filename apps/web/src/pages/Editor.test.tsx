@@ -47,7 +47,7 @@ describe('Editor Page', () => {
       'Brush (B)',
       'Eraser (E)',
       'Text (T)',
-      'Bone (Shift+B)',
+      'Bone (J)',
     ];
 
     tools.forEach((tool) => {

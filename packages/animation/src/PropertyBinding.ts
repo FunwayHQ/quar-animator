@@ -257,6 +257,15 @@ export const POLYGON_ANIMATABLE_PROPERTIES: AnimatableProperty[] = [
 ];
 
 /**
+ * Bone-specific animatable properties.
+ */
+export const BONE_ANIMATABLE_PROPERTIES: AnimatableProperty[] = [
+  { path: 'length', displayName: 'Length', interpolationType: 'number' },
+  { path: 'angleMin', displayName: 'Angle Min', interpolationType: 'number' },
+  { path: 'angleMax', displayName: 'Angle Max', interpolationType: 'number' },
+];
+
+/**
  * Get all animatable properties for a given node type.
  */
 export function getAnimatableProperties(nodeType: string): AnimatableProperty[] {
@@ -311,6 +320,9 @@ export function getAnimatableProperties(nodeType: string): AnimatableProperty[] 
       // Regular groups only have transform + opacity (COMMON_ANIMATABLE_PROPERTIES)
       // We include SHAPE_ANIMATABLE_PROPERTIES here; for regular groups they are simply unused
       props.push(...SHAPE_ANIMATABLE_PROPERTIES);
+      break;
+    case 'bone':
+      props.push(...BONE_ANIMATABLE_PROPERTIES);
       break;
   }
 
@@ -435,7 +447,10 @@ export function detectInterpolationType(path: string): InterpolationType {
     path === 'cornerRadius' ||
     path.startsWith('cornerRadius.') ||
     path === 'sides' ||
-    path === 'innerRadius'
+    path === 'innerRadius' ||
+    path === 'length' ||
+    path === 'angleMin' ||
+    path === 'angleMax'
   ) {
     return 'number';
   }
