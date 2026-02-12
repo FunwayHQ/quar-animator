@@ -53,6 +53,8 @@ function nodeTypeIcon(type: string, node?: Node): string {
       return '\u2669'; // path-like symbol
     case 'bone':
       return '\u22A5'; // ⊥ perpendicular symbol
+    case 'ik-target':
+      return '\u2295'; // ⊕ crosshair-like symbol
     default:
       return '\u25FC';
   }

@@ -204,6 +204,13 @@ export function MenuBar({ projectActions }: MenuBarProps) {
     });
   }, [selectedNodeIds, sceneGraph]);
 
+  const hasBoneSelected = useMemo(() => {
+    return Array.from(selectedNodeIds).some((id) => {
+      const n = sceneGraph.getNode(id);
+      return n && n.type === 'bone';
+    });
+  }, [selectedNodeIds, sceneGraph]);
+
   const hasSkinnedSelected = useMemo(() => {
     return Array.from(selectedNodeIds).some((id) => {
       const n = sceneGraph.getNode(id);
@@ -787,6 +794,23 @@ export function MenuBar({ projectActions }: MenuBarProps) {
                   onClick={() => {
                     closeMenu();
                     window.dispatchEvent(new CustomEvent('menubar:unbind-mesh'));
+                  }}
+                />
+                <Separator />
+                <MenuItem
+                  label="Create IK Chain"
+                  disabled={!hasBoneSelected}
+                  onClick={() => {
+                    closeMenu();
+                    window.dispatchEvent(new CustomEvent('menubar:create-ik-chain'));
+                  }}
+                />
+                <MenuItem
+                  label="Remove IK Chain"
+                  disabled={!hasBoneSelected}
+                  onClick={() => {
+                    closeMenu();
+                    window.dispatchEvent(new CustomEvent('menubar:remove-ik-chain'));
                   }}
                 />
               </div>

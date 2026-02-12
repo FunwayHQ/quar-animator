@@ -18,6 +18,9 @@ import type {
   EffectType,
   BlendMode,
   BrushProfile,
+  IKChain,
+  IKTargetNode,
+  BoneNode,
 } from '@quar/types';
 import type { KeyframeClipboard } from '@quar/animation';
 import { createTimeline, KeyframeManager } from '@quar/animation';
@@ -34,7 +37,12 @@ import {
   getShapeOutlinePoints,
 } from '@quar/core';
 import type { OnionSkinSettings, BooleanOp } from '@quar/core';
-import { createSkinBinding, computeAutoWeights, computeFKChain } from '@quar/rigging';
+import {
+  createSkinBinding,
+  computeAutoWeights,
+  computeFKChain,
+  evaluateIKChains,
+} from '@quar/rigging';
 import type { FKBoneState } from '@quar/rigging';
 import { toast } from '../components/common/Toast';
 
@@ -193,6 +201,20 @@ export interface EditorStore {
     tessellatedVertices?: Float32Array
   ) => void;
   unbindMesh: (sceneGraph: SceneGraphLike, nodeId: string) => void;
+
+  // IK chains
+  ikChains: IKChain[];
+  createIKChain: (
+    sceneGraph: SceneGraphLike,
+    endEffectorBoneId: string,
+    chainDepth?: number
+  ) => void;
+  removeIKChain: (sceneGraph: SceneGraphLike, chainId: string) => void;
+  setIKChainEnabled: (chainId: string, enabled: boolean) => void;
+  setIKChainSettings: (
+    chainId: string,
+    settings: { maxIterations?: number; tolerance?: number }
+  ) => void;
 
   // Aspect ratio lock
   aspectRatioLocked: boolean;
@@ -823,6 +845,153 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     set({ isDirty: true });
   },
 
+  // IK chains
+  ikChains: [],
+  createIKChain: (sceneGraph: SceneGraphLike, endEffectorBoneId: string, chainDepth?: number) => {
+    const endBone = sceneGraph.getNode(endEffectorBoneId);
+    if (!endBone || endBone.type !== 'bone') {
+      toast.error('Selected node is not a bone');
+      return;
+    }
+
+    // Walk parent chain to find root
+    const chain: BoneNode[] = [];
+    let currentId: string | null = endEffectorBoneId;
+    while (currentId) {
+      const node = sceneGraph.getNode(currentId);
+      if (!node || node.type !== 'bone') break;
+      chain.unshift(node as BoneNode);
+      currentId = node.parent;
+      if (chainDepth != null && chain.length >= chainDepth) break;
+    }
+
+    if (chain.length === 0) {
+      toast.error('No valid bone chain found');
+      return;
+    }
+
+    const rootBoneId = chain[0].id;
+
+    // Check for overlapping chains
+    const { ikChains } = get();
+    const boneIds = new Set(chain.map((b) => b.id));
+    for (const existing of ikChains) {
+      // Walk existing chain bones
+      let cId: string | null = existing.endEffectorBoneId;
+      while (cId) {
+        if (boneIds.has(cId)) {
+          toast.error('Bone is already part of an IK chain');
+          return;
+        }
+        const n = sceneGraph.getNode(cId);
+        if (!n || n.type !== 'bone' || cId === existing.rootBoneId) break;
+        cId = n.parent;
+      }
+    }
+
+    get().pushUndo(sceneGraph);
+
+    // Compute end effector tip in world space for target placement
+    const endBoneWT = sceneGraph.getWorldTransform(endEffectorBoneId);
+    const boneLen = (endBone as BoneNode).length;
+    const tipX = endBoneWT.a * boneLen + endBoneWT.tx;
+    const tipY = endBoneWT.b * boneLen + endBoneWT.ty;
+
+    const chainId = `ik_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const targetId = `ikt_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
+    // Create IK target node at end effector tip
+    const targetNode: IKTargetNode = {
+      id: targetId,
+      name: `IK Target (${(endBone as BoneNode).name})`,
+      type: 'ik-target',
+      parent: null,
+      children: [],
+      transform: {
+        position: { x: tipX, y: tipY },
+        rotation: 0,
+        scale: { x: 1, y: 1 },
+        anchor: { x: 0, y: 0 },
+        skew: { x: 0, y: 0 },
+      },
+      visible: true,
+      locked: false,
+      opacity: 1,
+      blendMode: 'normal',
+      ikChainId: chainId,
+      targetType: 'effector',
+    };
+
+    sceneGraph.addNode(targetNode as any);
+
+    const newChain: IKChain = {
+      id: chainId,
+      name: `IK Chain (${chain.map((b) => b.name).join(' → ')})`,
+      rootBoneId,
+      endEffectorBoneId,
+      targetNodeId: targetId,
+      maxIterations: 10,
+      tolerance: 0.5,
+      enabled: true,
+    };
+
+    set({
+      ikChains: [...ikChains, newChain],
+      selectedNodeIds: new Set([targetId]),
+      isDirty: true,
+    });
+
+    toast.success('IK chain created');
+  },
+
+  removeIKChain: (sceneGraph: SceneGraphLike, chainId: string) => {
+    const { ikChains } = get();
+    const chain = ikChains.find((c) => c.id === chainId);
+    if (!chain) return;
+
+    get().pushUndo(sceneGraph);
+
+    // Remove target nodes from scene graph
+    if (sceneGraph.getNode(chain.targetNodeId)) {
+      sceneGraph.removeNode(chain.targetNodeId);
+    }
+    if (chain.poleTargetNodeId && sceneGraph.getNode(chain.poleTargetNodeId)) {
+      sceneGraph.removeNode(chain.poleTargetNodeId);
+    }
+
+    set({
+      ikChains: ikChains.filter((c) => c.id !== chainId),
+      isDirty: true,
+    });
+
+    toast.info('IK chain removed');
+  },
+
+  setIKChainEnabled: (chainId: string, enabled: boolean) => {
+    const { ikChains } = get();
+    set({
+      ikChains: ikChains.map((c) => (c.id === chainId ? { ...c, enabled } : c)),
+    });
+  },
+
+  setIKChainSettings: (
+    chainId: string,
+    settings: { maxIterations?: number; tolerance?: number }
+  ) => {
+    const { ikChains } = get();
+    set({
+      ikChains: ikChains.map((c) =>
+        c.id === chainId
+          ? {
+              ...c,
+              ...(settings.maxIterations != null ? { maxIterations: settings.maxIterations } : {}),
+              ...(settings.tolerance != null ? { tolerance: settings.tolerance } : {}),
+            }
+          : c
+      ),
+    });
+  },
+
   // Aspect ratio lock
   aspectRatioLocked: false,
   toggleAspectRatioLock: () => set((state) => ({ aspectRatioLocked: !state.aspectRatioLocked })),
@@ -869,12 +1038,19 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     get().pasteClipboard(sceneGraph);
   },
   deleteSelection: (sceneGraph: SceneGraphLike) => {
-    const { selectedNodeIds, timeline, enteredGroupId } = get();
+    const { selectedNodeIds, timeline, enteredGroupId, ikChains } = get();
     if (selectedNodeIds.size === 0) return;
     get().pushUndo(sceneGraph);
     // Clean up keyframe tracks for deleted nodes
     const mgr = new KeyframeManager(timeline);
+    // Clean up IK chains if deleting IK target nodes
+    let newIkChains = ikChains;
     for (const id of selectedNodeIds) {
+      const node = sceneGraph.getNode(id);
+      if (node && node.type === 'ik-target') {
+        const chainId = (node as IKTargetNode).ikChainId;
+        newIkChains = newIkChains.filter((c) => c.id !== chainId);
+      }
       mgr.removeAllKeyframesForNode(id);
       sceneGraph.removeNode(id);
     }
@@ -885,6 +1061,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       editingGradient: null,
       timeline: { ...timeline },
       isDirty: true,
+      ikChains: newIkChains,
       ...(clearGroup ? { enteredGroupId: null } : {}),
     });
   },

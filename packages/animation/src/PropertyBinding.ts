@@ -333,6 +333,9 @@ export function getAnimatableProperties(nodeType: string): AnimatableProperty[] 
     case 'bone':
       props.push(...BONE_ANIMATABLE_PROPERTIES);
       break;
+    case 'ik-target':
+      // IK targets only animate position (from COMMON)
+      break;
   }
 
   return props;

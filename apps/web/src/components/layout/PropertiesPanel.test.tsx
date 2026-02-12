@@ -793,4 +793,110 @@ describe('PropertiesPanel', () => {
       expect(updatedNode.cornerRadius).toBe(10);
     });
   });
+
+  // ==========================================================================
+  // IK Target Properties
+  // ==========================================================================
+
+  describe('IK Target', () => {
+    it('shows IK Chain section for ik-target node', () => {
+      const sg = renderWithSceneGraph();
+
+      const chainId = 'ik_test_chain';
+      // Set up IK chain in store
+      useEditorStore.setState({
+        ikChains: [
+          {
+            id: chainId,
+            name: 'IK Chain (Bone1 → Bone2)',
+            rootBoneId: 'bone1',
+            endEffectorBoneId: 'bone2',
+            targetNodeId: 'ikt1',
+            maxIterations: 10,
+            tolerance: 0.5,
+            enabled: true,
+          },
+        ],
+      });
+
+      act(() => {
+        sg.addNode({
+          id: 'ikt1',
+          name: 'IK Target',
+          type: 'ik-target',
+          parent: null,
+          children: [],
+          transform: {
+            position: { x: 100, y: 200 },
+            rotation: 0,
+            scale: { x: 1, y: 1 },
+            anchor: { x: 0, y: 0 },
+            skew: { x: 0, y: 0 },
+          },
+          visible: true,
+          locked: false,
+          opacity: 1,
+          blendMode: 'normal',
+          ikChainId: chainId,
+          targetType: 'effector',
+        } as any);
+        useEditorStore.getState().setSelection(['ikt1']);
+      });
+
+      // Should show IK Chain section
+      expect(screen.getByText('IK Chain')).toBeInTheDocument();
+      // Should show chain name
+      expect(screen.getByText('IK Chain (Bone1 → Bone2)')).toBeInTheDocument();
+      // Should show target type
+      expect(screen.getByText('End Effector')).toBeInTheDocument();
+    });
+
+    it('shows Pole Target type for pole target nodes', () => {
+      const sg = renderWithSceneGraph();
+
+      const chainId = 'ik_test_chain';
+      useEditorStore.setState({
+        ikChains: [
+          {
+            id: chainId,
+            name: 'IK Chain (A → B)',
+            rootBoneId: 'bone1',
+            endEffectorBoneId: 'bone2',
+            targetNodeId: 'ikt1',
+            poleTargetNodeId: 'ikp1',
+            maxIterations: 10,
+            tolerance: 0.5,
+            enabled: true,
+          },
+        ],
+      });
+
+      act(() => {
+        sg.addNode({
+          id: 'ikp1',
+          name: 'Pole Target',
+          type: 'ik-target',
+          parent: null,
+          children: [],
+          transform: {
+            position: { x: 50, y: 100 },
+            rotation: 0,
+            scale: { x: 1, y: 1 },
+            anchor: { x: 0, y: 0 },
+            skew: { x: 0, y: 0 },
+          },
+          visible: true,
+          locked: false,
+          opacity: 1,
+          blendMode: 'normal',
+          ikChainId: chainId,
+          targetType: 'pole',
+        } as any);
+        useEditorStore.getState().setSelection(['ikp1']);
+      });
+
+      expect(screen.getByText('IK Chain')).toBeInTheDocument();
+      expect(screen.getByText('Pole Target')).toBeInTheDocument();
+    });
+  });
 });

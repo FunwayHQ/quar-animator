@@ -184,4 +184,30 @@ describe('MenuBar', () => {
     const nav = screen.getByRole('navigation');
     expect(nav).toBeInTheDocument();
   });
+
+  describe('Rigging menu IK items', () => {
+    it('shows Create IK Chain and Remove IK Chain in Rigging menu', () => {
+      render(<MenuBar />);
+      fireEvent.click(screen.getByTestId('menu-rigging'));
+
+      expect(screen.getByText('Create IK Chain')).toBeInTheDocument();
+      expect(screen.getByText('Remove IK Chain')).toBeInTheDocument();
+    });
+
+    it('Create IK Chain is disabled when no bone is selected', () => {
+      render(<MenuBar />);
+      fireEvent.click(screen.getByTestId('menu-rigging'));
+
+      const createButton = screen.getByText('Create IK Chain').closest('button');
+      expect(createButton).toBeDisabled();
+    });
+
+    it('Remove IK Chain is disabled when no bone is selected', () => {
+      render(<MenuBar />);
+      fireEvent.click(screen.getByTestId('menu-rigging'));
+
+      const removeButton = screen.getByText('Remove IK Chain').closest('button');
+      expect(removeButton).toBeDisabled();
+    });
+  });
 });

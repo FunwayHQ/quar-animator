@@ -647,6 +647,17 @@ export class SelectionTool extends BaseTool {
         localBounds = { x: 0, y: -halfH, width: node.length, height: halfH * 2 };
         break;
       }
+      case 'ik-target': {
+        // IK targets are small crosshair icons — use a fixed screen-size hitbox
+        const hitSize = 16 / this.context.camera.zoom;
+        localBounds = {
+          x: -hitSize / 2,
+          y: -hitSize / 2,
+          width: hitSize,
+          height: hitSize,
+        };
+        break;
+      }
       default:
         return null;
     }

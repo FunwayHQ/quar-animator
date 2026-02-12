@@ -917,6 +917,9 @@ export class ShapeRenderer {
       // Skip node being edited (e.g. text node with active overlay)
       if (skipNodeId && node.id === skipNodeId) return;
 
+      // Skip IK target nodes (no geometry to render)
+      if (node.type === 'ik-target') return;
+
       const worldTransform = sceneGraph.getWorldTransform(node.id);
       this.currentEffectiveOpacity = sceneGraph.getEffectiveOpacity(node.id);
 

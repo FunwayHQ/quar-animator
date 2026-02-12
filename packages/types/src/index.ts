@@ -166,7 +166,8 @@ export type NodeType =
   | 'path'
   | 'text'
   | 'image'
-  | 'bone';
+  | 'bone'
+  | 'ik-target';
 
 export interface BaseNode {
   id: string;
@@ -313,6 +314,28 @@ export interface BoneNode extends BaseNode {
   angleMax?: number; // FK rotation constraint (degrees)
 }
 
+export interface IKTargetNode extends BaseNode {
+  type: 'ik-target';
+  ikChainId: string;
+  targetType: 'effector' | 'pole';
+}
+
+// ============================================================================
+// IK Chain Types
+// ============================================================================
+
+export interface IKChain {
+  id: string;
+  name: string;
+  rootBoneId: string;
+  endEffectorBoneId: string;
+  targetNodeId: string;
+  poleTargetNodeId?: string;
+  maxIterations: number;
+  tolerance: number;
+  enabled: boolean;
+}
+
 // ============================================================================
 // Skin Binding Types (Mesh Deformation)
 // ============================================================================
@@ -348,7 +371,8 @@ export type Node =
   | PathNode
   | TextNode
   | ImageNode
-  | BoneNode;
+  | BoneNode
+  | IKTargetNode;
 
 /** Node types that can have skin bindings */
 export type SkinnableNode = RectangleNode | EllipseNode | PolygonNode | PathNode | ImageNode;

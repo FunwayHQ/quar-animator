@@ -44,6 +44,7 @@ describe('EditorStore', () => {
       redoStack: [],
       canUndo: false,
       canRedo: false,
+      ikChains: [],
     });
   });
 
@@ -1742,6 +1743,317 @@ describe('EditorStore', () => {
 
       useEditorStore.getState().redo(sg);
       expect(sg.getRootNodes()).toHaveLength(1);
+    });
+  });
+
+  // ==========================================================================
+  // IK Chain Management
+  // ==========================================================================
+
+  describe('IK chains', () => {
+    function createIKSceneGraph() {
+      const nodes = new Map<string, any>();
+      let rootNodeIds: string[] = [];
+      return {
+        getNode: (id: string) => nodes.get(id),
+        getRootNodes: () => rootNodeIds.map((id) => nodes.get(id)).filter(Boolean),
+        addNode: vi.fn((node: any) => {
+          nodes.set(node.id, node);
+          if (!node.parent && !rootNodeIds.includes(node.id)) rootNodeIds.push(node.id);
+        }),
+        removeNode: vi.fn((id: string) => {
+          nodes.delete(id);
+          rootNodeIds = rootNodeIds.filter((rid) => rid !== id);
+        }),
+        updateNode: vi.fn((id: string, updates: any) => {
+          const node = nodes.get(id);
+          if (node) nodes.set(id, { ...node, ...updates });
+        }),
+        moveNode: vi.fn(),
+        getDescendants: () => [],
+        traverse: (cb: (node: any, depth: number) => void) => {
+          for (const node of nodes.values()) cb(node, 0);
+        },
+        getWorldTransform: (id: string) => {
+          const node = nodes.get(id);
+          if (!node) return { a: 1, b: 0, c: 0, d: 1, tx: 0, ty: 0 };
+          const pos = node.transform?.position || { x: 0, y: 0 };
+          return { a: 1, b: 0, c: 0, d: 1, tx: pos.x, ty: pos.y };
+        },
+        toJSON: () => ({
+          nodes: Array.from(nodes.values()),
+          rootNodeIds: [...rootNodeIds],
+        }),
+        fromJSON: (data: { nodes: any[]; rootNodeIds: string[] }) => {
+          nodes.clear();
+          for (const node of data.nodes) nodes.set(node.id, node);
+          rootNodeIds = [...data.rootNodeIds];
+        },
+        _addTestNode: (node: any) => {
+          nodes.set(node.id, node);
+          if (!node.parent && !rootNodeIds.includes(node.id)) rootNodeIds.push(node.id);
+        },
+      };
+    }
+
+    function makeBone(
+      id: string,
+      name: string,
+      parentId: string | null,
+      x = 0,
+      y = 0,
+      length = 50
+    ) {
+      return {
+        id,
+        name,
+        type: 'bone' as const,
+        parent: parentId,
+        children: [],
+        transform: {
+          position: { x, y },
+          rotation: 0,
+          scale: { x: 1, y: 1 },
+          anchor: { x: 0, y: 0 },
+          skew: { x: 0, y: 0 },
+        },
+        visible: true,
+        locked: false,
+        opacity: 1,
+        blendMode: 'normal' as const,
+        length,
+        angle: 0,
+        angleMin: -180,
+        angleMax: 180,
+      };
+    }
+
+    it('createIKChain creates chain and target node from end effector bone', () => {
+      const sg = createIKSceneGraph();
+      const bone1 = makeBone('bone1', 'Root', null, 0, 0, 50);
+      const bone2 = makeBone('bone2', 'Tip', 'bone1', 50, 0, 30);
+      sg._addTestNode(bone1);
+      sg._addTestNode(bone2);
+
+      useEditorStore.getState().createIKChain(sg, 'bone2');
+
+      const { ikChains, selectedNodeIds } = useEditorStore.getState();
+      expect(ikChains).toHaveLength(1);
+      expect(ikChains[0].rootBoneId).toBe('bone1');
+      expect(ikChains[0].endEffectorBoneId).toBe('bone2');
+      expect(ikChains[0].enabled).toBe(true);
+      expect(ikChains[0].maxIterations).toBe(10);
+      expect(ikChains[0].tolerance).toBe(0.5);
+
+      // Target node added to scene graph
+      expect(sg.addNode).toHaveBeenCalledTimes(1);
+      const addedNode = (sg.addNode as any).mock.calls[0][0];
+      expect(addedNode.type).toBe('ik-target');
+      expect(addedNode.targetType).toBe('effector');
+      expect(addedNode.ikChainId).toBe(ikChains[0].id);
+
+      // Target is selected
+      expect(selectedNodeIds.has(addedNode.id)).toBe(true);
+    });
+
+    it('createIKChain rejects non-bone node', () => {
+      const sg = createIKSceneGraph();
+      sg._addTestNode({
+        id: 'rect1',
+        name: 'Rect',
+        type: 'rectangle',
+        parent: null,
+        children: [],
+        transform: {
+          position: { x: 0, y: 0 },
+          rotation: 0,
+          scale: { x: 1, y: 1 },
+          anchor: { x: 0.5, y: 0.5 },
+          skew: { x: 0, y: 0 },
+        },
+        visible: true,
+        locked: false,
+        opacity: 1,
+        blendMode: 'normal',
+        width: 100,
+        height: 100,
+        cornerRadius: [0, 0, 0, 0],
+        fills: [],
+        strokes: [],
+      });
+
+      useEditorStore.getState().createIKChain(sg, 'rect1');
+      expect(useEditorStore.getState().ikChains).toHaveLength(0);
+    });
+
+    it('createIKChain rejects overlapping chains', () => {
+      const sg = createIKSceneGraph();
+      const bone1 = makeBone('bone1', 'Root', null, 0, 0, 50);
+      const bone2 = makeBone('bone2', 'Mid', 'bone1', 50, 0, 30);
+      const bone3 = makeBone('bone3', 'Tip', 'bone2', 80, 0, 20);
+      sg._addTestNode(bone1);
+      sg._addTestNode(bone2);
+      sg._addTestNode(bone3);
+
+      // Create chain on bone2 (root: bone1, end: bone2)
+      useEditorStore.getState().createIKChain(sg, 'bone2');
+      expect(useEditorStore.getState().ikChains).toHaveLength(1);
+
+      // Try to create chain on bone3 that overlaps (root: bone1, end: bone3 — shares bone2)
+      useEditorStore.getState().createIKChain(sg, 'bone3');
+      // Should be rejected
+      expect(useEditorStore.getState().ikChains).toHaveLength(1);
+    });
+
+    it('createIKChain respects chainDepth parameter', () => {
+      const sg = createIKSceneGraph();
+      const bone1 = makeBone('bone1', 'Root', null, 0, 0, 50);
+      const bone2 = makeBone('bone2', 'Mid', 'bone1', 50, 0, 30);
+      const bone3 = makeBone('bone3', 'Tip', 'bone2', 80, 0, 20);
+      sg._addTestNode(bone1);
+      sg._addTestNode(bone2);
+      sg._addTestNode(bone3);
+
+      // Create chain with depth 2 — should stop at bone2, not walk to bone1
+      useEditorStore.getState().createIKChain(sg, 'bone3', 2);
+
+      const { ikChains } = useEditorStore.getState();
+      expect(ikChains).toHaveLength(1);
+      expect(ikChains[0].rootBoneId).toBe('bone2');
+      expect(ikChains[0].endEffectorBoneId).toBe('bone3');
+    });
+
+    it('createIKChain positions target at end effector tip', () => {
+      const sg = createIKSceneGraph();
+      const bone1 = makeBone('bone1', 'Root', null, 100, 200, 50);
+      sg._addTestNode(bone1);
+
+      useEditorStore.getState().createIKChain(sg, 'bone1');
+
+      const addedNode = (sg.addNode as any).mock.calls[0][0];
+      // World transform for bone1 returns tx=100, ty=200 with identity rotation
+      // Tip = tx + a*length = 100 + 1*50 = 150, ty + b*length = 200 + 0*50 = 200
+      expect(addedNode.transform.position.x).toBe(150);
+      expect(addedNode.transform.position.y).toBe(200);
+    });
+
+    it('removeIKChain removes chain and target node', () => {
+      const sg = createIKSceneGraph();
+      const bone1 = makeBone('bone1', 'Root', null, 0, 0, 50);
+      sg._addTestNode(bone1);
+
+      useEditorStore.getState().createIKChain(sg, 'bone1');
+      const { ikChains } = useEditorStore.getState();
+      const chainId = ikChains[0].id;
+      const targetId = ikChains[0].targetNodeId;
+
+      useEditorStore.getState().removeIKChain(sg, chainId);
+
+      expect(useEditorStore.getState().ikChains).toHaveLength(0);
+      expect(sg.removeNode).toHaveBeenCalledWith(targetId);
+    });
+
+    it('removeIKChain with invalid chainId does nothing', () => {
+      const sg = createIKSceneGraph();
+      useEditorStore.getState().removeIKChain(sg, 'nonexistent');
+      expect(sg.removeNode).not.toHaveBeenCalled();
+    });
+
+    it('setIKChainEnabled toggles chain enabled state', () => {
+      const sg = createIKSceneGraph();
+      const bone1 = makeBone('bone1', 'Root', null, 0, 0, 50);
+      sg._addTestNode(bone1);
+
+      useEditorStore.getState().createIKChain(sg, 'bone1');
+      const chainId = useEditorStore.getState().ikChains[0].id;
+
+      useEditorStore.getState().setIKChainEnabled(chainId, false);
+      expect(useEditorStore.getState().ikChains[0].enabled).toBe(false);
+
+      useEditorStore.getState().setIKChainEnabled(chainId, true);
+      expect(useEditorStore.getState().ikChains[0].enabled).toBe(true);
+    });
+
+    it('setIKChainSettings updates chain parameters', () => {
+      const sg = createIKSceneGraph();
+      const bone1 = makeBone('bone1', 'Root', null, 0, 0, 50);
+      sg._addTestNode(bone1);
+
+      useEditorStore.getState().createIKChain(sg, 'bone1');
+      const chainId = useEditorStore.getState().ikChains[0].id;
+
+      useEditorStore.getState().setIKChainSettings(chainId, {
+        maxIterations: 20,
+        tolerance: 0.1,
+      });
+
+      const chain = useEditorStore.getState().ikChains[0];
+      expect(chain.maxIterations).toBe(20);
+      expect(chain.tolerance).toBe(0.1);
+    });
+
+    it('deleteSelection cleans up IK chains when deleting IK target', () => {
+      const sg = createIKSceneGraph();
+      const bone1 = makeBone('bone1', 'Root', null, 0, 0, 50);
+      sg._addTestNode(bone1);
+
+      useEditorStore.getState().createIKChain(sg, 'bone1');
+      const { ikChains } = useEditorStore.getState();
+      const targetId = ikChains[0].targetNodeId;
+
+      // Select the IK target node and delete
+      useEditorStore.setState({ selectedNodeIds: new Set([targetId]) });
+      useEditorStore.getState().deleteSelection(sg);
+
+      expect(useEditorStore.getState().ikChains).toHaveLength(0);
+    });
+
+    it('deleteSelection preserves IK chains when deleting non-IK nodes', () => {
+      const sg = createIKSceneGraph();
+      const bone1 = makeBone('bone1', 'Root', null, 0, 0, 50);
+      sg._addTestNode(bone1);
+      sg._addTestNode({
+        id: 'rect1',
+        name: 'Rect',
+        type: 'rectangle',
+        parent: null,
+        children: [],
+        transform: {
+          position: { x: 0, y: 0 },
+          rotation: 0,
+          scale: { x: 1, y: 1 },
+          anchor: { x: 0.5, y: 0.5 },
+          skew: { x: 0, y: 0 },
+        },
+        visible: true,
+        locked: false,
+        opacity: 1,
+        blendMode: 'normal',
+        width: 100,
+        height: 100,
+        cornerRadius: [0, 0, 0, 0],
+        fills: [],
+        strokes: [],
+      });
+
+      useEditorStore.getState().createIKChain(sg, 'bone1');
+      expect(useEditorStore.getState().ikChains).toHaveLength(1);
+
+      // Delete the rectangle — IK chain should remain
+      useEditorStore.setState({ selectedNodeIds: new Set(['rect1']) });
+      useEditorStore.getState().deleteSelection(sg);
+
+      expect(useEditorStore.getState().ikChains).toHaveLength(1);
+    });
+
+    it('createIKChain marks project dirty', () => {
+      const sg = createIKSceneGraph();
+      const bone1 = makeBone('bone1', 'Root', null, 0, 0, 50);
+      sg._addTestNode(bone1);
+      useEditorStore.setState({ isDirty: false });
+
+      useEditorStore.getState().createIKChain(sg, 'bone1');
+      expect(useEditorStore.getState().isDirty).toBe(true);
     });
   });
 });

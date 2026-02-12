@@ -10,6 +10,7 @@ import {
   applyAnimatedValues,
   getAnimatedNodes,
 } from '@quar/animation';
+import { evaluateIKChains } from '@quar/rigging';
 import { useEditorStore } from '../stores/editorStore';
 import { useSceneGraph } from '../contexts/SceneGraphContext';
 
@@ -22,8 +23,14 @@ export function usePlayback() {
   // Apply animated values from timeline to ALL scene graph nodes (including children in groups)
   const applyAnimations = useCallback((frame: number) => {
     const sg = sceneGraphRef.current;
-    const { timeline } = useEditorStore.getState();
-    if (!timeline.tracks || timeline.tracks.length === 0) return;
+    const { timeline, ikChains } = useEditorStore.getState();
+    if (!timeline.tracks || timeline.tracks.length === 0) {
+      // Even without animation tracks, evaluate IK chains (for interactive posing)
+      if (ikChains.length > 0) {
+        evaluateIKChains(ikChains, sg);
+      }
+      return;
+    }
     // Get all unique animated node IDs from timeline tracks
     const animatedNodeIds = getAnimatedNodes(timeline);
     for (const nodeId of animatedNodeIds) {
@@ -36,6 +43,11 @@ export function usePlayback() {
           sg.updateNode(nodeId, updated);
         }
       }
+    }
+
+    // After FK animation, evaluate IK chains
+    if (ikChains.length > 0) {
+      evaluateIKChains(ikChains, sg);
     }
   }, []);
 

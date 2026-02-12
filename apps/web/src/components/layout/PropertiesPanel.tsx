@@ -1763,6 +1763,51 @@ export function PropertiesPanel() {
                   </>
                 );
               })()}
+            {/* IK Target section */}
+            {node.type === 'ik-target' &&
+              (() => {
+                const ikTarget = node;
+                const chain = useEditorStore
+                  .getState()
+                  .ikChains.find((c) => c.id === ikTarget.ikChainId);
+                return (
+                  <>
+                    <div className={styles.sectionTitle}>IK Chain</div>
+                    <div className={styles.propertyRow}>
+                      <span className={styles.propertyLabel}>Chain</span>
+                      <div className={styles.propertyInputs}>
+                        <span style={{ fontSize: '11px', color: '#aaa' }}>
+                          {chain?.name ?? 'Unknown'}
+                        </span>
+                      </div>
+                    </div>
+                    <div className={styles.propertyRow}>
+                      <span className={styles.propertyLabel}>Type</span>
+                      <div className={styles.propertyInputs}>
+                        <span style={{ fontSize: '11px', color: '#aaa' }}>
+                          {ikTarget.targetType === 'effector' ? 'End Effector' : 'Pole Target'}
+                        </span>
+                      </div>
+                    </div>
+                    {chain && (
+                      <div className={styles.propertyRow}>
+                        <span className={styles.propertyLabel}>Enabled</span>
+                        <div className={styles.propertyInputs}>
+                          <input
+                            type="checkbox"
+                            checked={chain.enabled}
+                            onChange={(e) => {
+                              useEditorStore
+                                .getState()
+                                .setIKChainEnabled(chain.id, e.target.checked);
+                            }}
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
             {/* Rigging Section — shown for nodes with skinData (shapes + images) */}
             {node.type !== 'bone' &&
               node.type !== 'text' &&

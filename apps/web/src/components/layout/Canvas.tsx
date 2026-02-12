@@ -10,6 +10,7 @@ import {
 } from '@quar/core';
 import type { Node, ImageNode, TextNode, GroupNode, Vector2 } from '@quar/types';
 import { evaluateNodeAtFrame, applyAnimatedValues, getAnimatedNodes } from '@quar/animation';
+import { evaluateIKChains } from '@quar/rigging';
 import { useCanvasTools } from '../../hooks/useCanvasTools';
 import { useToolShortcuts } from '../../hooks/useToolShortcuts';
 import { useEditorStore } from '../../stores/editorStore';
@@ -111,6 +112,8 @@ export function Canvas() {
   );
   const bindMeshToBones = useEditorStore((state) => state.bindMeshToBones);
   const unbindMesh = useEditorStore((state) => state.unbindMesh);
+  const createIKChain = useEditorStore((state) => state.createIKChain);
+  const removeIKChain = useEditorStore((state) => state.removeIKChain);
 
   // Get shared SceneGraph from context
   const sceneGraph = useSceneGraph();
@@ -333,7 +336,7 @@ export function Canvas() {
   const selectionBounds = selectionDisplay?.bounds ?? null;
   const selectionRotation = selectionDisplay?.rotation ?? 0;
 
-  // Collect bone nodes for overlay
+  // Collect bone nodes and IK target nodes for overlay
   const boneNodes = useMemo(() => {
     if (!sceneGraphRef.current) return [];
     const bones: import('@quar/types').BoneNode[] = [];
@@ -354,6 +357,20 @@ export function Canvas() {
     return bones;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sceneGraphVersion]);
+
+  const ikTargetNodes = useMemo(() => {
+    if (!sceneGraphRef.current) return [];
+    const targets: import('@quar/types').IKTargetNode[] = [];
+    sceneGraphRef.current.traverse((node) => {
+      if (node.type === 'ik-target') {
+        targets.push(node as import('@quar/types').IKTargetNode);
+      }
+    });
+    return targets;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sceneGraphVersion]);
+
+  const ikChains = useEditorStore((state) => state.ikChains);
 
   const transformHandles = useMemo(() => {
     if (!transformHandlesRef.current || !selectionBounds || !cameraRef.current) return [];
@@ -526,6 +543,14 @@ export function Canvas() {
           }
         }
 
+        // Evaluate IK chains for interactive posing (when NOT playing)
+        if (sceneGraphRef.current) {
+          const { ikChains, isPlaying: ikPlaying } = useEditorStore.getState();
+          if (ikChains.length > 0 && !ikPlaying) {
+            evaluateIKChains(ikChains, sceneGraphRef.current);
+          }
+        }
+
         // Render shapes from scene graph
         if (sceneGraphRef.current && shapeRenderer) {
           shapeRenderer.render(
@@ -669,8 +694,46 @@ export function Canvas() {
       }
     };
 
+    const handleCreateIKChain = () => {
+      const state = useEditorStore.getState();
+      const selectedArr = Array.from(state.selectedNodeIds);
+      for (const nodeId of selectedArr) {
+        const node = sceneGraphRef.current?.getNode(nodeId);
+        if (node && node.type === 'bone') {
+          createIKChain(sceneGraphRef.current, nodeId);
+          break;
+        }
+      }
+    };
+
+    const handleRemoveIKChain = () => {
+      const state = useEditorStore.getState();
+      const selectedArr = Array.from(state.selectedNodeIds);
+      for (const nodeId of selectedArr) {
+        const node = sceneGraphRef.current?.getNode(nodeId);
+        if (!node) continue;
+        // If an IK target is selected, remove its chain
+        if (node.type === 'ik-target') {
+          removeIKChain(sceneGraphRef.current, (node as any).ikChainId);
+          break;
+        }
+        // If a bone is selected, find its chain
+        if (node.type === 'bone') {
+          const chain = state.ikChains.find(
+            (c) => c.rootBoneId === nodeId || c.endEffectorBoneId === nodeId
+          );
+          if (chain) {
+            removeIKChain(sceneGraphRef.current, chain.id);
+            break;
+          }
+        }
+      }
+    };
+
     window.addEventListener('menubar:bind-to-bones', handleBindToBones);
     window.addEventListener('menubar:unbind-mesh', handleUnbindMesh);
+    window.addEventListener('menubar:create-ik-chain', handleCreateIKChain);
+    window.addEventListener('menubar:remove-ik-chain', handleRemoveIKChain);
 
     return () => {
       window.removeEventListener('menubar:zoom-in', handleZoomIn);
@@ -679,8 +742,10 @@ export function Canvas() {
       window.removeEventListener('menubar:fit-to-window', handleFitToWindow);
       window.removeEventListener('menubar:bind-to-bones', handleBindToBones);
       window.removeEventListener('menubar:unbind-mesh', handleUnbindMesh);
+      window.removeEventListener('menubar:create-ik-chain', handleCreateIKChain);
+      window.removeEventListener('menubar:remove-ik-chain', handleRemoveIKChain);
     };
-  }, [cameraReady, bindMeshToBones, unbindMesh]); // Re-attach when camera becomes ready
+  }, [cameraReady, bindMeshToBones, unbindMesh, createIKChain, removeIKChain]); // Re-attach when camera becomes ready
 
   // --------------------------------------------------------------------------
   // Mouse Handlers
@@ -1224,6 +1289,41 @@ export function Canvas() {
           const selNode = sceneGraph.getNode(selectedArr[0]!);
           if (!selNode) return [];
 
+          // IK chain items for bones
+          if (selNode.type === 'bone') {
+            const items: ContextMenuEntry[] = [];
+            const existingChain = ikChains.find(
+              (c) => c.rootBoneId === selNode.id || c.endEffectorBoneId === selNode.id
+            );
+            if (!existingChain) {
+              items.push({
+                id: 'create-ik-chain',
+                label: 'Create IK Chain',
+                onClick: () => createIKChain(sceneGraph, selNode.id),
+              });
+            } else {
+              items.push({
+                id: 'remove-ik-chain',
+                label: 'Remove IK Chain',
+                onClick: () => removeIKChain(sceneGraph, existingChain.id),
+              });
+            }
+            return items.length > 0 ? [{ type: 'separator' }, ...items] : [];
+          }
+
+          // IK target items
+          if (selNode.type === 'ik-target') {
+            const chainId = selNode.ikChainId;
+            return [
+              { type: 'separator' },
+              {
+                id: 'remove-ik-chain',
+                label: 'Remove IK Chain',
+                onClick: () => removeIKChain(sceneGraph, chainId),
+              },
+            ];
+          }
+
           const isBindableShape =
             selNode.type === 'rectangle' ||
             selNode.type === 'ellipse' ||
@@ -1387,6 +1487,10 @@ export function Canvas() {
     createBrushProfileFromSelection,
     bindMeshToBones,
     unbindMesh,
+    createIKChain,
+    removeIKChain,
+    ikChains,
+    ikTargetNodes,
     isDirectSelectionActive,
     directSelectionPoints,
     deleteDirectSelectionPoints,
@@ -1656,10 +1760,14 @@ export function Canvas() {
           sceneGraph={sceneGraph}
         />
       )}
-      {(activeTool === 'bone' || boneNodes.some((b) => selectedNodeIds.has(b.id))) &&
-        boneNodes.length > 0 && (
+      {(activeTool === 'bone' ||
+        boneNodes.some((b) => selectedNodeIds.has(b.id)) ||
+        ikTargetNodes.length > 0) &&
+        (boneNodes.length > 0 || ikTargetNodes.length > 0) && (
           <BoneOverlay
             boneNodes={boneNodes}
+            ikTargetNodes={ikTargetNodes}
+            ikChains={ikChains}
             selectedNodeIds={selectedNodeIds}
             camera={cameraRef.current}
             sceneGraph={sceneGraph}

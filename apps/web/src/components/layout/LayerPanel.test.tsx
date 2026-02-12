@@ -914,4 +914,42 @@ describe('LayerPanel', () => {
       expect(useEditorStore.getState().selectedNodeIds.size).toBe(2);
     });
   });
+
+  // ==========================================================================
+  // IK Target Nodes
+  // ==========================================================================
+
+  describe('IK Target nodes', () => {
+    it('shows ⊕ icon for ik-target nodes', () => {
+      let sg: SceneGraph | null = null;
+      render(
+        <SceneGraphProvider>
+          <SceneGraphCapture onCapture={(s) => (sg = s)} />
+          <LayerPanel />
+        </SceneGraphProvider>
+      );
+
+      act(() => {
+        sg!.addNode({
+          id: 'ikt1',
+          name: 'IK Target (Bone1)',
+          type: 'ik-target',
+          parent: null,
+          children: [],
+          transform: createDefaultTransform(),
+          visible: true,
+          locked: false,
+          opacity: 1,
+          blendMode: 'normal',
+          ikChainId: 'chain1',
+          targetType: 'effector',
+        } as any);
+      });
+
+      // Check the IK target shows up with its name
+      expect(screen.getByText('IK Target (Bone1)')).toBeInTheDocument();
+      // Check for ⊕ icon
+      expect(screen.getByText('\u2295')).toBeInTheDocument();
+    });
+  });
 });
