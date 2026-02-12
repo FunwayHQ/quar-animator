@@ -816,40 +816,96 @@ export function generateStrokeOutlineVertices(
     const cx = vertices[i * 2] as number;
     const cy = vertices[i * 2 + 1] as number;
 
-    // Calculate direction vector based on neighbors
-    let dx = 0;
-    let dy = 0;
-
     const prevIdx = i > 0 ? i - 1 : closed ? numVertices - 1 : -1;
     const nextIdx = i < numVertices - 1 ? i + 1 : closed ? 0 : -1;
 
-    if (prevIdx >= 0 && nextIdx >= 0) {
-      // Middle point (or closed path point): average direction from prev to next
-      dx = (vertices[nextIdx * 2] as number) - (vertices[prevIdx * 2] as number);
-      dy = (vertices[nextIdx * 2 + 1] as number) - (vertices[prevIdx * 2 + 1] as number);
-    } else if (nextIdx >= 0) {
-      // First point: direction toward next
-      dx = (vertices[nextIdx * 2] as number) - cx;
-      dy = (vertices[nextIdx * 2 + 1] as number) - cy;
-    } else if (prevIdx >= 0) {
-      // Last point: direction from prev
-      dx = cx - (vertices[prevIdx * 2] as number);
-      dy = cy - (vertices[prevIdx * 2 + 1] as number);
-    }
-
-    const len = Math.sqrt(dx * dx + dy * dy);
     let perpX: number;
     let perpY: number;
+    let miterScale = 1;
 
-    if (len < GEOMETRY_EPSILON) {
-      // Degenerate: reuse last valid perpendicular
-      perpX = lastPerpX;
-      perpY = lastPerpY;
-    } else {
-      perpX = -dy / len;
-      perpY = dx / len;
+    if (prevIdx >= 0 && nextIdx >= 0) {
+      // Both neighbors exist — compute proper miter join bisector
+      // Incoming edge normal (prev → current)
+      const inDx = cx - (vertices[prevIdx * 2] as number);
+      const inDy = cy - (vertices[prevIdx * 2 + 1] as number);
+      const inLen = Math.sqrt(inDx * inDx + inDy * inDy);
+      // Outgoing edge normal (current → next)
+      const outDx = (vertices[nextIdx * 2] as number) - cx;
+      const outDy = (vertices[nextIdx * 2 + 1] as number) - cy;
+      const outLen = Math.sqrt(outDx * outDx + outDy * outDy);
+
+      if (inLen < GEOMETRY_EPSILON && outLen < GEOMETRY_EPSILON) {
+        perpX = lastPerpX;
+        perpY = lastPerpY;
+      } else if (inLen < GEOMETRY_EPSILON) {
+        perpX = -outDy / outLen;
+        perpY = outDx / outLen;
+      } else if (outLen < GEOMETRY_EPSILON) {
+        perpX = -inDy / inLen;
+        perpY = inDx / inLen;
+      } else {
+        // Per-edge normals (rotate edge tangent 90° CCW: (-dy, dx))
+        const n1x = -inDy / inLen;
+        const n1y = inDx / inLen;
+        const n2x = -outDy / outLen;
+        const n2y = outDx / outLen;
+
+        // Miter bisector = sum of the two unit normals
+        const mx = n1x + n2x;
+        const my = n1y + n2y;
+        const mLen = Math.sqrt(mx * mx + my * my);
+
+        if (mLen < GEOMETRY_EPSILON) {
+          // Normals cancel out (180° turn) — use incoming normal
+          perpX = n1x;
+          perpY = n1y;
+        } else {
+          // Normalize miter direction
+          perpX = mx / mLen;
+          perpY = my / mLen;
+          // Scale so perpendicular distance from each edge = offset
+          // miterScale = 1 / dot(edgeNormal, miterDir)
+          const dot = n1x * perpX + n1y * perpY;
+          if (dot > GEOMETRY_EPSILON) {
+            miterScale = 1 / dot;
+            // Miter limit: cap at 4× to avoid extremely long spikes at acute angles
+            if (miterScale > 4) miterScale = 4;
+          }
+        }
+      }
       lastPerpX = perpX;
       lastPerpY = perpY;
+    } else if (nextIdx >= 0) {
+      // First point of open path: use outgoing edge normal
+      const dx = (vertices[nextIdx * 2] as number) - cx;
+      const dy = (vertices[nextIdx * 2 + 1] as number) - cy;
+      const len = Math.sqrt(dx * dx + dy * dy);
+      if (len < GEOMETRY_EPSILON) {
+        perpX = lastPerpX;
+        perpY = lastPerpY;
+      } else {
+        perpX = -dy / len;
+        perpY = dx / len;
+        lastPerpX = perpX;
+        lastPerpY = perpY;
+      }
+    } else if (prevIdx >= 0) {
+      // Last point of open path: use incoming edge normal
+      const dx = cx - (vertices[prevIdx * 2] as number);
+      const dy = cy - (vertices[prevIdx * 2 + 1] as number);
+      const len = Math.sqrt(dx * dx + dy * dy);
+      if (len < GEOMETRY_EPSILON) {
+        perpX = lastPerpX;
+        perpY = lastPerpY;
+      } else {
+        perpX = -dy / len;
+        perpY = dx / len;
+        lastPerpX = perpX;
+        lastPerpY = perpY;
+      }
+    } else {
+      perpX = lastPerpX;
+      perpY = lastPerpY;
     }
 
     // Apply width profile multiplier if provided
@@ -867,8 +923,10 @@ export function generateStrokeOutlineVertices(
       effRightOffset = rightOffset * multiplier;
     }
 
-    leftSide.push(cx + perpX * effLeftOffset, cy + perpY * effLeftOffset);
-    rightSide.push(cx + perpX * effRightOffset, cy + perpY * effRightOffset);
+    const scaledLeft = effLeftOffset * miterScale;
+    const scaledRight = effRightOffset * miterScale;
+    leftSide.push(cx + perpX * scaledLeft, cy + perpY * scaledLeft);
+    rightSide.push(cx + perpX * scaledRight, cy + perpY * scaledRight);
   }
 
   // Combine: left side forward + right side reversed = closed polygon
