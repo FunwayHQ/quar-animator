@@ -467,6 +467,9 @@ export function detectInterpolationType(path: string): InterpolationType {
   if (/^effects\.\d+\.color$/.test(path)) return 'color';
   if (/^effects\.\d+\.(offsetX|offsetY|blur|spread|opacity|radius)$/.test(path)) return 'number';
 
+  // Vertex-level properties (points.N.cornerRadius, subpaths.N.M.cornerRadius)
+  if (/^(points|subpaths)\.\d+(\.\d+)?\.cornerRadius$/.test(path)) return 'number';
+
   return 'discrete';
 }
 

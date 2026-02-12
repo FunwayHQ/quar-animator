@@ -1558,6 +1558,37 @@ describe('DirectSelectionTool', () => {
 
     // --- No Subpaths Backward Compatibility ---
 
+    it('should call onTransformComplete with vertex-move after point drag', () => {
+      const completeCalls: Array<{ nodeIds: Set<string>; type: string }> = [];
+      context.onTransformComplete = (nodeIds, type) => {
+        completeCalls.push({ nodeIds, type });
+      };
+
+      const path = createTestPath(
+        context,
+        [createPoint(0, 0), createPoint(100, 0), createPoint(50, 100)],
+        true
+      );
+
+      context.setSelectedIds([path.id]);
+
+      // Select a point
+      tool.onPointerDown(createMockPointerEvent({ worldPosition: { x: 0, y: 0 }, button: 0 }));
+      tool.onPointerUp(createMockPointerEvent({ worldPosition: { x: 0, y: 0 } }));
+
+      // Drag the selected point
+      tool.onPointerDown(createMockPointerEvent({ worldPosition: { x: 0, y: 0 }, button: 0 }));
+      tool.onPointerMove(createMockPointerEvent({ worldPosition: { x: 10, y: 10 } }));
+      tool.onPointerUp(createMockPointerEvent({ worldPosition: { x: 10, y: 10 } }));
+
+      expect(completeCalls.length).toBe(1);
+      expect(completeCalls[0].type).toBe('vertex-move');
+      expect(completeCalls[0].nodeIds.has(path.id)).toBe(true);
+
+      // Clean up
+      delete context.onTransformComplete;
+    });
+
     it('should behave identically for paths without subpaths', () => {
       const path = createTestPath(
         context,

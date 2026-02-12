@@ -122,6 +122,10 @@ export interface EditorStore {
   enterGroup: (groupId: string) => void;
   exitGroup: () => void;
 
+  // Direct selection state (vertex selection for PropertiesPanel)
+  directSelectionPoints: Array<{ nodeId: string; pointIndex: number }>;
+  setDirectSelectionPoints: (points: Array<{ nodeId: string; pointIndex: number }>) => void;
+
   // Text editing state
   editingTextNodeId: string | null;
   setEditingTextNodeId: (id: string | null) => void;
@@ -351,6 +355,11 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   enterGroup: (groupId: string) =>
     set({ enteredGroupId: groupId, selectedNodeIds: new Set<string>() }),
   exitGroup: () => set({ enteredGroupId: null }),
+
+  // Direct selection state
+  directSelectionPoints: [],
+  setDirectSelectionPoints: (points: Array<{ nodeId: string; pointIndex: number }>) =>
+    set({ directSelectionPoints: points }),
 
   editingTextNodeId: null,
   setEditingTextNodeId: (id: string | null) => set({ editingTextNodeId: id }),

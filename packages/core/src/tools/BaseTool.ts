@@ -11,7 +11,7 @@ import type { Camera } from '../Camera';
 // Types
 // ============================================================================
 
-export type TransformType = 'move' | 'resize' | 'rotate';
+export type TransformType = 'move' | 'resize' | 'rotate' | 'vertex-move';
 
 export interface ToolContext {
   sceneGraph: SceneGraph;

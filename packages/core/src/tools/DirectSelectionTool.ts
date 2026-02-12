@@ -18,53 +18,15 @@ import {
   convertPointType as convertPointTypeUtil,
   updateHandleWithSymmetry,
 } from '../path/pointUtils';
-import { getPolygonBounds, getPathBounds } from '../path/pathUtils';
+import {
+  getPolygonBounds,
+  getPathBounds,
+  getAllPoints,
+  getSubpathBoundaries,
+  setAllPoints,
+  getContourRange,
+} from '../path/pathUtils';
 import { getTextBounds } from '../font/textMetrics';
-
-// ============================================================================
-// Subpath Helpers
-// ============================================================================
-
-/** Merge node.points + node.subpaths[] into a single flat array. */
-function getAllPoints(node: PathNode): PathPoint[] {
-  if (!node.subpaths || node.subpaths.length === 0) return node.points;
-  const result: PathPoint[] = [...node.points];
-  for (const sp of node.subpaths) result.push(...sp);
-  return result;
-}
-
-/** Return start indices of each contour: [0, points.length, points.length+subpaths[0].length, ...] */
-function getSubpathBoundaries(node: PathNode): number[] {
-  const b = [0, node.points.length];
-  if (node.subpaths) {
-    for (const sp of node.subpaths) b.push(b[b.length - 1] + sp.length);
-  }
-  return b;
-}
-
-/** Split a flat array back into points + subpaths using the original node boundaries. */
-function setAllPoints(
-  node: PathNode,
-  all: PathPoint[]
-): { points: PathPoint[]; subpaths?: PathPoint[][] } {
-  const b = getSubpathBoundaries(node);
-  const points = all.slice(0, b[1]);
-  const subpaths: PathPoint[][] = [];
-  for (let i = 1; i < b.length - 1; i++) {
-    subpaths.push(all.slice(b[i], b[i + 1]));
-  }
-  return { points, subpaths: subpaths.length ? subpaths : undefined };
-}
-
-/** Find the contour range [start, end) for a given flat index. */
-function getContourRange(boundaries: number[], flatIndex: number): { start: number; end: number } {
-  for (let c = 0; c < boundaries.length - 1; c++) {
-    if (flatIndex >= boundaries[c] && flatIndex < boundaries[c + 1]) {
-      return { start: boundaries[c], end: boundaries[c + 1] };
-    }
-  }
-  return { start: 0, end: boundaries[1] || 0 };
-}
 
 // ============================================================================
 // Types
@@ -118,6 +80,7 @@ export class DirectSelectionTool extends BaseTool {
   private dragStartPoint: Vector2 | null = null;
   private dragHandle: HandleHit | null = null;
   private initialPointPositions: Map<string, Vector2> = new Map();
+  private hasDragged: boolean = false;
 
   // Double-click detection
   private lastClickTime: number = 0;
@@ -182,6 +145,7 @@ export class DirectSelectionTool extends BaseTool {
       this.dragMode = 'dragging-handle';
       this.dragHandle = handleHit;
       this.state.isDragging = true;
+      this.hasDragged = false;
 
       // Note: initial handle position stored implicitly via dragHandle
       return;
@@ -210,6 +174,7 @@ export class DirectSelectionTool extends BaseTool {
       this.context.onTransformStart?.();
       this.dragMode = 'dragging-point';
       this.state.isDragging = true;
+      this.hasDragged = false;
 
       // Store initial positions of all selected points
       this.initialPointPositions.clear();
@@ -310,6 +275,7 @@ export class DirectSelectionTool extends BaseTool {
     if (!this.dragStartPoint) return;
 
     if (this.dragMode === 'dragging-point') {
+      this.hasDragged = true;
       // Move selected points — convert world-space delta to local-space
       const worldDelta = vec2.subtract(worldPos, this.dragStartPoint);
 
@@ -340,6 +306,7 @@ export class DirectSelectionTool extends BaseTool {
         });
       }
     } else if (this.dragMode === 'dragging-handle' && this.dragHandle) {
+      this.hasDragged = true;
       // Move handle — convert world position to local-space handle offset
       const node = this.context.sceneGraph.getNode(this.dragHandle.nodeId) as PathNode;
       if (!node) return;
@@ -374,6 +341,15 @@ export class DirectSelectionTool extends BaseTool {
   }
 
   onPointerUp(_event: CanvasPointerEvent): void {
+    // Notify about vertex transform completion (for auto-keyframe)
+    if (
+      this.hasDragged &&
+      (this.dragMode === 'dragging-point' || this.dragMode === 'dragging-handle')
+    ) {
+      const nodeIds = new Set(this.selectedPoints.map((sp) => sp.nodeId));
+      this.context.onTransformComplete?.(nodeIds, 'vertex-move');
+    }
+
     this.dragMode = 'idle';
     this.dragStartPoint = null;
     this.dragHandle = null;

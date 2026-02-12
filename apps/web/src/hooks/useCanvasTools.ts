@@ -11,6 +11,7 @@ import {
   PenTool,
   DirectSelectionTool,
   SelectionTool,
+  getAllPoints,
 } from '@quar/core';
 import type { TransformType } from '@quar/core';
 import type {
@@ -239,6 +240,74 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
         }
       } else if (type === 'rotate') {
         addKf(nodeId, 'transform.rotation', frame, node.transform.rotation);
+      } else if (type === 'vertex-move') {
+        // Keyframe ALL vertex positions/handles/cornerRadius for the affected path node
+        // to prevent un-keyframed vertices from snapping to base state during interpolation
+        if (node.type === 'path') {
+          const pathNode = node as PathNode;
+          const allPts = getAllPoints(pathNode);
+
+          // Determine if node uses subpaths
+          const hasSubpaths = pathNode.subpaths && pathNode.subpaths.length > 0;
+
+          if (hasSubpaths) {
+            // Primary contour
+            for (let i = 0; i < pathNode.points.length; i++) {
+              const pt = pathNode.points[i];
+              addKf(nodeId, `points.${i}.position.x`, frame, pt.position.x);
+              addKf(nodeId, `points.${i}.position.y`, frame, pt.position.y);
+              if (pt.cornerRadius !== undefined) {
+                addKf(nodeId, `points.${i}.cornerRadius`, frame, pt.cornerRadius);
+              }
+              if (pt.handleIn) {
+                addKf(nodeId, `points.${i}.handleIn.x`, frame, pt.handleIn.x);
+                addKf(nodeId, `points.${i}.handleIn.y`, frame, pt.handleIn.y);
+              }
+              if (pt.handleOut) {
+                addKf(nodeId, `points.${i}.handleOut.x`, frame, pt.handleOut.x);
+                addKf(nodeId, `points.${i}.handleOut.y`, frame, pt.handleOut.y);
+              }
+            }
+            // Subpaths
+            for (let s = 0; s < pathNode.subpaths!.length; s++) {
+              const sp = pathNode.subpaths![s];
+              for (let i = 0; i < sp.length; i++) {
+                const pt = sp[i];
+                addKf(nodeId, `subpaths.${s}.${i}.position.x`, frame, pt.position.x);
+                addKf(nodeId, `subpaths.${s}.${i}.position.y`, frame, pt.position.y);
+                if (pt.cornerRadius !== undefined) {
+                  addKf(nodeId, `subpaths.${s}.${i}.cornerRadius`, frame, pt.cornerRadius);
+                }
+                if (pt.handleIn) {
+                  addKf(nodeId, `subpaths.${s}.${i}.handleIn.x`, frame, pt.handleIn.x);
+                  addKf(nodeId, `subpaths.${s}.${i}.handleIn.y`, frame, pt.handleIn.y);
+                }
+                if (pt.handleOut) {
+                  addKf(nodeId, `subpaths.${s}.${i}.handleOut.x`, frame, pt.handleOut.x);
+                  addKf(nodeId, `subpaths.${s}.${i}.handleOut.y`, frame, pt.handleOut.y);
+                }
+              }
+            }
+          } else {
+            // Simple path — no subpaths
+            for (let i = 0; i < allPts.length; i++) {
+              const pt = allPts[i];
+              addKf(nodeId, `points.${i}.position.x`, frame, pt.position.x);
+              addKf(nodeId, `points.${i}.position.y`, frame, pt.position.y);
+              if (pt.cornerRadius !== undefined) {
+                addKf(nodeId, `points.${i}.cornerRadius`, frame, pt.cornerRadius);
+              }
+              if (pt.handleIn) {
+                addKf(nodeId, `points.${i}.handleIn.x`, frame, pt.handleIn.x);
+                addKf(nodeId, `points.${i}.handleIn.y`, frame, pt.handleIn.y);
+              }
+              if (pt.handleOut) {
+                addKf(nodeId, `points.${i}.handleOut.x`, frame, pt.handleOut.x);
+                addKf(nodeId, `points.${i}.handleOut.y`, frame, pt.handleOut.y);
+              }
+            }
+          }
+        }
       }
     }
   }, []);
@@ -333,7 +402,11 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
     if (tool?.type === 'direct-selection') {
       const dsTool = tool as DirectSelectionTool;
       setIsDirectSelectionActive(true);
-      setDirectSelectionPoints(dsTool.getSelectedPoints());
+      const selPts = dsTool.getSelectedPoints();
+      setDirectSelectionPoints(selPts);
+
+      // Push to editor store so PropertiesPanel can access vertex selection
+      useEditorStore.getState().setDirectSelectionPoints(selPts);
 
       // Collect only selected path nodes for overlay rendering
       const selected = selectedNodeIdsRef.current;
@@ -348,6 +421,7 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
       setIsDirectSelectionActive(false);
       setDirectSelectionPoints([]);
       setDirectSelectionPathNodes([]);
+      useEditorStore.getState().setDirectSelectionPoints([]);
     }
   }, []);
 

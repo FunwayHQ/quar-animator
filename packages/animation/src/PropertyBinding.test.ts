@@ -457,4 +457,44 @@ describe('corner radius animation support', () => {
     addKeyframe(track, 10, 20);
     expect(evaluateTrack(track, 5)).toBe(10);
   });
+
+  it('detectInterpolationType recognizes vertex cornerRadius paths as number', () => {
+    expect(detectInterpolationType('points.0.cornerRadius')).toBe('number');
+    expect(detectInterpolationType('points.5.cornerRadius')).toBe('number');
+    expect(detectInterpolationType('subpaths.0.3.cornerRadius')).toBe('number');
+    expect(detectInterpolationType('subpaths.1.0.cornerRadius')).toBe('number');
+  });
+
+  it('detectInterpolationType recognizes vertex position paths as number', () => {
+    // These already match .endsWith('.x') / .endsWith('.y')
+    expect(detectInterpolationType('points.0.position.x')).toBe('number');
+    expect(detectInterpolationType('points.0.position.y')).toBe('number');
+    expect(detectInterpolationType('points.2.handleIn.x')).toBe('number');
+    expect(detectInterpolationType('subpaths.0.1.handleOut.y')).toBe('number');
+  });
+
+  it('getProperty/setProperty works for vertex paths', () => {
+    const node = {
+      id: 'n1',
+      type: 'path',
+      points: [
+        {
+          position: { x: 10, y: 20 },
+          handleIn: null,
+          handleOut: null,
+          type: 'corner',
+          cornerRadius: 5,
+        },
+        { position: { x: 30, y: 40 }, handleIn: null, handleOut: null, type: 'corner' },
+      ],
+    } as any;
+
+    expect(getProperty(node, 'points.0.position.x')).toBe(10);
+    expect(getProperty(node, 'points.0.cornerRadius')).toBe(5);
+    expect(getProperty(node, 'points.1.cornerRadius')).toBeUndefined();
+
+    const updated = setProperty(node, 'points.0.cornerRadius', 12);
+    expect(getProperty(updated, 'points.0.cornerRadius')).toBe(12);
+    expect(getProperty(updated, 'points.0.position.x')).toBe(10); // unchanged
+  });
 });

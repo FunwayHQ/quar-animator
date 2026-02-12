@@ -53,6 +53,8 @@ import {
   WEB_SAFE_FONTS,
   getFontManager,
   GOOGLE_FONTS_CATALOG,
+  getAllPoints,
+  setAllPoints,
 } from '@quar/core';
 import type { SceneGraph } from '@quar/core';
 import { getKeyframeState } from '../../hooks/useKeyframeState';
@@ -323,6 +325,8 @@ export function PropertiesPanel() {
   const toggleEffectVisibility = useEditorStore((state) => state.toggleEffectVisibility);
   const setBlendMode = useEditorStore((state) => state.setBlendMode);
   const pushUndo = useEditorStore((state) => state.pushUndo);
+  const activeTool = useEditorStore((state) => state.activeTool);
+  const dsPoints = useEditorStore((state) => state.directSelectionPoints);
 
   // Undo snapshot before scrub or input commit
   const handleScrubStart = useCallback(() => {
@@ -1981,6 +1985,229 @@ export function PropertiesPanel() {
             </div>
           </div>
         )}
+
+        {/* Vertex section — visible when DirectSelectionTool has selected points */}
+        {activeTool === 'direct-selection' &&
+          dsPoints.length > 0 &&
+          node.type === 'path' &&
+          (() => {
+            const pathNode = node as PathNode;
+            const allPts = getAllPoints(pathNode);
+            const firstPt = allPts[dsPoints[0].pointIndex];
+            if (!firstPt) return null;
+
+            // Check if all selected are corner type (for cornerRadius editing)
+            const allCorner = dsPoints.every((sp) => {
+              const pt = allPts[sp.pointIndex];
+              return pt && pt.type === 'corner';
+            });
+
+            // Corner radius: show only for corner points, "Mixed" if values differ
+            const crValues = allCorner
+              ? dsPoints.map((sp) => allPts[sp.pointIndex]?.cornerRadius ?? 0)
+              : [];
+            const crAllSame = crValues.length > 0 && crValues.every((v) => v === crValues[0]);
+            const crDisplay = allCorner ? (crAllSame ? String(crValues[0]) : '') : null;
+
+            const handleVertexPosChange = (axis: 'x' | 'y', value: string) => {
+              const num = parseFloat(value);
+              if (isNaN(num)) return;
+              pushUndo(sceneGraph);
+              for (const sp of dsPoints) {
+                const n = sceneGraph.getNode(sp.nodeId) as PathNode | undefined;
+                if (!n || n.type !== 'path') continue;
+                const pts = getAllPoints(n);
+                const pt = pts[sp.pointIndex];
+                if (!pt) continue;
+                const newPts = [...pts];
+                newPts[sp.pointIndex] = {
+                  ...pt,
+                  position: { ...pt.position, [axis]: num },
+                };
+                const split = setAllPoints(n, newPts);
+                sceneGraph.updateNode(sp.nodeId, {
+                  points: split.points,
+                  subpaths: split.subpaths,
+                });
+                if (autoKeyframe) {
+                  addKeyframeAtFrame(
+                    sp.nodeId,
+                    `points.${sp.pointIndex}.position.${axis}`,
+                    currentFrame,
+                    num
+                  );
+                }
+              }
+            };
+
+            const handleVertexCornerRadiusChange = (value: string) => {
+              const num = parseFloat(value);
+              if (isNaN(num) || num < 0) return;
+              pushUndo(sceneGraph);
+              for (const sp of dsPoints) {
+                const n = sceneGraph.getNode(sp.nodeId) as PathNode | undefined;
+                if (!n || n.type !== 'path') continue;
+                const pts = getAllPoints(n);
+                const pt = pts[sp.pointIndex];
+                if (!pt || pt.type !== 'corner') continue;
+                const newPts = [...pts];
+                newPts[sp.pointIndex] = {
+                  ...pt,
+                  cornerRadius: num > 0 ? num : undefined,
+                };
+                const split = setAllPoints(n, newPts);
+                sceneGraph.updateNode(sp.nodeId, {
+                  points: split.points,
+                  subpaths: split.subpaths,
+                });
+                if (autoKeyframe) {
+                  addKeyframeAtFrame(
+                    sp.nodeId,
+                    `points.${sp.pointIndex}.cornerRadius`,
+                    currentFrame,
+                    num
+                  );
+                }
+              }
+            };
+
+            return (
+              <div className={styles.section}>
+                <div className={styles.sectionHeader}>
+                  <span className={styles.sectionTitle}>Vertex</span>
+                </div>
+                <div className={styles.sectionContent}>
+                  <div className={styles.propertyRow}>
+                    <div className={styles.twoColumnRow}>
+                      <div className={`${styles.inputGroup} ${styles.inputGroupFlex}`}>
+                        <ScrubLabel
+                          onScrubStart={handleScrubStart}
+                          label="X"
+                          value={+firstPt.position.x.toFixed(1)}
+                          onChange={(v) => handleVertexPosChange('x', String(v))}
+                          sensitivity={1}
+                        />
+                        <input
+                          className={styles.input}
+                          type="text"
+                          value={fmt1(firstPt.position.x)}
+                          onChange={(e) => handleVertexPosChange('x', e.target.value)}
+                          {...numericInputProps(
+                            () => +firstPt.position.x.toFixed(1),
+                            (v) => handleVertexPosChange('x', v)
+                          )}
+                          data-testid="vertex-pos-x"
+                        />
+                        <KeyframeIndicator
+                          state={
+                            selectedId
+                              ? getKeyframeState(
+                                  timeline,
+                                  selectedId,
+                                  `points.${dsPoints[0].pointIndex}.position.x`,
+                                  currentFrame
+                                )
+                              : 'none'
+                          }
+                          onToggle={() => {
+                            if (selectedId)
+                              toggleKeyframe(
+                                `points.${dsPoints[0].pointIndex}.position.x`,
+                                firstPt.position.x
+                              );
+                          }}
+                        />
+                      </div>
+                      <div className={`${styles.inputGroup} ${styles.inputGroupFlex}`}>
+                        <ScrubLabel
+                          onScrubStart={handleScrubStart}
+                          label="Y"
+                          value={+firstPt.position.y.toFixed(1)}
+                          onChange={(v) => handleVertexPosChange('y', String(v))}
+                          sensitivity={1}
+                        />
+                        <input
+                          className={styles.input}
+                          type="text"
+                          value={fmt1(firstPt.position.y)}
+                          onChange={(e) => handleVertexPosChange('y', e.target.value)}
+                          {...numericInputProps(
+                            () => +firstPt.position.y.toFixed(1),
+                            (v) => handleVertexPosChange('y', v)
+                          )}
+                          data-testid="vertex-pos-y"
+                        />
+                        <KeyframeIndicator
+                          state={
+                            selectedId
+                              ? getKeyframeState(
+                                  timeline,
+                                  selectedId,
+                                  `points.${dsPoints[0].pointIndex}.position.y`,
+                                  currentFrame
+                                )
+                              : 'none'
+                          }
+                          onToggle={() => {
+                            if (selectedId)
+                              toggleKeyframe(
+                                `points.${dsPoints[0].pointIndex}.position.y`,
+                                firstPt.position.y
+                              );
+                          }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  {allCorner && (
+                    <div className={styles.propertyRow}>
+                      <div className={`${styles.inputGroup} ${styles.inputGroupFlex}`}>
+                        <ScrubLabel
+                          onScrubStart={handleScrubStart}
+                          label="R"
+                          value={crAllSame ? crValues[0] : 0}
+                          onChange={(v) => handleVertexCornerRadiusChange(String(Math.max(0, v)))}
+                          sensitivity={0.5}
+                          min={0}
+                        />
+                        <input
+                          className={styles.input}
+                          type="text"
+                          value={crDisplay ?? ''}
+                          placeholder={crAllSame ? undefined : 'Mixed'}
+                          onChange={(e) => handleVertexCornerRadiusChange(e.target.value)}
+                          {...numericInputProps(
+                            () => (crAllSame ? crValues[0] : 0),
+                            (v) => handleVertexCornerRadiusChange(v)
+                          )}
+                          data-testid="vertex-corner-radius"
+                        />
+                        <KeyframeIndicator
+                          state={
+                            selectedId
+                              ? getKeyframeState(
+                                  timeline,
+                                  selectedId,
+                                  `points.${dsPoints[0].pointIndex}.cornerRadius`,
+                                  currentFrame
+                                )
+                              : 'none'
+                          }
+                          onToggle={() => {
+                            if (selectedId)
+                              toggleKeyframe(
+                                `points.${dsPoints[0].pointIndex}.cornerRadius`,
+                                crValues[0] ?? 0
+                              );
+                          }}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
 
         {/* Brush Stroke section — visible only for brush strokes with brushData */}
         {node.type === 'path' && (node as PathNode).brushData && (

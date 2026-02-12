@@ -27,6 +27,10 @@ import {
   createStarPath,
   generateStrokeOutlineVertices,
   applyCornerRadius,
+  getAllPoints,
+  getSubpathBoundaries,
+  setAllPoints,
+  getContourRange,
 } from './pathUtils';
 import type { PathPoint } from '@quar/types';
 
@@ -869,5 +873,157 @@ describe('applyCornerRadius', () => {
     for (let i = 0; i < tessellated.length; i++) {
       expect(isFinite(tessellated[i])).toBe(true);
     }
+  });
+});
+
+// ============================================================================
+// Per-Vertex Corner Radius & Subpath Helpers
+// ============================================================================
+
+describe('clonePathPoint preserves cornerRadius', () => {
+  it('should clone cornerRadius when present', () => {
+    const point: PathPoint = {
+      position: { x: 10, y: 20 },
+      handleIn: null,
+      handleOut: null,
+      type: 'corner',
+      cornerRadius: 5,
+    };
+    const cloned = clonePathPoint(point);
+    expect(cloned.cornerRadius).toBe(5);
+    expect(cloned.position).toEqual({ x: 10, y: 20 });
+    expect(cloned.type).toBe('corner');
+  });
+
+  it('should not add cornerRadius when absent', () => {
+    const point: PathPoint = {
+      position: { x: 0, y: 0 },
+      handleIn: null,
+      handleOut: null,
+      type: 'corner',
+    };
+    const cloned = clonePathPoint(point);
+    expect(cloned.cornerRadius).toBeUndefined();
+  });
+
+  it('should preserve cornerRadius=0', () => {
+    const point: PathPoint = {
+      position: { x: 0, y: 0 },
+      handleIn: null,
+      handleOut: null,
+      type: 'corner',
+      cornerRadius: 0,
+    };
+    const cloned = clonePathPoint(point);
+    expect(cloned.cornerRadius).toBe(0);
+  });
+});
+
+describe('createCornerPoint with cornerRadius', () => {
+  it('should create a corner point with cornerRadius', () => {
+    const point = createCornerPoint({ x: 5, y: 10 }, 8);
+    expect(point.cornerRadius).toBe(8);
+    expect(point.type).toBe('corner');
+    expect(point.position).toEqual({ x: 5, y: 10 });
+  });
+
+  it('should not set cornerRadius when 0', () => {
+    const point = createCornerPoint({ x: 0, y: 0 }, 0);
+    expect(point.cornerRadius).toBeUndefined();
+  });
+
+  it('should not set cornerRadius when undefined', () => {
+    const point = createCornerPoint({ x: 0, y: 0 });
+    expect(point.cornerRadius).toBeUndefined();
+  });
+});
+
+describe('getAllPoints', () => {
+  it('should return points when no subpaths', () => {
+    const node = {
+      points: [createCornerPoint({ x: 0, y: 0 }), createCornerPoint({ x: 10, y: 0 })],
+    };
+    const all = getAllPoints(node as any);
+    expect(all.length).toBe(2);
+    expect(all[0].position).toEqual({ x: 0, y: 0 });
+  });
+
+  it('should merge points + subpaths', () => {
+    const node = {
+      points: [createCornerPoint({ x: 0, y: 0 })],
+      subpaths: [[createCornerPoint({ x: 10, y: 10 }), createCornerPoint({ x: 20, y: 20 })]],
+    };
+    const all = getAllPoints(node as any);
+    expect(all.length).toBe(3);
+    expect(all[2].position).toEqual({ x: 20, y: 20 });
+  });
+});
+
+describe('getSubpathBoundaries', () => {
+  it('should return [0, N] for simple path', () => {
+    const node = {
+      points: [
+        createCornerPoint({ x: 0, y: 0 }),
+        createCornerPoint({ x: 10, y: 0 }),
+        createCornerPoint({ x: 10, y: 10 }),
+      ],
+    };
+    const b = getSubpathBoundaries(node as any);
+    expect(b).toEqual([0, 3]);
+  });
+
+  it('should include subpath boundaries', () => {
+    const node = {
+      points: [createCornerPoint({ x: 0, y: 0 }), createCornerPoint({ x: 1, y: 1 })],
+      subpaths: [
+        [createCornerPoint({ x: 2, y: 2 })],
+        [createCornerPoint({ x: 3, y: 3 }), createCornerPoint({ x: 4, y: 4 })],
+      ],
+    };
+    const b = getSubpathBoundaries(node as any);
+    expect(b).toEqual([0, 2, 3, 5]);
+  });
+});
+
+describe('setAllPoints', () => {
+  it('should split flat array back into points + subpaths', () => {
+    const node = {
+      points: [createCornerPoint({ x: 0, y: 0 }), createCornerPoint({ x: 1, y: 1 })],
+      subpaths: [[createCornerPoint({ x: 2, y: 2 })]],
+    };
+    const all = getAllPoints(node as any);
+    // Modify a point
+    all[2] = { ...all[2], position: { x: 99, y: 99 } };
+    const result = setAllPoints(node as any, all);
+    expect(result.points.length).toBe(2);
+    expect(result.subpaths!.length).toBe(1);
+    expect(result.subpaths![0][0].position).toEqual({ x: 99, y: 99 });
+  });
+
+  it('should return undefined subpaths for simple path', () => {
+    const node = {
+      points: [createCornerPoint({ x: 0, y: 0 }), createCornerPoint({ x: 1, y: 1 })],
+    };
+    const all = getAllPoints(node as any);
+    const result = setAllPoints(node as any, all);
+    expect(result.points.length).toBe(2);
+    expect(result.subpaths).toBeUndefined();
+  });
+});
+
+describe('getContourRange', () => {
+  it('should find range for first contour', () => {
+    const boundaries = [0, 3, 5];
+    expect(getContourRange(boundaries, 1)).toEqual({ start: 0, end: 3 });
+  });
+
+  it('should find range for second contour', () => {
+    const boundaries = [0, 3, 5];
+    expect(getContourRange(boundaries, 4)).toEqual({ start: 3, end: 5 });
+  });
+
+  it('should default to first contour for out-of-range', () => {
+    const boundaries = [0, 3];
+    expect(getContourRange(boundaries, 10)).toEqual({ start: 0, end: 3 });
   });
 });

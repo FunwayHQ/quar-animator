@@ -17,13 +17,17 @@ const GEOMETRY_EPSILON = 0.001;
 /**
  * Create a corner PathPoint (no bezier handles)
  */
-export function createCornerPoint(position: Vector2): PathPoint {
-  return {
+export function createCornerPoint(position: Vector2, cornerRadius?: number): PathPoint {
+  const point: PathPoint = {
     position: { ...position },
     handleIn: null,
     handleOut: null,
     type: 'corner',
   };
+  if (cornerRadius !== undefined && cornerRadius > 0) {
+    point.cornerRadius = cornerRadius;
+  }
+  return point;
 }
 
 /**
@@ -62,12 +66,16 @@ export function createSymmetricPoint(position: Vector2, handleOut: Vector2): Pat
  * Clone a PathPoint
  */
 export function clonePathPoint(point: PathPoint): PathPoint {
-  return {
+  const cloned: PathPoint = {
     position: { ...point.position },
     handleIn: point.handleIn ? { ...point.handleIn } : null,
     handleOut: point.handleOut ? { ...point.handleOut } : null,
     type: point.type,
   };
+  if (point.cornerRadius !== undefined) {
+    cloned.cornerRadius = point.cornerRadius;
+  }
+  return cloned;
 }
 
 // ============================================================================
@@ -368,6 +376,65 @@ export function getNearestPointOnPath(
   });
 
   return bestResult;
+}
+
+// ============================================================================
+// Subpath Helpers (shared by DirectSelectionTool, PropertiesPanel, etc.)
+// ============================================================================
+
+/**
+ * Merge node.points + node.subpaths[] into a single flat array.
+ */
+export function getAllPoints(node: { points: PathPoint[]; subpaths?: PathPoint[][] }): PathPoint[] {
+  if (!node.subpaths || node.subpaths.length === 0) return node.points;
+  const result: PathPoint[] = [...node.points];
+  for (const sp of node.subpaths) result.push(...sp);
+  return result;
+}
+
+/**
+ * Return start indices of each contour: [0, points.length, points.length+subpaths[0].length, ...]
+ */
+export function getSubpathBoundaries(node: {
+  points: PathPoint[];
+  subpaths?: PathPoint[][];
+}): number[] {
+  const b = [0, node.points.length];
+  if (node.subpaths) {
+    for (const sp of node.subpaths) b.push(b[b.length - 1] + sp.length);
+  }
+  return b;
+}
+
+/**
+ * Split a flat array back into points + subpaths using the original node boundaries.
+ */
+export function setAllPoints(
+  node: { points: PathPoint[]; subpaths?: PathPoint[][] },
+  all: PathPoint[]
+): { points: PathPoint[]; subpaths?: PathPoint[][] } {
+  const b = getSubpathBoundaries(node);
+  const points = all.slice(0, b[1]);
+  const subpaths: PathPoint[][] = [];
+  for (let i = 1; i < b.length - 1; i++) {
+    subpaths.push(all.slice(b[i], b[i + 1]));
+  }
+  return { points, subpaths: subpaths.length ? subpaths : undefined };
+}
+
+/**
+ * Find the contour range [start, end) for a given flat index.
+ */
+export function getContourRange(
+  boundaries: number[],
+  flatIndex: number
+): { start: number; end: number } {
+  for (let c = 0; c < boundaries.length - 1; c++) {
+    if (flatIndex >= boundaries[c] && flatIndex < boundaries[c + 1]) {
+      return { start: boundaries[c], end: boundaries[c + 1] };
+    }
+  }
+  return { start: 0, end: boundaries[1] || 0 };
 }
 
 // ============================================================================
