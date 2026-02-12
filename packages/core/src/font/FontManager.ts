@@ -93,6 +93,8 @@ export class FontManager {
   /**
    * Load a Google Font by family and weight from the catalog.
    * Returns null if the font is not in the catalog.
+   * Resolves the TTF URL dynamically via Google Fonts CSS2 API
+   * (hardcoded gstatic URLs break when Google updates versions).
    */
   async loadGoogleFont(family: string, weight: number = 400): Promise<opentype.Font | null> {
     const entry = GOOGLE_FONTS_CATALOG.find((e) => e.family === family);
@@ -101,8 +103,29 @@ export class FontManager {
     const closestWeight = entry.weights.reduce((prev, curr) =>
       Math.abs(curr - weight) < Math.abs(prev - weight) ? curr : prev
     );
-    const url = entry.url(closestWeight);
-    return this.loadFontFromUrl(url, family, 'google', closestWeight);
+
+    const key = fontCacheKey(family, closestWeight);
+    const existing = this.fontCache.get(key);
+    if (existing) return existing;
+
+    const loading = this.loadingPromises.get(key);
+    if (loading) return loading;
+
+    const promise = (async () => {
+      const url = await resolveGoogleFontUrl(family, closestWeight);
+      if (!url) throw new Error(`Could not resolve font URL for ${family} ${closestWeight}`);
+      const response = await fetch(url);
+      if (!response.ok) throw new Error(`Failed to fetch font: ${response.statusText}`);
+      const buffer = await response.arrayBuffer();
+      const font = opentype.parse(buffer);
+      this.fontCache.set(key, font);
+      this.availableFonts.set(family, { family, source: 'google' });
+      this.loadingPromises.delete(key);
+      return font;
+    })();
+
+    this.loadingPromises.set(key, promise);
+    return promise;
   }
 
   /**
@@ -251,8 +274,39 @@ export const WEB_SAFE_FONTS = [
 ] as const;
 
 /**
- * Google Fonts catalog — curated popular fonts with gstatic TTF URLs.
- * URLs use the well-known gstatic CDN pattern.
+ * Resolve a Google Font TTF URL dynamically via the CSS2 API.
+ * This avoids relying on hardcoded gstatic URLs that break when Google updates versions.
+ * Falls back to the catalog's hardcoded URL if the CSS2 API fails.
+ */
+async function resolveGoogleFontUrl(family: string, weight: number): Promise<string | null> {
+  try {
+    // The CSS2 API returns @font-face CSS with the current gstatic URL
+    const cssUrl = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(family)}:wght@${weight}`;
+    const response = await fetch(cssUrl, {
+      headers: {
+        // Request TrueType format by pretending to be an older browser
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      },
+    });
+    if (!response.ok) throw new Error(`CSS2 API returned ${response.status}`);
+    const css = await response.text();
+    // Extract the first url(...) from the CSS
+    const match = css.match(/url\(([^)]+)\)/);
+    if (match?.[1]) return match[1];
+  } catch {
+    // CSS2 API failed — fall back to catalog hardcoded URL
+  }
+
+  // Fallback: use catalog hardcoded URL
+  const entry = GOOGLE_FONTS_CATALOG.find((e) => e.family === family);
+  if (entry) return entry.url(weight);
+  return null;
+}
+
+/**
+ * Google Fonts catalog — curated popular fonts with per-weight TTF URLs.
+ * These hardcoded URLs serve as fallback when the CSS2 API is unavailable.
  */
 export const GOOGLE_FONTS_CATALOG: GoogleFontEntry[] = [
   {

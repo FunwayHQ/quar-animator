@@ -1761,31 +1761,44 @@ export function PropertiesPanel() {
                             const family = textNode.fontFamily;
                             // Check if the weight is loaded; if not, try loading it
                             if (!fm.hasFontWeight(family, w)) {
-                              const catalogEntry = GOOGLE_FONTS_CATALOG.find(
-                                (g) => g.family === family
-                              );
-                              if (catalogEntry && hasGoogleFontsConsent()) {
-                                fm.loadGoogleFont(family, w)
-                                  .then(() => {
-                                    pushUndo();
-                                    sceneGraph.updateNode(nodeId, { fontWeight: w });
-                                  })
-                                  .catch(() => {
-                                    toast.error(`Failed to load ${family} weight ${w}`);
-                                  });
+                              if (!hasGoogleFontsConsent()) {
+                                toast.info(
+                                  'Enable Google Fonts in the consent banner to load this weight'
+                                );
                                 return;
                               }
+                              fm.loadGoogleFont(family, w)
+                                .then(() => {
+                                  pushUndo();
+                                  sceneGraph.updateNode(nodeId, { fontWeight: w });
+                                  if (autoKeyframe)
+                                    addKeyframeAtFrame(nodeId, 'fontWeight', currentFrame, w);
+                                })
+                                .catch(() => {
+                                  toast.error(`Failed to load ${family} weight ${w}`);
+                                });
+                              return;
                             }
                             pushUndo();
                             sceneGraph.updateNode(nodeId, { fontWeight: w });
+                            if (autoKeyframe)
+                              addKeyframeAtFrame(nodeId, 'fontWeight', currentFrame, w);
                           }}
                         >
-                          {[100, 200, 300, 400, 500, 600, 700, 800, 900].map((w) => (
-                            <option key={w} value={w}>
-                              {w}
-                              {w === 400 ? ' (Regular)' : w === 700 ? ' (Bold)' : ''}
-                            </option>
-                          ))}
+                          {(() => {
+                            const catalogEntry = GOOGLE_FONTS_CATALOG.find(
+                              (g) => g.family === textNode.fontFamily
+                            );
+                            const weights = catalogEntry
+                              ? catalogEntry.weights
+                              : [100, 200, 300, 400, 500, 600, 700, 800, 900];
+                            return weights.map((w) => (
+                              <option key={w} value={w}>
+                                {w}
+                                {w === 400 ? ' (Regular)' : w === 700 ? ' (Bold)' : ''}
+                              </option>
+                            ));
+                          })()}
                         </select>
                       </div>
                     </div>
