@@ -3,7 +3,7 @@
  * Functions for working with PathPoint arrays and path tessellation
  */
 
-import type { PathPoint, Vector2, Rect } from '@quar/types';
+import type { PathPoint, PathNode, Vector2, Rect } from '@quar/types';
 import { vec2 } from '../math';
 import { bezier } from './bezier';
 
@@ -76,6 +76,62 @@ export function clonePathPoint(point: PathPoint): PathPoint {
     cloned.cornerRadius = point.cornerRadius;
   }
   return cloned;
+}
+
+/**
+ * Center a PathNode's geometry at its AABB center.
+ * Offsets all point positions so the center is at local (0,0),
+ * sets transform.position to the AABB center, and anchor to (0.5, 0.5)
+ * for correct rotation pivot. Handles are relative offsets — no change needed.
+ * Returns the centering offset (the AABB center in original coords).
+ */
+export function centerPathNodeGeometry(node: PathNode): Vector2 {
+  if (node.points.length === 0) return { x: 0, y: 0 };
+
+  // Compute AABB of all point positions
+  let minX = Infinity,
+    maxX = -Infinity,
+    minY = Infinity,
+    maxY = -Infinity;
+  for (const p of node.points) {
+    if (p.position.x < minX) minX = p.position.x;
+    if (p.position.x > maxX) maxX = p.position.x;
+    if (p.position.y < minY) minY = p.position.y;
+    if (p.position.y > maxY) maxY = p.position.y;
+  }
+  if (node.subpaths) {
+    for (const sp of node.subpaths) {
+      for (const p of sp) {
+        if (p.position.x < minX) minX = p.position.x;
+        if (p.position.x > maxX) maxX = p.position.x;
+        if (p.position.y < minY) minY = p.position.y;
+        if (p.position.y > maxY) maxY = p.position.y;
+      }
+    }
+  }
+
+  const cx = (minX + maxX) / 2;
+  const cy = (minY + maxY) / 2;
+
+  // Offset all point positions (handles are relative — unchanged)
+  for (const p of node.points) {
+    p.position.x -= cx;
+    p.position.y -= cy;
+  }
+  if (node.subpaths) {
+    for (const sp of node.subpaths) {
+      for (const p of sp) {
+        p.position.x -= cx;
+        p.position.y -= cy;
+      }
+    }
+  }
+
+  // Update transform: position at AABB center, anchor for correct rotation pivot
+  node.transform.position = { x: cx, y: cy };
+  node.transform.anchor = { x: 0.5, y: 0.5 };
+
+  return { x: cx, y: cy };
 }
 
 // ============================================================================

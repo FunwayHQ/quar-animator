@@ -11,6 +11,7 @@ import {
   convertPointType as convertPointTypeUtil,
   updateHandleWithSymmetry,
 } from '../path/pointUtils';
+import { centerPathNodeGeometry } from '../path/pathUtils';
 
 // ============================================================================
 // PenTool Class
@@ -289,8 +290,9 @@ export class PenTool extends BaseTool {
       return;
     }
 
-    // Create final path node
+    // Create final path node and center geometry for correct rotation pivot
     const node = this.createPathNode(this.currentPath, closed);
+    centerPathNodeGeometry(node);
 
     // Add to scene graph
     this.context.onTransformStart?.();

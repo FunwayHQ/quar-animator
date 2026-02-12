@@ -12,6 +12,7 @@ import { vec2 } from '../math';
 import { schneiderFitCurve, curvesToPathPoints, type CubicSegment } from '../path/schneider';
 import { KalmanFilter2D, smoothingToKalmanParams } from '../path/kalmanFilter';
 import { generateBrushOutline } from '../path/brushOutline';
+import { centerPathNodeGeometry } from '../path/pathUtils';
 
 // ============================================================================
 // Types
@@ -272,6 +273,17 @@ export class BrushTool extends BaseTool {
     }
 
     const node = this.createPathNode(pathPoints, widths);
+
+    // Center geometry for correct rotation pivot
+    const center = centerPathNodeGeometry(node);
+    // Also center brushData spine points (same coordinate space as outline)
+    const spine: PathPoint[] | undefined = node.brushData?.spine;
+    if (spine) {
+      for (const p of spine) {
+        p.position.x -= center.x;
+        p.position.y -= center.y;
+      }
+    }
 
     // Add to scene graph
     this.context.onTransformStart?.();
