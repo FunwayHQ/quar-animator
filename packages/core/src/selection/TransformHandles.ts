@@ -14,10 +14,54 @@ import { vec2 } from '../math';
 // Cursor Mapping
 // ============================================================================
 
-// Inline SVG rotate cursor (32x32 refined curved arrow, hotspot 16,16)
-// Four variants rotated for each corner — clean arc with filled arrowhead
+// Figma-quality rotate cursor (32×32, hotspot 16,16)
+// Compact ~100° arc with filled triangular arrowhead, dual-layer for contrast:
+// dark filled shadow underneath, white filled shape on top.
+// Arc: radius 9 centered at (16,16), from ~215° to ~325° (bottom-left to upper-right)
+// Arrowhead: filled triangle at the arc tip pointing along the tangent direction
 function makeRotateCursor(rotateDeg: number): string {
-  const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32' fill='none'><g transform='rotate(${rotateDeg} 16 16)'><path d='M12.5 6.5C8.9 9 7 12.5 7.2 16.5' stroke='%23000' stroke-opacity='0.45' stroke-width='3' stroke-linecap='round'/><path d='M12.5 6.5C8.9 9 7 12.5 7.2 16.5' stroke='white' stroke-width='1.5' stroke-linecap='round'/><path d='M14.8 9.3L12.2 6.2L9.2 8.5' stroke='%23000' stroke-opacity='0.45' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/><path d='M14.8 9.3L12.2 6.2L9.2 8.5' stroke='white' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/></g></svg>`;
+  // Arc geometry: r=9, center=(16,16), sweep from 215° to 325° (110° arc)
+  const cx = 16,
+    cy = 16,
+    r = 9;
+  const startAngle = (215 * Math.PI) / 180;
+  const endAngle = (325 * Math.PI) / 180;
+  const x1 = cx + r * Math.cos(startAngle);
+  const y1 = cy + r * Math.sin(startAngle);
+  const x2 = cx + r * Math.cos(endAngle);
+  const y2 = cy + r * Math.sin(endAngle);
+  // Arc path (large-arc=0 for <180°, sweep=1 for clockwise)
+  const arc = `M${x1.toFixed(2)},${y1.toFixed(2)}A${r},${r},0,0,1,${x2.toFixed(2)},${y2.toFixed(2)}`;
+
+  // Arrowhead: filled triangle at arc end, pointing along tangent
+  // Tangent at endAngle points perpendicular to radius (90° CW from radius direction)
+  const tx = -Math.sin(endAngle); // tangent x (clockwise arc)
+  const ty = Math.cos(endAngle); // tangent y
+  // Normal pointing outward from center
+  const nx = Math.cos(endAngle);
+  const ny = Math.sin(endAngle);
+  // Triangle: tip ahead of arc end along tangent, two base points spread across normal
+  const tipLen = 5.5,
+    baseSpread = 3.2,
+    baseBack = 1.0;
+  const tipX = x2 + tx * tipLen;
+  const tipY = y2 + ty * tipLen;
+  const b1X = x2 - tx * baseBack + nx * baseSpread;
+  const b1Y = y2 - ty * baseBack + ny * baseSpread;
+  const b2X = x2 - tx * baseBack - nx * baseSpread;
+  const b2Y = y2 - ty * baseBack - ny * baseSpread;
+  const arrow = `M${tipX.toFixed(2)},${tipY.toFixed(2)}L${b1X.toFixed(2)},${b1Y.toFixed(2)}L${b2X.toFixed(2)},${b2Y.toFixed(2)}Z`;
+
+  const svg =
+    `<svg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'>` +
+    `<g transform='rotate(${rotateDeg} 16 16)'>` +
+    // Shadow layer — dark, thicker, semi-transparent
+    `<path d='${arc}' fill='none' stroke='%23000' stroke-opacity='0.5' stroke-width='3' stroke-linecap='round'/>` +
+    `<path d='${arrow}' fill='%23000' fill-opacity='0.5' stroke='%23000' stroke-opacity='0.5' stroke-width='1.5' stroke-linejoin='round'/>` +
+    // Foreground layer — white, crisp
+    `<path d='${arc}' fill='none' stroke='white' stroke-width='1.6' stroke-linecap='round'/>` +
+    `<path d='${arrow}' fill='white' stroke='white' stroke-width='0.5' stroke-linejoin='round'/>` +
+    `</g></svg>`;
   return `url("data:image/svg+xml,${encodeURIComponent(svg)}") 16 16, pointer`;
 }
 
