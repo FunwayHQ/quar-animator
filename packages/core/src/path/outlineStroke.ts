@@ -8,20 +8,96 @@ import { getShapeOutlinePoints } from './shapeToPath';
 import {
   tessellatePathToVertices,
   generateStrokeOutlineVertices,
+  createCornerPoint,
   getPathBounds,
   applyCornerRadius,
 } from './pathUtils';
-import { schneiderFitCurve, curvesToPathPoints } from './schneider';
 
-/** Max squared error for Schneider curve fitting on stroke outlines */
-const OUTLINE_FIT_ERROR = 1.0;
+// ============================================================================
+// RDP Simplification + Auto-Smooth
+// ============================================================================
+
+/** Max perpendicular distance for RDP simplification (world units) */
+const RDP_TOLERANCE = 0.5;
+
+/** Cosine threshold for auto-smoothing — angle must be within ~30° of straight */
+const SMOOTH_COS_THRESHOLD = 0.86;
 
 /**
- * Convert a flat vertex array region into smooth PathPoints via curve fitting.
- * For closed contours, appends the first vertex to close the loop before fitting,
- * then removes the duplicate endpoint.
+ * Ramer-Douglas-Peucker polyline simplification.
+ * Returns indices of points to keep.
  */
-function fitVerticesToCurve(
+function rdpSimplify(points: Vector2[], tolerance: number): number[] {
+  if (points.length <= 2) {
+    return points.map((_, i) => i);
+  }
+
+  const keep: boolean[] = Array.from({ length: points.length }, () => false);
+  keep[0] = true;
+  keep[points.length - 1] = true;
+
+  rdpRecurse(points, 0, points.length - 1, tolerance * tolerance, keep);
+
+  const indices: number[] = [];
+  for (let i = 0; i < keep.length; i++) {
+    if (keep[i]) indices.push(i);
+  }
+  return indices;
+}
+
+function rdpRecurse(
+  points: Vector2[],
+  start: number,
+  end: number,
+  toleranceSq: number,
+  keep: boolean[]
+): void {
+  if (end - start < 2) return;
+
+  let maxDistSq = 0;
+  let maxIdx = start;
+
+  const sx = points[start].x,
+    sy = points[start].y;
+  const ex = points[end].x,
+    ey = points[end].y;
+  const dx = ex - sx,
+    dy = ey - sy;
+  const lenSq = dx * dx + dy * dy;
+
+  for (let i = start + 1; i < end; i++) {
+    const px = points[i].x - sx;
+    const py = points[i].y - sy;
+
+    let distSq: number;
+    if (lenSq < 1e-10) {
+      distSq = px * px + py * py;
+    } else {
+      const t = Math.max(0, Math.min(1, (px * dx + py * dy) / lenSq));
+      const projX = px - t * dx;
+      const projY = py - t * dy;
+      distSq = projX * projX + projY * projY;
+    }
+
+    if (distSq > maxDistSq) {
+      maxDistSq = distSq;
+      maxIdx = i;
+    }
+  }
+
+  if (maxDistSq > toleranceSq) {
+    keep[maxIdx] = true;
+    rdpRecurse(points, start, maxIdx, toleranceSq, keep);
+    rdpRecurse(points, maxIdx, end, toleranceSq, keep);
+  }
+}
+
+/**
+ * Convert a flat vertex array region into PathPoints using RDP simplification
+ * and auto-smooth tangent detection. Positions are exact (subset of original
+ * offset vertices), avoiding the systematic bias of curve fitting.
+ */
+function simplifyAndSmooth(
   verts: Float32Array,
   startIdx: number,
   count: number,
@@ -29,32 +105,79 @@ function fitVerticesToCurve(
 ): PathPoint[] {
   if (count < 2) return [];
 
+  // Extract vertices
   const points: Vector2[] = [];
   for (let i = 0; i < count; i++) {
     const idx = (startIdx + i) * 2;
     points.push({ x: verts[idx], y: verts[idx + 1] });
   }
 
-  if (closed && points.length >= 3) {
-    // Close the loop for fitting
-    points.push({ x: points[0].x, y: points[0].y });
+  // RDP simplify
+  const indices = rdpSimplify(points, RDP_TOLERANCE);
+  const simplified = indices.map((i) => points[i]);
+
+  if (simplified.length < 3) {
+    return simplified.map((pt) => createCornerPoint(pt));
   }
 
-  const curves = schneiderFitCurve(points, OUTLINE_FIT_ERROR);
-  if (curves.length === 0) return [];
+  const n = simplified.length;
 
-  const pathPoints = curvesToPathPoints(curves);
+  // Convert to PathPoints with auto-smooth tangent detection
+  return simplified.map((pt, i) => {
+    const prevIdx = closed ? (i - 1 + n) % n : i - 1;
+    const nextIdx = closed ? (i + 1) % n : i + 1;
 
-  if (closed && pathPoints.length >= 2) {
-    // Remove duplicate closing point — path is closed implicitly.
-    // Transfer its handleIn to the first point so the closing segment
-    // renders as a smooth curve (not a straight line).
-    const closingPoint = pathPoints.pop()!;
-    pathPoints[0].handleIn = closingPoint.handleIn;
-  }
+    // Endpoints of open paths stay as corners
+    if (!closed && (i === 0 || i === n - 1)) {
+      return createCornerPoint(pt);
+    }
 
-  return pathPoints;
+    const prev = simplified[prevIdx];
+    const next = simplified[nextIdx];
+
+    const inDx = pt.x - prev.x;
+    const inDy = pt.y - prev.y;
+    const outDx = next.x - pt.x;
+    const outDy = next.y - pt.y;
+    const inLen = Math.sqrt(inDx * inDx + inDy * inDy);
+    const outLen = Math.sqrt(outDx * outDx + outDy * outDy);
+
+    if (inLen < 1e-6 || outLen < 1e-6) {
+      return createCornerPoint(pt);
+    }
+
+    // Cosine of angle between incoming and outgoing edges
+    const cosAngle = (inDx * outDx + inDy * outDy) / (inLen * outLen);
+
+    if (cosAngle > SMOOTH_COS_THRESHOLD) {
+      // Smooth curve point — set handles along the averaged tangent direction
+      const tDx = inDx / inLen + outDx / outLen;
+      const tDy = inDy / inLen + outDy / outLen;
+      const tLen = Math.sqrt(tDx * tDx + tDy * tDy);
+
+      if (tLen > 1e-6) {
+        const tx = tDx / tLen;
+        const ty = tDy / tLen;
+        // Handle length = 1/3 of segment (standard cubic bezier heuristic)
+        const hIn = inLen / 3;
+        const hOut = outLen / 3;
+
+        return {
+          position: { x: pt.x, y: pt.y },
+          handleIn: { x: -tx * hIn, y: -ty * hIn },
+          handleOut: { x: tx * hOut, y: ty * hOut },
+          type: 'smooth' as const,
+        };
+      }
+    }
+
+    return createCornerPoint(pt);
+  });
 }
+
+// ============================================================================
+// Main
+// ============================================================================
 
 /**
  * Convert a node's stroke to a filled PathNode.
@@ -116,17 +239,16 @@ export function outlineStroke(
       // For closed paths, generateStrokeOutlineVertices returns
       // [leftSide(outer)... rightSideReversed(inner)...] as one polygon.
       // Split into two separate closed contours (outer ring + inner ring).
-      // Use curve fitting to produce smooth bezier curves instead of many corner points.
+      // Use RDP simplification + auto-smooth for clean output with exact geometry.
       const innerCount = outlineVerts.length / 2 - numVertices;
-      const outerPoints = fitVerticesToCurve(outlineVerts, 0, numVertices, true);
-      const innerPoints = fitVerticesToCurve(outlineVerts, numVertices, innerCount, true);
+      const outerPoints = simplifyAndSmooth(outlineVerts, 0, numVertices, true);
+      const innerPoints = simplifyAndSmooth(outlineVerts, numVertices, innerCount, true);
       if (outerPoints.length >= 3) resultContours.push(outerPoints);
       if (innerPoints.length >= 3) resultContours.push(innerPoints);
     } else {
       // Open paths: single combined polygon (ribbon shape).
-      // Fit curves for smooth result.
       const totalVerts = outlineVerts.length / 2;
-      const points = fitVerticesToCurve(outlineVerts, 0, totalVerts, false);
+      const points = simplifyAndSmooth(outlineVerts, 0, totalVerts, false);
       if (points.length >= 3) resultContours.push(points);
     }
   }
