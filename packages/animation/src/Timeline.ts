@@ -225,8 +225,9 @@ export function interpolateValue<T>(
   // Calculate normalized time between keyframes
   const localT = (time - before.time) / (after.time - before.time);
 
-  // Apply easing
-  const easedT = applyEasing(localT, before.easing);
+  // Apply easing — use the "after" keyframe's easing so that setting easing
+  // on a keyframe controls the incoming transition (matching user expectation)
+  const easedT = applyEasing(localT, after.easing);
 
   // Interpolate
   return interpolator(before.value, after.value, easedT);
@@ -269,7 +270,7 @@ export const interpolators = {
   rotation: (a: number, b: number, t: number): number => {
     // Shortest-path interpolation: wrap difference to [-180, 180]
     // Use true mathematical modulo ((x % n) + n) % n to handle negative values
-    const diff = (((b - a + 180) % 360) + 360) % 360 - 180;
+    const diff = ((((b - a + 180) % 360) + 360) % 360) - 180;
     return a + diff * t;
   },
 
@@ -319,7 +320,10 @@ export function getTracksByNode(timeline: Timeline, nodeId: string): PropertyTra
 }
 
 export function getKeyframeCount(timeline: Timeline): number {
-  return timeline.tracks.reduce((sum: number, track: PropertyTrack) => sum + track.keyframes.length, 0);
+  return timeline.tracks.reduce(
+    (sum: number, track: PropertyTrack) => sum + track.keyframes.length,
+    0
+  );
 }
 
 export function getAnimatedNodes(timeline: Timeline): Set<string> {

@@ -396,8 +396,10 @@ export function Timeline({ playback }: TimelineProps = {}) {
       }
 
       // Easing presets with checkmark
+      let anyPresetMatch = false;
       for (const preset of EASING_PRESETS) {
         const isActive = easingsMatch(currentKfEasing, preset.value);
+        if (isActive) anyPresetMatch = true;
         items.push({
           id: `easing-${typeof preset.value === 'string' ? preset.value : 'custom'}`,
           label: isActive ? `\u2713 ${preset.label}` : `\u2003${preset.label}`,
@@ -413,9 +415,11 @@ export function Timeline({ playback }: TimelineProps = {}) {
         });
       }
 
+      // Show checkmark on "Custom Easing..." when a non-preset easing is active
+      const customPrefix = !anyPresetMatch && currentKfEasing !== 'linear' ? '\u2713 ' : '';
       items.push({
         id: 'custom-easing',
-        label: 'Custom Easing\u2026',
+        label: `${customPrefix}Custom Easing\u2026`,
         onClick: () => {
           setEasingEditor({
             x: contextMenu.x,

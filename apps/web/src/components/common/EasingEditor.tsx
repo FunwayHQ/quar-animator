@@ -104,6 +104,18 @@ export function EasingEditor({ easing, onChange, anchorX, anchorY, onClose }: Ea
     el.style.top = `${y}px`;
   }, [anchorX, anchorY]);
 
+  // Auto-scroll to active preset on open
+  useEffect(() => {
+    requestAnimationFrame(() => {
+      const el = editorRef.current;
+      if (!el) return;
+      const active = el.querySelector(`.${styles.presetCellActive}`);
+      if (active) active.scrollIntoView({ block: 'nearest' });
+    });
+    // Only run on mount (easing identity won't change after open)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Escape to close
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
