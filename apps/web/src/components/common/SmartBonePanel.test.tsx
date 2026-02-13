@@ -6,8 +6,18 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '../../test/utils';
 import { SmartBonePanel } from './SmartBonePanel';
 import { useEditorStore, DEFAULT_FILL, DEFAULT_STROKE } from '../../stores/editorStore';
+import { SceneGraphProvider } from '../../contexts/SceneGraphContext';
 import { createTimeline } from '@quar/animation';
 import type { SmartBoneAction } from '@quar/types';
+
+/** Helper: render SmartBonePanel wrapped in SceneGraphProvider */
+function renderPanel(boneId: string) {
+  return render(
+    <SceneGraphProvider>
+      <SmartBonePanel boneId={boneId} />
+    </SceneGraphProvider>
+  );
+}
 
 function createTestAction(boneId: string, overrides?: Partial<SmartBoneAction>): SmartBoneAction {
   return {
@@ -47,11 +57,13 @@ describe('SmartBonePanel', () => {
       smartBoneActions: [],
       smartBoneRecordingActionId: null,
       smartBoneRecordingTargetId: null,
+      smartBoneRecordingPrevTool: null,
+      smartBoneRecordingPrevRotation: null,
     });
   });
 
   it('renders empty state when no actions exist', () => {
-    render(<SmartBonePanel boneId="bone-1" />);
+    renderPanel('bone-1');
     expect(screen.getByTestId('no-actions-message')).toBeInTheDocument();
     expect(screen.getByText('No actions defined')).toBeInTheDocument();
   });
@@ -60,14 +72,14 @@ describe('SmartBonePanel', () => {
     const action = createTestAction('bone-1');
     useEditorStore.setState({ smartBoneActions: [action] });
 
-    render(<SmartBonePanel boneId="bone-1" />);
+    renderPanel('bone-1');
     expect(screen.queryByTestId('no-actions-message')).not.toBeInTheDocument();
     expect(screen.getByTestId('smart-bone-action')).toBeInTheDocument();
     expect(screen.getByText('Smart Bone 1')).toBeInTheDocument();
   });
 
   it('creates a new action via + Action button', () => {
-    render(<SmartBonePanel boneId="bone-1" />);
+    renderPanel('bone-1');
     const createBtn = screen.getByTestId('create-smart-bone-action');
 
     fireEvent.click(createBtn);
@@ -81,7 +93,7 @@ describe('SmartBonePanel', () => {
     const action = createTestAction('bone-1');
     useEditorStore.setState({ smartBoneActions: [action] });
 
-    render(<SmartBonePanel boneId="bone-1" />);
+    renderPanel('bone-1');
     fireEvent.click(screen.getByTestId('remove-action'));
 
     expect(useEditorStore.getState().smartBoneActions.length).toBe(0);
@@ -91,7 +103,7 @@ describe('SmartBonePanel', () => {
     const action = createTestAction('bone-1');
     useEditorStore.setState({ smartBoneActions: [action] });
 
-    render(<SmartBonePanel boneId="bone-1" />);
+    renderPanel('bone-1');
     // The toggle is a <label> wrapping a hidden <input type="checkbox">
     const label = screen.getByTitle('Enable/disable');
     const checkbox = label.querySelector('input[type="checkbox"]') as HTMLInputElement;
@@ -106,7 +118,7 @@ describe('SmartBonePanel', () => {
     const action = createTestAction('bone-1');
     useEditorStore.setState({ smartBoneActions: [action] });
 
-    render(<SmartBonePanel boneId="bone-1" />);
+    renderPanel('bone-1');
     fireEvent.click(screen.getByTestId('add-target'));
 
     const updatedAction = useEditorStore.getState().smartBoneActions[0];
@@ -120,7 +132,7 @@ describe('SmartBonePanel', () => {
     const action2 = createTestAction('bone-2', { id: 'a2', name: 'Action B' });
     useEditorStore.setState({ smartBoneActions: [action1, action2] });
 
-    render(<SmartBonePanel boneId="bone-1" />);
+    renderPanel('bone-1');
     expect(screen.getByText('Action A')).toBeInTheDocument();
     expect(screen.queryByText('Action B')).not.toBeInTheDocument();
   });
@@ -131,7 +143,7 @@ describe('SmartBonePanel', () => {
     });
     useEditorStore.setState({ smartBoneActions: [action] });
 
-    render(<SmartBonePanel boneId="bone-1" />);
+    renderPanel('bone-1');
 
     // Start recording
     fireEvent.click(screen.getByTestId('start-recording'));

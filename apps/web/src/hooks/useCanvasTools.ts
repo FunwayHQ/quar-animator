@@ -12,10 +12,13 @@ import {
   DirectSelectionTool,
   SelectionTool,
   WeightPaintTool,
+  PointMagnetTool,
   getAllPoints,
 } from '@quar/core';
 import type { TransformType } from '@quar/core';
 import { findTrack } from '@quar/animation';
+import { compactMorphOffsets } from '@quar/rigging';
+import type { MorphVertexOffset } from '@quar/types';
 import type {
   CanvasPointerEvent,
   Node,
@@ -507,6 +510,61 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
       }
     }
   }, [activeTool, syncDirectSelectionState]);
+
+  // Bridge Smart Bone recording: load existing offsets on start, save on stop
+  useEffect(() => {
+    // Track previous recording state to detect transitions
+    let prevActionId: string | null = null;
+    let prevTargetId: string | null = null;
+
+    const unsubscribe = useEditorStore.subscribe((state) => {
+      const { smartBoneRecordingActionId, smartBoneRecordingTargetId } = state;
+
+      // Transition: null → value (recording started)
+      if (smartBoneRecordingActionId && !prevActionId) {
+        const pmTool = toolManagerRef.current?.getTool<PointMagnetTool>('point-magnet');
+        if (pmTool) {
+          // Load existing target offsets into the tool
+          const action = state.smartBoneActions.find((a) => a.id === smartBoneRecordingActionId);
+          const target = action?.targets.find((t) => t.id === smartBoneRecordingTargetId);
+          if (target && target.offsets && Object.keys(target.offsets).length > 0) {
+            const existingOffsets = new Map<string, MorphVertexOffset[]>();
+            for (const [nodeId, nodeOffsets] of Object.entries(target.offsets)) {
+              existingOffsets.set(nodeId, nodeOffsets);
+            }
+            pmTool.setWorkingOffsets(existingOffsets);
+          } else {
+            pmTool.setWorkingOffsets(new Map());
+          }
+        }
+      }
+
+      // Transition: value → null (recording stopped)
+      if (!smartBoneRecordingActionId && prevActionId && prevTargetId) {
+        const pmTool = toolManagerRef.current?.getTool<PointMagnetTool>('point-magnet');
+        if (pmTool) {
+          // Extract, compact, and save working offsets
+          const workingOffsets = pmTool.getWorkingOffsets();
+          const compacted: Record<string, MorphVertexOffset[]> = {};
+          for (const [nodeId, offsets] of workingOffsets) {
+            const clean = compactMorphOffsets(offsets);
+            if (clean.length > 0) {
+              compacted[nodeId] = clean;
+            }
+          }
+          useEditorStore.getState().saveMorphTargetOffsets(prevActionId, prevTargetId, compacted);
+
+          // Clear the tool's working offsets
+          pmTool.setWorkingOffsets(new Map());
+        }
+      }
+
+      prevActionId = smartBoneRecordingActionId;
+      prevTargetId = smartBoneRecordingTargetId;
+    });
+
+    return unsubscribe;
+  }, []);
 
   // Event handlers
   const handlePointerDown = useCallback(

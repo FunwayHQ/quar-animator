@@ -2128,26 +2128,79 @@ describe('EditorStore', () => {
       expect(useEditorStore.getState().smartBoneActions[0].targets).toHaveLength(0);
     });
 
-    it('startSmartBoneRecording sets recording state', () => {
+    it('startSmartBoneRecording sets recording state and rotates bone', () => {
+      // Create a bone node in a mock scene graph
+      const boneNode = {
+        id: 'bone-1',
+        type: 'bone',
+        transform: { position: { x: 0, y: 0 }, rotation: 0, scale: { x: 1, y: 1 } },
+      };
+      const mockSg = {
+        getNode: (id: string) => (id === 'bone-1' ? boneNode : undefined),
+        updateNode: vi.fn((id: string, updates: any) => {
+          if (id === 'bone-1') Object.assign(boneNode, updates);
+        }),
+      } as any;
+
       useEditorStore.getState().createSmartBoneAction('bone-1');
       const actionId = useEditorStore.getState().smartBoneActions[0].id;
       useEditorStore.getState().addMorphTarget(actionId, 45);
       const targetId = useEditorStore.getState().smartBoneActions[0].targets[0].id;
 
-      useEditorStore.getState().startSmartBoneRecording(actionId, targetId);
-      expect(useEditorStore.getState().smartBoneRecordingActionId).toBe(actionId);
-      expect(useEditorStore.getState().smartBoneRecordingTargetId).toBe(targetId);
+      useEditorStore.getState().startSmartBoneRecording(actionId, targetId, mockSg);
+      const state = useEditorStore.getState();
+      expect(state.smartBoneRecordingActionId).toBe(actionId);
+      expect(state.smartBoneRecordingTargetId).toBe(targetId);
+      expect(state.activeTool).toBe('point-magnet');
+      expect(state.smartBoneRecordingPrevTool).toBe('selection');
+      expect(state.smartBoneRecordingPrevRotation).toBe(0);
+      // Bone should be rotated to the target's driverValue
+      expect(mockSg.updateNode).toHaveBeenCalledWith(
+        'bone-1',
+        expect.objectContaining({
+          transform: expect.objectContaining({ rotation: 45 }),
+        })
+      );
     });
 
-    it('stopSmartBoneRecording clears recording state', () => {
+    it('stopSmartBoneRecording clears recording state and restores bone', () => {
+      const boneNode = {
+        id: 'bone-1',
+        type: 'bone',
+        transform: { position: { x: 0, y: 0 }, rotation: 45, scale: { x: 1, y: 1 } },
+      };
+      const mockSg = {
+        getNode: (id: string) => (id === 'bone-1' ? boneNode : undefined),
+        updateNode: vi.fn((id: string, updates: any) => {
+          if (id === 'bone-1') Object.assign(boneNode, updates);
+        }),
+      } as any;
+
+      // Set up recording state as if startSmartBoneRecording was called
+      useEditorStore.getState().createSmartBoneAction('bone-1');
+      const actionId = useEditorStore.getState().smartBoneActions[0].id;
       useEditorStore.setState({
-        smartBoneRecordingActionId: 'some-action',
+        smartBoneRecordingActionId: actionId,
         smartBoneRecordingTargetId: 'some-target',
+        smartBoneRecordingPrevTool: 'selection',
+        smartBoneRecordingPrevRotation: 10,
+        activeTool: 'point-magnet',
       });
 
-      useEditorStore.getState().stopSmartBoneRecording();
-      expect(useEditorStore.getState().smartBoneRecordingActionId).toBeNull();
-      expect(useEditorStore.getState().smartBoneRecordingTargetId).toBeNull();
+      useEditorStore.getState().stopSmartBoneRecording(mockSg);
+      const state = useEditorStore.getState();
+      expect(state.smartBoneRecordingActionId).toBeNull();
+      expect(state.smartBoneRecordingTargetId).toBeNull();
+      expect(state.activeTool).toBe('selection');
+      expect(state.smartBoneRecordingPrevTool).toBeNull();
+      expect(state.smartBoneRecordingPrevRotation).toBeNull();
+      // Bone should be restored to the previous rotation
+      expect(mockSg.updateNode).toHaveBeenCalledWith(
+        'bone-1',
+        expect.objectContaining({
+          transform: expect.objectContaining({ rotation: 10 }),
+        })
+      );
     });
 
     it('saveMorphTargetOffsets stores offsets on the target', () => {

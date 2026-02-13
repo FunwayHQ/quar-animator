@@ -7,6 +7,7 @@
 
 import { useState } from 'react';
 import { useEditorStore } from '../../stores/editorStore';
+import { useSceneGraph } from '../../contexts/SceneGraphContext';
 import type { SmartBoneAction, MorphTarget } from '@quar/types';
 import styles from './SmartBonePanel.module.css';
 
@@ -15,6 +16,7 @@ interface SmartBonePanelProps {
 }
 
 export function SmartBonePanel({ boneId }: SmartBonePanelProps) {
+  const sceneGraph = useSceneGraph();
   const smartBoneActions: SmartBoneAction[] = useEditorStore((state) => state.smartBoneActions);
   const createSmartBoneAction = useEditorStore((state) => state.createSmartBoneAction);
   const removeSmartBoneAction = useEditorStore((state) => state.removeSmartBoneAction);
@@ -67,8 +69,10 @@ export function SmartBonePanel({ boneId }: SmartBonePanelProps) {
           }
           onAddTarget={(driverValue: number) => addMorphTarget(action.id, driverValue)}
           onRemoveTarget={(targetId: string) => removeMorphTarget(action.id, targetId)}
-          onStartRecording={(targetId: string) => startSmartBoneRecording(action.id, targetId)}
-          onStopRecording={stopSmartBoneRecording}
+          onStartRecording={(targetId: string) =>
+            startSmartBoneRecording(action.id, targetId, sceneGraph)
+          }
+          onStopRecording={() => stopSmartBoneRecording(sceneGraph)}
           disabled={isRecording && recordingActionId !== action.id}
         />
       ))}

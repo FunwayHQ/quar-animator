@@ -223,6 +223,8 @@ export interface EditorStore {
   smartBoneActions: SmartBoneAction[];
   smartBoneRecordingActionId: string | null;
   smartBoneRecordingTargetId: string | null;
+  smartBoneRecordingPrevTool: ToolType | null;
+  smartBoneRecordingPrevRotation: number | null;
   createSmartBoneAction: (boneId: string) => void;
   removeSmartBoneAction: (actionId: string) => void;
   setSmartBoneActionEnabled: (actionId: string, enabled: boolean) => void;
@@ -232,8 +234,8 @@ export interface EditorStore {
   ) => void;
   addMorphTarget: (actionId: string, driverValue: number) => void;
   removeMorphTarget: (actionId: string, targetId: string) => void;
-  startSmartBoneRecording: (actionId: string, targetId: string) => void;
-  stopSmartBoneRecording: () => void;
+  startSmartBoneRecording: (actionId: string, targetId: string, sceneGraph: SceneGraphLike) => void;
+  stopSmartBoneRecording: (sceneGraph: SceneGraphLike) => void;
   saveMorphTargetOffsets: (
     actionId: string,
     targetId: string,
@@ -1021,6 +1023,8 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   smartBoneActions: [] as SmartBoneAction[],
   smartBoneRecordingActionId: null as string | null,
   smartBoneRecordingTargetId: null as string | null,
+  smartBoneRecordingPrevTool: null as ToolType | null,
+  smartBoneRecordingPrevRotation: null as number | null,
 
   createSmartBoneAction: (boneId: string) => {
     const id = `sba_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
@@ -1040,7 +1044,12 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       isDirty: true,
       // Stop recording if the removed action was being recorded
       ...(get().smartBoneRecordingActionId === actionId
-        ? { smartBoneRecordingActionId: null, smartBoneRecordingTargetId: null }
+        ? {
+            smartBoneRecordingActionId: null,
+            smartBoneRecordingTargetId: null,
+            smartBoneRecordingPrevTool: null,
+            smartBoneRecordingPrevRotation: null,
+          }
         : {}),
     });
   },
@@ -1097,22 +1106,69 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       isDirty: true,
       // Stop recording if the removed target was being recorded
       ...(get().smartBoneRecordingTargetId === targetId
-        ? { smartBoneRecordingActionId: null, smartBoneRecordingTargetId: null }
+        ? {
+            smartBoneRecordingActionId: null,
+            smartBoneRecordingTargetId: null,
+            smartBoneRecordingPrevTool: null,
+            smartBoneRecordingPrevRotation: null,
+          }
         : {}),
     });
   },
 
-  startSmartBoneRecording: (actionId: string, targetId: string) => {
+  startSmartBoneRecording: (actionId: string, targetId: string, sceneGraph: SceneGraphLike) => {
+    const state = get();
+    const action = state.smartBoneActions.find((a) => a.id === actionId);
+    if (!action) return;
+    const target = action.targets.find((t) => t.id === targetId);
+    if (!target) return;
+
+    // Find the driver bone and save its current rotation
+    const boneId = action.driver.boneId;
+    const bone = sceneGraph.getNode(boneId);
+    const prevRotation = bone ? bone.transform.rotation : 0;
+
+    // Save previous tool and bone rotation for restoration on stop
+    const prevTool = state.activeTool;
+
+    // Rotate bone to the target's driver value
+    if (bone) {
+      sceneGraph.updateNode(boneId, {
+        transform: { ...bone.transform, rotation: target.driverValue },
+      });
+    }
+
     set({
       smartBoneRecordingActionId: actionId,
       smartBoneRecordingTargetId: targetId,
+      smartBoneRecordingPrevTool: prevTool,
+      smartBoneRecordingPrevRotation: prevRotation,
+      activeTool: 'point-magnet' as ToolType,
     });
   },
 
-  stopSmartBoneRecording: () => {
+  stopSmartBoneRecording: (sceneGraph: SceneGraphLike) => {
+    const state = get();
+
+    // Restore bone rotation
+    if (state.smartBoneRecordingActionId != null) {
+      const action = state.smartBoneActions.find((a) => a.id === state.smartBoneRecordingActionId);
+      if (action && state.smartBoneRecordingPrevRotation != null) {
+        const bone = sceneGraph.getNode(action.driver.boneId);
+        if (bone) {
+          sceneGraph.updateNode(action.driver.boneId, {
+            transform: { ...bone.transform, rotation: state.smartBoneRecordingPrevRotation },
+          });
+        }
+      }
+    }
+
     set({
       smartBoneRecordingActionId: null,
       smartBoneRecordingTargetId: null,
+      activeTool: state.smartBoneRecordingPrevTool ?? 'selection',
+      smartBoneRecordingPrevTool: null,
+      smartBoneRecordingPrevRotation: null,
     });
   },
 
@@ -2277,6 +2333,8 @@ function createHistoryActions(
         smartBoneActions: [],
         smartBoneRecordingActionId: null,
         smartBoneRecordingTargetId: null,
+        smartBoneRecordingPrevTool: null,
+        smartBoneRecordingPrevRotation: null,
       });
     },
 

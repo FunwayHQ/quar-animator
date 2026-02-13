@@ -10,7 +10,8 @@ import {
 } from '@quar/core';
 import type { Node, ImageNode, TextNode, GroupNode, Vector2 } from '@quar/types';
 import { evaluateNodeAtFrame, applyAnimatedValues, getAnimatedNodes } from '@quar/animation';
-import { evaluateIKChains, evaluateSmartBones } from '@quar/rigging';
+import { evaluateIKChains, evaluateSmartBones, morphOffsetsToDense } from '@quar/rigging';
+import type { PointMagnetTool } from '@quar/core';
 import { useCanvasTools } from '../../hooks/useCanvasTools';
 import { useToolShortcuts } from '../../hooks/useToolShortcuts';
 import { useEditorStore } from '../../stores/editorStore';
@@ -23,6 +24,7 @@ import { CanvasRuler } from '../canvas/CanvasRuler';
 import { TextEditOverlay } from '../canvas/TextEditOverlay';
 import { BoneOverlay } from '../canvas/BoneOverlay';
 import { WeightPaintOverlay } from '../canvas/WeightPaintOverlay';
+import { PointMagnetOverlay } from '../canvas/PointMagnetOverlay';
 import { ContextMenu } from '../common/ContextMenu';
 import type { ContextMenuEntry } from '../common/ContextMenu';
 import { promptDialog } from '../common/PromptDialog';
@@ -514,22 +516,53 @@ export function Canvas() {
         // Evaluate Smart Bones (corrective morph targets after FK+IK)
         let morphOffsetsMap: Map<string, Float32Array> | undefined;
         if (sceneGraphRef.current && shapeRenderer) {
-          const { smartBoneActions } = useEditorStore.getState();
-          if (smartBoneActions.length > 0) {
-            // Build vertex count map from ShapeRenderer geometry cache
-            const nodeVertexCounts = new Map<string, number>();
+          const { smartBoneActions, smartBoneRecordingActionId } = useEditorStore.getState();
+
+          // Build vertex count map (needed for Smart Bones evaluation AND recording preview)
+          const needVertexCounts =
+            smartBoneActions.length > 0 || smartBoneRecordingActionId != null;
+          const nodeVertexCounts = new Map<string, number>();
+          if (needVertexCounts) {
             sceneGraphRef.current.traverse((n: Node) => {
               if ((n as any).skinData) {
                 const verts = shapeRenderer.getTessellatedVertices(n.id);
                 if (verts) nodeVertexCounts.set(n.id, verts.length / 2);
               }
             });
+          }
+
+          if (smartBoneActions.length > 0) {
             const result = evaluateSmartBones(
               smartBoneActions,
               sceneGraphRef.current,
               nodeVertexCounts
             );
             if (result.size > 0) morphOffsetsMap = result;
+          }
+
+          // During recording, merge PointMagnetTool working offsets for live preview
+          if (smartBoneRecordingActionId) {
+            const pmTool = _toolManagerRef.current?.getTool<PointMagnetTool>('point-magnet');
+            if (pmTool) {
+              const workingOffsets = pmTool.getWorkingOffsets();
+              if (workingOffsets.size > 0) {
+                if (!morphOffsetsMap) morphOffsetsMap = new Map();
+                for (const [nodeId, sparseOffsets] of workingOffsets) {
+                  const vertCount = nodeVertexCounts.get(nodeId) ?? 0;
+                  if (vertCount === 0) continue;
+                  const dense = morphOffsetsToDense(sparseOffsets, vertCount);
+                  const existing = morphOffsetsMap.get(nodeId);
+                  if (existing) {
+                    // Merge additively
+                    for (let i = 0; i < Math.min(dense.length, existing.length); i++) {
+                      existing[i] += dense[i];
+                    }
+                  } else {
+                    morphOffsetsMap.set(nodeId, dense);
+                  }
+                }
+              }
+            }
           }
         }
 
@@ -1830,6 +1863,14 @@ export function Canvas() {
           camera={cameraRef.current}
           canvasWidth={viewportSize.width}
           canvasHeight={viewportSize.height}
+        />
+      )}
+      {activeTool === 'point-magnet' && cameraRef.current && (
+        <PointMagnetOverlay
+          camera={cameraRef.current}
+          canvasWidth={viewportSize.width}
+          canvasHeight={viewportSize.height}
+          toolManager={_toolManagerRef.current}
         />
       )}
       {isPenToolDrawing && (
