@@ -41,6 +41,8 @@ export interface ToolManagerOptions {
   getEnteredGroupId?: () => string | null;
   setEnteredGroupId?: (id: string | null) => void;
   onEnterTextEdit?: (nodeId: string) => void;
+  convertShapeToPath?: (nodeId: string) => string | null;
+  getTessellatedVertices?: (nodeId: string) => Float32Array | null;
 }
 
 // ============================================================================
@@ -239,6 +241,8 @@ export class ToolManager {
       getEnteredGroupId: options.getEnteredGroupId,
       setEnteredGroupId: options.setEnteredGroupId,
       onEnterTextEdit: options.onEnterTextEdit,
+      convertShapeToPath: options.convertShapeToPath,
+      getTessellatedVertices: options.getTessellatedVertices,
     };
   }
 
