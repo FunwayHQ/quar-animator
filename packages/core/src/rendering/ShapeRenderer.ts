@@ -402,6 +402,8 @@ interface TessellationCacheEntry {
   skinnedVertexData?: Float32Array;
   /** Bone ID → uniform array index mapping for GPU skinning */
   boneIdToIndex?: Map<string, number>;
+  /** Last morph offsets reference used to pack skinnedVertexData (for invalidation) */
+  lastMorphOffsets?: Float32Array;
 }
 
 /** Build a cache key string from node geometry properties */
@@ -607,6 +609,7 @@ export class ShapeRenderer {
   private textureCache: Map<string, WebGLTexture> = new Map();
   private pendingImages: Map<string, Promise<HTMLImageElement>> = new Map();
   private currentVPArray: Float32Array | null = null;
+  private currentMorphOffsets: Map<string, Float32Array> | undefined = undefined;
 
   // Pre-allocated arrays to avoid GC
   private vertices: Float32Array;
@@ -1061,7 +1064,8 @@ export class ShapeRenderer {
     sceneGraph: SceneGraph,
     viewProjectionMatrix: Matrix3,
     _selectedIds: Set<string> = new Set(),
-    skipNodeId?: string | null
+    skipNodeId?: string | null,
+    morphOffsets?: Map<string, Float32Array>
   ): void {
     if (!this.program || !this.vao) return;
 
@@ -1100,6 +1104,9 @@ export class ShapeRenderer {
 
     // Cache VP array for texture program
     this.currentVPArray = vpArray;
+
+    // Store morph offsets for skinned node rendering
+    this.currentMorphOffsets = morphOffsets;
 
     // Get canvas dimensions for effect rendering
     const canvasWidth = gl.drawingBufferWidth;
@@ -2761,10 +2768,22 @@ export class ShapeRenderer {
    * Ensure GPU skin data (packed vertices + bone ID mapping) is cached for a skinned node.
    * Called lazily on first GPU render of a skinned node.
    */
-  private ensureSkinnedCacheData(cached: TessellationCacheEntry, skinData: SkinData): void {
-    if (cached.skinnedVertexData && cached.boneIdToIndex) return;
+  private ensureSkinnedCacheData(
+    cached: TessellationCacheEntry,
+    skinData: SkinData,
+    morphOffsets?: Float32Array
+  ): void {
+    // Rebuild if morph offsets changed (reference identity check) or never built
+    const morphChanged = morphOffsets !== cached.lastMorphOffsets;
+    if (cached.skinnedVertexData && cached.boneIdToIndex && !morphChanged) return;
     cached.boneIdToIndex = buildBoneIdToIndex(skinData);
-    cached.skinnedVertexData = packSkinnedVertices(cached.vertices, skinData, cached.boneIdToIndex);
+    cached.skinnedVertexData = packSkinnedVertices(
+      cached.vertices,
+      skinData,
+      cached.boneIdToIndex,
+      morphOffsets
+    );
+    cached.lastMorphOffsets = morphOffsets;
   }
 
   /**
@@ -2968,6 +2987,9 @@ export class ShapeRenderer {
     // Collect current bone world transforms
     const boneWorldTransforms = this.collectBoneTransforms(skinData, sceneGraph);
 
+    // Get morph offsets for this node (from Smart Bones evaluation)
+    const nodeMorphOffsets = this.currentMorphOffsets?.get(node.id);
+
     // Determine if GPU path is available
     const boneCount = Object.keys(skinData.inverseBindMatrices).length;
     const canUseGPU =
@@ -2979,8 +3001,8 @@ export class ShapeRenderer {
     // --- Fills ---
     if (fills.length > 0) {
       if (canUseGPU) {
-        // Ensure GPU skin data is cached
-        this.ensureSkinnedCacheData(cached, skinData);
+        // Ensure GPU skin data is cached (with morph offsets baked in)
+        this.ensureSkinnedCacheData(cached, skinData, nodeMorphOffsets);
         if (cached.skinnedVertexData && cached.boneIdToIndex) {
           this.renderSkinnedFillsGPU(
             cached,
@@ -2992,7 +3014,12 @@ export class ShapeRenderer {
         }
       } else {
         // CPU fallback for fills
-        const deformed = deformVertices(cached.vertices, skinData, boneWorldTransforms);
+        const deformed = deformVertices(
+          cached.vertices,
+          skinData,
+          boneWorldTransforms,
+          nodeMorphOffsets
+        );
         this.renderer.useProgram(this.program);
         const identityMatrix = mat3.toFloat32Array(mat3.create());
         this.currentModelMatrix = identityMatrix;
@@ -3008,7 +3035,12 @@ export class ShapeRenderer {
 
     // --- Strokes (always CPU — needs deformed positions for outline generation) ---
     if (strokes.length > 0) {
-      const deformed = deformVertices(cached.vertices, skinData, boneWorldTransforms);
+      const deformed = deformVertices(
+        cached.vertices,
+        skinData,
+        boneWorldTransforms,
+        nodeMorphOffsets
+      );
       this.renderSkinnedStrokes(
         deformed,
         strokes,
@@ -3046,8 +3078,16 @@ export class ShapeRenderer {
       boneWorldTransforms[boneId] = { a: bw.a, b: bw.b, c: bw.c, d: bw.d, tx: bw.tx, ty: bw.ty };
     }
 
+    // Get morph offsets for this image node (from Smart Bones evaluation)
+    const nodeMorphOffsets = this.currentMorphOffsets?.get(node.id);
+
     // Deform quad vertices via CPU linear blend skinning — result is in world space
-    const deformed = deformVertices(cached.vertices, skinData, boneWorldTransforms);
+    const deformed = deformVertices(
+      cached.vertices,
+      skinData,
+      boneWorldTransforms,
+      nodeMorphOffsets
+    );
 
     // Build interleaved position+UV buffer from deformed quad
     // Bind-pose vertex order: [BL, BR, TL, TR] (matches renderImage)

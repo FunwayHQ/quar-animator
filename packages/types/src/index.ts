@@ -378,6 +378,42 @@ export type Node =
 export type SkinnableNode = RectangleNode | EllipseNode | PolygonNode | PathNode | ImageNode;
 
 // ============================================================================
+// Smart Bones Types (Corrective Morph Targets)
+// ============================================================================
+
+/** Sparse vertex offset for a morph target */
+export interface MorphVertexOffset {
+  vertexIndex: number; // Tessellated vertex index
+  dx: number;
+  dy: number;
+}
+
+/** A morph target snapshot at a specific driver value */
+export interface MorphTarget {
+  id: string;
+  name: string;
+  driverValue: number; // Driver property value where this target is fully active
+  offsets: Record<string, MorphVertexOffset[]>; // nodeId → sparse vertex offsets
+}
+
+/** Defines which bone property drives a Smart Bone action */
+export interface SmartBoneDriver {
+  boneId: string;
+  property: 'transform.rotation'; // Extensible later
+  rangeMin: number; // Blend weight = 0
+  rangeMax: number; // Blend weight = 1
+}
+
+/** A Smart Bone action with driver and morph targets */
+export interface SmartBoneAction {
+  id: string;
+  name: string;
+  driver: SmartBoneDriver;
+  targets: MorphTarget[]; // Ordered by driverValue ascending
+  enabled: boolean;
+}
+
+// ============================================================================
 // Animation Types
 // ============================================================================
 
@@ -488,6 +524,7 @@ export type ToolType =
   | 'text'
   | 'bone'
   | 'weight-paint'
+  | 'point-magnet'
   | 'camera';
 
 export interface CanvasPointerEvent {

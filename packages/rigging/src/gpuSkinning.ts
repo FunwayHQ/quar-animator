@@ -37,7 +37,8 @@ export function buildBoneIdToIndex(skinData: SkinData): Map<string, number> {
 export function packSkinnedVertices(
   vertices: Float32Array,
   skinData: SkinData,
-  boneIdToIndex: Map<string, number>
+  boneIdToIndex: Map<string, number>,
+  morphOffsets?: Float32Array
 ): Float32Array {
   const numVertices = vertices.length / 2;
   const packed = new Float32Array(numVertices * 10);
@@ -45,9 +46,15 @@ export function packSkinnedVertices(
   for (let i = 0; i < numVertices; i++) {
     const base = i * 10;
 
-    // Position
-    packed[base] = vertices[i * 2];
-    packed[base + 1] = vertices[i * 2 + 1];
+    // Position (with optional morph offsets applied)
+    let px = vertices[i * 2];
+    let py = vertices[i * 2 + 1];
+    if (morphOffsets && morphOffsets.length === vertices.length) {
+      px += morphOffsets[i * 2];
+      py += morphOffsets[i * 2 + 1];
+    }
+    packed[base] = px;
+    packed[base + 1] = py;
 
     // Initialize bone indices to -1 and weights to 0
     packed[base + 2] = -1;

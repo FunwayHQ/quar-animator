@@ -10,7 +10,7 @@ import {
 } from '@quar/core';
 import type { Node, ImageNode, TextNode, GroupNode, Vector2 } from '@quar/types';
 import { evaluateNodeAtFrame, applyAnimatedValues, getAnimatedNodes } from '@quar/animation';
-import { evaluateIKChains } from '@quar/rigging';
+import { evaluateIKChains, evaluateSmartBones } from '@quar/rigging';
 import { useCanvasTools } from '../../hooks/useCanvasTools';
 import { useToolShortcuts } from '../../hooks/useToolShortcuts';
 import { useEditorStore } from '../../stores/editorStore';
@@ -511,13 +511,36 @@ export function Canvas() {
           }
         }
 
+        // Evaluate Smart Bones (corrective morph targets after FK+IK)
+        let morphOffsetsMap: Map<string, Float32Array> | undefined;
+        if (sceneGraphRef.current && shapeRenderer) {
+          const { smartBoneActions } = useEditorStore.getState();
+          if (smartBoneActions.length > 0) {
+            // Build vertex count map from ShapeRenderer geometry cache
+            const nodeVertexCounts = new Map<string, number>();
+            sceneGraphRef.current.traverse((n: Node) => {
+              if ((n as any).skinData) {
+                const verts = shapeRenderer.getTessellatedVertices(n.id);
+                if (verts) nodeVertexCounts.set(n.id, verts.length / 2);
+              }
+            });
+            const result = evaluateSmartBones(
+              smartBoneActions,
+              sceneGraphRef.current,
+              nodeVertexCounts
+            );
+            if (result.size > 0) morphOffsetsMap = result;
+          }
+        }
+
         // Render shapes from scene graph
         if (sceneGraphRef.current && shapeRenderer) {
           shapeRenderer.render(
             sceneGraphRef.current,
             viewProjectionMatrix,
             selectedNodeIdsRef.current,
-            useEditorStore.getState().editingTextNodeId
+            useEditorStore.getState().editingTextNodeId,
+            morphOffsetsMap
           );
 
           // Update deformed bounds for selected skinned nodes (post IK + render)

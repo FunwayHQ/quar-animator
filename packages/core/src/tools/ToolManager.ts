@@ -17,6 +17,7 @@ import { HandTool } from './HandTool';
 import { TextTool } from './TextTool';
 import { BoneTool } from './BoneTool';
 import { WeightPaintTool } from './WeightPaintTool';
+import { PointMagnetTool } from './PointMagnetTool';
 import type { SceneGraph } from '../SceneGraph';
 import type { Camera } from '../Camera';
 
@@ -81,6 +82,7 @@ export class ToolManager {
     this.tools.set('text', new TextTool(context));
     this.tools.set('bone', new BoneTool(context));
     this.tools.set('weight-paint', new WeightPaintTool(context));
+    this.tools.set('point-magnet', new PointMagnetTool(context));
 
     // Set default tool
     this.setActiveTool('selection');

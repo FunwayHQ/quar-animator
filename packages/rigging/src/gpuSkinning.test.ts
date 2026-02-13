@@ -437,6 +437,37 @@ describe('gpuSkinning', () => {
   // GPU vs CPU equivalence
   // --------------------------------------------------------------------------
 
+  describe('packSkinnedVertices with morphOffsets', () => {
+    it('adds morph offsets to packed positions', () => {
+      const skinData = createSimpleSkinData();
+      const boneIdToIndex = new Map([['b1', 0]]);
+      const vertices = new Float32Array([10, 20, 30, 40]);
+      const morphOffsets = new Float32Array([1, 2, 3, 4]);
+
+      const packed = packSkinnedVertices(vertices, skinData, boneIdToIndex, morphOffsets);
+
+      // Vertex 0: position should be 10+1=11, 20+2=22
+      expect(packed[0]).toBeCloseTo(11);
+      expect(packed[1]).toBeCloseTo(22);
+      // Vertex 1: position should be 30+3=33, 40+4=44
+      expect(packed[10]).toBeCloseTo(33);
+      expect(packed[11]).toBeCloseTo(44);
+    });
+
+    it('ignores morph offsets with mismatched length', () => {
+      const skinData = createSimpleSkinData();
+      const boneIdToIndex = new Map([['b1', 0]]);
+      const vertices = new Float32Array([10, 20, 30, 40]);
+      const wrongLength = new Float32Array([1, 2]); // too short
+
+      const packed = packSkinnedVertices(vertices, skinData, boneIdToIndex, wrongLength);
+
+      // Positions unchanged
+      expect(packed[0]).toBe(10);
+      expect(packed[1]).toBe(20);
+    });
+  });
+
   describe('GPU vs CPU equivalence', () => {
     it('single bone translation matches deformVertices output', () => {
       const skinData = createSimpleSkinData();

@@ -45,6 +45,9 @@ describe('EditorStore', () => {
       canUndo: false,
       canRedo: false,
       ikChains: [],
+      smartBoneActions: [],
+      smartBoneRecordingActionId: null,
+      smartBoneRecordingTargetId: null,
     });
   });
 
@@ -2054,6 +2057,150 @@ describe('EditorStore', () => {
 
       useEditorStore.getState().createIKChain(sg, 'bone1');
       expect(useEditorStore.getState().isDirty).toBe(true);
+    });
+  });
+
+  // ==========================================================================
+  // Smart Bones
+  // ==========================================================================
+
+  describe('Smart Bones', () => {
+    it('createSmartBoneAction creates an action for the given bone', () => {
+      useEditorStore.getState().createSmartBoneAction('bone-1');
+
+      const actions = useEditorStore.getState().smartBoneActions;
+      expect(actions).toHaveLength(1);
+      expect(actions[0].driver.boneId).toBe('bone-1');
+      expect(actions[0].driver.property).toBe('transform.rotation');
+      expect(actions[0].enabled).toBe(true);
+      expect(actions[0].targets).toEqual([]);
+    });
+
+    it('removeSmartBoneAction removes the action by id', () => {
+      useEditorStore.getState().createSmartBoneAction('bone-1');
+      const actionId = useEditorStore.getState().smartBoneActions[0].id;
+
+      useEditorStore.getState().removeSmartBoneAction(actionId);
+      expect(useEditorStore.getState().smartBoneActions).toHaveLength(0);
+    });
+
+    it('setSmartBoneActionEnabled toggles enabled flag', () => {
+      useEditorStore.getState().createSmartBoneAction('bone-1');
+      const actionId = useEditorStore.getState().smartBoneActions[0].id;
+
+      useEditorStore.getState().setSmartBoneActionEnabled(actionId, false);
+      expect(useEditorStore.getState().smartBoneActions[0].enabled).toBe(false);
+
+      useEditorStore.getState().setSmartBoneActionEnabled(actionId, true);
+      expect(useEditorStore.getState().smartBoneActions[0].enabled).toBe(true);
+    });
+
+    it('updateSmartBoneDriver updates driver range', () => {
+      useEditorStore.getState().createSmartBoneAction('bone-1');
+      const actionId = useEditorStore.getState().smartBoneActions[0].id;
+
+      useEditorStore.getState().updateSmartBoneDriver(actionId, { rangeMin: -45, rangeMax: 135 });
+      const driver = useEditorStore.getState().smartBoneActions[0].driver;
+      expect(driver.rangeMin).toBe(-45);
+      expect(driver.rangeMax).toBe(135);
+    });
+
+    it('addMorphTarget adds a target with the given driver value', () => {
+      useEditorStore.getState().createSmartBoneAction('bone-1');
+      const actionId = useEditorStore.getState().smartBoneActions[0].id;
+
+      useEditorStore.getState().addMorphTarget(actionId, 45);
+
+      const targets = useEditorStore.getState().smartBoneActions[0].targets;
+      expect(targets).toHaveLength(1);
+      expect(targets[0].driverValue).toBe(45);
+      expect(targets[0].offsets).toEqual({});
+    });
+
+    it('removeMorphTarget removes the target by id', () => {
+      useEditorStore.getState().createSmartBoneAction('bone-1');
+      const actionId = useEditorStore.getState().smartBoneActions[0].id;
+
+      useEditorStore.getState().addMorphTarget(actionId, 45);
+      const targetId = useEditorStore.getState().smartBoneActions[0].targets[0].id;
+
+      useEditorStore.getState().removeMorphTarget(actionId, targetId);
+      expect(useEditorStore.getState().smartBoneActions[0].targets).toHaveLength(0);
+    });
+
+    it('startSmartBoneRecording sets recording state', () => {
+      useEditorStore.getState().createSmartBoneAction('bone-1');
+      const actionId = useEditorStore.getState().smartBoneActions[0].id;
+      useEditorStore.getState().addMorphTarget(actionId, 45);
+      const targetId = useEditorStore.getState().smartBoneActions[0].targets[0].id;
+
+      useEditorStore.getState().startSmartBoneRecording(actionId, targetId);
+      expect(useEditorStore.getState().smartBoneRecordingActionId).toBe(actionId);
+      expect(useEditorStore.getState().smartBoneRecordingTargetId).toBe(targetId);
+    });
+
+    it('stopSmartBoneRecording clears recording state', () => {
+      useEditorStore.setState({
+        smartBoneRecordingActionId: 'some-action',
+        smartBoneRecordingTargetId: 'some-target',
+      });
+
+      useEditorStore.getState().stopSmartBoneRecording();
+      expect(useEditorStore.getState().smartBoneRecordingActionId).toBeNull();
+      expect(useEditorStore.getState().smartBoneRecordingTargetId).toBeNull();
+    });
+
+    it('saveMorphTargetOffsets stores offsets on the target', () => {
+      useEditorStore.getState().createSmartBoneAction('bone-1');
+      const actionId = useEditorStore.getState().smartBoneActions[0].id;
+      useEditorStore.getState().addMorphTarget(actionId, 45);
+      const targetId = useEditorStore.getState().smartBoneActions[0].targets[0].id;
+
+      const offsets = { 'mesh-1': [{ vertexIndex: 0, dx: 5, dy: 3 }] };
+      useEditorStore.getState().saveMorphTargetOffsets(actionId, targetId, offsets);
+
+      const target = useEditorStore.getState().smartBoneActions[0].targets[0];
+      expect(target.offsets).toEqual(offsets);
+    });
+
+    it('deleteSelection removes smart bone actions for deleted bones', () => {
+      useEditorStore.getState().createSmartBoneAction('bone-1');
+      useEditorStore.getState().createSmartBoneAction('bone-2');
+      expect(useEditorStore.getState().smartBoneActions).toHaveLength(2);
+
+      // Create a minimal scene graph mock for deleteSelection
+      const nodes = new Map<string, any>();
+      let rootNodeIds: string[] = [];
+      const sg = {
+        getNode: (id: string) => nodes.get(id),
+        getRootNodes: () => rootNodeIds.map((id) => nodes.get(id)).filter(Boolean),
+        addNode: vi.fn((node: any) => {
+          nodes.set(node.id, node);
+          if (!node.parent) rootNodeIds.push(node.id);
+        }),
+        removeNode: vi.fn((id: string) => {
+          nodes.delete(id);
+          rootNodeIds = rootNodeIds.filter((rid) => rid !== id);
+        }),
+        traverse: vi.fn(),
+        toJSON: vi.fn(() => ({ nodes: [] })),
+        fromJSON: vi.fn(),
+      };
+      sg.addNode({
+        id: 'bone-1',
+        name: 'Bone1',
+        type: 'bone',
+        parent: null,
+        children: [],
+      });
+
+      useEditorStore.setState({ selectedNodeIds: new Set(['bone-1']) });
+      useEditorStore.getState().deleteSelection(sg as any);
+
+      // Action for bone-1 should be removed, bone-2 remains
+      const remaining = useEditorStore.getState().smartBoneActions;
+      expect(remaining).toHaveLength(1);
+      expect(remaining[0].driver.boneId).toBe('bone-2');
     });
   });
 });

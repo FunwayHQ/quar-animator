@@ -22,6 +22,8 @@ import type {
   IKChain,
   IKTargetNode,
   BoneNode,
+  SmartBoneAction,
+  MorphVertexOffset,
 } from '@quar/types';
 import type { KeyframeClipboard } from '@quar/animation';
 import { createTimeline, KeyframeManager } from '@quar/animation';
@@ -215,6 +217,27 @@ export interface EditorStore {
   setIKChainSettings: (
     chainId: string,
     settings: { maxIterations?: number; tolerance?: number }
+  ) => void;
+
+  // Smart Bones (corrective morph targets)
+  smartBoneActions: SmartBoneAction[];
+  smartBoneRecordingActionId: string | null;
+  smartBoneRecordingTargetId: string | null;
+  createSmartBoneAction: (boneId: string) => void;
+  removeSmartBoneAction: (actionId: string) => void;
+  setSmartBoneActionEnabled: (actionId: string, enabled: boolean) => void;
+  updateSmartBoneDriver: (
+    actionId: string,
+    updates: { rangeMin?: number; rangeMax?: number }
+  ) => void;
+  addMorphTarget: (actionId: string, driverValue: number) => void;
+  removeMorphTarget: (actionId: string, targetId: string) => void;
+  startSmartBoneRecording: (actionId: string, targetId: string) => void;
+  stopSmartBoneRecording: () => void;
+  saveMorphTargetOffsets: (
+    actionId: string,
+    targetId: string,
+    offsets: Record<string, MorphVertexOffset[]>
   ) => void;
 
   // Aspect ratio lock
@@ -994,6 +1017,123 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     });
   },
 
+  // Smart Bones (corrective morph targets)
+  smartBoneActions: [] as SmartBoneAction[],
+  smartBoneRecordingActionId: null as string | null,
+  smartBoneRecordingTargetId: null as string | null,
+
+  createSmartBoneAction: (boneId: string) => {
+    const id = `sba_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+    const action: SmartBoneAction = {
+      id,
+      name: `Smart Bone ${get().smartBoneActions.length + 1}`,
+      driver: { boneId, property: 'transform.rotation', rangeMin: 0, rangeMax: 90 },
+      targets: [],
+      enabled: true,
+    };
+    set({ smartBoneActions: [...get().smartBoneActions, action], isDirty: true });
+  },
+
+  removeSmartBoneAction: (actionId: string) => {
+    set({
+      smartBoneActions: get().smartBoneActions.filter((a) => a.id !== actionId),
+      isDirty: true,
+      // Stop recording if the removed action was being recorded
+      ...(get().smartBoneRecordingActionId === actionId
+        ? { smartBoneRecordingActionId: null, smartBoneRecordingTargetId: null }
+        : {}),
+    });
+  },
+
+  setSmartBoneActionEnabled: (actionId: string, enabled: boolean) => {
+    set({
+      smartBoneActions: get().smartBoneActions.map((a) =>
+        a.id === actionId ? { ...a, enabled } : a
+      ),
+    });
+  },
+
+  updateSmartBoneDriver: (actionId: string, updates: { rangeMin?: number; rangeMax?: number }) => {
+    set({
+      smartBoneActions: get().smartBoneActions.map((a) =>
+        a.id === actionId
+          ? {
+              ...a,
+              driver: {
+                ...a.driver,
+                ...(updates.rangeMin != null ? { rangeMin: updates.rangeMin } : {}),
+                ...(updates.rangeMax != null ? { rangeMax: updates.rangeMax } : {}),
+              },
+            }
+          : a
+      ),
+      isDirty: true,
+    });
+  },
+
+  addMorphTarget: (actionId: string, driverValue: number) => {
+    const targetId = `mt_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+    set({
+      smartBoneActions: get().smartBoneActions.map((a) =>
+        a.id === actionId
+          ? {
+              ...a,
+              targets: [
+                ...a.targets,
+                { id: targetId, name: `Target at ${driverValue}°`, driverValue, offsets: {} },
+              ].sort((x, y) => x.driverValue - y.driverValue),
+            }
+          : a
+      ),
+      isDirty: true,
+    });
+  },
+
+  removeMorphTarget: (actionId: string, targetId: string) => {
+    set({
+      smartBoneActions: get().smartBoneActions.map((a) =>
+        a.id === actionId ? { ...a, targets: a.targets.filter((t) => t.id !== targetId) } : a
+      ),
+      isDirty: true,
+      // Stop recording if the removed target was being recorded
+      ...(get().smartBoneRecordingTargetId === targetId
+        ? { smartBoneRecordingActionId: null, smartBoneRecordingTargetId: null }
+        : {}),
+    });
+  },
+
+  startSmartBoneRecording: (actionId: string, targetId: string) => {
+    set({
+      smartBoneRecordingActionId: actionId,
+      smartBoneRecordingTargetId: targetId,
+    });
+  },
+
+  stopSmartBoneRecording: () => {
+    set({
+      smartBoneRecordingActionId: null,
+      smartBoneRecordingTargetId: null,
+    });
+  },
+
+  saveMorphTargetOffsets: (
+    actionId: string,
+    targetId: string,
+    offsets: Record<string, MorphVertexOffset[]>
+  ) => {
+    set({
+      smartBoneActions: get().smartBoneActions.map((a) =>
+        a.id === actionId
+          ? {
+              ...a,
+              targets: a.targets.map((t) => (t.id === targetId ? { ...t, offsets } : t)),
+            }
+          : a
+      ),
+      isDirty: true,
+    });
+  },
+
   // Aspect ratio lock
   aspectRatioLocked: false,
   toggleAspectRatioLock: () => set((state) => ({ aspectRatioLocked: !state.aspectRatioLocked })),
@@ -1040,7 +1180,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     get().pasteClipboard(sceneGraph);
   },
   deleteSelection: (sceneGraph: SceneGraphLike) => {
-    const { selectedNodeIds, timeline, enteredGroupId, ikChains } = get();
+    const { selectedNodeIds, timeline, enteredGroupId, ikChains, smartBoneActions } = get();
     if (selectedNodeIds.size === 0) return;
     get().pushUndo(sceneGraph);
     // Clean up keyframe tracks for deleted nodes
@@ -1056,6 +1196,10 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       mgr.removeAllKeyframesForNode(id);
       sceneGraph.removeNode(id);
     }
+    // Clean up Smart Bone actions referencing deleted bones
+    const newSmartBoneActions = smartBoneActions.filter(
+      (a) => !selectedNodeIds.has(a.driver.boneId)
+    );
     // Clear enteredGroupId if the entered group no longer exists
     const clearGroup = enteredGroupId && !sceneGraph.getNode(enteredGroupId);
     set({
@@ -1064,6 +1208,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       timeline: { ...timeline },
       isDirty: true,
       ikChains: newIkChains,
+      smartBoneActions: newSmartBoneActions,
       ...(clearGroup ? { enteredGroupId: null } : {}),
     });
   },
@@ -2129,6 +2274,9 @@ function createHistoryActions(
         redoStack: [],
         canUndo: false,
         canRedo: false,
+        smartBoneActions: [],
+        smartBoneRecordingActionId: null,
+        smartBoneRecordingTargetId: null,
       });
     },
 

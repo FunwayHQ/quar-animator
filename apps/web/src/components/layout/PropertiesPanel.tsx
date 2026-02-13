@@ -39,6 +39,7 @@ import { useSceneGraph } from '../../contexts/SceneGraphContext';
 import { useEditorStore, DEFAULT_FILL, DEFAULT_STROKE } from '../../stores/editorStore';
 import { ScrubLabel } from '../common/ScrubLabel';
 import { KeyframeIndicator } from '../common/KeyframeIndicator';
+import { SmartBonePanel } from '../common/SmartBonePanel';
 import { ColorPicker } from '../common/ColorPicker';
 import { GradientEditor } from '../common/GradientEditor';
 import type { FillType } from '../common/GradientEditor';
@@ -1775,6 +1776,8 @@ export function PropertiesPanel() {
                   </>
                 );
               })()}
+            {/* Smart Bones section (for bone nodes) */}
+            {node.type === 'bone' && <SmartBonePanel boneId={nodeId} />}
             {/* IK Target section */}
             {node.type === 'ik-target' &&
               (() => {

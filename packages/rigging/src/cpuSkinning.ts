@@ -59,15 +59,25 @@ export function computeSkinMatrix(
  * @param vertices - Source bind-pose vertices (xy pairs, local to mesh)
  * @param skinData - Skin binding data with weights and matrices
  * @param boneWorldTransforms - Current bone world transforms keyed by bone ID
+ * @param morphOffsets - Optional dense Float32Array of xy offset pairs to add before skinning
  * @returns Deformed vertices in world space (Float32Array of xy pairs)
  */
 export function deformVertices(
   vertices: Float32Array,
   skinData: SkinData,
-  boneWorldTransforms: Record<string, AffineTransform2D>
+  boneWorldTransforms: Record<string, AffineTransform2D>,
+  morphOffsets?: Float32Array
 ): Float32Array {
-  const numVertices = vertices.length / 2;
-  const result = new Float32Array(vertices.length);
+  // Apply morph offsets to bind-pose vertices before skinning
+  let sourceVertices = vertices;
+  if (morphOffsets && morphOffsets.length === vertices.length) {
+    const morphed = new Float32Array(vertices.length);
+    for (let i = 0; i < vertices.length; i++) morphed[i] = vertices[i] + morphOffsets[i];
+    sourceVertices = morphed;
+  }
+
+  const numVertices = sourceVertices.length / 2;
+  const result = new Float32Array(sourceVertices.length);
 
   // Pre-compute full skin matrices: boneWorld * IBM * meshBind
   const skinMatrices: Record<string, number[]> = {};
@@ -79,8 +89,8 @@ export function deformVertices(
   }
 
   for (let i = 0; i < numVertices; i++) {
-    const vx = vertices[i * 2];
-    const vy = vertices[i * 2 + 1];
+    const vx = sourceVertices[i * 2];
+    const vy = sourceVertices[i * 2 + 1];
 
     const entry = i < skinData.vertices.length ? skinData.vertices[i] : null;
 

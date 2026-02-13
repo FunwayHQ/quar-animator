@@ -322,5 +322,69 @@ describe('cpuSkinning', () => {
       expect(result[6]).toBeCloseTo(-1); // (1,1) → (-1,1)
       expect(result[7]).toBeCloseTo(1);
     });
+
+    // --- Morph offsets ---
+
+    it('applies morph offsets before skinning', () => {
+      const skinData = createSimpleSkinData();
+      const vertices = new Float32Array([10, 20, 30, 40]);
+      const morphOffsets = new Float32Array([5, -5, 10, -10]);
+      const boneTransforms: Record<string, AffineTransform2D> = {
+        b1: identityTransform(),
+      };
+
+      const result = deformVertices(vertices, skinData, boneTransforms, morphOffsets);
+
+      // With identity skinning, result = vertex + morphOffset
+      expect(result[0]).toBeCloseTo(15); // 10 + 5
+      expect(result[1]).toBeCloseTo(15); // 20 + (-5)
+      expect(result[2]).toBeCloseTo(40); // 30 + 10
+      expect(result[3]).toBeCloseTo(30); // 40 + (-10)
+    });
+
+    it('applies morph offsets then bone translation', () => {
+      const skinData = createSimpleSkinData();
+      const vertices = new Float32Array([0, 0, 10, 0]);
+      const morphOffsets = new Float32Array([5, 5, 5, 5]);
+      const boneTransforms: Record<string, AffineTransform2D> = {
+        b1: translationTransform(100, 0),
+      };
+
+      const result = deformVertices(vertices, skinData, boneTransforms, morphOffsets);
+
+      // Morph first: (5,5), (15,5)
+      // Then bone translation (+100,0): (105, 5), (115, 5)
+      expect(result[0]).toBeCloseTo(105);
+      expect(result[1]).toBeCloseTo(5);
+      expect(result[2]).toBeCloseTo(115);
+      expect(result[3]).toBeCloseTo(5);
+    });
+
+    it('ignores morph offsets with mismatched length', () => {
+      const skinData = createSimpleSkinData();
+      const vertices = new Float32Array([10, 20, 30, 40]);
+      const wrongLength = new Float32Array([1, 2]); // too short
+      const boneTransforms: Record<string, AffineTransform2D> = {
+        b1: identityTransform(),
+      };
+
+      const result = deformVertices(vertices, skinData, boneTransforms, wrongLength);
+
+      // Should use original vertices (morph ignored)
+      expect(result[0]).toBeCloseTo(10);
+      expect(result[1]).toBeCloseTo(20);
+    });
+
+    it('works without morph offsets (backward compatible)', () => {
+      const skinData = createSimpleSkinData();
+      const vertices = new Float32Array([10, 20, 30, 40]);
+      const boneTransforms: Record<string, AffineTransform2D> = {
+        b1: identityTransform(),
+      };
+
+      const result = deformVertices(vertices, skinData, boneTransforms);
+      expect(result[0]).toBeCloseTo(10);
+      expect(result[1]).toBeCloseTo(20);
+    });
   });
 });

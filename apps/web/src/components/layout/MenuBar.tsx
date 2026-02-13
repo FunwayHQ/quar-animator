@@ -14,6 +14,7 @@ import { useSceneGraph } from '../../contexts/SceneGraphContext';
 import type { ProjectActions } from '../../hooks/useProjectActions';
 import type { ProjectListItem } from '../../services/projectStorage';
 import { ProjectListDialog } from '../common/ProjectListDialog';
+import type { SmartBoneAction } from '@quar/types';
 import styles from './MenuBar.module.css';
 
 // ============================================================================
@@ -149,6 +150,10 @@ export function MenuBar({ projectActions }: MenuBarProps) {
   const setCurrentFrameAction = useEditorStore((state) => state.setCurrentFrame);
   const toggleAutoKeyframeAction = useEditorStore((state) => state.toggleAutoKeyframe);
   const setActiveToolAction = useEditorStore((state) => state.setActiveTool);
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-return
+  const smartBoneActions: SmartBoneAction[] = useEditorStore((state) => state.smartBoneActions);
+  const createSmartBoneActionStore = useEditorStore((state) => state.createSmartBoneAction);
+  const removeSmartBoneActionStore = useEditorStore((state) => state.removeSmartBoneAction);
 
   // --- Computed flags ---
   const hasSelection = selectedNodeIds.size > 0;
@@ -225,6 +230,15 @@ export function MenuBar({ projectActions }: MenuBarProps) {
       return !!(n as { skinData?: unknown }).skinData;
     });
   }, [selectedNodeIds, sceneGraph]);
+
+  const hasSmartBoneActionsForSelected = useMemo(() => {
+    const boneIds = Array.from(selectedNodeIds).filter((id) => {
+      const n = sceneGraph.getNode(id);
+      return n && n.type === 'bone';
+    });
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-member-access
+    return smartBoneActions.some((a: SmartBoneAction) => boneIds.includes(a.driver.boneId));
+  }, [selectedNodeIds, sceneGraph, smartBoneActions]);
 
   // --- Close menu when clicking outside ---
   useEffect(() => {
@@ -819,6 +833,40 @@ export function MenuBar({ projectActions }: MenuBarProps) {
                     closeMenu();
                     window.dispatchEvent(new CustomEvent('menubar:remove-ik-chain'));
                   }}
+                />
+                <Separator />
+                <MenuItem
+                  label="Create Smart Bone Action"
+                  disabled={!hasBoneSelected}
+                  onClick={() => {
+                    closeMenu();
+                    const boneId = Array.from(selectedNodeIds).find((id) => {
+                      const n = sceneGraph.getNode(id);
+                      return n && n.type === 'bone';
+                    });
+                    if (boneId) createSmartBoneActionStore(boneId);
+                  }}
+                  data-testid="create-smart-bone-action-menu"
+                />
+                <MenuItem
+                  label="Delete Smart Bone Action"
+                  disabled={!hasSmartBoneActionsForSelected}
+                  onClick={() => {
+                    closeMenu();
+                    const boneId = Array.from(selectedNodeIds).find((id) => {
+                      const n = sceneGraph.getNode(id);
+                      return n && n.type === 'bone';
+                    });
+                    if (boneId) {
+                      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument
+                      const action = smartBoneActions.find(
+                        (a: SmartBoneAction) => a.driver.boneId === boneId
+                      );
+                      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-member-access
+                      if (action) removeSmartBoneActionStore((action as SmartBoneAction).id);
+                    }
+                  }}
+                  data-testid="delete-smart-bone-action-menu"
                 />
               </div>
             )}
