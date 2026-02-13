@@ -109,7 +109,7 @@ export function Timeline({ playback }: TimelineProps = {}) {
   // Track scene graph changes for layer labels
   const [nodes, setNodes] = useState<Node[]>([]);
   useEffect(() => {
-    const update = () => setNodes(sceneGraph.getRootNodes());
+    const update = () => setNodes([...sceneGraph.getRootNodes()].reverse());
     update();
     const unsub = sceneGraph.on('nodeAdded', update);
     const unsub2 = sceneGraph.on('nodeRemoved', update);

@@ -403,7 +403,7 @@ export function LayerPanel() {
     };
   }, [sceneGraph]);
 
-  const rootNodes = sceneGraph.getRootNodes();
+  const rootNodes = [...sceneGraph.getRootNodes()].reverse();
 
   // ========================================================================
   // Selection handlers

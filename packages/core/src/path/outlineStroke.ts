@@ -12,89 +12,28 @@ import {
   getPathBounds,
   applyCornerRadius,
 } from './pathUtils';
+import { schneiderFitCurve, curvesToPathPoints } from './schneider';
 
 // ============================================================================
-// RDP Simplification + Auto-Smooth
+// Polyline → Smooth Bezier (Schneider curve fitting)
 // ============================================================================
 
-/** Max perpendicular distance for RDP simplification (world units) */
-const RDP_TOLERANCE = 0.5;
+/**
+ * Schneider max squared error — tight tolerance for accurate stroke outlines.
+ * Lower = more accurate (more segments), higher = fewer segments.
+ */
+const SCHNEIDER_MAX_ERROR = 0.25;
 
 /**
- * Ramer-Douglas-Peucker polyline simplification.
- * Returns indices of points to keep.
+ * Convert a flat vertex array region into smooth PathPoints using
+ * Schneider's curve fitting algorithm.
+ *
+ * Schneider fits a chain of G1-continuous cubic Bezier curves to the
+ * polyline with Newton-Raphson refinement, minimizing the maximum
+ * deviation from all points (not just the midpoint). This produces
+ * accurate curves with few control points.
  */
-function rdpSimplify(points: Vector2[], tolerance: number): number[] {
-  if (points.length <= 2) {
-    return points.map((_, i) => i);
-  }
-
-  const keep: boolean[] = Array.from({ length: points.length }, () => false);
-  keep[0] = true;
-  keep[points.length - 1] = true;
-
-  rdpRecurse(points, 0, points.length - 1, tolerance * tolerance, keep);
-
-  const indices: number[] = [];
-  for (let i = 0; i < keep.length; i++) {
-    if (keep[i]) indices.push(i);
-  }
-  return indices;
-}
-
-function rdpRecurse(
-  points: Vector2[],
-  start: number,
-  end: number,
-  toleranceSq: number,
-  keep: boolean[]
-): void {
-  if (end - start < 2) return;
-
-  let maxDistSq = 0;
-  let maxIdx = start;
-
-  const sx = points[start].x,
-    sy = points[start].y;
-  const ex = points[end].x,
-    ey = points[end].y;
-  const dx = ex - sx,
-    dy = ey - sy;
-  const lenSq = dx * dx + dy * dy;
-
-  for (let i = start + 1; i < end; i++) {
-    const px = points[i].x - sx;
-    const py = points[i].y - sy;
-
-    let distSq: number;
-    if (lenSq < 1e-10) {
-      distSq = px * px + py * py;
-    } else {
-      const t = Math.max(0, Math.min(1, (px * dx + py * dy) / lenSq));
-      const projX = px - t * dx;
-      const projY = py - t * dy;
-      distSq = projX * projX + projY * projY;
-    }
-
-    if (distSq > maxDistSq) {
-      maxDistSq = distSq;
-      maxIdx = i;
-    }
-  }
-
-  if (maxDistSq > toleranceSq) {
-    keep[maxIdx] = true;
-    rdpRecurse(points, start, maxIdx, toleranceSq, keep);
-    rdpRecurse(points, maxIdx, end, toleranceSq, keep);
-  }
-}
-
-/**
- * Convert a flat vertex array region into PathPoints using RDP simplification.
- * All positions are exact (subset of original offset vertices), avoiding any
- * approximation error that would cause stroke thinning at curves.
- */
-function simplifyToCornerPoints(verts: Float32Array, startIdx: number, count: number): PathPoint[] {
+function simplifyToSmoothPoints(verts: Float32Array, startIdx: number, count: number): PathPoint[] {
   if (count < 2) return [];
 
   // Extract vertices
@@ -104,10 +43,25 @@ function simplifyToCornerPoints(verts: Float32Array, startIdx: number, count: nu
     points.push({ x: verts[idx], y: verts[idx + 1] });
   }
 
-  // RDP simplify — reduces point count while keeping exact positions
-  const indices = rdpSimplify(points, RDP_TOLERANCE);
+  // For very few points, return corners directly (e.g. straight rectangle sides)
+  if (points.length <= 4) {
+    return points.map((p) => createCornerPoint(p));
+  }
 
-  return indices.map((i) => createCornerPoint(points[i]));
+  // Fit cubic bezier curves using Schneider's algorithm
+  const curves = schneiderFitCurve(points, SCHNEIDER_MAX_ERROR);
+  if (curves.length === 0) return points.map((p) => createCornerPoint(p));
+
+  // Convert to PathPoints (handles are relative to position)
+  const pathPoints = curvesToPathPoints(curves);
+
+  // Normalize null handles to {x:0, y:0} for consistency
+  for (const pt of pathPoints) {
+    if (!pt.handleIn) pt.handleIn = { x: 0, y: 0 };
+    if (!pt.handleOut) pt.handleOut = { x: 0, y: 0 };
+  }
+
+  return pathPoints;
 }
 
 // ============================================================================
@@ -176,14 +130,14 @@ export function outlineStroke(
       // Split into two separate closed contours (outer ring + inner ring).
       // Use RDP simplification for clean output with exact geometry.
       const innerCount = outlineVerts.length / 2 - numVertices;
-      const outerPoints = simplifyToCornerPoints(outlineVerts, 0, numVertices);
-      const innerPoints = simplifyToCornerPoints(outlineVerts, numVertices, innerCount);
+      const outerPoints = simplifyToSmoothPoints(outlineVerts, 0, numVertices);
+      const innerPoints = simplifyToSmoothPoints(outlineVerts, numVertices, innerCount);
       if (outerPoints.length >= 3) resultContours.push(outerPoints);
       if (innerPoints.length >= 3) resultContours.push(innerPoints);
     } else {
       // Open paths: single combined polygon (ribbon shape).
       const totalVerts = outlineVerts.length / 2;
-      const points = simplifyToCornerPoints(outlineVerts, 0, totalVerts);
+      const points = simplifyToSmoothPoints(outlineVerts, 0, totalVerts);
       if (points.length >= 3) resultContours.push(points);
     }
   }
@@ -205,14 +159,17 @@ export function outlineStroke(
   const centerX = (minX + maxX) / 2;
   const centerY = (minY + maxY) / 2;
 
-  // Center all contour points at origin
+  // Center all contour points at origin (preserve handles)
   const centeredContours = resultContours.map((contour) =>
-    contour.map((pt) =>
-      createCornerPoint({
+    contour.map((pt) => ({
+      position: {
         x: pt.position.x - centerX,
         y: pt.position.y - centerY,
-      })
-    )
+      },
+      handleIn: { ...pt.handleIn },
+      handleOut: { ...pt.handleOut },
+      type: pt.type,
+    }))
   );
 
   const primaryPoints = centeredContours[0];

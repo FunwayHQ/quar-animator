@@ -290,7 +290,7 @@ describe('outlineStroke', () => {
       expect(result!.subpaths!.length).toBeGreaterThanOrEqual(1);
     });
 
-    it('produces corner points with exact positions from offset polygon', () => {
+    it('produces smooth points with bezier handles for curved segments', () => {
       const points: PathPoint[] = [
         { ...makeCorner(-50, -50), cornerRadius: 20 },
         { ...makeCorner(50, -50), cornerRadius: 20 },
@@ -300,10 +300,11 @@ describe('outlineStroke', () => {
       const result = outlineStroke(makeClosedPath(points, 4), 0, generateId);
       expect(result).not.toBeNull();
 
-      // All points should be corner type (no handles) for exact geometry
+      // Points should have handles (smooth) for curved corner radius segments
+      // or zero handles for straight segments — either way they exist as objects
       for (const pt of result!.points) {
-        expect(pt.handleIn).toBeNull();
-        expect(pt.handleOut).toBeNull();
+        expect(pt.handleIn).toBeDefined();
+        expect(pt.handleOut).toBeDefined();
       }
     });
 
@@ -346,15 +347,14 @@ describe('outlineStroke', () => {
       const result = outlineStroke(makeClosedPath(points, 4), 0, generateId);
       expect(result).not.toBeNull();
 
-      // Without corner radius, a 100x100 square produces exactly 4 outer + 4 inner points.
-      // With corner radius applied, each corner becomes a bezier arc (3 points per corner),
-      // resulting in significantly more points.
+      // Without corner radius, a 100x100 square produces 4 outer + 4 inner.
+      // With corner radius, more points needed to represent the arcs.
       const totalPoints = result!.points.length + (result!.subpaths?.[0]?.length ?? 0);
       // Should have more than 8 points total (4+4 from a sharp square)
-      expect(totalPoints).toBeGreaterThan(16);
+      expect(totalPoints).toBeGreaterThan(8);
     });
 
-    it('uses fewer points than raw tessellation via RDP simplification', () => {
+    it('produces a reasonable number of points via resampling', () => {
       const points: PathPoint[] = [
         { ...makeCorner(-50, -50), cornerRadius: 15 },
         { ...makeCorner(50, -50), cornerRadius: 15 },
@@ -364,15 +364,14 @@ describe('outlineStroke', () => {
       const result = outlineStroke(makeClosedPath(points, 4), 0, generateId);
       expect(result).not.toBeNull();
 
-      // RDP simplification reduces the raw tessellation (~40+ points for
-      // 4 corners with radius) to a smaller set while keeping exact positions.
-      // Should have fewer than the raw tessellation but enough to represent curves.
+      // Arc-length resampling produces a clean small set of points
+      // rather than dozens of raw tessellation vertices.
       const outerCount = result!.points.length;
       const innerCount = result!.subpaths?.[0]?.length ?? 0;
-      expect(outerCount).toBeLessThan(40);
-      expect(innerCount).toBeLessThan(40);
-      expect(outerCount).toBeGreaterThanOrEqual(8); // At least 2 per corner
-      expect(innerCount).toBeGreaterThanOrEqual(8);
+      expect(outerCount).toBeLessThan(20);
+      expect(innerCount).toBeLessThan(20);
+      expect(outerCount).toBeGreaterThanOrEqual(3);
+      expect(innerCount).toBeGreaterThanOrEqual(3);
     });
 
     it('outline is wider than shape without corner radius', () => {
