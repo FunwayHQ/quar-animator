@@ -1,0 +1,520 @@
+/* ============================================================================
+   Smart Bones Panel — Neo-Industrial Studio
+   Technical precision with expressive recording state
+   ============================================================================ */
+
+.container {
+  padding: var(--space-xs) 0;
+}
+
+/* Section header row */
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-sm);
+}
+
+.title {
+  font-size: var(--font-size-2xs);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+/* + Action button — dashed outline add pattern */
+.addActionButton {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px 8px;
+  background: transparent;
+  border: 1px dashed var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-disabled);
+  font-size: var(--font-size-2xs);
+  font-family: var(--font-family-ui);
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+  transition: all var(--duration-fast);
+  letter-spacing: 0.01em;
+}
+
+.addActionButton:hover {
+  border-color: var(--color-accent-primary);
+  color: var(--color-accent-primary);
+  background: rgba(168, 85, 247, 0.06);
+}
+
+.addActionButton:active {
+  transform: scale(0.96);
+}
+
+.addActionButton:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+  border-color: var(--color-border-subtle);
+  color: var(--color-text-disabled);
+  background: transparent;
+}
+
+/* Empty state message */
+.emptyMessage {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-disabled);
+  padding: var(--space-sm) 0;
+  text-align: center;
+  font-style: italic;
+  letter-spacing: 0.01em;
+}
+
+/* ============================================================================
+   Action Card
+   ============================================================================ */
+
+.actionCard {
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  padding: var(--space-sm);
+  margin-bottom: var(--space-sm);
+  background: var(--color-bg-tertiary);
+  transition: all var(--duration-fast);
+}
+
+.actionCard:last-child {
+  margin-bottom: 0;
+}
+
+.actionCard:hover {
+  border-color: var(--color-border-default);
+}
+
+.actionCardDisabled {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+/* Recording state — red accent border + subtle glow */
+.actionCardRecording {
+  border-color: rgba(251, 113, 133, 0.4);
+  background: rgba(251, 113, 133, 0.04);
+  box-shadow: inset 0 0 0 1px rgba(251, 113, 133, 0.06);
+}
+
+/* Action header: toggle + name + delete */
+.actionHeader {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: var(--space-sm);
+}
+
+/* Custom toggle switch */
+.toggle {
+  position: relative;
+  width: 26px;
+  height: 14px;
+  flex-shrink: 0;
+}
+
+.toggle input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggleTrack {
+  position: absolute;
+  inset: 0;
+  background: var(--color-bg-primary);
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  transition: all var(--duration-fast);
+}
+
+.toggleTrack::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 8px;
+  height: 8px;
+  background: var(--color-text-disabled);
+  border-radius: var(--radius-full);
+  transition: all var(--duration-fast) var(--easing-default);
+}
+
+.toggle input:checked + .toggleTrack {
+  background: var(--color-accent-primary);
+  border-color: var(--color-accent-primary);
+}
+
+.toggle input:checked + .toggleTrack::after {
+  transform: translateX(12px);
+  background: #fff;
+}
+
+.toggle input:hover + .toggleTrack {
+  border-color: var(--color-text-tertiary);
+}
+
+.toggle input:checked:hover + .toggleTrack {
+  background: var(--color-accent-primary-hover);
+  border-color: var(--color-accent-primary-hover);
+}
+
+.actionName {
+  flex: 1;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-primary);
+  letter-spacing: -0.01em;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Delete action button — appears on hover */
+.deleteButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-xs);
+  color: var(--color-text-disabled);
+  cursor: pointer;
+  flex-shrink: 0;
+  opacity: 0;
+  transition: all var(--duration-fast);
+}
+
+.actionCard:hover .deleteButton {
+  opacity: 0.6;
+}
+
+.deleteButton:hover {
+  opacity: 1 !important;
+  color: var(--color-accent-error);
+  background: rgba(251, 113, 133, 0.1);
+}
+
+/* ============================================================================
+   Driver Range — Min° / Max° inputs
+   ============================================================================ */
+
+.driverRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: var(--space-sm);
+}
+
+.driverLabel {
+  font-size: var(--font-size-2xs);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-disabled);
+  width: 14px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.driverInputGroup {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  background: var(--color-bg-primary);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  transition: all var(--duration-fast);
+}
+
+.driverInputGroup:hover {
+  border-color: var(--color-border-default);
+}
+
+.driverInputGroup:focus-within {
+  border-color: var(--color-accent-primary);
+  box-shadow: 0 0 0 2px var(--color-accent-primary-glow);
+}
+
+.driverInput {
+  flex: 1;
+  width: 0;
+  min-width: 32px;
+  height: 24px;
+  padding: 0 var(--space-xs);
+  background: transparent;
+  border: none;
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
+  font-family: var(--font-family-mono);
+  font-weight: var(--font-weight-medium);
+  text-align: right;
+  outline: none;
+}
+
+.driverInput::placeholder {
+  color: var(--color-text-disabled);
+}
+
+/* Remove spinner arrows */
+.driverInput::-webkit-inner-spin-button,
+.driverInput::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.driverInput {
+  -moz-appearance: textfield;
+}
+
+.driverSuffix {
+  font-size: var(--font-size-2xs);
+  color: var(--color-text-disabled);
+  padding-right: 6px;
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.driverSeparator {
+  font-size: var(--font-size-2xs);
+  color: var(--color-border-default);
+  flex-shrink: 0;
+  user-select: none;
+}
+
+/* ============================================================================
+   Targets Section
+   ============================================================================ */
+
+.targetsHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-xs);
+  padding-top: var(--space-xs);
+  border-top: 1px solid var(--color-border-subtle);
+}
+
+.targetsLabel {
+  font-size: var(--font-size-2xs);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-disabled);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.addTargetButton {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px 6px;
+  background: transparent;
+  border: 1px dashed var(--color-border-subtle);
+  border-radius: var(--radius-xs);
+  color: var(--color-text-disabled);
+  font-size: var(--font-size-2xs);
+  font-family: var(--font-family-ui);
+  cursor: pointer;
+  transition: all var(--duration-fast);
+}
+
+.addTargetButton:hover {
+  border-color: var(--color-border-default);
+  color: var(--color-text-tertiary);
+  background: var(--color-bg-hover);
+}
+
+.addTargetButton:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+  border-color: var(--color-border-subtle);
+  color: var(--color-text-disabled);
+  background: transparent;
+}
+
+/* Morph target row */
+.targetRow {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 6px;
+  margin-bottom: 2px;
+  border-radius: var(--radius-sm);
+  transition: all var(--duration-fast);
+}
+
+.targetRow:last-child {
+  margin-bottom: 0;
+}
+
+.targetRow:hover {
+  background: var(--color-bg-hover);
+}
+
+/* Active recording target — red glow */
+.targetRowRecording {
+  background: rgba(251, 113, 133, 0.08);
+}
+
+.targetRowRecording:hover {
+  background: rgba(251, 113, 133, 0.12);
+}
+
+/* Recording dot indicator */
+.recordingDot {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-full);
+  background: var(--color-accent-error);
+  flex-shrink: 0;
+  animation: pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.3;
+  }
+}
+
+.targetInfo {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.targetName {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.targetValue {
+  font-size: var(--font-size-2xs);
+  color: var(--color-text-disabled);
+  font-family: var(--font-family-mono);
+  flex-shrink: 0;
+}
+
+/* Record / Stop buttons */
+.recordButton {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 7px;
+  background: transparent;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-2xs);
+  font-family: var(--font-family-ui);
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+  transition: all var(--duration-fast);
+  flex-shrink: 0;
+}
+
+.recordButton:hover {
+  border-color: var(--color-accent-error);
+  color: var(--color-accent-error);
+  background: rgba(251, 113, 133, 0.06);
+}
+
+.recordButton:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+  border-color: var(--color-border-subtle);
+  color: var(--color-text-disabled);
+  background: transparent;
+}
+
+/* Stop button — filled red */
+.stopButton {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 7px;
+  background: var(--color-accent-error);
+  border: 1px solid var(--color-accent-error);
+  border-radius: var(--radius-sm);
+  color: #fff;
+  font-size: var(--font-size-2xs);
+  font-family: var(--font-family-ui);
+  font-weight: var(--font-weight-semibold);
+  cursor: pointer;
+  transition: all var(--duration-fast);
+  flex-shrink: 0;
+  letter-spacing: 0.02em;
+}
+
+.stopButton:hover {
+  background: #f43f5e;
+  border-color: #f43f5e;
+}
+
+.stopButton:active {
+  transform: scale(0.95);
+}
+
+/* Remove target — minimal × */
+.removeTargetButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-xs);
+  color: var(--color-text-disabled);
+  font-size: 11px;
+  cursor: pointer;
+  flex-shrink: 0;
+  opacity: 0;
+  transition: all var(--duration-fast);
+}
+
+.targetRow:hover .removeTargetButton {
+  opacity: 0.5;
+}
+
+.removeTargetButton:hover {
+  opacity: 1 !important;
+  color: var(--color-accent-error);
+  background: rgba(251, 113, 133, 0.1);
+}
+
+.removeTargetButton:disabled {
+  opacity: 0 !important;
+  cursor: not-allowed;
+}
+
+/* Recording indicator for the stop button row */
+.recordingBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--font-size-2xs);
+  color: var(--color-accent-error);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: 0.03em;
+}

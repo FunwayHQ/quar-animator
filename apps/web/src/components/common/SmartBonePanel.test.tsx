@@ -53,7 +53,7 @@ describe('SmartBonePanel', () => {
   it('renders empty state when no actions exist', () => {
     render(<SmartBonePanel boneId="bone-1" />);
     expect(screen.getByTestId('no-actions-message')).toBeInTheDocument();
-    expect(screen.getByText('No Smart Bone actions')).toBeInTheDocument();
+    expect(screen.getByText('No actions defined')).toBeInTheDocument();
   });
 
   it('renders action list when actions exist', () => {
@@ -92,7 +92,9 @@ describe('SmartBonePanel', () => {
     useEditorStore.setState({ smartBoneActions: [action] });
 
     render(<SmartBonePanel boneId="bone-1" />);
-    const checkbox = screen.getByTitle('Enable/disable');
+    // The toggle is a <label> wrapping a hidden <input type="checkbox">
+    const label = screen.getByTitle('Enable/disable');
+    const checkbox = label.querySelector('input[type="checkbox"]') as HTMLInputElement;
 
     expect(useEditorStore.getState().smartBoneActions[0].enabled).toBe(true);
 
