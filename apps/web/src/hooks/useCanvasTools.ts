@@ -15,6 +15,7 @@ import {
   getAllPoints,
 } from '@quar/core';
 import type { TransformType } from '@quar/core';
+import { findTrack } from '@quar/animation';
 import type {
   CanvasPointerEvent,
   Node,
@@ -215,40 +216,70 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
   }, []);
 
   // Auto-keyframe callback for canvas transform operations (move/resize/rotate)
+  // Also creates keyframes when auto-keyframe is OFF but the property already has keyframes
   const onTransformComplete = useCallback((nodeIds: Set<string>, type: TransformType) => {
-    if (!autoKeyframeRef.current) return;
-
+    const autoKf = autoKeyframeRef.current;
     const frame = currentFrameRef.current;
     const sg = sceneGraphRef.current;
     const addKf = addKeyframeAtFrameRef.current;
+    const { timeline } = useEditorStore.getState();
+
+    /** Returns true if auto-keyframe is on OR the property already has keyframes */
+    const shouldKf = (nodeId: string, property: string): boolean => {
+      if (autoKf) return true;
+      if (!timeline) return false;
+      const track = findTrack(timeline, nodeId, property);
+      return track != null && track.keyframes.length > 0;
+    };
 
     for (const nodeId of nodeIds) {
       const node = sg.getNode(nodeId);
       if (!node) continue;
 
       if (type === 'move') {
-        addKf(nodeId, 'transform.position.x', frame, node.transform.position.x);
-        addKf(nodeId, 'transform.position.y', frame, node.transform.position.y);
+        if (shouldKf(nodeId, 'transform.position.x'))
+          addKf(nodeId, 'transform.position.x', frame, node.transform.position.x);
+        if (shouldKf(nodeId, 'transform.position.y'))
+          addKf(nodeId, 'transform.position.y', frame, node.transform.position.y);
       } else if (type === 'resize') {
         // Position may change during resize (e.g. top-left handle drag)
-        addKf(nodeId, 'transform.position.x', frame, node.transform.position.x);
-        addKf(nodeId, 'transform.position.y', frame, node.transform.position.y);
+        if (shouldKf(nodeId, 'transform.position.x'))
+          addKf(nodeId, 'transform.position.x', frame, node.transform.position.x);
+        if (shouldKf(nodeId, 'transform.position.y'))
+          addKf(nodeId, 'transform.position.y', frame, node.transform.position.y);
 
         if (node.type === 'rectangle') {
-          addKf(nodeId, 'width', frame, node.width);
-          addKf(nodeId, 'height', frame, node.height);
+          if (shouldKf(nodeId, 'width')) addKf(nodeId, 'width', frame, node.width);
+          if (shouldKf(nodeId, 'height')) addKf(nodeId, 'height', frame, node.height);
         } else if (node.type === 'ellipse') {
-          addKf(nodeId, 'radiusX', frame, node.radiusX);
-          addKf(nodeId, 'radiusY', frame, node.radiusY);
+          if (shouldKf(nodeId, 'radiusX')) addKf(nodeId, 'radiusX', frame, node.radiusX);
+          if (shouldKf(nodeId, 'radiusY')) addKf(nodeId, 'radiusY', frame, node.radiusY);
         } else if (node.type === 'polygon') {
-          addKf(nodeId, 'transform.scale.x', frame, node.transform.scale.x);
-          addKf(nodeId, 'transform.scale.y', frame, node.transform.scale.y);
+          if (shouldKf(nodeId, 'transform.scale.x'))
+            addKf(nodeId, 'transform.scale.x', frame, node.transform.scale.x);
+          if (shouldKf(nodeId, 'transform.scale.y'))
+            addKf(nodeId, 'transform.scale.y', frame, node.transform.scale.y);
         }
       } else if (type === 'rotate') {
-        addKf(nodeId, 'transform.rotation', frame, node.transform.rotation);
+        if (shouldKf(nodeId, 'transform.rotation'))
+          addKf(nodeId, 'transform.rotation', frame, node.transform.rotation);
       } else if (type === 'vertex-move') {
         // Keyframe ALL vertex positions/handles/cornerRadius for the affected path node
-        // to prevent un-keyframed vertices from snapping to base state during interpolation
+        // to prevent un-keyframed vertices from snapping to base state during interpolation.
+        // Check if auto-keyframe is on OR any vertex property already has keyframes.
+        const hasVertexTracks =
+          autoKf ||
+          (timeline != null &&
+            timeline.tracks.some(
+              (t) =>
+                t.nodeId === nodeId &&
+                t.keyframes.length > 0 &&
+                (t.property.startsWith('points.') ||
+                  t.property.startsWith('subpaths.') ||
+                  t.property.startsWith('vertexOffsets.'))
+            ));
+        if (!hasVertexTracks) continue;
+
         if (node.type === 'path') {
           const pathNode = node as PathNode;
           const allPts = getAllPoints(pathNode);

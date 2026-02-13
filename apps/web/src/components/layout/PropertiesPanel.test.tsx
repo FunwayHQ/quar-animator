@@ -4,7 +4,7 @@ import { SceneGraphProvider, useSceneGraph } from '../../contexts/SceneGraphCont
 import { createDefaultTransform } from '@quar/core';
 import { createTimeline } from '@quar/animation';
 import type { SceneGraph } from '@quar/core';
-import type { RectangleNode, EllipseNode, PolygonNode } from '@quar/types';
+import type { RectangleNode, EllipseNode, PolygonNode, PathNode } from '@quar/types';
 import { PropertiesPanel } from './PropertiesPanel';
 import { useEditorStore } from '../../stores/editorStore';
 import type { ReactNode } from 'react';
@@ -897,6 +897,282 @@ describe('PropertiesPanel', () => {
 
       expect(screen.getByText('IK Chain')).toBeInTheDocument();
       expect(screen.getByText('Pole Target')).toBeInTheDocument();
+    });
+  });
+
+  // ============================================================================
+  // shouldKeyframe: auto-create keyframes for already-animated properties
+  // ============================================================================
+
+  describe('shouldKeyframe — auto-create keyframes for animated properties', () => {
+    beforeEach(() => {
+      useEditorStore.setState({
+        timeline: createTimeline({ duration: 300, frameRate: 30 }),
+        currentFrame: 0,
+        autoKeyframe: false,
+      });
+    });
+
+    it('should NOT create keyframe when autoKeyframe OFF and property has no keyframes', () => {
+      const sg = renderWithSceneGraph();
+
+      act(() => {
+        sg.addNode(createTestRect('rect1', 'Rectangle 1'));
+        useEditorStore.getState().setSelection(['rect1']);
+      });
+
+      // Change position X — autoKeyframe is OFF, no existing keyframes
+      const posXInput = document.getElementById('prop-pos-x') as HTMLInputElement;
+      act(() => {
+        fireEvent.change(posXInput, { target: { value: '300' } });
+      });
+
+      // No keyframe should be created
+      const { timeline } = useEditorStore.getState();
+      expect(timeline.tracks.length).toBe(0);
+    });
+
+    it('should create keyframe when autoKeyframe OFF but property already has keyframes', () => {
+      const sg = renderWithSceneGraph();
+
+      act(() => {
+        sg.addNode(createTestRect('rect1', 'Rectangle 1'));
+        useEditorStore.getState().setSelection(['rect1']);
+        // Add an existing keyframe for position X at frame 0
+        useEditorStore.getState().addKeyframeAtFrame('rect1', 'transform.position.x', 0, 150);
+      });
+
+      // Scrub to frame 10
+      act(() => {
+        useEditorStore.setState({ currentFrame: 10 });
+      });
+
+      // Change position X — property already has keyframes, should auto-create
+      const posXInput = document.getElementById('prop-pos-x') as HTMLInputElement;
+      act(() => {
+        fireEvent.change(posXInput, { target: { value: '300' } });
+      });
+
+      const { timeline } = useEditorStore.getState();
+      const track = timeline.tracks.find(
+        (t) => t.nodeId === 'rect1' && t.property === 'transform.position.x'
+      );
+      expect(track).toBeDefined();
+      // Should have 2 keyframes: original at frame 0 + new one at frame 10
+      expect(track!.keyframes.length).toBe(2);
+      expect(track!.keyframes[1].time).toBe(10);
+    });
+
+    it('should create keyframe when autoKeyframe ON regardless of existing keyframes', () => {
+      const sg = renderWithSceneGraph();
+
+      act(() => {
+        sg.addNode(createTestRect('rect1', 'Rectangle 1'));
+        useEditorStore.getState().setSelection(['rect1']);
+        useEditorStore.setState({ autoKeyframe: true });
+      });
+
+      // Change position X — autoKeyframe is ON, no pre-existing keyframes needed
+      const posXInput = document.getElementById('prop-pos-x') as HTMLInputElement;
+      act(() => {
+        fireEvent.change(posXInput, { target: { value: '300' } });
+      });
+
+      const { timeline } = useEditorStore.getState();
+      const track = timeline.tracks.find(
+        (t) => t.nodeId === 'rect1' && t.property === 'transform.position.x'
+      );
+      expect(track).toBeDefined();
+      expect(track!.keyframes.length).toBe(1);
+    });
+
+    it('should NOT create keyframe for unrelated property when another property is animated', () => {
+      const sg = renderWithSceneGraph();
+
+      act(() => {
+        sg.addNode(createTestRect('rect1', 'Rectangle 1'));
+        useEditorStore.getState().setSelection(['rect1']);
+        // Add keyframe for position X only
+        useEditorStore.getState().addKeyframeAtFrame('rect1', 'transform.position.x', 0, 150);
+      });
+
+      act(() => {
+        useEditorStore.setState({ currentFrame: 10 });
+      });
+
+      // Change rotation — rotation has no keyframes, position X does
+      const rotInput = screen.getByDisplayValue('45.0\u00B0');
+      act(() => {
+        fireEvent.change(rotInput, { target: { value: '90' } });
+      });
+
+      const { timeline } = useEditorStore.getState();
+      // Position X track should still have just 1 keyframe
+      const posTrack = timeline.tracks.find(
+        (t) => t.nodeId === 'rect1' && t.property === 'transform.position.x'
+      );
+      expect(posTrack!.keyframes.length).toBe(1);
+      // Rotation should NOT have a keyframe
+      const rotTrack = timeline.tracks.find(
+        (t) => t.nodeId === 'rect1' && t.property === 'transform.rotation'
+      );
+      expect(rotTrack).toBeUndefined();
+    });
+
+    it('should auto-create keyframe for opacity when opacity already has keyframes', () => {
+      const sg = renderWithSceneGraph();
+
+      act(() => {
+        sg.addNode(createTestRect('rect1', 'Rectangle 1'));
+        useEditorStore.getState().setSelection(['rect1']);
+        // Add existing opacity keyframe
+        useEditorStore.getState().addKeyframeAtFrame('rect1', 'opacity', 0, 0.8);
+      });
+
+      act(() => {
+        useEditorStore.setState({ currentFrame: 15 });
+      });
+
+      // Change opacity via text input
+      const opacityInput = screen.getByDisplayValue('80%');
+      act(() => {
+        fireEvent.change(opacityInput, { target: { value: '50' } });
+      });
+
+      const { timeline } = useEditorStore.getState();
+      const track = timeline.tracks.find((t) => t.nodeId === 'rect1' && t.property === 'opacity');
+      expect(track).toBeDefined();
+      expect(track!.keyframes.length).toBe(2);
+      expect(track!.keyframes[1].time).toBe(15);
+    });
+
+    it('should auto-create keyframe for size when width already has keyframes', () => {
+      const sg = renderWithSceneGraph();
+
+      act(() => {
+        sg.addNode(createTestRect('rect1', 'Rectangle 1'));
+        useEditorStore.getState().setSelection(['rect1']);
+        // Add existing width keyframe
+        useEditorStore.getState().addKeyframeAtFrame('rect1', 'width', 0, 100);
+      });
+
+      act(() => {
+        useEditorStore.setState({ currentFrame: 20 });
+      });
+
+      // Change width
+      const widthInput = document.getElementById('prop-size-w')!;
+      act(() => {
+        fireEvent.change(widthInput, { target: { value: '200' } });
+      });
+
+      const { timeline } = useEditorStore.getState();
+      const track = timeline.tracks.find((t) => t.nodeId === 'rect1' && t.property === 'width');
+      expect(track).toBeDefined();
+      expect(track!.keyframes.length).toBe(2);
+      expect(track!.keyframes[1].time).toBe(20);
+    });
+
+    it('should auto-create keyframe for vertex position when point already has keyframes', () => {
+      const sg = renderWithSceneGraph();
+
+      const pathNode: PathNode = {
+        id: 'path1',
+        name: 'Test Path',
+        type: 'path',
+        parent: null,
+        children: [],
+        transform: createDefaultTransform(),
+        visible: true,
+        locked: false,
+        opacity: 1,
+        blendMode: 'normal',
+        closed: true,
+        points: [
+          { position: { x: 0, y: 0 }, type: 'corner' },
+          { position: { x: 100, y: 0 }, type: 'corner' },
+          { position: { x: 100, y: 100 }, type: 'corner' },
+        ],
+        fills: [
+          { type: 'solid', color: { r: 100, g: 100, b: 100, a: 1 }, opacity: 1, visible: true },
+        ],
+        strokes: [],
+      };
+
+      act(() => {
+        sg.addNode(pathNode);
+        useEditorStore.getState().setSelection(['path1']);
+        // Simulate direct selection tool with point 0 selected
+        useEditorStore.setState({
+          activeTool: 'direct-selection',
+          directSelectionPoints: [{ nodeId: 'path1', pointIndex: 0 }],
+        });
+        // Add existing keyframe for point 0 position.x at frame 0
+        useEditorStore.getState().addKeyframeAtFrame('path1', 'points.0.position.x', 0, 0);
+      });
+
+      act(() => {
+        useEditorStore.setState({ currentFrame: 12 });
+      });
+
+      // Change vertex X position — property already has keyframes, should auto-create
+      const vertexXInput = screen.getByTestId('vertex-pos-x');
+      act(() => {
+        fireEvent.change(vertexXInput, { target: { value: '50' } });
+      });
+
+      const { timeline } = useEditorStore.getState();
+      const track = timeline.tracks.find(
+        (t) => t.nodeId === 'path1' && t.property === 'points.0.position.x'
+      );
+      expect(track).toBeDefined();
+      expect(track!.keyframes.length).toBe(2);
+      expect(track!.keyframes[1].time).toBe(12);
+    });
+
+    it('should NOT create vertex keyframe when no existing vertex keyframes and autoKeyframe OFF', () => {
+      const sg = renderWithSceneGraph();
+
+      const pathNode: PathNode = {
+        id: 'path1',
+        name: 'Test Path',
+        type: 'path',
+        parent: null,
+        children: [],
+        transform: createDefaultTransform(),
+        visible: true,
+        locked: false,
+        opacity: 1,
+        blendMode: 'normal',
+        closed: true,
+        points: [
+          { position: { x: 0, y: 0 }, type: 'corner' },
+          { position: { x: 100, y: 0 }, type: 'corner' },
+          { position: { x: 100, y: 100 }, type: 'corner' },
+        ],
+        fills: [
+          { type: 'solid', color: { r: 100, g: 100, b: 100, a: 1 }, opacity: 1, visible: true },
+        ],
+        strokes: [],
+      };
+
+      act(() => {
+        sg.addNode(pathNode);
+        useEditorStore.getState().setSelection(['path1']);
+        useEditorStore.setState({
+          activeTool: 'direct-selection',
+          directSelectionPoints: [{ nodeId: 'path1', pointIndex: 0 }],
+        });
+      });
+
+      // Change vertex X — no existing keyframes, autoKeyframe OFF
+      const vertexXInput = screen.getByTestId('vertex-pos-x');
+      act(() => {
+        fireEvent.change(vertexXInput, { target: { value: '50' } });
+      });
+
+      const { timeline } = useEditorStore.getState();
+      expect(timeline.tracks.length).toBe(0);
     });
   });
 });

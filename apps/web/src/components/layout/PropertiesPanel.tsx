@@ -57,6 +57,7 @@ import {
   getAllPoints,
   setAllPoints,
 } from '@quar/core';
+import { findTrack } from '@quar/animation';
 import type { SceneGraph } from '@quar/core';
 import { getKeyframeState } from '../../hooks/useKeyframeState';
 import styles from './PropertiesPanel.module.css';
@@ -90,6 +91,15 @@ const groupBoundsManager = new SelectionManager();
 function fmt1(v: number): string {
   if (!isFinite(v)) return '0.0';
   return (Math.round(v * 10) / 10).toFixed(1);
+}
+
+/** Returns true if auto-keyframe is on OR the property already has keyframes */
+function shouldKeyframe(autoKeyframe: boolean, nodeId: string, property: string): boolean {
+  if (autoKeyframe) return true;
+  const { timeline } = useEditorStore.getState();
+  if (!timeline) return false;
+  const track = findTrack(timeline, nodeId, property);
+  return track != null && track.keyframes.length > 0;
 }
 
 function getNodeSize(node: Node, sceneGraph?: SceneGraph): { width: number; height: number } {
@@ -396,7 +406,7 @@ export function PropertiesPanel() {
           },
         },
       });
-      if (autoKeyframe) {
+      if (shouldKeyframe(autoKeyframe, selectedId, `transform.position.${axis}`)) {
         addKeyframeAtFrame(selectedId, `transform.position.${axis}`, currentFrame, centerValue);
       }
     },
@@ -414,7 +424,7 @@ export function PropertiesPanel() {
       sceneGraph.updateNode(selectedId, {
         transform: { ...currentNode.transform, rotation: num },
       });
-      if (autoKeyframe) {
+      if (shouldKeyframe(autoKeyframe, selectedId, 'transform.rotation')) {
         addKeyframeAtFrame(selectedId, 'transform.rotation', currentFrame, num);
       }
     },
@@ -426,13 +436,13 @@ export function PropertiesPanel() {
       if (!selectedId) return;
       if (nodeToUpdate.type === 'rectangle' || nodeToUpdate.type === 'image') {
         sceneGraph.updateNode(selectedId, { width: w, height: h });
-        if (autoKeyframe) {
+        if (shouldKeyframe(autoKeyframe, selectedId, 'width')) {
           addKeyframeAtFrame(selectedId, 'width', currentFrame, w);
           addKeyframeAtFrame(selectedId, 'height', currentFrame, h);
         }
       } else if (nodeToUpdate.type === 'ellipse') {
         sceneGraph.updateNode(selectedId, { radiusX: w / 2, radiusY: h / 2 });
-        if (autoKeyframe) {
+        if (shouldKeyframe(autoKeyframe, selectedId, 'radiusX')) {
           addKeyframeAtFrame(selectedId, 'radiusX', currentFrame, w / 2);
           addKeyframeAtFrame(selectedId, 'radiusY', currentFrame, h / 2);
         }
@@ -447,7 +457,7 @@ export function PropertiesPanel() {
             scale: { x: scaleX, y: scaleY },
           },
         });
-        if (autoKeyframe) {
+        if (shouldKeyframe(autoKeyframe, selectedId, 'transform.scale.x')) {
           addKeyframeAtFrame(selectedId, 'transform.scale.x', currentFrame, scaleX);
           addKeyframeAtFrame(selectedId, 'transform.scale.y', currentFrame, scaleY);
         }
@@ -483,7 +493,7 @@ export function PropertiesPanel() {
               scale: { x: scaleX, y: scaleY },
             },
           });
-          if (autoKeyframe) {
+          if (shouldKeyframe(autoKeyframe, selectedId, 'transform.scale.x')) {
             addKeyframeAtFrame(selectedId, 'transform.scale.x', currentFrame, scaleX);
             addKeyframeAtFrame(selectedId, 'transform.scale.y', currentFrame, scaleY);
           }
@@ -536,7 +546,7 @@ export function PropertiesPanel() {
       const currentNode = sceneGraph.getNode(selectedId);
       if (!currentNode || currentNode.type !== 'polygon') return;
       sceneGraph.updateNode(selectedId, { sides: num } as Partial<Node>);
-      if (autoKeyframe) {
+      if (shouldKeyframe(autoKeyframe, selectedId, 'sides')) {
         addKeyframeAtFrame(selectedId, 'sides', currentFrame, num);
       }
     },
@@ -553,7 +563,7 @@ export function PropertiesPanel() {
       const poly = currentNode as PolygonNode;
       const clamped = Math.min(num, poly.radius);
       sceneGraph.updateNode(selectedId, { innerRadius: clamped } as Partial<Node>);
-      if (autoKeyframe) {
+      if (shouldKeyframe(autoKeyframe, selectedId, 'innerRadius')) {
         addKeyframeAtFrame(selectedId, 'innerRadius', currentFrame, clamped);
       }
     },
@@ -579,7 +589,7 @@ export function PropertiesPanel() {
       const colorWithAlpha = { ...color, a: existingAlpha };
       fills[index] = { ...fill, type: 'solid', color: colorWithAlpha };
       sceneGraph.updateNode(selectedId, { fills } as Partial<Node>);
-      if (autoKeyframe) {
+      if (shouldKeyframe(autoKeyframe, selectedId, `fills.${index}.color`)) {
         addKeyframeAtFrame(selectedId, `fills.${index}.color`, currentFrame, colorWithAlpha);
       }
     },
@@ -596,7 +606,7 @@ export function PropertiesPanel() {
       if (!fill) return;
       fills[index] = { ...fill, type: 'solid', color };
       sceneGraph.updateNode(selectedId, { fills } as Partial<Node>);
-      if (autoKeyframe) {
+      if (shouldKeyframe(autoKeyframe, selectedId, `fills.${index}.color`)) {
         addKeyframeAtFrame(selectedId, `fills.${index}.color`, currentFrame, color);
       }
     },
@@ -684,7 +694,7 @@ export function PropertiesPanel() {
       if (!fill) return;
       fills[index] = { ...fill, opacity: clamped };
       sceneGraph.updateNode(selectedId, { fills } as Partial<Node>);
-      if (autoKeyframe) {
+      if (shouldKeyframe(autoKeyframe, selectedId, `fills.${index}.opacity`)) {
         addKeyframeAtFrame(selectedId, `fills.${index}.opacity`, currentFrame, clamped);
       }
     },
@@ -701,7 +711,7 @@ export function PropertiesPanel() {
       if (!fill) return;
       fills[index] = { ...fill, type: 'gradient', gradient };
       sceneGraph.updateNode(selectedId, { fills } as Partial<Node>);
-      if (autoKeyframe) {
+      if (shouldKeyframe(autoKeyframe, selectedId, `fills.${index}.gradient.angle`)) {
         addKeyframeAtFrame(
           selectedId,
           `fills.${index}.gradient.angle`,
@@ -732,7 +742,7 @@ export function PropertiesPanel() {
       const colorWithAlpha = { ...color, a: existingAlpha };
       strokes[index] = { ...stroke, color: colorWithAlpha };
       sceneGraph.updateNode(selectedId, { strokes } as Partial<Node>);
-      if (autoKeyframe) {
+      if (shouldKeyframe(autoKeyframe, selectedId, `strokes.${index}.color`)) {
         addKeyframeAtFrame(selectedId, `strokes.${index}.color`, currentFrame, colorWithAlpha);
       }
     },
@@ -749,7 +759,7 @@ export function PropertiesPanel() {
       if (!stroke) return;
       strokes[index] = { ...stroke, color };
       sceneGraph.updateNode(selectedId, { strokes } as Partial<Node>);
-      if (autoKeyframe) {
+      if (shouldKeyframe(autoKeyframe, selectedId, `strokes.${index}.color`)) {
         addKeyframeAtFrame(selectedId, `strokes.${index}.color`, currentFrame, color);
       }
     },
@@ -767,7 +777,7 @@ export function PropertiesPanel() {
       const clamped = Math.max(0.5, Math.min(100, width));
       strokes[index] = { ...stroke, width: clamped };
       sceneGraph.updateNode(selectedId, { strokes } as Partial<Node>);
-      if (autoKeyframe) {
+      if (shouldKeyframe(autoKeyframe, selectedId, `strokes.${index}.width`)) {
         addKeyframeAtFrame(selectedId, `strokes.${index}.width`, currentFrame, clamped);
       }
     },
@@ -788,7 +798,7 @@ export function PropertiesPanel() {
       if (!stroke) return;
       strokes[index] = { ...stroke, opacity: clamped };
       sceneGraph.updateNode(selectedId, { strokes } as Partial<Node>);
-      if (autoKeyframe) {
+      if (shouldKeyframe(autoKeyframe, selectedId, `strokes.${index}.opacity`)) {
         addKeyframeAtFrame(selectedId, `strokes.${index}.opacity`, currentFrame, clamped);
       }
     },
@@ -872,7 +882,7 @@ export function PropertiesPanel() {
       if (!stroke) return;
       strokes[index] = { ...stroke, gradient };
       sceneGraph.updateNode(selectedId, { strokes } as Partial<Node>);
-      if (autoKeyframe) {
+      if (shouldKeyframe(autoKeyframe, selectedId, `strokes.${index}.gradient.angle`)) {
         addKeyframeAtFrame(
           selectedId,
           `strokes.${index}.gradient.angle`,
@@ -910,7 +920,7 @@ export function PropertiesPanel() {
       if (isNaN(num)) return;
       const clamped = Math.max(0, Math.min(1, num / 100));
       sceneGraph.updateNode(selectedId, { opacity: clamped });
-      if (autoKeyframe) {
+      if (shouldKeyframe(autoKeyframe, selectedId, 'opacity')) {
         addKeyframeAtFrame(selectedId, 'opacity', currentFrame, clamped);
       }
     },
@@ -924,7 +934,7 @@ export function PropertiesPanel() {
       if (isNaN(num)) return;
       const opacity = num / 100;
       sceneGraph.updateNode(selectedId, { opacity });
-      if (autoKeyframe) {
+      if (shouldKeyframe(autoKeyframe, selectedId, 'opacity')) {
         addKeyframeAtFrame(selectedId, 'opacity', currentFrame, opacity);
       }
     },
@@ -943,7 +953,7 @@ export function PropertiesPanel() {
       const imgNode = currentNode as ImageNode;
       const adjustments = { ...(imgNode.adjustments ?? DEFAULT_ADJUSTMENTS), [key]: value };
       sceneGraph.updateNode(selectedId, { adjustments } as Partial<Node>);
-      if (autoKeyframe) {
+      if (shouldKeyframe(autoKeyframe, selectedId, `adjustments.${String(key)}`)) {
         addKeyframeAtFrame(selectedId, `adjustments.${String(key)}`, currentFrame, value);
       }
     },
@@ -995,7 +1005,7 @@ export function PropertiesPanel() {
           newRadius[3] = num;
         }
         sceneGraph.updateNode(selectedId, { cornerRadius: newRadius });
-        if (autoKeyframe) {
+        if (shouldKeyframe(autoKeyframe, selectedId, `cornerRadius.${corner}`)) {
           if (corner !== undefined) {
             addKeyframeAtFrame(selectedId, `cornerRadius.${corner}`, currentFrame, num);
           } else {
@@ -1022,7 +1032,7 @@ export function PropertiesPanel() {
           newRadius[3] = num;
         }
         sceneGraph.updateNode(selectedId, { cornerRadius: newRadius });
-        if (autoKeyframe) {
+        if (shouldKeyframe(autoKeyframe, selectedId, `cornerRadius.${corner}`)) {
           if (corner !== undefined) {
             addKeyframeAtFrame(selectedId, `cornerRadius.${corner}`, currentFrame, num);
           } else {
@@ -1034,7 +1044,7 @@ export function PropertiesPanel() {
         }
       } else if (currentNode.type === 'polygon') {
         sceneGraph.updateNode(selectedId, { cornerRadius: num } as Partial<Node>);
-        if (autoKeyframe) {
+        if (shouldKeyframe(autoKeyframe, selectedId, 'cornerRadius')) {
           addKeyframeAtFrame(selectedId, 'cornerRadius', currentFrame, num);
         }
       }
@@ -1671,7 +1681,7 @@ export function PropertiesPanel() {
                               const val = Math.max(1, v);
                               pushUndo(sceneGraph);
                               sceneGraph.updateNode(nodeId, { length: val } as Partial<BoneNode>);
-                              if (autoKeyframe)
+                              if (shouldKeyframe(autoKeyframe, nodeId, 'length'))
                                 addKeyframeAtFrame(nodeId, 'length', currentFrame, val);
                             }}
                             min={1}
@@ -1685,7 +1695,7 @@ export function PropertiesPanel() {
                               if (!isNaN(val) && val > 0) {
                                 pushUndo(sceneGraph);
                                 sceneGraph.updateNode(nodeId, { length: val } as Partial<BoneNode>);
-                                if (autoKeyframe)
+                                if (shouldKeyframe(autoKeyframe, nodeId, 'length'))
                                   addKeyframeAtFrame(nodeId, 'length', currentFrame, val);
                               }
                             }}
@@ -1698,7 +1708,7 @@ export function PropertiesPanel() {
                                   sceneGraph.updateNode(nodeId, {
                                     length: val,
                                   } as Partial<BoneNode>);
-                                  if (autoKeyframe)
+                                  if (shouldKeyframe(autoKeyframe, nodeId, 'length'))
                                     addKeyframeAtFrame(nodeId, 'length', currentFrame, val);
                                 }
                               }
@@ -1940,7 +1950,7 @@ export function PropertiesPanel() {
                                 .then(() => {
                                   pushUndo(sceneGraph);
                                   sceneGraph.updateNode(nodeId, { fontFamily: family });
-                                  if (autoKeyframe)
+                                  if (shouldKeyframe(autoKeyframe, nodeId, 'fontFamily'))
                                     addKeyframeAtFrame(nodeId, 'fontFamily', currentFrame, family);
                                 })
                                 .catch(() => {
@@ -1950,7 +1960,7 @@ export function PropertiesPanel() {
                             }
                             pushUndo(sceneGraph);
                             sceneGraph.updateNode(nodeId, { fontFamily: family });
-                            if (autoKeyframe)
+                            if (shouldKeyframe(autoKeyframe, nodeId, 'fontFamily'))
                               addKeyframeAtFrame(nodeId, 'fontFamily', currentFrame, family);
                           }}
                         >
@@ -1980,7 +1990,7 @@ export function PropertiesPanel() {
                             onChange={(v) => {
                               const val = Math.max(1, Math.round(v));
                               sceneGraph.updateNode(nodeId, { fontSize: val });
-                              if (autoKeyframe)
+                              if (shouldKeyframe(autoKeyframe, nodeId, 'fontSize'))
                                 addKeyframeAtFrame(nodeId, 'fontSize', currentFrame, val);
                             }}
                             min={1}
@@ -1995,7 +2005,7 @@ export function PropertiesPanel() {
                               if (!isNaN(val) && val > 0) {
                                 pushUndo(sceneGraph);
                                 sceneGraph.updateNode(nodeId, { fontSize: val });
-                                if (autoKeyframe)
+                                if (shouldKeyframe(autoKeyframe, nodeId, 'fontSize'))
                                   addKeyframeAtFrame(nodeId, 'fontSize', currentFrame, val);
                               }
                             }}
@@ -2005,7 +2015,7 @@ export function PropertiesPanel() {
                                 const val = parseInt(v);
                                 if (!isNaN(val) && val > 0) {
                                   sceneGraph.updateNode(nodeId, { fontSize: val });
-                                  if (autoKeyframe)
+                                  if (shouldKeyframe(autoKeyframe, nodeId, 'fontSize'))
                                     addKeyframeAtFrame(nodeId, 'fontSize', currentFrame, val);
                                 }
                               }
@@ -2035,7 +2045,7 @@ export function PropertiesPanel() {
                                 .then(() => {
                                   pushUndo(sceneGraph);
                                   sceneGraph.updateNode(nodeId, { fontWeight: w });
-                                  if (autoKeyframe)
+                                  if (shouldKeyframe(autoKeyframe, nodeId, 'fontWeight'))
                                     addKeyframeAtFrame(nodeId, 'fontWeight', currentFrame, w);
                                 })
                                 .catch(() => {
@@ -2045,7 +2055,7 @@ export function PropertiesPanel() {
                             }
                             pushUndo(sceneGraph);
                             sceneGraph.updateNode(nodeId, { fontWeight: w });
-                            if (autoKeyframe)
+                            if (shouldKeyframe(autoKeyframe, nodeId, 'fontWeight'))
                               addKeyframeAtFrame(nodeId, 'fontWeight', currentFrame, w);
                           }}
                         >
@@ -2107,7 +2117,7 @@ export function PropertiesPanel() {
                             onChange={(v) => {
                               const val = Math.max(0.5, +v.toFixed(2));
                               sceneGraph.updateNode(nodeId, { lineHeight: val });
-                              if (autoKeyframe)
+                              if (shouldKeyframe(autoKeyframe, nodeId, 'lineHeight'))
                                 addKeyframeAtFrame(nodeId, 'lineHeight', currentFrame, val);
                             }}
                             sensitivity={0.01}
@@ -2123,7 +2133,7 @@ export function PropertiesPanel() {
                               if (!isNaN(val) && val > 0) {
                                 pushUndo(sceneGraph);
                                 sceneGraph.updateNode(nodeId, { lineHeight: val });
-                                if (autoKeyframe)
+                                if (shouldKeyframe(autoKeyframe, nodeId, 'lineHeight'))
                                   addKeyframeAtFrame(nodeId, 'lineHeight', currentFrame, val);
                               }
                             }}
@@ -2147,7 +2157,7 @@ export function PropertiesPanel() {
                             value={textNode.letterSpacing}
                             onChange={(v) => {
                               sceneGraph.updateNode(nodeId, { letterSpacing: +v.toFixed(1) });
-                              if (autoKeyframe)
+                              if (shouldKeyframe(autoKeyframe, nodeId, 'letterSpacing'))
                                 addKeyframeAtFrame(
                                   nodeId,
                                   'letterSpacing',
@@ -2168,7 +2178,7 @@ export function PropertiesPanel() {
                               if (!isNaN(val)) {
                                 pushUndo(sceneGraph);
                                 sceneGraph.updateNode(nodeId, { letterSpacing: val });
-                                if (autoKeyframe)
+                                if (shouldKeyframe(autoKeyframe, nodeId, 'letterSpacing'))
                                   addKeyframeAtFrame(nodeId, 'letterSpacing', currentFrame, val);
                               }
                             }}
@@ -2306,7 +2316,13 @@ export function PropertiesPanel() {
                   points: split.points,
                   subpaths: split.subpaths,
                 });
-                if (autoKeyframe) {
+                if (
+                  shouldKeyframe(
+                    autoKeyframe,
+                    sp.nodeId,
+                    `points.${sp.pointIndex}.position.${axis}`
+                  )
+                ) {
                   addKeyframeAtFrame(
                     sp.nodeId,
                     `points.${sp.pointIndex}.position.${axis}`,
@@ -2337,7 +2353,9 @@ export function PropertiesPanel() {
                   points: split.points,
                   subpaths: split.subpaths,
                 });
-                if (autoKeyframe) {
+                if (
+                  shouldKeyframe(autoKeyframe, sp.nodeId, `points.${sp.pointIndex}.cornerRadius`)
+                ) {
                   addKeyframeAtFrame(
                     sp.nodeId,
                     `points.${sp.pointIndex}.cornerRadius`,
@@ -3083,7 +3101,13 @@ export function PropertiesPanel() {
                                       index,
                                       { color: c } as Partial<Effect>
                                     );
-                                    if (autoKeyframe)
+                                    if (
+                                      shouldKeyframe(
+                                        autoKeyframe,
+                                        selectedId,
+                                        `effects.${index}.color`
+                                      )
+                                    )
                                       addKeyframeAtFrame(
                                         selectedId,
                                         `effects.${index}.color`,
@@ -3112,7 +3136,13 @@ export function PropertiesPanel() {
                                       index,
                                       { opacity: clamped } as Partial<Effect>
                                     );
-                                    if (autoKeyframe)
+                                    if (
+                                      shouldKeyframe(
+                                        autoKeyframe,
+                                        selectedId,
+                                        `effects.${index}.opacity`
+                                      )
+                                    )
                                       addKeyframeAtFrame(
                                         selectedId,
                                         `effects.${index}.opacity`,
@@ -3139,7 +3169,13 @@ export function PropertiesPanel() {
                                       index,
                                       { opacity: clamped } as Partial<Effect>
                                     );
-                                    if (autoKeyframe)
+                                    if (
+                                      shouldKeyframe(
+                                        autoKeyframe,
+                                        selectedId,
+                                        `effects.${index}.opacity`
+                                      )
+                                    )
                                       addKeyframeAtFrame(
                                         selectedId,
                                         `effects.${index}.opacity`,
@@ -3160,7 +3196,13 @@ export function PropertiesPanel() {
                                         index,
                                         { opacity: clamped } as Partial<Effect>
                                       );
-                                      if (autoKeyframe)
+                                      if (
+                                        shouldKeyframe(
+                                          autoKeyframe,
+                                          selectedId,
+                                          `effects.${index}.opacity`
+                                        )
+                                      )
                                         addKeyframeAtFrame(
                                           selectedId,
                                           `effects.${index}.opacity`,
@@ -3187,7 +3229,13 @@ export function PropertiesPanel() {
                                       index,
                                       { offsetX: v } as Partial<Effect>
                                     );
-                                    if (autoKeyframe)
+                                    if (
+                                      shouldKeyframe(
+                                        autoKeyframe,
+                                        selectedId,
+                                        `effects.${index}.offsetX`
+                                      )
+                                    )
                                       addKeyframeAtFrame(
                                         selectedId,
                                         `effects.${index}.offsetX`,
@@ -3210,7 +3258,13 @@ export function PropertiesPanel() {
                                       index,
                                       { offsetX: v } as Partial<Effect>
                                     );
-                                    if (autoKeyframe)
+                                    if (
+                                      shouldKeyframe(
+                                        autoKeyframe,
+                                        selectedId,
+                                        `effects.${index}.offsetX`
+                                      )
+                                    )
                                       addKeyframeAtFrame(
                                         selectedId,
                                         `effects.${index}.offsetX`,
@@ -3230,7 +3284,13 @@ export function PropertiesPanel() {
                                         index,
                                         { offsetX: val } as Partial<Effect>
                                       );
-                                      if (autoKeyframe)
+                                      if (
+                                        shouldKeyframe(
+                                          autoKeyframe,
+                                          selectedId,
+                                          `effects.${index}.offsetX`
+                                        )
+                                      )
                                         addKeyframeAtFrame(
                                           selectedId,
                                           `effects.${index}.offsetX`,
@@ -3255,7 +3315,13 @@ export function PropertiesPanel() {
                                       index,
                                       { offsetY: v } as Partial<Effect>
                                     );
-                                    if (autoKeyframe)
+                                    if (
+                                      shouldKeyframe(
+                                        autoKeyframe,
+                                        selectedId,
+                                        `effects.${index}.offsetY`
+                                      )
+                                    )
                                       addKeyframeAtFrame(
                                         selectedId,
                                         `effects.${index}.offsetY`,
@@ -3278,7 +3344,13 @@ export function PropertiesPanel() {
                                       index,
                                       { offsetY: v } as Partial<Effect>
                                     );
-                                    if (autoKeyframe)
+                                    if (
+                                      shouldKeyframe(
+                                        autoKeyframe,
+                                        selectedId,
+                                        `effects.${index}.offsetY`
+                                      )
+                                    )
                                       addKeyframeAtFrame(
                                         selectedId,
                                         `effects.${index}.offsetY`,
@@ -3298,7 +3370,13 @@ export function PropertiesPanel() {
                                         index,
                                         { offsetY: val } as Partial<Effect>
                                       );
-                                      if (autoKeyframe)
+                                      if (
+                                        shouldKeyframe(
+                                          autoKeyframe,
+                                          selectedId,
+                                          `effects.${index}.offsetY`
+                                        )
+                                      )
                                         addKeyframeAtFrame(
                                           selectedId,
                                           `effects.${index}.offsetY`,
@@ -3326,7 +3404,13 @@ export function PropertiesPanel() {
                                       index,
                                       { blur: clamped } as Partial<Effect>
                                     );
-                                    if (autoKeyframe)
+                                    if (
+                                      shouldKeyframe(
+                                        autoKeyframe,
+                                        selectedId,
+                                        `effects.${index}.blur`
+                                      )
+                                    )
                                       addKeyframeAtFrame(
                                         selectedId,
                                         `effects.${index}.blur`,
@@ -3352,7 +3436,13 @@ export function PropertiesPanel() {
                                       index,
                                       { blur: clamped } as Partial<Effect>
                                     );
-                                    if (autoKeyframe)
+                                    if (
+                                      shouldKeyframe(
+                                        autoKeyframe,
+                                        selectedId,
+                                        `effects.${index}.blur`
+                                      )
+                                    )
                                       addKeyframeAtFrame(
                                         selectedId,
                                         `effects.${index}.blur`,
@@ -3373,7 +3463,13 @@ export function PropertiesPanel() {
                                         index,
                                         { blur: clamped } as Partial<Effect>
                                       );
-                                      if (autoKeyframe)
+                                      if (
+                                        shouldKeyframe(
+                                          autoKeyframe,
+                                          selectedId,
+                                          `effects.${index}.blur`
+                                        )
+                                      )
                                         addKeyframeAtFrame(
                                           selectedId,
                                           `effects.${index}.blur`,
@@ -3399,7 +3495,13 @@ export function PropertiesPanel() {
                                       index,
                                       { spread: clamped } as Partial<Effect>
                                     );
-                                    if (autoKeyframe)
+                                    if (
+                                      shouldKeyframe(
+                                        autoKeyframe,
+                                        selectedId,
+                                        `effects.${index}.spread`
+                                      )
+                                    )
                                       addKeyframeAtFrame(
                                         selectedId,
                                         `effects.${index}.spread`,
@@ -3425,7 +3527,13 @@ export function PropertiesPanel() {
                                       index,
                                       { spread: clamped } as Partial<Effect>
                                     );
-                                    if (autoKeyframe)
+                                    if (
+                                      shouldKeyframe(
+                                        autoKeyframe,
+                                        selectedId,
+                                        `effects.${index}.spread`
+                                      )
+                                    )
                                       addKeyframeAtFrame(
                                         selectedId,
                                         `effects.${index}.spread`,
@@ -3446,7 +3554,13 @@ export function PropertiesPanel() {
                                         index,
                                         { spread: clamped } as Partial<Effect>
                                       );
-                                      if (autoKeyframe)
+                                      if (
+                                        shouldKeyframe(
+                                          autoKeyframe,
+                                          selectedId,
+                                          `effects.${index}.spread`
+                                        )
+                                      )
                                         addKeyframeAtFrame(
                                           selectedId,
                                           `effects.${index}.spread`,
@@ -3481,7 +3595,13 @@ export function PropertiesPanel() {
                                     index,
                                     { radius: clamped } as Partial<Effect>
                                   );
-                                  if (autoKeyframe)
+                                  if (
+                                    shouldKeyframe(
+                                      autoKeyframe,
+                                      selectedId,
+                                      `effects.${index}.radius`
+                                    )
+                                  )
                                     addKeyframeAtFrame(
                                       selectedId,
                                       `effects.${index}.radius`,
@@ -3507,7 +3627,13 @@ export function PropertiesPanel() {
                                     index,
                                     { radius: clamped } as Partial<Effect>
                                   );
-                                  if (autoKeyframe)
+                                  if (
+                                    shouldKeyframe(
+                                      autoKeyframe,
+                                      selectedId,
+                                      `effects.${index}.radius`
+                                    )
+                                  )
                                     addKeyframeAtFrame(
                                       selectedId,
                                       `effects.${index}.radius`,
@@ -3528,7 +3654,13 @@ export function PropertiesPanel() {
                                       index,
                                       { radius: clamped } as Partial<Effect>
                                     );
-                                    if (autoKeyframe)
+                                    if (
+                                      shouldKeyframe(
+                                        autoKeyframe,
+                                        selectedId,
+                                        `effects.${index}.radius`
+                                      )
+                                    )
                                       addKeyframeAtFrame(
                                         selectedId,
                                         `effects.${index}.radius`,

@@ -602,6 +602,51 @@ describe('image vertexOffsets properties', () => {
     expect(evaluateTrack(track, 5)).toBe(25);
   });
 
+  it('evaluateTrack interpolates point positions', () => {
+    const trackX = createTrack<number>('path1', 'points.0.position.x');
+    addKeyframe(trackX, 0, 10);
+    addKeyframe(trackX, 20, 50);
+    expect(evaluateTrack(trackX, 10)).toBe(30); // linear midpoint
+    expect(evaluateTrack(trackX, 0)).toBe(10);
+    expect(evaluateTrack(trackX, 20)).toBe(50);
+  });
+
+  it('evaluateNodeAtFrame returns animated point positions', () => {
+    const timeline = createTimeline({ duration: 100, frameRate: 30 });
+    const trackX = createTrack<number>('path1', 'points.0.position.x');
+    addKeyframe(trackX, 0, 0);
+    addKeyframe(trackX, 10, 100);
+    const trackY = createTrack<number>('path1', 'points.0.position.y');
+    addKeyframe(trackY, 0, 0);
+    addKeyframe(trackY, 10, 200);
+    timeline.tracks.push(trackX, trackY);
+
+    const values = evaluateNodeAtFrame(timeline, 'path1', 5);
+    expect(values.get('points.0.position.x')).toBe(50);
+    expect(values.get('points.0.position.y')).toBe(100);
+  });
+
+  it('applyAnimatedValues updates point positions on path node', () => {
+    const node = {
+      id: 'p1',
+      type: 'path' as const,
+      points: [
+        { position: { x: 10, y: 20 }, type: 'corner' as const },
+        { position: { x: 30, y: 40 }, type: 'corner' as const },
+      ],
+    } as unknown as Node;
+
+    const animated = new Map<string, unknown>();
+    animated.set('points.0.position.x', 99);
+    animated.set('points.1.position.y', 77);
+
+    const result = applyAnimatedValues(node, animated);
+    expect(getProperty(result, 'points.0.position.x')).toBe(99);
+    expect(getProperty(result, 'points.0.position.y')).toBe(20); // unchanged
+    expect(getProperty(result, 'points.1.position.y')).toBe(77);
+    expect(getProperty(result, 'points.1.position.x')).toBe(30); // unchanged
+  });
+
   it('getAnimatableProperties includes skinData-independent properties for images', () => {
     const props = getAnimatableProperties('image');
     const paths = props.map((p) => p.path);
