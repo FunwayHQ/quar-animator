@@ -289,11 +289,10 @@ export class DirectSelectionTool extends BaseTool {
       return;
     }
 
-    // Click on a convertible shape that's already selected → convert to path for point editing
+    // Click on a convertible shape → convert to path for point editing
     if (
       hitNode &&
       (hitNode.type === 'rectangle' || hitNode.type === 'ellipse' || hitNode.type === 'polygon') &&
-      this.context.getSelectedIds().has(hitNode.id) &&
       this.context.convertShapeToPath
     ) {
       const newId = this.context.convertShapeToPath(hitNode.id);

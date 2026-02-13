@@ -1964,10 +1964,8 @@ describe('DirectSelectionTool', () => {
       });
 
       const rect = createTestRectangle(context, 50, 30);
-      // First: select the rectangle
-      context.setSelectedIds([rect.id]);
 
-      // Second: click on the already-selected rectangle → triggers conversion
+      // Single click on the rectangle → triggers conversion immediately
       tool.onPointerDown(createMockPointerEvent({ worldPosition: { x: 0, y: 0 }, button: 0 }));
       tool.onPointerUp(createMockPointerEvent({ worldPosition: { x: 0, y: 0 } }));
 
@@ -1975,18 +1973,17 @@ describe('DirectSelectionTool', () => {
       expect(convertedId).not.toBeNull();
     });
 
-    it('should not convert shape if not already selected', () => {
-      context.convertShapeToPath = vi.fn(() => null);
+    it('should not convert when convertShapeToPath is not available', () => {
+      context.convertShapeToPath = undefined;
 
-      createTestRectangle(context, 50, 30);
-      // Don't pre-select the rectangle
+      const rect = createTestRectangle(context, 50, 30);
 
-      // Click on the rectangle without pre-selection
+      // Click on the rectangle — no converter available, just selects
       tool.onPointerDown(createMockPointerEvent({ worldPosition: { x: 0, y: 0 }, button: 0 }));
       tool.onPointerUp(createMockPointerEvent({ worldPosition: { x: 0, y: 0 } }));
 
-      // Should not have tried to convert (first click just selects)
-      expect(context.convertShapeToPath).not.toHaveBeenCalled();
+      // Should have selected the node without conversion
+      expect(context.getSelectedIds().has(rect.id)).toBe(true);
     });
 
     it('should convert selected polygon to path on click', () => {
@@ -2015,7 +2012,6 @@ describe('DirectSelectionTool', () => {
       });
 
       const poly = createTestPolygon(context, 50, 3);
-      context.setSelectedIds([poly.id]);
 
       tool.onPointerDown(createMockPointerEvent({ worldPosition: { x: 0, y: 0 }, button: 0 }));
       tool.onPointerUp(createMockPointerEvent({ worldPosition: { x: 0, y: 0 } }));
@@ -2023,7 +2019,7 @@ describe('DirectSelectionTool', () => {
       expect(context.convertShapeToPath).toHaveBeenCalledWith(poly.id);
     });
 
-    it('should convert selected ellipse to path on click', () => {
+    it('should convert ellipse to path on click', () => {
       context.convertShapeToPath = vi.fn((nodeId: string) => {
         const pathId = context.generateId();
         const pathNode: PathNode = {
@@ -2054,7 +2050,6 @@ describe('DirectSelectionTool', () => {
       });
 
       const ellipse = createTestEllipse(context, 30, 20);
-      context.setSelectedIds([ellipse.id]);
 
       tool.onPointerDown(createMockPointerEvent({ worldPosition: { x: 0, y: 0 }, button: 0 }));
       tool.onPointerUp(createMockPointerEvent({ worldPosition: { x: 0, y: 0 } }));
@@ -2110,7 +2105,6 @@ describe('DirectSelectionTool', () => {
       });
 
       const rect = createTestRectangle(context, 50, 30);
-      context.setSelectedIds([rect.id]);
 
       tool.onPointerDown(createMockPointerEvent({ worldPosition: { x: 0, y: 0 }, button: 0 }));
       tool.onPointerUp(createMockPointerEvent({ worldPosition: { x: 0, y: 0 } }));
