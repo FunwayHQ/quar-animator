@@ -290,8 +290,7 @@ describe('outlineStroke', () => {
       expect(result!.subpaths!.length).toBeGreaterThanOrEqual(1);
     });
 
-    it('first point of closed contour has handleIn for smooth closing segment', () => {
-      // A curved closed path where the closing segment must be smooth
+    it('produces corner points with exact positions from offset polygon', () => {
       const points: PathPoint[] = [
         { ...makeCorner(-50, -50), cornerRadius: 20 },
         { ...makeCorner(50, -50), cornerRadius: 20 },
@@ -301,11 +300,11 @@ describe('outlineStroke', () => {
       const result = outlineStroke(makeClosedPath(points, 4), 0, generateId);
       expect(result).not.toBeNull();
 
-      // The first point of the outer contour should have handleIn
-      // (transferred from the closing point during curve fitting)
-      // so the closing segment is a smooth curve, not a straight line
-      const firstPoint = result!.points[0];
-      expect(firstPoint.handleIn).not.toBeNull();
+      // All points should be corner type (no handles) for exact geometry
+      for (const pt of result!.points) {
+        expect(pt.handleIn).toBeNull();
+        expect(pt.handleOut).toBeNull();
+      }
     });
 
     it('covers all edges of a closed square path', () => {
@@ -355,7 +354,7 @@ describe('outlineStroke', () => {
       expect(totalPoints).toBeGreaterThan(16);
     });
 
-    it('produces smooth points with bezier handles, not many corner points', () => {
+    it('uses fewer points than raw tessellation via RDP simplification', () => {
       const points: PathPoint[] = [
         { ...makeCorner(-50, -50), cornerRadius: 15 },
         { ...makeCorner(50, -50), cornerRadius: 15 },
@@ -365,13 +364,15 @@ describe('outlineStroke', () => {
       const result = outlineStroke(makeClosedPath(points, 4), 0, generateId);
       expect(result).not.toBeNull();
 
-      // Curve fitting should produce smooth points with bezier handles
-      const allPoints = [...result!.points, ...(result!.subpaths?.[0] ?? [])];
-      const pointsWithHandles = allPoints.filter(
-        (p) => p.handleIn !== null || p.handleOut !== null
-      );
-      // Most points should have handles (smooth curves, not corner segments)
-      expect(pointsWithHandles.length).toBeGreaterThan(allPoints.length / 2);
+      // RDP simplification reduces the raw tessellation (~40+ points for
+      // 4 corners with radius) to a smaller set while keeping exact positions.
+      // Should have fewer than the raw tessellation but enough to represent curves.
+      const outerCount = result!.points.length;
+      const innerCount = result!.subpaths?.[0]?.length ?? 0;
+      expect(outerCount).toBeLessThan(40);
+      expect(innerCount).toBeLessThan(40);
+      expect(outerCount).toBeGreaterThanOrEqual(8); // At least 2 per corner
+      expect(innerCount).toBeGreaterThanOrEqual(8);
     });
 
     it('outline is wider than shape without corner radius', () => {

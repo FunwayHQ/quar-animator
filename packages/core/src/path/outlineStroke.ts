@@ -20,9 +20,6 @@ import {
 /** Max perpendicular distance for RDP simplification (world units) */
 const RDP_TOLERANCE = 0.5;
 
-/** Cosine threshold for auto-smoothing — angle must be within ~30° of straight */
-const SMOOTH_COS_THRESHOLD = 0.86;
-
 /**
  * Ramer-Douglas-Peucker polyline simplification.
  * Returns indices of points to keep.
@@ -93,16 +90,11 @@ function rdpRecurse(
 }
 
 /**
- * Convert a flat vertex array region into PathPoints using RDP simplification
- * and auto-smooth tangent detection. Positions are exact (subset of original
- * offset vertices), avoiding the systematic bias of curve fitting.
+ * Convert a flat vertex array region into PathPoints using RDP simplification.
+ * All positions are exact (subset of original offset vertices), avoiding any
+ * approximation error that would cause stroke thinning at curves.
  */
-function simplifyAndSmooth(
-  verts: Float32Array,
-  startIdx: number,
-  count: number,
-  closed: boolean
-): PathPoint[] {
+function simplifyToCornerPoints(verts: Float32Array, startIdx: number, count: number): PathPoint[] {
   if (count < 2) return [];
 
   // Extract vertices
@@ -112,67 +104,10 @@ function simplifyAndSmooth(
     points.push({ x: verts[idx], y: verts[idx + 1] });
   }
 
-  // RDP simplify
+  // RDP simplify — reduces point count while keeping exact positions
   const indices = rdpSimplify(points, RDP_TOLERANCE);
-  const simplified = indices.map((i) => points[i]);
 
-  if (simplified.length < 3) {
-    return simplified.map((pt) => createCornerPoint(pt));
-  }
-
-  const n = simplified.length;
-
-  // Convert to PathPoints with auto-smooth tangent detection
-  return simplified.map((pt, i) => {
-    const prevIdx = closed ? (i - 1 + n) % n : i - 1;
-    const nextIdx = closed ? (i + 1) % n : i + 1;
-
-    // Endpoints of open paths stay as corners
-    if (!closed && (i === 0 || i === n - 1)) {
-      return createCornerPoint(pt);
-    }
-
-    const prev = simplified[prevIdx];
-    const next = simplified[nextIdx];
-
-    const inDx = pt.x - prev.x;
-    const inDy = pt.y - prev.y;
-    const outDx = next.x - pt.x;
-    const outDy = next.y - pt.y;
-    const inLen = Math.sqrt(inDx * inDx + inDy * inDy);
-    const outLen = Math.sqrt(outDx * outDx + outDy * outDy);
-
-    if (inLen < 1e-6 || outLen < 1e-6) {
-      return createCornerPoint(pt);
-    }
-
-    // Cosine of angle between incoming and outgoing edges
-    const cosAngle = (inDx * outDx + inDy * outDy) / (inLen * outLen);
-
-    if (cosAngle > SMOOTH_COS_THRESHOLD) {
-      // Smooth curve point — set handles along the averaged tangent direction
-      const tDx = inDx / inLen + outDx / outLen;
-      const tDy = inDy / inLen + outDy / outLen;
-      const tLen = Math.sqrt(tDx * tDx + tDy * tDy);
-
-      if (tLen > 1e-6) {
-        const tx = tDx / tLen;
-        const ty = tDy / tLen;
-        // Handle length = 1/3 of segment (standard cubic bezier heuristic)
-        const hIn = inLen / 3;
-        const hOut = outLen / 3;
-
-        return {
-          position: { x: pt.x, y: pt.y },
-          handleIn: { x: -tx * hIn, y: -ty * hIn },
-          handleOut: { x: tx * hOut, y: ty * hOut },
-          type: 'smooth' as const,
-        };
-      }
-    }
-
-    return createCornerPoint(pt);
-  });
+  return indices.map((i) => createCornerPoint(points[i]));
 }
 
 // ============================================================================
@@ -239,16 +174,16 @@ export function outlineStroke(
       // For closed paths, generateStrokeOutlineVertices returns
       // [leftSide(outer)... rightSideReversed(inner)...] as one polygon.
       // Split into two separate closed contours (outer ring + inner ring).
-      // Use RDP simplification + auto-smooth for clean output with exact geometry.
+      // Use RDP simplification for clean output with exact geometry.
       const innerCount = outlineVerts.length / 2 - numVertices;
-      const outerPoints = simplifyAndSmooth(outlineVerts, 0, numVertices, true);
-      const innerPoints = simplifyAndSmooth(outlineVerts, numVertices, innerCount, true);
+      const outerPoints = simplifyToCornerPoints(outlineVerts, 0, numVertices);
+      const innerPoints = simplifyToCornerPoints(outlineVerts, numVertices, innerCount);
       if (outerPoints.length >= 3) resultContours.push(outerPoints);
       if (innerPoints.length >= 3) resultContours.push(innerPoints);
     } else {
       // Open paths: single combined polygon (ribbon shape).
       const totalVerts = outlineVerts.length / 2;
-      const points = simplifyAndSmooth(outlineVerts, 0, totalVerts, false);
+      const points = simplifyToCornerPoints(outlineVerts, 0, totalVerts);
       if (points.length >= 3) resultContours.push(points);
     }
   }
@@ -270,15 +205,14 @@ export function outlineStroke(
   const centerX = (minX + maxX) / 2;
   const centerY = (minY + maxY) / 2;
 
-  // Center all contour points at origin (preserving bezier handles)
+  // Center all contour points at origin
   const centeredContours = resultContours.map((contour) =>
-    contour.map((pt) => ({
-      ...pt,
-      position: {
+    contour.map((pt) =>
+      createCornerPoint({
         x: pt.position.x - centerX,
         y: pt.position.y - centerY,
-      },
-    }))
+      })
+    )
   );
 
   const primaryPoints = centeredContours[0];
