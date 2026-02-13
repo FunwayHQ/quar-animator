@@ -11,3 +11,4 @@ export * from './ik';
 export * from './ikEvaluator';
 export * from './skinBinding';
 export * from './cpuSkinning';
+export * from './gpuSkinning';

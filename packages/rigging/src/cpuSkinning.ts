@@ -19,7 +19,7 @@ export interface AffineTransform2D {
  * Multiply two 2D affine matrices represented as 6-element arrays [a,b,c,d,tx,ty].
  * Returns [a,b,c,d,tx,ty] of the product.
  */
-function mul6(m1: number[], m2: number[]): number[] {
+export function mul6(m1: number[], m2: number[]): number[] {
   const [a1, b1, c1, d1, tx1, ty1] = m1;
   const [a2, b2, c2, d2, tx2, ty2] = m2;
   return [

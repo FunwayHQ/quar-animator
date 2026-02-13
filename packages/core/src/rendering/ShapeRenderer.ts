@@ -45,7 +45,13 @@ import earcut from 'earcut';
 import { getFontManager } from '../font/FontManager';
 import { textToSubpaths } from '../font/glyphConverter';
 import { getTextBounds } from '../font/textMetrics';
-import { deformVertices } from '@quar/rigging';
+import {
+  deformVertices,
+  MAX_BONES_GPU,
+  buildBoneIdToIndex,
+  packSkinnedVertices,
+  computeBoneMatrixUniforms,
+} from '@quar/rigging';
 import type { AffineTransform2D } from '@quar/rigging';
 
 // ============================================================================
@@ -298,6 +304,69 @@ void main() {
 }
 `;
 
+// GPU-skinned flat-color vertex shader: LBS in vertex shader
+const SKINNED_VERTEX_SHADER = `#version 300 es
+precision highp float;
+
+in vec2 a_position;
+in vec4 a_boneIndices;
+in vec4 a_boneWeights;
+
+const int MAX_BONES = ${MAX_BONES_GPU};
+uniform mat3 u_boneMatrices[MAX_BONES];
+uniform mat3 u_viewProjection;
+
+void main() {
+  vec3 pos = vec3(a_position, 1.0);
+  vec3 skinned = vec3(0.0);
+  float totalWeight = 0.0;
+  for (int i = 0; i < 4; i++) {
+    float w = a_boneWeights[i];
+    if (w <= 0.0) continue;
+    int idx = int(a_boneIndices[i]);
+    if (idx < 0 || idx >= MAX_BONES) continue;
+    skinned += w * (u_boneMatrices[idx] * pos);
+    totalWeight += w;
+  }
+  if (totalWeight <= 0.0) skinned = pos;
+  else if (abs(totalWeight - 1.0) > 0.001) skinned /= totalWeight;
+  gl_Position = vec4((u_viewProjection * skinned).xy, 0.0, 1.0);
+}
+`;
+
+// GPU-skinned gradient vertex shader: LBS + pass bind-pose coords for gradient interpolation
+const SKINNED_GRADIENT_VERTEX_SHADER = `#version 300 es
+precision highp float;
+
+in vec2 a_position;
+in vec4 a_boneIndices;
+in vec4 a_boneWeights;
+
+const int MAX_BONES = ${MAX_BONES_GPU};
+uniform mat3 u_boneMatrices[MAX_BONES];
+uniform mat3 u_viewProjection;
+
+out vec2 v_localPos;
+
+void main() {
+  v_localPos = a_position;
+  vec3 pos = vec3(a_position, 1.0);
+  vec3 skinned = vec3(0.0);
+  float totalWeight = 0.0;
+  for (int i = 0; i < 4; i++) {
+    float w = a_boneWeights[i];
+    if (w <= 0.0) continue;
+    int idx = int(a_boneIndices[i]);
+    if (idx < 0 || idx >= MAX_BONES) continue;
+    skinned += w * (u_boneMatrices[idx] * pos);
+    totalWeight += w;
+  }
+  if (totalWeight <= 0.0) skinned = pos;
+  else if (abs(totalWeight - 1.0) > 0.001) skinned /= totalWeight;
+  gl_Position = vec4((u_viewProjection * skinned).xy, 0.0, 1.0);
+}
+`;
+
 // ============================================================================
 // Configuration
 // ============================================================================
@@ -329,6 +398,10 @@ interface TessellationCacheEntry {
   contours?: Float32Array[];
   /** Number of tessellated vertices per contour (for compound path skinned stroke rendering) */
   contourVertexCounts?: number[];
+  /** Packed [pos, boneIdx, boneWt] interleaved data for GPU skinning */
+  skinnedVertexData?: Float32Array;
+  /** Bone ID → uniform array index mapping for GPU skinning */
+  boneIdToIndex?: Map<string, number>;
 }
 
 /** Build a cache key string from node geometry properties */
@@ -522,6 +595,12 @@ export class ShapeRenderer {
   private vertexBuffer: WebGLBuffer | null = null;
   private indexBuffer: WebGLBuffer | null = null;
 
+  // GPU skinning
+  private skinnedProgram: ShaderProgram | null = null;
+  private skinnedGradientProgram: ShaderProgram | null = null;
+  private skinnedVAO: WebGLVertexArrayObject | null = null;
+  private skinnedVertexBuffer: WebGLBuffer | null = null;
+
   // Texture rendering
   private textureVAO: WebGLVertexArrayObject | null = null;
   private textureVertexBuffer: WebGLBuffer | null = null;
@@ -554,6 +633,7 @@ export class ShapeRenderer {
 
     this.initializeShaders();
     this.initializeBuffers();
+    this.initializeSkinnedBuffers();
     this.initializeWeightBuffers();
     this.initializeTextureBuffers();
     this.effectRenderer = new EffectRenderer(renderer);
@@ -623,6 +703,42 @@ export class ShapeRenderer {
         'u_cornerRadius',
       ]
     );
+
+    // GPU skinning shaders
+    const boneMatrixUniforms = Array.from(
+      { length: MAX_BONES_GPU },
+      (_, i) => `u_boneMatrices[${i}]`
+    );
+
+    this.skinnedProgram = this.renderer.createShaderProgram(
+      'shape-skinned',
+      SKINNED_VERTEX_SHADER,
+      SHAPE_FRAGMENT_SHADER,
+      ['a_position', 'a_boneIndices', 'a_boneWeights'],
+      ['u_viewProjection', 'u_color', ...boneMatrixUniforms]
+    );
+
+    this.skinnedGradientProgram = this.renderer.createShaderProgram(
+      'shape-skinned-gradient',
+      SKINNED_GRADIENT_VERTEX_SHADER,
+      GRADIENT_FRAGMENT_SHADER,
+      ['a_position', 'a_boneIndices', 'a_boneWeights'],
+      [
+        'u_viewProjection',
+        'u_gradientType',
+        'u_stopCount',
+        'u_bounds',
+        'u_angle',
+        'u_center',
+        'u_radius',
+        'u_opacity',
+        'u_gradStart',
+        'u_gradEnd',
+        ...Array.from({ length: MAX_GRADIENT_STOPS }, (_, i) => `u_stops[${i}]`),
+        ...Array.from({ length: MAX_GRADIENT_STOPS }, (_, i) => `u_offsets[${i}]`),
+        ...boneMatrixUniforms,
+      ]
+    );
   }
 
   private initializeBuffers(): void {
@@ -645,6 +761,66 @@ export class ShapeRenderer {
     if (this.program) {
       gl.enableVertexAttribArray(this.program.attributes.a_position!);
       gl.vertexAttribPointer(this.program.attributes.a_position!, 2, gl.FLOAT, false, 0, 0);
+    }
+
+    this.renderer.bindVAO(null);
+  }
+
+  private initializeSkinnedBuffers(): void {
+    const gl = this.renderer.context;
+    if (!this.skinnedProgram) return;
+
+    this.skinnedVAO = this.renderer.createVAO();
+    this.renderer.bindVAO(this.skinnedVAO);
+
+    // Interleaved buffer: [position(2f), boneIndices(4f), boneWeights(4f)] = 10 floats/vertex
+    // stride = 10 * 4 = 40 bytes
+    this.skinnedVertexBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.skinnedVertexBuffer);
+    gl.bufferData(
+      gl.ARRAY_BUFFER,
+      MAX_VERTICES * 10 * Float32Array.BYTES_PER_ELEMENT,
+      gl.DYNAMIC_DRAW
+    );
+
+    const stride = 10 * Float32Array.BYTES_PER_ELEMENT; // 40 bytes
+
+    // a_position at offset 0 (2 floats)
+    gl.enableVertexAttribArray(this.skinnedProgram.attributes.a_position!);
+    gl.vertexAttribPointer(
+      this.skinnedProgram.attributes.a_position!,
+      2,
+      gl.FLOAT,
+      false,
+      stride,
+      0
+    );
+
+    // a_boneIndices at offset 8 (4 floats)
+    gl.enableVertexAttribArray(this.skinnedProgram.attributes.a_boneIndices!);
+    gl.vertexAttribPointer(
+      this.skinnedProgram.attributes.a_boneIndices!,
+      4,
+      gl.FLOAT,
+      false,
+      stride,
+      2 * Float32Array.BYTES_PER_ELEMENT
+    );
+
+    // a_boneWeights at offset 24 (4 floats)
+    gl.enableVertexAttribArray(this.skinnedProgram.attributes.a_boneWeights!);
+    gl.vertexAttribPointer(
+      this.skinnedProgram.attributes.a_boneWeights!,
+      4,
+      gl.FLOAT,
+      false,
+      stride,
+      6 * Float32Array.BYTES_PER_ELEMENT
+    );
+
+    // Share index buffer from main VAO
+    if (this.indexBuffer) {
+      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indexBuffer);
     }
 
     this.renderer.bindVAO(null);
@@ -903,6 +1079,22 @@ export class ShapeRenderer {
     if (this.gradientProgram) {
       this.renderer.useProgram(this.gradientProgram);
       gl.uniformMatrix3fv(this.gradientProgram.uniforms.u_viewProjection ?? null, false, vpArray);
+      this.renderer.useProgram(this.program);
+    }
+
+    // Also set on skinned programs if available
+    if (this.skinnedProgram) {
+      this.renderer.useProgram(this.skinnedProgram);
+      gl.uniformMatrix3fv(this.skinnedProgram.uniforms.u_viewProjection ?? null, false, vpArray);
+      this.renderer.useProgram(this.program);
+    }
+    if (this.skinnedGradientProgram) {
+      this.renderer.useProgram(this.skinnedGradientProgram);
+      gl.uniformMatrix3fv(
+        this.skinnedGradientProgram.uniforms.u_viewProjection ?? null,
+        false,
+        vpArray
+      );
       this.renderer.useProgram(this.program);
     }
 
@@ -2549,28 +2741,12 @@ export class ShapeRenderer {
   // --------------------------------------------------------------------------
 
   /**
-   * Render a skinned node by deforming bind-pose vertices through CPU skinning.
-   * Deformed vertices are already in world space, so we use identity model matrix.
+   * Collect current bone world transforms from the scene graph for a skinned node.
    */
-  private renderSkinnedNode(node: Node, sceneGraph: SceneGraph): void {
-    if (!this.program) return;
-
-    const skinData = (node as any).skinData as SkinData;
-    if (!skinData) return;
-
-    const gl = this.renderer.context;
-
-    // Get bind-pose tessellation from geometry cache.
-    // The cache is populated by the normal render path (renderRectangle, etc.)
-    // on frames before skinData was added. If not yet cached, skip this frame —
-    // the first frame after skinData is removed will repopulate it.
-    const cached = this.geometryCache.get(node.id);
-    if (!cached) return;
-
-    const bindPoseVertices = cached.vertices;
-    const fillIndices = cached.fillIndices;
-
-    // Collect current bone world transforms
+  private collectBoneTransforms(
+    skinData: SkinData,
+    sceneGraph: SceneGraph
+  ): Record<string, AffineTransform2D> {
     const boneWorldTransforms: Record<string, AffineTransform2D> = {};
     for (const boneId of Object.keys(skinData.inverseBindMatrices)) {
       const boneNode = sceneGraph.getNode(boneId);
@@ -2578,102 +2754,268 @@ export class ShapeRenderer {
       const bw = sceneGraph.getWorldTransform(boneId);
       boneWorldTransforms[boneId] = { a: bw.a, b: bw.b, c: bw.c, d: bw.d, tx: bw.tx, ty: bw.ty };
     }
+    return boneWorldTransforms;
+  }
 
-    // Deform vertices via CPU linear blend skinning — result is in world space
-    const deformed = deformVertices(bindPoseVertices, skinData, boneWorldTransforms);
+  /**
+   * Ensure GPU skin data (packed vertices + bone ID mapping) is cached for a skinned node.
+   * Called lazily on first GPU render of a skinned node.
+   */
+  private ensureSkinnedCacheData(cached: TessellationCacheEntry, skinData: SkinData): void {
+    if (cached.skinnedVertexData && cached.boneIdToIndex) return;
+    cached.boneIdToIndex = buildBoneIdToIndex(skinData);
+    cached.skinnedVertexData = packSkinnedVertices(cached.vertices, skinData, cached.boneIdToIndex);
+  }
+
+  /**
+   * Upload bone matrix uniforms to a skinned shader program.
+   */
+  private uploadBoneMatrices(program: ShaderProgram, boneMatrixData: Float32Array): void {
+    const gl = this.renderer.context;
+    const maxBones = boneMatrixData.length / 9;
+    for (let i = 0; i < maxBones; i++) {
+      const uniformLoc = program.uniforms[`u_boneMatrices[${i}]`];
+      if (uniformLoc) {
+        gl.uniformMatrix3fv(uniformLoc, false, boneMatrixData.subarray(i * 9, i * 9 + 9));
+      }
+    }
+  }
+
+  /**
+   * Render fills of a skinned node via GPU vertex shader LBS.
+   * Bind-pose vertices + bone weights are in the skinned VBO; only bone matrices update per frame.
+   */
+  private renderSkinnedFillsGPU(
+    cached: TessellationCacheEntry,
+    skinData: SkinData,
+    fills: Fill[],
+    boneWorldTransforms: Record<string, AffineTransform2D>,
+    nodeOpacity: number
+  ): void {
+    if (!this.skinnedProgram || !this.skinnedVAO || !this.skinnedVertexBuffer) return;
+
+    const gl = this.renderer.context;
+    const skinnedVertexData = cached.skinnedVertexData!;
+    const boneIdToIndex = cached.boneIdToIndex!;
+    const fillIndices = cached.fillIndices;
+
+    // Compute bone matrix uniforms
+    const boneMatrixData = computeBoneMatrixUniforms(skinData, boneIdToIndex, boneWorldTransforms);
+
+    // Switch to skinned VAO and upload interleaved vertex data
+    this.renderer.bindVAO(this.skinnedVAO);
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.skinnedVertexBuffer);
+    gl.bufferSubData(gl.ARRAY_BUFFER, 0, skinnedVertexData);
+
+    for (const fill of fills) {
+      if (!fill.visible || fill.type === 'none') continue;
+
+      if (fill.type === 'gradient' && fill.gradient && this.skinnedGradientProgram) {
+        // Use skinned gradient program
+        this.renderer.useProgram(this.skinnedGradientProgram);
+        this.uploadBoneMatrices(this.skinnedGradientProgram, boneMatrixData);
+        // Set gradient uniforms on the skinned gradient program
+        // (setGradientUniforms uses this.gradientProgram, so we temporarily swap)
+        const savedGradProg = this.gradientProgram;
+        this.gradientProgram = this.skinnedGradientProgram;
+        this.setGradientUniforms(
+          fill.gradient,
+          computeBounds(cached.vertices),
+          fill.opacity * nodeOpacity
+        );
+        this.gradientProgram = savedGradProg;
+
+        // Upload fill indices and draw
+        if (fillIndices.length > 0) {
+          const indexArray = new Uint16Array(fillIndices);
+          gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indexBuffer);
+          gl.bufferSubData(gl.ELEMENT_ARRAY_BUFFER, 0, indexArray);
+          gl.drawElements(gl.TRIANGLES, fillIndices.length, gl.UNSIGNED_SHORT, 0);
+        }
+      } else {
+        // Use skinned flat-color program
+        this.renderer.useProgram(this.skinnedProgram);
+        this.uploadBoneMatrices(this.skinnedProgram, boneMatrixData);
+
+        const color = this.getFillColor(fill, nodeOpacity);
+        gl.uniform4fv(this.skinnedProgram.uniforms.u_color ?? null, color);
+
+        // Upload fill indices and draw
+        if (fillIndices.length > 0) {
+          const indexArray = new Uint16Array(fillIndices);
+          gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indexBuffer);
+          gl.bufferSubData(gl.ELEMENT_ARRAY_BUFFER, 0, indexArray);
+          gl.drawElements(gl.TRIANGLES, fillIndices.length, gl.UNSIGNED_SHORT, 0);
+        }
+      }
+    }
+
+    // Restore standard VAO
+    this.renderer.bindVAO(this.vao);
+  }
+
+  /**
+   * Render strokes for a skinned node via CPU-deformed vertices.
+   * Strokes need CPU deformation because outline generation requires actual deformed positions.
+   */
+  private renderSkinnedStrokes(
+    deformedVertices: Float32Array,
+    strokes: Stroke[],
+    closed: boolean,
+    contourVertexCounts: number[] | undefined,
+    nodeOpacity: number
+  ): void {
+    if (strokes.length === 0) return;
+
+    // Ensure flat-color program is active with identity model matrix
+    if (!this.program) return;
+    this.renderer.useProgram(this.program);
+    const identityMatrix = mat3.toFloat32Array(mat3.create());
+    this.currentModelMatrix = identityMatrix;
+    const gl = this.renderer.context;
+    gl.uniformMatrix3fv(this.program.uniforms.u_model ?? null, false, identityMatrix);
+
+    if (contourVertexCounts && contourVertexCounts.length > 1) {
+      // Per-contour stroke rendering for compound paths
+      let vertOffset = 0;
+      for (const contourVCount of contourVertexCounts) {
+        if (contourVCount < 2) {
+          vertOffset += contourVCount * 2;
+          continue;
+        }
+        const contourDeformed = deformedVertices.subarray(
+          vertOffset,
+          vertOffset + contourVCount * 2
+        );
+        for (const stroke of strokes) {
+          if (!stroke.visible || stroke.width <= 0) continue;
+          const align = stroke.align ?? 'center';
+          const outlineVertices = generateStrokeOutlineVertices(
+            contourDeformed,
+            contourVCount,
+            stroke.width,
+            true,
+            align,
+            stroke.widthProfile as number[] | undefined
+          );
+          if (outlineVertices.length / 2 < 3) continue;
+          if (stroke.gradient) {
+            this.renderStrokeStripGradient(
+              outlineVertices,
+              stroke.gradient,
+              stroke.opacity * nodeOpacity,
+              true
+            );
+          } else {
+            const color = this.getStrokeColor(stroke, nodeOpacity);
+            this.renderStrokeStrip(outlineVertices, color, true);
+          }
+        }
+        vertOffset += contourVCount * 2;
+      }
+    } else {
+      // Single contour
+      const numDeformedVerts = deformedVertices.length / 2;
+      if (numDeformedVerts >= 2) {
+        for (const stroke of strokes) {
+          if (!stroke.visible || stroke.width <= 0) continue;
+          const align = stroke.align ?? 'center';
+          const outlineVertices = generateStrokeOutlineVertices(
+            deformedVertices,
+            numDeformedVerts,
+            stroke.width,
+            closed,
+            align,
+            stroke.widthProfile as number[] | undefined
+          );
+          if (outlineVertices.length / 2 < 3) continue;
+          if (stroke.gradient) {
+            this.renderStrokeStripGradient(
+              outlineVertices,
+              stroke.gradient,
+              stroke.opacity * nodeOpacity,
+              closed
+            );
+          } else {
+            const color = this.getStrokeColor(stroke, nodeOpacity);
+            this.renderStrokeStrip(outlineVertices, color, closed);
+          }
+        }
+      }
+    }
+  }
+
+  /**
+   * Render a skinned node using hybrid GPU/CPU approach:
+   * - GPU path for fills (vertex shader LBS) when available and bone count ≤ 32
+   * - CPU path for strokes (needs deformed positions for outline generation)
+   */
+  private renderSkinnedNode(node: Node, sceneGraph: SceneGraph): void {
+    if (!this.program) return;
+
+    const skinData = (node as any).skinData as SkinData;
+    if (!skinData) return;
+
+    // Get bind-pose tessellation from geometry cache
+    const cached = this.geometryCache.get(node.id);
+    if (!cached) return;
 
     // Get fills/strokes from node
     const fills: Fill[] = 'fills' in node ? (node as any).fills : [];
     const strokes: Stroke[] = 'strokes' in node ? (node as any).strokes : [];
     const closed = 'closed' in node ? (node as any).closed : true;
 
-    // Ensure flat-color program is active and set identity model matrix
-    // (deformed vertices are already in world space)
-    this.renderer.useProgram(this.program);
-    const identityMatrix = mat3.toFloat32Array(mat3.create());
-    this.currentModelMatrix = identityMatrix;
-    gl.uniformMatrix3fv(this.program.uniforms.u_model ?? null, false, identityMatrix);
+    // Collect current bone world transforms
+    const boneWorldTransforms = this.collectBoneTransforms(skinData, sceneGraph);
 
-    // Render fills normally — fill indices from bind-pose tessellation are still valid
-    for (const fill of fills) {
-      if (fill.visible && fill.type !== 'none') {
-        this.renderFill(deformed, fillIndices, fill, this.currentEffectiveOpacity);
+    // Determine if GPU path is available
+    const boneCount = Object.keys(skinData.inverseBindMatrices).length;
+    const canUseGPU =
+      this.skinnedProgram != null &&
+      this.skinnedVAO != null &&
+      this.skinnedVertexBuffer != null &&
+      boneCount <= MAX_BONES_GPU;
+
+    // --- Fills ---
+    if (fills.length > 0) {
+      if (canUseGPU) {
+        // Ensure GPU skin data is cached
+        this.ensureSkinnedCacheData(cached, skinData);
+        if (cached.skinnedVertexData && cached.boneIdToIndex) {
+          this.renderSkinnedFillsGPU(
+            cached,
+            skinData,
+            fills,
+            boneWorldTransforms,
+            this.currentEffectiveOpacity
+          );
+        }
+      } else {
+        // CPU fallback for fills
+        const deformed = deformVertices(cached.vertices, skinData, boneWorldTransforms);
+        this.renderer.useProgram(this.program);
+        const identityMatrix = mat3.toFloat32Array(mat3.create());
+        this.currentModelMatrix = identityMatrix;
+        const gl = this.renderer.context;
+        gl.uniformMatrix3fv(this.program.uniforms.u_model ?? null, false, identityMatrix);
+        for (const fill of fills) {
+          if (fill.visible && fill.type !== 'none') {
+            this.renderFill(deformed, cached.fillIndices, fill, this.currentEffectiveOpacity);
+          }
+        }
       }
     }
 
-    // Render strokes by generating outline fresh from deformed vertices each frame.
-    // We CANNOT use renderStroke() here because it delegates to getCachedStrokeOutline()
-    // which caches by stroke properties only (not vertex positions), returning stale
-    // bind-pose outlines for deformed vertices.
+    // --- Strokes (always CPU — needs deformed positions for outline generation) ---
     if (strokes.length > 0) {
-      // For compound paths (multiple contours), render each contour's stroke independently.
-      // Otherwise self-intersecting outline from combined vertices produces artifacts.
-      const contourVertexCounts = cached.contourVertexCounts;
-      if (contourVertexCounts && contourVertexCounts.length > 1) {
-        // Per-contour stroke rendering
-        let vertOffset = 0;
-        for (const contourVCount of contourVertexCounts) {
-          if (contourVCount < 2) {
-            vertOffset += contourVCount * 2;
-            continue;
-          }
-          const contourDeformed = deformed.subarray(vertOffset, vertOffset + contourVCount * 2);
-          for (const stroke of strokes) {
-            if (!stroke.visible || stroke.width <= 0) continue;
-            const align = stroke.align ?? 'center';
-            const outlineVertices = generateStrokeOutlineVertices(
-              contourDeformed,
-              contourVCount,
-              stroke.width,
-              true, // contours in compound paths are always closed
-              align,
-              stroke.widthProfile as number[] | undefined
-            );
-            if (outlineVertices.length / 2 < 3) continue;
-            if (stroke.gradient) {
-              this.renderStrokeStripGradient(
-                outlineVertices,
-                stroke.gradient,
-                stroke.opacity * this.currentEffectiveOpacity,
-                true
-              );
-            } else {
-              const color = this.getStrokeColor(stroke, this.currentEffectiveOpacity);
-              this.renderStrokeStrip(outlineVertices, color, true);
-            }
-          }
-          vertOffset += contourVCount * 2;
-        }
-      } else {
-        // Single contour — generate one stroke outline from all deformed vertices
-        const numDeformedVerts = deformed.length / 2;
-        if (numDeformedVerts >= 2) {
-          for (const stroke of strokes) {
-            if (!stroke.visible || stroke.width <= 0) continue;
-            const align = stroke.align ?? 'center';
-            const outlineVertices = generateStrokeOutlineVertices(
-              deformed,
-              numDeformedVerts,
-              stroke.width,
-              closed,
-              align,
-              stroke.widthProfile as number[] | undefined
-            );
-            if (outlineVertices.length / 2 < 3) continue;
-            if (stroke.gradient) {
-              this.renderStrokeStripGradient(
-                outlineVertices,
-                stroke.gradient,
-                stroke.opacity * this.currentEffectiveOpacity,
-                closed
-              );
-            } else {
-              const color = this.getStrokeColor(stroke, this.currentEffectiveOpacity);
-              this.renderStrokeStrip(outlineVertices, color, closed);
-            }
-          }
-        }
-      }
+      const deformed = deformVertices(cached.vertices, skinData, boneWorldTransforms);
+      this.renderSkinnedStrokes(
+        deformed,
+        strokes,
+        closed,
+        cached.contourVertexCounts,
+        this.currentEffectiveOpacity
+      );
     }
   }
 
@@ -3615,15 +3957,29 @@ export class ShapeRenderer {
       this.weightVAO = null;
     }
 
+    // GPU skinning resources
+    if (this.skinnedVertexBuffer) {
+      gl.deleteBuffer(this.skinnedVertexBuffer);
+      this.skinnedVertexBuffer = null;
+    }
+    if (this.skinnedVAO) {
+      gl.deleteVertexArray(this.skinnedVAO);
+      this.skinnedVAO = null;
+    }
+
     // Clean up shader programs from WebGLRenderer
     this.renderer.deleteProgram('shape');
     this.renderer.deleteProgram('shape-gradient');
     this.renderer.deleteProgram('shape-texture');
     this.renderer.deleteProgram('shape-weight');
+    this.renderer.deleteProgram('shape-skinned');
+    this.renderer.deleteProgram('shape-skinned-gradient');
     this.program = null;
     this.gradientProgram = null;
     this.textureProgram = null;
     this.weightProgram = null;
+    this.skinnedProgram = null;
+    this.skinnedGradientProgram = null;
 
     this.geometryCache.clear();
 

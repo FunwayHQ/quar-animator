@@ -163,9 +163,9 @@ describe('ShapeRenderer', () => {
     });
 
     it('should compile vertex and fragment shaders', () => {
-      // 2 shaders per program (vertex + fragment) x 8 programs (flat + gradient + texture + blur + blend + shadow + composite + weight)
-      expect(gl.shaderSource).toHaveBeenCalledTimes(16);
-      expect(gl.compileShader).toHaveBeenCalledTimes(16);
+      // 2 shaders per program (vertex + fragment) x 10 programs (flat + gradient + texture + blur + blend + shadow + composite + weight + skinned + skinned-gradient)
+      expect(gl.shaderSource).toHaveBeenCalledTimes(20);
+      expect(gl.compileShader).toHaveBeenCalledTimes(20);
     });
 
     it('should link shader program', () => {
@@ -1006,6 +1006,202 @@ describe('ShapeRenderer', () => {
   });
 
   // ==========================================================================
+  // GPU Skinning
+  // ==========================================================================
+
+  describe('GPU skinning', () => {
+    describe('skinned buffer initialization', () => {
+      it('should create skinned VAO during initialization', () => {
+        // ShapeRenderer constructor calls initializeSkinnedBuffers which creates a VAO
+        // We check that createVertexArray was called (at least for the skinned VAO)
+        expect(gl.createVertexArray).toHaveBeenCalled();
+      });
+
+      it('should set up skinned vertex attributes with correct stride (40 bytes)', () => {
+        // initializeSkinnedBuffers sets up interleaved attributes:
+        // a_position(2f) + a_boneIndices(4f) + a_boneWeights(4f) = 10 floats = 40 bytes stride
+        const calls = (gl.vertexAttribPointer as any).mock.calls;
+        // Find calls with stride=40
+        const skinnedCalls = calls.filter(
+          (c: any[]) => c[4] === 40 // stride parameter is at index 4
+        );
+        // Should have 3 attributes: a_position(offset 0), a_boneIndices(offset 8), a_boneWeights(offset 24)
+        expect(skinnedCalls.length).toBe(3);
+        // Check offsets
+        const offsets = skinnedCalls.map((c: any[]) => c[5]).sort((a: number, b: number) => a - b);
+        expect(offsets).toEqual([0, 8, 24]);
+      });
+    });
+
+    describe('render path selection', () => {
+      it('should render skinned node with GPU path when skin data is present', () => {
+        // Create a node without skinData first to populate geometry cache
+        const rect = createRectangleNode('skinned1', 100, 50);
+        sceneGraph.addNode(rect);
+        const vpMatrix = mat3.identity();
+        shapeRenderer.render(sceneGraph, vpMatrix);
+
+        // Now add bone and skinData
+        sceneGraph.addNode({
+          id: 'bone1',
+          name: 'Bone 1',
+          type: 'bone' as any,
+          parent: null,
+          children: [],
+          transform: createDefaultTransform(),
+          visible: true,
+          locked: false,
+          opacity: 1,
+          blendMode: 'normal',
+          length: 100,
+          boneColor: '#ff0000',
+        } as any);
+
+        (rect as any).skinData = {
+          vertices: [{ influences: [{ boneId: 'bone1', weight: 1.0 }] }],
+          inverseBindMatrices: {
+            bone1: [1, 0, 0, 1, 0, 0],
+          },
+          meshBindMatrix: [1, 0, 0, 1, 0, 0],
+          vertexCount: 1,
+        };
+
+        vi.clearAllMocks();
+        // Render again with skinData — GPU skinning path should be used
+        shapeRenderer.render(sceneGraph, vpMatrix);
+        expect(gl.drawElements).toHaveBeenCalled();
+      });
+
+      it('should fall back to CPU path when bone count exceeds MAX_BONES_GPU', () => {
+        const rect = createRectangleNode('skinned_many', 100, 50);
+        sceneGraph.addNode(rect);
+        const vpMatrix = mat3.identity();
+        // First render to populate geometry cache
+        shapeRenderer.render(sceneGraph, vpMatrix);
+
+        // Create skinData with 33 bones (exceeds MAX_BONES_GPU = 32)
+        const ibm: Record<string, number[]> = {};
+        for (let i = 0; i < 33; i++) {
+          ibm[`bone_${i}`] = [1, 0, 0, 1, 0, 0];
+          sceneGraph.addNode({
+            id: `bone_${i}`,
+            name: `Bone ${i}`,
+            type: 'bone' as any,
+            parent: null,
+            children: [],
+            transform: createDefaultTransform(),
+            visible: true,
+            locked: false,
+            opacity: 1,
+            blendMode: 'normal',
+            length: 100,
+            boneColor: '#ff0000',
+          } as any);
+        }
+        (rect as any).skinData = {
+          vertices: [{ influences: [{ boneId: 'bone_0', weight: 1.0 }] }],
+          inverseBindMatrices: ibm,
+          meshBindMatrix: [1, 0, 0, 1, 0, 0],
+          vertexCount: 1,
+        };
+
+        vi.clearAllMocks();
+        // This should not crash — falls back to CPU path
+        shapeRenderer.render(sceneGraph, vpMatrix);
+        expect(gl.drawElements).toHaveBeenCalled();
+      });
+
+      it('should handle skinned node without cached geometry gracefully', () => {
+        const rect = createRectangleNode('skinned_nocache', 100, 50);
+        (rect as any).skinData = {
+          vertices: [],
+          inverseBindMatrices: { bone1: [1, 0, 0, 1, 0, 0] },
+          meshBindMatrix: [1, 0, 0, 1, 0, 0],
+          vertexCount: 0,
+        };
+        sceneGraph.addNode(rect);
+
+        // Don't render first (no geometry cache) — just add and render with skinData
+        // The node should be skipped gracefully
+        const vpMatrix = mat3.identity();
+        expect(() => shapeRenderer.render(sceneGraph, vpMatrix)).not.toThrow();
+      });
+    });
+
+    describe('cache integration', () => {
+      it('should populate skinned cache data lazily on first GPU render', () => {
+        const rect = createRectangleNode('cache_test', 100, 50);
+        sceneGraph.addNode(rect);
+
+        // First render — populates geometry cache for the rectangle
+        const vpMatrix = mat3.identity();
+        shapeRenderer.render(sceneGraph, vpMatrix);
+
+        // Now add skinData — next render should populate skinnedVertexData
+        (rect as any).skinData = {
+          vertices: [{ influences: [{ boneId: 'bone1', weight: 1.0 }] }],
+          inverseBindMatrices: { bone1: [1, 0, 0, 1, 0, 0] },
+          meshBindMatrix: [1, 0, 0, 1, 0, 0],
+          vertexCount: 1,
+        };
+        sceneGraph.addNode({
+          id: 'bone1',
+          name: 'Bone 1',
+          type: 'bone' as any,
+          parent: null,
+          children: [],
+          transform: createDefaultTransform(),
+          visible: true,
+          locked: false,
+          opacity: 1,
+          blendMode: 'normal',
+          length: 100,
+          boneColor: '#ff0000',
+        } as any);
+
+        // Re-render — the skinned node should populate GPU cache data
+        shapeRenderer.render(sceneGraph, vpMatrix);
+        // Should not throw and should draw
+        expect(gl.drawElements).toHaveBeenCalled();
+      });
+
+      it('should upload bone matrices via uniformMatrix3fv during GPU skinned render', () => {
+        const rect = createRectangleNode('bone_uniform_test', 100, 50);
+        sceneGraph.addNode(rect);
+        const vpMatrix = mat3.identity();
+        shapeRenderer.render(sceneGraph, vpMatrix);
+
+        sceneGraph.addNode({
+          id: 'boneU',
+          name: 'Bone U',
+          type: 'bone' as any,
+          parent: null,
+          children: [],
+          transform: createDefaultTransform(),
+          visible: true,
+          locked: false,
+          opacity: 1,
+          blendMode: 'normal',
+          length: 100,
+          boneColor: '#ff0000',
+        } as any);
+
+        (rect as any).skinData = {
+          vertices: [{ influences: [{ boneId: 'boneU', weight: 1.0 }] }],
+          inverseBindMatrices: { boneU: [1, 0, 0, 1, 0, 0] },
+          meshBindMatrix: [1, 0, 0, 1, 0, 0],
+          vertexCount: 1,
+        };
+
+        vi.clearAllMocks();
+        shapeRenderer.render(sceneGraph, vpMatrix);
+        // uniformMatrix3fv should be called many times for bone matrices + VP
+        expect(gl.uniformMatrix3fv).toHaveBeenCalled();
+      });
+    });
+  });
+
+  // ==========================================================================
   // Dispose
   // ==========================================================================
 
@@ -1018,6 +1214,16 @@ describe('ShapeRenderer', () => {
     it('should delete VAO', () => {
       shapeRenderer.dispose();
       expect(gl.deleteVertexArray).toHaveBeenCalled();
+    });
+
+    it('should delete skinned GPU resources on dispose', () => {
+      vi.clearAllMocks();
+      shapeRenderer.dispose();
+      // Should delete skinned vertex buffer + skinned VAO
+      expect(gl.deleteBuffer).toHaveBeenCalled();
+      expect(gl.deleteVertexArray).toHaveBeenCalled();
+      // Should delete skinned program names
+      expect(gl.deleteProgram).toHaveBeenCalled();
     });
   });
 });

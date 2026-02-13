@@ -117,12 +117,12 @@ describe('ShapeRenderer - Image Rendering', () => {
   // ==========================================================================
 
   describe('texture program initialization', () => {
-    it('should create texture shader program (8 programs total: flat, gradient, texture + 4 post-process + weight)', () => {
-      // ShapeRenderer creates 8 programs: flat, gradient, texture, blur, blend, shadow, composite, weight
-      // 2 shaders per program (vertex + fragment) = 16 shaders total
+    it('should create texture shader program (10 programs total: flat, gradient, texture + 4 post-process + weight + 2 skinned)', () => {
+      // ShapeRenderer creates 10 programs: flat, gradient, texture, blur, blend, shadow, composite, weight, skinned, skinned-gradient
+      // 2 shaders per program (vertex + fragment) = 20 shaders total
       expect(gl.createProgram).toHaveBeenCalled();
-      expect(gl.shaderSource).toHaveBeenCalledTimes(16);
-      expect(gl.compileShader).toHaveBeenCalledTimes(16);
+      expect(gl.shaderSource).toHaveBeenCalledTimes(20);
+      expect(gl.compileShader).toHaveBeenCalledTimes(20);
     });
 
     it('should create texture VAO', () => {
