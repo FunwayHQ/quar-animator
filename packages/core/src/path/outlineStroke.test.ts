@@ -276,7 +276,8 @@ describe('outlineStroke', () => {
       expect(result).not.toBeNull();
       // Open paths produce a single ribbon polygon, not two contours
       expect(result!.subpaths).toBeUndefined();
-      expect(result!.points.length).toBeGreaterThanOrEqual(6); // 3 left + 3 right
+      // Curve fitting reduces many corner points to fewer smooth points with handles
+      expect(result!.points.length).toBeGreaterThanOrEqual(3);
     });
   });
 
@@ -334,6 +335,25 @@ describe('outlineStroke', () => {
       const totalPoints = result!.points.length + (result!.subpaths?.[0]?.length ?? 0);
       // Should have more than 8 points total (4+4 from a sharp square)
       expect(totalPoints).toBeGreaterThan(16);
+    });
+
+    it('produces smooth points with bezier handles, not many corner points', () => {
+      const points: PathPoint[] = [
+        { ...makeCorner(-50, -50), cornerRadius: 15 },
+        { ...makeCorner(50, -50), cornerRadius: 15 },
+        { ...makeCorner(50, 50), cornerRadius: 15 },
+        { ...makeCorner(-50, 50), cornerRadius: 15 },
+      ];
+      const result = outlineStroke(makeClosedPath(points, 4), 0, generateId);
+      expect(result).not.toBeNull();
+
+      // Curve fitting should produce smooth points with bezier handles
+      const allPoints = [...result!.points, ...(result!.subpaths?.[0] ?? [])];
+      const pointsWithHandles = allPoints.filter(
+        (p) => p.handleIn !== null || p.handleOut !== null
+      );
+      // Most points should have handles (smooth curves, not corner segments)
+      expect(pointsWithHandles.length).toBeGreaterThan(allPoints.length / 2);
     });
 
     it('outline is wider than shape without corner radius', () => {

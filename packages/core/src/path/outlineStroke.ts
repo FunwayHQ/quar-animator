@@ -3,15 +3,55 @@
  * Converts a node's stroke into a filled PathNode.
  */
 
-import type { Node, PathNode, PathPoint, Stroke } from '@quar/types';
+import type { Node, PathNode, PathPoint, Stroke, Vector2 } from '@quar/types';
 import { getShapeOutlinePoints } from './shapeToPath';
 import {
   tessellatePathToVertices,
   generateStrokeOutlineVertices,
-  createCornerPoint,
   getPathBounds,
   applyCornerRadius,
 } from './pathUtils';
+import { schneiderFitCurve, curvesToPathPoints } from './schneider';
+
+/** Max squared error for Schneider curve fitting on stroke outlines */
+const OUTLINE_FIT_ERROR = 1.0;
+
+/**
+ * Convert a flat vertex array region into smooth PathPoints via curve fitting.
+ * For closed contours, appends the first vertex to close the loop before fitting,
+ * then removes the duplicate endpoint.
+ */
+function fitVerticesToCurve(
+  verts: Float32Array,
+  startIdx: number,
+  count: number,
+  closed: boolean
+): PathPoint[] {
+  if (count < 2) return [];
+
+  const points: Vector2[] = [];
+  for (let i = 0; i < count; i++) {
+    const idx = (startIdx + i) * 2;
+    points.push({ x: verts[idx], y: verts[idx + 1] });
+  }
+
+  if (closed && points.length >= 3) {
+    // Close the loop for fitting
+    points.push({ x: points[0].x, y: points[0].y });
+  }
+
+  const curves = schneiderFitCurve(points, OUTLINE_FIT_ERROR);
+  if (curves.length === 0) return [];
+
+  const pathPoints = curvesToPathPoints(curves);
+
+  if (closed && pathPoints.length >= 2) {
+    // Remove duplicate closing point — path is closed implicitly
+    pathPoints.pop();
+  }
+
+  return pathPoints;
+}
 
 /**
  * Convert a node's stroke to a filled PathNode.
@@ -72,42 +112,19 @@ export function outlineStroke(
     if (outline.closed) {
       // For closed paths, generateStrokeOutlineVertices returns
       // [leftSide(outer)... rightSideReversed(inner)...] as one polygon.
-      // This creates a seam gap at the start/end vertex. Split into two
-      // separate closed contours (outer ring + inner ring) for correct fill.
-      const outerPoints: PathPoint[] = [];
-      const innerPoints: PathPoint[] = [];
-      for (let i = 0; i < numVertices; i++) {
-        outerPoints.push(
-          createCornerPoint({
-            x: outlineVerts[i * 2],
-            y: outlineVerts[i * 2 + 1],
-          })
-        );
-      }
-      for (let i = numVertices; i < outlineVerts.length / 2; i++) {
-        innerPoints.push(
-          createCornerPoint({
-            x: outlineVerts[i * 2],
-            y: outlineVerts[i * 2 + 1],
-          })
-        );
-      }
-      resultContours.push(outerPoints);
-      if (innerPoints.length >= 3) {
-        resultContours.push(innerPoints);
-      }
+      // Split into two separate closed contours (outer ring + inner ring).
+      // Use curve fitting to produce smooth bezier curves instead of many corner points.
+      const innerCount = outlineVerts.length / 2 - numVertices;
+      const outerPoints = fitVerticesToCurve(outlineVerts, 0, numVertices, true);
+      const innerPoints = fitVerticesToCurve(outlineVerts, numVertices, innerCount, true);
+      if (outerPoints.length >= 3) resultContours.push(outerPoints);
+      if (innerPoints.length >= 3) resultContours.push(innerPoints);
     } else {
-      // Open paths: single combined polygon is correct (ribbon shape)
-      const points: PathPoint[] = [];
-      for (let i = 0; i < outlineVerts.length; i += 2) {
-        points.push(
-          createCornerPoint({
-            x: outlineVerts[i],
-            y: outlineVerts[i + 1],
-          })
-        );
-      }
-      resultContours.push(points);
+      // Open paths: single combined polygon (ribbon shape).
+      // Fit curves for smooth result.
+      const totalVerts = outlineVerts.length / 2;
+      const points = fitVerticesToCurve(outlineVerts, 0, totalVerts, false);
+      if (points.length >= 3) resultContours.push(points);
     }
   }
 
@@ -128,14 +145,15 @@ export function outlineStroke(
   const centerX = (minX + maxX) / 2;
   const centerY = (minY + maxY) / 2;
 
-  // Center all contour points at origin
+  // Center all contour points at origin (preserving bezier handles)
   const centeredContours = resultContours.map((contour) =>
-    contour.map((pt) =>
-      createCornerPoint({
+    contour.map((pt) => ({
+      ...pt,
+      position: {
         x: pt.position.x - centerX,
         y: pt.position.y - centerY,
-      })
-    )
+      },
+    }))
   );
 
   const primaryPoints = centeredContours[0];
