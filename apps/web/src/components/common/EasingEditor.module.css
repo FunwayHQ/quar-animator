@@ -1,0 +1,295 @@
+/* ============================================================================
+   EasingEditor — Visual cubic bezier curve editor
+   ============================================================================ */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-color-picker);
+}
+
+.editor {
+  position: fixed;
+  z-index: var(--z-color-picker);
+  width: 260px;
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-lg);
+  box-shadow:
+    var(--shadow-xl),
+    0 0 1px rgba(0, 0, 0, 0.6),
+    inset 0 1px 0 var(--color-glass-highlight);
+  display: flex;
+  flex-direction: column;
+  animation: editorEnter 0.12s var(--easing-default) both;
+  user-select: none;
+  overflow: hidden;
+}
+
+@keyframes editorEnter {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* ---- Header ---- */
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.headerTitle {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.closeButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  background: none;
+  border: none;
+  color: var(--color-text-disabled);
+  cursor: pointer;
+  border-radius: var(--radius-xs);
+  transition:
+    color var(--duration-fast),
+    background var(--duration-fast);
+}
+
+.closeButton:hover {
+  color: var(--color-text-primary);
+  background: var(--color-bg-hover);
+}
+
+/* ---- SVG Curve Area ---- */
+
+.curveArea {
+  position: relative;
+  padding: 10px;
+}
+
+.curveSvg {
+  display: block;
+  cursor: default;
+}
+
+.gridLine {
+  stroke: var(--color-border-subtle);
+  stroke-width: 0.5;
+}
+
+.baseline {
+  stroke: var(--color-text-disabled);
+  stroke-dasharray: 3 3;
+  stroke-width: 0.75;
+  fill: none;
+}
+
+.curvePath {
+  stroke: var(--color-accent-primary);
+  stroke-width: 2;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.controlLine {
+  stroke: var(--color-accent-secondary);
+  stroke-width: 1;
+  stroke-dasharray: 2 2;
+  opacity: 0.6;
+}
+
+.handle {
+  fill: var(--color-accent-primary);
+  stroke: #fff;
+  stroke-width: 1.5;
+  cursor: grab;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.3));
+  transition: r 0.1s;
+}
+
+.handle:hover {
+  r: 6;
+}
+
+.handleActive {
+  cursor: grabbing;
+}
+
+/* ---- Live Preview Strip ---- */
+
+.previewStrip {
+  height: 24px;
+  margin: 0 10px;
+  position: relative;
+  border-radius: var(--radius-xs);
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border-subtle);
+  overflow: hidden;
+}
+
+.previewDot {
+  position: absolute;
+  top: 50%;
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-full);
+  background: var(--color-accent-primary);
+  transform: translate(-50%, -50%);
+  box-shadow: 0 0 4px rgba(168, 85, 247, 0.5);
+}
+
+/* ---- Numeric Inputs Row ---- */
+
+.inputsRow {
+  display: flex;
+  gap: 4px;
+  padding: 8px 10px 4px;
+}
+
+.inputCol {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.inputLabel {
+  font-size: 8px;
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-disabled);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  text-align: center;
+  line-height: 1;
+}
+
+.inputField {
+  height: 22px;
+  padding: 0 3px;
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-xs);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-xs);
+  font-family: var(--font-family-mono);
+  font-weight: var(--font-weight-medium);
+  text-align: center;
+  width: 100%;
+  transition: border-color var(--duration-fast);
+}
+
+.inputField:hover {
+  border-color: var(--color-border-default);
+}
+
+.inputField:focus {
+  border-color: var(--color-accent-primary);
+  box-shadow: 0 0 0 1px var(--color-accent-primary-glow);
+  outline: none;
+}
+
+.inputField::-webkit-inner-spin-button,
+.inputField::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.inputField[type='number'] {
+  -moz-appearance: textfield;
+}
+
+/* ---- Preset Grid ---- */
+
+.presetArea {
+  padding: 4px 10px 10px;
+  max-height: 220px;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.presetArea::-webkit-scrollbar {
+  width: 4px;
+}
+
+.presetArea::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.presetArea::-webkit-scrollbar-thumb {
+  background: var(--color-border-default);
+  border-radius: var(--radius-full);
+}
+
+.categoryName {
+  font-size: 8px;
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-disabled);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin: 6px 0 3px;
+  padding-left: 1px;
+}
+
+.categoryName:first-child {
+  margin-top: 0;
+}
+
+.presetGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 3px;
+}
+
+.presetCell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 3px 2px;
+  border-radius: var(--radius-xs);
+  cursor: pointer;
+  border: 1px solid transparent;
+  background: none;
+  transition:
+    background var(--duration-fast),
+    border-color var(--duration-fast);
+}
+
+.presetCell:hover {
+  background: var(--color-bg-hover);
+  border-color: var(--color-border-subtle);
+}
+
+.presetCellActive {
+  border-color: var(--color-accent-primary);
+  background: rgba(168, 85, 247, 0.06);
+}
+
+.presetLabel {
+  font-size: 7px;
+  color: var(--color-text-secondary);
+  text-align: center;
+  line-height: 1.1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}

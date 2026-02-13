@@ -274,3 +274,172 @@ export const EASE = createCubicBezier(0.25, 0.1, 0.25, 1);
 export const EASE_IN = createCubicBezier(0.42, 0, 1, 1);
 export const EASE_OUT = createCubicBezier(0, 0, 0.58, 1);
 export const EASE_IN_OUT = createCubicBezier(0.42, 0, 0.58, 1);
+
+// ============================================================================
+// SVG Path Generation
+// ============================================================================
+
+/**
+ * Sample an easing function and return an SVG path `d` string.
+ * Maps t→x (left to right), f(t)→y (SVG Y-down: 0 at top, height at bottom).
+ */
+export function easingToSvgPath(
+  easing: EasingFunction,
+  width: number = 100,
+  height: number = 100,
+  samples: number = 64
+): string {
+  const fn = getEasingFunction(easing);
+  const parts: string[] = [];
+  for (let i = 0; i <= samples; i++) {
+    const t = i / samples;
+    const v = fn(t);
+    const x = (t * width).toFixed(2);
+    const y = ((1 - v) * height).toFixed(2);
+    parts.push(`${i === 0 ? 'M' : 'L'}${x},${y}`);
+  }
+  return parts.join(' ');
+}
+
+// ============================================================================
+// Easing Categories & Display Names
+// ============================================================================
+
+export interface EasingCategoryItem {
+  label: string;
+  value: EasingFunction;
+}
+
+export interface EasingCategory {
+  name: string;
+  items: EasingCategoryItem[];
+}
+
+export const EASING_CATEGORIES: EasingCategory[] = [
+  {
+    name: 'CSS Standard',
+    items: [
+      { label: 'Linear', value: 'linear' },
+      { label: 'Ease', value: EASE },
+      { label: 'Ease In', value: EASE_IN },
+      { label: 'Ease Out', value: EASE_OUT },
+      { label: 'Ease In Out', value: EASE_IN_OUT },
+    ],
+  },
+  {
+    name: 'Power',
+    items: [
+      { label: 'In Quad', value: 'easeInQuad' },
+      { label: 'Out Quad', value: 'easeOutQuad' },
+      { label: 'In Out Quad', value: 'easeInOutQuad' },
+      { label: 'In Cubic', value: 'easeInCubic' },
+      { label: 'Out Cubic', value: 'easeOutCubic' },
+      { label: 'In Out Cubic', value: 'easeInOutCubic' },
+      { label: 'In Quart', value: 'easeInQuart' },
+      { label: 'Out Quart', value: 'easeOutQuart' },
+      { label: 'In Out Quart', value: 'easeInOutQuart' },
+      { label: 'In Quint', value: 'easeInQuint' },
+      { label: 'Out Quint', value: 'easeOutQuint' },
+      { label: 'In Out Quint', value: 'easeInOutQuint' },
+    ],
+  },
+  {
+    name: 'Expo & Circ',
+    items: [
+      { label: 'In Expo', value: 'easeInExpo' },
+      { label: 'Out Expo', value: 'easeOutExpo' },
+      { label: 'In Out Expo', value: 'easeInOutExpo' },
+      { label: 'In Circ', value: 'easeInCirc' },
+      { label: 'Out Circ', value: 'easeOutCirc' },
+      { label: 'In Out Circ', value: 'easeInOutCirc' },
+    ],
+  },
+  {
+    name: 'Back',
+    items: [
+      { label: 'In Back', value: 'easeInBack' },
+      { label: 'Out Back', value: 'easeOutBack' },
+      { label: 'In Out Back', value: 'easeInOutBack' },
+    ],
+  },
+  {
+    name: 'Elastic & Bounce',
+    items: [
+      { label: 'In Elastic', value: 'easeInElastic' },
+      { label: 'Out Elastic', value: 'easeOutElastic' },
+      { label: 'In Out Elastic', value: 'easeInOutElastic' },
+      { label: 'In Bounce', value: 'easeInBounce' },
+      { label: 'Out Bounce', value: 'easeOutBounce' },
+      { label: 'In Out Bounce', value: 'easeInOutBounce' },
+    ],
+  },
+];
+
+const EASING_DISPLAY_NAMES: Record<EasingType, string> = {
+  linear: 'Linear',
+  easeInQuad: 'Ease In Quad',
+  easeOutQuad: 'Ease Out Quad',
+  easeInOutQuad: 'Ease In Out Quad',
+  easeInCubic: 'Ease In Cubic',
+  easeOutCubic: 'Ease Out Cubic',
+  easeInOutCubic: 'Ease In Out Cubic',
+  easeInQuart: 'Ease In Quart',
+  easeOutQuart: 'Ease Out Quart',
+  easeInOutQuart: 'Ease In Out Quart',
+  easeInQuint: 'Ease In Quint',
+  easeOutQuint: 'Ease Out Quint',
+  easeInOutQuint: 'Ease In Out Quint',
+  easeInExpo: 'Ease In Expo',
+  easeOutExpo: 'Ease Out Expo',
+  easeInOutExpo: 'Ease In Out Expo',
+  easeInCirc: 'Ease In Circ',
+  easeOutCirc: 'Ease Out Circ',
+  easeInOutCirc: 'Ease In Out Circ',
+  easeInBack: 'Ease In Back',
+  easeOutBack: 'Ease Out Back',
+  easeInOutBack: 'Ease In Out Back',
+  easeInElastic: 'Ease In Elastic',
+  easeOutElastic: 'Ease Out Elastic',
+  easeInOutElastic: 'Ease In Out Elastic',
+  easeInBounce: 'Ease In Bounce',
+  easeOutBounce: 'Ease Out Bounce',
+  easeInOutBounce: 'Ease In Out Bounce',
+};
+
+/**
+ * Get a human-readable display name for an easing function.
+ */
+export function getEasingDisplayName(easing: EasingFunction): string {
+  if (typeof easing === 'string') {
+    return EASING_DISPLAY_NAMES[easing] ?? easing;
+  }
+  if (easing.type === 'cubicBezier') {
+    const [x1, y1, x2, y2] = easing.points;
+    // Check if it matches a known CSS preset
+    if (x1 === 0.25 && y1 === 0.1 && x2 === 0.25 && y2 === 1) return 'Ease';
+    if (x1 === 0.42 && y1 === 0 && x2 === 1 && y2 === 1) return 'Ease In';
+    if (x1 === 0 && y1 === 0 && x2 === 0.58 && y2 === 1) return 'Ease Out';
+    if (x1 === 0.42 && y1 === 0 && x2 === 0.58 && y2 === 1) return 'Ease In Out';
+    return `cubic-bezier(${x1}, ${y1}, ${x2}, ${y2})`;
+  }
+  return 'Linear';
+}
+
+/**
+ * Check if an easing is a cubic bezier (either named CSS preset or explicit).
+ * Returns the [x1, y1, x2, y2] control points, or null for non-bezier easings.
+ */
+export function easingToBezierPoints(
+  easing: EasingFunction
+): [number, number, number, number] | null {
+  if (typeof easing === 'string') {
+    // Named easings are NOT cubic bezier representable (Bounce, Elastic, etc.)
+    // Except linear which is trivially representable
+    if (easing === 'linear') return [0, 0, 1, 1];
+    return null;
+  }
+  if (easing.type === 'cubicBezier') {
+    return easing.points;
+  }
+  return null;
+}

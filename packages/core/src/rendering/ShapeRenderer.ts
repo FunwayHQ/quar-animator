@@ -404,6 +404,8 @@ interface TessellationCacheEntry {
   boneIdToIndex?: Map<string, number>;
   /** Last morph offsets reference used to pack skinnedVertexData (for invalidation) */
   lastMorphOffsets?: Float32Array;
+  /** Last skinData reference used to pack skinnedVertexData (for weight paint invalidation) */
+  lastSkinData?: unknown;
 }
 
 /** Build a cache key string from node geometry properties */
@@ -2773,9 +2775,10 @@ export class ShapeRenderer {
     skinData: SkinData,
     morphOffsets?: Float32Array
   ): void {
-    // Rebuild if morph offsets changed (reference identity check) or never built
+    // Rebuild if morph offsets or skinData changed (reference identity check) or never built
     const morphChanged = morphOffsets !== cached.lastMorphOffsets;
-    if (cached.skinnedVertexData && cached.boneIdToIndex && !morphChanged) return;
+    const skinChanged = skinData !== cached.lastSkinData;
+    if (cached.skinnedVertexData && cached.boneIdToIndex && !morphChanged && !skinChanged) return;
     cached.boneIdToIndex = buildBoneIdToIndex(skinData);
     cached.skinnedVertexData = packSkinnedVertices(
       cached.vertices,
@@ -2784,6 +2787,7 @@ export class ShapeRenderer {
       morphOffsets
     );
     cached.lastMorphOffsets = morphOffsets;
+    cached.lastSkinData = skinData;
   }
 
   /**

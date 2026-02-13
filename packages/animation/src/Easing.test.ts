@@ -8,6 +8,10 @@ import {
   getEasingTypes,
   getEasingFunction,
   createCubicBezier,
+  easingToSvgPath,
+  easingToBezierPoints,
+  getEasingDisplayName,
+  EASING_CATEGORIES,
   EASE,
   EASE_IN,
   EASE_OUT,
@@ -332,5 +336,145 @@ describe('cubic bezier presets', () => {
   it('EASE_OUT preset should have fast start', () => {
     const fn = getEasingFunction(EASE_OUT);
     expect(fn(0.25)).toBeGreaterThan(0.25);
+  });
+});
+
+// ============================================================================
+// easingToSvgPath
+// ============================================================================
+
+describe('easingToSvgPath', () => {
+  it('should return a valid SVG path string starting with M', () => {
+    const path = easingToSvgPath('linear', 100, 100, 10);
+    expect(path).toMatch(/^M/);
+    expect(path).toContain('L');
+  });
+
+  it('should generate correct number of segments', () => {
+    const path = easingToSvgPath('linear', 100, 100, 10);
+    // 1 M + 10 L = 11 segments
+    const segments = path.split(/(?=[ML])/).filter(Boolean);
+    expect(segments).toHaveLength(11);
+  });
+
+  it('should map linear easing to a diagonal line', () => {
+    const path = easingToSvgPath('linear', 100, 100, 4);
+    // Start at (0, 100) = t=0,f=0 → SVG y = 100
+    // End at (100, 0) = t=1,f=1 → SVG y = 0
+    expect(path).toContain('M0.00,100.00');
+    expect(path).toContain('L100.00,0.00');
+  });
+
+  it('should accept cubic bezier easing', () => {
+    const path = easingToSvgPath(EASE, 200, 200, 16);
+    expect(path).toMatch(/^M/);
+    const segments = path.split(/(?=[ML])/).filter(Boolean);
+    expect(segments).toHaveLength(17);
+  });
+
+  it('should default to 100x100 with 64 samples', () => {
+    const path = easingToSvgPath('easeInQuad');
+    const segments = path.split(/(?=[ML])/).filter(Boolean);
+    expect(segments).toHaveLength(65); // 0..64 inclusive
+  });
+});
+
+// ============================================================================
+// EASING_CATEGORIES
+// ============================================================================
+
+describe('EASING_CATEGORIES', () => {
+  it('should have 5 categories', () => {
+    expect(EASING_CATEGORIES).toHaveLength(5);
+  });
+
+  it('should contain all category names', () => {
+    const names = EASING_CATEGORIES.map((c) => c.name);
+    expect(names).toEqual(['CSS Standard', 'Power', 'Expo & Circ', 'Back', 'Elastic & Bounce']);
+  });
+
+  it('CSS Standard should have 5 items', () => {
+    expect(EASING_CATEGORIES[0]!.items).toHaveLength(5);
+  });
+
+  it('Power should have 12 items', () => {
+    expect(EASING_CATEGORIES[1]!.items).toHaveLength(12);
+  });
+
+  it('should have 32 total preset items', () => {
+    const total = EASING_CATEGORIES.reduce((sum, cat) => sum + cat.items.length, 0);
+    expect(total).toBe(32);
+  });
+
+  it('each item should have a label and value', () => {
+    for (const cat of EASING_CATEGORIES) {
+      for (const item of cat.items) {
+        expect(item.label).toBeTruthy();
+        expect(item.value).toBeDefined();
+      }
+    }
+  });
+});
+
+// ============================================================================
+// getEasingDisplayName
+// ============================================================================
+
+describe('getEasingDisplayName', () => {
+  it('should return "Linear" for linear', () => {
+    expect(getEasingDisplayName('linear')).toBe('Linear');
+  });
+
+  it('should return readable name for named easings', () => {
+    expect(getEasingDisplayName('easeInCubic')).toBe('Ease In Cubic');
+    expect(getEasingDisplayName('easeOutBounce')).toBe('Ease Out Bounce');
+    expect(getEasingDisplayName('easeInOutElastic')).toBe('Ease In Out Elastic');
+  });
+
+  it('should return CSS name for EASE preset', () => {
+    expect(getEasingDisplayName(EASE)).toBe('Ease');
+  });
+
+  it('should return CSS name for EASE_IN preset', () => {
+    expect(getEasingDisplayName(EASE_IN)).toBe('Ease In');
+  });
+
+  it('should return CSS name for EASE_OUT preset', () => {
+    expect(getEasingDisplayName(EASE_OUT)).toBe('Ease Out');
+  });
+
+  it('should return CSS name for EASE_IN_OUT preset', () => {
+    expect(getEasingDisplayName(EASE_IN_OUT)).toBe('Ease In Out');
+  });
+
+  it('should return cubic-bezier notation for custom values', () => {
+    const custom = createCubicBezier(0.1, 0.2, 0.3, 0.4);
+    expect(getEasingDisplayName(custom)).toBe('cubic-bezier(0.1, 0.2, 0.3, 0.4)');
+  });
+});
+
+// ============================================================================
+// easingToBezierPoints
+// ============================================================================
+
+describe('easingToBezierPoints', () => {
+  it('should return [0,0,1,1] for linear', () => {
+    expect(easingToBezierPoints('linear')).toEqual([0, 0, 1, 1]);
+  });
+
+  it('should return null for named non-linear easings', () => {
+    expect(easingToBezierPoints('easeInBounce')).toBeNull();
+    expect(easingToBezierPoints('easeOutElastic')).toBeNull();
+    expect(easingToBezierPoints('easeInQuad')).toBeNull();
+  });
+
+  it('should return points for cubic bezier', () => {
+    const pts = easingToBezierPoints(EASE);
+    expect(pts).toEqual([0.25, 0.1, 0.25, 1]);
+  });
+
+  it('should return custom points for createCubicBezier', () => {
+    const easing = createCubicBezier(0.1, 0.2, 0.8, 0.9);
+    expect(easingToBezierPoints(easing)).toEqual([0.1, 0.2, 0.8, 0.9]);
   });
 });

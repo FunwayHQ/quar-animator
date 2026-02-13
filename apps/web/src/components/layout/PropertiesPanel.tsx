@@ -58,9 +58,11 @@ import {
   getAllPoints,
   setAllPoints,
 } from '@quar/core';
-import { findTrack } from '@quar/animation';
+import { findTrack, getEasingDisplayName } from '@quar/animation';
 import type { SceneGraph } from '@quar/core';
 import { getKeyframeState } from '../../hooks/useKeyframeState';
+import { EasingCurvePreview } from '../common/EasingCurvePreview';
+import { EasingEditor } from '../common/EasingEditor';
 import styles from './PropertiesPanel.module.css';
 
 // ============================================================================
@@ -341,11 +343,21 @@ export function PropertiesPanel() {
   const ikChains = useEditorStore((state) => state.ikChains);
   const setIKChainEnabled = useEditorStore((state) => state.setIKChainEnabled);
   const dsPoints = useEditorStore((state) => state.directSelectionPoints);
+  const selectedKeyframeIds = useEditorStore((state) => state.selectedKeyframeIds);
+  const setKeyframeEasing = useEditorStore((state) => state.setKeyframeEasing);
+  const weightPaintBoneId = useEditorStore((state) => state.weightPaintBoneId);
+  const setWeightPaintBoneId = useEditorStore((state) => state.setWeightPaintBoneId);
 
   // Undo snapshot before scrub or input commit
   const handleScrubStart = useCallback(() => {
     pushUndo(sceneGraph);
   }, [pushUndo, sceneGraph]);
+
+  // Easing editor state for PropertiesPanel
+  const [easingEditorState, setEasingEditorState] = useState<{
+    x: number;
+    y: number;
+  } | null>(null);
 
   // Re-render on SceneGraph changes (any mutation)
   const [, setVersion] = useState(0);
@@ -1850,9 +1862,9 @@ export function PropertiesPanel() {
                       <div className={styles.propertyInputs}>
                         <select
                           className={styles.select}
-                          value={useEditorStore.getState().weightPaintBoneId ?? ''}
+                          value={weightPaintBoneId ?? ''}
                           onChange={(e) => {
-                            useEditorStore.getState().setWeightPaintBoneId(e.target.value || null);
+                            setWeightPaintBoneId(e.target.value || null);
                           }}
                         >
                           <option value="">Select bone...</option>
@@ -3683,6 +3695,77 @@ export function PropertiesPanel() {
             ))}
           </div>
         </div>
+
+        {/* Easing — shown when keyframes are selected */}
+        {selectedKeyframeIds.size > 0 &&
+          (() => {
+            // Find easing of first selected keyframe
+            let kfEasing: import('@quar/types').EasingFunction = 'linear';
+            let kfNodeId = '';
+            let kfProperty = '';
+            let kfId = '';
+            for (const track of timeline.tracks) {
+              for (const kf of track.keyframes) {
+                if (selectedKeyframeIds.has(kf.id)) {
+                  kfEasing = kf.easing;
+                  kfNodeId = track.nodeId;
+                  kfProperty = track.property;
+                  kfId = kf.id;
+                  break;
+                }
+              }
+              if (kfId) break;
+            }
+            return (
+              <div className={styles.section} data-testid="easing-section">
+                <div className={styles.sectionHeader}>
+                  <span className={styles.sectionTitle}>Easing</span>
+                </div>
+                <div className={styles.sectionContent}>
+                  {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions */}
+                  <div
+                    className={styles.propertyRow}
+                    style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}
+                    onClick={(e) => {
+                      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                      setEasingEditorState({ x: rect.left, y: rect.bottom + 4 });
+                    }}
+                    data-testid="easing-section-trigger"
+                  >
+                    <EasingCurvePreview easing={kfEasing} width={48} height={32} />
+                    <span
+                      style={{
+                        fontSize: 'var(--font-size-xs)',
+                        color: 'var(--color-text-secondary)',
+                      }}
+                    >
+                      {/* eslint-disable-next-line @typescript-eslint/no-unsafe-call */}
+                      {String(getEasingDisplayName(kfEasing))}
+                    </span>
+                  </div>
+                  {easingEditorState && (
+                    <EasingEditor
+                      easing={kfEasing}
+                      anchorX={easingEditorState.x}
+                      anchorY={easingEditorState.y}
+                      onChange={(newEasing) => {
+                        for (const selKfId of selectedKeyframeIds) {
+                          for (const track of timeline.tracks) {
+                            for (const kf of track.keyframes) {
+                              if (kf.id === selKfId) {
+                                setKeyframeEasing(track.nodeId, track.property, selKfId, newEasing);
+                              }
+                            }
+                          }
+                        }
+                      }}
+                      onClose={() => setEasingEditorState(null)}
+                    />
+                  )}
+                </div>
+              </div>
+            );
+          })()}
 
         {/* Blend Mode */}
         <div className={styles.section} data-testid="blend-mode-section">

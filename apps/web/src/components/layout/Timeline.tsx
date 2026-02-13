@@ -6,6 +6,7 @@ import type { Node, EasingFunction } from '@quar/types';
 import { ContextMenu } from '../common/ContextMenu';
 import type { ContextMenuEntry } from '../common/ContextMenu';
 import { OnionSkinPanel } from '../common/OnionSkinPanel';
+import { EasingEditor } from '../common/EasingEditor';
 import styles from './Timeline.module.css';
 
 // ============================================================================
@@ -22,6 +23,19 @@ const EASING_PRESETS: Array<{ label: string; value: EasingFunction }> = [
   { label: 'Ease Out Bounce', value: 'easeOutBounce' },
   { label: 'Ease Out Elastic', value: 'easeOutElastic' },
 ];
+
+function easingsMatch(a: EasingFunction, b: EasingFunction): boolean {
+  if (typeof a === 'string' && typeof b === 'string') return a === b;
+  if (typeof a === 'string' || typeof b === 'string') return false;
+  return (
+    a.type === 'cubicBezier' &&
+    b.type === 'cubicBezier' &&
+    a.points[0] === b.points[0] &&
+    a.points[1] === b.points[1] &&
+    a.points[2] === b.points[2] &&
+    a.points[3] === b.points[3]
+  );
+}
 
 export interface TimelineProps {
   /** Playback callbacks from usePlayback hook — controls the PlaybackController */
@@ -78,6 +92,11 @@ export function Timeline({ playback }: TimelineProps = {}) {
   const clearWorkArea = useEditorStore((s) => s.clearWorkArea);
 
   const [showOnionSkinPanel, setShowOnionSkinPanel] = useState(false);
+  const [easingEditor, setEasingEditor] = useState<{
+    x: number;
+    y: number;
+    easing: EasingFunction;
+  } | null>(null);
 
   const rulerRef = useRef<HTMLDivElement>(null);
   const tracksRef = useRef<HTMLDivElement>(null);
@@ -364,11 +383,24 @@ export function Timeline({ playback }: TimelineProps = {}) {
     if (contextMenu.keyframeId && contextMenu.nodeId && contextMenu.property) {
       const items: ContextMenuEntry[] = [];
 
-      // Easing presets
+      // Find the easing of the first selected keyframe for checkmark
+      let currentKfEasing: EasingFunction = 'linear';
+      for (const track of timeline.tracks) {
+        for (const kf of track.keyframes) {
+          if (selectedKeyframeIds.has(kf.id)) {
+            currentKfEasing = kf.easing;
+            break;
+          }
+        }
+        if (currentKfEasing !== 'linear') break;
+      }
+
+      // Easing presets with checkmark
       for (const preset of EASING_PRESETS) {
+        const isActive = easingsMatch(currentKfEasing, preset.value);
         items.push({
           id: `easing-${typeof preset.value === 'string' ? preset.value : 'custom'}`,
-          label: preset.label,
+          label: isActive ? `\u2713 ${preset.label}` : `\u2003${preset.label}`,
           onClick: () => {
             // Apply to all selected keyframes
             for (const kfId of selectedKeyframeIds) {
@@ -380,6 +412,18 @@ export function Timeline({ playback }: TimelineProps = {}) {
           },
         });
       }
+
+      items.push({
+        id: 'custom-easing',
+        label: 'Custom Easing\u2026',
+        onClick: () => {
+          setEasingEditor({
+            x: contextMenu.x,
+            y: contextMenu.y,
+            easing: currentKfEasing,
+          });
+        },
+      });
 
       items.push({ type: 'separator' });
 
@@ -473,6 +517,7 @@ export function Timeline({ playback }: TimelineProps = {}) {
   }, [
     contextMenu,
     duration,
+    timeline,
     selectedKeyframeIds,
     keyframeMap,
     setCurrentFrame,
@@ -956,6 +1001,22 @@ export function Timeline({ playback }: TimelineProps = {}) {
           y={contextMenu.y}
           items={contextMenuItems()}
           onClose={() => setContextMenu(null)}
+        />
+      )}
+      {easingEditor && (
+        <EasingEditor
+          easing={easingEditor.easing}
+          anchorX={easingEditor.x}
+          anchorY={easingEditor.y}
+          onChange={(newEasing) => {
+            for (const kfId of selectedKeyframeIds) {
+              const info = keyframeMap.get(kfId);
+              if (info) {
+                setKeyframeEasing(info.nodeId, info.property, kfId, newEasing);
+              }
+            }
+          }}
+          onClose={() => setEasingEditor(null)}
         />
       )}
     </div>
