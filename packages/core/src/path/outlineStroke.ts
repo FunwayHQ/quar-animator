@@ -124,21 +124,24 @@ export function outlineStroke(
 
     if (outlineVerts.length < 6) continue; // Need at least 3 points
 
+    // generateStrokeOutlineVertices always returns:
+    //   [leftSide(numVertices)... rightSideReversed(numVertices)...]
+    // Split into left and right, fit each independently for accuracy.
+    const totalVerts = outlineVerts.length / 2;
+    const rightCount = totalVerts - numVertices;
+    const leftPoints = simplifyToSmoothPoints(outlineVerts, 0, numVertices);
+    const rightPoints = simplifyToSmoothPoints(outlineVerts, numVertices, rightCount);
+
     if (outline.closed) {
-      // For closed paths, generateStrokeOutlineVertices returns
-      // [leftSide(outer)... rightSideReversed(inner)...] as one polygon.
-      // Split into two separate closed contours (outer ring + inner ring).
-      // Use RDP simplification for clean output with exact geometry.
-      const innerCount = outlineVerts.length / 2 - numVertices;
-      const outerPoints = simplifyToSmoothPoints(outlineVerts, 0, numVertices);
-      const innerPoints = simplifyToSmoothPoints(outlineVerts, numVertices, innerCount);
-      if (outerPoints.length >= 3) resultContours.push(outerPoints);
-      if (innerPoints.length >= 3) resultContours.push(innerPoints);
+      // Two separate closed contours (outer ring + inner ring)
+      if (leftPoints.length >= 3) resultContours.push(leftPoints);
+      if (rightPoints.length >= 3) resultContours.push(rightPoints);
     } else {
-      // Open paths: single combined polygon (ribbon shape).
-      const totalVerts = outlineVerts.length / 2;
-      const points = simplifyToSmoothPoints(outlineVerts, 0, totalVerts);
-      if (points.length >= 3) resultContours.push(points);
+      // Open paths: stitch left + right into one closed ribbon contour.
+      // Left goes forward, right goes backward — together they form a closed shape.
+      if (leftPoints.length >= 2 && rightPoints.length >= 2) {
+        resultContours.push([...leftPoints, ...rightPoints]);
+      }
     }
   }
 
@@ -166,8 +169,8 @@ export function outlineStroke(
         x: pt.position.x - centerX,
         y: pt.position.y - centerY,
       },
-      handleIn: { ...pt.handleIn },
-      handleOut: { ...pt.handleOut },
+      handleIn: pt.handleIn ? { ...pt.handleIn } : null,
+      handleOut: pt.handleOut ? { ...pt.handleOut } : null,
       type: pt.type,
     }))
   );
