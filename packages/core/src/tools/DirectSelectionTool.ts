@@ -994,13 +994,39 @@ export class DirectSelectionTool extends BaseTool {
         return rawBounds;
       }
       case 'image': {
+        const imgNode = node;
         const anchor = node.transform.anchor;
-        return {
-          x: -node.width * anchor.x,
-          y: -node.height * anchor.y,
-          width: node.width,
-          height: node.height,
-        };
+        const w = imgNode.width;
+        const h = imgNode.height;
+        const x0 = -w * anchor.x;
+        const y0 = -h * anchor.y;
+        const x1 = x0 + w;
+        const y1 = y0 + h;
+
+        // Account for vertex offsets [BL, BR, TL, TR]
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+        const vo: [Vector2, Vector2, Vector2, Vector2] | undefined = imgNode.vertexOffsets;
+        if (vo) {
+          const corners = [
+            { x: x0 + vo[0].x, y: y0 + vo[0].y },
+            { x: x1 + vo[1].x, y: y0 + vo[1].y },
+            { x: x0 + vo[2].x, y: y1 + vo[2].y },
+            { x: x1 + vo[3].x, y: y1 + vo[3].y },
+          ];
+          let minX = corners[0].x,
+            minY = corners[0].y;
+          let maxX = corners[0].x,
+            maxY = corners[0].y;
+          for (let i = 1; i < 4; i++) {
+            if (corners[i].x < minX) minX = corners[i].x;
+            if (corners[i].y < minY) minY = corners[i].y;
+            if (corners[i].x > maxX) maxX = corners[i].x;
+            if (corners[i].y > maxY) maxY = corners[i].y;
+          }
+          return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
+        }
+
+        return { x: x0, y: y0, width: w, height: h };
       }
       default:
         return null;

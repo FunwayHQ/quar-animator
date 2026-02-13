@@ -283,9 +283,32 @@ export class SelectionManager {
       case 'image': {
         const imgNode = node;
         const anchor = node.transform.anchor;
+        const x0 = -imgNode.width * anchor.x;
+        const y0 = -imgNode.height * anchor.y;
+        const x1 = x0 + imgNode.width;
+        const y1 = y0 + imgNode.height;
+
+        // Account for vertex offsets [BL, BR, TL, TR]
+        const vo = imgNode.vertexOffsets;
+        if (vo) {
+          const blX = x0 + (vo[0]?.x ?? 0),
+            blY = y0 + (vo[0]?.y ?? 0);
+          const brX = x1 + (vo[1]?.x ?? 0),
+            brY = y0 + (vo[1]?.y ?? 0);
+          const tlX = x0 + (vo[2]?.x ?? 0),
+            tlY = y1 + (vo[2]?.y ?? 0);
+          const trX = x1 + (vo[3]?.x ?? 0),
+            trY = y1 + (vo[3]?.y ?? 0);
+          const minX = Math.min(blX, brX, tlX, trX);
+          const minY = Math.min(blY, brY, tlY, trY);
+          const maxX = Math.max(blX, brX, tlX, trX);
+          const maxY = Math.max(blY, brY, tlY, trY);
+          return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
+        }
+
         return {
-          x: -imgNode.width * anchor.x,
-          y: -imgNode.height * anchor.y,
+          x: x0,
+          y: y0,
           width: imgNode.width,
           height: imgNode.height,
         };

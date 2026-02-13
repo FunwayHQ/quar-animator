@@ -97,8 +97,8 @@ describe('SelectionManager - Image Node', () => {
       const bounds = manager.getNodeBounds(image);
 
       expect(bounds).not.toBeNull();
-      expect(bounds!.x).toBe(0);   // 100 - 100 (half width)
-      expect(bounds!.y).toBe(25);  // 100 - 75  (half height)
+      expect(bounds!.x).toBe(0); // 100 - 100 (half width)
+      expect(bounds!.y).toBe(25); // 100 - 75  (half height)
       expect(bounds!.width).toBe(200);
       expect(bounds!.height).toBe(150);
     });
@@ -109,8 +109,8 @@ describe('SelectionManager - Image Node', () => {
       const bounds = manager.getNodeBounds(image);
 
       expect(bounds).not.toBeNull();
-      expect(bounds!.x).toBe(20);  // 50 - 30
-      expect(bounds!.y).toBe(20);  // 50 - 30
+      expect(bounds!.x).toBe(20); // 50 - 30
+      expect(bounds!.y).toBe(20); // 50 - 30
       expect(bounds!.width).toBe(60);
       expect(bounds!.height).toBe(60);
     });
@@ -151,8 +151,8 @@ describe('SelectionManager - Image Node', () => {
       const bounds = manager.getNodeBounds(image);
 
       expect(bounds).not.toBeNull();
-      expect(bounds!.x).toBeCloseTo(9.5);  // 10 - 0.5
-      expect(bounds!.y).toBeCloseTo(9.5);  // 10 - 0.5
+      expect(bounds!.x).toBeCloseTo(9.5); // 10 - 0.5
+      expect(bounds!.y).toBeCloseTo(9.5); // 10 - 0.5
       expect(bounds!.width).toBe(1);
       expect(bounds!.height).toBe(1);
     });
@@ -287,6 +287,54 @@ describe('SelectionManager - Image Node', () => {
       expect(imageBounds!.rect.height).toBe(rectBounds!.rect.height);
       expect(imageBounds!.center.x).toBe(rectBounds!.center.x);
       expect(imageBounds!.center.y).toBe(rectBounds!.center.y);
+    });
+  });
+
+  // ==========================================================================
+  // Vertex Offsets
+  // ==========================================================================
+
+  describe('image vertex offsets bounds', () => {
+    it('should expand bounds to account for vertex offsets', () => {
+      const img = createTestImage('img1', 100, 100, 200, 100);
+      // Move top-right corner outward
+      img.vertexOffsets = [
+        { x: 0, y: 0 }, // BL unchanged
+        { x: 0, y: 0 }, // BR unchanged
+        { x: 0, y: 0 }, // TL unchanged
+        { x: 50, y: 30 }, // TR extended right and up
+      ];
+      sceneGraph.addNode(img);
+
+      const bounds = manager.getSelectionBounds(new Set(['img1']), sceneGraph);
+      expect(bounds).not.toBeNull();
+      // Original rect: x=[0,200], y=[0,100] in local, world center at (100,100)
+      // TR vertex offset: x+50, y+30 → local TR corner at (150, 130) instead of (100, 50)
+      // The bounds should be larger than the base 200x100
+      expect(bounds!.rect.width).toBeGreaterThan(200);
+      expect(bounds!.rect.height).toBeGreaterThan(100);
+    });
+
+    it('should match base bounds when vertex offsets are all zero', () => {
+      const imgWithVo = createTestImage('img1', 100, 100, 200, 100);
+      imgWithVo.vertexOffsets = [
+        { x: 0, y: 0 },
+        { x: 0, y: 0 },
+        { x: 0, y: 0 },
+        { x: 0, y: 0 },
+      ];
+      sceneGraph.addNode(imgWithVo);
+
+      const imgPlain = createTestImage('img2', 100, 100, 200, 100);
+      sceneGraph.addNode(imgPlain);
+
+      const boundsVo = manager.getSelectionBounds(new Set(['img1']), sceneGraph);
+      const boundsPlain = manager.getSelectionBounds(new Set(['img2']), sceneGraph);
+
+      expect(boundsVo).not.toBeNull();
+      expect(boundsPlain).not.toBeNull();
+      expect(boundsVo!.rect.width).toBeCloseTo(boundsPlain!.rect.width, 1);
+      expect(boundsVo!.rect.height).toBeCloseTo(boundsPlain!.rect.height, 1);
     });
   });
 });
