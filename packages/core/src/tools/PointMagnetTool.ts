@@ -8,6 +8,7 @@ import type { CanvasPointerEvent, ToolType, Node, SkinnableNode } from '@quar/ty
 import { BaseTool } from './BaseTool';
 import { applyBrushDisplacement, type FalloffType } from '@quar/rigging';
 import type { MorphVertexOffset } from '@quar/types';
+import { mat3 } from '../math';
 
 /** Type guard for nodes that can have skinData */
 function isSkinnableNode(node: Node): node is SkinnableNode {
@@ -183,15 +184,30 @@ export class PointMagnetTool extends BaseTool {
       const vertexPositions = this.context.getTessellatedVertices?.(node.id);
       if (!vertexPositions || vertexPositions.length < 2) return;
 
+      // Tessellated vertices are in local space — transform brush position
+      // and direction into local space so offsets are produced in local coords.
+      const worldMat = sg.getWorldTransform(node.id);
+      const invWorld = mat3.invert(worldMat);
+      if (!invWorld) return;
+
+      const localBrush = mat3.transformPoint(invWorld, { x: worldX, y: worldY });
+      // Transform direction vector (not a point — no translation component)
+      const localDirX = invWorld.a * dirX + invWorld.c * dirY;
+      const localDirY = invWorld.b * dirX + invWorld.d * dirY;
+
+      // Scale brush radius by the inverse of the node's world scale
+      const scaleX = Math.sqrt(worldMat.a * worldMat.a + worldMat.b * worldMat.b);
+      const localRadius = this.brushRadius / (scaleX || 1);
+
       const currentOffsets = this.workingOffsets.get(node.id) ?? [];
       const newOffsets = applyBrushDisplacement(
         currentOffsets,
-        worldX,
-        worldY,
-        this.brushRadius,
+        localBrush.x,
+        localBrush.y,
+        localRadius,
         this.brushStrength,
-        dirX,
-        dirY,
+        localDirX,
+        localDirY,
         this.falloff,
         vertexPositions
       );
