@@ -18,7 +18,7 @@ import { getFontManager } from './FontManager';
 export function convertTextToPath(textNode: TextNode, generateId: () => string): PathNode | null {
   const fm = getFontManager();
   // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-  const font = fm.getFontOrFallback(textNode.fontFamily);
+  const font = fm.getFontOrFallback(textNode.fontFamily, textNode.fontWeight);
   if (!font) return null;
 
   const result = textToSubpaths(textNode.content, font, textNode.fontSize, {
@@ -123,7 +123,7 @@ export function convertTextToPathGroup(
 ): TextToPathGroupResult | null {
   const fm = getFontManager();
   // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-  const font = fm.getFontOrFallback(textNode.fontFamily);
+  const font = fm.getFontOrFallback(textNode.fontFamily, textNode.fontWeight);
   if (!font) return null;
 
   const result = textToSubpaths(textNode.content, font, textNode.fontSize, {

@@ -260,7 +260,7 @@ export class SelectionManager {
       }
       case 'text': {
         const textNode = node;
-        return getTextBounds(
+        const rawBounds = getTextBounds(
           textNode.content,
           textNode.fontFamily,
           textNode.fontSize,
@@ -268,6 +268,17 @@ export class SelectionManager {
           textNode.letterSpacing,
           textNode.textAlign
         );
+        const anchor = node.transform.anchor;
+        // For non-zero anchors, center geometry like rectangles
+        if (anchor.x !== 0 || anchor.y !== 0) {
+          return {
+            x: -rawBounds.width * anchor.x,
+            y: -rawBounds.height * anchor.y,
+            width: rawBounds.width,
+            height: rawBounds.height,
+          };
+        }
+        return rawBounds;
       }
       case 'image': {
         const imgNode = node;

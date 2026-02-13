@@ -2,10 +2,17 @@
  * Tests for DirectSelectionTool
  */
 
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { DirectSelectionTool } from './DirectSelectionTool';
 import type { ToolContext } from './BaseTool';
-import type { PathNode, PathPoint, ImageNode } from '@quar/types';
+import type {
+  PathNode,
+  PathPoint,
+  ImageNode,
+  RectangleNode,
+  EllipseNode,
+  PolygonNode,
+} from '@quar/types';
 import { createMockToolContext, createMockPointerEvent } from '../test/setup';
 import { createDefaultTransform } from '../SceneGraph';
 
@@ -1820,6 +1827,297 @@ describe('DirectSelectionTool', () => {
       expect(selected.length).toBe(1);
       expect(selected[0].nodeId).toBe(img.id);
       expect(selected[0].pointIndex).toBe(0); // BL
+    });
+  });
+
+  // ==========================================================================
+  // Shape-to-Path Auto-Conversion (Bug 3 fix)
+  // ==========================================================================
+
+  describe('shape-to-path auto-conversion', () => {
+    function createTestRectangle(
+      ctx: ToolContext,
+      width: number,
+      height: number,
+      position: { x: number; y: number } = { x: 0, y: 0 }
+    ): RectangleNode {
+      const transform = createDefaultTransform();
+      transform.position = position;
+
+      const node: RectangleNode = {
+        id: ctx.generateId(),
+        name: 'Test Rect',
+        type: 'rectangle',
+        parent: null,
+        children: [],
+        transform,
+        visible: true,
+        locked: false,
+        opacity: 1,
+        blendMode: 'normal',
+        width,
+        height,
+        cornerRadius: [0, 0, 0, 0],
+        fills: [ctx.defaultFill],
+        strokes: [ctx.defaultStroke],
+      };
+
+      ctx.sceneGraph.addNode(node);
+      return node;
+    }
+
+    function createTestPolygon(
+      ctx: ToolContext,
+      radius: number,
+      sides: number,
+      position: { x: number; y: number } = { x: 0, y: 0 }
+    ): PolygonNode {
+      const transform = createDefaultTransform();
+      transform.position = position;
+
+      const node: PolygonNode = {
+        id: ctx.generateId(),
+        name: 'Test Polygon',
+        type: 'polygon',
+        parent: null,
+        children: [],
+        transform,
+        visible: true,
+        locked: false,
+        opacity: 1,
+        blendMode: 'normal',
+        sides,
+        radius,
+        fills: [ctx.defaultFill],
+        strokes: [ctx.defaultStroke],
+      };
+
+      ctx.sceneGraph.addNode(node);
+      return node;
+    }
+
+    function createTestEllipse(
+      ctx: ToolContext,
+      radiusX: number,
+      radiusY: number,
+      position: { x: number; y: number } = { x: 0, y: 0 }
+    ): EllipseNode {
+      const transform = createDefaultTransform();
+      transform.position = position;
+
+      const node: EllipseNode = {
+        id: ctx.generateId(),
+        name: 'Test Ellipse',
+        type: 'ellipse',
+        parent: null,
+        children: [],
+        transform,
+        visible: true,
+        locked: false,
+        opacity: 1,
+        blendMode: 'normal',
+        radiusX,
+        radiusY,
+        fills: [ctx.defaultFill],
+        strokes: [ctx.defaultStroke],
+      };
+
+      ctx.sceneGraph.addNode(node);
+      return node;
+    }
+
+    it('should convert selected rectangle to path on click', () => {
+      let convertedId: string | null = null;
+      context.convertShapeToPath = vi.fn((nodeId: string) => {
+        // Simulate the store action: remove old node, add path node
+        const node = context.sceneGraph.getNode(nodeId);
+        if (!node || node.type !== 'rectangle') return null;
+
+        const pathId = context.generateId();
+        const pathNode: PathNode = {
+          id: pathId,
+          name: `${node.name} (Path)`,
+          type: 'path',
+          parent: null,
+          children: [],
+          transform: { ...node.transform },
+          visible: true,
+          locked: false,
+          opacity: 1,
+          blendMode: 'normal',
+          points: [
+            createPoint(-25, -15),
+            createPoint(25, -15),
+            createPoint(25, 15),
+            createPoint(-25, 15),
+          ],
+          closed: true,
+          fills: [],
+          strokes: [],
+        };
+
+        context.sceneGraph.addNode(pathNode);
+        context.sceneGraph.removeNode(nodeId);
+        context.setSelectedIds([pathId]);
+        convertedId = pathId;
+        return pathId;
+      });
+
+      const rect = createTestRectangle(context, 50, 30);
+      // First: select the rectangle
+      context.setSelectedIds([rect.id]);
+
+      // Second: click on the already-selected rectangle → triggers conversion
+      tool.onPointerDown(createMockPointerEvent({ worldPosition: { x: 0, y: 0 }, button: 0 }));
+      tool.onPointerUp(createMockPointerEvent({ worldPosition: { x: 0, y: 0 } }));
+
+      expect(context.convertShapeToPath).toHaveBeenCalledWith(rect.id);
+      expect(convertedId).not.toBeNull();
+    });
+
+    it('should not convert shape if not already selected', () => {
+      context.convertShapeToPath = vi.fn(() => null);
+
+      createTestRectangle(context, 50, 30);
+      // Don't pre-select the rectangle
+
+      // Click on the rectangle without pre-selection
+      tool.onPointerDown(createMockPointerEvent({ worldPosition: { x: 0, y: 0 }, button: 0 }));
+      tool.onPointerUp(createMockPointerEvent({ worldPosition: { x: 0, y: 0 } }));
+
+      // Should not have tried to convert (first click just selects)
+      expect(context.convertShapeToPath).not.toHaveBeenCalled();
+    });
+
+    it('should convert selected polygon to path on click', () => {
+      context.convertShapeToPath = vi.fn((nodeId: string) => {
+        const pathId = context.generateId();
+        const pathNode: PathNode = {
+          id: pathId,
+          name: 'Polygon (Path)',
+          type: 'path',
+          parent: null,
+          children: [],
+          transform: createDefaultTransform(),
+          visible: true,
+          locked: false,
+          opacity: 1,
+          blendMode: 'normal',
+          points: [createPoint(0, 50), createPoint(43, -25), createPoint(-43, -25)],
+          closed: true,
+          fills: [],
+          strokes: [],
+        };
+        context.sceneGraph.addNode(pathNode);
+        context.sceneGraph.removeNode(nodeId);
+        context.setSelectedIds([pathId]);
+        return pathId;
+      });
+
+      const poly = createTestPolygon(context, 50, 3);
+      context.setSelectedIds([poly.id]);
+
+      tool.onPointerDown(createMockPointerEvent({ worldPosition: { x: 0, y: 0 }, button: 0 }));
+      tool.onPointerUp(createMockPointerEvent({ worldPosition: { x: 0, y: 0 } }));
+
+      expect(context.convertShapeToPath).toHaveBeenCalledWith(poly.id);
+    });
+
+    it('should convert selected ellipse to path on click', () => {
+      context.convertShapeToPath = vi.fn((nodeId: string) => {
+        const pathId = context.generateId();
+        const pathNode: PathNode = {
+          id: pathId,
+          name: 'Ellipse (Path)',
+          type: 'path',
+          parent: null,
+          children: [],
+          transform: createDefaultTransform(),
+          visible: true,
+          locked: false,
+          opacity: 1,
+          blendMode: 'normal',
+          points: [
+            createPoint(30, 0),
+            createPoint(0, 20),
+            createPoint(-30, 0),
+            createPoint(0, -20),
+          ],
+          closed: true,
+          fills: [],
+          strokes: [],
+        };
+        context.sceneGraph.addNode(pathNode);
+        context.sceneGraph.removeNode(nodeId);
+        context.setSelectedIds([pathId]);
+        return pathId;
+      });
+
+      const ellipse = createTestEllipse(context, 30, 20);
+      context.setSelectedIds([ellipse.id]);
+
+      tool.onPointerDown(createMockPointerEvent({ worldPosition: { x: 0, y: 0 }, button: 0 }));
+      tool.onPointerUp(createMockPointerEvent({ worldPosition: { x: 0, y: 0 } }));
+
+      expect(context.convertShapeToPath).toHaveBeenCalledWith(ellipse.id);
+    });
+
+    it('should not convert path nodes (already a path)', () => {
+      context.convertShapeToPath = vi.fn(() => null);
+
+      const path = createTestPath(
+        context,
+        [createPoint(0, 0), createPoint(100, 0), createPoint(100, 100)],
+        true
+      );
+      context.setSelectedIds([path.id]);
+
+      tool.onPointerDown(createMockPointerEvent({ worldPosition: { x: 0, y: 0 }, button: 0 }));
+      tool.onPointerUp(createMockPointerEvent({ worldPosition: { x: 0, y: 0 } }));
+
+      // Path nodes should go through normal point selection, not conversion
+      expect(context.convertShapeToPath).not.toHaveBeenCalled();
+    });
+
+    it('should select all points after converting shape to path', () => {
+      context.convertShapeToPath = vi.fn((nodeId: string) => {
+        const pathId = context.generateId();
+        const pathNode: PathNode = {
+          id: pathId,
+          name: 'Rect (Path)',
+          type: 'path',
+          parent: null,
+          children: [],
+          transform: createDefaultTransform(),
+          visible: true,
+          locked: false,
+          opacity: 1,
+          blendMode: 'normal',
+          points: [
+            createPoint(-25, -15),
+            createPoint(25, -15),
+            createPoint(25, 15),
+            createPoint(-25, 15),
+          ],
+          closed: true,
+          fills: [],
+          strokes: [],
+        };
+        context.sceneGraph.addNode(pathNode);
+        context.sceneGraph.removeNode(nodeId);
+        context.setSelectedIds([pathId]);
+        return pathId;
+      });
+
+      const rect = createTestRectangle(context, 50, 30);
+      context.setSelectedIds([rect.id]);
+
+      tool.onPointerDown(createMockPointerEvent({ worldPosition: { x: 0, y: 0 }, button: 0 }));
+      tool.onPointerUp(createMockPointerEvent({ worldPosition: { x: 0, y: 0 } }));
+
+      // After conversion, all 4 points should be selected
+      const selected = tool.getSelectedPoints();
+      expect(selected.length).toBe(4);
     });
   });
 });

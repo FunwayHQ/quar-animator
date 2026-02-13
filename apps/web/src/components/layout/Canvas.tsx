@@ -64,6 +64,12 @@ export function Canvas() {
   // Track active drag listener cleanup to prevent leaks on unmount
   const activeDragCleanupRef = useRef<(() => void) | null>(null);
 
+  // Deformed bounds cache — updated in RAF render loop after IK evaluation
+  const deformedBoundsRef = useRef<
+    Map<string, { x: number; y: number; width: number; height: number }>
+  >(new Map());
+  const deformedBoundsVersionRef = useRef(0);
+
   // UI state (for display)
   const [zoomPercent, setZoomPercent] = useState(100);
   const [mouseWorldPos, setMouseWorldPos] = useState<Vector2>({ x: 0, y: 0 });
@@ -75,6 +81,7 @@ export function Canvas() {
     height: 0,
   });
   const [cameraVersion, setCameraVersion] = useState(0);
+  const [deformedBoundsVersion, setDeformedBoundsVersion] = useState(0);
 
   // Get selection state from store
   const selectedNodeIds = useEditorStore((state) => state.selectedNodeIds);
@@ -262,67 +269,20 @@ export function Canvas() {
   const selectionDisplay = useMemo(() => {
     if (!sceneGraphRef.current || selectedNodeIds.size === 0) return null;
 
-    // For a single skinned node (or group with skinned children), compute bounds from deformed vertices
-    if (selectedNodeIds.size === 1 && shapeRendererRef.current) {
-      const nodeId = [...selectedNodeIds][0]!;
-      const node = sceneGraphRef.current.getNode(nodeId);
-      if (node) {
-        // Direct skinned node
-        if ((node as any).skinData) {
-          const deformedRect = shapeRendererRef.current.getDeformedBounds(
-            node,
-            sceneGraphRef.current
-          );
-          if (deformedRect) {
-            return {
-              bounds: {
-                rect: deformedRect,
-                center: {
-                  x: deformedRect.x + deformedRect.width / 2,
-                  y: deformedRect.y + deformedRect.height / 2,
-                },
-              },
-              rotation: 0,
-            };
-          }
-        }
-        // Group with skinned children — compute combined deformed bounds
-        if (node.type === 'group') {
-          const children = sceneGraphRef.current.getChildren(node.id);
-          let hasAnySkin = false;
-          let minX = Infinity,
-            minY = Infinity,
-            maxX = -Infinity,
-            maxY = -Infinity;
-          for (const child of children) {
-            if ((child as any).skinData) {
-              const childRect = shapeRendererRef.current.getDeformedBounds(
-                child,
-                sceneGraphRef.current
-              );
-              if (childRect) {
-                hasAnySkin = true;
-                if (childRect.x < minX) minX = childRect.x;
-                if (childRect.y < minY) minY = childRect.y;
-                if (childRect.x + childRect.width > maxX) maxX = childRect.x + childRect.width;
-                if (childRect.y + childRect.height > maxY) maxY = childRect.y + childRect.height;
-              }
-            }
-          }
-          if (hasAnySkin) {
-            const deformedRect = { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
-            return {
-              bounds: {
-                rect: deformedRect,
-                center: {
-                  x: deformedRect.x + deformedRect.width / 2,
-                  y: deformedRect.y + deformedRect.height / 2,
-                },
-              },
-              rotation: 0,
-            };
-          }
-        }
+    // Read deformed bounds from the ref (updated in RAF render loop after IK evaluation)
+    for (const nodeId of selectedNodeIds) {
+      const deformedRect = deformedBoundsRef.current.get(nodeId);
+      if (deformedRect) {
+        return {
+          bounds: {
+            rect: deformedRect,
+            center: {
+              x: deformedRect.x + deformedRect.width / 2,
+              y: deformedRect.y + deformedRect.height / 2,
+            },
+          },
+          rotation: 0,
+        };
       }
     }
 
@@ -330,8 +290,8 @@ export function Canvas() {
       selectedNodeIds,
       sceneGraphRef.current
     );
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- sceneGraphVersion triggers recalculation when nodes change
-  }, [selectedNodeIds, sceneGraphRef, sceneGraphVersion]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- sceneGraphVersion/deformedBoundsVersion trigger recalculation
+  }, [selectedNodeIds, sceneGraphRef, sceneGraphVersion, deformedBoundsVersion]);
 
   const selectionBounds = selectionDisplay?.bounds ?? null;
   const selectionRotation = selectionDisplay?.rotation ?? 0;
@@ -559,6 +519,75 @@ export function Canvas() {
             selectedNodeIdsRef.current,
             useEditorStore.getState().editingTextNodeId
           );
+
+          // Update deformed bounds for selected skinned nodes (post IK + render)
+          const selIds = selectedNodeIdsRef.current;
+          if (selIds.size > 0) {
+            const newBounds = new Map<
+              string,
+              { x: number; y: number; width: number; height: number }
+            >();
+            for (const sid of selIds) {
+              const sNode = sceneGraphRef.current.getNode(sid);
+              if (!sNode) continue;
+              if ((sNode as any).skinData) {
+                const dr = shapeRenderer.getDeformedBounds(sNode, sceneGraphRef.current);
+                if (dr) newBounds.set(sid, dr);
+              } else if (sNode.type === 'group') {
+                // Group with skinned children
+                const children = sceneGraphRef.current.getChildren(sNode.id);
+                let minX = Infinity,
+                  minY = Infinity,
+                  maxX = -Infinity,
+                  maxY = -Infinity;
+                let hasSkin = false;
+                for (const child of children) {
+                  if ((child as any).skinData) {
+                    const cr = shapeRenderer.getDeformedBounds(child, sceneGraphRef.current);
+                    if (cr) {
+                      hasSkin = true;
+                      if (cr.x < minX) minX = cr.x;
+                      if (cr.y < minY) minY = cr.y;
+                      if (cr.x + cr.width > maxX) maxX = cr.x + cr.width;
+                      if (cr.y + cr.height > maxY) maxY = cr.y + cr.height;
+                    }
+                  }
+                }
+                if (hasSkin) {
+                  newBounds.set(sid, { x: minX, y: minY, width: maxX - minX, height: maxY - minY });
+                }
+              }
+            }
+            // Only bump version if bounds actually changed
+            if (newBounds.size > 0) {
+              const prev = deformedBoundsRef.current;
+              let changed = newBounds.size !== prev.size;
+              if (!changed) {
+                for (const [k, v] of newBounds) {
+                  const pv = prev.get(k);
+                  if (
+                    !pv ||
+                    pv.x !== v.x ||
+                    pv.y !== v.y ||
+                    pv.width !== v.width ||
+                    pv.height !== v.height
+                  ) {
+                    changed = true;
+                    break;
+                  }
+                }
+              }
+              if (changed) {
+                deformedBoundsRef.current = newBounds;
+                deformedBoundsVersionRef.current++;
+                setDeformedBoundsVersion(deformedBoundsVersionRef.current);
+              }
+            } else if (deformedBoundsRef.current.size > 0) {
+              deformedBoundsRef.current = newBounds;
+              deformedBoundsVersionRef.current++;
+              setDeformedBoundsVersion(deformedBoundsVersionRef.current);
+            }
+          }
         }
 
         // Render preview node (if drawing)

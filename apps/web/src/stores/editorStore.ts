@@ -11,6 +11,7 @@ import type {
   Color,
   Keyframe,
   Node,
+  PathNode,
   GroupNode,
   Timeline,
   EasingFunction,
@@ -355,6 +356,7 @@ export interface EditorStore {
 
   // Convert operations
   convertTextToPath: (sceneGraph: SceneGraphLike) => void;
+  convertShapeToPath: (sceneGraph: SceneGraphLike, nodeId: string) => string | null;
   outlineStroke: (sceneGraph: SceneGraphLike) => void;
 
   // Undo/Redo history
@@ -1908,6 +1910,65 @@ function createBooleanActions(
       if (newIds.length > 0) {
         set({ selectedNodeIds: new Set(newIds), isDirty: true });
       }
+    },
+
+    convertShapeToPath: (sceneGraph: SceneGraphLike, nodeId: string): string | null => {
+      const node = sceneGraph.getNode(nodeId);
+      if (!node) return null;
+      if (node.type !== 'rectangle' && node.type !== 'ellipse' && node.type !== 'polygon') {
+        return null;
+      }
+
+      const outline = getShapeOutlinePoints(node);
+      if (!outline || outline.points.length < 2) return null;
+
+      get().pushUndo(sceneGraph);
+
+      const newId = `s2p_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      const fills = 'fills' in node ? (node as any).fills : [];
+      const strokes = 'strokes' in node ? (node as any).strokes : [];
+
+      const pathNode: PathNode = {
+        id: newId,
+        name: `${node.name} (Path)`,
+        type: 'path',
+        parent: node.parent,
+        children: [],
+        transform: {
+          position: { ...node.transform.position },
+          rotation: node.transform.rotation,
+          scale: { ...node.transform.scale },
+          anchor: { x: 0.5, y: 0.5 },
+          skew: { ...node.transform.skew },
+        },
+        visible: node.visible,
+        locked: node.locked,
+        opacity: node.opacity,
+        blendMode: node.blendMode,
+        effects: node.effects ? [...node.effects] : undefined,
+        points: outline.points,
+        subpaths: outline.subpaths,
+        closed: outline.closed,
+        fills: fills.length > 0 ? structuredClone(fills) : [],
+        strokes: strokes.length > 0 ? structuredClone(strokes) : [],
+      };
+
+      // Find insertion point (preserve z-order)
+      const parentId = node.parent;
+      const siblings = parentId
+        ? (sceneGraph.getNode(parentId)?.children ?? [])
+        : sceneGraph.getRootNodes().map((n: Node) => n.id);
+      const insertIndex = siblings.indexOf(nodeId);
+
+      // Add path node, position it, remove original
+      sceneGraph.addNode(pathNode, parentId ?? undefined);
+      if (insertIndex >= 0) {
+        sceneGraph.moveNode(newId, parentId ?? null, insertIndex);
+      }
+      sceneGraph.removeNode(nodeId);
+
+      set({ selectedNodeIds: new Set([newId]), isDirty: true });
+      return newId;
     },
 
     outlineStroke: (sceneGraph: SceneGraphLike) => {

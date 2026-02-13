@@ -44,6 +44,7 @@ import {
 import earcut from 'earcut';
 import { getFontManager } from '../font/FontManager';
 import { textToSubpaths } from '../font/glyphConverter';
+import { getTextBounds } from '../font/textMetrics';
 import { deformVertices } from '@quar/rigging';
 import type { AffineTransform2D } from '@quar/rigging';
 
@@ -1521,8 +1522,26 @@ export class ShapeRenderer {
 
     const gl = this.renderer.context;
 
+    // Apply anchor offset for non-zero anchors (centers text geometry)
+    let adjustedMatrix = worldMatrix;
+    const ax = node.transform.anchor.x;
+    const ay = node.transform.anchor.y;
+    if (ax !== 0 || ay !== 0) {
+      const rawBounds = getTextBounds(
+        node.content,
+        node.fontFamily,
+        node.fontSize,
+        node.lineHeight,
+        node.letterSpacing,
+        node.textAlign
+      );
+      const offsetX = -(rawBounds.x + rawBounds.width * ax);
+      const offsetY = -(rawBounds.y + rawBounds.height * ay);
+      adjustedMatrix = mat3.translate(worldMatrix, offsetX, offsetY);
+    }
+
     // Set model matrix
-    const modelArray = mat3.toFloat32Array(worldMatrix);
+    const modelArray = mat3.toFloat32Array(adjustedMatrix);
     this.currentModelMatrix = modelArray;
     gl.uniformMatrix3fv(this.program.uniforms.u_model ?? null, false, modelArray);
 
@@ -3331,6 +3350,24 @@ export class ShapeRenderer {
     const font = fm.getFontOrFallback(node.fontFamily, node.fontWeight);
     if (!font) return;
 
+    // Apply anchor offset for non-zero anchors (centers text geometry)
+    let adjustedMatrix = worldMatrix;
+    const ax = node.transform.anchor.x;
+    const ay = node.transform.anchor.y;
+    if (ax !== 0 || ay !== 0) {
+      const rawBounds = getTextBounds(
+        node.content,
+        node.fontFamily,
+        node.fontSize,
+        node.lineHeight,
+        node.letterSpacing,
+        node.textAlign
+      );
+      const offsetX = -(rawBounds.x + rawBounds.width * ax);
+      const offsetY = -(rawBounds.y + rawBounds.height * ay);
+      adjustedMatrix = mat3.translate(worldMatrix, offsetX, offsetY);
+    }
+
     const result = textToSubpaths(node.content, font, node.fontSize, {
       textAlign: node.textAlign,
       lineHeight: node.lineHeight,
@@ -3359,7 +3396,7 @@ export class ShapeRenderer {
       writeOff += arr.length;
     }
 
-    this.renderNodeGhost(combined, node.fills, node.strokes, true, worldMatrix, colorOverride);
+    this.renderNodeGhost(combined, node.fills, node.strokes, true, adjustedMatrix, colorOverride);
   }
 
   private renderImageWithOverride(

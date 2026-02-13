@@ -32,6 +32,7 @@ export interface ToolContext {
   setEnteredGroupId?: (id: string | null) => void;
   onEnterTextEdit?: (nodeId: string) => void;
   getTessellatedVertices?: (nodeId: string) => Float32Array | null;
+  convertShapeToPath?: (nodeId: string) => string | null;
 }
 
 export interface ToolState {

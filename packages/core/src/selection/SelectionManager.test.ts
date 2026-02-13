@@ -5,7 +5,14 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { SelectionManager } from './SelectionManager';
 import { SceneGraph, createDefaultTransform } from '../SceneGraph';
-import type { RectangleNode, EllipseNode, PathNode, GroupNode, PolygonNode } from '@quar/types';
+import type {
+  RectangleNode,
+  EllipseNode,
+  PathNode,
+  GroupNode,
+  PolygonNode,
+  TextNode,
+} from '@quar/types';
 
 // ============================================================================
 // Test Helpers
@@ -465,6 +472,83 @@ describe('SelectionManager', () => {
       expect(result!.bounds.center.x).toBeCloseTo(100, 0);
       expect(result!.bounds.center.y).toBeCloseTo(200, 0);
       expect(result!.rotation).toBe(30);
+    });
+  });
+
+  // ==========================================================================
+  // Text Node Anchor Bounds (Bug 4 fix)
+  // ==========================================================================
+
+  describe('text node anchor-aware bounds', () => {
+    function createTestTextNode(
+      id: string,
+      x: number,
+      y: number,
+      anchorX: number = 0,
+      anchorY: number = 0
+    ): TextNode {
+      const transform = createDefaultTransform();
+      transform.position = { x, y };
+      transform.anchor = { x: anchorX, y: anchorY };
+
+      return {
+        id,
+        name: `Text ${id}`,
+        type: 'text',
+        parent: null,
+        children: [],
+        transform,
+        visible: true,
+        locked: false,
+        opacity: 1,
+        blendMode: 'normal',
+        content: 'Hello',
+        fontFamily: 'Inter',
+        fontSize: 24,
+        fontWeight: 400,
+        fontStyle: 'normal',
+        textAlign: 'left',
+        lineHeight: 1.2,
+        letterSpacing: 0,
+        fills: [{ type: 'solid', color: { r: 0, g: 0, b: 0, a: 1 }, opacity: 1, visible: true }],
+        strokes: [],
+      };
+    }
+
+    it('should center text bounds when anchor is (0.5, 0.5)', () => {
+      const text = createTestTextNode('t1', 100, 200, 0.5, 0.5);
+      sceneGraph.addNode(text);
+
+      const bounds = manager.getSelectionBounds(new Set(['t1']), sceneGraph);
+      expect(bounds).not.toBeNull();
+      // With anchor (0.5, 0.5), local bounds should be centered:
+      // x = -width * 0.5, y = -height * 0.5
+      // The world center should be at the node position (100, 200)
+      expect(bounds!.rect.x + bounds!.rect.width / 2).toBeCloseTo(100, 0);
+      expect(bounds!.rect.y + bounds!.rect.height / 2).toBeCloseTo(200, 0);
+    });
+
+    it('should use raw bounds when anchor is (0, 0)', () => {
+      const text = createTestTextNode('t2', 100, 200, 0, 0);
+      sceneGraph.addNode(text);
+
+      const bounds = manager.getSelectionBounds(new Set(['t2']), sceneGraph);
+      expect(bounds).not.toBeNull();
+      // With anchor (0, 0), raw bounds are used directly (baseline-left origin)
+      // Position should NOT be centered on the node position
+    });
+
+    it('should produce bounds for rotated text with centered anchor', () => {
+      const text = createTestTextNode('t3', 100, 200, 0.5, 0.5);
+      text.transform.rotation = 45;
+      sceneGraph.addNode(text);
+
+      const result = manager.getSelectionBoundsForDisplay(new Set(['t3']), sceneGraph);
+      expect(result).not.toBeNull();
+      // The rotation center should be at the node position
+      expect(result!.bounds.center.x).toBeCloseTo(100, 0);
+      expect(result!.bounds.center.y).toBeCloseTo(200, 0);
+      expect(result!.rotation).toBe(45);
     });
   });
 });

@@ -289,6 +289,28 @@ export class DirectSelectionTool extends BaseTool {
       return;
     }
 
+    // Click on a convertible shape that's already selected → convert to path for point editing
+    if (
+      hitNode &&
+      (hitNode.type === 'rectangle' || hitNode.type === 'ellipse' || hitNode.type === 'polygon') &&
+      this.context.getSelectedIds().has(hitNode.id) &&
+      this.context.convertShapeToPath
+    ) {
+      const newId = this.context.convertShapeToPath(hitNode.id);
+      if (newId) {
+        this.clearPointSelection();
+        // Select all points of the new path node for immediate editing
+        const newNode = this.context.sceneGraph.getNode(newId);
+        if (newNode && newNode.type === 'path') {
+          const allPts = getAllPoints(newNode);
+          for (let i = 0; i < allPts.length; i++) {
+            this.selectedPoints.push({ nodeId: newId, pointIndex: i });
+          }
+        }
+        return;
+      }
+    }
+
     // Click on a non-path node → select it
     if (hitNode && hitNode.type !== 'path') {
       this.clearPointSelection();
@@ -951,8 +973,8 @@ export class DirectSelectionTool extends BaseTool {
           ? primaryBounds
           : allBounds.reduce((a, b) => rect.union(a, b));
       }
-      case 'text':
-        return getTextBounds(
+      case 'text': {
+        const rawBounds = getTextBounds(
           node.content,
           node.fontFamily,
           node.fontSize,
@@ -960,6 +982,17 @@ export class DirectSelectionTool extends BaseTool {
           node.letterSpacing,
           node.textAlign
         );
+        const anchor = node.transform.anchor;
+        if (anchor.x !== 0 || anchor.y !== 0) {
+          return {
+            x: -rawBounds.width * anchor.x,
+            y: -rawBounds.height * anchor.y,
+            width: rawBounds.width,
+            height: rawBounds.height,
+          };
+        }
+        return rawBounds;
+      }
       case 'image': {
         const anchor = node.transform.anchor;
         return {

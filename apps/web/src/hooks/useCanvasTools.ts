@@ -396,6 +396,9 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
       getTessellatedVertices: (nodeId: string) => {
         return getTessellatedVertices?.(nodeId) ?? null;
       },
+      convertShapeToPath: (nodeId: string) => {
+        return useEditorStore.getState().convertShapeToPath(sceneGraphRef.current, nodeId);
+      },
     });
 
     // Set the active tool from EditorStore (ToolManager defaults to 'selection')
