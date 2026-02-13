@@ -10,6 +10,7 @@ import {
   generateStrokeOutlineVertices,
   createCornerPoint,
   getPathBounds,
+  applyCornerRadius,
 } from './pathUtils';
 
 /**
@@ -49,8 +50,11 @@ export function outlineStroke(
   for (const contour of allContours) {
     if (contour.length < 2) continue;
 
+    // Apply per-vertex corner radius before tessellation
+    const resolvedContour = applyCornerRadius(contour, outline.closed);
+
     // Tessellate the contour to line segments
-    const vertices = tessellatePathToVertices(contour, outline.closed, 0.5);
+    const vertices = tessellatePathToVertices(resolvedContour, outline.closed, 0.5);
     const numVertices = vertices.length / 2;
     if (numVertices < 2) continue;
 
