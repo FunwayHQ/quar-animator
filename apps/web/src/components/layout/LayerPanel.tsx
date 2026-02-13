@@ -427,15 +427,10 @@ export function LayerPanel() {
     [setSelection, toggleSelection, selectRange, sceneGraph]
   );
 
-  const handleDoubleClick = useCallback(
-    (id: string) => {
-      const node = sceneGraph.getNode(id);
-      if (node && node.type === 'group') {
-        enterGroup(id);
-      }
-    },
-    [sceneGraph, enterGroup]
-  );
+  const handleDoubleClick = useCallback((id: string) => {
+    // Double-click always starts rename (for any node type)
+    setRenamingNodeId(id);
+  }, []);
 
   const pushUndo = useEditorStore((state) => state.pushUndo);
 

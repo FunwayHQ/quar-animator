@@ -170,7 +170,11 @@ function getNodeSize(node: Node, sceneGraph?: SceneGraph): { width: number; heig
       if (!sceneGraph) return { width: 0, height: 0 };
       const childIds = new Set(sceneGraph.getDescendants(node.id).map((n: Node) => n.id));
       const bounds = groupBoundsManager.getSelectionBounds(childIds, sceneGraph);
-      if (bounds) return { width: bounds.rect.width, height: bounds.rect.height };
+      if (bounds) {
+        const gsx = node.transform.scale?.x ?? 1;
+        const gsy = node.transform.scale?.y ?? 1;
+        return { width: bounds.rect.width * gsx, height: bounds.rect.height * gsy };
+      }
       return { width: 0, height: 0 };
     }
     default:
@@ -245,7 +249,8 @@ function isSizeEditable(node: Node): boolean {
     node.type === 'ellipse' ||
     node.type === 'polygon' ||
     node.type === 'path' ||
-    node.type === 'image'
+    node.type === 'image' ||
+    node.type === 'group'
   );
 }
 
@@ -259,6 +264,7 @@ function getSizePropertyPaths(node: Node): { w: string; h: string } {
     case 'polygon':
     case 'path':
     case 'text':
+    case 'group':
       return { w: 'transform.scale.x', h: 'transform.scale.y' };
     default:
       return { w: 'width', h: 'height' };
@@ -510,6 +516,26 @@ export function PropertiesPanel() {
             addKeyframeAtFrame(selectedId, 'transform.scale.x', currentFrame, scaleX);
             addKeyframeAtFrame(selectedId, 'transform.scale.y', currentFrame, scaleY);
           }
+        }
+      } else if (nodeToUpdate.type === 'group') {
+        // Groups scale via transform.scale relative to base bounds
+        const currentSize = getNodeSize(nodeToUpdate, sceneGraph);
+        const curSx = nodeToUpdate.transform.scale?.x ?? 1;
+        const curSy = nodeToUpdate.transform.scale?.y ?? 1;
+        // Compute base (unscaled) size
+        const baseW = curSx !== 0 ? currentSize.width / curSx : 1;
+        const baseH = curSy !== 0 ? currentSize.height / curSy : 1;
+        const scaleX = baseW > 0 ? w / baseW : curSx;
+        const scaleY = baseH > 0 ? h / baseH : curSy;
+        sceneGraph.updateNode(selectedId, {
+          transform: {
+            ...nodeToUpdate.transform,
+            scale: { x: scaleX, y: scaleY },
+          },
+        });
+        if (shouldKeyframe(autoKeyframe, selectedId, 'transform.scale.x')) {
+          addKeyframeAtFrame(selectedId, 'transform.scale.x', currentFrame, scaleX);
+          addKeyframeAtFrame(selectedId, 'transform.scale.y', currentFrame, scaleY);
         }
       }
     },
@@ -1351,7 +1377,7 @@ export function PropertiesPanel() {
                     type="text"
                     className={styles.input}
                     value={fmt1(size.width)}
-                    readOnly={!isSizeEditable(node) || isGroup}
+                    readOnly={!isSizeEditable(node)}
                     onChange={(e) => handleSizeChange('width', e.target.value)}
                     {...numericInputProps(
                       () => Math.round(size.width),
@@ -1359,30 +1385,28 @@ export function PropertiesPanel() {
                     )}
                   />
                 </div>
-                {!isGroup && (
-                  <button
-                    className={`${styles.lockButton} ${aspectRatioLocked ? styles.lockButtonActive : ''}`}
-                    onClick={toggleAspectRatioLock}
-                    title={aspectRatioLocked ? 'Unlock aspect ratio' : 'Lock aspect ratio'}
-                    aria-label={aspectRatioLocked ? 'Unlock aspect ratio' : 'Lock aspect ratio'}
-                    data-testid="aspect-ratio-lock"
-                  >
-                    {aspectRatioLocked ? <Lock size={12} /> : <Unlock size={12} />}
-                  </button>
-                )}
+                <button
+                  className={`${styles.lockButton} ${aspectRatioLocked ? styles.lockButtonActive : ''}`}
+                  onClick={toggleAspectRatioLock}
+                  title={aspectRatioLocked ? 'Unlock aspect ratio' : 'Lock aspect ratio'}
+                  aria-label={aspectRatioLocked ? 'Unlock aspect ratio' : 'Lock aspect ratio'}
+                  data-testid="aspect-ratio-lock"
+                >
+                  {aspectRatioLocked ? <Lock size={12} /> : <Unlock size={12} />}
+                </button>
                 <div className={styles.inputGroup}>
                   <ScrubLabel
                     onScrubStart={handleScrubStart}
                     label="H"
                     value={Math.round(size.height) || 0}
-                    onChange={isGroup ? noop : (v) => handleSizeChange('height', String(v))}
+                    onChange={(v) => handleSizeChange('height', String(v))}
                     min={1}
                   />
                   <input
                     type="text"
                     className={styles.input}
                     value={fmt1(size.height)}
-                    readOnly={!isSizeEditable(node) || isGroup}
+                    readOnly={!isSizeEditable(node)}
                     onChange={(e) => handleSizeChange('height', e.target.value)}
                     {...numericInputProps(
                       () => Math.round(size.height),

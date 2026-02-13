@@ -885,6 +885,8 @@ export class SelectionTool extends BaseTool {
       } else if (node.type === 'image') {
         state.width = node.width;
         state.height = node.height;
+      } else if (node.type === 'group') {
+        state.scale = { ...node.transform.scale };
       }
 
       states.set(id, state);
@@ -1044,6 +1046,18 @@ export class SelectionTool extends BaseTool {
           transform: { ...node.transform, position: newPosition },
           width: newWidth,
           height: newHeight,
+        });
+      } else if (node.type === 'group' && initialState.scale !== undefined) {
+        // For groups, apply non-uniform scaling via transform scale
+        const newScaleX = Math.max(0.01, initialState.scale.x * scaleX);
+        const newScaleY = Math.max(0.01, initialState.scale.y * scaleY);
+
+        this.context.sceneGraph.updateNode(id, {
+          transform: {
+            ...node.transform,
+            position: newPosition,
+            scale: { x: newScaleX, y: newScaleY },
+          },
         });
       }
     }

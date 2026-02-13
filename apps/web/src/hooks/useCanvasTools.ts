@@ -257,11 +257,20 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
         } else if (node.type === 'ellipse') {
           if (shouldKf(nodeId, 'radiusX')) addKf(nodeId, 'radiusX', frame, node.radiusX);
           if (shouldKf(nodeId, 'radiusY')) addKf(nodeId, 'radiusY', frame, node.radiusY);
-        } else if (node.type === 'polygon') {
+        } else if (
+          node.type === 'polygon' ||
+          node.type === 'path' ||
+          node.type === 'text' ||
+          node.type === 'group'
+        ) {
           if (shouldKf(nodeId, 'transform.scale.x'))
             addKf(nodeId, 'transform.scale.x', frame, node.transform.scale.x);
           if (shouldKf(nodeId, 'transform.scale.y'))
             addKf(nodeId, 'transform.scale.y', frame, node.transform.scale.y);
+        } else if (node.type === 'image') {
+          if (shouldKf(nodeId, 'width')) addKf(nodeId, 'width', frame, (node as ImageNode).width);
+          if (shouldKf(nodeId, 'height'))
+            addKf(nodeId, 'height', frame, (node as ImageNode).height);
         }
       } else if (type === 'rotate') {
         if (shouldKf(nodeId, 'transform.rotation'))
