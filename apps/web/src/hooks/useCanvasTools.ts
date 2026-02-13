@@ -540,7 +540,14 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
       }
 
       // Transition: value → null (recording stopped)
+      // Capture and clear prev IDs BEFORE calling saveMorphTargetOffsets to
+      // prevent re-entrant infinite recursion (set() triggers subscribe again)
       if (!smartBoneRecordingActionId && prevActionId && prevTargetId) {
+        const savedActionId = prevActionId;
+        const savedTargetId = prevTargetId;
+        prevActionId = null;
+        prevTargetId = null;
+
         const pmTool = toolManagerRef.current?.getTool<PointMagnetTool>('point-magnet');
         if (pmTool) {
           // Extract, compact, and save working offsets
@@ -552,11 +559,12 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
               compacted[nodeId] = clean;
             }
           }
-          useEditorStore.getState().saveMorphTargetOffsets(prevActionId, prevTargetId, compacted);
+          useEditorStore.getState().saveMorphTargetOffsets(savedActionId, savedTargetId, compacted);
 
           // Clear the tool's working offsets
           pmTool.setWorkingOffsets(new Map());
         }
+        return;
       }
 
       prevActionId = smartBoneRecordingActionId;
