@@ -290,6 +290,24 @@ describe('outlineStroke', () => {
       expect(result!.subpaths!.length).toBeGreaterThanOrEqual(1);
     });
 
+    it('first point of closed contour has handleIn for smooth closing segment', () => {
+      // A curved closed path where the closing segment must be smooth
+      const points: PathPoint[] = [
+        { ...makeCorner(-50, -50), cornerRadius: 20 },
+        { ...makeCorner(50, -50), cornerRadius: 20 },
+        { ...makeCorner(50, 50), cornerRadius: 20 },
+        { ...makeCorner(-50, 50), cornerRadius: 20 },
+      ];
+      const result = outlineStroke(makeClosedPath(points, 4), 0, generateId);
+      expect(result).not.toBeNull();
+
+      // The first point of the outer contour should have handleIn
+      // (transferred from the closing point during curve fitting)
+      // so the closing segment is a smooth curve, not a straight line
+      const firstPoint = result!.points[0];
+      expect(firstPoint.handleIn).not.toBeNull();
+    });
+
     it('covers all edges of a closed square path', () => {
       const points = [
         makeCorner(-50, -40),

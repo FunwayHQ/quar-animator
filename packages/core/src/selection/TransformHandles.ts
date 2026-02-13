@@ -14,12 +14,11 @@ import { vec2 } from '../math';
 // Cursor Mapping
 // ============================================================================
 
-// Inline SVG rotate cursor (24x24 curved arrow, hotspot 12,12)
-// Four variants rotated for each corner
+// Inline SVG rotate cursor (32x32 refined curved arrow, hotspot 16,16)
+// Four variants rotated for each corner — clean arc with filled arrowhead
 function makeRotateCursor(rotateDeg: number): string {
-  // White curved arrow with 1px black stroke outline — visible on dark backgrounds
-  const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none'><g transform='rotate(${rotateDeg} 12 12)'><path d='M7.5 3.5A8.5 8.5 0 0 1 20 12' stroke='black' stroke-width='3' stroke-linecap='round' fill='none'/><path d='M7.5 3.5A8.5 8.5 0 0 1 20 12' stroke='white' stroke-width='1.5' stroke-linecap='round' fill='none'/><polyline points='4.5,4.5 7.5,3.5 8.5,6.5' stroke='black' stroke-width='3' stroke-linecap='round' stroke-linejoin='round' fill='none'/><polyline points='4.5,4.5 7.5,3.5 8.5,6.5' stroke='white' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round' fill='none'/></g></svg>`;
-  return `url("data:image/svg+xml,${encodeURIComponent(svg)}") 12 12, pointer`;
+  const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32' fill='none'><g transform='rotate(${rotateDeg} 16 16)'><path d='M12.5 6.5C8.9 9 7 12.5 7.2 16.5' stroke='%23000' stroke-opacity='0.45' stroke-width='3' stroke-linecap='round'/><path d='M12.5 6.5C8.9 9 7 12.5 7.2 16.5' stroke='white' stroke-width='1.5' stroke-linecap='round'/><path d='M14.8 9.3L12.2 6.2L9.2 8.5' stroke='%23000' stroke-opacity='0.45' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/><path d='M14.8 9.3L12.2 6.2L9.2 8.5' stroke='white' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/></g></svg>`;
+  return `url("data:image/svg+xml,${encodeURIComponent(svg)}") 16 16, pointer`;
 }
 
 // Note: World coordinates use Y-up, so "top" in code is visually at the bottom
@@ -34,10 +33,10 @@ const HANDLE_CURSORS: Record<HandlePosition, string> = {
   'bottom-left': 'nwse-resize', // Visually top-left
   left: 'ew-resize',
   // Rotation zones: cursor rotated per corner (world Y-up → visual positions swapped)
-  'rotate-top-left': makeRotateCursor(180),     // Visually bottom-left
-  'rotate-top-right': makeRotateCursor(270),     // Visually bottom-right
-  'rotate-bottom-left': makeRotateCursor(90),    // Visually top-left
-  'rotate-bottom-right': makeRotateCursor(0),    // Visually top-right
+  'rotate-top-left': makeRotateCursor(180), // Visually bottom-left
+  'rotate-top-right': makeRotateCursor(270), // Visually bottom-right
+  'rotate-bottom-left': makeRotateCursor(90), // Visually top-left
+  'rotate-bottom-right': makeRotateCursor(0), // Visually top-right
 };
 
 // Corner positions for rotation zone detection
@@ -186,8 +185,8 @@ export class TransformHandles {
 
     // 2. Check rotation zones — near a corner but outside the bounds rect
     const rotationRadius = this.config.rotationZoneRadius;
-    const cornerHandles = handles.filter(h =>
-      CORNER_POSITIONS.includes(h.position as typeof CORNER_POSITIONS[number])
+    const cornerHandles = handles.filter((h) =>
+      CORNER_POSITIONS.includes(h.position as (typeof CORNER_POSITIONS)[number])
     );
 
     for (const corner of cornerHandles) {
@@ -209,8 +208,8 @@ export class TransformHandles {
    * Uses the corner handle positions to define the rectangle in screen space
    */
   private isOutsideBounds(screenPoint: Vector2, handles: TransformHandle[]): boolean {
-    const tl = handles.find(h => h.position === 'top-left')!;
-    const br = handles.find(h => h.position === 'bottom-right')!;
+    const tl = handles.find((h) => h.position === 'top-left')!;
+    const br = handles.find((h) => h.position === 'bottom-right')!;
 
     // In screen space, determine the axis-aligned bounding rect from corners
     const minX = Math.min(tl.screenPosition.x, br.screenPosition.x);
@@ -219,10 +218,7 @@ export class TransformHandles {
     const maxY = Math.max(tl.screenPosition.y, br.screenPosition.y);
 
     return (
-      screenPoint.x < minX ||
-      screenPoint.x > maxX ||
-      screenPoint.y < minY ||
-      screenPoint.y > maxY
+      screenPoint.x < minX || screenPoint.x > maxX || screenPoint.y < minY || screenPoint.y > maxY
     );
   }
 

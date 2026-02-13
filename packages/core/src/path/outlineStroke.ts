@@ -46,8 +46,11 @@ function fitVerticesToCurve(
   const pathPoints = curvesToPathPoints(curves);
 
   if (closed && pathPoints.length >= 2) {
-    // Remove duplicate closing point — path is closed implicitly
-    pathPoints.pop();
+    // Remove duplicate closing point — path is closed implicitly.
+    // Transfer its handleIn to the first point so the closing segment
+    // renders as a smooth curve (not a straight line).
+    const closingPoint = pathPoints.pop()!;
+    pathPoints[0].handleIn = closingPoint.handleIn;
   }
 
   return pathPoints;
