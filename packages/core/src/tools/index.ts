@@ -16,4 +16,5 @@ export * from './TextTool';
 export * from './BoneTool';
 export * from './WeightPaintTool';
 export * from './PointMagnetTool';
+export * from './ArtboardTool';
 export * from './ToolManager';

@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { SceneGraphProvider, useSceneGraph } from '../../contexts/SceneGraphContext';
 import { createDefaultTransform } from '@quar/core';
 import type { SceneGraph } from '@quar/core';
-import type { RectangleNode, EllipseNode, GroupNode } from '@quar/types';
+import type { RectangleNode, EllipseNode, GroupNode, ArtboardNode } from '@quar/types';
 import { LayerPanel } from './LayerPanel';
 import { useEditorStore } from '../../stores/editorStore';
 import type { ReactNode } from 'react';
@@ -950,6 +950,68 @@ describe('LayerPanel', () => {
       expect(screen.getByText('IK Target (Bone1)')).toBeInTheDocument();
       // Check for ⊕ icon
       expect(screen.getByText('\u2295')).toBeInTheDocument();
+    });
+  });
+
+  // ==========================================================================
+  // Artboard icon
+  // ==========================================================================
+
+  describe('artboard layer', () => {
+    function createTestArtboard(id: string, name: string): ArtboardNode {
+      return {
+        id,
+        name,
+        type: 'artboard',
+        parent: null,
+        children: [],
+        transform: createDefaultTransform(),
+        visible: true,
+        locked: false,
+        opacity: 1,
+        blendMode: 'normal',
+        width: 1920,
+        height: 1080,
+        backgroundColor: { r: 255, g: 255, b: 255, a: 1 },
+        clipContent: true,
+      };
+    }
+
+    it('shows artboard icon (⬜) for artboard nodes', () => {
+      let sg: SceneGraph | null = null;
+      render(
+        <SceneGraphProvider>
+          <SceneGraphCapture onCapture={(s) => (sg = s)} />
+          <LayerPanel />
+        </SceneGraphProvider>
+      );
+
+      act(() => {
+        sg!.addNode(createTestArtboard('art1', 'My Artboard'));
+      });
+
+      // ⬜ is U+2B1C
+      expect(screen.getByText('\u2B1C')).toBeInTheDocument();
+      expect(screen.getByText('My Artboard')).toBeInTheDocument();
+    });
+
+    it('shows artboard children indented under it', () => {
+      let sg: SceneGraph | null = null;
+      render(
+        <SceneGraphProvider>
+          <SceneGraphCapture onCapture={(s) => (sg = s)} />
+          <LayerPanel />
+        </SceneGraphProvider>
+      );
+
+      act(() => {
+        sg!.addNode(createTestArtboard('art1', 'Canvas'));
+        sg!.addNode(createTestRect('r1', 'Child Rect'));
+        sg!.moveNode('r1', 'art1');
+      });
+
+      expect(screen.getByText('Canvas')).toBeInTheDocument();
+      expect(screen.getByText('Child Rect')).toBeInTheDocument();
     });
   });
 });

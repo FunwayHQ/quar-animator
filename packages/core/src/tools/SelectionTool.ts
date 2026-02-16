@@ -131,6 +131,15 @@ export class SelectionTool extends BaseTool {
         );
 
         if (hitHandle?.startsWith('rotate-')) {
+          // Prevent rotation on artboard nodes
+          const allArtboards = [...selectedIds].every((id) => {
+            const n = this.context.sceneGraph.getNode(id);
+            return n?.type === 'artboard';
+          });
+          if (allArtboards) {
+            // Skip rotation — artboards cannot be rotated
+            return;
+          }
           // Start rotation operation
           this.context.onTransformStart?.();
           this.mode = 'rotating';
@@ -177,8 +186,12 @@ export class SelectionTool extends BaseTool {
     const enteredGroupId = this.context.getEnteredGroupId?.() ?? null;
     const hitNode = rawHit ? this.resolveHitToScope(rawHit) : null;
 
-    // Double-click on a group to enter it
-    if (event.clickCount === 2 && hitNode && hitNode.type === 'group') {
+    // Double-click on a group or artboard to enter it
+    if (
+      event.clickCount === 2 &&
+      hitNode &&
+      (hitNode.type === 'group' || hitNode.type === 'artboard')
+    ) {
       this.context.setEnteredGroupId?.(hitNode.id);
       return;
     }
@@ -310,6 +323,8 @@ export class SelectionTool extends BaseTool {
     const selectedIds = this.context.getSelectedIds();
 
     if (this.mode === 'moving' && this.moveStartPositions.size > 0) {
+      // Auto-reparent: check if moved nodes should be placed in/out of artboards
+      this.autoReparentAfterMove(selectedIds);
       // Move completed - notify for auto-keyframe
       this.context.onTransformComplete?.(selectedIds, 'move');
     } else if (this.mode === 'resizing') {
@@ -647,6 +662,16 @@ export class SelectionTool extends BaseTool {
         localBounds = { x: 0, y: -halfH, width: node.length, height: halfH * 2 };
         break;
       }
+      case 'artboard': {
+        const anchor = transform.anchor;
+        localBounds = {
+          x: -node.width * anchor.x,
+          y: -node.height * anchor.y,
+          width: node.width,
+          height: node.height,
+        };
+        break;
+      }
       case 'ik-target':
       case 'vitruvian': {
         // IK targets and vitruvian nodes are small icons — use a fixed screen-size hitbox
@@ -888,6 +913,9 @@ export class SelectionTool extends BaseTool {
         state.height = node.height;
       } else if (node.type === 'group') {
         state.scale = { ...node.transform.scale };
+      } else if (node.type === 'artboard') {
+        state.width = node.width;
+        state.height = node.height;
       }
 
       states.set(id, state);
@@ -1060,6 +1088,19 @@ export class SelectionTool extends BaseTool {
             scale: { x: newScaleX, y: newScaleY },
           },
         });
+      } else if (
+        node.type === 'artboard' &&
+        initialState.width !== undefined &&
+        initialState.height !== undefined
+      ) {
+        const newWidth = Math.max(1, initialState.width * scaleX);
+        const newHeight = Math.max(1, initialState.height * scaleY);
+
+        this.context.sceneGraph.updateNode(id, {
+          transform: { ...node.transform, position: newPosition },
+          width: newWidth,
+          height: newHeight,
+        });
       }
     }
   }
@@ -1208,6 +1249,102 @@ export class SelectionTool extends BaseTool {
     }
 
     return { x, y, width, height };
+  }
+
+  /**
+   * Find the deepest artboard containing a world-space point.
+   */
+  private findArtboardAtPoint(worldPoint: Vector2): Node | null {
+    const sg = this.context.sceneGraph;
+    let deepest: Node | null = null;
+    let deepestDepth = -1;
+
+    const visit = (nodeId: string, depth: number): void => {
+      const node = sg.getNode(nodeId);
+      if (!node || !node.visible || node.type !== 'artboard') return;
+      const wt = sg.getWorldTransform(nodeId);
+      const hw = node.width / 2;
+      const hh = node.height / 2;
+      // Check if point is inside artboard bounds (inverse transform)
+      const inv = mat3.invert(wt);
+      if (!inv) return;
+      const local = mat3.transformPoint(inv, worldPoint);
+      if (local.x >= -hw && local.x <= hw && local.y >= -hh && local.y <= hh) {
+        if (depth > deepestDepth) {
+          deepest = node;
+          deepestDepth = depth;
+        }
+        // Check nested artboards
+        for (const childId of node.children) {
+          visit(childId, depth + 1);
+        }
+      }
+    };
+
+    for (const rootNode of sg.getRootNodes()) {
+      visit(rootNode.id, 0);
+    }
+    return deepest;
+  }
+
+  /**
+   * Auto-reparent moved nodes into/out of artboards based on position.
+   */
+  private autoReparentAfterMove(selectedIds: Set<string>): void {
+    const sg = this.context.sceneGraph;
+
+    for (const id of selectedIds) {
+      const node = sg.getNode(id);
+      if (!node) continue;
+      // Don't reparent artboards themselves
+      if (node.type === 'artboard') continue;
+
+      // Compute world center of node
+      const wt = sg.getWorldTransform(id);
+      const center = mat3.transformPoint(wt, { x: 0, y: 0 });
+
+      const targetArtboard = this.findArtboardAtPoint(center);
+      const currentParent = node.parent;
+
+      // Determine target parent ID (null = root)
+      const targetParentId = targetArtboard?.id ?? null;
+
+      // Skip if already in the correct parent, or if the target is the node itself
+      if (targetParentId === currentParent) continue;
+      if (targetParentId === id) continue;
+
+      // Don't reparent into a node that's also being moved
+      if (targetParentId && selectedIds.has(targetParentId)) continue;
+
+      // Convert world position to new parent's local coords
+      const worldPos = node.transform.position;
+      let localPos = worldPos;
+
+      if (node.parent) {
+        // Current position is local — convert to world first
+        const parentWorld = sg.getWorldTransform(node.parent);
+        const wp = mat3.transformPoint(parentWorld, worldPos);
+        if (targetParentId) {
+          const newParentWorld = sg.getWorldTransform(targetParentId);
+          const inv = mat3.invert(newParentWorld);
+          localPos = inv ? mat3.transformPoint(inv, wp) : wp;
+        } else {
+          localPos = wp;
+        }
+      } else {
+        // Currently at root — worldPos is already world
+        if (targetParentId) {
+          const newParentWorld = sg.getWorldTransform(targetParentId);
+          const inv = mat3.invert(newParentWorld);
+          localPos = inv ? mat3.transformPoint(inv, worldPos) : worldPos;
+        }
+      }
+
+      sg.moveNode(id, targetParentId);
+      sg.updateNode(id, {
+        transform: { ...node.transform, position: localPos },
+      });
+    }
   }
 
   /**

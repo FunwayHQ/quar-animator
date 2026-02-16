@@ -182,6 +182,25 @@ export class SelectionManager {
    * Uses world-transform-based AABB for all leaf nodes.
    */
   private collectNodeBounds(node: Node, sceneGraph: SceneGraph, out: Rect[]): void {
+    if (node.type === 'artboard') {
+      // Artboard uses its own dimensions, not descendant bounds
+      if (node.parent) {
+        // Nested artboard: use full world transform
+        const worldTransform = sceneGraph.getWorldTransform(node.id);
+        const localBounds = this.getLocalBounds(node);
+        if (localBounds) {
+          out.push(transformBoundsToWorld(localBounds, worldTransform));
+        }
+      } else {
+        // Root artboard: use getNodeBounds (excludes anchor from transform to
+        // avoid double-counting since getLocalBounds already applies anchor)
+        const nodeBounds = this.getNodeBounds(node);
+        if (nodeBounds) {
+          out.push(nodeBounds);
+        }
+      }
+      return;
+    }
     if (node.type === 'group') {
       const descendants = sceneGraph.getDescendants(node.id);
       for (const desc of descendants) {
@@ -317,6 +336,15 @@ export class SelectionManager {
         // Bone anchor is (0,0), extends along +X for length
         const halfH = Math.max(node.length * 0.15, 4);
         return { x: 0, y: -halfH, width: node.length, height: halfH * 2 };
+      }
+      case 'artboard': {
+        const anchor = node.transform.anchor;
+        return {
+          x: -node.width * anchor.x,
+          y: -node.height * anchor.y,
+          width: node.width,
+          height: node.height,
+        };
       }
       default:
         return null;

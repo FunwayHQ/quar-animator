@@ -181,6 +181,22 @@ const icons = {
       <path d="M17 10c.7-.7 1.69 0 2.5 0a2.5 2.5 0 1 0 0-5 .5.5 0 0 1-.5-.5 2.5 2.5 0 1 0-5 0c0 .81.7 1.8 0 2.5l-7 7c-.7.7-1.69 0-2.5 0a2.5 2.5 0 0 0 0 5c.28 0 .5.22.5.5a2.5 2.5 0 1 0 5 0c0-.81-.7-1.8 0-2.5Z" />
     </svg>
   ),
+  artboard: (
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+    >
+      <rect x="3" y="3" width="18" height="18" />
+      <line x1="3" y1="3" x2="1" y2="1" />
+      <line x1="21" y1="3" x2="23" y2="1" />
+      <line x1="3" y1="21" x2="1" y2="23" />
+      <line x1="21" y1="21" x2="23" y2="23" />
+    </svg>
+  ),
 };
 
 const tools: Array<{ type: ToolType; icon: React.ReactNode; label: string; shortcut: string }> = [
@@ -200,6 +216,7 @@ const tools: Array<{ type: ToolType; icon: React.ReactNode; label: string; short
   { type: 'brush', icon: icons.brush, label: 'Brush', shortcut: 'B' },
   { type: 'eraser', icon: icons.eraser, label: 'Eraser', shortcut: 'E' },
   { type: 'text', icon: icons.text, label: 'Text', shortcut: 'T' },
+  { type: 'artboard', icon: icons.artboard, label: 'Artboard', shortcut: 'F' },
   { type: 'bone', icon: icons.bone, label: 'Bone', shortcut: 'J' },
 ];
 

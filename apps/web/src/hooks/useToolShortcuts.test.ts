@@ -90,6 +90,14 @@ describe('useToolShortcuts', () => {
 
       expect(useEditorStore.getState().activeTool).toBe('pen');
     });
+
+    it('should switch to artboard tool with F', () => {
+      renderHook(() => useToolShortcuts());
+
+      dispatchKeyDown('f');
+
+      expect(useEditorStore.getState().activeTool).toBe('artboard');
+    });
   });
 
   // ==========================================================================
@@ -296,6 +304,10 @@ describe('getToolShortcut', () => {
 
   it('should return P for pen', () => {
     expect(getToolShortcut('pen')).toBe('P');
+  });
+
+  it('should return F for artboard', () => {
+    expect(getToolShortcut('artboard')).toBe('F');
   });
 
   it('should return null for brush (no shortcut)', () => {

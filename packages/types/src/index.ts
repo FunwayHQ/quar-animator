@@ -177,7 +177,8 @@ export type NodeType =
   | 'image'
   | 'bone'
   | 'ik-target'
-  | 'vitruvian';
+  | 'vitruvian'
+  | 'artboard';
 
 export interface BaseNode {
   id: string;
@@ -336,6 +337,14 @@ export interface VitruvianNode extends BaseNode {
   controllerId: string;
 }
 
+export interface ArtboardNode extends BaseNode {
+  type: 'artboard';
+  width: number;
+  height: number;
+  backgroundColor: Color;
+  clipContent: boolean;
+}
+
 // ============================================================================
 // IK Chain Types
 // ============================================================================
@@ -389,7 +398,8 @@ export type Node =
   | ImageNode
   | BoneNode
   | IKTargetNode
-  | VitruvianNode;
+  | VitruvianNode
+  | ArtboardNode;
 
 /** Node types that can have skin bindings */
 export type SkinnableNode = RectangleNode | EllipseNode | PolygonNode | PathNode | ImageNode;
@@ -615,7 +625,8 @@ export type ToolType =
   | 'bone'
   | 'weight-paint'
   | 'point-magnet'
-  | 'camera';
+  | 'camera'
+  | 'artboard';
 
 export interface CanvasPointerEvent {
   screenPosition: Vector2;

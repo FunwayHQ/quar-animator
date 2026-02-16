@@ -32,6 +32,7 @@ import { GradientHandleOverlay } from '../canvas/GradientHandleOverlay';
 import { CanvasRuler } from '../canvas/CanvasRuler';
 import { TextEditOverlay } from '../canvas/TextEditOverlay';
 import { BoneOverlay } from '../canvas/BoneOverlay';
+import { ArtboardOverlay } from '../canvas/ArtboardOverlay';
 import { WeightPaintOverlay } from '../canvas/WeightPaintOverlay';
 import { PointMagnetOverlay } from '../canvas/PointMagnetOverlay';
 import { ContextMenu } from '../common/ContextMenu';
@@ -318,7 +319,7 @@ export function Canvas() {
     const collectBones = (nodes: Node[]) => {
       for (const node of nodes) {
         if (node.type === 'bone') {
-          bones.push(node as import('@quar/types').BoneNode);
+          bones.push(node);
         }
         if (node.children.length > 0) {
           const children = node.children
@@ -342,6 +343,19 @@ export function Canvas() {
       }
     });
     return targets;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sceneGraphVersion]);
+
+  // Collect artboard nodes for overlay
+  const artboardNodes = useMemo(() => {
+    if (!sceneGraphRef.current) return [];
+    const artboards: import('@quar/types').ArtboardNode[] = [];
+    sceneGraphRef.current.traverse((node) => {
+      if (node.type === 'artboard') {
+        artboards.push(node as import('@quar/types').ArtboardNode);
+      }
+    });
+    return artboards;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sceneGraphVersion]);
 
@@ -1934,6 +1948,14 @@ export function Canvas() {
           pathNodes={directSelectionPathNodes}
           imageNodes={directSelectionImageNodes}
           selectedPoints={directSelectionPoints}
+          camera={cameraRef.current}
+          sceneGraph={sceneGraph}
+        />
+      )}
+      {artboardNodes.length > 0 && (
+        <ArtboardOverlay
+          artboardNodes={artboardNodes}
+          selectedNodeIds={selectedNodeIds}
           camera={cameraRef.current}
           sceneGraph={sceneGraph}
         />

@@ -251,7 +251,7 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
         if (shouldKf(nodeId, 'transform.position.y'))
           addKf(nodeId, 'transform.position.y', frame, node.transform.position.y);
 
-        if (node.type === 'rectangle') {
+        if (node.type === 'rectangle' || node.type === 'artboard') {
           if (shouldKf(nodeId, 'width')) addKf(nodeId, 'width', frame, node.width);
           if (shouldKf(nodeId, 'height')) addKf(nodeId, 'height', frame, node.height);
         } else if (node.type === 'ellipse') {

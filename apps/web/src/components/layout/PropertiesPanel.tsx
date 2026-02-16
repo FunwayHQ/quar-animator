@@ -9,6 +9,7 @@ import type {
   ImageNode,
   GroupNode,
   BoneNode,
+  ArtboardNode,
   Color,
   Gradient,
   Fill,
@@ -171,6 +172,9 @@ function getNodeSize(node: Node, sceneGraph?: SceneGraph): { width: number; heig
       const imgNode = node;
       return { width: imgNode.width, height: imgNode.height };
     }
+    case 'artboard': {
+      return { width: node.width, height: node.height };
+    }
     case 'group': {
       if (!sceneGraph) return { width: 0, height: 0 };
       const childIds = new Set(sceneGraph.getDescendants(node.id).map((n: Node) => n.id));
@@ -255,7 +259,8 @@ function isSizeEditable(node: Node): boolean {
     node.type === 'polygon' ||
     node.type === 'path' ||
     node.type === 'image' ||
-    node.type === 'group'
+    node.type === 'group' ||
+    node.type === 'artboard'
   );
 }
 
@@ -263,6 +268,7 @@ function getSizePropertyPaths(node: Node): { w: string; h: string } {
   switch (node.type) {
     case 'rectangle':
     case 'image':
+    case 'artboard':
       return { w: 'width', h: 'height' };
     case 'ellipse':
       return { w: 'radiusX', h: 'radiusY' };
@@ -469,7 +475,11 @@ export function PropertiesPanel() {
   const applySize = useCallback(
     (nodeToUpdate: Node, w: number, h: number) => {
       if (!selectedId) return;
-      if (nodeToUpdate.type === 'rectangle' || nodeToUpdate.type === 'image') {
+      if (
+        nodeToUpdate.type === 'rectangle' ||
+        nodeToUpdate.type === 'image' ||
+        nodeToUpdate.type === 'artboard'
+      ) {
         sceneGraph.updateNode(selectedId, { width: w, height: h });
         if (shouldKeyframe(autoKeyframe, selectedId, 'width')) {
           addKeyframeAtFrame(selectedId, 'width', currentFrame, w);
@@ -2648,6 +2658,72 @@ export function PropertiesPanel() {
             </div>
           </div>
         )}
+
+        {node.type === 'artboard' &&
+          (() => {
+            const artboard = node as ArtboardNode;
+            const bgHex = colorToHex(artboard.backgroundColor);
+            return (
+              <div className={styles.section}>
+                <div className={styles.sectionHeader}>
+                  <span className={styles.sectionTitle}>Artboard</span>
+                </div>
+                <div className={styles.sectionContent}>
+                  <div className={styles.propertyRow}>
+                    <span className={styles.propertyLabel}>Background</span>
+                    <div className={styles.propertyInputs}>
+                      <div
+                        className={styles.colorSwatch}
+                        style={{ '--swatch-color': bgHex } as React.CSSProperties}
+                        onClick={() => {
+                          const input = document.createElement('input');
+                          input.type = 'color';
+                          input.value = bgHex;
+                          input.addEventListener('input', () => {
+                            const parsed = hexToColor(input.value);
+                            if (parsed) {
+                              if (shouldKeyframe(autoKeyframe, nodeId, 'backgroundColor')) {
+                                addKeyframeAtFrame(nodeId, 'backgroundColor', currentFrame, parsed);
+                              }
+                              sceneGraph.updateNode(nodeId, { backgroundColor: parsed });
+                            }
+                          });
+                          input.click();
+                        }}
+                      />
+                      <input
+                        type="text"
+                        className={styles.input}
+                        value={bgHex}
+                        onChange={(e) => {
+                          const parsed = hexToColor(e.target.value);
+                          if (parsed) {
+                            if (shouldKeyframe(autoKeyframe, nodeId, 'backgroundColor')) {
+                              addKeyframeAtFrame(nodeId, 'backgroundColor', currentFrame, parsed);
+                            }
+                            sceneGraph.updateNode(nodeId, { backgroundColor: parsed });
+                          }
+                        }}
+                      />
+                    </div>
+                  </div>
+                  <div className={styles.propertyRow}>
+                    <span className={styles.propertyLabel}>Clip Content</span>
+                    <div className={styles.propertyInputs}>
+                      <input
+                        type="checkbox"
+                        checked={artboard.clipContent}
+                        onChange={(e) => {
+                          pushUndo(sceneGraph);
+                          sceneGraph.updateNode(nodeId, { clipContent: e.target.checked });
+                        }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
 
         <div className={styles.section}>
           <div className={styles.sectionHeader}>

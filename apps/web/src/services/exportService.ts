@@ -4,7 +4,7 @@
  */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access */
 
-import type { Node } from '@quar/types';
+import type { Node, ArtboardNode } from '@quar/types';
 import type { SceneGraph } from '@quar/core';
 import { SelectionManager, WebGLRenderer, ShapeRenderer, mat3 } from '@quar/core';
 import { exportNodesToSvg } from '@quar/core';
@@ -54,17 +54,39 @@ export async function exportSelectionAsPng(
 ): Promise<void> {
   if (nodes.length === 0) return;
 
-  // Compute bounds of selected nodes
-  const selectionManager = new SelectionManager();
-  const selectedIds = new Set(nodes.map((n) => n.id));
-  const selBounds = selectionManager.getSelectionBounds(selectedIds, sceneGraph);
-  if (!selBounds) return;
+  // Check if we're exporting a single artboard — use its fixed dimensions
+  const isArtboardExport = nodes.length === 1 && nodes[0].type === 'artboard';
+  const artboard = isArtboardExport ? (nodes[0] as ArtboardNode) : null;
 
-  const { rect: boundsRect } = selBounds;
-  const pixelWidth = Math.ceil(boundsRect.width * multiplier);
-  const pixelHeight = Math.ceil(boundsRect.height * multiplier);
+  let pixelWidth: number;
+  let pixelHeight: number;
+  let cx: number;
+  let cy: number;
+
+  if (artboard) {
+    // Artboard export: use artboard dimensions
+    pixelWidth = Math.ceil(artboard.width * multiplier);
+    pixelHeight = Math.ceil(artboard.height * multiplier);
+    cx = artboard.transform.position.x;
+    cy = artboard.transform.position.y;
+  } else {
+    // Compute bounds of selected nodes
+    const selectionManager = new SelectionManager();
+    const selectedIds = new Set(nodes.map((n) => n.id));
+    const selBounds = selectionManager.getSelectionBounds(selectedIds, sceneGraph);
+    if (!selBounds) return;
+
+    const { rect: boundsRect } = selBounds;
+    pixelWidth = Math.ceil(boundsRect.width * multiplier);
+    pixelHeight = Math.ceil(boundsRect.height * multiplier);
+    cx = boundsRect.x + boundsRect.width / 2;
+    cy = boundsRect.y + boundsRect.height / 2;
+  }
 
   if (pixelWidth <= 0 || pixelHeight <= 0) return;
+
+  const halfW = (artboard ? artboard.width : pixelWidth / multiplier) / 2;
+  const halfH = (artboard ? artboard.height : pixelHeight / multiplier) / 2;
 
   // Create offscreen canvas + WebGL context
   const canvas = document.createElement('canvas');
@@ -80,28 +102,37 @@ export async function exportSelectionAsPng(
   const shapeRenderer = new ShapeRenderer(renderer);
 
   // Build orthographic VP matrix that maps world bounds → clip space
-  // The camera maps [minX..maxX] → [-1..1] and [minY..maxY] → [-1..1]
-  const halfW = boundsRect.width / 2;
-  const halfH = boundsRect.height / 2;
-  const cx = boundsRect.x + halfW;
-  const cy = boundsRect.y + halfH;
-
-  // Projection: scale to NDC
   const projection = mat3.create(1 / halfW, 0, 0, 1 / halfH, 0, 0);
-  // View: translate center to origin
   const view = mat3.create(1, 0, 0, 1, -cx, -cy);
   const vpMatrix = mat3.multiply(projection, view);
 
-  // Clear to transparent
+  // Clear
   const gl = renderer.context;
   gl.viewport(0, 0, pixelWidth, pixelHeight);
-  gl.clearColor(0, 0, 0, 0);
+
+  if (artboard) {
+    // Fill with artboard background color
+    const bg = artboard.backgroundColor;
+    gl.clearColor(bg.r / 255, bg.g / 255, bg.b / 255, bg.a);
+  } else {
+    gl.clearColor(0, 0, 0, 0);
+  }
   gl.clear(gl.COLOR_BUFFER_BIT);
 
-  // Render each node
-  for (const node of nodes) {
-    if (!node.visible) continue;
-    shapeRenderer.renderNode(node, vpMatrix);
+  // Render nodes
+  if (artboard) {
+    // For artboard export, render children rather than the artboard itself
+    for (const childId of artboard.children) {
+      const child = sceneGraph.getNode(childId);
+      if (child && child.visible) {
+        shapeRenderer.renderNode(child, vpMatrix);
+      }
+    }
+  } else {
+    for (const node of nodes) {
+      if (!node.visible) continue;
+      shapeRenderer.renderNode(node, vpMatrix);
+    }
   }
 
   // Convert to PNG blob and download

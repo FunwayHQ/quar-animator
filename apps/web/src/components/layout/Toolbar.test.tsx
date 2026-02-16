@@ -17,6 +17,7 @@ describe('Toolbar', () => {
       'Eraser (E)',
       'Text (T)',
       'Bone (J)',
+      'Artboard (F)',
     ];
 
     toolLabels.forEach((label) => {
@@ -63,6 +64,7 @@ describe('Toolbar', () => {
       'eraser',
       'text',
       'bone',
+      'artboard',
     ];
 
     tools.forEach((tool) => {

@@ -344,6 +344,13 @@ export function getAnimatableProperties(nodeType: string): AnimatableProperty[] 
         interpolationType: 'discrete',
       });
       break;
+    case 'artboard':
+      props.push(
+        { path: 'width', displayName: 'Width', interpolationType: 'number' },
+        { path: 'height', displayName: 'Height', interpolationType: 'number' },
+        { path: 'backgroundColor', displayName: 'Background Color', interpolationType: 'color' }
+      );
+      break;
   }
 
   return props;

@@ -374,7 +374,10 @@ export class SceneGraph {
    * but continues visiting siblings. Returning `void` or anything else visits children normally.
    * Invisible nodes and their subtrees are always skipped.
    */
-  traverseVisible(callback: (node: Node) => boolean | void): void {
+  traverseVisible(
+    callback: (node: Node) => boolean | void,
+    onExitNode?: (node: Node) => void
+  ): void {
     const visit = (nodeId: string): void => {
       const node = this.nodes.get(nodeId);
       if (!node || !node.visible) return;
@@ -383,6 +386,7 @@ export class SceneGraph {
       for (const childId of node.children) {
         visit(childId);
       }
+      onExitNode?.(node);
     };
     for (const rootId of this.rootNodeIds) {
       visit(rootId);

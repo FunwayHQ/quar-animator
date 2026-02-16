@@ -841,5 +841,142 @@ describe('SceneGraph', () => {
       expect(visited).toContain('child2');
       expect(visited).toHaveLength(5);
     });
+
+    it('should call onExitNode after visiting children', () => {
+      const root: GroupNode = {
+        id: 'root',
+        name: 'Root',
+        type: 'group',
+        parent: null,
+        children: [],
+        transform: createDefaultTransform(),
+        visible: true,
+        locked: false,
+        opacity: 1,
+        blendMode: 'normal',
+      };
+
+      const child: Node = {
+        id: 'child1',
+        name: 'Child',
+        type: 'rectangle',
+        parent: null,
+        children: [],
+        transform: createDefaultTransform(),
+        visible: true,
+        locked: false,
+        opacity: 1,
+        blendMode: 'normal',
+        width: 10,
+        height: 10,
+        cornerRadius: [0, 0, 0, 0],
+        fills: [],
+        strokes: [],
+      } as Node;
+
+      sceneGraph.addNode(root);
+      sceneGraph.addNode(child);
+      sceneGraph.moveNode('child1', 'root');
+
+      const entered: string[] = [];
+      const exited: string[] = [];
+
+      sceneGraph.traverseVisible(
+        (node) => {
+          entered.push(node.id);
+        },
+        (node) => {
+          exited.push(node.id);
+        }
+      );
+
+      // Enter: root, child1. Exit: root (after child1 done)
+      expect(entered).toEqual(['root', 'child1']);
+      // onExitNode fires for root after all children visited
+      // child1 has no children so onExitNode fires for it too
+      expect(exited).toContain('root');
+      expect(exited).toContain('child1');
+    });
+
+    it('should not call onExitNode for skipped nodes', () => {
+      const root: GroupNode = {
+        id: 'root',
+        name: 'Root',
+        type: 'group',
+        parent: null,
+        children: [],
+        transform: createDefaultTransform(),
+        visible: true,
+        locked: false,
+        opacity: 1,
+        blendMode: 'normal',
+      };
+
+      const child: Node = {
+        id: 'child1',
+        name: 'Child',
+        type: 'rectangle',
+        parent: null,
+        children: [],
+        transform: createDefaultTransform(),
+        visible: true,
+        locked: false,
+        opacity: 1,
+        blendMode: 'normal',
+        width: 10,
+        height: 10,
+        cornerRadius: [0, 0, 0, 0],
+        fills: [],
+        strokes: [],
+      } as Node;
+
+      sceneGraph.addNode(root);
+      sceneGraph.addNode(child);
+      sceneGraph.moveNode('child1', 'root');
+
+      const exited: string[] = [];
+
+      sceneGraph.traverseVisible(
+        (node) => {
+          if (node.id === 'root') return false; // skip children
+        },
+        (node) => {
+          exited.push(node.id);
+        }
+      );
+
+      // root returned false -> skip children, no onExitNode for root
+      expect(exited).not.toContain('root');
+      expect(exited).not.toContain('child1');
+    });
+
+    it('should not call onExitNode when not provided', () => {
+      const node: Node = {
+        id: 'n1',
+        name: 'Node',
+        type: 'rectangle',
+        parent: null,
+        children: [],
+        transform: createDefaultTransform(),
+        visible: true,
+        locked: false,
+        opacity: 1,
+        blendMode: 'normal',
+        width: 10,
+        height: 10,
+        cornerRadius: [0, 0, 0, 0],
+        fills: [],
+        strokes: [],
+      } as Node;
+
+      sceneGraph.addNode(node);
+
+      // Should not throw when onExitNode is omitted
+      expect(() => {
+        sceneGraph.traverseVisible((n) => {
+          // no-op
+        });
+      }).not.toThrow();
+    });
   });
 });

@@ -4,7 +4,7 @@ import { SceneGraphProvider, useSceneGraph } from '../../contexts/SceneGraphCont
 import { createDefaultTransform } from '@quar/core';
 import { createTimeline } from '@quar/animation';
 import type { SceneGraph } from '@quar/core';
-import type { RectangleNode, EllipseNode, PolygonNode, PathNode } from '@quar/types';
+import type { RectangleNode, EllipseNode, PolygonNode, PathNode, ArtboardNode } from '@quar/types';
 import { PropertiesPanel } from './PropertiesPanel';
 import { useEditorStore } from '../../stores/editorStore';
 import type { ReactNode } from 'react';
@@ -1173,6 +1173,116 @@ describe('PropertiesPanel', () => {
 
       const { timeline } = useEditorStore.getState();
       expect(timeline.tracks.length).toBe(0);
+    });
+  });
+
+  // ==========================================================================
+  // Artboard Properties
+  // ==========================================================================
+
+  describe('artboard properties', () => {
+    function createTestArtboard(id: string, name: string): ArtboardNode {
+      return {
+        id,
+        name,
+        type: 'artboard',
+        parent: null,
+        children: [],
+        transform: { ...createDefaultTransform(), position: { x: 500, y: 500 } },
+        visible: true,
+        locked: false,
+        opacity: 1,
+        blendMode: 'normal',
+        width: 1920,
+        height: 1080,
+        backgroundColor: { r: 255, g: 255, b: 255, a: 1 },
+        clipContent: true,
+      };
+    }
+
+    it('shows artboard section with background and clip content', () => {
+      const sg = renderWithSceneGraph();
+
+      act(() => {
+        sg.addNode(createTestArtboard('art1', 'Main Artboard'));
+        useEditorStore.getState().setSelection(['art1']);
+      });
+
+      // "Artboard" appears as both node type label and section title
+      const artboardTexts = screen.getAllByText('Artboard');
+      expect(artboardTexts.length).toBeGreaterThanOrEqual(1);
+      expect(screen.getByText('Background')).toBeInTheDocument();
+      expect(screen.getByText('Clip Content')).toBeInTheDocument();
+    });
+
+    it('shows artboard dimensions in size section', () => {
+      const sg = renderWithSceneGraph();
+
+      act(() => {
+        sg.addNode(createTestArtboard('art1', 'HD Artboard'));
+        useEditorStore.getState().setSelection(['art1']);
+      });
+
+      expect(screen.getByDisplayValue('1920.0')).toBeInTheDocument();
+      expect(screen.getByDisplayValue('1080.0')).toBeInTheDocument();
+    });
+
+    it('updates artboard width via size input', () => {
+      const sg = renderWithSceneGraph();
+
+      act(() => {
+        sg.addNode(createTestArtboard('art1', 'Artboard'));
+        useEditorStore.getState().setSelection(['art1']);
+      });
+
+      const widthInput = screen.getByDisplayValue('1920.0');
+      act(() => {
+        fireEvent.change(widthInput, { target: { value: '1440' } });
+      });
+
+      const node = sg.getNode('art1') as ArtboardNode;
+      expect(node.width).toBe(1440);
+    });
+
+    it('updates artboard background color via hex input', () => {
+      const sg = renderWithSceneGraph();
+
+      act(() => {
+        sg.addNode(createTestArtboard('art1', 'Artboard'));
+        useEditorStore.getState().setSelection(['art1']);
+      });
+
+      // The background color input should show #FFFFFF (white) — colorToHex returns uppercase
+      const bgInput = screen.getByDisplayValue('#FFFFFF');
+      expect(bgInput).toBeInTheDocument();
+
+      act(() => {
+        fireEvent.change(bgInput, { target: { value: '#FF0000' } });
+      });
+
+      const node = sg.getNode('art1') as ArtboardNode;
+      expect(node.backgroundColor.r).toBe(255);
+      expect(node.backgroundColor.g).toBe(0);
+      expect(node.backgroundColor.b).toBe(0);
+    });
+
+    it('toggles clipContent checkbox', () => {
+      const sg = renderWithSceneGraph();
+
+      act(() => {
+        sg.addNode(createTestArtboard('art1', 'Artboard'));
+        useEditorStore.getState().setSelection(['art1']);
+      });
+
+      const checkbox = screen.getByRole('checkbox');
+      expect(checkbox).toBeChecked();
+
+      act(() => {
+        fireEvent.click(checkbox);
+      });
+
+      const node = sg.getNode('art1') as ArtboardNode;
+      expect(node.clipContent).toBe(false);
     });
   });
 });

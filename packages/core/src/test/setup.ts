@@ -199,6 +199,7 @@ export const mockDefaultStroke: Stroke = {
 export function createMockToolContext(): ToolContext {
   const selectedIds = new Set<string>();
   let idCounter = 0;
+  let enteredGroupId: string | null = null;
 
   return {
     sceneGraph: new SceneGraph(),
@@ -214,5 +215,9 @@ export function createMockToolContext(): ToolContext {
     defaultStroke: mockDefaultStroke,
     generateId: () => `node-${++idCounter}`,
     setActiveTool: () => {},
+    getEnteredGroupId: () => enteredGroupId,
+    setEnteredGroupId: (id: string | null) => {
+      enteredGroupId = id;
+    },
   };
 }

@@ -57,6 +57,8 @@ function nodeTypeIcon(type: string, node?: Node): string {
       return '\u2295'; // ⊕ crosshair-like symbol
     case 'vitruvian':
       return '\u2726'; // ✦ four-pointed star (Vitruvian switch)
+    case 'artboard':
+      return '\u2B1C'; // ⬜ white large square (artboard frame)
     default:
       return '\u25FC';
   }

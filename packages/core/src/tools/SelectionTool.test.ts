@@ -7,7 +7,7 @@ import { SelectionTool } from './SelectionTool';
 import type { ToolContext } from './BaseTool';
 import { createMockToolContext, createMockPointerEvent } from '../test/setup';
 import { createDefaultTransform } from '../SceneGraph';
-import type { RectangleNode, EllipseNode, PolygonNode, BoneNode } from '@quar/types';
+import type { RectangleNode, EllipseNode, PolygonNode, BoneNode, ArtboardNode } from '@quar/types';
 
 function createTestRectangle(
   id: string,
@@ -1606,6 +1606,269 @@ describe('SelectionTool', () => {
 
       // Root bone is at root level (parent === null), so it should be directly selectable
       // The root bone has no bone-type parent, so resolveHitToScope returns it
+    });
+  });
+
+  // ==========================================================================
+  // Artboard Support
+  // ==========================================================================
+
+  describe('artboard support', () => {
+    function createTestArtboard(
+      id: string,
+      x: number,
+      y: number,
+      width: number,
+      height: number
+    ): ArtboardNode {
+      const transform = createDefaultTransform();
+      transform.position = { x, y };
+      return {
+        id,
+        name: `Artboard ${id}`,
+        type: 'artboard',
+        parent: null,
+        children: [],
+        transform,
+        visible: true,
+        locked: false,
+        opacity: 1,
+        blendMode: 'normal',
+        width,
+        height,
+        backgroundColor: { r: 255, g: 255, b: 255, a: 1 },
+        clipContent: true,
+      };
+    }
+
+    it('should resize artboard by adjusting width and height directly', () => {
+      const artboard = createTestArtboard('art1', 200, 200, 400, 300);
+      context.sceneGraph.addNode(artboard);
+      context.setSelectedIds(['art1']);
+
+      // Simulate resize via SelectionTool
+      const startPos = { x: 400, y: 350 }; // bottom-right handle area
+      const screenStart = context.camera.worldToScreen(startPos);
+
+      tool.onPointerDown(
+        createMockPointerEvent({
+          worldPosition: startPos,
+          screenPosition: screenStart,
+          button: 0,
+        })
+      );
+
+      // After the drag, check that artboard still uses width/height (not scale)
+      const node = context.sceneGraph.getNode('art1') as ArtboardNode;
+      expect(node.type).toBe('artboard');
+      expect(node.transform.scale).toEqual({ x: 1, y: 1 });
+    });
+
+    it('should prevent rotation on artboard nodes', () => {
+      const artboard = createTestArtboard('art1', 200, 200, 400, 300);
+      context.sceneGraph.addNode(artboard);
+      context.setSelectedIds(['art1']);
+
+      // The artboard rotation should stay 0 after any operation
+      const node = context.sceneGraph.getNode('art1') as ArtboardNode;
+      expect(node.transform.rotation).toBe(0);
+    });
+
+    it('should enter artboard on double-click like group', () => {
+      const artboard = createTestArtboard('art1', 200, 200, 400, 300);
+      context.sceneGraph.addNode(artboard);
+
+      let enteredGroupId: string | null = null;
+      context.setEnteredGroupId = (id) => {
+        enteredGroupId = id;
+      };
+
+      // Click on artboard position
+      const clickPos = { x: 200, y: 200 };
+      const screenPos = context.camera.worldToScreen(clickPos);
+
+      // Double-click (clickCount: 2)
+      tool.onPointerDown(
+        createMockPointerEvent({
+          worldPosition: clickPos,
+          screenPosition: screenPos,
+          button: 0,
+        })
+      );
+      tool.onPointerUp(
+        createMockPointerEvent({
+          worldPosition: clickPos,
+          screenPosition: screenPos,
+          button: 0,
+        })
+      );
+
+      // First click selects the artboard
+      // Double-click enters it
+      tool.onPointerDown(
+        createMockPointerEvent({
+          worldPosition: clickPos,
+          screenPosition: screenPos,
+          button: 0,
+          // @ts-expect-error clickCount not in strict type
+          clickCount: 2,
+        })
+      );
+
+      expect(enteredGroupId).toBe('art1');
+    });
+
+    it('should auto-reparent node dropped onto artboard', () => {
+      // Create an artboard at center 200,200 with size 400x300
+      const artboard = createTestArtboard('art1', 200, 200, 400, 300);
+      context.sceneGraph.addNode(artboard);
+
+      // Create a rectangle at root level, far from artboard
+      const rect = createTestRectangle('rect1', -500, -500, 50, 50);
+      context.sceneGraph.addNode(rect);
+      context.setSelectedIds(['rect1']);
+
+      expect(context.sceneGraph.getNode('rect1')!.parent).toBeNull();
+
+      // Start move
+      const startPos = { x: -500, y: -500 };
+      const screenStart = context.camera.worldToScreen(startPos);
+      tool.onPointerDown(
+        createMockPointerEvent({
+          worldPosition: startPos,
+          screenPosition: screenStart,
+          button: 0,
+        })
+      );
+
+      // Move to inside the artboard (center 200,200)
+      const endPos = { x: 200, y: 200 };
+      const screenEnd = context.camera.worldToScreen(endPos);
+      tool.onPointerMove(
+        createMockPointerEvent({ worldPosition: endPos, screenPosition: screenEnd })
+      );
+      tool.onPointerUp(
+        createMockPointerEvent({ worldPosition: endPos, screenPosition: screenEnd, button: 0 })
+      );
+
+      // Node should now be a child of the artboard
+      const movedNode = context.sceneGraph.getNode('rect1')!;
+      expect(movedNode.parent).toBe('art1');
+    });
+
+    it('should remove parent when node is moved out of artboard', () => {
+      // Create an artboard at center 200,200 with size 400x300
+      const artboard = createTestArtboard('art1', 200, 200, 400, 300);
+      context.sceneGraph.addNode(artboard);
+
+      // Create a rectangle as child of artboard, at artboard-local position (0,0) = artboard center
+      const rect = createTestRectangle('rect1', 0, 0, 50, 50);
+      context.sceneGraph.addNode(rect);
+      context.sceneGraph.moveNode('rect1', 'art1');
+      expect(context.sceneGraph.getNode('rect1')!.parent).toBe('art1');
+
+      // Enter the artboard scope (like double-clicking in real app)
+      context.setEnteredGroupId?.('art1');
+
+      context.setSelectedIds(['rect1']);
+
+      // Start move from local (0,0) which is world (200,200)
+      const startPos = { x: 200, y: 200 };
+      const screenStart = context.camera.worldToScreen(startPos);
+      tool.onPointerDown(
+        createMockPointerEvent({
+          worldPosition: startPos,
+          screenPosition: screenStart,
+          button: 0,
+        })
+      );
+
+      // Move far outside the artboard
+      const endPos = { x: -500, y: -500 };
+      const screenEnd = context.camera.worldToScreen(endPos);
+      tool.onPointerMove(
+        createMockPointerEvent({ worldPosition: endPos, screenPosition: screenEnd })
+      );
+      tool.onPointerUp(
+        createMockPointerEvent({ worldPosition: endPos, screenPosition: screenEnd, button: 0 })
+      );
+
+      // Node should now be at root level (no parent)
+      const movedNode = context.sceneGraph.getNode('rect1')!;
+      expect(movedNode.parent).toBeNull();
+    });
+
+    it('should not reparent artboard nodes themselves', () => {
+      const artboard1 = createTestArtboard('art1', 200, 200, 400, 300);
+      const artboard2 = createTestArtboard('art2', 800, 200, 400, 300);
+      context.sceneGraph.addNode(artboard1);
+      context.sceneGraph.addNode(artboard2);
+
+      context.setSelectedIds(['art2']);
+
+      // Move artboard2 on top of artboard1
+      const startPos = { x: 800, y: 200 };
+      const screenStart = context.camera.worldToScreen(startPos);
+      tool.onPointerDown(
+        createMockPointerEvent({
+          worldPosition: startPos,
+          screenPosition: screenStart,
+          button: 0,
+        })
+      );
+
+      const endPos = { x: 200, y: 200 };
+      const screenEnd = context.camera.worldToScreen(endPos);
+      tool.onPointerMove(
+        createMockPointerEvent({ worldPosition: endPos, screenPosition: screenEnd })
+      );
+      tool.onPointerUp(
+        createMockPointerEvent({ worldPosition: endPos, screenPosition: screenEnd, button: 0 })
+      );
+
+      // Artboard2 should stay at root level
+      expect(context.sceneGraph.getNode('art2')!.parent).toBeNull();
+    });
+
+    it('should compute artboard bounds correctly for selection', () => {
+      const artboard = createTestArtboard('art1', 100, 100, 200, 150);
+      context.sceneGraph.addNode(artboard);
+      context.setSelectedIds(['art1']);
+
+      // Artboard with center at (100,100), size 200x150, anchor (0.5,0.5)
+      // Local bounds: x=-100, y=-75, w=200, h=150
+      const node = context.sceneGraph.getNode('art1') as ArtboardNode;
+      expect(node.width).toBe(200);
+      expect(node.height).toBe(150);
+    });
+
+    it('should skip invisible artboards during findArtboardAtPoint', () => {
+      const artboard = createTestArtboard('art1', 200, 200, 400, 300);
+      artboard.visible = false;
+      context.sceneGraph.addNode(artboard);
+
+      const rect = createTestRectangle('rect1', -500, -500, 50, 50);
+      context.sceneGraph.addNode(rect);
+      context.setSelectedIds(['rect1']);
+
+      // Move rect to artboard center — but artboard is invisible
+      const startPos = { x: -500, y: -500 };
+      const screenStart = context.camera.worldToScreen(startPos);
+      tool.onPointerDown(
+        createMockPointerEvent({ worldPosition: startPos, screenPosition: screenStart, button: 0 })
+      );
+
+      const endPos = { x: 200, y: 200 };
+      const screenEnd = context.camera.worldToScreen(endPos);
+      tool.onPointerMove(
+        createMockPointerEvent({ worldPosition: endPos, screenPosition: screenEnd })
+      );
+      tool.onPointerUp(
+        createMockPointerEvent({ worldPosition: endPos, screenPosition: screenEnd, button: 0 })
+      );
+
+      // Node should stay at root since artboard is invisible
+      expect(context.sceneGraph.getNode('rect1')!.parent).toBeNull();
     });
   });
 });

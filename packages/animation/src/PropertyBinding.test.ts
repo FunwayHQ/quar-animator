@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import type { RectangleNode, ImageNode } from '@quar/types';
+import type { RectangleNode, ImageNode, ArtboardNode } from '@quar/types';
 import {
   getProperty,
   setProperty,
@@ -657,5 +657,101 @@ describe('image vertexOffsets properties', () => {
     // Plus the common ones
     expect(paths).toContain('transform.position.x');
     expect(paths).toContain('opacity');
+  });
+
+  // ==========================================================================
+  // Artboard animation support
+  // ==========================================================================
+
+  it('getAnimatableProperties returns width, height, backgroundColor for artboard', () => {
+    const props = getAnimatableProperties('artboard');
+    const paths = props.map((p) => p.path);
+    expect(paths).toContain('width');
+    expect(paths).toContain('height');
+    expect(paths).toContain('backgroundColor');
+    // Common transform properties should also be present
+    expect(paths).toContain('transform.position.x');
+    expect(paths).toContain('transform.position.y');
+    expect(paths).toContain('opacity');
+  });
+
+  it('artboard width interpolation type is number', () => {
+    const props = getAnimatableProperties('artboard');
+    const widthProp = props.find((p) => p.path === 'width');
+    expect(widthProp).toBeDefined();
+    expect(widthProp!.interpolationType).toBe('number');
+  });
+
+  it('artboard backgroundColor interpolation type is color', () => {
+    const props = getAnimatableProperties('artboard');
+    const bgProp = props.find((p) => p.path === 'backgroundColor');
+    expect(bgProp).toBeDefined();
+    expect(bgProp!.interpolationType).toBe('color');
+  });
+
+  it('getProperty/setProperty works for artboard width', () => {
+    const artboard: ArtboardNode = {
+      id: 'art1',
+      name: 'Artboard',
+      type: 'artboard',
+      parent: null,
+      children: [],
+      transform: {
+        position: { x: 0, y: 0 },
+        rotation: 0,
+        scale: { x: 1, y: 1 },
+        anchor: { x: 0.5, y: 0.5 },
+        skew: { x: 0, y: 0 },
+      },
+      visible: true,
+      locked: false,
+      opacity: 1,
+      blendMode: 'normal',
+      width: 1920,
+      height: 1080,
+      backgroundColor: { r: 255, g: 255, b: 255, a: 1 },
+      clipContent: true,
+    };
+
+    expect(getProperty(artboard, 'width')).toBe(1920);
+    expect(getProperty(artboard, 'height')).toBe(1080);
+
+    const updated = setProperty(artboard, 'width', 1440);
+    expect(getProperty(updated, 'width')).toBe(1440);
+    expect(getProperty(updated, 'height')).toBe(1080); // unchanged
+  });
+
+  it('evaluateNodeAtFrame interpolates artboard properties', () => {
+    const artboard: ArtboardNode = {
+      id: 'art1',
+      name: 'Artboard',
+      type: 'artboard',
+      parent: null,
+      children: [],
+      transform: {
+        position: { x: 0, y: 0 },
+        rotation: 0,
+        scale: { x: 1, y: 1 },
+        anchor: { x: 0.5, y: 0.5 },
+        skew: { x: 0, y: 0 },
+      },
+      visible: true,
+      locked: false,
+      opacity: 1,
+      blendMode: 'normal',
+      width: 1920,
+      height: 1080,
+      backgroundColor: { r: 255, g: 255, b: 255, a: 1 },
+      clipContent: true,
+    };
+
+    let tl = createTimeline();
+    const track = createTrack('art1', 'width');
+    addKeyframe(track, 0, 1920, 'linear');
+    addKeyframe(track, 30, 960, 'linear');
+    tl = { ...tl, tracks: [...tl.tracks, track] };
+
+    const values = evaluateNodeAtFrame(tl, 'art1', 15);
+    expect(values.get('width')).toBeCloseTo(1440, 0);
   });
 });

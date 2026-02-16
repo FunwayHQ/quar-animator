@@ -12,6 +12,7 @@ import type {
   GroupNode,
   PolygonNode,
   TextNode,
+  ArtboardNode,
 } from '@quar/types';
 
 // ============================================================================
@@ -549,6 +550,79 @@ describe('SelectionManager', () => {
       expect(result!.bounds.center.x).toBeCloseTo(100, 0);
       expect(result!.bounds.center.y).toBeCloseTo(200, 0);
       expect(result!.rotation).toBe(45);
+    });
+  });
+
+  // ==========================================================================
+  // Artboard bounds
+  // ==========================================================================
+
+  describe('artboard bounds', () => {
+    function createTestArtboard(
+      id: string,
+      x: number,
+      y: number,
+      width: number,
+      height: number
+    ): ArtboardNode {
+      const transform = createDefaultTransform();
+      transform.position = { x, y };
+      return {
+        id,
+        name: `Artboard ${id}`,
+        type: 'artboard',
+        parent: null,
+        children: [],
+        transform,
+        visible: true,
+        locked: false,
+        opacity: 1,
+        blendMode: 'normal',
+        width,
+        height,
+        backgroundColor: { r: 255, g: 255, b: 255, a: 1 },
+        clipContent: true,
+      };
+    }
+
+    it('should compute artboard bounds from width/height with centered anchor', () => {
+      const artboard = createTestArtboard('art1', 100, 100, 200, 150);
+      sceneGraph.addNode(artboard);
+
+      const result = manager.getSelectionBounds(new Set(['art1']), sceneGraph);
+      expect(result).not.toBeNull();
+      expect(result!.rect.width).toBeCloseTo(200);
+      expect(result!.rect.height).toBeCloseTo(150);
+      // Center should be at the artboard position
+      expect(result!.rect.x + result!.rect.width / 2).toBeCloseTo(100);
+      expect(result!.rect.y + result!.rect.height / 2).toBeCloseTo(100);
+    });
+
+    it('should use own dimensions, not children bounds', () => {
+      const artboard = createTestArtboard('art1', 200, 200, 400, 300);
+      sceneGraph.addNode(artboard);
+
+      // Add a child that extends beyond artboard
+      const child = createTestRectangle('child1', 0, 0, 1000, 1000);
+      sceneGraph.addNode(child);
+      sceneGraph.moveNode('child1', 'art1');
+
+      const result = manager.getSelectionBounds(new Set(['art1']), sceneGraph);
+      expect(result).not.toBeNull();
+      // Bounds should be artboard's own size, not child's
+      expect(result!.rect.width).toBeCloseTo(400);
+      expect(result!.rect.height).toBeCloseTo(300);
+    });
+
+    it('should return bounds for display with rotation 0', () => {
+      const artboard = createTestArtboard('art1', 300, 200, 500, 400);
+      sceneGraph.addNode(artboard);
+
+      const result = manager.getSelectionBoundsForDisplay(new Set(['art1']), sceneGraph);
+      expect(result).not.toBeNull();
+      expect(result!.rotation).toBe(0);
+      expect(result!.bounds.rect.width).toBeCloseTo(500);
+      expect(result!.bounds.rect.height).toBeCloseTo(400);
     });
   });
 });

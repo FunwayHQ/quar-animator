@@ -13,6 +13,7 @@ import type {
   ImageNode,
   GroupNode,
   BoneNode,
+  ArtboardNode,
   Node,
   Fill,
   Stroke,
@@ -448,6 +449,8 @@ function buildGeometryKey(node: Node): string {
     }
     case 'bone':
       return `B:${node.length}:${node.boneStyle}`;
+    case 'artboard':
+      return `A:${node.width}:${node.height}:${node.transform.anchor.x}:${node.transform.anchor.y}`;
     default:
       return '';
   }
@@ -1114,29 +1117,188 @@ export class ShapeRenderer {
     const canvasWidth = gl.drawingBufferWidth;
     const canvasHeight = gl.drawingBufferHeight;
 
+    // Scissor stack for artboard clipping
+    const scissorStack: { x: number; y: number; w: number; h: number }[] = [];
+
+    const pushScissor = (sx: number, sy: number, sw: number, sh: number) => {
+      if (scissorStack.length > 0) {
+        // Intersect with current top
+        const top = scissorStack[scissorStack.length - 1];
+        const ix1 = Math.max(sx, top.x);
+        const iy1 = Math.max(sy, top.y);
+        const ix2 = Math.min(sx + sw, top.x + top.w);
+        const iy2 = Math.min(sy + sh, top.y + top.h);
+        sx = ix1;
+        sy = iy1;
+        sw = Math.max(0, ix2 - ix1);
+        sh = Math.max(0, iy2 - iy1);
+      }
+      scissorStack.push({ x: sx, y: sy, w: sw, h: sh });
+      gl.enable(gl.SCISSOR_TEST);
+      gl.scissor(sx, sy, sw, sh);
+    };
+
+    const popScissor = () => {
+      scissorStack.pop();
+      if (scissorStack.length === 0) {
+        gl.disable(gl.SCISSOR_TEST);
+      } else {
+        const top = scissorStack[scissorStack.length - 1];
+        gl.scissor(top.x, top.y, top.w, top.h);
+      }
+    };
+
     // Traverse and render visible shapes
-    sceneGraph.traverseVisible((node) => {
-      // Skip node being edited (e.g. text node with active overlay)
-      if (skipNodeId && node.id === skipNodeId) return;
+    sceneGraph.traverseVisible(
+      (node) => {
+        // Skip node being edited (e.g. text node with active overlay)
+        if (skipNodeId && node.id === skipNodeId) return;
 
-      // Skip IK target and vitruvian nodes (no geometry to render)
-      if (node.type === 'ik-target' || node.type === 'vitruvian') return;
+        // Skip IK target and vitruvian nodes (no geometry to render)
+        if (node.type === 'ik-target' || node.type === 'vitruvian') return;
 
-      const worldTransform = sceneGraph.getWorldTransform(node.id);
-      this.currentEffectiveOpacity = sceneGraph.getEffectiveOpacity(node.id);
+        const worldTransform = sceneGraph.getWorldTransform(node.id);
+        this.currentEffectiveOpacity = sceneGraph.getEffectiveOpacity(node.id);
 
-      // Boolean group: render computed result, skip children
-      if (node.type === 'group' && node.booleanOp) {
-        const groupNode = node;
-        const renderBoolGroup = () => {
-          this.renderBooleanGroup(groupNode, worldTransform, sceneGraph);
+        // Artboard: render background and set up scissor clipping
+        if (node.type === 'artboard') {
+          this.renderArtboardBackground(node, worldTransform);
+          if (node.clipContent) {
+            // Compute screen-space scissor rect from artboard bounds
+            const hw = node.width / 2;
+            const hh = node.height / 2;
+            // Artboard corners in local space (anchor 0.5,0.5)
+            const corners = [
+              mat3.transformPoint(worldTransform, { x: -hw, y: -hh }),
+              mat3.transformPoint(worldTransform, { x: hw, y: -hh }),
+              mat3.transformPoint(worldTransform, { x: hw, y: hh }),
+              mat3.transformPoint(worldTransform, { x: -hw, y: hh }),
+            ];
+            // Transform world coords through VP to NDC
+            const screenCorners = corners.map((c) => {
+              const ndc = mat3.transformPoint(viewProjectionMatrix, c);
+              // NDC to screen pixels
+              return {
+                x: (ndc.x * 0.5 + 0.5) * canvasWidth,
+                y: (ndc.y * 0.5 + 0.5) * canvasHeight, // GL scissor Y is bottom-up (matches NDC)
+              };
+            });
+            const minX = Math.min(...screenCorners.map((c) => c.x));
+            const minY = Math.min(...screenCorners.map((c) => c.y));
+            const maxX = Math.max(...screenCorners.map((c) => c.x));
+            const maxY = Math.max(...screenCorners.map((c) => c.y));
+            pushScissor(
+              Math.floor(minX),
+              Math.floor(minY),
+              Math.ceil(maxX - minX),
+              Math.ceil(maxY - minY)
+            );
+          }
+          return; // continue into children
+        }
+
+        // Boolean group: render computed result, skip children
+        if (node.type === 'group' && node.booleanOp) {
+          const groupNode = node;
+          const renderBoolGroup = () => {
+            this.renderBooleanGroup(groupNode, worldTransform, sceneGraph);
+          };
+
+          if (this.effectRenderer.needsMultiPass(node.effects, node.blendMode)) {
+            this.effectRenderer.renderNodeWithEffects(
+              node.effects,
+              node.blendMode,
+              () => {
+                this.renderer.useProgram(this.program!);
+                this.renderer.bindVAO(this.vao);
+                gl.uniformMatrix3fv(
+                  this.program!.uniforms.u_viewProjection ?? null,
+                  false,
+                  vpArray
+                );
+                if (this.gradientProgram) {
+                  this.renderer.useProgram(this.gradientProgram);
+                  gl.uniformMatrix3fv(
+                    this.gradientProgram.uniforms.u_viewProjection ?? null,
+                    false,
+                    vpArray
+                  );
+                  this.renderer.useProgram(this.program!);
+                }
+                this.currentVPArray = vpArray;
+                renderBoolGroup();
+              },
+              canvasWidth,
+              canvasHeight
+            );
+            this.renderer.useProgram(this.program!);
+            this.renderer.bindVAO(this.vao);
+            gl.uniformMatrix3fv(this.program!.uniforms.u_viewProjection ?? null, false, vpArray);
+            if (this.gradientProgram) {
+              this.renderer.useProgram(this.gradientProgram);
+              gl.uniformMatrix3fv(
+                this.gradientProgram.uniforms.u_viewProjection ?? null,
+                false,
+                vpArray
+              );
+              this.renderer.useProgram(this.program!);
+            }
+            this.currentVPArray = vpArray;
+          } else {
+            renderBoolGroup();
+          }
+          return false; // skip children — they are rendered as part of the boolean result
+        }
+
+        const renderShape = () => {
+          // Check for skinned mesh — deform vertices via CPU skinning
+          if (
+            node.type !== 'bone' &&
+            node.type !== 'group' &&
+            node.type !== 'text' &&
+            'skinData' in node &&
+            (node as any).skinData
+          ) {
+            if (node.type === 'image') {
+              this.renderSkinnedImage(node, sceneGraph);
+            } else {
+              this.renderSkinnedNode(node, sceneGraph);
+            }
+            return;
+          }
+
+          switch (node.type) {
+            case 'rectangle':
+              this.renderRectangle(node, worldTransform);
+              break;
+            case 'ellipse':
+              this.renderEllipse(node, worldTransform);
+              break;
+            case 'polygon':
+              this.renderPolygon(node, worldTransform);
+              break;
+            case 'path':
+              this.renderPath(node, worldTransform);
+              break;
+            case 'text':
+              this.renderText(node, worldTransform);
+              break;
+            case 'image':
+              this.renderImage(node, worldTransform);
+              break;
+            case 'bone':
+              this.renderBone(node, worldTransform);
+              break;
+          }
         };
 
+        // Check if node needs multi-pass rendering (effects or blend mode)
         if (this.effectRenderer.needsMultiPass(node.effects, node.blendMode)) {
           this.effectRenderer.renderNodeWithEffects(
             node.effects,
             node.blendMode,
             () => {
+              // Re-setup shader state since effect renderer may have changed it
               this.renderer.useProgram(this.program!);
               this.renderer.bindVAO(this.vao);
               gl.uniformMatrix3fv(this.program!.uniforms.u_viewProjection ?? null, false, vpArray);
@@ -1150,11 +1312,12 @@ export class ShapeRenderer {
                 this.renderer.useProgram(this.program!);
               }
               this.currentVPArray = vpArray;
-              renderBoolGroup();
+              renderShape();
             },
             canvasWidth,
             canvasHeight
           );
+          // Restore shader state for next node
           this.renderer.useProgram(this.program!);
           this.renderer.bindVAO(this.vao);
           gl.uniformMatrix3fv(this.program!.uniforms.u_viewProjection ?? null, false, vpArray);
@@ -1169,98 +1332,18 @@ export class ShapeRenderer {
           }
           this.currentVPArray = vpArray;
         } else {
-          renderBoolGroup();
+          // Fast path: no effects, normal blend mode — render directly
+          renderShape();
         }
-        return false; // skip children — they are rendered as part of the boolean result
+        return; // explicit void return (callback returns boolean | void)
+      },
+      (node) => {
+        // onExitNode: pop scissor when leaving a clipping artboard
+        if (node.type === 'artboard' && node.clipContent) {
+          popScissor();
+        }
       }
-
-      const renderShape = () => {
-        // Check for skinned mesh — deform vertices via CPU skinning
-        if (
-          node.type !== 'bone' &&
-          node.type !== 'group' &&
-          node.type !== 'text' &&
-          'skinData' in node &&
-          (node as any).skinData
-        ) {
-          if (node.type === 'image') {
-            this.renderSkinnedImage(node as ImageNode, sceneGraph);
-          } else {
-            this.renderSkinnedNode(node, sceneGraph);
-          }
-          return;
-        }
-
-        switch (node.type) {
-          case 'rectangle':
-            this.renderRectangle(node, worldTransform);
-            break;
-          case 'ellipse':
-            this.renderEllipse(node, worldTransform);
-            break;
-          case 'polygon':
-            this.renderPolygon(node, worldTransform);
-            break;
-          case 'path':
-            this.renderPath(node, worldTransform);
-            break;
-          case 'text':
-            this.renderText(node, worldTransform);
-            break;
-          case 'image':
-            this.renderImage(node, worldTransform);
-            break;
-          case 'bone':
-            this.renderBone(node, worldTransform);
-            break;
-        }
-      };
-
-      // Check if node needs multi-pass rendering (effects or blend mode)
-      if (this.effectRenderer.needsMultiPass(node.effects, node.blendMode)) {
-        this.effectRenderer.renderNodeWithEffects(
-          node.effects,
-          node.blendMode,
-          () => {
-            // Re-setup shader state since effect renderer may have changed it
-            this.renderer.useProgram(this.program!);
-            this.renderer.bindVAO(this.vao);
-            gl.uniformMatrix3fv(this.program!.uniforms.u_viewProjection ?? null, false, vpArray);
-            if (this.gradientProgram) {
-              this.renderer.useProgram(this.gradientProgram);
-              gl.uniformMatrix3fv(
-                this.gradientProgram.uniforms.u_viewProjection ?? null,
-                false,
-                vpArray
-              );
-              this.renderer.useProgram(this.program!);
-            }
-            this.currentVPArray = vpArray;
-            renderShape();
-          },
-          canvasWidth,
-          canvasHeight
-        );
-        // Restore shader state for next node
-        this.renderer.useProgram(this.program!);
-        this.renderer.bindVAO(this.vao);
-        gl.uniformMatrix3fv(this.program!.uniforms.u_viewProjection ?? null, false, vpArray);
-        if (this.gradientProgram) {
-          this.renderer.useProgram(this.gradientProgram);
-          gl.uniformMatrix3fv(
-            this.gradientProgram.uniforms.u_viewProjection ?? null,
-            false,
-            vpArray
-          );
-          this.renderer.useProgram(this.program!);
-        }
-        this.currentVPArray = vpArray;
-      } else {
-        // Fast path: no effects, normal blend mode — render directly
-        renderShape();
-      }
-      return; // explicit void return (callback returns boolean | void)
-    });
+    );
 
     this.renderer.bindVAO(null);
   }
@@ -1320,7 +1403,10 @@ export class ShapeRenderer {
         this.renderImage(node, worldMatrix);
         break;
       case 'bone':
-        this.renderBone(node as BoneNode, worldMatrix);
+        this.renderBone(node, worldMatrix);
+        break;
+      case 'artboard':
+        this.renderArtboardBackground(node, worldMatrix);
         break;
     }
 
@@ -1426,6 +1512,46 @@ export class ShapeRenderer {
       true,
       this.currentEffectiveOpacity
     );
+  }
+
+  /**
+   * Render an artboard background rectangle
+   */
+  renderArtboardBackground(node: ArtboardNode, worldMatrix: Matrix3): void {
+    if (!this.program) return;
+
+    const gl = this.renderer.context;
+    const bg = node.backgroundColor;
+    if (bg.a <= 0) return; // transparent background — skip
+
+    const anchor = node.transform.anchor;
+    const pathPoints = createRectanglePath(
+      -node.width * anchor.x,
+      -node.height * anchor.y,
+      node.width,
+      node.height,
+      [0, 0, 0, 0]
+    );
+    const { vertices: tessellated, fillIndices } = this.getCachedTessellation(
+      node.id + ':bg',
+      node,
+      pathPoints,
+      true,
+      DEFAULT_TESSELLATION_TOLERANCE
+    );
+
+    const modelArray = mat3.toFloat32Array(worldMatrix);
+    this.currentModelMatrix = modelArray;
+    this.renderer.useProgram(this.program);
+    gl.uniformMatrix3fv(this.program.uniforms.u_model ?? null, false, modelArray);
+
+    const color = new Float32Array([
+      bg.r / 255,
+      bg.g / 255,
+      bg.b / 255,
+      bg.a * this.currentEffectiveOpacity,
+    ]);
+    this.renderFillWithColor(tessellated, fillIndices, color);
   }
 
   /**
@@ -2334,7 +2460,7 @@ export class ShapeRenderer {
       stroke.width,
       closed,
       align,
-      stroke.widthProfile as number[] | undefined
+      stroke.widthProfile
     );
     if (!cached) return;
 
@@ -2919,7 +3045,7 @@ export class ShapeRenderer {
             stroke.width,
             true,
             align,
-            stroke.widthProfile as number[] | undefined
+            stroke.widthProfile
           );
           if (outlineVertices.length / 2 < 3) continue;
           if (stroke.gradient) {
@@ -2949,7 +3075,7 @@ export class ShapeRenderer {
             stroke.width,
             closed,
             align,
-            stroke.widthProfile as number[] | undefined
+            stroke.widthProfile
           );
           if (outlineVertices.length / 2 < 3) continue;
           if (stroke.gradient) {
@@ -3378,7 +3504,7 @@ export class ShapeRenderer {
         this.renderImageWithOverride(node, worldMatrix, colorOverride);
         break;
       case 'bone':
-        this.renderBoneWithOverride(node as BoneNode, worldMatrix, colorOverride);
+        this.renderBoneWithOverride(node, worldMatrix, colorOverride);
         break;
     }
 
