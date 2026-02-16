@@ -1958,6 +1958,7 @@ export function Canvas() {
           selectedNodeIds={selectedNodeIds}
           camera={cameraRef.current}
           sceneGraph={sceneGraph}
+          cameraVersion={cameraVersion}
         />
       )}
       {(activeTool === 'bone' ||

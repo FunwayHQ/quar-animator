@@ -13,6 +13,7 @@ interface ArtboardOverlayProps {
   selectedNodeIds: Set<string>;
   camera: Camera | null;
   sceneGraph: SceneGraph;
+  cameraVersion: number;
 }
 
 const LABEL_FONT_SIZE = 11;
@@ -25,6 +26,7 @@ export function ArtboardOverlay({
   selectedNodeIds,
   camera,
   sceneGraph,
+  cameraVersion,
 }: ArtboardOverlayProps) {
   const labels = useMemo(() => {
     if (!camera || artboardNodes.length === 0) return [];
@@ -54,7 +56,8 @@ export function ArtboardOverlay({
         isSelected,
       };
     });
-  }, [artboardNodes, camera, sceneGraph, selectedNodeIds]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [artboardNodes, camera, sceneGraph, selectedNodeIds, cameraVersion]);
 
   if (labels.length === 0) return null;
 

@@ -47,6 +47,7 @@ describe('ArtboardOverlay', () => {
         selectedNodeIds={new Set()}
         camera={camera}
         sceneGraph={sg}
+        cameraVersion={0}
       />
     );
 
@@ -65,6 +66,7 @@ describe('ArtboardOverlay', () => {
         selectedNodeIds={new Set()}
         camera={camera}
         sceneGraph={sg}
+        cameraVersion={0}
       />
     );
 
@@ -86,6 +88,7 @@ describe('ArtboardOverlay', () => {
         selectedNodeIds={new Set()}
         camera={camera}
         sceneGraph={sg}
+        cameraVersion={0}
       />
     );
 
@@ -107,6 +110,7 @@ describe('ArtboardOverlay', () => {
         selectedNodeIds={new Set(['art1'])}
         camera={camera}
         sceneGraph={sg}
+        cameraVersion={0}
       />
     );
 
@@ -129,6 +133,7 @@ describe('ArtboardOverlay', () => {
         selectedNodeIds={new Set()}
         camera={camera}
         sceneGraph={sg}
+        cameraVersion={0}
       />
     );
 
@@ -149,6 +154,7 @@ describe('ArtboardOverlay', () => {
         selectedNodeIds={new Set()}
         camera={null}
         sceneGraph={sg}
+        cameraVersion={0}
       />
     );
 
