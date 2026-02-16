@@ -33,6 +33,7 @@ import { CanvasRuler } from '../canvas/CanvasRuler';
 import { TextEditOverlay } from '../canvas/TextEditOverlay';
 import { BoneOverlay } from '../canvas/BoneOverlay';
 import { ArtboardOverlay } from '../canvas/ArtboardOverlay';
+import { GuideOverlay } from '../canvas/GuideOverlay';
 import { WeightPaintOverlay } from '../canvas/WeightPaintOverlay';
 import { PointMagnetOverlay } from '../canvas/PointMagnetOverlay';
 import { ContextMenu } from '../common/ContextMenu';
@@ -98,6 +99,10 @@ export function Canvas() {
   });
   const [cameraVersion, setCameraVersion] = useState(0);
   const [deformedBoundsVersion, setDeformedBoundsVersion] = useState(0);
+  const [guideDragPreview, setGuideDragPreview] = useState<{
+    axis: 'x' | 'y';
+    worldPosition: number;
+  } | null>(null);
 
   // Get selection state from store
   const selectedNodeIds = useEditorStore((state) => state.selectedNodeIds);
@@ -127,6 +132,11 @@ export function Canvas() {
   const cutSelection = useEditorStore((state) => state.cutSelection);
   const editingGradient = useEditorStore((state) => state.editingGradient);
   const showRulers = useEditorStore((state) => state.showRulers);
+  const guides = useEditorStore((state) => state.guides);
+  const showGuides = useEditorStore((state) => state.showGuides);
+  const addGuide = useEditorStore((state) => state.addGuide);
+  const removeGuide = useEditorStore((state) => state.removeGuide);
+  const updateGuidePosition = useEditorStore((state) => state.updateGuidePosition);
   const editingTextNodeId = useEditorStore((state) => state.editingTextNodeId);
   const setEditingTextNodeId = useEditorStore((state) => state.setEditingTextNodeId);
   const activeTool = useEditorStore((state) => state.activeTool);
@@ -1999,12 +2009,33 @@ export function Canvas() {
           onPointPointerDown={handlePenPointPointerDown}
         />
       )}
+      {showGuides && (
+        <GuideOverlay
+          guides={guides}
+          camera={cameraRef.current}
+          viewportWidth={viewportSize.width}
+          viewportHeight={viewportSize.height}
+          cameraVersion={cameraVersion}
+          dragPreview={guideDragPreview}
+          canvasRef={canvasRef}
+          onRemoveGuide={removeGuide}
+          onUpdateGuidePosition={updateGuidePosition}
+        />
+      )}
       {showRulers && (
         <CanvasRuler
           camera={cameraRef.current}
           viewportWidth={viewportSize.width}
           viewportHeight={viewportSize.height}
           cameraVersion={cameraVersion}
+          canvasRef={canvasRef}
+          onGuideDrag={(axis, worldPosition) => setGuideDragPreview({ axis, worldPosition })}
+          onGuideDragEnd={(axis, worldPosition) => {
+            setGuideDragPreview(null);
+            if (!isNaN(worldPosition)) {
+              addGuide(axis, worldPosition);
+            }
+          }}
         />
       )}
       {editingTextNodeId &&

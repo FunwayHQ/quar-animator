@@ -219,5 +219,7 @@ export function createMockToolContext(): ToolContext {
     setEnteredGroupId: (id: string | null) => {
       enteredGroupId = id;
     },
+    getGuides: () => [],
+    getSnapToGuides: () => false,
   };
 }

@@ -75,6 +75,7 @@ export function useProjectActions(options: UseProjectActionsOptions = {}): Proje
       frameRate: state.frameRate,
       autoKeyframe: state.autoKeyframe,
       onionSkin: state.onionSkin,
+      guides: state.guides,
       vitruvianControllers: state.vitruvianControllers,
       dynamicChains: state.dynamicChains,
       globalWind: state.globalWind,

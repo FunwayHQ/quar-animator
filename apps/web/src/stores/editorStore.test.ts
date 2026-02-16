@@ -2419,4 +2419,69 @@ describe('EditorStore', () => {
       expect(useEditorStore.getState().dynamicChains).toHaveLength(0);
     });
   });
+
+  describe('Guides', () => {
+    beforeEach(() => {
+      useEditorStore.setState({ guides: [], showGuides: true, snapToGuides: true });
+    });
+
+    it('initial state has empty guides', () => {
+      expect(useEditorStore.getState().guides).toEqual([]);
+      expect(useEditorStore.getState().showGuides).toBe(true);
+      expect(useEditorStore.getState().snapToGuides).toBe(true);
+    });
+
+    it('addGuide creates a guide with unique id', () => {
+      useEditorStore.getState().addGuide('x', 100);
+      const guides = useEditorStore.getState().guides;
+      expect(guides).toHaveLength(1);
+      expect(guides[0].axis).toBe('x');
+      expect(guides[0].position).toBe(100);
+      expect(guides[0].id).toBeTruthy();
+    });
+
+    it('addGuide supports multiple guides', () => {
+      useEditorStore.getState().addGuide('x', 100);
+      useEditorStore.getState().addGuide('y', 200);
+      useEditorStore.getState().addGuide('x', 300);
+      expect(useEditorStore.getState().guides).toHaveLength(3);
+    });
+
+    it('removeGuide removes guide by id', () => {
+      useEditorStore.getState().addGuide('x', 100);
+      useEditorStore.getState().addGuide('y', 200);
+      const guides = useEditorStore.getState().guides;
+      useEditorStore.getState().removeGuide(guides[0].id);
+      expect(useEditorStore.getState().guides).toHaveLength(1);
+      expect(useEditorStore.getState().guides[0].axis).toBe('y');
+    });
+
+    it('updateGuidePosition updates position', () => {
+      useEditorStore.getState().addGuide('x', 100);
+      const id = useEditorStore.getState().guides[0].id;
+      useEditorStore.getState().updateGuidePosition(id, 250);
+      expect(useEditorStore.getState().guides[0].position).toBe(250);
+    });
+
+    it('clearGuides removes all guides', () => {
+      useEditorStore.getState().addGuide('x', 100);
+      useEditorStore.getState().addGuide('y', 200);
+      useEditorStore.getState().clearGuides();
+      expect(useEditorStore.getState().guides).toEqual([]);
+    });
+
+    it('toggleShowGuides toggles visibility', () => {
+      expect(useEditorStore.getState().showGuides).toBe(true);
+      useEditorStore.getState().toggleShowGuides();
+      expect(useEditorStore.getState().showGuides).toBe(false);
+      useEditorStore.getState().toggleShowGuides();
+      expect(useEditorStore.getState().showGuides).toBe(true);
+    });
+
+    it('toggleSnapToGuides toggles snapping', () => {
+      expect(useEditorStore.getState().snapToGuides).toBe(true);
+      useEditorStore.getState().toggleSnapToGuides();
+      expect(useEditorStore.getState().snapToGuides).toBe(false);
+    });
+  });
 });

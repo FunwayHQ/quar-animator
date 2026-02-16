@@ -411,6 +411,8 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
       convertShapeToPath: (nodeId: string) => {
         return useEditorStore.getState().convertShapeToPath(sceneGraphRef.current, nodeId);
       },
+      getGuides: () => useEditorStore.getState().guides,
+      getSnapToGuides: () => useEditorStore.getState().snapToGuides,
     });
 
     // Set the active tool from EditorStore (ToolManager defaults to 'selection')

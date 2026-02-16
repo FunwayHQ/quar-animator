@@ -108,6 +108,8 @@ export function MenuBar({ projectActions }: MenuBarProps) {
   const selectedNodeIds = useEditorStore((state) => state.selectedNodeIds);
   const clipboard = useEditorStore((state) => state.clipboard);
   const showRulers = useEditorStore((state) => state.showRulers);
+  const showGuides = useEditorStore((state) => state.showGuides);
+  const snapToGuides = useEditorStore((state) => state.snapToGuides);
   const snapToGrid = useEditorStore((state) => state.snapToGrid);
   const onionSkinEnabled = useEditorStore(
     (state: { onionSkin: { enabled: boolean } }) => state.onionSkin.enabled
@@ -143,6 +145,9 @@ export function MenuBar({ projectActions }: MenuBarProps) {
   const flattenBooleanGroupAction = useEditorStore((state) => state.flattenBooleanGroup);
   const releaseBooleanGroupAction = useEditorStore((state) => state.releaseBooleanGroup);
   const toggleShowRulersAction = useEditorStore((state) => state.toggleShowRulers);
+  const toggleShowGuidesAction = useEditorStore((state) => state.toggleShowGuides);
+  const toggleSnapToGuidesAction = useEditorStore((state) => state.toggleSnapToGuides);
+  const clearGuidesAction = useEditorStore((state) => state.clearGuides);
   const toggleSnapToGridAction = useEditorStore((state) => state.toggleSnapToGrid);
   const toggleOnionSkinAction = useEditorStore((state) => state.toggleOnionSkin);
   const setIsPlayingAction = useEditorStore((state) => state.setIsPlaying);
@@ -691,6 +696,31 @@ export function MenuBar({ projectActions }: MenuBarProps) {
                 />
                 <Separator />
                 <MenuItem
+                  label="Show Guides"
+                  shortcut="Shift+G"
+                  checked={showGuides}
+                  onClick={() => {
+                    closeMenu();
+                    toggleShowGuidesAction();
+                  }}
+                />
+                <MenuItem
+                  label="Snap to Guides"
+                  checked={snapToGuides}
+                  onClick={() => {
+                    closeMenu();
+                    toggleSnapToGuidesAction();
+                  }}
+                />
+                <MenuItem
+                  label="Clear All Guides"
+                  onClick={() => {
+                    closeMenu();
+                    clearGuidesAction();
+                  }}
+                />
+                <Separator />
+                <MenuItem
                   label="Onion Skinning"
                   shortcut="Shift+O"
                   checked={onionSkinEnabled}
@@ -880,7 +910,7 @@ export function MenuBar({ projectActions }: MenuBarProps) {
                         (a: SmartBoneAction) => a.driver.boneId === boneId
                       );
                       // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-member-access
-                      if (action) removeSmartBoneActionStore((action as SmartBoneAction).id);
+                      if (action) removeSmartBoneActionStore(action.id);
                     }
                   }}
                   data-testid="delete-smart-bone-action-menu"

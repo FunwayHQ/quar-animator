@@ -33,6 +33,8 @@ export interface ToolContext {
   onEnterTextEdit?: (nodeId: string) => void;
   getTessellatedVertices?: (nodeId: string) => Float32Array | null;
   convertShapeToPath?: (nodeId: string) => string | null;
+  getGuides?: () => { id: string; axis: 'x' | 'y'; position: number }[];
+  getSnapToGuides?: () => boolean;
 }
 
 export interface ToolState {

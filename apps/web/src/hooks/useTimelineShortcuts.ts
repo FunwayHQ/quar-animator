@@ -88,6 +88,12 @@ export function useTimelineShortcuts(callbacks: TimelineShortcutCallbacks) {
           useEditorStore.getState().toggleShowRulers();
           return;
         }
+        if (event.key === 'G' || event.key === 'g') {
+          // Shift+G : toggle guides
+          event.preventDefault();
+          useEditorStore.getState().toggleShowGuides();
+          return;
+        }
         // Don't process other keys when Shift is held (avoid unintended Shift+K, Shift+L, etc.)
         return;
       }

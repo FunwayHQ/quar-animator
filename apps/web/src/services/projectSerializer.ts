@@ -9,6 +9,7 @@ import type { OnionSkinSettings } from '@quar/core';
 import type { SceneGraph } from '@quar/core';
 import { createTimeline } from '@quar/animation';
 import { DEFAULT_ONION_SKIN_SETTINGS } from '@quar/core';
+import type { Guide } from '../stores/editorStore';
 
 // ============================================================================
 // Types
@@ -29,6 +30,7 @@ export interface ProjectData {
     frameRate: number;
     autoKeyframe: boolean;
     onionSkin: OnionSkinSettings;
+    guides?: Guide[];
   };
   rigging?: {
     vitruvianControllers?: VitruvianController[];
@@ -43,6 +45,7 @@ export interface EditorStateSnapshot {
   frameRate: number;
   autoKeyframe: boolean;
   onionSkin: OnionSkinSettings;
+  guides?: Guide[];
   vitruvianControllers?: VitruvianController[];
   dynamicChains?: DynamicChain[];
   globalWind?: WindSettings;
@@ -71,6 +74,7 @@ export function serializeProject(
       frameRate: editorState.frameRate,
       autoKeyframe: editorState.autoKeyframe,
       onionSkin: { ...editorState.onionSkin },
+      guides: editorState.guides ? [...editorState.guides] : [],
     },
     rigging: {
       vitruvianControllers: editorState.vitruvianControllers
@@ -187,6 +191,7 @@ export function deserializeProject(
     frameRate: data.settings.frameRate,
     autoKeyframe: data.settings.autoKeyframe,
     onionSkin: { ...DEFAULT_ONION_SKIN_SETTINGS, ...data.settings.onionSkin },
+    guides: data.settings.guides ?? [],
     currentFrame: 0,
     vitruvianControllers: data.rigging?.vitruvianControllers ?? [],
     dynamicChains: data.rigging?.dynamicChains ?? [],

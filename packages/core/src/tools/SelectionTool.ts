@@ -772,28 +772,82 @@ export class SelectionTool extends BaseTool {
   }
 
   /**
-   * Snap a node's position so that its visual top-left corner aligns with grid lines.
-   * In world space (Y-up): visual left = min X, visual top = max Y.
+   * Find the closest guide for a set of edge values along one axis.
+   * Returns the snap offset to apply, or null if no guide is close enough.
+   */
+  private snapToGuide(edgeValues: number[], axis: 'x' | 'y'): number | null {
+    if (!this.context.getSnapToGuides?.()) return null;
+    const guides = this.context.getGuides?.() ?? [];
+    const threshold = 5 / this.context.camera.zoom;
+    let bestOffset: number | null = null;
+    let bestDist = threshold;
+    for (const g of guides) {
+      if (g.axis !== axis) continue;
+      for (const val of edgeValues) {
+        const dist = Math.abs(val - g.position);
+        if (dist < bestDist) {
+          bestDist = dist;
+          bestOffset = g.position - val;
+        }
+      }
+    }
+    return bestOffset;
+  }
+
+  /**
+   * Snap a node's position so that its visual edges align with grid lines or guides.
+   * Guide snap takes priority when closer than grid snap.
    */
   private snapNodePosition(node: Node, centerPos: Vector2): Vector2 {
-    if (!this.context.getSnapToGrid?.()) return centerPos;
+    const gridEnabled = this.context.getSnapToGrid?.() ?? false;
+    const guideEnabled = this.context.getSnapToGuides?.() ?? false;
+    if (!gridEnabled && !guideEnabled) return centerPos;
 
     const size = this.getNodeBoundsSize(node);
     if (size.width === 0 && size.height === 0) {
-      return this.snapPosition(centerPos);
+      if (gridEnabled) return this.snapPosition(centerPos);
+      // Guide snap for point-like nodes: snap center
+      const gx = this.snapToGuide([centerPos.x], 'x');
+      const gy = this.snapToGuide([centerPos.y], 'y');
+      return {
+        x: gx != null ? centerPos.x + gx : centerPos.x,
+        y: gy != null ? centerPos.y + gy : centerPos.y,
+      };
     }
 
     const anchor = node.transform.anchor ?? { x: 0.5, y: 0.5 };
-    // Visual top-left on screen: left edge (world min X), top edge (world max Y)
-    const visualTopLeft = {
-      x: centerPos.x - size.width * anchor.x,
-      y: centerPos.y + size.height * (1 - anchor.y),
-    };
-    const snappedTL = this.snapPosition(visualTopLeft);
-    return {
-      x: snappedTL.x + size.width * anchor.x,
-      y: snappedTL.y - size.height * (1 - anchor.y),
-    };
+
+    // Compute edges in world space (Y-up)
+    const left = centerPos.x - size.width * anchor.x;
+    const right = left + size.width;
+    const bottom = centerPos.y - size.height * anchor.y;
+    const top = bottom + size.height;
+
+    let dx = 0;
+    let dy = 0;
+
+    // Try guide snap first (checks all edges)
+    const guideSnapX = guideEnabled ? this.snapToGuide([left, right, centerPos.x], 'x') : null;
+    const guideSnapY = guideEnabled ? this.snapToGuide([top, bottom, centerPos.y], 'y') : null;
+
+    if (guideSnapX != null) {
+      dx = guideSnapX;
+    } else if (gridEnabled) {
+      // Fall back to grid snap on visual top-left
+      const visualTopLeft = { x: left, y: top };
+      const snappedTL = this.snapPosition(visualTopLeft);
+      dx = snappedTL.x - left;
+    }
+
+    if (guideSnapY != null) {
+      dy = guideSnapY;
+    } else if (gridEnabled) {
+      const visualTopLeft = { x: left, y: top };
+      const snappedTL = this.snapPosition(visualTopLeft);
+      dy = snappedTL.y - top;
+    }
+
+    return { x: centerPos.x + dx, y: centerPos.y + dy };
   }
 
   /** Get bounding box dimensions for a node (used for snap offset). */

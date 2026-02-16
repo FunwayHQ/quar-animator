@@ -89,6 +89,16 @@ interface HistorySnapshot {
 export type EraserMode = 'stroke' | 'point';
 
 // ============================================================================
+// Guide Type
+// ============================================================================
+
+export interface Guide {
+  id: string;
+  axis: 'x' | 'y'; // 'x' = vertical line at x, 'y' = horizontal line at y
+  position: number; // world coordinate
+}
+
+// ============================================================================
 // Default Values
 // ============================================================================
 
@@ -356,6 +366,17 @@ export interface EditorStore {
   showRulers: boolean;
   setShowRulers: (show: boolean) => void;
   toggleShowRulers: () => void;
+
+  // Guides
+  guides: Guide[];
+  showGuides: boolean;
+  snapToGuides: boolean;
+  addGuide: (axis: 'x' | 'y', position: number) => void;
+  removeGuide: (id: string) => void;
+  updateGuidePosition: (id: string, position: number) => void;
+  clearGuides: () => void;
+  toggleShowGuides: () => void;
+  toggleSnapToGuides: () => void;
 
   // Gradient editing
   editingGradient: { nodeId: string; fillIndex: number; source: 'fill' | 'stroke' } | null;
@@ -917,7 +938,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     while (currentId) {
       const node = sceneGraph.getNode(currentId);
       if (!node || node.type !== 'bone') break;
-      chain.unshift(node as BoneNode);
+      chain.unshift(node);
       currentId = node.parent;
       if (chainDepth != null && chain.length >= chainDepth) break;
     }
@@ -950,7 +971,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
     // Compute end effector tip in world space for target placement
     const endBoneWT = sceneGraph.getWorldTransform(endEffectorBoneId);
-    const boneLen = (endBone as BoneNode).length;
+    const boneLen = endBone.length;
     const tipX = endBoneWT.a * boneLen + endBoneWT.tx;
     const tipY = endBoneWT.b * boneLen + endBoneWT.ty;
 
@@ -960,7 +981,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     // Create IK target node at end effector tip
     const targetNode: IKTargetNode = {
       id: targetId,
-      name: `IK Target (${(endBone as BoneNode).name})`,
+      name: `IK Target (${endBone.name})`,
       type: 'ik-target',
       parent: null,
       children: [],
@@ -1373,7 +1394,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     const id = `dc_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
     const chain: DynamicChain = {
       id,
-      name: `Dynamic Chain (${(rootBone as BoneNode).name})`,
+      name: `Dynamic Chain (${rootBone.name})`,
       rootBoneId,
       boneIds,
       enabled: true,
@@ -1480,7 +1501,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     for (const id of selectedNodeIds) {
       const node = sceneGraph.getNode(id);
       if (node && node.type === 'ik-target') {
-        const chainId = (node as IKTargetNode).ikChainId;
+        const chainId = node.ikChainId;
         newIkChains = newIkChains.filter((c) => c.id !== chainId);
       }
       mgr.removeAllKeyframesForNode(id);
@@ -1817,6 +1838,24 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   showRulers: true,
   setShowRulers: (show: boolean) => set({ showRulers: show }),
   toggleShowRulers: () => set((state) => ({ showRulers: !state.showRulers })),
+
+  // Guides
+  guides: [],
+  showGuides: true,
+  snapToGuides: true,
+  addGuide: (axis: 'x' | 'y', position: number) => {
+    const id = `guide-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    set((state) => ({ guides: [...state.guides, { id, axis, position }] }));
+  },
+  removeGuide: (id: string) =>
+    set((state) => ({ guides: state.guides.filter((g) => g.id !== id) })),
+  updateGuidePosition: (id: string, position: number) =>
+    set((state) => ({
+      guides: state.guides.map((g) => (g.id === id ? { ...g, position } : g)),
+    })),
+  clearGuides: () => set({ guides: [] }),
+  toggleShowGuides: () => set((state) => ({ showGuides: !state.showGuides })),
+  toggleSnapToGuides: () => set((state) => ({ snapToGuides: !state.snapToGuides })),
 
   // Gradient editing
   editingGradient: null,
@@ -2719,6 +2758,13 @@ export const useShowRulers = (): boolean =>
   useEditorStore((state: EditorStore) => state.showRulers);
 export const useToggleShowRulers = (): (() => void) =>
   useEditorStore((state: EditorStore) => state.toggleShowRulers);
+
+// Guide selectors
+export const useGuides = (): Guide[] => useEditorStore((state: EditorStore) => state.guides);
+export const useShowGuides = (): boolean =>
+  useEditorStore((state: EditorStore) => state.showGuides);
+export const useSnapToGuides = (): boolean =>
+  useEditorStore((state: EditorStore) => state.snapToGuides);
 
 // Gradient editing selectors
 export const useEditingGradient = () =>
