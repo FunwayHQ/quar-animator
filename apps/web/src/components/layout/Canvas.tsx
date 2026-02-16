@@ -7,6 +7,7 @@ import {
   OnionSkinRenderer,
   SelectionManager,
   TransformHandles,
+  importSvg,
 } from '@quar/core';
 import type { Node, ImageNode, TextNode, GroupNode, Vector2 } from '@quar/types';
 import { evaluateNodeAtFrame, applyAnimatedValues, getAnimatedNodes } from '@quar/animation';
@@ -1780,7 +1781,8 @@ export function Canvas() {
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     const camera = cameraRef.current;
-    if (!camera || !sceneGraphRef.current) return;
+    const sg = sceneGraphRef.current;
+    if (!camera || !sg) return;
 
     const files = Array.from(e.dataTransfer.files);
     const imageFile = files.find((f) => f.type.startsWith('image/'));
@@ -1799,44 +1801,70 @@ export function Canvas() {
     };
     const worldPos = camera.screenToWorld(screenPos);
 
-    const reader = new FileReader();
-    reader.onload = () => {
-      const dataUri = reader.result as string;
-      const img = new Image();
-      img.onload = () => {
-        const nodeId = `node_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
-        const imageNode = {
-          id: nodeId,
-          name: imageFile.name.replace(/\.[^.]+$/, ''),
-          type: 'image' as const,
-          parent: null,
-          children: [],
-          transform: {
-            position: { x: worldPos.x, y: worldPos.y },
-            rotation: 0,
-            scale: { x: 1, y: 1 },
-            anchor: { x: 0.5, y: 0.5 },
-            skew: { x: 0, y: 0 },
-          },
-          visible: true,
-          locked: false,
-          opacity: 1,
-          blendMode: 'normal' as const,
-          src: dataUri,
-          width: img.naturalWidth,
-          height: img.naturalHeight,
-          naturalWidth: img.naturalWidth,
-          naturalHeight: img.naturalHeight,
-          cornerRadius: [0, 0, 0, 0] as [number, number, number, number],
-        };
+    const isSvg = imageFile.type === 'image/svg+xml' || imageFile.name.endsWith('.svg');
 
-        useEditorStore.getState().pushUndo(sceneGraphRef.current);
-        sceneGraphRef.current!.addNode(imageNode);
-        useEditorStore.setState({ selectedNodeIds: new Set([nodeId]) });
+    if (isSvg) {
+      // SVG → import as vector paths
+      const reader = new FileReader();
+      reader.onload = () => {
+        const svgString = reader.result as string;
+        let idCounter = Date.now();
+        const generateId = () => `node_${idCounter++}`;
+        try {
+          useEditorStore.getState().pushUndo(sg);
+          const result = importSvg(svgString, sg, generateId, {
+            centerAtOrigin: false,
+            position: worldPos,
+          });
+          if (result.rootIds.length > 0) {
+            useEditorStore.setState({ selectedNodeIds: new Set(result.rootIds) });
+          }
+        } catch {
+          // silently fail on invalid SVG
+        }
       };
-      img.src = dataUri;
-    };
-    reader.readAsDataURL(imageFile);
+      reader.readAsText(imageFile);
+    } else {
+      // Raster image (PNG, JPG, etc.) → import as ImageNode
+      const reader = new FileReader();
+      reader.onload = () => {
+        const dataUri = reader.result as string;
+        const img = new Image();
+        img.onload = () => {
+          const nodeId = `node_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+          const imageNode = {
+            id: nodeId,
+            name: imageFile.name.replace(/\.[^.]+$/, ''),
+            type: 'image' as const,
+            parent: null,
+            children: [],
+            transform: {
+              position: { x: worldPos.x, y: worldPos.y },
+              rotation: 0,
+              scale: { x: 1, y: 1 },
+              anchor: { x: 0.5, y: 0.5 },
+              skew: { x: 0, y: 0 },
+            },
+            visible: true,
+            locked: false,
+            opacity: 1,
+            blendMode: 'normal' as const,
+            src: dataUri,
+            width: img.naturalWidth,
+            height: img.naturalHeight,
+            naturalWidth: img.naturalWidth,
+            naturalHeight: img.naturalHeight,
+            cornerRadius: [0, 0, 0, 0] as [number, number, number, number],
+          };
+
+          useEditorStore.getState().pushUndo(sg);
+          sg.addNode(imageNode);
+          useEditorStore.setState({ selectedNodeIds: new Set([nodeId]) });
+        };
+        img.src = dataUri;
+      };
+      reader.readAsDataURL(imageFile);
+    }
   }, []);
 
   // --------------------------------------------------------------------------
