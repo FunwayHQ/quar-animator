@@ -75,6 +75,9 @@ export function useProjectActions(options: UseProjectActionsOptions = {}): Proje
       frameRate: state.frameRate,
       autoKeyframe: state.autoKeyframe,
       onionSkin: state.onionSkin,
+      vitruvianControllers: state.vitruvianControllers,
+      dynamicChains: state.dynamicChains,
+      globalWind: state.globalWind,
     };
   }, []);
 

@@ -176,7 +176,8 @@ export type NodeType =
   | 'text'
   | 'image'
   | 'bone'
-  | 'ik-target';
+  | 'ik-target'
+  | 'vitruvian';
 
 export interface BaseNode {
   id: string;
@@ -330,6 +331,11 @@ export interface IKTargetNode extends BaseNode {
   targetType: 'effector' | 'pole';
 }
 
+export interface VitruvianNode extends BaseNode {
+  type: 'vitruvian';
+  controllerId: string;
+}
+
 // ============================================================================
 // IK Chain Types
 // ============================================================================
@@ -382,7 +388,8 @@ export type Node =
   | TextNode
   | ImageNode
   | BoneNode
-  | IKTargetNode;
+  | IKTargetNode
+  | VitruvianNode;
 
 /** Node types that can have skin bindings */
 export type SkinnableNode = RectangleNode | EllipseNode | PolygonNode | PathNode | ImageNode;
@@ -421,6 +428,79 @@ export interface SmartBoneAction {
   driver: SmartBoneDriver;
   targets: MorphTarget[]; // Ordered by driverValue ascending
   enabled: boolean;
+}
+
+// ============================================================================
+// Vitruvian Bones Types (Bone Group Switching)
+// ============================================================================
+
+/** Snapshot of SkinData for a specific node at bone-group capture time */
+export interface BoneGroupSkinSnapshot {
+  nodeId: string;
+  skinData: SkinData;
+}
+
+/** A named group of bones for Vitruvian switching */
+export interface BoneGroup {
+  id: string;
+  name: string;
+  boneIds: string[];
+  skinSnapshots: BoneGroupSkinSnapshot[];
+}
+
+/** Controller that manages multiple bone groups for pose topology switching */
+export interface VitruvianController {
+  id: string;
+  name: string;
+  groups: BoneGroup[];
+  activeGroupId: string;
+  enabled: boolean;
+}
+
+// ============================================================================
+// Dynamic Bone Chain Types (Physics)
+// ============================================================================
+
+/** Configuration for a dynamic bone chain with Verlet physics */
+export interface DynamicChain {
+  id: string;
+  name: string;
+  rootBoneId: string;
+  boneIds: string[];
+  enabled: boolean;
+  stiffness: number; // 0-1, joint stiffness
+  damping: number; // 0-1, velocity damping
+  gravity: number; // Gravity strength
+  gravityAngle: number; // Gravity direction in degrees (default -90 = downward)
+  windInfluence: number; // 0-1, how much wind affects this chain
+  elasticity: number; // 0-1, spring-back to rest pose
+  collisionRadius: number; // Per-bone collision sphere radius
+  freezeAxis?: 'x' | 'y'; // Optional axis lock
+}
+
+/** Global wind settings for all dynamic chains */
+export interface WindSettings {
+  strength: number;
+  direction: number; // Degrees
+  turbulence: number; // 0-1
+  frequency: number; // Oscillation frequency
+  enabled: boolean;
+}
+
+/** Transient particle state for Verlet simulation (NOT persisted) */
+export interface DynamicParticle {
+  position: Vector2;
+  prevPosition: Vector2;
+  restLength: number;
+  restAngle: number;
+  mass: number;
+}
+
+/** Transient chain simulation state (NOT persisted) */
+export interface DynamicChainState {
+  chainId: string;
+  particles: DynamicParticle[];
+  initialized: boolean;
 }
 
 // ============================================================================

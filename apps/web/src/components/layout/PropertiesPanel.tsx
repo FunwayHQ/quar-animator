@@ -41,6 +41,9 @@ import { useEditorStore, DEFAULT_FILL, DEFAULT_STROKE } from '../../stores/edito
 import { ScrubLabel } from '../common/ScrubLabel';
 import { KeyframeIndicator } from '../common/KeyframeIndicator';
 import { SmartBonePanel } from '../common/SmartBonePanel';
+import { VitruvianPanel } from '../common/VitruvianPanel';
+import { DynamicChainPanel } from '../common/DynamicChainPanel';
+import { WindPanel } from '../common/WindPanel';
 import { ColorPicker } from '../common/ColorPicker';
 import { GradientEditor } from '../common/GradientEditor';
 import type { FillType } from '../common/GradientEditor';
@@ -355,6 +358,7 @@ export function PropertiesPanel() {
   const setKeyframeEasing = useEditorStore((state) => state.setKeyframeEasing);
   const weightPaintBoneId = useEditorStore((state) => state.weightPaintBoneId);
   const setWeightPaintBoneId = useEditorStore((state) => state.setWeightPaintBoneId);
+  const dynamicChains = useEditorStore((state) => state.dynamicChains);
 
   // Undo snapshot before scrub or input commit
   const handleScrubStart = useCallback(() => {
@@ -1826,6 +1830,12 @@ export function PropertiesPanel() {
               })()}
             {/* Smart Bones section (for bone nodes) */}
             {node.type === 'bone' && <SmartBonePanel boneId={nodeId} />}
+            {/* Vitruvian Bones section (for bone nodes) */}
+            {node.type === 'bone' && <VitruvianPanel boneId={nodeId} />}
+            {/* Dynamic Chain section (for bone nodes) */}
+            {node.type === 'bone' && <DynamicChainPanel boneId={nodeId} />}
+            {/* Global Wind section (visible when any dynamic chain exists) */}
+            {node.type === 'bone' && dynamicChains.length > 0 && <WindPanel />}
             {/* IK Target section */}
             {node.type === 'ik-target' &&
               (() => {

@@ -4,7 +4,7 @@
  */
 
 /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access */
-import type { Node, Timeline } from '@quar/types';
+import type { Node, Timeline, VitruvianController, DynamicChain, WindSettings } from '@quar/types';
 import type { OnionSkinSettings } from '@quar/core';
 import type { SceneGraph } from '@quar/core';
 import { createTimeline } from '@quar/animation';
@@ -30,6 +30,11 @@ export interface ProjectData {
     autoKeyframe: boolean;
     onionSkin: OnionSkinSettings;
   };
+  rigging?: {
+    vitruvianControllers?: VitruvianController[];
+    dynamicChains?: DynamicChain[];
+    globalWind?: WindSettings;
+  };
 }
 
 export interface EditorStateSnapshot {
@@ -38,6 +43,9 @@ export interface EditorStateSnapshot {
   frameRate: number;
   autoKeyframe: boolean;
   onionSkin: OnionSkinSettings;
+  vitruvianControllers?: VitruvianController[];
+  dynamicChains?: DynamicChain[];
+  globalWind?: WindSettings;
 }
 
 // ============================================================================
@@ -63,6 +71,13 @@ export function serializeProject(
       frameRate: editorState.frameRate,
       autoKeyframe: editorState.autoKeyframe,
       onionSkin: { ...editorState.onionSkin },
+    },
+    rigging: {
+      vitruvianControllers: editorState.vitruvianControllers
+        ? structuredClone(editorState.vitruvianControllers)
+        : [],
+      dynamicChains: editorState.dynamicChains ? structuredClone(editorState.dynamicChains) : [],
+      globalWind: editorState.globalWind ? { ...editorState.globalWind } : undefined,
     },
   };
 }
@@ -173,6 +188,9 @@ export function deserializeProject(
     autoKeyframe: data.settings.autoKeyframe,
     onionSkin: { ...DEFAULT_ONION_SKIN_SETTINGS, ...data.settings.onionSkin },
     currentFrame: 0,
+    vitruvianControllers: data.rigging?.vitruvianControllers ?? [],
+    dynamicChains: data.rigging?.dynamicChains ?? [],
+    globalWind: data.rigging?.globalWind,
   });
 }
 

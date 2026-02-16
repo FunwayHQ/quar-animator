@@ -48,6 +48,15 @@ describe('EditorStore', () => {
       smartBoneActions: [],
       smartBoneRecordingActionId: null,
       smartBoneRecordingTargetId: null,
+      vitruvianControllers: [],
+      dynamicChains: [],
+      globalWind: {
+        strength: 0,
+        direction: 0,
+        turbulence: 0,
+        frequency: 1,
+        enabled: false,
+      },
     });
   });
 
@@ -2254,6 +2263,160 @@ describe('EditorStore', () => {
       const remaining = useEditorStore.getState().smartBoneActions;
       expect(remaining).toHaveLength(1);
       expect(remaining[0].driver.boneId).toBe('bone-2');
+    });
+  });
+
+  describe('Vitruvian Controllers', () => {
+    it('createVitruvianController creates a controller with default group', () => {
+      useEditorStore.getState().createVitruvianController();
+      const controllers = useEditorStore.getState().vitruvianControllers;
+      expect(controllers).toHaveLength(1);
+      expect(controllers[0].name).toMatch(/Vitruvian/);
+      expect(controllers[0].enabled).toBe(true);
+      // Creates a default group automatically
+      expect(controllers[0].groups).toHaveLength(1);
+      expect(controllers[0].groups[0].name).toBe('Default');
+      expect(controllers[0].activeGroupId).toBe(controllers[0].groups[0].id);
+    });
+
+    it('removeVitruvianController removes by id', () => {
+      useEditorStore.getState().createVitruvianController();
+      const id = useEditorStore.getState().vitruvianControllers[0].id;
+      useEditorStore.getState().removeVitruvianController(id);
+      expect(useEditorStore.getState().vitruvianControllers).toHaveLength(0);
+    });
+
+    it('setVitruvianControllerEnabled toggles enabled', () => {
+      useEditorStore.getState().createVitruvianController();
+      const id = useEditorStore.getState().vitruvianControllers[0].id;
+      useEditorStore.getState().setVitruvianControllerEnabled(id, false);
+      expect(useEditorStore.getState().vitruvianControllers[0].enabled).toBe(false);
+    });
+
+    it('addVitruvianGroup adds a group with the bone', () => {
+      useEditorStore.getState().createVitruvianController();
+      const id = useEditorStore.getState().vitruvianControllers[0].id;
+      useEditorStore.getState().addVitruvianGroup(id, 'Group B', ['bone-1']);
+      const groups = useEditorStore.getState().vitruvianControllers[0].groups;
+      // 1 default + 1 added
+      expect(groups).toHaveLength(2);
+      expect(groups[1].name).toBe('Group B');
+      expect(groups[1].boneIds).toContain('bone-1');
+    });
+
+    it('removeVitruvianGroup removes the group', () => {
+      useEditorStore.getState().createVitruvianController();
+      const ctrlId = useEditorStore.getState().vitruvianControllers[0].id;
+      useEditorStore.getState().addVitruvianGroup(ctrlId, 'Group B', ['bone-1']);
+      // groups[0] = Default, groups[1] = added
+      const addedGroupId = useEditorStore.getState().vitruvianControllers[0].groups[1].id;
+      useEditorStore.getState().removeVitruvianGroup(ctrlId, addedGroupId);
+      // Only the Default group remains
+      expect(useEditorStore.getState().vitruvianControllers[0].groups).toHaveLength(1);
+    });
+
+    it('setVitruvianActiveGroup changes active group', () => {
+      useEditorStore.getState().createVitruvianController();
+      const ctrlId = useEditorStore.getState().vitruvianControllers[0].id;
+      useEditorStore.getState().addVitruvianGroup(ctrlId, 'Group B', ['bone-1']);
+      // groups: [Default, added]
+      const groups = useEditorStore.getState().vitruvianControllers[0].groups;
+      // Switch to the newly added group
+      useEditorStore.getState().setVitruvianActiveGroup(ctrlId, groups[1].id);
+      expect(useEditorStore.getState().vitruvianControllers[0].activeGroupId).toBe(groups[1].id);
+    });
+
+    it('clearHistory resets vitruvianControllers', () => {
+      useEditorStore.getState().createVitruvianController();
+      expect(useEditorStore.getState().vitruvianControllers).toHaveLength(1);
+      useEditorStore.getState().clearHistory();
+      expect(useEditorStore.getState().vitruvianControllers).toHaveLength(0);
+    });
+  });
+
+  describe('Dynamic Chains', () => {
+    it('createDynamicChain creates a chain', () => {
+      const sg = {
+        getNode: (id: string) => {
+          if (id === 'bone-root')
+            return {
+              id: 'bone-root',
+              type: 'bone',
+              children: ['bone-child-1'],
+            };
+          if (id === 'bone-child-1')
+            return {
+              id: 'bone-child-1',
+              type: 'bone',
+              children: [],
+            };
+          return undefined;
+        },
+      } as any;
+
+      useEditorStore.getState().createDynamicChain(sg, 'bone-root');
+      const chains = useEditorStore.getState().dynamicChains;
+      expect(chains).toHaveLength(1);
+      expect(chains[0].rootBoneId).toBe('bone-root');
+      expect(chains[0].boneIds).toContain('bone-root');
+      expect(chains[0].boneIds).toContain('bone-child-1');
+      expect(chains[0].enabled).toBe(true);
+    });
+
+    it('removeDynamicChain removes by id', () => {
+      const sg = {
+        getNode: (id: string) =>
+          id === 'bone-1' ? { id: 'bone-1', type: 'bone', children: [] } : undefined,
+      } as any;
+      useEditorStore.getState().createDynamicChain(sg, 'bone-1');
+      const chainId = useEditorStore.getState().dynamicChains[0].id;
+      useEditorStore.getState().removeDynamicChain(chainId);
+      expect(useEditorStore.getState().dynamicChains).toHaveLength(0);
+    });
+
+    it('setDynamicChainEnabled toggles enabled', () => {
+      const sg = {
+        getNode: (id: string) =>
+          id === 'bone-1' ? { id: 'bone-1', type: 'bone', children: [] } : undefined,
+      } as any;
+      useEditorStore.getState().createDynamicChain(sg, 'bone-1');
+      const chainId = useEditorStore.getState().dynamicChains[0].id;
+      useEditorStore.getState().setDynamicChainEnabled(chainId, false);
+      expect(useEditorStore.getState().dynamicChains[0].enabled).toBe(false);
+    });
+
+    it('updateDynamicChainSettings updates properties', () => {
+      const sg = {
+        getNode: (id: string) =>
+          id === 'bone-1' ? { id: 'bone-1', type: 'bone', children: [] } : undefined,
+      } as any;
+      useEditorStore.getState().createDynamicChain(sg, 'bone-1');
+      const chainId = useEditorStore.getState().dynamicChains[0].id;
+      useEditorStore.getState().updateDynamicChainSettings(chainId, {
+        stiffness: 0.9,
+        gravity: 200,
+      });
+      const chain = useEditorStore.getState().dynamicChains[0];
+      expect(chain.stiffness).toBe(0.9);
+      expect(chain.gravity).toBe(200);
+    });
+
+    it('setGlobalWind updates wind settings', () => {
+      useEditorStore.getState().setGlobalWind({ strength: 100, enabled: true });
+      const wind = useEditorStore.getState().globalWind;
+      expect(wind.strength).toBe(100);
+      expect(wind.enabled).toBe(true);
+    });
+
+    it('clearHistory resets dynamicChains', () => {
+      const sg = {
+        getNode: (id: string) =>
+          id === 'bone-1' ? { id: 'bone-1', type: 'bone', children: [] } : undefined,
+      } as any;
+      useEditorStore.getState().createDynamicChain(sg, 'bone-1');
+      expect(useEditorStore.getState().dynamicChains).toHaveLength(1);
+      useEditorStore.getState().clearHistory();
+      expect(useEditorStore.getState().dynamicChains).toHaveLength(0);
     });
   });
 });

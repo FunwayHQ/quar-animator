@@ -24,6 +24,10 @@ import type {
   BoneNode,
   SmartBoneAction,
   MorphVertexOffset,
+  VitruvianController,
+  BoneGroup,
+  DynamicChain,
+  WindSettings,
 } from '@quar/types';
 import type { KeyframeClipboard } from '@quar/animation';
 import { createTimeline, KeyframeManager } from '@quar/animation';
@@ -241,6 +245,32 @@ export interface EditorStore {
     targetId: string,
     offsets: Record<string, MorphVertexOffset[]>
   ) => void;
+
+  // Vitruvian Bones (bone group switching)
+  vitruvianControllers: VitruvianController[];
+  createVitruvianController: (name?: string) => string;
+  removeVitruvianController: (controllerId: string) => void;
+  setVitruvianControllerEnabled: (controllerId: string, enabled: boolean) => void;
+  setVitruvianActiveGroup: (controllerId: string, groupId: string) => void;
+  addVitruvianGroup: (controllerId: string, name: string, boneIds: string[]) => string;
+  removeVitruvianGroup: (controllerId: string, groupId: string) => void;
+  captureVitruvianSkinSnapshots: (
+    controllerId: string,
+    groupId: string,
+    sceneGraph: SceneGraphLike
+  ) => void;
+
+  // Dynamic Bone Chains (physics)
+  dynamicChains: DynamicChain[];
+  globalWind: WindSettings;
+  createDynamicChain: (sceneGraph: SceneGraphLike, rootBoneId: string) => void;
+  removeDynamicChain: (chainId: string) => void;
+  setDynamicChainEnabled: (chainId: string, enabled: boolean) => void;
+  updateDynamicChainSettings: (
+    chainId: string,
+    settings: Partial<Omit<DynamicChain, 'id' | 'name' | 'rootBoneId' | 'boneIds'>>
+  ) => void;
+  setGlobalWind: (settings: Partial<WindSettings>) => void;
 
   // Aspect ratio lock
   aspectRatioLocked: boolean;
@@ -1190,6 +1220,209 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     });
   },
 
+  // Vitruvian Bones (bone group switching)
+  vitruvianControllers: [] as VitruvianController[],
+
+  createVitruvianController: (name?: string) => {
+    const id = `vit_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+    const groupId = `vg_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+    const controller: VitruvianController = {
+      id,
+      name: name ?? `Vitruvian ${get().vitruvianControllers.length + 1}`,
+      groups: [
+        {
+          id: groupId,
+          name: 'Default',
+          boneIds: [],
+          skinSnapshots: [],
+        },
+      ],
+      activeGroupId: groupId,
+      enabled: true,
+    };
+    set({
+      vitruvianControllers: [...get().vitruvianControllers, controller],
+      isDirty: true,
+    });
+    toast.success('Vitruvian controller created');
+    return id;
+  },
+
+  removeVitruvianController: (controllerId: string) => {
+    set({
+      vitruvianControllers: get().vitruvianControllers.filter((c) => c.id !== controllerId),
+      isDirty: true,
+    });
+    toast.info('Vitruvian controller removed');
+  },
+
+  setVitruvianControllerEnabled: (controllerId: string, enabled: boolean) => {
+    set({
+      vitruvianControllers: get().vitruvianControllers.map((c) =>
+        c.id === controllerId ? { ...c, enabled } : c
+      ),
+    });
+  },
+
+  setVitruvianActiveGroup: (controllerId: string, groupId: string) => {
+    set({
+      vitruvianControllers: get().vitruvianControllers.map((c) =>
+        c.id === controllerId ? { ...c, activeGroupId: groupId } : c
+      ),
+      isDirty: true,
+    });
+  },
+
+  addVitruvianGroup: (controllerId: string, name: string, boneIds: string[]) => {
+    const groupId = `vg_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+    set({
+      vitruvianControllers: get().vitruvianControllers.map((c) =>
+        c.id === controllerId
+          ? {
+              ...c,
+              groups: [...c.groups, { id: groupId, name, boneIds, skinSnapshots: [] }],
+            }
+          : c
+      ),
+      isDirty: true,
+    });
+    return groupId;
+  },
+
+  removeVitruvianGroup: (controllerId: string, groupId: string) => {
+    set({
+      vitruvianControllers: get().vitruvianControllers.map((c) => {
+        if (c.id !== controllerId) return c;
+        const newGroups = c.groups.filter((g) => g.id !== groupId);
+        return {
+          ...c,
+          groups: newGroups,
+          // If active group was removed, switch to first remaining
+          activeGroupId:
+            c.activeGroupId === groupId ? (newGroups[0]?.id ?? c.activeGroupId) : c.activeGroupId,
+        };
+      }),
+      isDirty: true,
+    });
+  },
+
+  captureVitruvianSkinSnapshots: (
+    controllerId: string,
+    groupId: string,
+    sceneGraph: SceneGraphLike
+  ) => {
+    // Capture current skinData from all skinned nodes
+    const snapshots: import('@quar/types').BoneGroupSkinSnapshot[] = [];
+    sceneGraph.traverse((node) => {
+      if ((node as any).skinData) {
+        snapshots.push({
+          nodeId: node.id,
+          skinData: structuredClone((node as any).skinData),
+        });
+      }
+    });
+    set({
+      vitruvianControllers: get().vitruvianControllers.map((c) =>
+        c.id === controllerId
+          ? {
+              ...c,
+              groups: c.groups.map((g) =>
+                g.id === groupId ? { ...g, skinSnapshots: snapshots } : g
+              ),
+            }
+          : c
+      ),
+      isDirty: true,
+    });
+    toast.success(`Captured ${snapshots.length} skin snapshots`);
+  },
+
+  // Dynamic Bone Chains (physics)
+  dynamicChains: [] as DynamicChain[],
+  globalWind: {
+    strength: 0,
+    direction: 0,
+    turbulence: 0,
+    frequency: 1,
+    enabled: false,
+  } as WindSettings,
+
+  createDynamicChain: (sceneGraph: SceneGraphLike, rootBoneId: string) => {
+    const rootBone = sceneGraph.getNode(rootBoneId);
+    if (!rootBone || rootBone.type !== 'bone') {
+      toast.error('Selected node is not a bone');
+      return;
+    }
+
+    // Walk child chain from root bone
+    const boneIds: string[] = [rootBoneId];
+    let currentId = rootBoneId;
+    for (let i = 0; i < 100; i++) {
+      const node = sceneGraph.getNode(currentId);
+      if (!node) break;
+      const childBones = node.children.filter((cId) => {
+        const child = sceneGraph.getNode(cId);
+        return child && child.type === 'bone';
+      });
+      if (childBones.length === 0) break;
+      // Follow first bone child
+      currentId = childBones[0];
+      boneIds.push(currentId);
+    }
+
+    const id = `dc_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+    const chain: DynamicChain = {
+      id,
+      name: `Dynamic Chain (${(rootBone as BoneNode).name})`,
+      rootBoneId,
+      boneIds,
+      enabled: true,
+      stiffness: 0.3,
+      damping: 0.2,
+      gravity: 98,
+      gravityAngle: -90,
+      windInfluence: 0.5,
+      elasticity: 0.1,
+      collisionRadius: 0,
+    };
+    set({
+      dynamicChains: [...get().dynamicChains, chain],
+      isDirty: true,
+    });
+    toast.success('Dynamic chain created');
+  },
+
+  removeDynamicChain: (chainId: string) => {
+    set({
+      dynamicChains: get().dynamicChains.filter((c) => c.id !== chainId),
+      isDirty: true,
+    });
+    toast.info('Dynamic chain removed');
+  },
+
+  setDynamicChainEnabled: (chainId: string, enabled: boolean) => {
+    set({
+      dynamicChains: get().dynamicChains.map((c) => (c.id === chainId ? { ...c, enabled } : c)),
+    });
+  },
+
+  updateDynamicChainSettings: (
+    chainId: string,
+    settings: Partial<Omit<DynamicChain, 'id' | 'name' | 'rootBoneId' | 'boneIds'>>
+  ) => {
+    set({
+      dynamicChains: get().dynamicChains.map((c) => (c.id === chainId ? { ...c, ...settings } : c)),
+      isDirty: true,
+    });
+  },
+
+  setGlobalWind: (settings: Partial<WindSettings>) => {
+    set({
+      globalWind: { ...get().globalWind, ...settings },
+      isDirty: true,
+    });
+  },
+
   // Aspect ratio lock
   aspectRatioLocked: false,
   toggleAspectRatioLock: () => set((state) => ({ aspectRatioLocked: !state.aspectRatioLocked })),
@@ -1236,7 +1469,8 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     get().pasteClipboard(sceneGraph);
   },
   deleteSelection: (sceneGraph: SceneGraphLike) => {
-    const { selectedNodeIds, timeline, enteredGroupId, ikChains, smartBoneActions } = get();
+    const { selectedNodeIds, timeline, enteredGroupId, ikChains, smartBoneActions, dynamicChains } =
+      get();
     if (selectedNodeIds.size === 0) return;
     get().pushUndo(sceneGraph);
     // Clean up keyframe tracks for deleted nodes
@@ -1256,6 +1490,8 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     const newSmartBoneActions = smartBoneActions.filter(
       (a) => !selectedNodeIds.has(a.driver.boneId)
     );
+    // Clean up Dynamic Chains referencing deleted bones
+    const newDynamicChains = dynamicChains.filter((c) => !selectedNodeIds.has(c.rootBoneId));
     // Clear enteredGroupId if the entered group no longer exists
     const clearGroup = enteredGroupId && !sceneGraph.getNode(enteredGroupId);
     set({
@@ -1265,6 +1501,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       isDirty: true,
       ikChains: newIkChains,
       smartBoneActions: newSmartBoneActions,
+      dynamicChains: newDynamicChains,
       ...(clearGroup ? { enteredGroupId: null } : {}),
     });
   },
@@ -2335,6 +2572,8 @@ function createHistoryActions(
         smartBoneRecordingTargetId: null,
         smartBoneRecordingPrevTool: null,
         smartBoneRecordingPrevRotation: null,
+        vitruvianControllers: [],
+        dynamicChains: [],
       });
     },
 

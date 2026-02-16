@@ -154,6 +154,14 @@ export function MenuBar({ projectActions }: MenuBarProps) {
   const smartBoneActions: SmartBoneAction[] = useEditorStore((state) => state.smartBoneActions);
   const createSmartBoneActionStore = useEditorStore((state) => state.createSmartBoneAction);
   const removeSmartBoneActionStore = useEditorStore((state) => state.removeSmartBoneAction);
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-return
+  const vitruvianControllers = useEditorStore((state) => state.vitruvianControllers);
+  const createVitruvianController = useEditorStore((state) => state.createVitruvianController);
+  const removeVitruvianController = useEditorStore((state) => state.removeVitruvianController);
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-return
+  const dynamicChains = useEditorStore((state) => state.dynamicChains);
+  const createDynamicChain = useEditorStore((state) => state.createDynamicChain);
+  const removeDynamicChain = useEditorStore((state) => state.removeDynamicChain);
 
   // --- Computed flags ---
   const hasSelection = selectedNodeIds.size > 0;
@@ -239,6 +247,15 @@ export function MenuBar({ projectActions }: MenuBarProps) {
     // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-member-access
     return smartBoneActions.some((a: SmartBoneAction) => boneIds.includes(a.driver.boneId));
   }, [selectedNodeIds, sceneGraph, smartBoneActions]);
+
+  const hasDynamicChainForSelected = useMemo(() => {
+    const boneIds = Array.from(selectedNodeIds).filter((id) => {
+      const n = sceneGraph.getNode(id);
+      return n && n.type === 'bone';
+    });
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    return dynamicChains.some((c: { rootBoneId: string }) => boneIds.includes(c.rootBoneId));
+  }, [selectedNodeIds, sceneGraph, dynamicChains]);
 
   // --- Close menu when clicking outside ---
   useEffect(() => {
@@ -867,6 +884,64 @@ export function MenuBar({ projectActions }: MenuBarProps) {
                     }
                   }}
                   data-testid="delete-smart-bone-action-menu"
+                />
+                <Separator />
+                <MenuItem
+                  label="Create Vitruvian Controller"
+                  disabled={!hasBoneSelected}
+                  onClick={() => {
+                    closeMenu();
+                    createVitruvianController();
+                  }}
+                  data-testid="create-vitruvian-menu"
+                />
+                <MenuItem
+                  label="Remove Vitruvian Controller"
+                  disabled={vitruvianControllers.length === 0}
+                  onClick={() => {
+                    closeMenu();
+                    if (vitruvianControllers.length > 0) {
+                      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-member-access
+                      removeVitruvianController(
+                        vitruvianControllers[vitruvianControllers.length - 1].id
+                      );
+                    }
+                  }}
+                  data-testid="remove-vitruvian-menu"
+                />
+                <Separator />
+                <MenuItem
+                  label="Create Dynamic Chain"
+                  disabled={!hasBoneSelected}
+                  onClick={() => {
+                    closeMenu();
+                    const boneId = Array.from(selectedNodeIds).find((id) => {
+                      const n = sceneGraph.getNode(id);
+                      return n && n.type === 'bone';
+                    });
+                    if (boneId) createDynamicChain(sceneGraph, boneId);
+                  }}
+                  data-testid="create-dynamic-chain-menu"
+                />
+                <MenuItem
+                  label="Remove Dynamic Chain"
+                  disabled={!hasDynamicChainForSelected}
+                  onClick={() => {
+                    closeMenu();
+                    const boneId = Array.from(selectedNodeIds).find((id) => {
+                      const n = sceneGraph.getNode(id);
+                      return n && n.type === 'bone';
+                    });
+                    if (boneId) {
+                      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
+                      const chain = dynamicChains.find(
+                        (c: { rootBoneId: string }) => c.rootBoneId === boneId
+                      );
+                      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-member-access
+                      if (chain) removeDynamicChain(chain.id);
+                    }
+                  }}
+                  data-testid="remove-dynamic-chain-menu"
                 />
               </div>
             )}

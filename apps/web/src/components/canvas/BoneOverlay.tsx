@@ -15,6 +15,8 @@ interface BoneOverlayProps {
   selectedNodeIds: Set<string>;
   camera: Camera | null;
   sceneGraph: SceneGraph;
+  hiddenBoneIds?: Set<string>;
+  dynamicChainBoneIds?: Set<string>;
 }
 
 const JOINT_RADIUS = 5;
@@ -23,6 +25,8 @@ const ACCENT_COLOR = '#A855F7'; // Violet accent
 const IK_TARGET_SIZE = 8; // Crosshair size
 const IK_POLE_SIZE = 6; // Diamond size
 
+const DYNAMIC_COLOR = '#FF9800'; // Orange for dynamic chain bones
+
 export function BoneOverlay({
   boneNodes,
   ikTargetNodes = [],
@@ -30,10 +34,16 @@ export function BoneOverlay({
   selectedNodeIds,
   camera,
   sceneGraph,
+  hiddenBoneIds,
+  dynamicChainBoneIds,
 }: BoneOverlayProps) {
   const markers = useMemo(() => {
     if (!camera || boneNodes.length === 0) return [];
-    return boneNodes.map((bone) => {
+    // Filter out hidden Vitruvian bones
+    const visibleBones = hiddenBoneIds
+      ? boneNodes.filter((b) => !hiddenBoneIds.has(b.id))
+      : boneNodes;
+    return visibleBones.map((bone) => {
       const worldTransform = sceneGraph.getWorldTransform(bone.id);
 
       // Root joint position (world space)
@@ -50,15 +60,18 @@ export function BoneOverlay({
 
       const isSelected = selectedNodeIds.has(bone.id);
 
+      const isDynamic = dynamicChainBoneIds ? dynamicChainBoneIds.has(bone.id) : false;
+
       return {
         id: bone.id,
         rootScreen,
         tipScreen,
         isSelected,
         boneColor: bone.boneColor,
+        isDynamic,
       };
     });
-  }, [boneNodes, selectedNodeIds, camera, sceneGraph]);
+  }, [boneNodes, selectedNodeIds, camera, sceneGraph, hiddenBoneIds, dynamicChainBoneIds]);
 
   // IK target markers
   const ikMarkers = useMemo(() => {
@@ -137,7 +150,7 @@ export function BoneOverlay({
       ))}
 
       {/* Bone markers */}
-      {markers.map(({ id, rootScreen, tipScreen, isSelected, boneColor }) => (
+      {markers.map(({ id, rootScreen, tipScreen, isSelected, boneColor, isDynamic }) => (
         <g key={id}>
           {/* Selection highlight ring */}
           {isSelected && (
@@ -150,13 +163,25 @@ export function BoneOverlay({
               strokeWidth={2}
             />
           )}
+          {/* Dynamic chain indicator ring */}
+          {isDynamic && !isSelected && (
+            <circle
+              cx={rootScreen.x}
+              cy={rootScreen.y}
+              r={JOINT_RADIUS + 2}
+              fill="none"
+              stroke={DYNAMIC_COLOR}
+              strokeWidth={1.5}
+              strokeDasharray="3 2"
+            />
+          )}
           {/* Joint circle (filled) */}
           <circle
             cx={rootScreen.x}
             cy={rootScreen.y}
             r={JOINT_RADIUS}
-            fill={isSelected ? ACCENT_COLOR : boneColor}
-            stroke={isSelected ? ACCENT_COLOR : '#888'}
+            fill={isSelected ? ACCENT_COLOR : isDynamic ? DYNAMIC_COLOR : boneColor}
+            stroke={isSelected ? ACCENT_COLOR : isDynamic ? DYNAMIC_COLOR : '#888'}
             strokeWidth={1}
           />
           {/* Tip circle (open) */}
@@ -165,7 +190,7 @@ export function BoneOverlay({
             cy={tipScreen.y}
             r={TIP_RADIUS}
             fill="none"
-            stroke={isSelected ? ACCENT_COLOR : boneColor}
+            stroke={isSelected ? ACCENT_COLOR : isDynamic ? DYNAMIC_COLOR : boneColor}
             strokeWidth={1.5}
           />
         </g>

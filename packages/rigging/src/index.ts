@@ -14,3 +14,7 @@ export * from './cpuSkinning';
 export * from './gpuSkinning';
 export * from './smartBones';
 export * from './morphRecording';
+export * from './vitruvianBones';
+export * from './dynamicChain';
+export * from './dynamicChainEvaluator';
+export * from './bakeDynamicChain';

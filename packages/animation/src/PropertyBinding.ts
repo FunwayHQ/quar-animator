@@ -336,6 +336,14 @@ export function getAnimatableProperties(nodeType: string): AnimatableProperty[] 
     case 'ik-target':
       // IK targets only animate position (from COMMON)
       break;
+    case 'vitruvian':
+      // Vitruvian nodes animate activeGroupId (discrete switching)
+      props.push({
+        path: 'controllerId',
+        displayName: 'Controller ID',
+        interpolationType: 'discrete',
+      });
+      break;
   }
 
   return props;

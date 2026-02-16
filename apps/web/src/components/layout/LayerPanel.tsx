@@ -55,6 +55,8 @@ function nodeTypeIcon(type: string, node?: Node): string {
       return '\u22A5'; // ⊥ perpendicular symbol
     case 'ik-target':
       return '\u2295'; // ⊕ crosshair-like symbol
+    case 'vitruvian':
+      return '\u2726'; // ✦ four-pointed star (Vitruvian switch)
     default:
       return '\u25FC';
   }

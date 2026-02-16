@@ -10,7 +10,15 @@ import {
 } from '@quar/core';
 import type { Node, ImageNode, TextNode, GroupNode, Vector2 } from '@quar/types';
 import { evaluateNodeAtFrame, applyAnimatedValues, getAnimatedNodes } from '@quar/animation';
-import { evaluateIKChains, evaluateSmartBones, morphOffsetsToDense } from '@quar/rigging';
+import {
+  evaluateIKChains,
+  evaluateSmartBones,
+  morphOffsetsToDense,
+  evaluateVitruvianControllers,
+  evaluateDynamicChains,
+  resetDynamicChainStates,
+} from '@quar/rigging';
+import type { DynamicChainState } from '@quar/types';
 import type { PointMagnetTool } from '@quar/core';
 import { useCanvasTools } from '../../hooks/useCanvasTools';
 import { useToolShortcuts } from '../../hooks/useToolShortcuts';
@@ -65,6 +73,10 @@ export function Canvas() {
 
   // Track active drag listener cleanup to prevent leaks on unmount
   const activeDragCleanupRef = useRef<(() => void) | null>(null);
+
+  // Dynamic chain physics state (transient, not persisted)
+  const dynamicChainStatesRef = useRef<Map<string, DynamicChainState>>(new Map());
+  const lastFrameTimeRef = useRef<number>(0);
 
   // Deformed bounds cache — updated in RAF render loop after IK evaluation
   const deformedBoundsRef = useRef<
@@ -333,6 +345,26 @@ export function Canvas() {
   }, [sceneGraphVersion]);
 
   const ikChains = useEditorStore((state) => state.ikChains);
+  const vitruvianControllers = useEditorStore((state) => state.vitruvianControllers);
+  const dynamicChains = useEditorStore((state) => state.dynamicChains);
+
+  // Compute hidden bones from Vitruvian controllers
+  const hiddenBoneIds = useMemo(() => {
+    if (vitruvianControllers.length === 0) return undefined;
+    return evaluateVitruvianControllers(vitruvianControllers);
+  }, [vitruvianControllers]);
+
+  // Compute dynamic chain bone IDs for overlay
+  const dynamicChainBoneIds = useMemo(() => {
+    if (dynamicChains.length === 0) return undefined;
+    const ids = new Set<string>();
+    for (const chain of dynamicChains) {
+      if (chain.enabled) {
+        for (const boneId of chain.boneIds) ids.add(boneId);
+      }
+    }
+    return ids.size > 0 ? ids : undefined;
+  }, [dynamicChains]);
 
   const transformHandles = useMemo(() => {
     if (!transformHandlesRef.current || !selectionBounds || !cameraRef.current) return [];
@@ -513,7 +545,40 @@ export function Canvas() {
           }
         }
 
-        // Evaluate Smart Bones (corrective morph targets after FK+IK)
+        // Evaluate Dynamic Bone Chains (physics, after IK, before Smart Bones)
+        if (sceneGraphRef.current) {
+          const {
+            dynamicChains,
+            globalWind,
+            isPlaying: dcPlaying,
+            currentFrame: dcFrame,
+            frameRate: dcFrameRate,
+          } = useEditorStore.getState();
+          if (dynamicChains.length > 0 && dcPlaying) {
+            const now = performance.now() / 1000;
+            const dt =
+              lastFrameTimeRef.current > 0
+                ? Math.min(now - lastFrameTimeRef.current, 0.05)
+                : 1 / dcFrameRate;
+            lastFrameTimeRef.current = now;
+            evaluateDynamicChains(
+              dynamicChains,
+              dynamicChainStatesRef.current,
+              sceneGraphRef.current as any,
+              dt,
+              globalWind,
+              dcFrame / dcFrameRate
+            );
+          } else if (!dcPlaying) {
+            // Reset chain states when not playing so they re-init on next play
+            if (dynamicChainStatesRef.current.size > 0) {
+              resetDynamicChainStates(dynamicChainStatesRef.current);
+              lastFrameTimeRef.current = 0;
+            }
+          }
+        }
+
+        // Evaluate Smart Bones (corrective morph targets after FK+IK+Physics)
         let morphOffsetsMap: Map<string, Float32Array> | undefined;
         if (sceneGraphRef.current && shapeRenderer) {
           const { smartBoneActions, smartBoneRecordingActionId } = useEditorStore.getState();
@@ -1856,6 +1921,8 @@ export function Canvas() {
             selectedNodeIds={selectedNodeIds}
             camera={cameraRef.current}
             sceneGraph={sceneGraph}
+            hiddenBoneIds={hiddenBoneIds}
+            dynamicChainBoneIds={dynamicChainBoneIds}
           />
         )}
       {activeTool === 'weight-paint' && cameraRef.current && (
