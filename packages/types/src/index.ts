@@ -155,6 +155,15 @@ export type Effect = DropShadowEffect | InnerShadowEffect | LayerBlurEffect;
 export type EffectType = Effect['type'];
 
 // ============================================================================
+// Export Settings
+// ============================================================================
+
+export interface ExportSetting {
+  format: 'png' | 'svg';
+  multiplier: 1 | 2 | 3 | 4; // Only meaningful for PNG
+}
+
+// ============================================================================
 // Node Types
 // ============================================================================
 
@@ -181,6 +190,7 @@ export interface BaseNode {
   opacity: number;
   blendMode: BlendMode;
   effects?: Effect[];
+  exports?: ExportSetting[];
 }
 
 export type BlendMode =

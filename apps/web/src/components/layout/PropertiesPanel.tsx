@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import type {
   Node,
   RectangleNode,
@@ -34,6 +34,7 @@ import {
   Combine,
   Diff,
   ChevronDown,
+  Download,
 } from 'lucide-react';
 import { useSceneGraph } from '../../contexts/SceneGraphContext';
 import { useEditorStore, DEFAULT_FILL, DEFAULT_STROKE } from '../../stores/editorStore';
@@ -63,6 +64,7 @@ import type { SceneGraph } from '@quar/core';
 import { getKeyframeState } from '../../hooks/useKeyframeState';
 import { EasingCurvePreview } from '../common/EasingCurvePreview';
 import { EasingEditor } from '../common/EasingEditor';
+import { exportSelectionAsPng, exportSelectionAsSvg } from '../../services/exportService';
 import styles from './PropertiesPanel.module.css';
 
 // ============================================================================
@@ -382,6 +384,16 @@ export function PropertiesPanel() {
   // Get the first selected node (single-selection for properties)
   const selectedId = selectedNodeIds.size > 0 ? [...selectedNodeIds][0] : null;
   const node = selectedId ? sceneGraph.getNode(selectedId) : null;
+
+  // Collect all selected nodes for export
+  const selectedNodes = useMemo(() => {
+    const nodes: Node[] = [];
+    for (const id of selectedNodeIds) {
+      const n = sceneGraph.getNode(id);
+      if (n) nodes.push(n);
+    }
+    return nodes;
+  }, [selectedNodeIds, sceneGraph]);
 
   // Detect multi-selection of shape nodes for boolean ops
   const SHAPE_TYPES = new Set(['rectangle', 'ellipse', 'polygon', 'path']);
@@ -3829,7 +3841,169 @@ export function PropertiesPanel() {
             </select>
           </div>
         </div>
+
+        {/* Export */}
+        <ExportSection
+          nodes={selectedNodes}
+          sceneGraph={sceneGraph}
+          selectedId={selectedId}
+          node={node}
+        />
       </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// Export Section
+// ============================================================================
+
+function ExportSection({
+  nodes,
+  sceneGraph,
+  selectedId,
+  node,
+}: {
+  nodes: Node[];
+  sceneGraph: SceneGraph;
+  selectedId: string | null;
+  node: Node | null;
+}) {
+  const [exporting, setExporting] = useState(false);
+
+  const exportSettings = node?.exports ?? [];
+
+  const selectionBounds = useMemo(() => {
+    if (nodes.length === 0) return null;
+    const sm = new SelectionManager();
+    const ids = new Set(nodes.map((n) => n.id));
+    return sm.getSelectionBounds(ids, sceneGraph);
+  }, [nodes, sceneGraph]);
+
+  if (nodes.length === 0 || !selectedId || !node) return null;
+
+  const addExport = () => {
+    const newSetting: import('@quar/types').ExportSetting = { format: 'png', multiplier: 1 };
+    sceneGraph.updateNode(selectedId, {
+      exports: [...exportSettings, newSetting],
+    });
+  };
+
+  const removeExport = (index: number) => {
+    const updated = exportSettings.filter((_, i) => i !== index);
+    sceneGraph.updateNode(selectedId, {
+      exports: updated.length > 0 ? updated : undefined,
+    });
+  };
+
+  const updateExport = (index: number, setting: import('@quar/types').ExportSetting) => {
+    const updated = exportSettings.map((s, i) => (i === index ? setting : s));
+    sceneGraph.updateNode(selectedId, { exports: updated });
+  };
+
+  const handleExport = async () => {
+    if (exportSettings.length === 0) return;
+    setExporting(true);
+    try {
+      for (const setting of exportSettings) {
+        if (setting.format === 'png') {
+          await exportSelectionAsPng(nodes, sceneGraph, setting.multiplier);
+        } else {
+          exportSelectionAsSvg(nodes, sceneGraph);
+        }
+      }
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  return (
+    <div className={styles.section} data-testid="export-section">
+      <div className={styles.sectionHeader}>
+        <span className={styles.sectionTitle}>Export</span>
+        <button
+          className={styles.exportAddButton}
+          onClick={addExport}
+          title="Add export"
+          aria-label="Add export"
+          data-testid="add-export-button"
+        >
+          <Plus size={12} />
+        </button>
+      </div>
+
+      {exportSettings.length > 0 && (
+        <div className={styles.sectionContent}>
+          {exportSettings.map((setting, index) => {
+            const boundsW = selectionBounds ? selectionBounds.rect.width : 0;
+            const boundsH = selectionBounds ? selectionBounds.rect.height : 0;
+            const displayW =
+              setting.format === 'png'
+                ? Math.ceil(boundsW * setting.multiplier)
+                : Math.ceil(boundsW);
+            const displayH =
+              setting.format === 'png'
+                ? Math.ceil(boundsH * setting.multiplier)
+                : Math.ceil(boundsH);
+
+            return (
+              <div key={index} className={styles.exportPreset} data-testid="export-preset">
+                <div className={styles.exportPresetHeader}>
+                  <select
+                    className={styles.exportPresetSelect}
+                    value={`${setting.format}${setting.format === 'png' ? ` ${setting.multiplier}x` : ''}`}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (val === 'svg') {
+                        updateExport(index, { format: 'svg', multiplier: 1 });
+                      } else {
+                        const m = parseInt(val.split(' ')[1]!) as 1 | 2 | 3 | 4;
+                        updateExport(index, { format: 'png', multiplier: m });
+                      }
+                    }}
+                    data-testid="export-format-select"
+                  >
+                    <option value="png 1x">PNG 1x</option>
+                    <option value="png 2x">PNG 2x</option>
+                    <option value="png 3x">PNG 3x</option>
+                    <option value="png 4x">PNG 4x</option>
+                    <option value="svg">SVG</option>
+                  </select>
+
+                  {selectionBounds && (
+                    <span className={styles.exportDimensions}>
+                      {displayW} × {displayH}
+                    </span>
+                  )}
+
+                  <button
+                    className={styles.exportRemoveButton}
+                    onClick={() => removeExport(index)}
+                    title="Remove export"
+                    aria-label="Remove export"
+                    data-testid="remove-export-button"
+                  >
+                    <Minus size={12} />
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+
+          {/* Export button */}
+          <button
+            className={styles.exportButton}
+            onClick={() => void handleExport()}
+            disabled={exporting}
+            data-testid="export-button"
+          >
+            <Download size={14} />
+            {exporting
+              ? 'Exporting...'
+              : `Export${exportSettings.length > 1 ? ` (${exportSettings.length})` : ''}`}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
