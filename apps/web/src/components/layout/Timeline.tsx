@@ -976,27 +976,27 @@ export function Timeline({ playback }: TimelineProps = {}) {
               );
             })}
             {nodes.length === 0 && <div className={styles.track} />}
-
-            {/* Work Area dimmed regions in tracks */}
-            {workAreaEnabled && (
-              <>
-                <div
-                  className={styles.workAreaTrackDimmed}
-                  style={{ left: 0, width: `${(workAreaStart / duration) * 100}%` }}
-                />
-                <div
-                  className={styles.workAreaTrackDimmed}
-                  style={{ left: `${((workAreaEnd + 1) / duration) * 100}%`, right: 0 }}
-                />
-              </>
-            )}
-
-            {/* Playhead line */}
-            <div
-              className={styles.playheadLine}
-              style={{ left: `${(currentFrame / duration) * 100}%` }}
-            />
           </div>
+
+          {/* Work Area dimmed regions in tracks — positioned in tracksArea to match ruler width */}
+          {workAreaEnabled && (
+            <>
+              <div
+                className={styles.workAreaTrackDimmed}
+                style={{ left: 0, width: `${(workAreaStart / duration) * 100}%` }}
+              />
+              <div
+                className={styles.workAreaTrackDimmed}
+                style={{ left: `${((workAreaEnd + 1) / duration) * 100}%`, right: 0 }}
+              />
+            </>
+          )}
+
+          {/* Playhead line — positioned in tracksArea so its % width matches the ruler */}
+          <div
+            className={styles.playheadLine}
+            style={{ left: `${(currentFrame / duration) * 100}%` }}
+          />
         </div>
       </div>
       {contextMenu && (
