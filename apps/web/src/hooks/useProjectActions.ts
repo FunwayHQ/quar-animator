@@ -22,7 +22,7 @@ import {
   downloadProjectFile,
   uploadProjectFile,
 } from '../services/projectSerializer';
-import { importSvg } from '@quar/core';
+import { importSvg, createGroupNode } from '@quar/core';
 import type { ProjectListItem } from '../services/projectStorage';
 
 // ============================================================================
@@ -270,7 +270,18 @@ export function useProjectActions(options: UseProjectActionsOptions = {}): Proje
             centerAtOrigin: true,
             selectAfterImport: true,
           });
-          if (result.rootIds.length > 0) {
+          if (result.rootIds.length > 1) {
+            const groupId = generateId();
+            const group = createGroupNode(groupId, 'Imported SVG');
+            sceneGraph.addNode(group);
+            for (const rootId of result.rootIds) {
+              sceneGraph.moveNode(rootId, groupId);
+            }
+            useEditorStore.setState({ selectedNodeIds: new Set([groupId]) });
+            toast.success(
+              `Imported ${result.nodes.length} element${result.nodes.length === 1 ? '' : 's'} from SVG`
+            );
+          } else if (result.rootIds.length === 1) {
             useEditorStore.setState({ selectedNodeIds: new Set(result.rootIds) });
             toast.success(
               `Imported ${result.nodes.length} element${result.nodes.length === 1 ? '' : 's'} from SVG`

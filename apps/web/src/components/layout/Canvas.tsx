@@ -8,6 +8,7 @@ import {
   SelectionManager,
   TransformHandles,
   importSvg,
+  createGroupNode,
 } from '@quar/core';
 import type { Node, ImageNode, TextNode, GroupNode, Vector2 } from '@quar/types';
 import { evaluateNodeAtFrame, applyAnimatedValues, getAnimatedNodes } from '@quar/animation';
@@ -1118,7 +1119,16 @@ export function Canvas() {
           centerAtOrigin: false,
           position: worldCenter,
         });
-        if (result.rootIds.length > 0) {
+        if (result.rootIds.length > 1) {
+          // Wrap multiple root nodes in a group
+          const groupId = generateId();
+          const group = createGroupNode(groupId, 'Imported SVG');
+          sg.addNode(group);
+          for (const rootId of result.rootIds) {
+            sg.moveNode(rootId, groupId);
+          }
+          useEditorStore.setState({ selectedNodeIds: new Set([groupId]) });
+        } else if (result.rootIds.length === 1) {
           useEditorStore.setState({ selectedNodeIds: new Set(result.rootIds) });
         }
       } catch {
@@ -2144,7 +2154,15 @@ export function Canvas() {
             centerAtOrigin: false,
             position: worldPos,
           });
-          if (result.rootIds.length > 0) {
+          if (result.rootIds.length > 1) {
+            const groupId = generateId();
+            const group = createGroupNode(groupId, 'Imported SVG');
+            sg.addNode(group);
+            for (const rootId of result.rootIds) {
+              sg.moveNode(rootId, groupId);
+            }
+            useEditorStore.setState({ selectedNodeIds: new Set([groupId]) });
+          } else if (result.rootIds.length === 1) {
             useEditorStore.setState({ selectedNodeIds: new Set(result.rootIds) });
           }
         } catch {

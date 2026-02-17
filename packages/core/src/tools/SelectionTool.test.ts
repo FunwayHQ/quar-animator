@@ -1877,44 +1877,5 @@ describe('SelectionTool', () => {
       // Node should stay at root since artboard is invisible
       expect(context.sceneGraph.getNode('rect1')!.parent).toBeNull();
     });
-
-    it('should enter artboard and select child on click when artboard is already selected', () => {
-      // Create artboard at center (200,200), size 400x300
-      const artboard = createTestArtboard('art1', 200, 200, 400, 300);
-      context.sceneGraph.addNode(artboard);
-
-      // Create a rectangle as child of artboard, at local position (0,0) = artboard center
-      const rect = createTestRectangle('rect1', 0, 0, 50, 50);
-      context.sceneGraph.addNode(rect);
-      context.sceneGraph.moveNode('rect1', 'art1');
-
-      // Pre-select the artboard (simulating first click)
-      context.setSelectedIds(['art1']);
-
-      // Click on the child's position (artboard center = world 200,200)
-      const clickPos = { x: 200, y: 200 };
-      const screenPos = context.camera.worldToScreen(clickPos);
-
-      tool.onPointerDown(
-        createMockPointerEvent({
-          worldPosition: clickPos,
-          screenPosition: screenPos,
-          button: 0,
-        })
-      );
-      tool.onPointerUp(
-        createMockPointerEvent({
-          worldPosition: clickPos,
-          screenPosition: screenPos,
-          button: 0,
-        })
-      );
-
-      // Should have entered the artboard
-      expect(context.getEnteredGroupId?.()).toBe('art1');
-      // Should have selected the child rectangle
-      expect(context.getSelectedIds().has('rect1')).toBe(true);
-      expect(context.getSelectedIds().has('art1')).toBe(false);
-    });
   });
 });

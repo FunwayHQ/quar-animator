@@ -241,33 +241,6 @@ export class SelectionTool extends BaseTool {
       const selectedIds = this.context.getSelectedIds();
       const isAlreadySelected = selectedIds.has(hitNode.id);
 
-      // Figma-style "click to enter": if clicking on a child of an already-selected
-      // group/artboard/symbol-instance, enter it and select the child instead
-      if (
-        isAlreadySelected &&
-        !this.isAdditive(event) &&
-        !event.shiftKey &&
-        rawHit &&
-        rawHit.id !== hitNode.id &&
-        (hitNode.type === 'group' ||
-          hitNode.type === 'artboard' ||
-          hitNode.type === 'symbol-instance')
-      ) {
-        this.context.setEnteredGroupId?.(hitNode.id);
-        // Re-resolve the raw hit in the new scope
-        const innerNode = this.resolveHitToScope(rawHit);
-        if (innerNode) {
-          this.context.setSelectedIds([innerNode.id]);
-          // Start move on the inner node
-          this.context.onTransformStart?.();
-          this.mode = 'moving';
-          this.state.isDragging = true;
-          this.moveStartPositions.clear();
-          this.moveStartPositions.set(innerNode.id, { ...innerNode.transform.position });
-          return;
-        }
-      }
-
       if (this.isAdditive(event) || event.shiftKey) {
         // Ctrl/Cmd/Shift+click: toggle selection
         if (isAlreadySelected) {
