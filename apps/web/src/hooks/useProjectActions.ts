@@ -6,7 +6,7 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { createTimeline } from '@quar/animation';
 import { useSceneGraph } from '../contexts/SceneGraphContext';
-import { useEditorStore } from '../stores/editorStore';
+import { useEditorStore, type PageData } from '../stores/editorStore';
 import { toast } from '../components/common/Toast';
 import {
   saveProject as dbSave,
@@ -79,6 +79,8 @@ export function useProjectActions(options: UseProjectActionsOptions = {}): Proje
       vitruvianControllers: state.vitruvianControllers,
       dynamicChains: state.dynamicChains,
       globalWind: state.globalWind,
+      pages: state.pages,
+      activePageId: state.activePageId,
     };
   }, []);
 
@@ -95,6 +97,19 @@ export function useProjectActions(options: UseProjectActionsOptions = {}): Proje
       sceneGraph.removeNode(node.id);
     }
 
+    // Create a fresh default page
+    const defaultTimeline = createTimeline({ duration: 300, frameRate: 30 });
+    const pageId = `page-${Date.now()}-new`;
+    const defaultPage: PageData = {
+      id: pageId,
+      name: 'Page 1',
+      sceneGraphJSON: { nodes: [], rootNodeIds: [] },
+      timeline: defaultTimeline,
+      selectedNodeIds: [],
+      undoStack: [],
+      redoStack: [],
+    };
+
     // Reset editor state
     useEditorStore.setState({
       projectId: null,
@@ -103,13 +118,15 @@ export function useProjectActions(options: UseProjectActionsOptions = {}): Proje
       projectCreatedAt: null,
       currentFrame: 0,
       isPlaying: false,
-      timeline: createTimeline({ duration: 300, frameRate: 30 }),
+      timeline: defaultTimeline,
       autoKeyframe: false,
       selectedNodeIds: new Set<string>(),
       selectedKeyframeIds: new Set<string>(),
       keyframeClipboard: null,
       clipboard: null,
       enteredGroupId: null,
+      pages: [defaultPage],
+      activePageId: pageId,
     });
     useEditorStore.getState().clearHistory();
   }, [sceneGraph]);

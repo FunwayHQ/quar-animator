@@ -87,6 +87,10 @@ export function usePlayback() {
       if (curr.workAreaEnd !== prev.workAreaEnd) {
         ctrl.setWorkAreaEnd(curr.workAreaEnd);
       }
+      // Stop playback controller when store says not playing (e.g. page switch)
+      if (!curr.isPlaying && prev.isPlaying && ctrl.isPlaying) {
+        ctrl.pause();
+      }
       // Apply animations for manual frame changes (scrubbing, stepping)
       // Only when NOT playing — playback applies via onFrameChange above
       if (curr.currentFrame !== prev.currentFrame && !ctrl.isPlaying) {

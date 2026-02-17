@@ -10,6 +10,7 @@ import { DEFAULT_ONION_SKIN_SETTINGS } from '@quar/core';
 describe('EditorStore', () => {
   // Reset store before each test
   beforeEach(() => {
+    const defaultPageId = 'test-page-1';
     useEditorStore.setState({
       activeTool: 'selection',
       selectedNodeIds: new Set<string>(),
@@ -57,6 +58,19 @@ describe('EditorStore', () => {
         frequency: 1,
         enabled: false,
       },
+      enteredGroupId: null,
+      pages: [
+        {
+          id: defaultPageId,
+          name: 'Page 1',
+          sceneGraphJSON: { nodes: [], rootNodeIds: [] },
+          timeline: createTimeline({ duration: 300, frameRate: 30 }),
+          selectedNodeIds: [],
+          undoStack: [],
+          redoStack: [],
+        },
+      ],
+      activePageId: defaultPageId,
     });
   });
 
@@ -2482,6 +2496,323 @@ describe('EditorStore', () => {
       expect(useEditorStore.getState().snapToGuides).toBe(true);
       useEditorStore.getState().toggleSnapToGuides();
       expect(useEditorStore.getState().snapToGuides).toBe(false);
+    });
+  });
+
+  // ==========================================================================
+  // Pages
+  // ==========================================================================
+
+  describe('pages', () => {
+    function createMockSceneGraph() {
+      const nodes = new Map<string, any>();
+      let rootNodeIds: string[] = [];
+      return {
+        getNode: (id: string) => nodes.get(id),
+        getRootNodes: () => rootNodeIds.map((id) => nodes.get(id)).filter(Boolean),
+        addNode: vi.fn((node: any) => {
+          nodes.set(node.id, node);
+          if (!node.parent && !rootNodeIds.includes(node.id)) rootNodeIds.push(node.id);
+        }),
+        removeNode: vi.fn((id: string) => {
+          nodes.delete(id);
+          rootNodeIds = rootNodeIds.filter((rid) => rid !== id);
+        }),
+        updateNode: vi.fn((id: string, updates: any) => {
+          const node = nodes.get(id);
+          if (node) nodes.set(id, { ...node, ...updates });
+        }),
+        moveNode: vi.fn(),
+        getDescendants: () => [],
+        traverse: (cb: (node: any, depth: number) => void) => {
+          for (const node of nodes.values()) cb(node, 0);
+        },
+        getWorldTransform: () => ({ a: 1, b: 0, c: 0, d: 1, tx: 0, ty: 0 }),
+        toJSON: () => ({
+          nodes: Array.from(nodes.values()),
+          rootNodeIds: [...rootNodeIds],
+        }),
+        fromJSON: (data: { nodes: any[]; rootNodeIds: string[] }) => {
+          nodes.clear();
+          for (const node of data.nodes) nodes.set(node.id, node);
+          rootNodeIds = [...data.rootNodeIds];
+        },
+        _addTestNode: (node: any) => {
+          nodes.set(node.id, node);
+          if (!node.parent && !rootNodeIds.includes(node.id)) rootNodeIds.push(node.id);
+        },
+      };
+    }
+
+    function makeTestNode(id: string) {
+      return {
+        id,
+        name: id,
+        type: 'rectangle' as const,
+        parent: null,
+        children: [],
+        transform: {
+          position: { x: 0, y: 0 },
+          rotation: 0,
+          scale: { x: 1, y: 1 },
+          anchor: { x: 0.5, y: 0.5 },
+          skew: { x: 0, y: 0 },
+        },
+        visible: true,
+        locked: false,
+        opacity: 1,
+        blendMode: 'normal' as const,
+        width: 100,
+        height: 100,
+        cornerRadius: [0, 0, 0, 0] as [number, number, number, number],
+        fills: [],
+        strokes: [],
+      };
+    }
+
+    it('should start with one default page', () => {
+      const state = useEditorStore.getState();
+      expect(state.pages.length).toBe(1);
+      expect(state.pages[0]!.name).toBe('Page 1');
+      expect(state.activePageId).toBe(state.pages[0]!.id);
+    });
+
+    it('addPage creates a new page and switches to it', () => {
+      const sg = createMockSceneGraph();
+      sg._addTestNode(makeTestNode('rect1'));
+
+      const initialPageId = useEditorStore.getState().activePageId;
+      useEditorStore.getState().addPage(sg);
+
+      const state = useEditorStore.getState();
+      expect(state.pages.length).toBe(2);
+      expect(state.activePageId).not.toBe(initialPageId);
+      expect(state.pages[1]!.name).toBe('Page 2');
+      // Scene graph should be empty on new page
+      expect(sg.toJSON().nodes.length).toBe(0);
+    });
+
+    it('addPage saves current page state before switching', () => {
+      const sg = createMockSceneGraph();
+      sg._addTestNode(makeTestNode('rect1'));
+      useEditorStore.setState({ selectedNodeIds: new Set(['rect1']) });
+
+      const initialPageId = useEditorStore.getState().activePageId;
+      useEditorStore.getState().addPage(sg);
+
+      // The first page should have saved the rect1 node
+      const state = useEditorStore.getState();
+      const page1 = state.pages.find((p) => p.id === initialPageId)!;
+      expect(page1.sceneGraphJSON.nodes.length).toBe(1);
+      expect(page1.sceneGraphJSON.nodes[0]!.id).toBe('rect1');
+      expect(page1.selectedNodeIds).toContain('rect1');
+    });
+
+    it('switchPage saves current and loads target', () => {
+      const sg = createMockSceneGraph();
+      sg._addTestNode(makeTestNode('rect1'));
+
+      const page1Id = useEditorStore.getState().activePageId;
+
+      // Add page 2
+      useEditorStore.getState().addPage(sg);
+      const page2Id = useEditorStore.getState().activePageId;
+
+      // Add a node on page 2
+      sg._addTestNode(makeTestNode('rect2'));
+      useEditorStore.setState({ selectedNodeIds: new Set(['rect2']) });
+
+      // Switch back to page 1
+      useEditorStore.getState().switchPage(page1Id, sg);
+
+      expect(useEditorStore.getState().activePageId).toBe(page1Id);
+      // page 1 should have rect1
+      const json = sg.toJSON();
+      expect(json.nodes.length).toBe(1);
+      expect(json.nodes[0]!.id).toBe('rect1');
+
+      // Switch back to page 2
+      useEditorStore.getState().switchPage(page2Id, sg);
+      expect(useEditorStore.getState().activePageId).toBe(page2Id);
+      const json2 = sg.toJSON();
+      expect(json2.nodes.length).toBe(1);
+      expect(json2.nodes[0]!.id).toBe('rect2');
+    });
+
+    it('switchPage clears transient state', () => {
+      const sg = createMockSceneGraph();
+      useEditorStore.setState({ enteredGroupId: 'group1', clipboard: [makeTestNode('clip1')] });
+
+      useEditorStore.getState().addPage(sg);
+
+      expect(useEditorStore.getState().enteredGroupId).toBeNull();
+      expect(useEditorStore.getState().clipboard).toBeNull();
+    });
+
+    it('switchPage sets isPlaying to false', () => {
+      const sg = createMockSceneGraph();
+      useEditorStore.setState({ isPlaying: true });
+
+      useEditorStore.getState().addPage(sg);
+
+      expect(useEditorStore.getState().isPlaying).toBe(false);
+    });
+
+    it('switchPage to same page is a no-op', () => {
+      const sg = createMockSceneGraph();
+      const activePageId = useEditorStore.getState().activePageId;
+
+      // Should not throw or change state
+      useEditorStore.getState().switchPage(activePageId, sg);
+      expect(useEditorStore.getState().activePageId).toBe(activePageId);
+    });
+
+    it('deletePage removes the page', () => {
+      const sg = createMockSceneGraph();
+
+      useEditorStore.getState().addPage(sg);
+      expect(useEditorStore.getState().pages.length).toBe(2);
+
+      const page2Id = useEditorStore.getState().activePageId;
+      useEditorStore.getState().deletePage(page2Id, sg);
+
+      expect(useEditorStore.getState().pages.length).toBe(1);
+    });
+
+    it('deletePage switches to adjacent page when deleting active', () => {
+      const sg = createMockSceneGraph();
+      sg._addTestNode(makeTestNode('rect1'));
+
+      const page1Id = useEditorStore.getState().activePageId;
+
+      useEditorStore.getState().addPage(sg);
+      const page2Id = useEditorStore.getState().activePageId;
+
+      // Delete page 2 (active)
+      useEditorStore.getState().deletePage(page2Id, sg);
+
+      expect(useEditorStore.getState().activePageId).toBe(page1Id);
+      // Should have loaded page 1's scene graph
+      expect(sg.toJSON().nodes.length).toBe(1);
+      expect(sg.toJSON().nodes[0]!.id).toBe('rect1');
+    });
+
+    it('deletePage enforces minimum 1 page', () => {
+      const sg = createMockSceneGraph();
+      const pageId = useEditorStore.getState().activePageId;
+
+      useEditorStore.getState().deletePage(pageId, sg);
+
+      expect(useEditorStore.getState().pages.length).toBe(1);
+    });
+
+    it('deletePage of non-active page keeps current active', () => {
+      const sg = createMockSceneGraph();
+      const page1Id = useEditorStore.getState().activePageId;
+
+      useEditorStore.getState().addPage(sg);
+      const page2Id = useEditorStore.getState().activePageId;
+
+      // Switch back to page 1
+      useEditorStore.getState().switchPage(page1Id, sg);
+
+      // Delete page 2 (non-active)
+      useEditorStore.getState().deletePage(page2Id, sg);
+
+      expect(useEditorStore.getState().activePageId).toBe(page1Id);
+      expect(useEditorStore.getState().pages.length).toBe(1);
+    });
+
+    it('renamePage updates the page name', () => {
+      const state = useEditorStore.getState();
+      const pageId = state.pages[0]!.id;
+
+      useEditorStore.getState().renamePage(pageId, 'My Page');
+
+      expect(useEditorStore.getState().pages[0]!.name).toBe('My Page');
+    });
+
+    it('duplicatePage creates a copy after the source', () => {
+      const sg = createMockSceneGraph();
+      sg._addTestNode(makeTestNode('rect1'));
+
+      const page1Id = useEditorStore.getState().activePageId;
+      useEditorStore.getState().duplicatePage(page1Id, sg);
+
+      const state = useEditorStore.getState();
+      expect(state.pages.length).toBe(2);
+      expect(state.pages[1]!.name).toBe('Page 1 Copy');
+      // The duplicated page should have the same scene graph content
+      expect(state.pages[1]!.sceneGraphJSON.nodes.length).toBe(1);
+      expect(state.pages[1]!.sceneGraphJSON.nodes[0]!.id).toBe('rect1');
+    });
+
+    it('duplicatePage does not switch to the new page', () => {
+      const sg = createMockSceneGraph();
+      const page1Id = useEditorStore.getState().activePageId;
+
+      useEditorStore.getState().duplicatePage(page1Id, sg);
+
+      expect(useEditorStore.getState().activePageId).toBe(page1Id);
+    });
+
+    it('reorderPages moves pages correctly', () => {
+      const sg = createMockSceneGraph();
+
+      // Create 3 pages
+      useEditorStore.getState().addPage(sg);
+      useEditorStore.getState().addPage(sg);
+
+      const state = useEditorStore.getState();
+      expect(state.pages.length).toBe(3);
+
+      const ids = state.pages.map((p) => p.id);
+
+      // Move last page to position 0
+      useEditorStore.getState().reorderPages(2, 0);
+
+      const reordered = useEditorStore.getState().pages;
+      expect(reordered[0]!.id).toBe(ids[2]);
+      expect(reordered[1]!.id).toBe(ids[0]);
+      expect(reordered[2]!.id).toBe(ids[1]);
+    });
+
+    it('reorderPages with invalid indices is a no-op', () => {
+      const sg = createMockSceneGraph();
+      useEditorStore.getState().addPage(sg);
+
+      const before = useEditorStore.getState().pages.map((p) => p.id);
+
+      useEditorStore.getState().reorderPages(-1, 0);
+      useEditorStore.getState().reorderPages(0, 99);
+      useEditorStore.getState().reorderPages(0, 0);
+
+      const after = useEditorStore.getState().pages.map((p) => p.id);
+      expect(after).toEqual(before);
+    });
+
+    it('per-page undo/redo stacks are independent', () => {
+      const sg = createMockSceneGraph();
+      sg._addTestNode(makeTestNode('rect1'));
+
+      // Push undo on page 1
+      useEditorStore.getState().pushUndo(sg);
+      expect(useEditorStore.getState().canUndo).toBe(true);
+
+      const page1Id = useEditorStore.getState().activePageId;
+
+      // Switch to page 2
+      useEditorStore.getState().addPage(sg);
+      const page2Id = useEditorStore.getState().activePageId;
+
+      // Page 2 should have empty undo stack
+      expect(useEditorStore.getState().canUndo).toBe(false);
+
+      // Switch back to page 1
+      useEditorStore.getState().switchPage(page1Id, sg);
+
+      // Page 1's undo stack should be restored
+      expect(useEditorStore.getState().canUndo).toBe(true);
     });
   });
 });

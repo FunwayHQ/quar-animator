@@ -99,6 +99,38 @@ export interface Guide {
 }
 
 // ============================================================================
+// Page Data
+// ============================================================================
+
+export interface PageData {
+  id: string;
+  name: string;
+  sceneGraphJSON: { nodes: Node[]; rootNodeIds: string[] };
+  timeline: Timeline;
+  selectedNodeIds: string[];
+  undoStack: HistorySnapshot[];
+  redoStack: HistorySnapshot[];
+}
+
+let nextPageCounter = 1;
+
+function generatePageId(): string {
+  return `page-${Date.now()}-${nextPageCounter++}`;
+}
+
+function createDefaultPage(name: string = 'Page 1'): PageData {
+  return {
+    id: generatePageId(),
+    name,
+    sceneGraphJSON: { nodes: [], rootNodeIds: [] },
+    timeline: createTimeline({ duration: 300, frameRate: 30 }),
+    selectedNodeIds: [],
+    undoStack: [],
+    redoStack: [],
+  };
+}
+
+// ============================================================================
 // Default Values
 // ============================================================================
 
@@ -445,6 +477,16 @@ export interface EditorStore {
   redo: (sceneGraph: SceneGraphLike) => void;
   clearHistory: () => void;
   cutSelection: (sceneGraph: SceneGraphLike) => void;
+
+  // Pages
+  pages: PageData[];
+  activePageId: string;
+  addPage: (sceneGraph: SceneGraphLike) => void;
+  deletePage: (pageId: string, sceneGraph: SceneGraphLike) => void;
+  renamePage: (pageId: string, name: string) => void;
+  duplicatePage: (pageId: string, sceneGraph: SceneGraphLike) => void;
+  switchPage: (pageId: string, sceneGraph: SceneGraphLike) => void;
+  reorderPages: (fromIndex: number, toIndex: number) => void;
 }
 
 // ============================================================================
@@ -1902,6 +1944,9 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
   // Undo/Redo history
   ...createHistoryActions(set, get),
+
+  // Pages
+  ...createPageActions(set, get),
 }));
 
 // ============================================================================
@@ -2643,6 +2688,188 @@ function createHistoryActions(
 }
 
 // ============================================================================
+// Page Actions
+// ============================================================================
+
+function createPageActions(
+  set: (partial: Partial<EditorStore> | ((state: EditorStore) => Partial<EditorStore>)) => void,
+  get: () => EditorStore
+) {
+  const defaultPage = createDefaultPage();
+  return {
+    pages: [defaultPage] as PageData[],
+    activePageId: defaultPage.id,
+
+    addPage: (sceneGraph: SceneGraphLike) => {
+      const state = get();
+      // Save current page state first
+      const currentPage = state.pages.find((p) => p.id === state.activePageId);
+      if (currentPage) {
+        currentPage.sceneGraphJSON = structuredClone(sceneGraph.toJSON());
+        currentPage.timeline = structuredClone(state.timeline);
+        currentPage.selectedNodeIds = Array.from(state.selectedNodeIds);
+        currentPage.undoStack = state.undoStack;
+        currentPage.redoStack = state.redoStack;
+      }
+
+      const pageNum = state.pages.length + 1;
+      const newPage = createDefaultPage(`Page ${pageNum}`);
+
+      // Switch scene graph to empty
+      sceneGraph.fromJSON(newPage.sceneGraphJSON);
+
+      set({
+        pages: [...state.pages, newPage],
+        activePageId: newPage.id,
+        timeline: structuredClone(newPage.timeline),
+        selectedNodeIds: new Set<string>(),
+        selectedKeyframeIds: new Set<string>(),
+        undoStack: [],
+        redoStack: [],
+        canUndo: false,
+        canRedo: false,
+        enteredGroupId: null,
+        clipboard: null,
+        currentFrame: 0,
+        isPlaying: false,
+        isDirty: true,
+      });
+    },
+
+    deletePage: (pageId: string, sceneGraph: SceneGraphLike) => {
+      const state = get();
+      if (state.pages.length <= 1) return; // Must keep at least 1 page
+
+      const pageIndex = state.pages.findIndex((p) => p.id === pageId);
+      if (pageIndex === -1) return;
+
+      const newPages = state.pages.filter((p) => p.id !== pageId);
+
+      // If deleting the active page, switch to adjacent
+      if (state.activePageId === pageId) {
+        const switchToIndex = Math.min(pageIndex, newPages.length - 1);
+        const switchTo = newPages[switchToIndex]!;
+
+        sceneGraph.fromJSON(structuredClone(switchTo.sceneGraphJSON));
+
+        set({
+          pages: newPages,
+          activePageId: switchTo.id,
+          timeline: structuredClone(switchTo.timeline),
+          selectedNodeIds: new Set(switchTo.selectedNodeIds),
+          selectedKeyframeIds: new Set<string>(),
+          undoStack: switchTo.undoStack,
+          redoStack: switchTo.redoStack,
+          canUndo: switchTo.undoStack.length > 0,
+          canRedo: switchTo.redoStack.length > 0,
+          enteredGroupId: null,
+          clipboard: null,
+          currentFrame: 0,
+          isPlaying: false,
+          isDirty: true,
+        });
+      } else {
+        set({ pages: newPages, isDirty: true });
+      }
+    },
+
+    renamePage: (pageId: string, name: string) => {
+      set((state) => ({
+        pages: state.pages.map((p) => (p.id === pageId ? { ...p, name } : p)),
+        isDirty: true,
+      }));
+    },
+
+    duplicatePage: (pageId: string, sceneGraph: SceneGraphLike) => {
+      const state = get();
+      const sourcePage = state.pages.find((p) => p.id === pageId);
+      if (!sourcePage) return;
+
+      // If duplicating the active page, save current state first
+      if (pageId === state.activePageId) {
+        sourcePage.sceneGraphJSON = structuredClone(sceneGraph.toJSON());
+        sourcePage.timeline = structuredClone(state.timeline);
+        sourcePage.selectedNodeIds = Array.from(state.selectedNodeIds);
+        sourcePage.undoStack = state.undoStack;
+        sourcePage.redoStack = state.redoStack;
+      }
+
+      const newPage: PageData = {
+        id: generatePageId(),
+        name: `${sourcePage.name} Copy`,
+        sceneGraphJSON: structuredClone(sourcePage.sceneGraphJSON),
+        timeline: structuredClone(sourcePage.timeline),
+        selectedNodeIds: [],
+        undoStack: [],
+        redoStack: [],
+      };
+
+      // Insert after source page
+      const sourceIndex = state.pages.findIndex((p) => p.id === pageId);
+      const newPages = [...state.pages];
+      newPages.splice(sourceIndex + 1, 0, newPage);
+
+      set({ pages: newPages, isDirty: true });
+    },
+
+    switchPage: (pageId: string, sceneGraph: SceneGraphLike) => {
+      const state = get();
+      if (pageId === state.activePageId) return;
+
+      const targetPage = state.pages.find((p) => p.id === pageId);
+      if (!targetPage) return;
+
+      // Save current page state
+      const currentPage = state.pages.find((p) => p.id === state.activePageId);
+      if (currentPage) {
+        currentPage.sceneGraphJSON = structuredClone(sceneGraph.toJSON());
+        currentPage.timeline = structuredClone(state.timeline);
+        currentPage.selectedNodeIds = Array.from(state.selectedNodeIds);
+        currentPage.undoStack = state.undoStack;
+        currentPage.redoStack = state.redoStack;
+      }
+
+      // Load target page
+      sceneGraph.fromJSON(structuredClone(targetPage.sceneGraphJSON));
+
+      set({
+        activePageId: pageId,
+        timeline: structuredClone(targetPage.timeline),
+        selectedNodeIds: new Set(targetPage.selectedNodeIds),
+        selectedKeyframeIds: new Set<string>(),
+        undoStack: targetPage.undoStack,
+        redoStack: targetPage.redoStack,
+        canUndo: targetPage.undoStack.length > 0,
+        canRedo: targetPage.redoStack.length > 0,
+        enteredGroupId: null,
+        clipboard: null,
+        currentFrame: 0,
+        isPlaying: false,
+        isDirty: true,
+      });
+    },
+
+    reorderPages: (fromIndex: number, toIndex: number) => {
+      set((state) => {
+        if (
+          fromIndex < 0 ||
+          fromIndex >= state.pages.length ||
+          toIndex < 0 ||
+          toIndex >= state.pages.length ||
+          fromIndex === toIndex
+        ) {
+          return {};
+        }
+        const newPages = [...state.pages];
+        const [moved] = newPages.splice(fromIndex, 1);
+        newPages.splice(toIndex, 0, moved!);
+        return { pages: newPages, isDirty: true };
+      });
+    },
+  };
+}
+
+// ============================================================================
 // Selector Hooks
 // ============================================================================
 
@@ -2857,3 +3084,8 @@ export const useBindMeshToBones = (): ((
 ) => void) => useEditorStore((state: EditorStore) => state.bindMeshToBones);
 export const useUnbindMesh = (): ((sceneGraph: SceneGraphLike, nodeId: string) => void) =>
   useEditorStore((state: EditorStore) => state.unbindMesh);
+
+// Page selectors
+export const usePages = (): PageData[] => useEditorStore((state: EditorStore) => state.pages);
+export const useActivePageId = (): string =>
+  useEditorStore((state: EditorStore) => state.activePageId);

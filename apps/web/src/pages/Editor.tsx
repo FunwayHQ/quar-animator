@@ -6,6 +6,7 @@ import { PropertiesPanel } from '../components/layout/PropertiesPanel';
 import { LayerPanel } from '../components/layout/LayerPanel';
 import { Timeline } from '../components/layout/Timeline';
 import { MenuBar } from '../components/layout/MenuBar';
+import { PageTabs } from '../components/layout/PageTabs';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 import { SceneGraphProvider } from '../contexts/SceneGraphContext';
 import { usePlayback } from '../hooks/usePlayback';
@@ -21,6 +22,7 @@ function EditorInner() {
   useTimelineShortcuts(playback);
 
   // Mark project dirty when scene graph changes
+  /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return */
   const sceneGraph = useSceneGraph();
   useEffect(() => {
     const markDirty = () => useEditorStore.getState().markDirty();
@@ -31,6 +33,7 @@ function EditorInner() {
     ];
     return () => unsubs.forEach((u) => u());
   }, [sceneGraph]);
+  /* eslint-enable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return */
 
   const [searchParams] = useSearchParams();
   const projectId = searchParams.get('project');
@@ -80,6 +83,7 @@ function EditorInner() {
     <div className={styles.editor}>
       <MenuBar projectActions={projectActions} />
       <Toolbar />
+      <PageTabs />
       <div className={styles.main}>
         <div className={styles.workspace}>
           <div className={styles.leftPanel}>
