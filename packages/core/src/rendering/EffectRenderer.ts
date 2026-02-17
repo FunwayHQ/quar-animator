@@ -169,7 +169,7 @@ export class EffectRenderer {
 
     const { blend, quadVAO } = this.programs;
     this.renderer.useProgram(blend);
-    gl.bindVertexArray(quadVAO);
+    this.renderer.bindVAO(quadVAO);
 
     // Bind textures
     gl.activeTexture(gl.TEXTURE0);
@@ -188,7 +188,7 @@ export class EffectRenderer {
     gl.drawArrays(gl.TRIANGLES, 0, 6);
     gl.enable(gl.BLEND);
 
-    gl.bindVertexArray(null);
+    this.renderer.bindVAO(null);
     gl.activeTexture(gl.TEXTURE0);
 
     this.fbManager.release(dstFBO);
@@ -218,7 +218,7 @@ export class EffectRenderer {
 
     const { shadow, quadVAO } = this.programs;
     this.renderer.useProgram(shadow);
-    gl.bindVertexArray(quadVAO);
+    this.renderer.bindVAO(quadVAO);
 
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, blurredFBO.texture);
@@ -244,7 +244,7 @@ export class EffectRenderer {
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
     gl.drawArrays(gl.TRIANGLES, 0, 6);
 
-    gl.bindVertexArray(null);
+    this.renderer.bindVAO(null);
 
     this.fbManager.release(blurredFBO);
   }
@@ -313,7 +313,7 @@ export class EffectRenderer {
     gl.clear(gl.COLOR_BUFFER_BIT);
 
     this.renderer.useProgram(blur);
-    gl.bindVertexArray(quadVAO);
+    this.renderer.bindVAO(quadVAO);
 
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, source.texture);
@@ -337,7 +337,7 @@ export class EffectRenderer {
     gl.drawArrays(gl.TRIANGLES, 0, 6);
     gl.enable(gl.BLEND);
 
-    gl.bindVertexArray(null);
+    this.renderer.bindVAO(null);
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 
     this.fbManager.release(tempFBO);
@@ -359,7 +359,7 @@ export class EffectRenderer {
 
     const { composite, quadVAO } = this.programs;
     this.renderer.useProgram(composite);
-    gl.bindVertexArray(quadVAO);
+    this.renderer.bindVAO(quadVAO);
 
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, fbo.texture);
@@ -372,7 +372,7 @@ export class EffectRenderer {
 
     // Restore standard blend func for subsequent rendering
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
-    gl.bindVertexArray(null);
+    this.renderer.bindVAO(null);
   }
 
   dispose(): void {
