@@ -66,6 +66,8 @@ interface RotationState {
 
 interface NodeResizeState {
   position: Vector2;
+  worldPosition: Vector2; // World-space position for proportional mapping
+  parentWorldTransform?: Matrix3; // Parent's world transform (for local↔world conversion)
   width?: number;
   height?: number;
   radiusX?: number;
@@ -976,8 +978,20 @@ export class SelectionTool extends BaseTool {
       const node = this.context.sceneGraph.getNode(id);
       if (!node) continue;
 
+      // Compute world position for proportional mapping (bounds are in world coords)
+      let worldPosition: Vector2;
+      let parentWorldTransform: Matrix3 | undefined;
+      if (node.parent) {
+        parentWorldTransform = this.context.sceneGraph.getWorldTransform(node.parent);
+        worldPosition = mat3.transformPoint(parentWorldTransform, node.transform.position);
+      } else {
+        worldPosition = { ...node.transform.position };
+      }
+
       const state: NodeResizeState = {
         position: { ...node.transform.position },
+        worldPosition,
+        parentWorldTransform,
       };
 
       if (node.type === 'rectangle') {
@@ -1075,20 +1089,30 @@ export class SelectionTool extends BaseTool {
       const node = this.context.sceneGraph.getNode(id);
       if (!node) continue;
 
-      // Calculate new position relative to new bounds
+      // Use world position for proportional mapping (bounds are in world coords)
       const relX =
         initialBounds.rect.width > 0
-          ? (initialState.position.x - initialBounds.rect.x) / initialBounds.rect.width
+          ? (initialState.worldPosition.x - initialBounds.rect.x) / initialBounds.rect.width
           : 0;
       const relY =
         initialBounds.rect.height > 0
-          ? (initialState.position.y - initialBounds.rect.y) / initialBounds.rect.height
+          ? (initialState.worldPosition.y - initialBounds.rect.y) / initialBounds.rect.height
           : 0;
 
-      const newPosition = {
+      // Compute new position in world coordinates
+      const newWorldPosition = {
         x: newBounds.x + relX * newBounds.width,
         y: newBounds.y + relY * newBounds.height,
       };
+
+      // Convert back to local coordinates if node has a parent
+      let newPosition: Vector2;
+      if (initialState.parentWorldTransform) {
+        const inv = mat3.invert(initialState.parentWorldTransform);
+        newPosition = inv ? mat3.transformPoint(inv, newWorldPosition) : newWorldPosition;
+      } else {
+        newPosition = newWorldPosition;
+      }
 
       if (
         node.type === 'rectangle' &&
