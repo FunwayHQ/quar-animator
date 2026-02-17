@@ -5,7 +5,13 @@
  * using framebuffer-based multi-pass rendering.
  */
 
-import type { Effect, DropShadowEffect, InnerShadowEffect, LayerBlurEffect, BlendMode } from '@quar/types';
+import type {
+  Effect,
+  DropShadowEffect,
+  InnerShadowEffect,
+  LayerBlurEffect,
+  BlendMode,
+} from '@quar/types';
 import type { WebGLRenderer } from './WebGLRenderer';
 import { FramebufferManager } from './FramebufferManager';
 import type { FramebufferEntry } from './FramebufferManager';
@@ -57,17 +63,35 @@ export class EffectRenderer {
     const gl = this.gl;
     const visibleEffects = (effects ?? []).filter((e) => e.visible);
 
+    // Save and disable scissor test so FBO clears affect the entire texture
+    // (artboard clipContent enables scissor which would leave stale content in FBOs)
+    const scissorWasEnabled = gl.isEnabled(gl.SCISSOR_TEST);
+    if (scissorWasEnabled) gl.disable(gl.SCISSOR_TEST);
+
     // Render the node shape to an off-screen FBO
     const shapeFBO = this.fbManager.acquire(canvasWidth, canvasHeight);
     gl.bindFramebuffer(gl.FRAMEBUFFER, shapeFBO.fbo);
     gl.viewport(0, 0, canvasWidth, canvasHeight);
     gl.clearColor(0, 0, 0, 0);
     gl.clear(gl.COLOR_BUFFER_BIT);
+
+    // Use blendFuncSeparate so alpha in the FBO is correct (A, not A²)
+    // RGB: standard src-over premultiplied; Alpha: additive src-over
+    gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
     renderNodeFn();
+    // Restore standard blend func
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 
     // Restore default framebuffer for compositing
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     gl.viewport(0, 0, canvasWidth, canvasHeight);
+
+    // Re-enable scissor for compositing (clips to artboard bounds)
+    if (scissorWasEnabled) gl.enable(gl.SCISSOR_TEST);
+
+    // Disable depth test during compositing — fullscreen quads should not
+    // interact with the depth buffer or block subsequent shape rendering
+    gl.disable(gl.DEPTH_TEST);
 
     // Process effects in order: drop shadows (behind), then layer blur, then inner shadows (on top)
     // Render drop shadows first (they appear behind the shape)
@@ -80,12 +104,14 @@ export class EffectRenderer {
     // Render the shape itself (possibly blurred)
     const hasLayerBlur = visibleEffects.some((e) => e.type === 'layer-blur');
     if (hasLayerBlur) {
-      // Apply layer blur to the shape
+      // Disable scissor for blur FBO operations (need full-texture clears)
+      if (scissorWasEnabled) gl.disable(gl.SCISSOR_TEST);
       for (const effect of visibleEffects) {
         if (effect.type === 'layer-blur') {
           this.renderLayerBlur(effect, shapeFBO, canvasWidth, canvasHeight);
         }
       }
+      if (scissorWasEnabled) gl.enable(gl.SCISSOR_TEST);
     }
 
     // Composite the shape (or blurred shape) onto the canvas
@@ -101,6 +127,9 @@ export class EffectRenderer {
         this.renderInnerShadow(effect, shapeFBO, canvasWidth, canvasHeight);
       }
     }
+
+    // Restore depth test
+    gl.enable(gl.DEPTH_TEST);
 
     this.fbManager.release(shapeFBO);
   }
@@ -122,9 +151,16 @@ export class EffectRenderer {
     gl.bindFramebuffer(gl.READ_FRAMEBUFFER, null);
     gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, dstFBO.fbo);
     gl.blitFramebuffer(
-      0, 0, canvasWidth, canvasHeight,
-      0, 0, canvasWidth, canvasHeight,
-      gl.COLOR_BUFFER_BIT, gl.NEAREST
+      0,
+      0,
+      canvasWidth,
+      canvasHeight,
+      0,
+      0,
+      canvasWidth,
+      canvasHeight,
+      gl.COLOR_BUFFER_BIT,
+      gl.NEAREST
     );
 
     // Now composite src over dst using blend mode shader
@@ -166,8 +202,15 @@ export class EffectRenderer {
   ): void {
     const gl = this.gl;
 
+    // Disable scissor for blur FBO operations (need full-texture clears)
+    const scissorWasEnabled = gl.isEnabled(gl.SCISSOR_TEST);
+    if (scissorWasEnabled) gl.disable(gl.SCISSOR_TEST);
+
     // Blur the shape's alpha to create the shadow
     const blurredFBO = this.applyGaussianBlur(shapeFBO, effect.blur, canvasWidth, canvasHeight);
+
+    // Re-enable scissor for compositing to canvas
+    if (scissorWasEnabled) gl.enable(gl.SCISSOR_TEST);
 
     // Composite the blurred shadow with offset + color
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
@@ -233,9 +276,16 @@ export class EffectRenderer {
     gl.bindFramebuffer(gl.READ_FRAMEBUFFER, blurredFBO.fbo);
     gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, shapeFBO.fbo);
     gl.blitFramebuffer(
-      0, 0, canvasWidth, canvasHeight,
-      0, 0, canvasWidth, canvasHeight,
-      gl.COLOR_BUFFER_BIT, gl.NEAREST
+      0,
+      0,
+      canvasWidth,
+      canvasHeight,
+      0,
+      0,
+      canvasWidth,
+      canvasHeight,
+      gl.COLOR_BUFFER_BIT,
+      gl.NEAREST
     );
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 
@@ -296,12 +346,14 @@ export class EffectRenderer {
   }
 
   /**
-   * Simple composite: draw FBO texture to screen with standard alpha blending.
+   * Simple composite: draw FBO texture to screen with premultiplied alpha blending.
+   * The FBO content is premultiplied (rendered with blendFuncSeparate), so we use
+   * ONE/ONE_MINUS_SRC_ALPHA to avoid double-multiplying by alpha.
    */
   private compositeToScreen(
     fbo: FramebufferEntry,
-    canvasWidth: number,
-    canvasHeight: number
+    _canvasWidth: number,
+    _canvasHeight: number
   ): void {
     const gl = this.gl;
 
@@ -313,10 +365,13 @@ export class EffectRenderer {
     gl.bindTexture(gl.TEXTURE_2D, fbo.texture);
     gl.uniform1i(composite.uniforms.u_texture ?? null, 0);
 
+    // FBO content is premultiplied — use ONE for src factor to avoid alpha²
     gl.enable(gl.BLEND);
-    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
     gl.drawArrays(gl.TRIANGLES, 0, 6);
 
+    // Restore standard blend func for subsequent rendering
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
     gl.bindVertexArray(null);
   }
 
