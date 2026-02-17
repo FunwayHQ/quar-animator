@@ -1195,12 +1195,19 @@ describe('PropertiesPanel', () => {
         blendMode: 'normal',
         width: 1920,
         height: 1080,
-        backgroundColor: { r: 255, g: 255, b: 255, a: 1 },
+        fills: [
+          {
+            type: 'solid' as const,
+            color: { r: 255, g: 255, b: 255, a: 1 },
+            opacity: 1,
+            visible: true,
+          },
+        ],
         clipContent: true,
       };
     }
 
-    it('shows artboard section with background and clip content', () => {
+    it('shows artboard section with clip content', () => {
       const sg = renderWithSceneGraph();
 
       act(() => {
@@ -1211,7 +1218,6 @@ describe('PropertiesPanel', () => {
       // "Artboard" appears as both node type label and section title
       const artboardTexts = screen.getAllByText('Artboard');
       expect(artboardTexts.length).toBeGreaterThanOrEqual(1);
-      expect(screen.getByText('Background')).toBeInTheDocument();
       expect(screen.getByText('Clip Content')).toBeInTheDocument();
     });
 
@@ -1244,7 +1250,7 @@ describe('PropertiesPanel', () => {
       expect(node.width).toBe(1440);
     });
 
-    it('updates artboard background color via hex input', () => {
+    it('updates artboard fill color via fill section hex input', () => {
       const sg = renderWithSceneGraph();
 
       act(() => {
@@ -1252,18 +1258,18 @@ describe('PropertiesPanel', () => {
         useEditorStore.getState().setSelection(['art1']);
       });
 
-      // The background color input should show #FFFFFF (white) — colorToHex returns uppercase
-      const bgInput = screen.getByDisplayValue('#FFFFFF');
-      expect(bgInput).toBeInTheDocument();
+      // The fill color input should show #FFFFFF (white) — colorToHex returns uppercase
+      const fillInput = screen.getByDisplayValue('#FFFFFF');
+      expect(fillInput).toBeInTheDocument();
 
       act(() => {
-        fireEvent.change(bgInput, { target: { value: '#FF0000' } });
+        fireEvent.change(fillInput, { target: { value: '#FF0000' } });
       });
 
       const node = sg.getNode('art1') as ArtboardNode;
-      expect(node.backgroundColor.r).toBe(255);
-      expect(node.backgroundColor.g).toBe(0);
-      expect(node.backgroundColor.b).toBe(0);
+      expect(node.fills[0].color!.r).toBe(255);
+      expect(node.fills[0].color!.g).toBe(0);
+      expect(node.fills[0].color!.b).toBe(0);
     });
 
     it('toggles clipContent checkbox', () => {

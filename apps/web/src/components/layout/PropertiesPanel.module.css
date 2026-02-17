@@ -823,6 +823,16 @@
   background: rgba(239, 68, 68, 0.1);
 }
 
+.exportCheckbox {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
 .exportButton {
   display: flex;
   align-items: center;

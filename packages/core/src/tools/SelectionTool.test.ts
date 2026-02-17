@@ -1636,7 +1636,14 @@ describe('SelectionTool', () => {
         blendMode: 'normal',
         width,
         height,
-        backgroundColor: { r: 255, g: 255, b: 255, a: 1 },
+        fills: [
+          {
+            type: 'solid' as const,
+            color: { r: 255, g: 255, b: 255, a: 1 },
+            opacity: 1,
+            visible: true,
+          },
+        ],
         clipContent: true,
       };
     }

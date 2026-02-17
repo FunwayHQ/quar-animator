@@ -318,6 +318,7 @@ function hasFillsStrokes(node: Node): boolean {
     node.type === 'polygon' ||
     node.type === 'path' ||
     node.type === 'text' ||
+    node.type === 'artboard' ||
     (node.type === 'group' && node.booleanOp !== undefined)
   );
 }
@@ -2662,51 +2663,12 @@ export function PropertiesPanel() {
         {node.type === 'artboard' &&
           (() => {
             const artboard = node as ArtboardNode;
-            const bgHex = colorToHex(artboard.backgroundColor);
             return (
               <div className={styles.section}>
                 <div className={styles.sectionHeader}>
                   <span className={styles.sectionTitle}>Artboard</span>
                 </div>
                 <div className={styles.sectionContent}>
-                  <div className={styles.propertyRow}>
-                    <span className={styles.propertyLabel}>Background</span>
-                    <div className={styles.propertyInputs}>
-                      <div
-                        className={styles.colorSwatch}
-                        style={{ '--swatch-color': bgHex } as React.CSSProperties}
-                        onClick={() => {
-                          const input = document.createElement('input');
-                          input.type = 'color';
-                          input.value = bgHex;
-                          input.addEventListener('input', () => {
-                            const parsed = hexToColor(input.value);
-                            if (parsed) {
-                              if (shouldKeyframe(autoKeyframe, nodeId, 'backgroundColor')) {
-                                addKeyframeAtFrame(nodeId, 'backgroundColor', currentFrame, parsed);
-                              }
-                              sceneGraph.updateNode(nodeId, { backgroundColor: parsed });
-                            }
-                          });
-                          input.click();
-                        }}
-                      />
-                      <input
-                        type="text"
-                        className={styles.input}
-                        value={bgHex}
-                        onChange={(e) => {
-                          const parsed = hexToColor(e.target.value);
-                          if (parsed) {
-                            if (shouldKeyframe(autoKeyframe, nodeId, 'backgroundColor')) {
-                              addKeyframeAtFrame(nodeId, 'backgroundColor', currentFrame, parsed);
-                            }
-                            sceneGraph.updateNode(nodeId, { backgroundColor: parsed });
-                          }
-                        }}
-                      />
-                    </div>
-                  </div>
                   <div className={styles.propertyRow}>
                     <span className={styles.propertyLabel}>Clip Content</span>
                     <div className={styles.propertyInputs}>
@@ -3993,7 +3955,12 @@ function ExportSection({
     try {
       for (const setting of exportSettings) {
         if (setting.format === 'png') {
-          await exportSelectionAsPng(nodes, sceneGraph, setting.multiplier);
+          await exportSelectionAsPng(
+            nodes,
+            sceneGraph,
+            setting.multiplier,
+            setting.includeBackground ?? true
+          );
         } else {
           exportSelectionAsSvg(nodes, sceneGraph);
         }
@@ -4072,6 +4039,18 @@ function ExportSection({
                     <Minus size={12} />
                   </button>
                 </div>
+                {node.type === 'artboard' && setting.format === 'png' && (
+                  <label className={styles.exportCheckbox}>
+                    <input
+                      type="checkbox"
+                      checked={setting.includeBackground ?? true}
+                      onChange={(e) =>
+                        updateExport(index, { ...setting, includeBackground: e.target.checked })
+                      }
+                    />
+                    Include background
+                  </label>
+                )}
               </div>
             );
           })}

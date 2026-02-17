@@ -663,12 +663,12 @@ describe('image vertexOffsets properties', () => {
   // Artboard animation support
   // ==========================================================================
 
-  it('getAnimatableProperties returns width, height, backgroundColor for artboard', () => {
+  it('getAnimatableProperties returns width, height, fills.0.color for artboard', () => {
     const props = getAnimatableProperties('artboard');
     const paths = props.map((p) => p.path);
     expect(paths).toContain('width');
     expect(paths).toContain('height');
-    expect(paths).toContain('backgroundColor');
+    expect(paths).toContain('fills.0.color');
     // Common transform properties should also be present
     expect(paths).toContain('transform.position.x');
     expect(paths).toContain('transform.position.y');
@@ -682,11 +682,11 @@ describe('image vertexOffsets properties', () => {
     expect(widthProp!.interpolationType).toBe('number');
   });
 
-  it('artboard backgroundColor interpolation type is color', () => {
+  it('artboard fill color interpolation type is color', () => {
     const props = getAnimatableProperties('artboard');
-    const bgProp = props.find((p) => p.path === 'backgroundColor');
-    expect(bgProp).toBeDefined();
-    expect(bgProp!.interpolationType).toBe('color');
+    const fillProp = props.find((p) => p.path === 'fills.0.color');
+    expect(fillProp).toBeDefined();
+    expect(fillProp!.interpolationType).toBe('color');
   });
 
   it('getProperty/setProperty works for artboard width', () => {
@@ -709,7 +709,14 @@ describe('image vertexOffsets properties', () => {
       blendMode: 'normal',
       width: 1920,
       height: 1080,
-      backgroundColor: { r: 255, g: 255, b: 255, a: 1 },
+      fills: [
+        {
+          type: 'solid' as const,
+          color: { r: 255, g: 255, b: 255, a: 1 },
+          opacity: 1,
+          visible: true,
+        },
+      ],
       clipContent: true,
     };
 
@@ -741,7 +748,14 @@ describe('image vertexOffsets properties', () => {
       blendMode: 'normal',
       width: 1920,
       height: 1080,
-      backgroundColor: { r: 255, g: 255, b: 255, a: 1 },
+      fills: [
+        {
+          type: 'solid' as const,
+          color: { r: 255, g: 255, b: 255, a: 1 },
+          opacity: 1,
+          visible: true,
+        },
+      ],
       clipContent: true,
     };
 

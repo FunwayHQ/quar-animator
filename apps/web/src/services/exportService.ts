@@ -50,7 +50,8 @@ export function downloadBlob(blob: Blob, filename: string): void {
 export async function exportSelectionAsPng(
   nodes: Node[],
   sceneGraph: SceneGraph,
-  multiplier: number = 1
+  multiplier: number = 1,
+  includeBackground: boolean = true
 ): Promise<void> {
   if (nodes.length === 0) return;
 
@@ -110,29 +111,28 @@ export async function exportSelectionAsPng(
   const gl = renderer.context;
   gl.viewport(0, 0, pixelWidth, pixelHeight);
 
-  if (artboard) {
-    // Fill with artboard background color
-    const bg = artboard.backgroundColor;
-    gl.clearColor(bg.r / 255, bg.g / 255, bg.b / 255, bg.a);
-  } else {
-    gl.clearColor(0, 0, 0, 0);
-  }
+  gl.clearColor(0, 0, 0, 0);
   gl.clear(gl.COLOR_BUFFER_BIT);
 
-  // Render nodes
-  if (artboard) {
-    // For artboard export, render children rather than the artboard itself
-    for (const childId of artboard.children) {
-      const child = sceneGraph.getNode(childId);
-      if (child && child.visible) {
-        shapeRenderer.renderNode(child, vpMatrix);
-      }
-    }
-  } else {
-    for (const node of nodes) {
-      if (!node.visible) continue;
-      shapeRenderer.renderNode(node, vpMatrix);
-    }
+  // When exporting artboard without background, temporarily clear artboard fills
+  // so render() skips the background rectangle but still renders children
+  let savedFills: import('@quar/types').Fill[] | null = null;
+  if (artboard && !includeBackground) {
+    savedFills = artboard.fills;
+    sceneGraph.updateNode(artboard.id, { fills: [] } as Partial<Node>);
+  }
+
+  // Render all visible nodes using the full render pipeline.
+  // The VP matrix is set to show only the export bounds, so off-screen nodes
+  // are naturally clipped. Using render() instead of renderNode() ensures:
+  // - Recursive traversal into groups and artboard children
+  // - Correct world transforms (renderNode uses local transforms only)
+  // - Boolean groups, effects, blend modes, skinned meshes all work
+  shapeRenderer.render(sceneGraph, vpMatrix);
+
+  // Restore artboard fills if they were temporarily removed
+  if (artboard && savedFills !== null) {
+    sceneGraph.updateNode(artboard.id, { fills: savedFills } as Partial<Node>);
   }
 
   // Convert to PNG blob and download

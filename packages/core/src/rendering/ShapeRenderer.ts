@@ -1520,9 +1520,10 @@ export class ShapeRenderer {
   renderArtboardBackground(node: ArtboardNode, worldMatrix: Matrix3): void {
     if (!this.program) return;
 
+    const fills = node.fills;
+    if (!fills || fills.length === 0) return;
+
     const gl = this.renderer.context;
-    const bg = node.backgroundColor;
-    if (bg.a <= 0) return; // transparent background — skip
 
     const anchor = node.transform.anchor;
     const pathPoints = createRectanglePath(
@@ -1545,13 +1546,15 @@ export class ShapeRenderer {
     this.renderer.useProgram(this.program);
     gl.uniformMatrix3fv(this.program.uniforms.u_model ?? null, false, modelArray);
 
-    const color = new Float32Array([
-      bg.r / 255,
-      bg.g / 255,
-      bg.b / 255,
-      bg.a * this.currentEffectiveOpacity,
-    ]);
-    this.renderFillWithColor(tessellated, fillIndices, color);
+    this.renderFillsAndStrokes(
+      node.id + ':bg',
+      tessellated,
+      fillIndices,
+      fills,
+      [],
+      true,
+      this.currentEffectiveOpacity
+    );
   }
 
   /**

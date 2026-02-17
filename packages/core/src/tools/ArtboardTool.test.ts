@@ -59,13 +59,15 @@ describe('ArtboardTool', () => {
       expect(artboard.transform.position.y).toBe(70); // 20 + 100/2
     });
 
-    it('should have white background color by default', () => {
+    it('should have white solid fill by default', () => {
       tool.onPointerDown(createMockPointerEvent({ worldPosition: { x: 0, y: 0 }, button: 0 }));
       tool.onPointerUp(createMockPointerEvent({ worldPosition: { x: 100, y: 100 }, button: 0 }));
 
       const nodes = Array.from(context.sceneGraph.getNodes());
       const artboard = nodes[0] as ArtboardNode;
-      expect(artboard.backgroundColor).toEqual({ r: 255, g: 255, b: 255, a: 1 });
+      expect(artboard.fills).toHaveLength(1);
+      expect(artboard.fills[0].type).toBe('solid');
+      expect(artboard.fills[0].color).toEqual({ r: 255, g: 255, b: 255, a: 1 });
     });
 
     it('should have clipContent true by default', () => {

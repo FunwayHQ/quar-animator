@@ -161,6 +161,7 @@ export type EffectType = Effect['type'];
 export interface ExportSetting {
   format: 'png' | 'svg';
   multiplier: 1 | 2 | 3 | 4; // Only meaningful for PNG
+  includeBackground?: boolean; // For artboard export — include artboard background (default true)
 }
 
 // ============================================================================
@@ -341,7 +342,7 @@ export interface ArtboardNode extends BaseNode {
   type: 'artboard';
   width: number;
   height: number;
-  backgroundColor: Color;
+  fills: Fill[];
   clipContent: boolean;
 }
 

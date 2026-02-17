@@ -348,7 +348,7 @@ export function getAnimatableProperties(nodeType: string): AnimatableProperty[] 
       props.push(
         { path: 'width', displayName: 'Width', interpolationType: 'number' },
         { path: 'height', displayName: 'Height', interpolationType: 'number' },
-        { path: 'backgroundColor', displayName: 'Background Color', interpolationType: 'color' }
+        { path: 'fills.0.color', displayName: 'Fill Color', interpolationType: 'color' }
       );
       break;
   }
