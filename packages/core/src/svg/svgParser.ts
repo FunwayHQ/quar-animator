@@ -4,7 +4,13 @@
  */
 
 import type { Color, Vector2 } from '@quar/types';
-import { parseSvgColor, parseSvgLength, parseSvgPoints, resolveStyle, type ResolvedStyle } from './svgUtils';
+import {
+  parseSvgColor,
+  parseSvgLength,
+  parseSvgPoints,
+  resolveStyle,
+  type ResolvedStyle,
+} from './svgUtils';
 
 // ============================================================================
 // Types
@@ -25,8 +31,15 @@ export interface SvgDefs {
 export interface ParsedGradient {
   type: 'linear' | 'radial';
   stops: { offset: number; color: Color }[];
-  x1?: number; y1?: number; x2?: number; y2?: number;
-  cx?: number; cy?: number; r?: number; fx?: number; fy?: number;
+  x1?: number;
+  y1?: number;
+  x2?: number;
+  y2?: number;
+  cx?: number;
+  cy?: number;
+  r?: number;
+  fx?: number;
+  fy?: number;
   gradientUnits: 'objectBoundingBox' | 'userSpaceOnUse';
   gradientTransform?: string;
   spreadMethod: 'pad' | 'reflect' | 'repeat';
@@ -41,23 +54,35 @@ interface SvgElementBase {
 
 export interface SvgRect extends SvgElementBase {
   tag: 'rect';
-  x: number; y: number; width: number; height: number;
-  rx?: number; ry?: number;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  rx?: number;
+  ry?: number;
 }
 
 export interface SvgEllipse extends SvgElementBase {
   tag: 'ellipse';
-  cx: number; cy: number; rx: number; ry: number;
+  cx: number;
+  cy: number;
+  rx: number;
+  ry: number;
 }
 
 export interface SvgCircle extends SvgElementBase {
   tag: 'circle';
-  cx: number; cy: number; r: number;
+  cx: number;
+  cy: number;
+  r: number;
 }
 
 export interface SvgLine extends SvgElementBase {
   tag: 'line';
-  x1: number; y1: number; x2: number; y2: number;
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
 }
 
 export interface SvgPolygon extends SvgElementBase {
@@ -73,6 +98,7 @@ export interface SvgPolyline extends SvgElementBase {
 export interface SvgPath extends SvgElementBase {
   tag: 'path';
   d: string;
+  fillRule?: 'nonzero' | 'evenodd';
 }
 
 export interface SvgGroup extends SvgElementBase {
@@ -81,8 +107,14 @@ export interface SvgGroup extends SvgElementBase {
 }
 
 export type SvgElement =
-  | SvgRect | SvgEllipse | SvgCircle | SvgLine
-  | SvgPolygon | SvgPolyline | SvgPath | SvgGroup;
+  | SvgRect
+  | SvgEllipse
+  | SvgCircle
+  | SvgLine
+  | SvgPolygon
+  | SvgPolyline
+  | SvgPath
+  | SvgGroup;
 
 // ============================================================================
 // Main Parser
@@ -124,9 +156,14 @@ export function parseSvg(svgString: string): ParsedSvg {
 // ViewBox
 // ============================================================================
 
-function parseViewBox(attr: string | null): { x: number; y: number; width: number; height: number } | null {
+function parseViewBox(
+  attr: string | null
+): { x: number; y: number; width: number; height: number } | null {
   if (!attr) return null;
-  const parts = attr.trim().split(/[\s,]+/).map(Number);
+  const parts = attr
+    .trim()
+    .split(/[\s,]+/)
+    .map(Number);
   if (parts.length < 4 || parts.some(isNaN)) return null;
   return { x: parts[0]!, y: parts[1]!, width: parts[2]!, height: parts[3]! };
 }
@@ -164,7 +201,9 @@ function collectGradients(parent: Element, gradients: Map<string, ParsedGradient
     const gradient: ParsedGradient = {
       type,
       stops: parseGradientStops(el),
-      gradientUnits: (el.getAttribute('gradientUnits') as 'objectBoundingBox' | 'userSpaceOnUse') || 'objectBoundingBox',
+      gradientUnits:
+        (el.getAttribute('gradientUnits') as 'objectBoundingBox' | 'userSpaceOnUse') ||
+        'objectBoundingBox',
       gradientTransform: el.getAttribute('gradientTransform') || undefined,
       spreadMethod: (el.getAttribute('spreadMethod') as 'pad' | 'reflect' | 'repeat') || 'pad',
     };
@@ -192,7 +231,8 @@ function collectGradients(parent: Element, gradients: Map<string, ParsedGradient
     }
 
     // Store href for later inheritance resolution
-    const href = el.getAttribute('href') || el.getAttributeNS('http://www.w3.org/1999/xlink', 'href');
+    const href =
+      el.getAttribute('href') || el.getAttributeNS('http://www.w3.org/1999/xlink', 'href');
     if (href) {
       (gradient as ParsedGradient & { _href?: string })._href = href.replace('#', '');
     }
@@ -254,9 +294,9 @@ function resolveGradientInheritance(gradients: Map<string, ParsedGradient>): voi
       if (gradient.x2 === undefined) gradient.x2 = parent.x2;
       if (gradient.y2 === undefined) gradient.y2 = parent.y2;
     } else {
-      if (gradient.cx === undefined) gradient.cx = (parent as ParsedGradient).cx;
-      if (gradient.cy === undefined) gradient.cy = (parent as ParsedGradient).cy;
-      if (gradient.r === undefined) gradient.r = (parent as ParsedGradient).r;
+      if (gradient.cx === undefined) gradient.cx = parent.cx;
+      if (gradient.cy === undefined) gradient.cy = parent.cy;
+      if (gradient.r === undefined) gradient.r = parent.r;
     }
 
     // Clean up internal property
@@ -290,9 +330,17 @@ function walkChildren(
     const tag = child.tagName.toLowerCase();
 
     // Skip defs, metadata, title, desc, etc.
-    if (tag === 'defs' || tag === 'metadata' || tag === 'title' || tag === 'desc'
-      || tag === 'style' || tag === 'clippath' || tag === 'mask'
-      || tag === 'lineargradient' || tag === 'radialgradient') {
+    if (
+      tag === 'defs' ||
+      tag === 'metadata' ||
+      tag === 'title' ||
+      tag === 'desc' ||
+      tag === 'style' ||
+      tag === 'clippath' ||
+      tag === 'mask' ||
+      tag === 'lineargradient' ||
+      tag === 'radialgradient'
+    ) {
       continue;
     }
 
@@ -389,10 +437,13 @@ function parseElement(
     case 'path': {
       const d = el.getAttribute('d') || '';
       if (!d) return null;
+      const fr = el.getAttribute('fill-rule') || '';
+      const fillRule = fr === 'evenodd' ? ('evenodd' as const) : undefined; // SVG default is nonzero
       return {
         ...base,
         tag: 'path',
         d,
+        ...(fillRule ? { fillRule } : {}),
       } as SvgPath;
     }
 

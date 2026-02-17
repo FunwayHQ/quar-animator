@@ -524,7 +524,10 @@ function contourSignedArea(verts: Float32Array): number {
  * Uses AABB pre-check + point-in-polygon for containment, then signed area
  * to disambiguate outer vs hole.
  */
-function groupContoursByContainment(contourArrays: Float32Array[]): ContourGroup[] {
+function groupContoursByContainment(
+  contourArrays: Float32Array[],
+  fillRule: 'nonzero' | 'evenodd' = 'evenodd'
+): ContourGroup[] {
   const n = contourArrays.length;
   if (n <= 1) {
     return n === 1 ? [{ outer: 0, holes: [] }] : [];
@@ -554,10 +557,36 @@ function groupContoursByContainment(contourArrays: Float32Array[]): ContourGroup
     }
   }
 
-  // A contour is a hole if it is contained by exactly one outer at its nesting level.
-  // Simple heuristic: a contour with odd nesting depth is a hole.
   const depth = containedBy.map((parents) => parents.length);
-  const isHole = depth.map((d) => d % 2 === 1);
+  const isHole: boolean[] = new Array(n).fill(false);
+
+  if (fillRule === 'evenodd') {
+    // Evenodd: a contour with odd nesting depth is a hole.
+    for (let i = 0; i < n; i++) {
+      isHole[i] = depth[i]! % 2 === 1;
+    }
+  } else {
+    // Nonzero: a contained contour is a hole only if its winding direction
+    // differs from its immediate parent. Same winding = filled, not a hole.
+    for (let i = 0; i < n; i++) {
+      if (depth[i] === 0) continue; // Top-level contour, not a hole
+      // Find immediate parent (tightest container)
+      let parentIdx = -1;
+      let parentArea = Infinity;
+      for (const p of containedBy[i]!) {
+        const absA = Math.abs(areas[p]!);
+        if (absA < parentArea) {
+          parentArea = absA;
+          parentIdx = p;
+        }
+      }
+      if (parentIdx >= 0) {
+        // Same sign = same winding direction = NOT a hole (for nonzero)
+        const sameWinding = areas[i]! > 0 === areas[parentIdx]! > 0;
+        isHole[i] = !sameWinding;
+      }
+    }
+  }
 
   // Build groups: each non-hole contour is an outer
   const groups: ContourGroup[] = [];
@@ -2474,7 +2503,7 @@ export class ShapeRenderer {
     }
 
     // Group contours by containment: outers with their holes
-    const groups = groupContoursByContainment(contourArrays);
+    const groups = groupContoursByContainment(contourArrays, node.fillRule ?? 'nonzero');
 
     // Tessellate each group independently with earcut, then remap indices
     const allFillIndices: number[] = [];
@@ -3913,7 +3942,7 @@ export class ShapeRenderer {
       }
 
       // Group by containment and tessellate per group
-      const groups = groupContoursByContainment(contourArrays);
+      const groups = groupContoursByContainment(contourArrays, node.fillRule ?? 'nonzero');
       const ghostFillIndices: number[] = [];
       for (const group of groups) {
         const contourIndices = [group.outer, ...group.holes];

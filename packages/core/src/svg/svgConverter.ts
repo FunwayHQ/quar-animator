@@ -4,16 +4,33 @@
  */
 
 import type {
-  Node, GroupNode, RectangleNode, EllipseNode, PathNode,
-  Fill, Stroke, Gradient, GradientStop, Transform,
+  Node,
+  GroupNode,
+  RectangleNode,
+  EllipseNode,
+  PathNode,
+  Fill,
+  Stroke,
+  Gradient,
+  GradientStop,
+  Transform,
 } from '@quar/types';
 import { createDefaultTransform } from '../SceneGraph';
 import { parseSvgTransform, parseSvgColor, parseUrlRef, type ResolvedStyle } from './svgUtils';
 import { parseSvgPath } from './svgPathParser';
 import type {
-  ParsedSvg, SvgElement, SvgRect, SvgEllipse, SvgCircle,
-  SvgLine, SvgPolygon, SvgPolyline, SvgPath, SvgGroup,
-  SvgDefs, ParsedGradient,
+  ParsedSvg,
+  SvgElement,
+  SvgRect,
+  SvgEllipse,
+  SvgCircle,
+  SvgLine,
+  SvgPolygon,
+  SvgPolyline,
+  SvgPath,
+  SvgGroup,
+  SvgDefs,
+  ParsedGradient,
 } from './svgParser';
 
 // ============================================================================
@@ -26,7 +43,7 @@ import type {
  */
 export function convertSvgToNodes(
   parsed: ParsedSvg,
-  generateId: () => string,
+  generateId: () => string
 ): { nodes: Node[]; rootIds: string[] } {
   const viewBoxHeight = parsed.viewBox?.height ?? parsed.height;
   const allNodes: Node[] = [];
@@ -63,15 +80,24 @@ interface ConvertContext {
 
 function convertElement(element: SvgElement, ctx: ConvertContext): Node[] {
   switch (element.tag) {
-    case 'rect': return [convertRect(element, ctx)];
-    case 'ellipse': return [convertEllipse(element, ctx)];
-    case 'circle': return [convertCircle(element, ctx)];
-    case 'line': return [convertLine(element, ctx)];
-    case 'polygon': return [convertPolygon(element, ctx)];
-    case 'polyline': return [convertPolyline(element, ctx)];
-    case 'path': return convertPath(element, ctx);
-    case 'g': return [convertGroup(element, ctx)];
-    default: return [];
+    case 'rect':
+      return [convertRect(element, ctx)];
+    case 'ellipse':
+      return [convertEllipse(element, ctx)];
+    case 'circle':
+      return [convertCircle(element, ctx)];
+    case 'line':
+      return [convertLine(element, ctx)];
+    case 'polygon':
+      return [convertPolygon(element, ctx)];
+    case 'polyline':
+      return [convertPolyline(element, ctx)];
+    case 'path':
+      return convertPath(element, ctx);
+    case 'g':
+      return [convertGroup(element, ctx)];
+    default:
+      return [];
   }
 }
 
@@ -164,8 +190,18 @@ function convertCircle(el: SvgCircle, ctx: ConvertContext): EllipseNode {
 
 function convertLine(el: SvgLine, ctx: ConvertContext): PathNode {
   const points = [
-    { position: { x: el.x1, y: ctx.viewBoxHeight - el.y1 }, handleIn: null, handleOut: null, type: 'corner' as const },
-    { position: { x: el.x2, y: ctx.viewBoxHeight - el.y2 }, handleIn: null, handleOut: null, type: 'corner' as const },
+    {
+      position: { x: el.x1, y: ctx.viewBoxHeight - el.y1 },
+      handleIn: null,
+      handleOut: null,
+      type: 'corner' as const,
+    },
+    {
+      position: { x: el.x2, y: ctx.viewBoxHeight - el.y2 },
+      handleIn: null,
+      handleOut: null,
+      type: 'corner' as const,
+    },
   ];
 
   // Center the path so rotation/scale works correctly
@@ -195,7 +231,7 @@ function convertLine(el: SvgLine, ctx: ConvertContext): PathNode {
 }
 
 function convertPolygon(el: SvgPolygon, ctx: ConvertContext): PathNode {
-  const rawPoints = el.points.map(p => ({
+  const rawPoints = el.points.map((p) => ({
     position: { x: p.x, y: ctx.viewBoxHeight - p.y },
     handleIn: null,
     handleOut: null,
@@ -229,7 +265,7 @@ function convertPolygon(el: SvgPolygon, ctx: ConvertContext): PathNode {
 }
 
 function convertPolyline(el: SvgPolyline, ctx: ConvertContext): PathNode {
-  const rawPoints = el.points.map(p => ({
+  const rawPoints = el.points.map((p) => ({
     position: { x: p.x, y: ctx.viewBoxHeight - p.y },
     handleIn: null,
     handleOut: null,
@@ -267,9 +303,9 @@ function convertPath(el: SvgPath, ctx: ConvertContext): PathNode[] {
 
   // Flip Y for all subpaths
   const flippedSubpaths = parsedSubpaths
-    .filter(sp => sp.points.length >= 2)
-    .map(sp => ({
-      points: sp.points.map(p => ({
+    .filter((sp) => sp.points.length >= 2)
+    .map((sp) => ({
+      points: sp.points.map((p) => ({
         position: { x: p.position.x, y: ctx.viewBoxHeight - p.position.y },
         handleIn: p.handleIn ? { x: p.handleIn.x, y: -p.handleIn.y } : null,
         handleOut: p.handleOut ? { x: p.handleOut.x, y: -p.handleOut.y } : null,
@@ -281,10 +317,10 @@ function convertPath(el: SvgPath, ctx: ConvertContext): PathNode[] {
   if (flippedSubpaths.length === 0) return [];
 
   // Check if this is a compound path (multiple closed subpaths)
-  const closedSubpaths = flippedSubpaths.filter(sp => sp.closed);
+  const closedSubpaths = flippedSubpaths.filter((sp) => sp.closed);
   if (closedSubpaths.length > 1) {
     // Compound path: merge all closed subpaths into a single PathNode with subpaths/fillRule
-    return [convertCompoundPath(el, closedSubpaths, flippedSubpaths, ctx)];
+    return [convertCompoundPath(el, closedSubpaths, flippedSubpaths, ctx, el.fillRule)];
   }
 
   // Simple path(s): one node per subpath, centered
@@ -326,23 +362,24 @@ function convertCompoundPath(
   closedSubpaths: { points: import('@quar/types').PathPoint[]; closed: boolean }[],
   allSubpaths: { points: import('@quar/types').PathPoint[]; closed: boolean }[],
   ctx: ConvertContext,
+  fillRule?: 'nonzero' | 'evenodd'
 ): PathNode {
   // Gather all points from all subpaths for bounding box computation
-  const allPoints = allSubpaths.flatMap(sp => sp.points);
+  const allPoints = allSubpaths.flatMap((sp) => sp.points);
   const { center } = centerPathPoints(allPoints);
 
   // Center each subpath's points relative to the shared center
-  const centeredContours = closedSubpaths.map(sp =>
-    sp.points.map(p => ({
+  const centeredContours = closedSubpaths.map((sp) =>
+    sp.points.map((p) => ({
       ...p,
       position: { x: p.position.x - center.x, y: p.position.y - center.y },
     }))
   );
 
   // Also include open subpaths (strokes only) — center them too
-  const openSubpaths = allSubpaths.filter(sp => !sp.closed);
-  const centeredOpen = openSubpaths.map(sp =>
-    sp.points.map(p => ({
+  const openSubpaths = allSubpaths.filter((sp) => !sp.closed);
+  const centeredOpen = openSubpaths.map((sp) =>
+    sp.points.map((p) => ({
       ...p,
       position: { x: p.position.x - center.x, y: p.position.y - center.y },
     }))
@@ -371,7 +408,7 @@ function convertCompoundPath(
     points: primaryContour,
     subpaths: subpaths.length > 0 ? subpaths : undefined,
     closed: true,
-    fillRule: 'evenodd',
+    fillRule: fillRule ?? 'nonzero',
     fills: convertFills(el.style, ctx.defs),
     strokes: convertStrokes(el.style, ctx.defs),
   };
@@ -422,14 +459,18 @@ function convertGroup(el: SvgGroup, ctx: ConvertContext): GroupNode {
  * Compute bounding box center of path points and offset all points so the center is at origin.
  * Returns the centered points and the original center.
  */
-function centerPathPoints(
-  points: import('@quar/types').PathPoint[]
-): { centeredPoints: import('@quar/types').PathPoint[]; center: import('@quar/types').Vector2 } {
+function centerPathPoints(points: import('@quar/types').PathPoint[]): {
+  centeredPoints: import('@quar/types').PathPoint[];
+  center: import('@quar/types').Vector2;
+} {
   if (points.length === 0) {
     return { centeredPoints: [], center: { x: 0, y: 0 } };
   }
 
-  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  let minX = Infinity,
+    maxX = -Infinity,
+    minY = Infinity,
+    maxY = -Infinity;
   for (const p of points) {
     if (p.position.x < minX) minX = p.position.x;
     if (p.position.x > maxX) maxX = p.position.x;
@@ -439,7 +480,7 @@ function centerPathPoints(
 
   const center = { x: (minX + maxX) / 2, y: (minY + maxY) / 2 };
 
-  const centeredPoints = points.map(p => ({
+  const centeredPoints = points.map((p) => ({
     ...p,
     position: { x: p.position.x - center.x, y: p.position.y - center.y },
     // Handles are relative offsets — no change needed
@@ -527,12 +568,14 @@ function convertFills(style: ResolvedStyle, defs: SvgDefs): Fill[] {
   if (gradRef) {
     const gradient = defs.gradients.get(gradRef);
     if (gradient) {
-      return [{
-        type: 'gradient',
-        gradient: convertGradient(gradient),
-        opacity: style.fillOpacity,
-        visible: true,
-      }];
+      return [
+        {
+          type: 'gradient',
+          gradient: convertGradient(gradient),
+          opacity: style.fillOpacity,
+          visible: true,
+        },
+      ];
     }
   }
 
@@ -540,12 +583,14 @@ function convertFills(style: ResolvedStyle, defs: SvgDefs): Fill[] {
   const color = parseSvgColor(style.fill);
   if (!color) return [];
 
-  return [{
-    type: 'solid',
-    color,
-    opacity: style.fillOpacity,
-    visible: true,
-  }];
+  return [
+    {
+      type: 'solid',
+      color,
+      opacity: style.fillOpacity,
+      visible: true,
+    },
+  ];
 }
 
 function convertStrokes(style: ResolvedStyle, defs: SvgDefs): Stroke[] {
@@ -561,23 +606,25 @@ function convertStrokes(style: ResolvedStyle, defs: SvgDefs): Stroke[] {
     if (g) gradient = convertGradient(g);
   }
 
-  return [{
-    color,
-    width: style.strokeWidth,
-    opacity: style.strokeOpacity,
-    cap: style.strokeLinecap,
-    join: style.strokeLinejoin,
-    miterLimit: style.strokeMiterlimit,
-    dashArray: style.strokeDasharray ?? undefined,
-    dashOffset: style.strokeDashoffset || undefined,
-    gradient,
-    visible: true,
-    align: 'center',
-  }];
+  return [
+    {
+      color,
+      width: style.strokeWidth,
+      opacity: style.strokeOpacity,
+      cap: style.strokeLinecap,
+      join: style.strokeLinejoin,
+      miterLimit: style.strokeMiterlimit,
+      dashArray: style.strokeDasharray ?? undefined,
+      dashOffset: style.strokeDashoffset || undefined,
+      gradient,
+      visible: true,
+      align: 'center',
+    },
+  ];
 }
 
 function convertGradient(g: ParsedGradient): Gradient {
-  const stops: GradientStop[] = g.stops.map(s => ({
+  const stops: GradientStop[] = g.stops.map((s) => ({
     offset: s.offset,
     color: s.color,
   }));
