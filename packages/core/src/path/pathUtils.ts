@@ -552,15 +552,16 @@ export function applyCornerRadius(
     const distPrev = vec2.length(toPrev);
     const distNext = vec2.length(toNext);
 
-    // Skip degenerate edges (zero length)
-    if (distPrev < GEOMETRY_EPSILON || distNext < GEOMETRY_EPSILON) {
+    // Skip degenerate edges (zero length) — use relative epsilon based on edge length
+    const edgeEpsilon = Math.max(GEOMETRY_EPSILON, Math.min(distPrev, distNext) * 0.001);
+    if (distPrev < edgeEpsilon || distNext < edgeEpsilon) {
       result.push(clonePathPoint(point));
       continue;
     }
 
     // Clamp radius so it doesn't exceed half of either edge
     const r = Math.min(radius, distPrev / 2, distNext / 2);
-    if (r < GEOMETRY_EPSILON) {
+    if (r < edgeEpsilon) {
       result.push(clonePathPoint(point));
       continue;
     }

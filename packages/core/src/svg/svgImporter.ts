@@ -51,12 +51,7 @@ export function importSvg(
   generateId: () => string,
   options: SvgImportOptions = {}
 ): SvgImportResult {
-  const {
-    centerAtOrigin = true,
-    scale = 1,
-    position,
-    parentId = null,
-  } = options;
+  const { centerAtOrigin = true, scale = 1, position, parentId = null } = options;
 
   const warnings: string[] = [];
 
@@ -117,7 +112,7 @@ export function importSvg(
 
   const addNode = (nodeId: string) => {
     if (added.has(nodeId)) return;
-    const node = nodes.find(n => n.id === nodeId);
+    const node = nodes.find((n) => n.id === nodeId);
     if (!node) return;
 
     // If this node has a parent in the import, add parent first
@@ -167,8 +162,10 @@ interface Bounds {
 }
 
 function computeNodesBounds(nodes: Node[], rootIds: string[]): Bounds | null {
-  let minX = Infinity, minY = Infinity;
-  let maxX = -Infinity, maxY = -Infinity;
+  let minX = Infinity,
+    minY = Infinity;
+  let maxX = -Infinity,
+    maxY = -Infinity;
 
   for (const node of nodes) {
     if (!rootIds.includes(node.id) && node.parent) continue;
@@ -189,17 +186,47 @@ function computeNodesBounds(nodes: Node[], rootIds: string[]): Bounds | null {
 
 function getNodeHalfWidth(node: Node): number {
   switch (node.type) {
-    case 'rectangle': return node.width / 2;
-    case 'ellipse': return node.radiusX;
-    default: return 0;
+    case 'rectangle':
+      return node.width / 2;
+    case 'ellipse':
+      return node.radiusX;
+    case 'polygon':
+      return node.radius;
+    case 'path': {
+      if (node.points.length === 0) return 0;
+      let minX = Infinity,
+        maxX = -Infinity;
+      for (const pt of node.points) {
+        if (pt.position.x < minX) minX = pt.position.x;
+        if (pt.position.x > maxX) maxX = pt.position.x;
+      }
+      return (maxX - minX) / 2;
+    }
+    default:
+      return 0;
   }
 }
 
 function getNodeHalfHeight(node: Node): number {
   switch (node.type) {
-    case 'rectangle': return node.height / 2;
-    case 'ellipse': return node.radiusY;
-    default: return 0;
+    case 'rectangle':
+      return node.height / 2;
+    case 'ellipse':
+      return node.radiusY;
+    case 'polygon':
+      return node.radius;
+    case 'path': {
+      if (node.points.length === 0) return 0;
+      let minY = Infinity,
+        maxY = -Infinity;
+      for (const pt of node.points) {
+        if (pt.position.y < minY) minY = pt.position.y;
+        if (pt.position.y > maxY) maxY = pt.position.y;
+      }
+      return (maxY - minY) / 2;
+    }
+    default:
+      return 0;
   }
 }
 
@@ -224,6 +251,22 @@ function scaleNodeDimensions(node: Node, scale: number): void {
         if (point.handleOut) {
           point.handleOut.x *= scale;
           point.handleOut.y *= scale;
+        }
+      }
+      if (node.subpaths) {
+        for (const sp of node.subpaths) {
+          for (const point of sp) {
+            point.position.x *= scale;
+            point.position.y *= scale;
+            if (point.handleIn) {
+              point.handleIn.x *= scale;
+              point.handleIn.y *= scale;
+            }
+            if (point.handleOut) {
+              point.handleOut.x *= scale;
+              point.handleOut.y *= scale;
+            }
+          }
         }
       }
       break;

@@ -624,6 +624,13 @@ function convertStrokes(style: ResolvedStyle, defs: SvgDefs): Stroke[] {
 }
 
 function convertGradient(g: ParsedGradient): Gradient {
+  // TODO: gradientTransform is parsed but not yet applied to gradient coordinates.
+  // Implementing this requires parsing SVG transform matrix strings and applying
+  // the transformation to gradient start/end/center coordinates.
+  if (g.gradientTransform) {
+    console.warn('SVG gradientTransform is not yet supported and will be ignored');
+  }
+
   const stops: GradientStop[] = g.stops.map((s) => ({
     offset: s.offset,
     color: s.color,

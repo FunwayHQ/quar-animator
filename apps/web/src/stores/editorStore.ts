@@ -2731,15 +2731,18 @@ function createPageActions(
 
     addPage: (sceneGraph: SceneGraphLike) => {
       const state = get();
-      // Save current page state first
-      const currentPage = state.pages.find((p) => p.id === state.activePageId);
-      if (currentPage) {
-        currentPage.sceneGraphJSON = structuredClone(sceneGraph.toJSON());
-        currentPage.timeline = structuredClone(state.timeline);
-        currentPage.selectedNodeIds = Array.from(state.selectedNodeIds);
-        currentPage.undoStack = state.undoStack;
-        currentPage.redoStack = state.redoStack;
-      }
+      // Save current page state first (immutable update)
+      const updatedPages = state.pages.map((p) => {
+        if (p.id !== state.activePageId) return p;
+        return {
+          ...p,
+          sceneGraphJSON: structuredClone(sceneGraph.toJSON()),
+          timeline: structuredClone(state.timeline),
+          selectedNodeIds: Array.from(state.selectedNodeIds),
+          undoStack: state.undoStack,
+          redoStack: state.redoStack,
+        };
+      });
 
       const pageNum = state.pages.length + 1;
       const newPage = createDefaultPage(`Page ${pageNum}`);
@@ -2748,7 +2751,7 @@ function createPageActions(
       sceneGraph.fromJSON(newPage.sceneGraphJSON);
 
       set({
-        pages: [...state.pages, newPage],
+        pages: [...updatedPages, newPage],
         activePageId: newPage.id,
         timeline: structuredClone(newPage.timeline),
         selectedNodeIds: new Set<string>(),
@@ -2811,16 +2814,24 @@ function createPageActions(
 
     duplicatePage: (pageId: string, sceneGraph: SceneGraphLike) => {
       const state = get();
-      const sourcePage = state.pages.find((p) => p.id === pageId);
+      let sourcePage = state.pages.find((p) => p.id === pageId);
       if (!sourcePage) return;
 
-      // If duplicating the active page, save current state first
+      // If duplicating the active page, save current state first (immutable)
+      let updatedPages = state.pages;
       if (pageId === state.activePageId) {
-        sourcePage.sceneGraphJSON = structuredClone(sceneGraph.toJSON());
-        sourcePage.timeline = structuredClone(state.timeline);
-        sourcePage.selectedNodeIds = Array.from(state.selectedNodeIds);
-        sourcePage.undoStack = state.undoStack;
-        sourcePage.redoStack = state.redoStack;
+        updatedPages = state.pages.map((p) => {
+          if (p.id !== pageId) return p;
+          return {
+            ...p,
+            sceneGraphJSON: structuredClone(sceneGraph.toJSON()),
+            timeline: structuredClone(state.timeline),
+            selectedNodeIds: Array.from(state.selectedNodeIds),
+            undoStack: state.undoStack,
+            redoStack: state.redoStack,
+          };
+        });
+        sourcePage = updatedPages.find((p) => p.id === pageId)!;
       }
 
       const newPage: PageData = {
@@ -2834,8 +2845,8 @@ function createPageActions(
       };
 
       // Insert after source page
-      const sourceIndex = state.pages.findIndex((p) => p.id === pageId);
-      const newPages = [...state.pages];
+      const sourceIndex = updatedPages.findIndex((p) => p.id === pageId);
+      const newPages = [...updatedPages];
       newPages.splice(sourceIndex + 1, 0, newPage);
 
       set({ pages: newPages, isDirty: true });
@@ -2848,20 +2859,35 @@ function createPageActions(
       const targetPage = state.pages.find((p) => p.id === pageId);
       if (!targetPage) return;
 
-      // Save current page state
-      const currentPage = state.pages.find((p) => p.id === state.activePageId);
-      if (currentPage) {
-        currentPage.sceneGraphJSON = structuredClone(sceneGraph.toJSON());
-        currentPage.timeline = structuredClone(state.timeline);
-        currentPage.selectedNodeIds = Array.from(state.selectedNodeIds);
-        currentPage.undoStack = state.undoStack;
-        currentPage.redoStack = state.redoStack;
+      // Force-stop Smart Bone recording before switching pages
+      if (state.smartBoneRecordingActionId) {
+        set({
+          smartBoneRecordingActionId: null,
+          smartBoneRecordingTargetId: null,
+          smartBoneRecordingPrevTool: null,
+          smartBoneRecordingPrevRotation: null,
+          activeTool: state.smartBoneRecordingPrevTool ?? 'selection',
+        });
       }
+
+      // Save current page state (immutable update)
+      const updatedPages = state.pages.map((p) => {
+        if (p.id !== state.activePageId) return p;
+        return {
+          ...p,
+          sceneGraphJSON: structuredClone(sceneGraph.toJSON()),
+          timeline: structuredClone(state.timeline),
+          selectedNodeIds: Array.from(state.selectedNodeIds),
+          undoStack: state.undoStack,
+          redoStack: state.redoStack,
+        };
+      });
 
       // Load target page
       sceneGraph.fromJSON(structuredClone(targetPage.sceneGraphJSON));
 
       set({
+        pages: updatedPages,
         activePageId: pageId,
         timeline: structuredClone(targetPage.timeline),
         selectedNodeIds: new Set(targetPage.selectedNodeIds),

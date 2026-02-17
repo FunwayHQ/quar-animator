@@ -250,11 +250,14 @@ export class SceneGraph {
     const node = this.nodes.get(id);
     if (!node) return descendants;
 
+    const visited = new Set<string>();
     const collectDescendants = (nodeId: string) => {
       const n = this.nodes.get(nodeId);
       if (!n) return;
 
       for (const childId of n.children) {
+        if (visited.has(childId)) continue; // cycle protection
+        visited.add(childId);
         const child = this.nodes.get(childId);
         if (child) {
           descendants.push(child);
@@ -405,10 +408,6 @@ export class SceneGraph {
   }
 
   fromJSON(data: { nodes: Node[]; rootNodeIds: string[] }): void {
-    this.nodes.clear();
-    this.rootNodeIds = [];
-    this.worldTransformCache.clear();
-
     // Validate that nodes is an array
     if (!Array.isArray(data.nodes)) {
       console.warn('SceneGraph.fromJSON: data.nodes is not an array, using empty node list');
@@ -421,6 +420,8 @@ export class SceneGraph {
       data.rootNodeIds = [];
     }
 
+    // Parse into temp map — validate before destroying current state
+    const newNodes = new Map<string, Node>();
     for (const node of data.nodes) {
       // Skip nodes without a valid id
       if (!node || typeof node.id !== 'string' || node.id.length === 0) {
@@ -429,10 +430,23 @@ export class SceneGraph {
       }
       // Migrate old fill/stroke singular fields to fills/strokes arrays
       this.migrateNodeFillsStrokes(node);
-      this.nodes.set(node.id, node);
+      newNodes.set(node.id, node);
     }
 
-    this.rootNodeIds = data.rootNodeIds;
+    // Validate parent references — fix orphans
+    for (const [, node] of newNodes) {
+      if (node.parent && !newNodes.has(node.parent)) {
+        node.parent = null;
+      }
+    }
+
+    // Filter rootNodeIds to only valid IDs
+    const validRootIds = data.rootNodeIds.filter((id) => newNodes.has(id));
+
+    // Atomic swap — only after successful parsing
+    this.nodes = newNodes;
+    this.rootNodeIds = validRootIds;
+    this.worldTransformCache.clear();
   }
 
   /**

@@ -244,6 +244,11 @@ export class PlaybackController {
       }
     }
 
+    // Cap remaining accumulator to prevent float drift over long playback
+    if (this._accumulator > msPerFrame) {
+      this._accumulator = msPerFrame;
+    }
+
     this._scheduleFrame();
   };
 

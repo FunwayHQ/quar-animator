@@ -116,18 +116,17 @@ export function deformVertices(
       totalWeight += w;
     }
 
-    if (totalWeight > 0 && Math.abs(totalWeight - 1.0) > 0.001) {
-      // Normalize if weights don't sum to 1
-      outX /= totalWeight;
-      outY /= totalWeight;
-    }
-
-    if (totalWeight === 0) {
-      // Fallback to bind pose
+    if (totalWeight <= 0.001) {
+      // Near-zero weight — fallback to bind pose
       const m = skinData.meshBindMatrix;
       result[i * 2] = m[0] * vx + m[2] * vy + m[4];
       result[i * 2 + 1] = m[1] * vx + m[3] * vy + m[5];
     } else {
+      if (Math.abs(totalWeight - 1.0) > 0.001) {
+        // Normalize if weights don't sum to 1
+        outX /= totalWeight;
+        outY /= totalWeight;
+      }
       result[i * 2] = outX;
       result[i * 2 + 1] = outY;
     }

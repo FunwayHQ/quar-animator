@@ -35,6 +35,9 @@ export function getTextBounds(
 /**
  * Get text bounds using an opentype.js font instance.
  */
+// TODO: textAlign is not yet reflected in bounds calculation — center/right
+// alignment would shift the X origin, but this currently only affects rendering
+// position, not stored bounds.
 function getTextBoundsFromFont(
   content: string,
   font: opentype.Font,

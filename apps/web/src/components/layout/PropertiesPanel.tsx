@@ -22,6 +22,7 @@ import type {
   InnerShadowEffect,
   LayerBlurEffect,
   SymbolInstanceNode,
+  SymbolDefinition,
 } from '@quar/types';
 import {
   Lock,
@@ -113,7 +114,11 @@ function shouldKeyframe(autoKeyframe: boolean, nodeId: string, property: string)
   return track != null && track.keyframes.length > 0;
 }
 
-function getNodeSize(node: Node, sceneGraph?: SceneGraph): { width: number; height: number } {
+function getNodeSize(
+  node: Node,
+  sceneGraph?: SceneGraph,
+  symbols?: SymbolDefinition[]
+): { width: number; height: number } {
   switch (node.type) {
     case 'rectangle': {
       const rect = node;
@@ -191,8 +196,8 @@ function getNodeSize(node: Node, sceneGraph?: SceneGraph): { width: number; heig
     case 'symbol-instance': {
       // Symbol instances have no scene graph children — compute from definition
       const symInst = node as SymbolInstanceNode;
-      const symbols = useEditorStore.getState().symbols;
-      const symDef = symbols.find((s: { id: string }) => s.id === symInst.symbolId);
+      const syms = symbols ?? useEditorStore.getState().symbols;
+      const symDef = syms.find((s: { id: string }) => s.id === symInst.symbolId);
       if (symDef && symDef.sceneGraphJSON.nodes.length > 0) {
         const symBounds = getSymbolBounds(symDef.sceneGraphJSON.nodes as Node[]);
         const ssx = node.transform.scale?.x ?? 1;
@@ -381,6 +386,7 @@ export function PropertiesPanel() {
   const weightPaintBoneId = useEditorStore((state) => state.weightPaintBoneId);
   const setWeightPaintBoneId = useEditorStore((state) => state.setWeightPaintBoneId);
   const dynamicChains = useEditorStore((state) => state.dynamicChains);
+  const symbols = useEditorStore((state) => state.symbols);
 
   // Undo snapshot before scrub or input commit
   const handleScrubStart = useCallback(() => {
@@ -449,7 +455,7 @@ export function PropertiesPanel() {
       // Y: visual top = world max Y (Y-up) → center.y = snapped - height * (1 - anchor.y)
       const snappedTL = snap ? Math.round(num / grid) * grid : num;
       const anchor = currentNode.transform.anchor ?? { x: 0.5, y: 0.5 };
-      const nodeSize = getNodeSize(currentNode, sceneGraph);
+      const nodeSize = getNodeSize(currentNode, sceneGraph, symbols);
       const centerValue =
         axis === 'x'
           ? snappedTL + nodeSize.width * anchor.x
@@ -561,7 +567,7 @@ export function PropertiesPanel() {
         }
       } else if (nodeToUpdate.type === 'group') {
         // Groups scale via transform.scale relative to base bounds
-        const currentSize = getNodeSize(nodeToUpdate, sceneGraph);
+        const currentSize = getNodeSize(nodeToUpdate, sceneGraph, symbols);
         const curSx = nodeToUpdate.transform.scale?.x ?? 1;
         const curSy = nodeToUpdate.transform.scale?.y ?? 1;
         // Compute base (unscaled) size
@@ -593,7 +599,7 @@ export function PropertiesPanel() {
       const num = snap ? Math.max(grid, Math.round(raw / grid) * grid) : raw;
       const currentNode = sceneGraph.getNode(selectedId);
       if (!currentNode) return;
-      const currentSize = getNodeSize(currentNode, sceneGraph);
+      const currentSize = getNodeSize(currentNode, sceneGraph, symbols);
 
       let newW = currentSize.width;
       let newH = currentSize.height;
@@ -1150,7 +1156,7 @@ export function PropertiesPanel() {
         const n = sceneGraph.getNode(id);
         if (!n) continue;
         const a = n.transform.anchor ?? { x: 0.5, y: 0.5 };
-        const ns = getNodeSize(n, sceneGraph);
+        const ns = getNodeSize(n, sceneGraph, symbols);
         // Compute visual top-left from center (Y-up world: top = max Y)
         const tlX = n.transform.position.x - ns.width * a.x;
         const tlY = n.transform.position.y + ns.height * (1 - a.y);
@@ -1270,7 +1276,7 @@ export function PropertiesPanel() {
   const nodeId = selectedId as string;
 
   const isGroup = node.type === 'group';
-  const size = getNodeSize(node, sceneGraph);
+  const size = getNodeSize(node, sceneGraph, symbols);
   // Display top-left corner position (not center)
   const center = isGroup ? getGroupPosition(node, sceneGraph) : node.transform.position;
   const anchor = node.transform.anchor ?? { x: 0.5, y: 0.5 };
@@ -1346,7 +1352,6 @@ export function PropertiesPanel() {
         {node.type === 'symbol-instance' &&
           (() => {
             const symInst = node as SymbolInstanceNode;
-            const symbols = useEditorStore.getState().symbols;
             const symDef = symbols.find((s: { id: string }) => s.id === symInst.symbolId);
             return (
               <div className={styles.section}>

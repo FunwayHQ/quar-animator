@@ -84,35 +84,45 @@ export function glyphPathToSubpaths(opPath: opentype.Path): PathPoint[][] {
         const ctrl = { x: cmd.x1, y: -cmd.y1 };
         const endPt = { x: cmd.x, y: -cmd.y };
 
-        if (prevPt) {
-          const cubicCp1 = {
-            x: prevPt.position.x + (2 / 3) * (ctrl.x - prevPt.position.x),
-            y: prevPt.position.y + (2 / 3) * (ctrl.y - prevPt.position.y),
-          };
-          const cubicCp2 = {
-            x: endPt.x + (2 / 3) * (ctrl.x - endPt.x),
-            y: endPt.y + (2 / 3) * (ctrl.y - endPt.y),
-          };
-
-          prevPt.handleOut = {
-            x: cubicCp1.x - prevPt.position.x,
-            y: cubicCp1.y - prevPt.position.y,
-          };
-          if (prevPt.type === 'corner' && prevPt.handleOut) {
-            prevPt.type = 'smooth';
-          }
-
+        if (!prevPt) {
+          // No preceding M command — add endpoint as corner to avoid data loss
           currentPos = endPt;
           current.push({
             position: { ...endPt },
-            handleIn: {
-              x: cubicCp2.x - endPt.x,
-              y: cubicCp2.y - endPt.y,
-            },
+            handleIn: null,
             handleOut: null,
-            type: 'smooth',
+            type: 'corner',
           });
+          break;
         }
+
+        const cubicCp1 = {
+          x: prevPt.position.x + (2 / 3) * (ctrl.x - prevPt.position.x),
+          y: prevPt.position.y + (2 / 3) * (ctrl.y - prevPt.position.y),
+        };
+        const cubicCp2 = {
+          x: endPt.x + (2 / 3) * (ctrl.x - endPt.x),
+          y: endPt.y + (2 / 3) * (ctrl.y - endPt.y),
+        };
+
+        prevPt.handleOut = {
+          x: cubicCp1.x - prevPt.position.x,
+          y: cubicCp1.y - prevPt.position.y,
+        };
+        if (prevPt.type === 'corner' && prevPt.handleOut) {
+          prevPt.type = 'smooth';
+        }
+
+        currentPos = endPt;
+        current.push({
+          position: { ...endPt },
+          handleIn: {
+            x: cubicCp2.x - endPt.x,
+            y: cubicCp2.y - endPt.y,
+          },
+          handleOut: null,
+          type: 'smooth',
+        });
         break;
       }
       case 'Z': {

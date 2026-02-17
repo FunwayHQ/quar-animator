@@ -137,30 +137,35 @@ export function useProjectActions(options: UseProjectActionsOptions = {}): Proje
 
   // ------ Save Project ------
   const saveProject = useCallback(async () => {
-    const state = useEditorStore.getState();
-    let projectId = state.projectId;
+    manualSavingRef.current = true;
+    try {
+      const state = useEditorStore.getState();
+      let projectId = state.projectId;
 
-    if (!projectId) {
-      projectId = generateProjectId();
-      useEditorStore.setState({ projectId });
+      if (!projectId) {
+        projectId = generateProjectId();
+        useEditorStore.setState({ projectId });
+      }
+
+      const data = serializeProject(
+        state.projectName,
+        sceneGraph,
+        getEditorSnapshot(),
+        state.projectCreatedAt ?? undefined
+      );
+
+      useEditorStore.setState({
+        isDirty: false,
+        projectCreatedAt: data.createdAt,
+      });
+
+      const json = JSON.stringify(data);
+      await dbSave(projectId, state.projectName, json);
+      await setLastProjectId(projectId);
+      toast.success('Project saved');
+    } finally {
+      manualSavingRef.current = false;
     }
-
-    const data = serializeProject(
-      state.projectName,
-      sceneGraph,
-      getEditorSnapshot(),
-      state.projectCreatedAt ?? undefined
-    );
-
-    useEditorStore.setState({
-      isDirty: false,
-      projectCreatedAt: data.createdAt,
-    });
-
-    const json = JSON.stringify(data);
-    await dbSave(projectId, state.projectName, json);
-    await setLastProjectId(projectId);
-    toast.success('Project saved');
   }, [sceneGraph, getEditorSnapshot]);
 
   // ------ Save As ------
@@ -421,10 +426,11 @@ export function useProjectActions(options: UseProjectActionsOptions = {}): Proje
 
   // ------ Auto-save every 30s when dirty ------
   const autoSavingRef = useRef(false);
+  const manualSavingRef = useRef(false);
   useEffect(() => {
     autoSaveTimerRef.current = setInterval(() => {
       const { isDirty, projectId } = useEditorStore.getState();
-      if (isDirty && projectId && !autoSavingRef.current) {
+      if (isDirty && projectId && !autoSavingRef.current && !manualSavingRef.current) {
         autoSavingRef.current = true;
         saveProject()
           .catch(() => {

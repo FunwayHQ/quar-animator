@@ -101,8 +101,16 @@ function ellipseToPoints(node: EllipseNode, tolerance: number): Vector2[] {
 function polygonNodeToPoints(node: PolygonNode, tolerance: number): Vector2[] {
   const pathPoints =
     node.innerRadius !== undefined
-      ? createStarPath(0, 0, node.radius, node.innerRadius, node.sides)
-      : createPolygonPath(0, 0, node.radius, node.sides);
+      ? createStarPath(
+          0,
+          0,
+          node.radius,
+          node.innerRadius,
+          node.sides,
+          Math.PI / 2,
+          node.cornerRadius
+        )
+      : createPolygonPath(0, 0, node.radius, node.sides, Math.PI / 2, node.cornerRadius);
   return tessellateToVector2(pathPoints, true, tolerance);
 }
 

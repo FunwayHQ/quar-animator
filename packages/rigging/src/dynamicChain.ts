@@ -19,9 +19,7 @@ import type {
  * Minimal scene graph interface for dynamic chain evaluation.
  */
 export interface DynamicChainSceneGraph {
-  getNode(
-    id: string
-  ):
+  getNode(id: string):
     | {
         type: string;
         length: number;
@@ -277,23 +275,7 @@ export function stepDynamicChain(
     }
   }
 
-  // 5. Elasticity (spring back to rest positions)
-  if (elasticity > 0) {
-    // Compute rest positions from root
-    let restX = particles[0].position.x;
-    let restY = particles[0].position.y;
-
-    for (let i = 1; i < particles.length; i++) {
-      const p = particles[i];
-      restX += Math.cos(p.restAngle) * p.restLength;
-      restY += Math.sin(p.restAngle) * p.restLength;
-
-      p.position.x += (restX - p.position.x) * elasticity;
-      p.position.y += (restY - p.position.y) * elasticity;
-    }
-  }
-
-  // 6. Freeze axis
+  // 5. Freeze axis (before elasticity so frozen axes aren't undone by springs)
   if (freezeAxis) {
     for (let i = 1; i < particles.length; i++) {
       if (freezeAxis === 'x') {
@@ -311,6 +293,22 @@ export function stepDynamicChain(
         }
         particles[i].position.y = restY;
       }
+    }
+  }
+
+  // 6. Elasticity (spring back to rest positions)
+  if (elasticity > 0) {
+    // Compute rest positions from root
+    let restX = particles[0].position.x;
+    let restY = particles[0].position.y;
+
+    for (let i = 1; i < particles.length; i++) {
+      const p = particles[i];
+      restX += Math.cos(p.restAngle) * p.restLength;
+      restY += Math.sin(p.restAngle) * p.restLength;
+
+      p.position.x += (restX - p.position.x) * elasticity;
+      p.position.y += (restY - p.position.y) * elasticity;
     }
   }
 }
@@ -338,10 +336,11 @@ export function applyChainToBones(
     const childParticle = particles[i + 1];
 
     // World angle from parent particle to child particle
-    const worldAngle = Math.atan2(
-      childParticle.position.y - parentParticle.position.y,
-      childParticle.position.x - parentParticle.position.x
-    );
+    const dx = childParticle.position.x - parentParticle.position.x;
+    const dy = childParticle.position.y - parentParticle.position.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    if (dist < 1e-10) continue; // skip degenerate (coincident) bone
+    const worldAngle = Math.atan2(dy, dx);
 
     // Convert world angle to local rotation:
     // For root bone (no parent), local rotation = world angle in degrees

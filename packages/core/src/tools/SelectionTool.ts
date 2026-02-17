@@ -1280,6 +1280,7 @@ export class SelectionTool extends BaseTool {
 
     // Apply constraint (maintain aspect ratio)
     if (constrained) {
+      if (initial.height === 0 || initial.width === 0) return { x, y, width, height };
       const initialAspect = initial.width / initial.height;
       const currentAspect = width / height;
 

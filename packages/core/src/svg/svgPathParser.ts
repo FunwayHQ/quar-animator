@@ -48,9 +48,26 @@ function tokenizePath(d: string): PathToken[] {
   };
 
   const argCounts: Record<string, number> = {
-    M: 2, m: 2, L: 2, l: 2, H: 1, h: 1, V: 1, v: 1,
-    C: 6, c: 6, S: 4, s: 4, Q: 4, q: 4, T: 2, t: 2,
-    A: 7, a: 7, Z: 0, z: 0,
+    M: 2,
+    m: 2,
+    L: 2,
+    l: 2,
+    H: 1,
+    h: 1,
+    V: 1,
+    v: 1,
+    C: 6,
+    c: 6,
+    S: 4,
+    s: 4,
+    Q: 4,
+    q: 4,
+    T: 2,
+    t: 2,
+    A: 7,
+    a: 7,
+    Z: 0,
+    z: 0,
   };
 
   while ((match = commandRegex.exec(d)) !== null) {
@@ -92,12 +109,15 @@ function tokenizePath(d: string): PathToken[] {
  * Uses center parameterization and splits into ≤90° segments.
  */
 function arcToCubicBeziers(
-  x1: number, y1: number,
-  rx: number, ry: number,
+  x1: number,
+  y1: number,
+  rx: number,
+  ry: number,
   xAxisRotation: number,
   largeArcFlag: number,
   sweepFlag: number,
-  x2: number, y2: number
+  x2: number,
+  y2: number
 ): { handleOut: Vector2; point: Vector2; handleIn: Vector2 }[] {
   // Handle degenerate cases
   if (rx === 0 || ry === 0) {
@@ -132,12 +152,12 @@ function arcToCubicBeziers(
   }
 
   // Step 3: Compute center point (cx', cy')
-  let num = Math.max(0, rxSq * rySq - rxSq * y1pSq - rySq * x1pSq);
+  const num = Math.max(0, rxSq * rySq - rxSq * y1pSq - rySq * x1pSq);
   const den = rxSq * y1pSq + rySq * x1pSq;
   const sq = den === 0 ? 0 : Math.sqrt(num / den);
   const sign = largeArcFlag === sweepFlag ? -1 : 1;
-  const cxp = sign * sq * (rx * y1p / ry);
-  const cyp = sign * sq * (-ry * x1p / rx);
+  const cxp = sign * sq * ((rx * y1p) / ry);
+  const cyp = sign * sq * ((-ry * x1p) / rx);
 
   // Step 4: Compute center point in original coords
   const cx = cosPhi * cxp - sinPhi * cyp + (x1 + x2) / 2;
@@ -153,10 +173,7 @@ function arcToCubicBeziers(
   };
 
   const theta1 = angle(1, 0, (x1p - cxp) / rx, (y1p - cyp) / ry);
-  let dTheta = angle(
-    (x1p - cxp) / rx, (y1p - cyp) / ry,
-    (-x1p - cxp) / rx, (-y1p - cyp) / ry
-  );
+  let dTheta = angle((x1p - cxp) / rx, (y1p - cyp) / ry, (-x1p - cxp) / rx, (-y1p - cyp) / ry);
 
   if (sweepFlag === 0 && dTheta > 0) dTheta -= 2 * Math.PI;
   if (sweepFlag === 1 && dTheta < 0) dTheta += 2 * Math.PI;
@@ -187,7 +204,7 @@ function arcToCubicBeziers(
 
     // End point of segment
     const ex = rx * cosEnd;
-    const ey = ry * cosEnd === rx * cosEnd ? ry * sinEnd : ry * sinEnd;
+    const ey = ry * sinEnd;
 
     // Transform back to original coordinate system
     const transformX = (px: number, py: number) => cosPhi * px - sinPhi * py + cx;
@@ -332,7 +349,12 @@ export function parseSvgPath(d: string): ParsedSubpath[] {
       case 'S': {
         // Smooth cubic: reflect previous control point
         let x1: number, y1: number;
-        if (lastCommand === 'C' || lastCommand === 'S' || lastCommand === 'c' || lastCommand === 's') {
+        if (
+          lastCommand === 'C' ||
+          lastCommand === 'S' ||
+          lastCommand === 'c' ||
+          lastCommand === 's'
+        ) {
           x1 = 2 * currentX - lastControlX;
           y1 = 2 * currentY - lastControlY;
         } else {
@@ -401,7 +423,12 @@ export function parseSvgPath(d: string): ParsedSubpath[] {
       case 'T': {
         // Smooth quadratic: reflect previous quadratic control
         let qx: number, qy: number;
-        if (lastCommand === 'Q' || lastCommand === 'T' || lastCommand === 'q' || lastCommand === 't') {
+        if (
+          lastCommand === 'Q' ||
+          lastCommand === 'T' ||
+          lastCommand === 'q' ||
+          lastCommand === 't'
+        ) {
           qx = 2 * currentX - lastControlX;
           qy = 2 * currentY - lastControlY;
         } else {
@@ -449,7 +476,15 @@ export function parseSvgPath(d: string): ParsedSubpath[] {
         if (currentX === x && currentY === y) break;
 
         const beziers = arcToCubicBeziers(
-          currentX, currentY, rx, ry, xRotation, largeArc, sweep, x, y
+          currentX,
+          currentY,
+          rx,
+          ry,
+          xRotation,
+          largeArc,
+          sweep,
+          x,
+          y
         );
 
         for (const seg of beziers) {

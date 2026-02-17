@@ -12,7 +12,6 @@ import type { Node, SymbolInstanceNode, SymbolDefinition, SymbolOverride, Rect }
 
 interface CacheEntry {
   nodes: Node[];
-  key: string;
 }
 
 const resolvedSymbolCache = new Map<string, CacheEntry>();
@@ -55,6 +54,7 @@ export function applyOverrides(nodes: Node[], overrides: SymbolOverride[]): Node
   for (const override of overrides) {
     const target = nodeMap.get(override.nodeId);
     if (!target) continue; // Skip overrides for non-existent nodes
+    if (typeof override.properties !== 'object' || override.properties === null) continue;
 
     // Shallow-merge override properties onto the node
     const props: Record<string, unknown> = override.properties;
@@ -77,7 +77,7 @@ export function resolveSymbolInstance(
   const cacheKey = buildCacheKey(instance.symbolId, instance.overrides);
 
   const cached = resolvedSymbolCache.get(cacheKey);
-  if (cached && cached.key === cacheKey) {
+  if (cached) {
     return cached.nodes;
   }
 
@@ -88,7 +88,7 @@ export function resolveSymbolInstance(
   const resolved = applyOverrides(clonedNodes, instance.overrides);
 
   // Cache result
-  resolvedSymbolCache.set(cacheKey, { nodes: resolved, key: cacheKey });
+  resolvedSymbolCache.set(cacheKey, { nodes: resolved });
 
   return resolved;
 }
@@ -119,30 +119,37 @@ export function getSymbolBounds(resolvedNodes: Node[]): Rect {
 
     switch (node.type) {
       case 'rectangle':
-      case 'artboard':
-        w = (node as { width: number }).width;
-        h = (node as { height: number }).height;
+      case 'artboard': {
+        const r = node as Record<string, unknown>;
+        w = typeof r.width === 'number' && isFinite(r.width) ? r.width : 0;
+        h = typeof r.height === 'number' && isFinite(r.height) ? r.height : 0;
         break;
-      case 'image':
-        w = (node as { width: number }).width;
-        h = (node as { height: number }).height;
+      }
+      case 'image': {
+        const img = node as Record<string, unknown>;
+        w = typeof img.width === 'number' && isFinite(img.width) ? img.width : 0;
+        h = typeof img.height === 'number' && isFinite(img.height) ? img.height : 0;
         break;
+      }
       case 'ellipse': {
-        const e = node as { radiusX: number; radiusY: number };
-        w = e.radiusX * 2;
-        h = e.radiusY * 2;
+        const e = node as Record<string, unknown>;
+        const rx = typeof e.radiusX === 'number' && isFinite(e.radiusX) ? e.radiusX : 0;
+        const ry = typeof e.radiusY === 'number' && isFinite(e.radiusY) ? e.radiusY : 0;
+        w = rx * 2;
+        h = ry * 2;
         break;
       }
       case 'polygon': {
-        const p = node as { radius: number };
-        w = p.radius * 2;
-        h = p.radius * 2;
+        const p = node as Record<string, unknown>;
+        const rad = typeof p.radius === 'number' && isFinite(p.radius) ? p.radius : 0;
+        w = rad * 2;
+        h = rad * 2;
         break;
       }
       default:
-        // For paths, text, etc. use a default estimation
-        w = 100;
-        h = 100;
+        // For paths, text, groups, etc. — use 0 to avoid inflating bounds
+        w = 0;
+        h = 0;
         break;
     }
 

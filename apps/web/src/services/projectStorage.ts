@@ -37,7 +37,10 @@ export function initDB(): Promise<IDBDatabase> {
   dbPromise = new Promise<IDBDatabase>((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
 
-    request.onerror = () => reject(request.error);
+    request.onerror = () => {
+      dbPromise = null; // allow retry on next call
+      reject(request.error);
+    };
 
     request.onupgradeneeded = () => {
       const db = request.result;

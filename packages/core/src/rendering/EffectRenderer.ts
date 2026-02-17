@@ -209,6 +209,8 @@ export class EffectRenderer {
     gl.enable(gl.BLEND);
 
     this.renderer.bindVAO(null);
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, null);
     gl.activeTexture(gl.TEXTURE0);
 
     this.fbManager.release(dstFBO);
@@ -307,6 +309,8 @@ export class EffectRenderer {
       gl.COLOR_BUFFER_BIT,
       gl.NEAREST
     );
+    gl.bindFramebuffer(gl.READ_FRAMEBUFFER, null);
+    gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, null);
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 
     this.fbManager.release(blurredFBO);

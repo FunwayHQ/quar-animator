@@ -94,10 +94,7 @@ function v2dot(a: Vector2, b: Vector2): number {
  * Normalize angle to [-180, 180] range (degrees).
  */
 function normalizeAngle(deg: number): number {
-  let a = deg % 360;
-  if (a > 180) a -= 360;
-  if (a < -180) a += 360;
-  return a;
+  return (((deg % 360) + 540) % 360) - 180;
 }
 
 // ============================================================================
@@ -163,6 +160,7 @@ export function solveFABRIK(config: FABRIKConfig): IKSolveResult {
 
   // Unreachable target: extend fully toward target
   if (distToTarget > totalLength) {
+    if (distToTarget < 1e-10) return; // target at root — no solution
     const dir = v2normalize(v2sub(target, rootPos));
     positions[0] = { ...rootPos };
     for (let i = 0; i < boneLengths.length; i++) {
@@ -385,7 +383,7 @@ export function extractIKJoints(
   while (currentId) {
     const node = sceneGraph.getNode(currentId);
     if (!node || node.type !== 'bone') break;
-    chain.unshift(node as BoneNode);
+    chain.unshift(node);
     if (currentId === rootBoneId) break;
     currentId = node.parent;
   }
@@ -417,7 +415,7 @@ export function applyIKResult(result: IKSolveResult, sceneGraph: IKSceneGraph): 
     const node = sceneGraph.getNode(boneId);
     if (!node || node.type !== 'bone') continue;
 
-    const bone = node as BoneNode;
+    const bone = node;
 
     // Apply constraint clamping
     let clamped = rotation;

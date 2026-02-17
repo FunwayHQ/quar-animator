@@ -165,6 +165,7 @@ function parseViewBox(
     .split(/[\s,]+/)
     .map(Number);
   if (parts.length < 4 || parts.some(isNaN)) return null;
+  if (parts[2]! <= 0 || parts[3]! <= 0) return null;
   return { x: parts[0]!, y: parts[1]!, width: parts[2]!, height: parts[3]! };
 }
 
@@ -275,9 +276,17 @@ function parseGradientStops(gradientEl: Element): { offset: number; color: Color
 }
 
 function resolveGradientInheritance(gradients: Map<string, ParsedGradient>): void {
-  for (const [, gradient] of gradients) {
+  const visited = new Set<string>();
+  for (const [id, gradient] of gradients) {
     const href = (gradient as ParsedGradient & { _href?: string })._href;
     if (!href) continue;
+
+    // Detect self-reference and circular references
+    if (href === id || visited.has(id)) {
+      delete (gradient as ParsedGradient & { _href?: string })._href;
+      continue;
+    }
+    visited.add(id);
 
     const parent = gradients.get(href);
     if (!parent) continue;

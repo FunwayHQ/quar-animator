@@ -572,27 +572,51 @@ function getLocalExtent(node: Node, sceneGraph: SceneGraph): ExportBounds | null
     }
     case 'group': {
       // Union of children world bounds, transformed back to group local
-      let minX = Infinity,
-        minY = Infinity,
-        maxX = -Infinity,
-        maxY = -Infinity;
+      let wMinX = Infinity,
+        wMinY = Infinity,
+        wMaxX = -Infinity,
+        wMaxY = -Infinity;
       let found = false;
       for (const childId of node.children) {
         const child = sceneGraph.getNode(childId);
         if (!child || !child.visible) continue;
         const childBounds = getNodeWorldBounds(child, sceneGraph);
         if (childBounds) {
-          minX = Math.min(minX, childBounds.minX);
-          minY = Math.min(minY, childBounds.minY);
-          maxX = Math.max(maxX, childBounds.maxX);
-          maxY = Math.max(maxY, childBounds.maxY);
+          wMinX = Math.min(wMinX, childBounds.minX);
+          wMinY = Math.min(wMinY, childBounds.minY);
+          wMaxX = Math.max(wMaxX, childBounds.maxX);
+          wMaxY = Math.max(wMaxY, childBounds.maxY);
           found = true;
         }
       }
       if (!found) return null;
-      // Transform world bounds back to group local by inverting world transform
-      // For simplicity, we already compute world bounds directly
-      return { minX, minY, maxX, maxY };
+      // Transform world bounds back to group-local space by inverting the group's world transform
+      const gwt = sceneGraph.getWorldTransform(node.id);
+      const det = gwt.a * gwt.d - gwt.b * gwt.c;
+      if (Math.abs(det) < 1e-10) return { minX: wMinX, minY: wMinY, maxX: wMaxX, maxY: wMaxY };
+      const invDet = 1 / det;
+      // Inverse affine: inv(M) * (p - t)
+      const worldCorners = [
+        { x: wMinX, y: wMinY },
+        { x: wMaxX, y: wMinY },
+        { x: wMaxX, y: wMaxY },
+        { x: wMinX, y: wMaxY },
+      ];
+      let lMinX = Infinity,
+        lMinY = Infinity,
+        lMaxX = -Infinity,
+        lMaxY = -Infinity;
+      for (const c of worldCorners) {
+        const dx = c.x - gwt.tx;
+        const dy = c.y - gwt.ty;
+        const lx = (gwt.d * dx - gwt.c * dy) * invDet;
+        const ly = (-gwt.b * dx + gwt.a * dy) * invDet;
+        lMinX = Math.min(lMinX, lx);
+        lMinY = Math.min(lMinY, ly);
+        lMaxX = Math.max(lMaxX, lx);
+        lMaxY = Math.max(lMaxY, ly);
+      }
+      return { minX: lMinX, minY: lMinY, maxX: lMaxX, maxY: lMaxY };
     }
     default:
       return null;
