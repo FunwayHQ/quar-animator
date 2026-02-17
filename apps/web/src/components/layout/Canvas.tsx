@@ -1094,6 +1094,153 @@ export function Canvas() {
   // Paste from System Clipboard (SVG vector + raster images)
   // --------------------------------------------------------------------------
 
+  // Shared helpers for importing external clipboard content
+  const getCanvasCenter = useCallback(() => {
+    const camera = cameraRef.current;
+    if (!camera) return { x: 0, y: 0 };
+    return camera.screenToWorld({
+      x: (canvasRef.current?.clientWidth ?? 800) / 2,
+      y: (canvasRef.current?.clientHeight ?? 600) / 2,
+    });
+  }, []);
+
+  const importSvgString = useCallback(
+    (svgString: string) => {
+      const sg = sceneGraphRef.current;
+      if (!sg) return;
+      const worldCenter = getCanvasCenter();
+      let idCounter = Date.now();
+      const generateId = () => `node_${idCounter++}`;
+      try {
+        useEditorStore.getState().pushUndo(sg);
+        const result = importSvg(svgString, sg, generateId, {
+          centerAtOrigin: false,
+          position: worldCenter,
+        });
+        if (result.rootIds.length > 0) {
+          useEditorStore.setState({ selectedNodeIds: new Set(result.rootIds) });
+        }
+      } catch {
+        // Invalid SVG — ignore
+      }
+    },
+    [getCanvasCenter]
+  );
+
+  const importImageBlob = useCallback(
+    (blob: Blob) => {
+      const sg = sceneGraphRef.current;
+      if (!sg || blob.size > 10 * 1024 * 1024) return;
+
+      const reader = new FileReader();
+      reader.onload = () => {
+        const dataUri = reader.result as string;
+        const img = new Image();
+        img.onload = () => {
+          const worldCenter = getCanvasCenter();
+          const nodeId = `node_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+          const imageNode = {
+            id: nodeId,
+            name: 'Pasted Image',
+            type: 'image' as const,
+            parent: null,
+            children: [],
+            transform: {
+              position: { x: worldCenter.x, y: worldCenter.y },
+              rotation: 0,
+              scale: { x: 1, y: 1 },
+              anchor: { x: 0.5, y: 0.5 },
+              skew: { x: 0, y: 0 },
+            },
+            visible: true,
+            locked: false,
+            opacity: 1,
+            blendMode: 'normal' as const,
+            src: dataUri,
+            width: img.naturalWidth,
+            height: img.naturalHeight,
+            naturalWidth: img.naturalWidth,
+            naturalHeight: img.naturalHeight,
+            cornerRadius: [0, 0, 0, 0] as [number, number, number, number],
+          };
+
+          useEditorStore.getState().pushUndo(sg);
+          sg.addNode(imageNode);
+          useEditorStore.setState({ selectedNodeIds: new Set([nodeId]) });
+        };
+        img.src = dataUri;
+      };
+      reader.readAsDataURL(blob);
+    },
+    [getCanvasCenter]
+  );
+
+  /**
+   * Read system clipboard via Clipboard API and import SVG/images.
+   * Returns true if external content was found, false if should fall back to internal paste.
+   */
+  const pasteFromSystemClipboard = useCallback(async (): Promise<boolean> => {
+    try {
+      // Try the modern Clipboard API (navigator.clipboard.read)
+      if (navigator.clipboard && typeof navigator.clipboard.read === 'function') {
+        const clipboardItems = await navigator.clipboard.read();
+        for (const item of clipboardItems) {
+          // Check for SVG in text/html (Figma, Illustrator)
+          if (item.types.includes('text/html')) {
+            const htmlBlob = await item.getType('text/html');
+            const html = await htmlBlob.text();
+            const svgMatch = html.match(/<svg[\s\S]*?<\/svg>/i);
+            if (svgMatch) {
+              importSvgString(svgMatch[0]);
+              return true;
+            }
+          }
+
+          // Check for SVG in text/plain
+          if (item.types.includes('text/plain')) {
+            const textBlob = await item.getType('text/plain');
+            const text = await textBlob.text();
+            const svgMatch = text.match(/<svg[\s\S]*?<\/svg>/i);
+            if (svgMatch) {
+              importSvgString(svgMatch[0]);
+              return true;
+            }
+          }
+
+          // Check for image content
+          for (const type of item.types) {
+            if (type.startsWith('image/')) {
+              const imageBlob = await item.getType(type);
+              importImageBlob(imageBlob);
+              return true;
+            }
+          }
+        }
+      }
+    } catch {
+      // Clipboard API not available or permission denied — fall through
+    }
+
+    // Try fallback: navigator.clipboard.readText for SVG text
+    try {
+      if (navigator.clipboard && typeof navigator.clipboard.readText === 'function') {
+        const text = await navigator.clipboard.readText();
+        if (text) {
+          const svgMatch = text.match(/<svg[\s\S]*?<\/svg>/i);
+          if (svgMatch) {
+            importSvgString(svgMatch[0]);
+            return true;
+          }
+        }
+      }
+    } catch {
+      // readText not available or denied
+    }
+
+    return false;
+  }, [importSvgString, importImageBlob]);
+
+  // Handle native paste event (fires from Ctrl+V when element has focus)
   const handlePaste = useCallback(
     (e: ClipboardEvent) => {
       // Skip if focus is in an input/textarea
@@ -1101,17 +1248,15 @@ export function Canvas() {
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
 
       const sg = sceneGraphRef.current;
-      const camera = cameraRef.current;
-      if (!sg || !camera) return;
+      if (!sg) return;
 
       const items = e.clipboardData?.items;
       if (!items || items.length === 0) {
-        // No clipboard data — fall back to internal paste
         pasteClipboard(sg);
         return;
       }
 
-      // Scan clipboard items
+      // Scan clipboard items from the paste event
       let imageItem: DataTransferItem | null = null;
       let htmlItem: DataTransferItem | null = null;
       let plainTextItem: DataTransferItem | null = null;
@@ -1122,76 +1267,6 @@ export function Canvas() {
         if (item.type === 'text/plain' && !plainTextItem) plainTextItem = item;
       }
 
-      const getCanvasCenter = () =>
-        camera.screenToWorld({
-          x: (canvasRef.current?.clientWidth ?? 800) / 2,
-          y: (canvasRef.current?.clientHeight ?? 600) / 2,
-        });
-
-      const importSvgString = (svgString: string) => {
-        const worldCenter = getCanvasCenter();
-        let idCounter = Date.now();
-        const generateId = () => `node_${idCounter++}`;
-        try {
-          useEditorStore.getState().pushUndo(sg);
-          const result = importSvg(svgString, sg, generateId, {
-            centerAtOrigin: false,
-            position: worldCenter,
-          });
-          if (result.rootIds.length > 0) {
-            useEditorStore.setState({ selectedNodeIds: new Set(result.rootIds) });
-          }
-        } catch {
-          // Invalid SVG — ignore
-        }
-      };
-
-      const importImageBlob = (item: DataTransferItem) => {
-        const blob = item.getAsFile();
-        if (!blob || blob.size > 10 * 1024 * 1024) return;
-
-        const reader = new FileReader();
-        reader.onload = () => {
-          const dataUri = reader.result as string;
-          const img = new Image();
-          img.onload = () => {
-            const worldCenter = getCanvasCenter();
-            const nodeId = `node_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
-            const imageNode = {
-              id: nodeId,
-              name: 'Pasted Image',
-              type: 'image' as const,
-              parent: null,
-              children: [],
-              transform: {
-                position: { x: worldCenter.x, y: worldCenter.y },
-                rotation: 0,
-                scale: { x: 1, y: 1 },
-                anchor: { x: 0.5, y: 0.5 },
-                skew: { x: 0, y: 0 },
-              },
-              visible: true,
-              locked: false,
-              opacity: 1,
-              blendMode: 'normal' as const,
-              src: dataUri,
-              width: img.naturalWidth,
-              height: img.naturalHeight,
-              naturalWidth: img.naturalWidth,
-              naturalHeight: img.naturalHeight,
-              cornerRadius: [0, 0, 0, 0] as [number, number, number, number],
-            };
-
-            useEditorStore.getState().pushUndo(sg);
-            sg.addNode(imageNode);
-            useEditorStore.setState({ selectedNodeIds: new Set([nodeId]) });
-          };
-          img.src = dataUri;
-        };
-        reader.readAsDataURL(blob);
-      };
-
-      // Prefer HTML text (Figma/Illustrator copy SVG in text/html), then plain text
       const textItem = htmlItem || plainTextItem;
 
       if (textItem) {
@@ -1203,9 +1278,9 @@ export function Canvas() {
             importSvgString(svgMatch[0]);
             return;
           }
-          // No SVG in text — try image blob, or fall back to internal paste
           if (capturedImageItem) {
-            importImageBlob(capturedImageItem);
+            const file = capturedImageItem.getAsFile();
+            if (file) importImageBlob(file);
           } else {
             pasteClipboard(sg);
           }
@@ -1213,25 +1288,22 @@ export function Canvas() {
         return;
       }
 
-      // No text content — try image blob
       if (imageItem) {
         e.preventDefault();
-        importImageBlob(imageItem);
+        const file = imageItem.getAsFile();
+        if (file) importImageBlob(file);
         return;
       }
 
-      // No external content — fall back to internal clipboard
       pasteClipboard(sg);
     },
-    [pasteClipboard]
+    [pasteClipboard, importSvgString, importImageBlob]
   );
 
-  // Attach paste listener on the canvas element
+  // Listen for paste on document (not just canvas) so it works regardless of focus
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    canvas.addEventListener('paste', handlePaste);
-    return () => canvas.removeEventListener('paste', handlePaste);
+    document.addEventListener('paste', handlePaste);
+    return () => document.removeEventListener('paste', handlePaste);
   }, [handlePaste]);
 
   // --------------------------------------------------------------------------
@@ -1341,9 +1413,13 @@ export function Canvas() {
           return;
         }
         if (e.key === 'v') {
-          // Let the native paste event handle this — it will check
-          // for external clipboard content (SVG/images) first, then
-          // fall back to internal clipboard paste.
+          e.preventDefault();
+          // Try system clipboard first (SVG/images), fall back to internal
+          void pasteFromSystemClipboard().then((handled) => {
+            if (!handled) {
+              pasteClipboard(sceneGraph);
+            }
+          });
           return;
         }
         if (e.key === 'd' && !e.shiftKey) {
@@ -1378,6 +1454,7 @@ export function Canvas() {
       sceneGraph,
       copySelection,
       pasteClipboard,
+      pasteFromSystemClipboard,
       duplicateSelection,
       deleteSelection,
       selectAll,
@@ -1792,8 +1869,13 @@ export function Canvas() {
         id: 'paste',
         label: 'Paste',
         shortcut: 'Ctrl+V',
-        disabled: !clipboard || clipboard.length === 0,
-        onClick: () => pasteClipboard(sceneGraph),
+        onClick: () => {
+          void pasteFromSystemClipboard().then((handled) => {
+            if (!handled) {
+              pasteClipboard(sceneGraph);
+            }
+          });
+        },
       },
       { type: 'separator' },
       {
@@ -1810,6 +1892,7 @@ export function Canvas() {
     copySelection,
     duplicateSelection,
     pasteClipboard,
+    pasteFromSystemClipboard,
     deleteSelection,
     selectAll,
     groupSelection,
