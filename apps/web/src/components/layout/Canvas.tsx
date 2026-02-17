@@ -1240,12 +1240,14 @@ export function Canvas() {
     return false;
   }, [importSvgString, importImageBlob]);
 
-  // Handle native paste event (fires from Ctrl+V when element has focus)
+  // Handle native paste event (backup for when Clipboard API is unavailable)
   const handlePaste = useCallback(
     (e: ClipboardEvent) => {
       // Skip if focus is in an input/textarea
       const tag = (document.activeElement as HTMLElement)?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+
+      e.preventDefault();
 
       const sg = sceneGraphRef.current;
       if (!sg) return;
@@ -1270,7 +1272,6 @@ export function Canvas() {
       const textItem = htmlItem || plainTextItem;
 
       if (textItem) {
-        e.preventDefault();
         const capturedImageItem = imageItem;
         textItem.getAsString((text: string) => {
           const svgMatch = text.match(/<svg[\s\S]*?<\/svg>/i);
@@ -1289,7 +1290,6 @@ export function Canvas() {
       }
 
       if (imageItem) {
-        e.preventDefault();
         const file = imageItem.getAsFile();
         if (file) importImageBlob(file);
         return;
@@ -1300,11 +1300,36 @@ export function Canvas() {
     [pasteClipboard, importSvgString, importImageBlob]
   );
 
-  // Listen for paste on document (not just canvas) so it works regardless of focus
+  // Document-level Ctrl+V handler — uses Clipboard API for reliable cross-focus paste,
+  // with native paste event as fallback
   useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey) || e.key !== 'v') return;
+
+      const tag = (document.activeElement as HTMLElement)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+
+      // Prevent default to avoid double-paste from native paste event
+      e.preventDefault();
+
+      const sg = sceneGraphRef.current;
+      if (!sg) return;
+
+      // Use Clipboard API (works during user gesture context)
+      void pasteFromSystemClipboard().then((handled) => {
+        if (!handled) {
+          pasteClipboard(sg);
+        }
+      });
+    };
+
+    document.addEventListener('keydown', handleGlobalKeyDown);
     document.addEventListener('paste', handlePaste);
-    return () => document.removeEventListener('paste', handlePaste);
-  }, [handlePaste]);
+    return () => {
+      document.removeEventListener('keydown', handleGlobalKeyDown);
+      document.removeEventListener('paste', handlePaste);
+    };
+  }, [handlePaste, pasteFromSystemClipboard, pasteClipboard]);
 
   // --------------------------------------------------------------------------
   // Keyboard Handlers
@@ -1413,13 +1438,7 @@ export function Canvas() {
           return;
         }
         if (e.key === 'v') {
-          e.preventDefault();
-          // Try system clipboard first (SVG/images), fall back to internal
-          void pasteFromSystemClipboard().then((handled) => {
-            if (!handled) {
-              pasteClipboard(sceneGraph);
-            }
-          });
+          // Handled by document-level keydown listener (Clipboard API + fallback)
           return;
         }
         if (e.key === 'd' && !e.shiftKey) {
