@@ -202,17 +202,16 @@ export function MenuBar({ projectActions }: MenuBarProps) {
     });
   }, [selectedNodeIds, sceneGraph]);
 
-  const hasBoneNodes = useMemo(() => {
-    let found = false;
-    sceneGraph.traverse((node: { type: string }) => {
-      if (node.type === 'bone') {
-        found = true;
-        return false; // stop
-      }
-      return true;
-    });
-    return found;
-  }, [sceneGraph]);
+  // Compute without useMemo — sceneGraph is a stable ref so useMemo([sceneGraph])
+  // would never recompute after bones are added. Traversal is cheap.
+  let hasBoneNodes = false;
+  sceneGraph.traverse((node: { type: string }) => {
+    if (node.type === 'bone') {
+      hasBoneNodes = true;
+      return false; // stop
+    }
+    return true;
+  });
 
   const hasShapeSelected = useMemo(() => {
     return Array.from(selectedNodeIds).some((id) => {
