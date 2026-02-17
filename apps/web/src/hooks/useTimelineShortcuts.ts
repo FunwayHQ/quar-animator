@@ -107,6 +107,13 @@ export function useTimelineShortcuts(callbacks: TimelineShortcutCallbacks) {
           }
           break;
 
+        case 'g':
+        case 'G':
+          // G: toggle graph editor
+          event.preventDefault();
+          useEditorStore.getState().toggleTimelineViewMode();
+          break;
+
         case 'Home':
           event.preventDefault();
           callbacks.goToStart();

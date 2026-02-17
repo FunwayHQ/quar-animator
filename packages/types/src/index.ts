@@ -581,6 +581,8 @@ export interface CubicBezierEasing {
 
 export type EasingFunction = EasingType | CubicBezierEasing;
 
+export type TangentMode = 'auto' | 'smooth' | 'aligned' | 'free' | 'linear';
+
 export interface Keyframe<T = unknown> {
   id: string;
   time: number; // Frame number
@@ -588,6 +590,7 @@ export interface Keyframe<T = unknown> {
   easing: EasingFunction;
   tangentIn?: Vector2;
   tangentOut?: Vector2;
+  tangentMode?: TangentMode; // default: 'auto'
 }
 
 export interface PropertyTrack<T = unknown> {

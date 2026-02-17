@@ -7,6 +7,7 @@ import { ContextMenu } from '../common/ContextMenu';
 import type { ContextMenuEntry } from '../common/ContextMenu';
 import { OnionSkinPanel } from '../common/OnionSkinPanel';
 import { EasingEditor } from '../common/EasingEditor';
+import { GraphEditor } from '../timeline/GraphEditor';
 import styles from './Timeline.module.css';
 
 // ============================================================================
@@ -80,6 +81,8 @@ export function Timeline({ playback }: TimelineProps = {}) {
 
   const onionSkinEnabled = useEditorStore((s) => s.onionSkin.enabled);
   const toggleOnionSkin = useEditorStore((s) => s.toggleOnionSkin);
+  const timelineViewMode = useEditorStore((s) => s.timelineViewMode);
+  const toggleTimelineViewMode = useEditorStore((s) => s.toggleTimelineViewMode);
 
   const workAreaEnabled = useEditorStore((s) => s.workAreaEnabled);
   const workAreaStart = useEditorStore((s) => s.workAreaStart);
@@ -825,6 +828,24 @@ export function Timeline({ playback }: TimelineProps = {}) {
               <path d="M7 21H5a2 2 0 0 1-2-2v-2" />
             </svg>
           </button>
+          <button
+            className={`${styles.optionButton} ${timelineViewMode === 'graph' ? styles.active : ''}`}
+            onClick={toggleTimelineViewMode}
+            title="Toggle graph editor (G)"
+            aria-label="Toggle graph editor"
+            data-testid="graph-editor-toggle"
+          >
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+            >
+              <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+            </svg>
+          </button>
           <div style={{ position: 'relative' }}>
             <button
               className={`${styles.optionButton} ${onionSkinEnabled ? styles.active : ''}`}
@@ -855,150 +876,154 @@ export function Timeline({ playback }: TimelineProps = {}) {
         </div>
       </div>
 
-      {/* Timeline Area */}
-      <div className={styles.timelineArea}>
-        {/* Layer Labels */}
-        <div className={styles.layerLabels}>
-          {nodes.length > 0 ? (
-            nodes.map((node) => (
-              <div key={node.id} className={styles.layerLabel}>
-                {node.name ?? node.id}
-              </div>
-            ))
-          ) : (
-            <div className={styles.layerLabel}>No layers</div>
-          )}
-        </div>
+      {/* Timeline Area — Graph Editor or Dope Sheet */}
+      {timelineViewMode === 'graph' ? (
+        <GraphEditor />
+      ) : (
+        <div className={styles.timelineArea}>
+          {/* Layer Labels */}
+          <div className={styles.layerLabels}>
+            {nodes.length > 0 ? (
+              nodes.map((node) => (
+                <div key={node.id} className={styles.layerLabel}>
+                  {node.name ?? node.id}
+                </div>
+              ))
+            ) : (
+              <div className={styles.layerLabel}>No layers</div>
+            )}
+          </div>
 
-        {/* Tracks Area */}
-        <div className={styles.tracksArea}>
-          {/* Ruler */}
-          {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events -- keyboard navigation handled by useTimelineShortcuts hook */}
-          <div
-            className={styles.ruler}
-            ref={rulerRef}
-            onClick={handleRulerClick}
-            onContextMenu={handleTimelineContextMenu}
-            role="slider"
-            aria-valuenow={currentFrame}
-            aria-valuemin={0}
-            aria-valuemax={duration - 1}
-            aria-label="Timeline scrubber"
-            tabIndex={0}
-            data-testid="timeline-ruler"
-          >
-            {rulerMarks.map(({ index, frame }) => (
-              <div key={index} className={styles.rulerMark} style={{ left: `${index * 10}%` }}>
-                <span className={styles.rulerLabel}>{frame}</span>
-              </div>
-            ))}
-            {/* Work Area overlay in ruler */}
+          {/* Tracks Area */}
+          <div className={styles.tracksArea}>
+            {/* Ruler */}
+            {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events -- keyboard navigation handled by useTimelineShortcuts hook */}
+            <div
+              className={styles.ruler}
+              ref={rulerRef}
+              onClick={handleRulerClick}
+              onContextMenu={handleTimelineContextMenu}
+              role="slider"
+              aria-valuenow={currentFrame}
+              aria-valuemin={0}
+              aria-valuemax={duration - 1}
+              aria-label="Timeline scrubber"
+              tabIndex={0}
+              data-testid="timeline-ruler"
+            >
+              {rulerMarks.map(({ index, frame }) => (
+                <div key={index} className={styles.rulerMark} style={{ left: `${index * 10}%` }}>
+                  <span className={styles.rulerLabel}>{frame}</span>
+                </div>
+              ))}
+              {/* Work Area overlay in ruler */}
+              {workAreaEnabled && (
+                <>
+                  {/* Left dimmed region */}
+                  <div
+                    className={styles.workAreaDimmed}
+                    style={{ left: 0, width: `${(workAreaStart / duration) * 100}%` }}
+                  />
+                  {/* Right dimmed region */}
+                  <div
+                    className={styles.workAreaDimmed}
+                    style={{ left: `${((workAreaEnd + 1) / duration) * 100}%`, right: 0 }}
+                  />
+                  {/* Active bar */}
+                  {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}
+                  <div
+                    className={styles.workAreaBar}
+                    style={{
+                      left: `${(workAreaStart / duration) * 100}%`,
+                      width: `${((workAreaEnd - workAreaStart + 1) / duration) * 100}%`,
+                    }}
+                    onPointerDown={(e) => handleWorkAreaPointerDown(e, 'body')}
+                    onPointerMove={handleWorkAreaPointerMove}
+                    onPointerUp={handleWorkAreaPointerUp}
+                  />
+                  {/* Start handle */}
+                  {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}
+                  <div
+                    className={styles.workAreaHandleStart}
+                    style={{
+                      left: `${(workAreaStart / duration) * 100}%`,
+                      transform: 'translateX(-100%)',
+                    }}
+                    onPointerDown={(e) => handleWorkAreaPointerDown(e, 'start')}
+                    onPointerMove={handleWorkAreaPointerMove}
+                    onPointerUp={handleWorkAreaPointerUp}
+                  />
+                  {/* End handle */}
+                  {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}
+                  <div
+                    className={styles.workAreaHandleEnd}
+                    style={{ left: `${((workAreaEnd + 1) / duration) * 100}%` }}
+                    onPointerDown={(e) => handleWorkAreaPointerDown(e, 'end')}
+                    onPointerMove={handleWorkAreaPointerMove}
+                    onPointerUp={handleWorkAreaPointerUp}
+                  />
+                </>
+              )}
+              {/* Playhead */}
+              <div
+                className={styles.playhead}
+                style={{ left: `${(currentFrame / duration) * 100}%` }}
+              />
+            </div>
+
+            {/* Tracks */}
+            {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- click deselects keyframes, keyboard handled by useTimelineShortcuts */}
+            <div className={styles.tracks} ref={tracksRef} onClick={handleTrackClick}>
+              {nodes.map((node) => {
+                const kfs = nodeKeyframes.get(node.id);
+                return (
+                  <div key={node.id} className={styles.track}>
+                    {kfs &&
+                      kfs.map((kf) => (
+                        /* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- keyframe diamonds, keyboard handled at track level */
+                        <div
+                          key={kf.id}
+                          className={`${styles.keyframe} ${selectedKeyframeIds.has(kf.id) ? styles.selected : ''}`}
+                          style={{ left: `${(kf.time / duration) * 100}%` }}
+                          onClick={(e) => handleKeyframeClick(e, kf.id)}
+                          onContextMenu={(e) =>
+                            handleKeyframeContextMenu(e, kf.id, kf.nodeId, kf.property)
+                          }
+                          onPointerDown={(e) => handleKeyframePointerDown(e, kf.id)}
+                          onPointerMove={handleKeyframePointerMove}
+                          onPointerUp={handleKeyframePointerUp}
+                          data-testid={`keyframe-${kf.id}`}
+                          title={`${kf.property} @ frame ${kf.time}`}
+                        />
+                      ))}
+                  </div>
+                );
+              })}
+              {nodes.length === 0 && <div className={styles.track} />}
+            </div>
+
+            {/* Work Area dimmed regions in tracks — positioned in tracksArea to match ruler width */}
             {workAreaEnabled && (
               <>
-                {/* Left dimmed region */}
                 <div
-                  className={styles.workAreaDimmed}
+                  className={styles.workAreaTrackDimmed}
                   style={{ left: 0, width: `${(workAreaStart / duration) * 100}%` }}
                 />
-                {/* Right dimmed region */}
                 <div
-                  className={styles.workAreaDimmed}
+                  className={styles.workAreaTrackDimmed}
                   style={{ left: `${((workAreaEnd + 1) / duration) * 100}%`, right: 0 }}
-                />
-                {/* Active bar */}
-                {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}
-                <div
-                  className={styles.workAreaBar}
-                  style={{
-                    left: `${(workAreaStart / duration) * 100}%`,
-                    width: `${((workAreaEnd - workAreaStart + 1) / duration) * 100}%`,
-                  }}
-                  onPointerDown={(e) => handleWorkAreaPointerDown(e, 'body')}
-                  onPointerMove={handleWorkAreaPointerMove}
-                  onPointerUp={handleWorkAreaPointerUp}
-                />
-                {/* Start handle */}
-                {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}
-                <div
-                  className={styles.workAreaHandleStart}
-                  style={{
-                    left: `${(workAreaStart / duration) * 100}%`,
-                    transform: 'translateX(-100%)',
-                  }}
-                  onPointerDown={(e) => handleWorkAreaPointerDown(e, 'start')}
-                  onPointerMove={handleWorkAreaPointerMove}
-                  onPointerUp={handleWorkAreaPointerUp}
-                />
-                {/* End handle */}
-                {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}
-                <div
-                  className={styles.workAreaHandleEnd}
-                  style={{ left: `${((workAreaEnd + 1) / duration) * 100}%` }}
-                  onPointerDown={(e) => handleWorkAreaPointerDown(e, 'end')}
-                  onPointerMove={handleWorkAreaPointerMove}
-                  onPointerUp={handleWorkAreaPointerUp}
                 />
               </>
             )}
-            {/* Playhead */}
+
+            {/* Playhead line — positioned in tracksArea so its % width matches the ruler */}
             <div
-              className={styles.playhead}
+              className={styles.playheadLine}
               style={{ left: `${(currentFrame / duration) * 100}%` }}
             />
           </div>
-
-          {/* Tracks */}
-          {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- click deselects keyframes, keyboard handled by useTimelineShortcuts */}
-          <div className={styles.tracks} ref={tracksRef} onClick={handleTrackClick}>
-            {nodes.map((node) => {
-              const kfs = nodeKeyframes.get(node.id);
-              return (
-                <div key={node.id} className={styles.track}>
-                  {kfs &&
-                    kfs.map((kf) => (
-                      /* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- keyframe diamonds, keyboard handled at track level */
-                      <div
-                        key={kf.id}
-                        className={`${styles.keyframe} ${selectedKeyframeIds.has(kf.id) ? styles.selected : ''}`}
-                        style={{ left: `${(kf.time / duration) * 100}%` }}
-                        onClick={(e) => handleKeyframeClick(e, kf.id)}
-                        onContextMenu={(e) =>
-                          handleKeyframeContextMenu(e, kf.id, kf.nodeId, kf.property)
-                        }
-                        onPointerDown={(e) => handleKeyframePointerDown(e, kf.id)}
-                        onPointerMove={handleKeyframePointerMove}
-                        onPointerUp={handleKeyframePointerUp}
-                        data-testid={`keyframe-${kf.id}`}
-                        title={`${kf.property} @ frame ${kf.time}`}
-                      />
-                    ))}
-                </div>
-              );
-            })}
-            {nodes.length === 0 && <div className={styles.track} />}
-          </div>
-
-          {/* Work Area dimmed regions in tracks — positioned in tracksArea to match ruler width */}
-          {workAreaEnabled && (
-            <>
-              <div
-                className={styles.workAreaTrackDimmed}
-                style={{ left: 0, width: `${(workAreaStart / duration) * 100}%` }}
-              />
-              <div
-                className={styles.workAreaTrackDimmed}
-                style={{ left: `${((workAreaEnd + 1) / duration) * 100}%`, right: 0 }}
-              />
-            </>
-          )}
-
-          {/* Playhead line — positioned in tracksArea so its % width matches the ruler */}
-          <div
-            className={styles.playheadLine}
-            style={{ left: `${(currentFrame / duration) * 100}%` }}
-          />
         </div>
-      </div>
+      )}
       {contextMenu && (
         <ContextMenu
           x={contextMenu.x}

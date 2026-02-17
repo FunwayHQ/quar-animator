@@ -32,8 +32,8 @@ import type {
   SymbolOverride,
   SymbolInstanceNode,
 } from '@quar/types';
-import type { KeyframeClipboard } from '@quar/animation';
-import { createTimeline, KeyframeManager } from '@quar/animation';
+import type { KeyframeClipboard, GraphViewTransform } from '@quar/animation';
+import { createTimeline, KeyframeManager, tangentsToEasing } from '@quar/animation';
 import {
   DEFAULT_ONION_SKIN_SETTINGS,
   createGroupNode,
@@ -391,6 +391,32 @@ export interface EditorStore {
   setWorkAreaRange: (start: number, end: number) => void;
   setWorkAreaToCurrentFrame: (boundary: 'start' | 'end') => void;
   clearWorkArea: () => void;
+
+  // Graph editor state
+  timelineViewMode: 'dopeSheet' | 'graph';
+  graphVisibleTracks: string[]; // track IDs ("nodeId:property")
+  graphViewTransform: GraphViewTransform;
+  setTimelineViewMode: (mode: 'dopeSheet' | 'graph') => void;
+  toggleTimelineViewMode: () => void;
+  setGraphVisibleTracks: (trackIds: string[]) => void;
+  toggleGraphTrackVisibility: (trackId: string) => void;
+  setGraphViewTransform: (partial: Partial<GraphViewTransform>) => void;
+  updateKeyframeValue: (nodeId: string, property: string, time: number, newValue: number) => void;
+  updateKeyframeTimeAndValue: (
+    nodeId: string,
+    property: string,
+    oldTime: number,
+    newTime: number,
+    newValue: number
+  ) => void;
+  setKeyframeTangents: (
+    nodeId: string,
+    property: string,
+    time: number,
+    tangentIn: { x: number; y: number } | undefined,
+    tangentOut: { x: number; y: number } | undefined,
+    tangentMode: 'auto' | 'smooth' | 'aligned' | 'free' | 'linear'
+  ) => void;
 
   // Snap-to-grid
   snapToGrid: boolean;
@@ -1785,6 +1811,119 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       workAreaStart: 0,
       workAreaEnd: state.timelineDuration - 1,
     })),
+
+  // Graph editor state
+  timelineViewMode: 'dopeSheet',
+  graphVisibleTracks: [],
+  graphViewTransform: {
+    offsetX: 0,
+    offsetY: 0,
+    scaleX: 10,
+    scaleY: 50,
+    viewWidth: 800,
+    viewHeight: 200,
+  },
+  setTimelineViewMode: (mode: 'dopeSheet' | 'graph') => set({ timelineViewMode: mode }),
+  toggleTimelineViewMode: () =>
+    set((state) => ({
+      timelineViewMode: state.timelineViewMode === 'dopeSheet' ? 'graph' : 'dopeSheet',
+    })),
+  setGraphVisibleTracks: (trackIds: string[]) => set({ graphVisibleTracks: trackIds }),
+  toggleGraphTrackVisibility: (trackId: string) =>
+    set((state) => {
+      const current = state.graphVisibleTracks;
+      if (current.includes(trackId)) {
+        return { graphVisibleTracks: current.filter((t) => t !== trackId) };
+      }
+      return { graphVisibleTracks: [...current, trackId] };
+    }),
+  setGraphViewTransform: (partial: Partial<GraphViewTransform>) =>
+    set((state) => ({
+      graphViewTransform: { ...state.graphViewTransform, ...partial },
+    })),
+  updateKeyframeValue: (nodeId: string, property: string, time: number, newValue: number) => {
+    const { timeline } = get();
+    const track = timeline.tracks.find((t) => t.nodeId === nodeId && t.property === property);
+    if (!track) return;
+    const kfIndex = track.keyframes.findIndex((kf) => kf.time === time);
+    if (kfIndex === -1) return;
+    const newKeyframes = [...track.keyframes];
+    newKeyframes[kfIndex] = { ...newKeyframes[kfIndex], value: newValue };
+    const newTracks = timeline.tracks.map((t) =>
+      t.id === track.id ? { ...t, keyframes: newKeyframes } : t
+    );
+    set({ timeline: { ...timeline, tracks: newTracks }, isDirty: true });
+  },
+  updateKeyframeTimeAndValue: (
+    nodeId: string,
+    property: string,
+    oldTime: number,
+    newTime: number,
+    newValue: number
+  ) => {
+    const { timeline } = get();
+    const track = timeline.tracks.find((t) => t.nodeId === nodeId && t.property === property);
+    if (!track) return;
+    const kfIndex = track.keyframes.findIndex((kf) => kf.time === oldTime);
+    if (kfIndex === -1) return;
+    const roundedTime = Math.max(0, Math.round(newTime));
+    const newKeyframes = [...track.keyframes];
+    newKeyframes[kfIndex] = { ...newKeyframes[kfIndex], time: roundedTime, value: newValue };
+    // Sort by time after moving
+    newKeyframes.sort((a, b) => a.time - b.time);
+    const newTracks = timeline.tracks.map((t) =>
+      t.id === track.id ? { ...t, keyframes: newKeyframes } : t
+    );
+    set({ timeline: { ...timeline, tracks: newTracks }, isDirty: true });
+  },
+  setKeyframeTangents: (
+    nodeId: string,
+    property: string,
+    time: number,
+    tangentIn: { x: number; y: number } | undefined,
+    tangentOut: { x: number; y: number } | undefined,
+    tangentMode: 'auto' | 'smooth' | 'aligned' | 'free' | 'linear'
+  ) => {
+    const { timeline } = get();
+    const track = timeline.tracks.find((t) => t.nodeId === nodeId && t.property === property);
+    if (!track) return;
+    const kfIndex = track.keyframes.findIndex((kf) => kf.time === time);
+    if (kfIndex === -1) return;
+
+    const kf = track.keyframes[kfIndex];
+    const newKeyframes = [...track.keyframes];
+    const updated: Keyframe = {
+      ...kf,
+      tangentIn,
+      tangentOut,
+      tangentMode,
+    };
+
+    // Derive easing from tangents if both tangentOut and tangentIn are set
+    // and there's a next keyframe
+    if (tangentOut && kfIndex < track.keyframes.length - 1) {
+      const nextKf = track.keyframes[kfIndex + 1];
+      const dt = nextKf.time - kf.time;
+      const dv = (nextKf.value as number) - (kf.value as number);
+      // Get the tangentIn of the next keyframe for the easing
+      const nextTangentIn = tangentIn ?? nextKf.tangentIn;
+      if (nextTangentIn) {
+        // Store easing on the NEXT keyframe (after.easing convention)
+        const newEasing = tangentsToEasing(tangentOut, nextTangentIn, dt, dv);
+        const nextUpdated = { ...nextKf, easing: newEasing };
+        if (tangentIn) {
+          nextUpdated.tangentIn = tangentIn;
+        }
+        newKeyframes[kfIndex + 1] = nextUpdated;
+      }
+    }
+
+    newKeyframes[kfIndex] = updated;
+    const newTracks = timeline.tracks.map((t) =>
+      t.id === track.id ? { ...t, keyframes: newKeyframes } : t
+    );
+    set({ timeline: { ...timeline, tracks: newTracks }, isDirty: true });
+  },
 
   // Keyframe state
   timeline: createTimeline({ duration: 300, frameRate: 30 }),

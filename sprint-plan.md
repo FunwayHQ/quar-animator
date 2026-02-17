@@ -3,6 +3,7 @@
 **Total Duration**: 24 months (48 two-week sprints)
 **Sprint Length**: 2 weeks
 **Start Date**: TBD
+**Last Updated**: 2026-02-17
 
 ---
 
@@ -17,7 +18,24 @@ This document breaks down the PRD roadmap into actionable sprints with detailed 
 
 ---
 
-## Phase 1: Foundation (Sprints 1-12)
+## Progress Summary
+
+| Phase                   | Sprints  | Status                           |
+| ----------------------- | -------- | -------------------------------- |
+| Phase 1: Foundation     | 1-12     | **COMPLETE**                     |
+| Phase 2: Rigging Engine | 13-22    | **COMPLETE**                     |
+| Code Reviews            | X1-X3, Y | **COMPLETE** (36/42 items fixed) |
+| Animation Remedy        | 6 phases | **COMPLETE** (18 fixes)          |
+| Phase 2b: Remaining     | 23-26    | **NEXT**                         |
+| Phase 3: Production     | 27-36    | Planned                          |
+| Phase 4: Ecosystem      | 37-48    | Planned                          |
+
+**Current test count**: 2862 tests passing (1497 core + 396 animation + 728 web + 241 rigging)
+**Production URL**: https://animator.quar.pro
+
+---
+
+## Phase 1: Foundation (Sprints 1-12) - COMPLETE
 
 ### Sprint 1: Project Setup & Architecture
 
@@ -31,13 +49,14 @@ This document breaks down the PRD roadmap into actionable sprints with detailed 
 
 **Deliverables**:
 
-- [ ] Monorepo structure (pnpm workspaces)
-- [ ] TypeScript configuration
-- [ ] ESLint + Prettier setup
-- [ ] React + Vite project scaffold
-- [ ] CI/CD pipeline (GitHub Actions)
-- [ ] Design tokens (colors, spacing, typography)
-- [ ] Component library setup (Storybook)
+- [x] Monorepo structure (pnpm workspaces) - 9 packages
+- [x] TypeScript configuration with strict mode
+- [x] ESLint + Prettier + Husky pre-commit hooks
+- [x] React + Vite project scaffold at `apps/web`
+- [x] CI/CD pipeline (GitHub Actions)
+- [x] Design tokens in `@quar/ui` theme
+- [x] Component library setup (Storybook)
+- [x] **Bonus**: Full editor layout (MenuBar, Toolbar, Canvas, Properties, Layers, Timeline)
 
 **LLM Prompt**:
 
@@ -99,7 +118,7 @@ Output the complete file structure and all configuration files.
 
 ---
 
-### Sprint 2: Design System & Core UI Components
+### Sprint 2: Design System & Core UI Components ✅ COMPLETE
 
 **Goals**: Establish visual design language and build foundational UI components.
 
@@ -111,11 +130,12 @@ Output the complete file structure and all configuration files.
 
 **Deliverables**:
 
-- [ ] Design tokens finalized
-- [ ] Button, Input, Select, Checkbox components
-- [ ] Panel, Toolbar, Tooltip components
-- [ ] Icon library integration
-- [ ] Dark theme implementation
+- [x] Design tokens finalized (globals.css with CSS custom properties)
+- [x] Button, Input, Select, Checkbox components (all with variants and states)
+- [x] Panel, Toolbar, Tooltip, IconButton components
+- [x] Icon library integration (Lucide React)
+- [x] Dark theme implementation
+- [x] Storybook stories for all components
 
 **LLM Prompt**:
 
@@ -232,7 +252,7 @@ Create all components with:
 
 ---
 
-### Sprint 3: Canvas Foundation
+### Sprint 3: Canvas Foundation ✅ COMPLETE
 
 **Goals**: Implement basic WebGL canvas with zoom, pan, and grid.
 
@@ -243,11 +263,11 @@ Create all components with:
 | Frontend Designer | Canvas UI chrome |
 
 **Deliverables**:
-- [ ] WebGL 2 context initialization
-- [ ] Camera system (zoom, pan)
-- [ ] Grid rendering
-- [ ] Canvas resize handling
-- [ ] Coordinate system utilities
+- [x] WebGL 2 context initialization (WebGLRenderer with state caching, context loss handling)
+- [x] Camera system (zoom, pan, fit bounds, screen/world coordinate transforms)
+- [x] Grid rendering (infinite adaptive grid that scales with zoom)
+- [x] Canvas resize handling (ResizeObserver integration)
+- [x] Coordinate system utilities (vec2, mat3, rect in @quar/core/math)
 
 **LLM Prompt**:
 ```
@@ -355,7 +375,7 @@ Output complete, working code for all files.
 
 ---
 
-### Sprint 4: Scene Graph & Basic Shapes
+### Sprint 4: Scene Graph & Basic Shapes ✅ COMPLETE
 
 **Goals**: Implement scene graph data structure and basic vector shape rendering.
 
@@ -366,11 +386,12 @@ Output complete, working code for all files.
 | Animation System | Layer system foundation |
 
 **Deliverables**:
-- [ ] Scene graph with node hierarchy
-- [ ] Rectangle and ellipse shape nodes
-- [ ] Fill and stroke rendering
-- [ ] Selection system foundation
-- [ ] Layer panel data binding
+- [x] Scene graph with node hierarchy (SceneGraph class with events)
+- [x] Rectangle and ellipse shape nodes with fill/stroke rendering
+- [x] ShapeRenderer with WebGL 2 tessellation and earcut triangulation
+- [x] Selection system (SelectionManager, TransformHandles, hit testing)
+- [x] Tool system (BaseTool, RectangleTool, EllipseTool, PenTool, SelectionTool)
+- [x] Layer panel data binding, Toolbar, Properties panel integration
 
 **LLM Prompt**:
 ```
@@ -521,7 +542,7 @@ Display scene graph as a hierarchical list:
 
 ---
 
-### Sprint 5: Drawing Tools - Shapes
+### Sprint 5: Drawing Tools - Shapes ✅ COMPLETE
 
 **Goals**: Implement shape creation tools (rectangle, ellipse, polygon).
 
@@ -533,12 +554,12 @@ Display scene graph as a hierarchical list:
 | QA Tester | Tool interaction testing |
 
 **Deliverables**:
-- [ ] Tool manager with mode switching
-- [ ] Rectangle tool with drag-to-create
-- [ ] Ellipse tool
-- [ ] Polygon tool (star, triangle, etc.)
-- [ ] Shift to constrain proportions
-- [ ] Alt to draw from center
+- [x] Tool manager with mode switching
+- [x] Rectangle tool with drag-to-create
+- [x] Ellipse tool
+- [x] Polygon tool (star, triangle, regular polygons 3-12 sides)
+- [x] Shift to constrain proportions
+- [x] Alt to draw from center
 
 **LLM Prompt**:
 ```
@@ -669,7 +690,7 @@ Output complete implementation with all tool files.
 
 ---
 
-### Sprint 6: Drawing Tools - Pen & Bezier
+### Sprint 6: Drawing Tools - Pen & Bezier ✅ COMPLETE
 
 **Goals**: Implement pen tool for Bezier path creation.
 
@@ -680,12 +701,12 @@ Output complete implementation with all tool files.
 | Frontend Designer | Path editing UI |
 
 **Deliverables**:
-- [ ] Path node type with Bezier curves
-- [ ] Pen tool for path creation
-- [ ] Click for corner points
-- [ ] Drag for smooth curves
-- [ ] Alt-click to convert point type
-- [ ] Close path on start point click
+- [x] Path node type with Bezier curves
+- [x] Pen tool for path creation
+- [x] Click for corner points, drag for smooth curves
+- [x] Alt-click to convert point type
+- [x] Close path on start point click
+- [x] DirectSelectionTool for editing existing paths
 
 **LLM Prompt**:
 ```
@@ -946,7 +967,7 @@ Implement complete brush and eraser tools with all features.
 
 ---
 
-### Sprint 8: Selection & Transform Tools
+### Sprint 8: Selection & Transform Tools ✅ COMPLETE
 
 **Goals**: Implement selection tool with transform handles.
 
@@ -958,11 +979,11 @@ Implement complete brush and eraser tools with all features.
 | QA Tester | Transform accuracy testing |
 
 **Deliverables**:
-- [ ] Selection tool (click, marquee)
-- [ ] Transform handles (corners, edges, rotation)
-- [ ] Move, scale, rotate via handles
-- [ ] Numeric transform input in properties
-- [ ] Multi-select transform
+- [x] Selection tool (click, marquee)
+- [x] Transform handles (corners, edges, rotation)
+- [x] Move, scale, rotate via handles
+- [x] Numeric transform input in properties (ScrubLabel, aspect ratio lock)
+- [x] Multi-select transform
 
 **LLM Prompt**:
 ```
@@ -1089,7 +1110,7 @@ Implement complete selection and transform system.
 
 ---
 
-### Sprint 9: Timeline Foundation
+### Sprint 9: Timeline Foundation ✅ COMPLETE
 
 **Goals**: Build timeline UI with layer tracks and playhead.
 
@@ -1100,11 +1121,11 @@ Implement complete selection and transform system.
 | Frontend Designer | Timeline UI components |
 
 **Deliverables**:
-- [ ] Timeline component with tracks
-- [ ] Playhead with scrubbing
-- [ ] Frame number display
-- [ ] Zoom and scroll controls
-- [ ] Layer track rows
+- [x] Timeline component with tracks, ruler, playhead
+- [x] PlaybackController with rAF-based playback
+- [x] Easing system (30 standard + custom cubic bezier + spring)
+- [x] Transport controls, timecode display
+- [x] Layer track rows synced to SceneGraph
 
 **LLM Prompt**:
 ```
@@ -1250,7 +1271,7 @@ Implement complete timeline component with all features.
 
 ---
 
-### Sprint 10: Keyframe System
+### Sprint 10: Keyframe System ✅ COMPLETE
 
 **Goals**: Implement keyframe creation, editing, and interpolation.
 
@@ -1261,11 +1282,11 @@ Implement complete timeline component with all features.
 | Core Engine | Property binding system |
 
 **Deliverables**:
-- [ ] Keyframe creation on property change
-- [ ] Auto-keyframe mode toggle
-- [ ] Keyframe selection and manipulation
-- [ ] Linear and bezier interpolation
-- [ ] Copy/paste keyframes
+- [x] PropertyBinding system with dot-notation property access
+- [x] KeyframeManager with CRUD, clipboard, batch operations
+- [x] Auto-keyframe mode toggle (K shortcut)
+- [x] Timeline UI keyframe rendering & interaction (diamonds, drag-to-move, context menus)
+- [x] Playback evaluates animated values via evaluateNodeAtFrame
 
 **LLM Prompt**:
 ```
@@ -1437,7 +1458,7 @@ Implement complete keyframe system with all features.
 
 ---
 
-### Sprint 11: Properties Panel & Animation Recording
+### Sprint 11: Properties Panel & Animation Recording ✅ COMPLETE
 
 **Goals**: Context-sensitive properties panel with animation controls.
 
@@ -1448,11 +1469,11 @@ Implement complete keyframe system with all features.
 | Animation System | Recording integration |
 
 **Deliverables**:
-- [ ] Context-sensitive properties panel
-- [ ] Animatable property indicators
-- [ ] Per-property keyframe buttons
-- [ ] Numeric scrubbing
-- [ ] Color picker integration
+- [x] Context-sensitive properties panel with all node types
+- [x] KeyframeIndicator component (none/active/inactive states)
+- [x] Per-property keyframe buttons (position, size, rotation, opacity)
+- [x] Rotation ScrubLabel with degree symbol
+- [x] Color picker, gradient editor integration
 
 **LLM Prompt**:
 ```
@@ -1589,7 +1610,7 @@ Implement complete properties panel with all features.
 
 ---
 
-### Sprint 12: Onion Skinning & Playback Polish
+### Sprint 12: Onion Skinning & Playback Polish ✅ COMPLETE
 
 **Goals**: Implement onion skinning and polish playback experience.
 
@@ -1601,11 +1622,11 @@ Implement complete properties panel with all features.
 | QA Tester | Full Phase 1 testing |
 
 **Deliverables**:
-- [ ] Onion skinning with before/after frames
-- [ ] Configurable onion skin settings
-- [ ] Smooth playback at target framerate
-- [ ] Frame stepping and scrubbing polish
-- [ ] Phase 1 bug fixes
+- [x] Onion skinning with before/after frames (tinted ghost rendering)
+- [x] Configurable onion skin settings (OnionSkinPanel popover)
+- [x] Smooth playback at target framerate (accumulator with catchup limit)
+- [x] Frame stepping, scrubbing, Shift+O toggle
+- [x] Phase 1 bug fixes
 
 **LLM Prompt**:
 ```
@@ -1752,19 +1773,19 @@ Ensure these all work smoothly:
 | O        | Toggle onion skinning   |
 | L        | Toggle loop             |
 
-## Phase 1 Integration Testing
+## Phase 1 Integration Testing ✅
 
 QA Testing checklist:
 
-- [ ] Create shapes with all tools
-- [ ] Move, scale, rotate shapes
-- [ ] Create keyframes at different times
-- [ ] Play animation at correct framerate
-- [ ] Verify onion skinning appearance
-- [ ] Test undo/redo for all operations
-- [ ] Save and load project
-- [ ] Test with 100+ shapes
-- [ ] Test with 1000+ keyframes
+- [x] Create shapes with all tools
+- [x] Move, scale, rotate shapes
+- [x] Create keyframes at different times
+- [x] Play animation at correct framerate
+- [x] Verify onion skinning appearance
+- [x] Test undo/redo for all operations
+- [x] Save and load project
+- [x] Test with 100+ shapes
+- [x] Test with 1000+ keyframes
 
 Implement onion skinning and playback polish.
 
@@ -1772,24 +1793,32 @@ Implement onion skinning and playback polish.
 
 ---
 
-## Phase 1 Complete: Sprint 12 Checkpoint
+## Phase 1 Complete: Sprint 12 Checkpoint ✅
 
-At this point, Quar Animator should have:
-- ✅ WebGL canvas with zoom/pan
-- ✅ Shape drawing tools (rectangle, ellipse, polygon)
-- ✅ Path drawing tools (pen, brush, eraser)
-- ✅ Selection and transform tools
-- ✅ Timeline with layer tracks
-- ✅ Keyframe system with interpolation
-- ✅ Properties panel with animation controls
-- ✅ Onion skinning
-- ✅ Project save/load
+All Phase 1 deliverables achieved plus additional features built during code reviews:
+- ✅ WebGL canvas with zoom/pan, rulers, guides, artboards
+- ✅ Shape drawing tools (rectangle, ellipse, polygon/star)
+- ✅ Path drawing tools (pen, brush, eraser with boolean subtraction)
+- ✅ Selection and transform tools with group selection
+- ✅ Timeline with layer tracks, work area, keyframe editing
+- ✅ Keyframe system with 32 easing presets + custom bezier + visual editor
+- ✅ Properties panel with animation controls, multi-selection editing
+- ✅ Onion skinning with configurable ghost frames
+- ✅ Project save/load with IndexedDB persistence
+- ✅ Text tool with font-to-path conversion
+- ✅ Non-destructive boolean operations
+- ✅ SVG import/export, PNG/JPG export
+- ✅ Raster image support with adjustments
+- ✅ Visual effects (drop shadow, inner shadow, blur, 16 blend modes)
+- ✅ Undo/redo with snapshot history
+- ✅ Context menus, clipboard operations
+- ✅ Canvas rulers with draggable guides
 
 ---
 
-## Phase 2: Rigging Engine (Sprints 13-24)
+## Phase 2: Rigging Engine (Sprints 13-22) - COMPLETE
 
-### Sprint 13: Bone System Foundation
+### Sprint 13: Bone System Foundation ✅ COMPLETE
 
 **Goals**: Implement bone data structure and basic bone tool.
 
@@ -1800,10 +1829,11 @@ At this point, Quar Animator should have:
 | Frontend Designer | Bone visualization |
 
 **Deliverables**:
-- [ ] Bone data structure
-- [ ] Skeleton hierarchy
-- [ ] Bone tool for creation
-- [ ] FK animation support
+- [x] BoneNode type integrated into SceneGraph (not a separate Skeleton)
+- [x] BoneTool (J shortcut) with click-to-create, chain auto-parenting
+- [x] BoneOverlay SVG rendering with FK chain visualization
+- [x] FK animation support via standard timeline keyframes
+- [x] 53 new tests
 
 **LLM Prompt**:
 ```
@@ -1956,7 +1986,7 @@ Implement complete bone system foundation.
 
 ---
 
-### Sprint 14: Mesh Binding & Weight Painting
+### Sprint 14: Mesh Binding & Weight Painting ✅ COMPLETE
 
 **Goals**: Bind meshes to bones and implement weight painting.
 
@@ -1967,10 +1997,14 @@ Implement complete bone system foundation.
 | Core Engine | GPU skinning preparation |
 
 **Deliverables**:
-- [ ] Create mesh from path
-- [ ] Bind mesh to skeleton
-- [ ] Weight painting tools
-- [ ] Weight visualization
+- [x] SkinData types with vertex/bone influences
+- [x] skinBinding with distance-based auto-weighting
+- [x] cpuSkinning (Linear Blend Skinning) for deformation
+- [x] WeightPaintTool with add/subtract/smooth brush modes
+- [x] Weight visualization (heat map overlay in ShapeRenderer)
+- [x] Image skinning (4-vertex textured quad deformation)
+- [x] Vertex editing for images (DirectSelectionTool)
+- [x] 49 new tests
 
 **LLM Prompt**:
 ```
@@ -2160,11 +2194,27 @@ Implement complete mesh binding and weight painting system.
 
 ---
 
-### Sprint 15-16: IK Solver & GPU Skinning
+### Sprint 15: IK Solver ✅ COMPLETE
 
-**Goals**: FABRIK IK solver and WebGL skinning shaders.
+**Deliverables**:
+- [x] FABRIK algorithm (forward/backward passes, angle constraints, pole targets)
+- [x] IKTargetNode type (scene graph node — selectable, movable, animatable)
+- [x] IKChain management in editorStore (create/remove/enable/settings)
+- [x] evaluateIKChains orchestrator
+- [x] Canvas render loop + usePlayback integration (FK→IK→skinning pipeline)
+- [x] BoneOverlay IK visualization (crosshair effectors, diamond poles)
+- [x] 78 new tests
 
-**LLM Prompt**:
+### Sprint 16: GPU Skinning ✅ COMPLETE
+
+**Deliverables**:
+- [x] GPU vertex shader LBS for fill rendering (SKINNED_VERTEX_SHADER, SKINNED_GRADIENT_VERTEX_SHADER)
+- [x] `uniform mat3 u_boneMatrices[32]`, interleaved VBO (10 floats/vertex)
+- [x] CPU fallback for strokes/bounds/ghosts
+- [x] Hybrid renderSkinnedNode: GPU fills when ≤32 bones, CPU deformVertices for strokes
+- [x] 28 new tests
+
+**Original LLM Prompt (for reference)**:
 ```
 
 You are implementing IK solving and GPU skinning for Quar Animator.
@@ -2351,11 +2401,20 @@ Implement FABRIK IK solver and GPU skinning.
 
 ---
 
-### Sprint 17-18: Smart Bones System
+### Sprint 17-18: Smart Bones System ✅ COMPLETE
 
 **Goals**: Implement Smart Bones for corrective deformation.
 
-**LLM Prompt**:
+**Deliverables**:
+- [x] smartBones.ts pure evaluation functions (readDriverValue, computeBlendWeight, interpolateMorphOffsets)
+- [x] morphRecording.ts (applyBrushDisplacement, compactMorphOffsets)
+- [x] PointMagnetTool for brush-based vertex displacement
+- [x] SmartBonePanel UI for action/target management with recording workflow
+- [x] morphOffsets applied to bind-pose vertices BEFORE LBS skinning (CPU + GPU)
+- [x] Pipeline: FK → IK → Smart Bones → Skinning
+- [x] 90 new tests
+
+**Original LLM Prompt (for reference)**:
 ```
 
 You are implementing the Smart Bones system for Quar Animator.
@@ -2571,11 +2630,24 @@ Implement complete Smart Bones system.
 
 ---
 
-### Sprint 19-20: Vitruvian Bones & Physics
+### Sprint 19-20: Vitruvian Bones & Dynamic Chains ✅ COMPLETE
 
 **Goals**: Bone group switching and physics-based secondary motion.
 
-**LLM Prompt**:
+**Deliverables**:
+- [x] Vitruvian Bones — bone group switching for different pose topologies
+- [x] vitruvianBones.ts pure functions (getActiveGroup, getBoneVisibility, evaluateVitruvianControllers)
+- [x] VitruvianPanel UI with group management + skin capture
+- [x] Dynamic Bone Chains — Verlet integration physics (NOT Rapier — lightweight custom solver)
+- [x] dynamicChain.ts (gravity, wind, damping, stiffness, elasticity, axis-freeze)
+- [x] bakeDynamicChain.ts for baking physics to keyframes
+- [x] DynamicChainPanel + WindPanel UIs
+- [x] Pipeline: FK → IK → Physics → Smart Bones → Vitruvian → Skinning
+- [x] 97 new tests
+
+**Note**: Physics uses custom Verlet integration solver instead of Rapier WASM. This was a pragmatic choice — Rapier is heavy for secondary motion (hair/tail), and the Verlet solver is lightweight, deterministic, and sufficient for 2D chain dynamics.
+
+**Original LLM Prompt (for reference)**:
 ```
 
 You are implementing Vitruvian Bones and physics integration for Quar Animator.
@@ -2816,29 +2888,556 @@ Implement Vitruvian Bones and physics integration.
 
 ---
 
-### Sprint 21-24: Rigging Polish & Phase 2 Completion
+### Sprint 21: Multi-Page Projects ✅ COMPLETE
 
-Remaining Phase 2 sprints cover:
-- Graph editor for animation curves
-- Shape tweening (path interpolation)
-- .quar file format finalization
-- Sprite sheet export
-- Phase 2 integration testing and bug fixes
+**Goals**: Support multiple pages per project with independent scene graphs.
+
+**Deliverables**:
+- [x] PageData type (id, name, sceneGraphJSON, timeline, selectedNodeIds, undoStack, redoStack)
+- [x] Store actions: addPage, deletePage (min 1), renamePage, duplicatePage, switchPage, reorderPages
+- [x] switchPage saves current state → loads target via sceneGraph.fromJSON()
+- [x] Project serialization v2.0 format with pages[] + v1→v2 auto-migration
+- [x] PageTabs component (click to switch, double-click rename, context menu, "+" button)
+- [x] 39 new tests
+
+### Sprint 22: Symbols (Reusable Components) ✅ COMPLETE
+
+**Goals**: Figma-style reusable components with instances and overrides.
+
+**Deliverables**:
+- [x] SymbolDefinition type (id, name, sceneGraphJSON) stored globally in EditorStore
+- [x] SymbolInstanceNode type (symbolId, overrides: SymbolOverride[])
+- [x] symbolResolver.ts pure functions with cache (resolveSymbolInstance, applyOverrides)
+- [x] Symbol editing mode via fromJSON/toJSON swap (like page switching)
+- [x] ShapeRenderer renderResolvedNode dispatches to type-specific renderers
+- [x] SymbolLibraryPanel UI (list view, click→place, dblclick→edit, context menu)
+- [x] External clipboard paste (Ctrl+V pastes SVG/raster from system clipboard)
+- [x] 47 new tests
+
+### Code Reviews & Bug Fixes ✅ COMPLETE
+
+**Completed between and during sprints:**
+- [x] Code Review X1: Math & Core Fixes (guard clauses, Y-coordinate bugs, WebGL cleanup)
+- [x] Code Review X2: UI Wiring (stroke outlines, LayerPanel, PropertiesPanel, ErrorBoundary)
+- [x] Code Review X3: Performance & Quality (immutability, degenerate handling, named constants)
+- [x] Code Review Y: 36 verified issues fixed (2 critical, 10 high, 14 medium, 10 low)
+- [x] Animation Remedy: 18 fixes across 6 phases
+- [x] Group resize position drift fix (root-level and inside artboards)
+- [x] Easing evaluation fix (incoming vs outgoing convention)
+- [x] GPU skinning cache invalidation fix
+- [x] EffectRenderer VAO cache desync fix (drop shadow bug)
+- [x] Many more — see MEMORY.md for full list
 
 ---
 
-## Phase 3: Production Features (Sprints 25-36)
+## Phase 2b: Animation & Export Polish (Sprints 23-26) - NEXT
+
+### Sprint 23: Graph Editor for Animation Curves
+
+**Goals**: Visual curve editor for fine-tuning keyframe interpolation with tangent handles.
+
+**Deliverables**:
+- [ ] Graph editor panel (toggleable alongside dope sheet view in timeline)
+- [ ] Per-property curve visualization (position.x, position.y, rotation, etc.)
+- [ ] Draggable bezier tangent handles on each keyframe
+- [ ] Value axis (Y) and time axis (X) with zoom/pan
+- [ ] Auto/smooth/free/aligned tangent modes
+- [ ] Box selection of keyframe points in graph view
+- [ ] Snap to grid, value readout while dragging
+- [ ] Keyboard shortcuts: toggle graph/dope sheet view
+
+**LLM Prompt**:
+```
+
+You are implementing a graph editor for animation curves in Quar Animator.
+
+## Architecture
+
+The graph editor replaces or augments the existing timeline dope sheet view. It shows animation curves as bezier splines where:
+
+- X axis = time (frames)
+- Y axis = property value
+- Each keyframe is a control point with in/out tangent handles
+
+## Data Model
+
+Each keyframe already has an `easing` property. For the graph editor, we need tangent data:
+
+```typescript
+interface GraphKeyframe extends Keyframe {
+  tangentIn?: { x: number; y: number }; // Relative to keyframe position
+  tangentOut?: { x: number; y: number };
+  tangentMode: 'auto' | 'smooth' | 'free' | 'aligned' | 'linear';
+}
+```
+
+Tangent modes:
+
+- **auto**: Tangents computed automatically for smooth curves
+- **smooth**: In/out tangents are collinear and equal length
+- **aligned**: In/out tangents are collinear, independent lengths
+- **free**: In/out tangents are fully independent
+- **linear**: No tangents (linear interpolation)
+
+## Graph Editor Component
+
+Create `apps/web/src/components/timeline/GraphEditor.tsx`:
+
+Layout:
+
+```
+┌──────────────────────────────────────────────────────────┐
+│  Property List │  Value axis  │  Curve area              │
+│  ─────────────│──────────────│──────────────────────────│
+│  ● position.x │    200       │       ●───────╮          │
+│  ● position.y │    150       │      ╱        ╰────●     │
+│    rotation    │    100       │─●──╯                     │
+│    opacity     │     50       │                          │
+│                │      0       │                          │
+│                │  0  15  30  45  60  75  90  frames      │
+└──────────────────────────────────────────────────────────┘
+```
+
+- Left sidebar: checkboxes to show/hide property curves, color-coded
+- Value ruler on left
+- Time ruler on top (shared with dope sheet)
+- Curves rendered as SVG paths or Canvas 2D
+- Keyframe dots with tangent handle lines
+
+## Interactions
+
+- Click keyframe to select (shows tangent handles)
+- Drag keyframe to move in time+value
+- Drag tangent handles to adjust curves
+- Shift+drag for constrained movement (horizontal or vertical only)
+- Alt+click tangent to break/unify handles
+- Box select multiple keyframes
+- Mouse wheel to zoom, middle-click to pan
+- Double-click to add keyframe at cursor position
+
+## Tangent Computation
+
+For 'auto' mode:
+
+```typescript
+function computeAutoTangent(
+  prev: GraphKeyframe | null,
+  current: GraphKeyframe,
+  next: GraphKeyframe | null
+): { tangentIn: Vector2; tangentOut: Vector2 } {
+  // Catmull-Rom style: tangent direction = (next - prev) normalized
+  // Tangent length = 1/3 of time span to adjacent keyframe
+}
+```
+
+## Curve Rendering
+
+Render each segment between keyframes as a cubic bezier:
+
+```typescript
+function getCurveControlPoints(
+  kf1: GraphKeyframe,
+  kf2: GraphKeyframe
+): { cp1: Vector2; cp2: Vector2 } {
+  // cp1 = kf1.position + kf1.tangentOut
+  // cp2 = kf2.position + kf2.tangentIn
+}
+```
+
+## Integration
+
+- Toggle button in timeline header switches between dope sheet and graph editor
+- Selected properties in graph editor highlight corresponding tracks in dope sheet
+- Playhead is shared between both views
+- Keyframe operations (add, delete, copy, paste) work in both views
+
+Implement the complete graph editor with all interactions.
+
+```
+
+---
+
+### Sprint 24: Shape Tweening (Path Interpolation)
+
+**Goals**: Animate between different path shapes with automatic point matching.
+
+**Deliverables**:
+- [ ] Path-to-path interpolation algorithm
+- [ ] Point count matching (subdivision/merging)
+- [ ] Correspondence mapping between source and target points
+- [ ] Blend shape timeline integration
+- [ ] Preview during scrubbing
+
+**LLM Prompt**:
+```
+
+You are implementing shape tweening (path morphing) for Quar Animator.
+
+## Problem
+
+Given two PathNodes with potentially different numbers of points, animate smoothly between them.
+
+## Point Matching Algorithm
+
+```typescript
+interface ShapeTween {
+  sourceNodeId: string;
+  targetNodeId: string;
+  correspondence: PointCorrespondence[];
+}
+
+interface PointCorrespondence {
+  sourceIndex: number;
+  targetIndex: number;
+}
+
+function matchPoints(sourcePath: PathPoint[], targetPath: PathPoint[]): PointCorrespondence[] {
+  // 1. Normalize both paths to same point count
+  //    - If source has fewer points, subdivide source segments
+  //    - If target has fewer points, subdivide target segments
+  // 2. Find optimal correspondence to minimize total distance
+  //    - Use dynamic programming or greedy rotation matching
+  //    - Try all rotational offsets, pick minimum total distance
+  // 3. Return mapping
+}
+```
+
+## Subdivision for Point Matching
+
+```typescript
+function subdivideToCount(path: PathPoint[], targetCount: number): PathPoint[] {
+  // Find which segments to subdivide
+  // Use de Casteljau's algorithm to split bezier segments
+  // Distribute new points evenly along path length
+}
+```
+
+## Interpolation
+
+```typescript
+function interpolatePaths(
+  source: PathPoint[],
+  target: PathPoint[],
+  t: number,
+  correspondence: PointCorrespondence[]
+): PathPoint[] {
+  // After matching, both have same count
+  return source.map((srcPt, i) => {
+    const tgtPt = target[correspondence[i].targetIndex];
+    return {
+      position: lerp(srcPt.position, tgtPt.position, t),
+      handleIn: srcPt.handleIn && tgtPt.handleIn ? lerp(srcPt.handleIn, tgtPt.handleIn, t) : null,
+      handleOut:
+        srcPt.handleOut && tgtPt.handleOut ? lerp(srcPt.handleOut, tgtPt.handleOut, t) : null,
+      type: t < 0.5 ? srcPt.type : tgtPt.type,
+    };
+  });
+}
+```
+
+## Timeline Integration
+
+Shape tweens are a special interpolation type:
+
+- Detect when a 'path' track has keyframes with different point data
+- Use shape tween interpolation instead of standard number interpolation
+- Show "shape tween" indicator on track (different color or icon)
+
+## UI
+
+- In properties panel, show "Shape Tween" section when path has keyframes
+- Options: correspondence method (auto, manual), easing
+- Manual correspondence: click source point, then target point to map them
+- Preview: ghost overlay showing both shapes during editing
+
+Implement shape tweening with all features.
+
+```
+
+---
+
+### Sprint 25: Export Pipeline (Sprite Sheet, Lottie Foundation)
+
+**Goals**: Build export infrastructure for sprite sheets and begin Lottie JSON export.
+
+**Deliverables**:
+- [ ] Sprite sheet export (grid/packed layout, JSON metadata)
+- [ ] PNG sequence export
+- [ ] Lottie JSON export foundation (shapes, transforms, keyframes)
+- [ ] Export progress UI with preview
+- [ ] Export settings dialog
+
+**LLM Prompt**:
+```
+
+You are implementing the export pipeline for Quar Animator.
+
+## Sprite Sheet Export
+
+Create `packages/export/src/spriteSheet.ts`:
+
+```typescript
+interface SpriteSheetOptions {
+  format: 'png' | 'webp';
+  layout: 'grid' | 'packed'; // Grid = fixed cell size, Packed = bin packing
+  maxWidth: number; // Max atlas width
+  maxHeight: number; // Max atlas height
+  padding: number; // Pixels between frames
+  scale: number; // Render scale (1x, 2x, etc.)
+  frameRange?: [number, number]; // Subset of frames
+  trim: boolean; // Trim transparent pixels per frame
+}
+
+interface SpriteSheetResult {
+  image: Blob; // The atlas image
+  metadata: SpriteSheetMetadata;
+}
+
+interface SpriteSheetMetadata {
+  frames: Record<
+    string,
+    {
+      frame: { x: number; y: number; w: number; h: number };
+      sourceSize: { w: number; h: number };
+      spriteSourceSize: { x: number; y: number; w: number; h: number };
+      trimmed: boolean;
+    }
+  >;
+  meta: {
+    app: string;
+    version: string;
+    image: string;
+    format: string;
+    size: { w: number; h: number };
+    scale: string;
+  };
+}
+```
+
+### Bin Packing Algorithm
+
+For 'packed' layout, use MaxRects bin packing:
+
+```typescript
+function packFrames(frames: { width: number; height: number }[]): PackResult {
+  // Sort frames by area (largest first)
+  // Place each frame using best-short-side-fit heuristic
+  // Return positions and final atlas dimensions
+}
+```
+
+### Rendering Frames
+
+```typescript
+async function renderFrameToCanvas(
+  frame: number,
+  sceneGraph: SceneGraph,
+  timeline: Timeline,
+  renderer: ShapeRenderer,
+  width: number,
+  height: number
+): Promise<ImageData> {
+  // 1. Evaluate animation at frame
+  // 2. Render to offscreen canvas
+  // 3. Read pixels
+  // 4. Optionally trim transparent pixels
+}
+```
+
+## PNG Sequence Export
+
+```typescript
+async function exportPngSequence(
+  sceneGraph: SceneGraph,
+  timeline: Timeline,
+  options: { scale: number; frameRange: [number, number] }
+): Promise<Blob[]> {
+  // Render each frame, return array of PNG blobs
+  // Use Web Worker for parallel rendering if possible
+}
+```
+
+## Lottie JSON Foundation
+
+Create `packages/export/src/lottie.ts`:
+
+Begin mapping Quar data model to Lottie JSON format:
+
+```typescript
+interface LottieExporter {
+  export(sceneGraph: SceneGraph, timeline: Timeline): LottieAnimation;
+}
+
+// Map node types to Lottie layers:
+// - Rectangle → Lottie rect shape
+// - Ellipse → Lottie ellipse shape
+// - Path → Lottie path shape
+// - Group → Lottie precomp
+// - Image → Lottie image layer
+
+// Map keyframes to Lottie keyframe format:
+// - Position → Lottie spatial keyframes
+// - Rotation → Lottie rotation keyframes
+// - Scale → Lottie scale keyframes
+// - Opacity → Lottie opacity keyframes
+```
+
+Note: Full Lottie export is a multi-sprint effort. This sprint covers shapes and basic transforms only.
+
+## Export Dialog
+
+Create `apps/web/src/components/dialogs/ExportDialog.tsx`:
+
+- Format selection tabs (Sprite Sheet, PNG Sequence, Lottie, SVG)
+- Format-specific options
+- Live preview thumbnail
+- Progress bar during export
+- Download button
+
+Implement the export pipeline with sprite sheets, PNG sequence, and Lottie foundation.
+
+```
+
+---
+
+### Sprint 26: .quar File Format & Integration Testing
+
+**Goals**: Finalize native file format and comprehensive integration testing.
+
+**Deliverables**:
+- [ ] .quar file format specification (glTF 2.0 based with custom extensions)
+- [ ] .quar save/load implementation
+- [ ] File format versioning and migration
+- [ ] Integration test suite for full workflows
+- [ ] Performance benchmarks (200+ shapes, 1000+ keyframes)
+
+**LLM Prompt**:
+```
+
+You are finalizing the .quar file format for Quar Animator.
+
+## File Format
+
+Based on glTF 2.0 with custom extensions. The .quar file is a binary container (like .glb) containing:
+
+1. JSON header with scene graph, timeline, and metadata
+2. Binary buffers for mesh data, images, and audio
+
+### Custom Extensions
+
+```json
+{
+  "extensions": {
+    "QUAR_2d_shapes": {
+      "paths": [...],       // Bezier path data
+      "fills": [...],       // Fill definitions
+      "strokes": [...]      // Stroke definitions
+    },
+    "QUAR_animation": {
+      "timelines": [...],   // Timeline data
+      "keyframes": [...],   // Keyframe data with easing
+      "graphTangents": [...] // Graph editor tangent data
+    },
+    "QUAR_smart_constraints": {
+      "smartBones": [...],   // Smart Bone actions
+      "morphTargets": [...]  // Morph target data
+    },
+    "QUAR_vitruvian": {
+      "boneGroups": [...],   // Vitruvian bone groups
+      "dynamicChains": [...] // Physics chain settings
+    },
+    "QUAR_symbols": {
+      "definitions": [...],  // Symbol definitions
+      "instances": [...]     // Instance override data
+    },
+    "QUAR_pages": {
+      "pages": [...],        // Multi-page data
+      "activePageId": "..."
+    }
+  }
+}
+```
+
+### File Structure
+
+```
+.quar file (binary):
+┌─────────────────────────┐
+│ Magic: "QUAR"           │ 4 bytes
+│ Version: 1              │ 4 bytes (uint32)
+│ JSON length             │ 4 bytes (uint32)
+│ JSON data               │ Variable
+│ Binary buffer 0 length  │ 4 bytes
+│ Binary buffer 0 data    │ Variable (mesh vertices, weights)
+│ Binary buffer 1 length  │ 4 bytes
+│ Binary buffer 1 data    │ Variable (images)
+│ ...                     │
+└─────────────────────────┘
+```
+
+### Implementation
+
+```typescript
+class QuarFileFormat {
+  async save(project: ProjectData): Promise<ArrayBuffer> {
+    // 1. Serialize scene graph, timeline, settings to JSON
+    // 2. Extract binary data (mesh vertices, images, audio)
+    // 3. Pack into binary container
+  }
+
+  async load(buffer: ArrayBuffer): Promise<ProjectData> {
+    // 1. Parse header
+    // 2. Parse JSON
+    // 3. Resolve binary buffer references
+    // 4. Apply migrations for older versions
+  }
+}
+```
+
+### Migration System
+
+```typescript
+interface Migration {
+  fromVersion: number;
+  toVersion: number;
+  migrate(data: any): any;
+}
+
+const migrations: Migration[] = [
+  // Each version bump gets a migration function
+  { fromVersion: 1, toVersion: 2, migrate: (data) => { ... } },
+];
+```
+
+## Integration Testing
+
+Comprehensive test suite covering full workflows:
+
+1. Create project → add shapes → animate → save → reload → verify
+2. Import SVG → bind bones → weight paint → animate → export sprite sheet
+3. Multi-page project with symbols → duplicate page → modify → save/load
+4. Performance: 200+ shapes, 1000+ keyframes, 60fps playback
+5. Edge cases: empty project, corrupted files, very large projects
+
+Implement .quar file format and integration tests.
+
+```
+
+---
+
+## Phase 3: Production Features (Sprints 27-36)
 
 ### Key Sprints
 
-| Sprint | Focus |
-|--------|-------|
-| 25-26 | State machine visual editor |
-| 27-28 | State transitions and conditions |
-| 29-30 | Audio import and waveform display |
-| 31-32 | Symbol library with instances |
-| 33-34 | Video export (MP4, WebM) |
-| 35-36 | Plugin architecture, polish |
+| Sprint | Focus | Status |
+|--------|-------|--------|
+| 27-28 | State machine visual editor | Planned |
+| 29-30 | State transitions and conditions | Planned |
+| 31-32 | Audio import and waveform display | Planned |
+| 33-34 | Video export (MP4, WebM via FFmpeg.wasm) | Planned |
+| 35-36 | Lottie export completion, plugin architecture | Planned |
+
+**Note**: Symbol library (originally Sprint 31-32) was completed early as Sprint 22.
 
 ---
 
@@ -2846,14 +3445,14 @@ Remaining Phase 2 sprints cover:
 
 ### Key Sprints
 
-| Sprint | Focus |
-|--------|-------|
-| 37-38 | Quar Vector integration |
-| 39-40 | PSD import |
-| 41-42 | Runtime library (web) |
-| 43-44 | Runtime library (Unity, Godot) |
-| 45-46 | FLA/XFL import |
-| 47-48 | Documentation, tutorials, v1.0 release |
+| Sprint | Focus | Status |
+|--------|-------|--------|
+| 37-38 | Quar Vector integration | Planned |
+| 39-40 | PSD import | Planned |
+| 41-42 | Runtime library (web) | Planned |
+| 43-44 | Runtime library (Unity, Godot) | Planned |
+| 45-46 | FLA/XFL import | Planned |
+| 47-48 | Documentation, tutorials, v1.0 release | Planned |
 
 ---
 

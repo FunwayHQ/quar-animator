@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Quar Animator is a free, open-source, web-native 2D animation platform designed to fill the gap left by Adobe Animate's discontinuation. It's part of the QUAR Suite (alongside Quar Editor for 3D and Quar Vector for 2D illustration).
 
-**Current Status**: Sprint 12 (Onion Skinning & Playback Polish) complete. Onion skin ghost frame rendering with configurable before/after colors, opacity falloff, and frame counts. ShapeRenderer ghost rendering with tint/alpha blending. OnionSkinPanel settings UI. Shift+O toggle, Shift+,/. for 10-frame jumps. Sprint 11 added per-property keyframe indicators and Rotation ScrubLabel. Sprint 10 added PropertyBinding, KeyframeManager, keyframe CRUD, Timeline UI keyframe rendering/interaction, auto-keyframe mode, playback evaluation. Full drawing toolkit, context menus, clipboard operations. Canvas foundation with WebGL 2 rendering. Modern violet/bordeaux design system.
+**Current Status**: Sprint 23 (Graph Editor for Animation Curves) complete. Visual curve editor in Timeline panel with tangent handle editing, pan/zoom, marquee selection, keyframe drag, and property track list. G shortcut toggles between dope sheet and graph editor views. Sprint 22 added Figma-style Symbols. Sprint 21 added multi-page projects. Sprints 13-20 added full rigging pipeline (bones, IK, mesh binding, weight painting, GPU skinning, Smart Bones, Vitruvian Bones, dynamic chains). Full drawing toolkit, canvas foundation with WebGL 2 rendering. 2921 tests passing.
 
 ## Sprint Progress
 

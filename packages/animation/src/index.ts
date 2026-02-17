@@ -11,5 +11,14 @@ export type { KeyframeClipboard } from './KeyframeManager';
 export { PlaybackController } from './PlaybackController';
 export type { PlaybackOptions } from './PlaybackController';
 
+export * from './GraphEditorUtils';
+
 // Re-export types
-export type { Timeline, PropertyTrack, Keyframe, EasingFunction, Marker } from '@quar/types';
+export type {
+  Timeline,
+  PropertyTrack,
+  Keyframe,
+  EasingFunction,
+  Marker,
+  TangentMode,
+} from '@quar/types';
