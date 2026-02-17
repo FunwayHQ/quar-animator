@@ -1180,61 +1180,63 @@ export function Canvas() {
    * Returns true if external content was found, false if should fall back to internal paste.
    */
   const pasteFromSystemClipboard = useCallback(async (): Promise<boolean> => {
+    if (!navigator.clipboard) return false;
+
+    // 1. Try readText() first — auto-grants in user gesture context (no permission prompt).
+    //    Handles SVG copied from Figma/Illustrator/Inkscape/browsers as text.
     try {
-      // Try the modern Clipboard API (navigator.clipboard.read)
-      if (navigator.clipboard && typeof navigator.clipboard.read === 'function') {
-        const clipboardItems = await navigator.clipboard.read();
-        for (const item of clipboardItems) {
-          // Check for SVG in text/html (Figma, Illustrator)
-          if (item.types.includes('text/html')) {
-            const htmlBlob = await item.getType('text/html');
-            const html = await htmlBlob.text();
-            const svgMatch = html.match(/<svg[\s\S]*?<\/svg>/i);
-            if (svgMatch) {
-              importSvgString(svgMatch[0]);
-              return true;
-            }
-          }
-
-          // Check for SVG in text/plain
-          if (item.types.includes('text/plain')) {
-            const textBlob = await item.getType('text/plain');
-            const text = await textBlob.text();
-            const svgMatch = text.match(/<svg[\s\S]*?<\/svg>/i);
-            if (svgMatch) {
-              importSvgString(svgMatch[0]);
-              return true;
-            }
-          }
-
-          // Check for image content
-          for (const type of item.types) {
-            if (type.startsWith('image/')) {
-              const imageBlob = await item.getType(type);
-              importImageBlob(imageBlob);
-              return true;
-            }
-          }
+      const text = await navigator.clipboard.readText();
+      if (text) {
+        const svgMatch = text.match(/<svg[\s\S]*?<\/svg>/i);
+        if (svgMatch) {
+          importSvgString(svgMatch[0]);
+          return true;
         }
       }
     } catch {
-      // Clipboard API not available or permission denied — fall through
+      // readText denied or unavailable
     }
 
-    // Try fallback: navigator.clipboard.readText for SVG text
+    // 2. Try read() for text/html (Figma/Illustrator put SVG there) and images.
+    //    May show a permission prompt on first use — race with a timeout
+    //    so it doesn't hang indefinitely if user ignores the prompt.
     try {
-      if (navigator.clipboard && typeof navigator.clipboard.readText === 'function') {
-        const text = await navigator.clipboard.readText();
-        if (text) {
-          const svgMatch = text.match(/<svg[\s\S]*?<\/svg>/i);
-          if (svgMatch) {
-            importSvgString(svgMatch[0]);
-            return true;
+      if (typeof navigator.clipboard.read === 'function') {
+        const timeoutPromise = new Promise<null>((resolve) =>
+          setTimeout(() => resolve(null), 2000)
+        );
+        const itemsOrNull = await Promise.race([navigator.clipboard.read(), timeoutPromise]);
+        if (itemsOrNull) {
+          // Check text/html first (Figma, Illustrator, etc. put SVG in text/html)
+          for (const item of itemsOrNull) {
+            if (item.types.includes('text/html')) {
+              try {
+                const htmlBlob = await item.getType('text/html');
+                const html = await htmlBlob.text();
+                const svgMatch = html.match(/<svg[\s\S]*?<\/svg>/i);
+                if (svgMatch) {
+                  importSvgString(svgMatch[0]);
+                  return true;
+                }
+              } catch {
+                // Failed to read text/html
+              }
+            }
+          }
+          // Then check for image content
+          for (const item of itemsOrNull) {
+            for (const type of item.types) {
+              if (type.startsWith('image/')) {
+                const imageBlob = await item.getType(type);
+                importImageBlob(imageBlob);
+                return true;
+              }
+            }
           }
         }
       }
     } catch {
-      // readText not available or denied
+      // clipboard.read denied or unavailable
     }
 
     return false;
@@ -1300,34 +1302,49 @@ export function Canvas() {
     [pasteClipboard, importSvgString, importImageBlob]
   );
 
-  // Document-level Ctrl+V handler — uses Clipboard API for reliable cross-focus paste,
-  // with native paste event as fallback
+  // Document-level paste handler with dual strategy:
+  // 1. Ctrl+V keydown does NOT preventDefault — lets the native paste event fire,
+  //    giving handlePaste access to all MIME types (text/html from Figma, images, etc.)
+  // 2. Clipboard API fallback fires after 300ms if no paste event was received
+  //    (e.g., when no focusable element captures the paste).
   useEffect(() => {
+    const pasteHandledRef = { current: false };
+
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
       if (!(e.ctrlKey || e.metaKey) || e.key !== 'v') return;
 
       const tag = (document.activeElement as HTMLElement)?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
 
-      // Prevent default to avoid double-paste from native paste event
-      e.preventDefault();
+      // Don't preventDefault — let the browser fire the native paste event,
+      // which gives access to all MIME types (text/html from Figma, images, etc.)
+      pasteHandledRef.current = false;
 
-      const sg = sceneGraphRef.current;
-      if (!sg) return;
+      // Fallback: if no paste event fires within 300ms, use Clipboard API
+      setTimeout(() => {
+        if (pasteHandledRef.current) return;
+        const sg = sceneGraphRef.current;
+        if (!sg) return;
+        void pasteFromSystemClipboard()
+          .then((handled) => {
+            if (!handled) pasteClipboard(sg);
+          })
+          .catch(() => {
+            pasteClipboard(sg);
+          });
+      }, 300);
+    };
 
-      // Use Clipboard API (works during user gesture context)
-      void pasteFromSystemClipboard().then((handled) => {
-        if (!handled) {
-          pasteClipboard(sg);
-        }
-      });
+    const handleGlobalPaste = (e: ClipboardEvent) => {
+      pasteHandledRef.current = true;
+      handlePaste(e);
     };
 
     document.addEventListener('keydown', handleGlobalKeyDown);
-    document.addEventListener('paste', handlePaste);
+    document.addEventListener('paste', handleGlobalPaste);
     return () => {
       document.removeEventListener('keydown', handleGlobalKeyDown);
-      document.removeEventListener('paste', handlePaste);
+      document.removeEventListener('paste', handleGlobalPaste);
     };
   }, [handlePaste, pasteFromSystemClipboard, pasteClipboard]);
 
