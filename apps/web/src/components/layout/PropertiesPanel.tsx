@@ -637,156 +637,172 @@ export function PropertiesPanel() {
   );
 
   // ============================================================================
-  // Fill handlers (array-based)
+  // Multi-selection fill/stroke helper
+  // ============================================================================
+
+  // Apply a fill update to all selected nodes that have fills
+  const applyFillToAll = useCallback(
+    (updateFn: (nodeId: string, node: Node) => void) => {
+      for (const id of selectedNodeIds) {
+        const n = sceneGraph.getNode(id);
+        if (n && hasFillsStrokes(n)) updateFn(id, n);
+      }
+    },
+    [selectedNodeIds, sceneGraph]
+  );
+
+  // Apply a stroke update to all selected nodes that have strokes
+  const applyStrokeToAll = useCallback(
+    (updateFn: (nodeId: string, node: Node) => void) => {
+      for (const id of selectedNodeIds) {
+        const n = sceneGraph.getNode(id);
+        if (n && hasFillsStrokes(n)) updateFn(id, n);
+      }
+    },
+    [selectedNodeIds, sceneGraph]
+  );
+
+  // ============================================================================
+  // Fill handlers (array-based, multi-selection aware)
   // ============================================================================
 
   const handleFillColorChange = useCallback(
     (index: number, hex: string) => {
-      if (!selectedId) return;
       const color = hexToColor(hex);
       if (!color) return;
-      const currentNode = sceneGraph.getNode(selectedId);
-      if (!currentNode) return;
-      const fills = [...getNodeFills(currentNode)];
-      const fill = fills[index];
-      if (!fill) return;
-      // Preserve existing alpha when editing hex
-      const existingAlpha = fill.color?.a ?? 1;
-      const colorWithAlpha = { ...color, a: existingAlpha };
-      fills[index] = { ...fill, type: 'solid', color: colorWithAlpha };
-      sceneGraph.updateNode(selectedId, { fills } as Partial<Node>);
-      if (shouldKeyframe(autoKeyframe, selectedId, `fills.${index}.color`)) {
-        addKeyframeAtFrame(selectedId, `fills.${index}.color`, currentFrame, colorWithAlpha);
-      }
+      applyFillToAll((nodeId, currentNode) => {
+        const fills = [...getNodeFills(currentNode)];
+        const fill = fills[index];
+        if (!fill) return;
+        const existingAlpha = fill.color?.a ?? 1;
+        const colorWithAlpha = { ...color, a: existingAlpha };
+        fills[index] = { ...fill, type: 'solid', color: colorWithAlpha };
+        sceneGraph.updateNode(nodeId, { fills } as Partial<Node>);
+        if (shouldKeyframe(autoKeyframe, nodeId, `fills.${index}.color`)) {
+          addKeyframeAtFrame(nodeId, `fills.${index}.color`, currentFrame, colorWithAlpha);
+        }
+      });
     },
-    [selectedId, sceneGraph, autoKeyframe, currentFrame, addKeyframeAtFrame]
+    [applyFillToAll, sceneGraph, autoKeyframe, currentFrame, addKeyframeAtFrame]
   );
 
   const handleFillPickerChange = useCallback(
     (index: number, color: Color) => {
-      if (!selectedId) return;
-      const currentNode = sceneGraph.getNode(selectedId);
-      if (!currentNode) return;
-      const fills = [...getNodeFills(currentNode)];
-      const fill = fills[index];
-      if (!fill) return;
-      fills[index] = { ...fill, type: 'solid', color };
-      sceneGraph.updateNode(selectedId, { fills } as Partial<Node>);
-      if (shouldKeyframe(autoKeyframe, selectedId, `fills.${index}.color`)) {
-        addKeyframeAtFrame(selectedId, `fills.${index}.color`, currentFrame, color);
-      }
+      applyFillToAll((nodeId, currentNode) => {
+        const fills = [...getNodeFills(currentNode)];
+        const fill = fills[index];
+        if (!fill) return;
+        fills[index] = { ...fill, type: 'solid', color };
+        sceneGraph.updateNode(nodeId, { fills } as Partial<Node>);
+        if (shouldKeyframe(autoKeyframe, nodeId, `fills.${index}.color`)) {
+          addKeyframeAtFrame(nodeId, `fills.${index}.color`, currentFrame, color);
+        }
+      });
     },
-    [selectedId, sceneGraph, autoKeyframe, currentFrame, addKeyframeAtFrame]
+    [applyFillToAll, sceneGraph, autoKeyframe, currentFrame, addKeyframeAtFrame]
   );
 
   const handleToggleFillVisibility = useCallback(
     (index: number) => {
-      if (!selectedId) return;
-      const currentNode = sceneGraph.getNode(selectedId);
-      if (!currentNode) return;
-      const fills = [...getNodeFills(currentNode)];
-      const fill = fills[index];
-      if (!fill) return;
-      fills[index] = { ...fill, visible: !fill.visible };
-      sceneGraph.updateNode(selectedId, { fills } as Partial<Node>);
+      applyFillToAll((nodeId, currentNode) => {
+        const fills = [...getNodeFills(currentNode)];
+        const fill = fills[index];
+        if (!fill) return;
+        fills[index] = { ...fill, visible: !fill.visible };
+        sceneGraph.updateNode(nodeId, { fills } as Partial<Node>);
+      });
     },
-    [selectedId, sceneGraph]
+    [applyFillToAll, sceneGraph]
   );
 
   const handleAddFill = useCallback(() => {
-    if (!selectedId) return;
-    const currentNode = sceneGraph.getNode(selectedId);
-    if (!currentNode) return;
-    const fills = [...getNodeFills(currentNode), { ...DEFAULT_FILL }];
-    sceneGraph.updateNode(selectedId, { fills } as Partial<Node>);
-  }, [selectedId, sceneGraph]);
+    applyFillToAll((nodeId, currentNode) => {
+      const fills = [...getNodeFills(currentNode), { ...DEFAULT_FILL }];
+      sceneGraph.updateNode(nodeId, { fills } as Partial<Node>);
+    });
+  }, [applyFillToAll, sceneGraph]);
 
   const handleRemoveFill = useCallback(
     (index: number) => {
-      if (!selectedId) return;
-      const currentNode = sceneGraph.getNode(selectedId);
-      if (!currentNode) return;
-      const fills = getNodeFills(currentNode).filter((_, i) => i !== index);
-      sceneGraph.updateNode(selectedId, { fills } as Partial<Node>);
+      applyFillToAll((nodeId, currentNode) => {
+        const fills = getNodeFills(currentNode).filter((_, i) => i !== index);
+        sceneGraph.updateNode(nodeId, { fills } as Partial<Node>);
+      });
     },
-    [selectedId, sceneGraph]
+    [applyFillToAll, sceneGraph]
   );
 
   const handleFillTypeChange = useCallback(
     (index: number, type: FillType) => {
-      if (!selectedId) return;
-      const currentNode = sceneGraph.getNode(selectedId);
-      if (!currentNode) return;
-      const fills = [...getNodeFills(currentNode)];
-      const fill = fills[index];
-      if (!fill) return;
+      applyFillToAll((nodeId, currentNode) => {
+        const fills = [...getNodeFills(currentNode)];
+        const fill = fills[index];
+        if (!fill) return;
 
-      if (type === 'solid') {
-        const color = fill.gradient?.stops?.[0]?.color ??
-          fill.color ?? { r: 128, g: 128, b: 128, a: 1 };
-        fills[index] = { ...fill, type: 'solid', color };
-        // Clear gradient editing if this fill was being edited
-        const editing = useEditorStore.getState().editingGradient;
-        if (
-          editing &&
-          editing.nodeId === selectedId &&
-          editing.fillIndex === index &&
-          editing.source === 'fill'
-        ) {
-          useEditorStore.getState().clearEditingGradient();
+        if (type === 'solid') {
+          const color = fill.gradient?.stops?.[0]?.color ??
+            fill.color ?? { r: 128, g: 128, b: 128, a: 1 };
+          fills[index] = { ...fill, type: 'solid', color };
+          const editing = useEditorStore.getState().editingGradient;
+          if (
+            editing &&
+            editing.nodeId === nodeId &&
+            editing.fillIndex === index &&
+            editing.source === 'fill'
+          ) {
+            useEditorStore.getState().clearEditingGradient();
+          }
+        } else {
+          const gradient = fill.gradient
+            ? { ...fill.gradient, type: type as 'linear' | 'radial' | 'conic' }
+            : createDefaultGradient(type as 'linear' | 'radial' | 'conic');
+          fills[index] = { ...fill, type: 'gradient', gradient };
         }
-      } else {
-        const gradient = fill.gradient
-          ? { ...fill.gradient, type: type as 'linear' | 'radial' | 'conic' }
-          : createDefaultGradient(type as 'linear' | 'radial' | 'conic');
-        fills[index] = { ...fill, type: 'gradient', gradient };
-      }
-      sceneGraph.updateNode(selectedId, { fills } as Partial<Node>);
+        sceneGraph.updateNode(nodeId, { fills } as Partial<Node>);
+      });
     },
-    [selectedId, sceneGraph]
+    [applyFillToAll, sceneGraph]
   );
 
   const handleFillOpacityChange = useCallback(
     (index: number, value: string) => {
-      if (!selectedId) return;
       const cleaned = value.replace('%', '');
       const num = parseFloat(cleaned);
       if (isNaN(num)) return;
       const clamped = Math.max(0, Math.min(1, num / 100));
-      const currentNode = sceneGraph.getNode(selectedId);
-      if (!currentNode) return;
-      const fills = [...getNodeFills(currentNode)];
-      const fill = fills[index];
-      if (!fill) return;
-      fills[index] = { ...fill, opacity: clamped };
-      sceneGraph.updateNode(selectedId, { fills } as Partial<Node>);
-      if (shouldKeyframe(autoKeyframe, selectedId, `fills.${index}.opacity`)) {
-        addKeyframeAtFrame(selectedId, `fills.${index}.opacity`, currentFrame, clamped);
-      }
+      applyFillToAll((nodeId, currentNode) => {
+        const fills = [...getNodeFills(currentNode)];
+        const fill = fills[index];
+        if (!fill) return;
+        fills[index] = { ...fill, opacity: clamped };
+        sceneGraph.updateNode(nodeId, { fills } as Partial<Node>);
+        if (shouldKeyframe(autoKeyframe, nodeId, `fills.${index}.opacity`)) {
+          addKeyframeAtFrame(nodeId, `fills.${index}.opacity`, currentFrame, clamped);
+        }
+      });
     },
-    [selectedId, sceneGraph, autoKeyframe, currentFrame, addKeyframeAtFrame]
+    [applyFillToAll, sceneGraph, autoKeyframe, currentFrame, addKeyframeAtFrame]
   );
 
   const handleFillGradientChange = useCallback(
     (index: number, gradient: Gradient) => {
-      if (!selectedId) return;
-      const currentNode = sceneGraph.getNode(selectedId);
-      if (!currentNode) return;
-      const fills = [...getNodeFills(currentNode)];
-      const fill = fills[index];
-      if (!fill) return;
-      fills[index] = { ...fill, type: 'gradient', gradient };
-      sceneGraph.updateNode(selectedId, { fills } as Partial<Node>);
-      if (shouldKeyframe(autoKeyframe, selectedId, `fills.${index}.gradient.angle`)) {
-        addKeyframeAtFrame(
-          selectedId,
-          `fills.${index}.gradient.angle`,
-          currentFrame,
-          gradient.angle ?? 0
-        );
-      }
+      applyFillToAll((nodeId, currentNode) => {
+        const fills = [...getNodeFills(currentNode)];
+        const fill = fills[index];
+        if (!fill) return;
+        fills[index] = { ...fill, type: 'gradient', gradient };
+        sceneGraph.updateNode(nodeId, { fills } as Partial<Node>);
+        if (shouldKeyframe(autoKeyframe, nodeId, `fills.${index}.gradient.angle`)) {
+          addKeyframeAtFrame(
+            nodeId,
+            `fills.${index}.gradient.angle`,
+            currentFrame,
+            gradient.angle ?? 0
+          );
+        }
+      });
     },
-    [selectedId, sceneGraph, autoKeyframe, currentFrame, addKeyframeAtFrame]
+    [applyFillToAll, sceneGraph, autoKeyframe, currentFrame, addKeyframeAtFrame]
   );
 
   // ============================================================================
@@ -795,183 +811,171 @@ export function PropertiesPanel() {
 
   const handleStrokeColorChange = useCallback(
     (index: number, hex: string) => {
-      if (!selectedId) return;
       const color = hexToColor(hex);
       if (!color) return;
-      const currentNode = sceneGraph.getNode(selectedId);
-      if (!currentNode) return;
-      const strokes = [...getNodeStrokes(currentNode)];
-      const stroke = strokes[index];
-      if (!stroke) return;
-      // Preserve existing alpha when editing hex
-      const existingAlpha = stroke.color?.a ?? 1;
-      const colorWithAlpha = { ...color, a: existingAlpha };
-      strokes[index] = { ...stroke, color: colorWithAlpha };
-      sceneGraph.updateNode(selectedId, { strokes } as Partial<Node>);
-      if (shouldKeyframe(autoKeyframe, selectedId, `strokes.${index}.color`)) {
-        addKeyframeAtFrame(selectedId, `strokes.${index}.color`, currentFrame, colorWithAlpha);
-      }
+      applyStrokeToAll((nodeId, currentNode) => {
+        const strokes = [...getNodeStrokes(currentNode)];
+        const stroke = strokes[index];
+        if (!stroke) return;
+        const existingAlpha = stroke.color?.a ?? 1;
+        const colorWithAlpha = { ...color, a: existingAlpha };
+        strokes[index] = { ...stroke, color: colorWithAlpha };
+        sceneGraph.updateNode(nodeId, { strokes } as Partial<Node>);
+        if (shouldKeyframe(autoKeyframe, nodeId, `strokes.${index}.color`)) {
+          addKeyframeAtFrame(nodeId, `strokes.${index}.color`, currentFrame, colorWithAlpha);
+        }
+      });
     },
-    [selectedId, sceneGraph, autoKeyframe, currentFrame, addKeyframeAtFrame]
+    [applyStrokeToAll, sceneGraph, autoKeyframe, currentFrame, addKeyframeAtFrame]
   );
 
   const handleStrokePickerChange = useCallback(
     (index: number, color: Color) => {
-      if (!selectedId) return;
-      const currentNode = sceneGraph.getNode(selectedId);
-      if (!currentNode) return;
-      const strokes = [...getNodeStrokes(currentNode)];
-      const stroke = strokes[index];
-      if (!stroke) return;
-      strokes[index] = { ...stroke, color };
-      sceneGraph.updateNode(selectedId, { strokes } as Partial<Node>);
-      if (shouldKeyframe(autoKeyframe, selectedId, `strokes.${index}.color`)) {
-        addKeyframeAtFrame(selectedId, `strokes.${index}.color`, currentFrame, color);
-      }
+      applyStrokeToAll((nodeId, currentNode) => {
+        const strokes = [...getNodeStrokes(currentNode)];
+        const stroke = strokes[index];
+        if (!stroke) return;
+        strokes[index] = { ...stroke, color };
+        sceneGraph.updateNode(nodeId, { strokes } as Partial<Node>);
+        if (shouldKeyframe(autoKeyframe, nodeId, `strokes.${index}.color`)) {
+          addKeyframeAtFrame(nodeId, `strokes.${index}.color`, currentFrame, color);
+        }
+      });
     },
-    [selectedId, sceneGraph, autoKeyframe, currentFrame, addKeyframeAtFrame]
+    [applyStrokeToAll, sceneGraph, autoKeyframe, currentFrame, addKeyframeAtFrame]
   );
 
   const handleStrokeWidthChange = useCallback(
     (index: number, width: number) => {
-      if (!selectedId) return;
-      const currentNode = sceneGraph.getNode(selectedId);
-      if (!currentNode) return;
-      const strokes = [...getNodeStrokes(currentNode)];
-      const stroke = strokes[index];
-      if (!stroke) return;
       const clamped = Math.max(0.5, Math.min(100, width));
-      strokes[index] = { ...stroke, width: clamped };
-      sceneGraph.updateNode(selectedId, { strokes } as Partial<Node>);
-      if (shouldKeyframe(autoKeyframe, selectedId, `strokes.${index}.width`)) {
-        addKeyframeAtFrame(selectedId, `strokes.${index}.width`, currentFrame, clamped);
-      }
+      applyStrokeToAll((nodeId, currentNode) => {
+        const strokes = [...getNodeStrokes(currentNode)];
+        const stroke = strokes[index];
+        if (!stroke) return;
+        strokes[index] = { ...stroke, width: clamped };
+        sceneGraph.updateNode(nodeId, { strokes } as Partial<Node>);
+        if (shouldKeyframe(autoKeyframe, nodeId, `strokes.${index}.width`)) {
+          addKeyframeAtFrame(nodeId, `strokes.${index}.width`, currentFrame, clamped);
+        }
+      });
     },
-    [selectedId, sceneGraph, autoKeyframe, currentFrame, addKeyframeAtFrame]
+    [applyStrokeToAll, sceneGraph, autoKeyframe, currentFrame, addKeyframeAtFrame]
   );
 
   const handleStrokeOpacityChange = useCallback(
     (index: number, value: string) => {
-      if (!selectedId) return;
       const cleaned = value.replace('%', '');
       const num = parseFloat(cleaned);
       if (isNaN(num)) return;
       const clamped = Math.max(0, Math.min(1, num / 100));
-      const currentNode = sceneGraph.getNode(selectedId);
-      if (!currentNode) return;
-      const strokes = [...getNodeStrokes(currentNode)];
-      const stroke = strokes[index];
-      if (!stroke) return;
-      strokes[index] = { ...stroke, opacity: clamped };
-      sceneGraph.updateNode(selectedId, { strokes } as Partial<Node>);
-      if (shouldKeyframe(autoKeyframe, selectedId, `strokes.${index}.opacity`)) {
-        addKeyframeAtFrame(selectedId, `strokes.${index}.opacity`, currentFrame, clamped);
-      }
+      applyStrokeToAll((nodeId, currentNode) => {
+        const strokes = [...getNodeStrokes(currentNode)];
+        const stroke = strokes[index];
+        if (!stroke) return;
+        strokes[index] = { ...stroke, opacity: clamped };
+        sceneGraph.updateNode(nodeId, { strokes } as Partial<Node>);
+        if (shouldKeyframe(autoKeyframe, nodeId, `strokes.${index}.opacity`)) {
+          addKeyframeAtFrame(nodeId, `strokes.${index}.opacity`, currentFrame, clamped);
+        }
+      });
     },
-    [selectedId, sceneGraph, autoKeyframe, currentFrame, addKeyframeAtFrame]
+    [applyStrokeToAll, sceneGraph, autoKeyframe, currentFrame, addKeyframeAtFrame]
   );
 
   const handleToggleStrokeVisibility = useCallback(
     (index: number) => {
-      if (!selectedId) return;
-      const currentNode = sceneGraph.getNode(selectedId);
-      if (!currentNode) return;
-      const strokes = [...getNodeStrokes(currentNode)];
-      const stroke = strokes[index];
-      if (!stroke) return;
-      strokes[index] = { ...stroke, visible: !stroke.visible };
-      sceneGraph.updateNode(selectedId, { strokes } as Partial<Node>);
+      applyStrokeToAll((nodeId, currentNode) => {
+        const strokes = [...getNodeStrokes(currentNode)];
+        const stroke = strokes[index];
+        if (!stroke) return;
+        strokes[index] = { ...stroke, visible: !stroke.visible };
+        sceneGraph.updateNode(nodeId, { strokes } as Partial<Node>);
+      });
     },
-    [selectedId, sceneGraph]
+    [applyStrokeToAll, sceneGraph]
   );
 
   const handleAddStroke = useCallback(() => {
-    if (!selectedId) return;
-    const currentNode = sceneGraph.getNode(selectedId);
-    if (!currentNode) return;
-    const strokes = [...getNodeStrokes(currentNode), { ...DEFAULT_STROKE }];
-    sceneGraph.updateNode(selectedId, { strokes } as Partial<Node>);
-  }, [selectedId, sceneGraph]);
+    applyStrokeToAll((nodeId, currentNode) => {
+      const strokes = [...getNodeStrokes(currentNode), { ...DEFAULT_STROKE }];
+      sceneGraph.updateNode(nodeId, { strokes } as Partial<Node>);
+    });
+  }, [applyStrokeToAll, sceneGraph]);
 
   const handleRemoveStroke = useCallback(
     (index: number) => {
-      if (!selectedId) return;
-      const currentNode = sceneGraph.getNode(selectedId);
-      if (!currentNode) return;
-      const strokes = getNodeStrokes(currentNode).filter((_, i) => i !== index);
-      sceneGraph.updateNode(selectedId, { strokes } as Partial<Node>);
+      applyStrokeToAll((nodeId, currentNode) => {
+        const strokes = getNodeStrokes(currentNode).filter((_, i) => i !== index);
+        sceneGraph.updateNode(nodeId, { strokes } as Partial<Node>);
+      });
     },
-    [selectedId, sceneGraph]
+    [applyStrokeToAll, sceneGraph]
   );
 
   const handleStrokeTypeChange = useCallback(
     (index: number, type: FillType) => {
-      if (!selectedId) return;
-      const currentNode = sceneGraph.getNode(selectedId);
-      if (!currentNode) return;
-      const strokes = [...getNodeStrokes(currentNode)];
-      const stroke = strokes[index];
-      if (!stroke) return;
+      applyStrokeToAll((nodeId, currentNode) => {
+        const strokes = [...getNodeStrokes(currentNode)];
+        const stroke = strokes[index];
+        if (!stroke) return;
 
-      if (type === 'solid') {
-        const color = stroke.gradient?.stops?.[0]?.color ?? stroke.color;
-        const { gradient: _removed, ...rest } = stroke;
-        strokes[index] = { ...rest, color };
-        // Clear gradient editing if this stroke was being edited
-        const editing = useEditorStore.getState().editingGradient;
-        if (
-          editing &&
-          editing.nodeId === selectedId &&
-          editing.fillIndex === index &&
-          editing.source === 'stroke'
-        ) {
-          useEditorStore.getState().clearEditingGradient();
+        if (type === 'solid') {
+          const color = stroke.gradient?.stops?.[0]?.color ?? stroke.color;
+          const { gradient: _removed, ...rest } = stroke;
+          strokes[index] = { ...rest, color };
+          const editing = useEditorStore.getState().editingGradient;
+          if (
+            editing &&
+            editing.nodeId === nodeId &&
+            editing.fillIndex === index &&
+            editing.source === 'stroke'
+          ) {
+            useEditorStore.getState().clearEditingGradient();
+          }
+        } else {
+          const gradient = stroke.gradient
+            ? { ...stroke.gradient, type: type as 'linear' | 'radial' | 'conic' }
+            : createDefaultGradient(type as 'linear' | 'radial' | 'conic');
+          strokes[index] = { ...stroke, gradient };
         }
-      } else {
-        const gradient = stroke.gradient
-          ? { ...stroke.gradient, type: type as 'linear' | 'radial' | 'conic' }
-          : createDefaultGradient(type as 'linear' | 'radial' | 'conic');
-        strokes[index] = { ...stroke, gradient };
-      }
-      sceneGraph.updateNode(selectedId, { strokes } as Partial<Node>);
+        sceneGraph.updateNode(nodeId, { strokes } as Partial<Node>);
+      });
     },
-    [selectedId, sceneGraph]
+    [applyStrokeToAll, sceneGraph]
   );
 
   const handleStrokeGradientChange = useCallback(
     (index: number, gradient: Gradient) => {
-      if (!selectedId) return;
-      const currentNode = sceneGraph.getNode(selectedId);
-      if (!currentNode) return;
-      const strokes = [...getNodeStrokes(currentNode)];
-      const stroke = strokes[index];
-      if (!stroke) return;
-      strokes[index] = { ...stroke, gradient };
-      sceneGraph.updateNode(selectedId, { strokes } as Partial<Node>);
-      if (shouldKeyframe(autoKeyframe, selectedId, `strokes.${index}.gradient.angle`)) {
-        addKeyframeAtFrame(
-          selectedId,
-          `strokes.${index}.gradient.angle`,
-          currentFrame,
-          gradient.angle ?? 0
-        );
-      }
+      applyStrokeToAll((nodeId, currentNode) => {
+        const strokes = [...getNodeStrokes(currentNode)];
+        const stroke = strokes[index];
+        if (!stroke) return;
+        strokes[index] = { ...stroke, gradient };
+        sceneGraph.updateNode(nodeId, { strokes } as Partial<Node>);
+        if (shouldKeyframe(autoKeyframe, nodeId, `strokes.${index}.gradient.angle`)) {
+          addKeyframeAtFrame(
+            nodeId,
+            `strokes.${index}.gradient.angle`,
+            currentFrame,
+            gradient.angle ?? 0
+          );
+        }
+      });
     },
-    [selectedId, sceneGraph, autoKeyframe, currentFrame, addKeyframeAtFrame]
+    [applyStrokeToAll, sceneGraph, autoKeyframe, currentFrame, addKeyframeAtFrame]
   );
 
   const handleStrokeAlignChange = useCallback(
     (index: number, align: 'center' | 'inside' | 'outside') => {
-      if (!selectedId) return;
-      const currentNode = sceneGraph.getNode(selectedId);
-      if (!currentNode) return;
-      const strokes = [...getNodeStrokes(currentNode)];
-      const stroke = strokes[index];
-      if (!stroke) return;
-      strokes[index] = { ...stroke, align };
-      sceneGraph.updateNode(selectedId, { strokes } as Partial<Node>);
+      applyStrokeToAll((nodeId, currentNode) => {
+        const strokes = [...getNodeStrokes(currentNode)];
+        const stroke = strokes[index];
+        if (!stroke) return;
+        strokes[index] = { ...stroke, align };
+        sceneGraph.updateNode(nodeId, { strokes } as Partial<Node>);
+      });
     },
-    [selectedId, sceneGraph]
+    [applyStrokeToAll, sceneGraph]
   );
 
   // ============================================================================
@@ -980,31 +984,33 @@ export function PropertiesPanel() {
 
   const handleOpacityChange = useCallback(
     (value: string) => {
-      if (!selectedId) return;
       const cleaned = value.replace('%', '');
       const num = parseFloat(cleaned);
       if (isNaN(num)) return;
       const clamped = Math.max(0, Math.min(1, num / 100));
-      sceneGraph.updateNode(selectedId, { opacity: clamped });
-      if (shouldKeyframe(autoKeyframe, selectedId, 'opacity')) {
-        addKeyframeAtFrame(selectedId, 'opacity', currentFrame, clamped);
+      for (const id of selectedNodeIds) {
+        sceneGraph.updateNode(id, { opacity: clamped });
+        if (shouldKeyframe(autoKeyframe, id, 'opacity')) {
+          addKeyframeAtFrame(id, 'opacity', currentFrame, clamped);
+        }
       }
     },
-    [selectedId, sceneGraph, autoKeyframe, currentFrame, addKeyframeAtFrame]
+    [selectedNodeIds, sceneGraph, autoKeyframe, currentFrame, addKeyframeAtFrame]
   );
 
   const handleOpacitySlider = useCallback(
     (value: string) => {
-      if (!selectedId) return;
       const num = parseInt(value, 10);
       if (isNaN(num)) return;
       const opacity = num / 100;
-      sceneGraph.updateNode(selectedId, { opacity });
-      if (shouldKeyframe(autoKeyframe, selectedId, 'opacity')) {
-        addKeyframeAtFrame(selectedId, 'opacity', currentFrame, opacity);
+      for (const id of selectedNodeIds) {
+        sceneGraph.updateNode(id, { opacity });
+        if (shouldKeyframe(autoKeyframe, id, 'opacity')) {
+          addKeyframeAtFrame(id, 'opacity', currentFrame, opacity);
+        }
       }
     },
-    [selectedId, sceneGraph, autoKeyframe, currentFrame, addKeyframeAtFrame]
+    [selectedNodeIds, sceneGraph, autoKeyframe, currentFrame, addKeyframeAtFrame]
   );
 
   // ============================================================================
@@ -1274,6 +1280,12 @@ export function PropertiesPanel() {
   const strokes = getNodeStrokes(node);
   const opacityPercent = Math.round(node.opacity * 100);
   const sizePaths = getSizePropertyPaths(node);
+
+  // For multi-selection: show Appearance if ANY selected node has fills/strokes
+  const anySelectedHasFillsStrokes =
+    selectedNodeIds.size > 1
+      ? selectedNodes.some((n) => hasFillsStrokes(n))
+      : hasFillsStrokes(node);
 
   // Get the actual property value for a size path (not the display size)
   const getSizePropertyValue = (path: string): number => {
@@ -2693,7 +2705,7 @@ export function PropertiesPanel() {
           </div>
           <div className={styles.sectionContent}>
             {/* Fills list */}
-            {hasFillsStrokes(node) && (
+            {anySelectedHasFillsStrokes && (
               <>
                 <div className={styles.propertyRow}>
                   <div className={styles.propertyHeader}>

@@ -174,9 +174,10 @@ export class WebGLRenderer {
   clear(color?: [number, number, number, number]): void {
     const { gl } = this;
 
-    if (color) {
-      gl.clearColor(color[0], color[1], color[2], color[3]);
-    }
+    // Always set clearColor to guard against state leaks from FBO operations
+    // (e.g. EffectRenderer sets clearColor(0,0,0,0) for off-screen buffers)
+    const c = color ?? [0.102, 0.102, 0.102, 1.0];
+    gl.clearColor(c[0], c[1], c[2], c[3]);
 
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
   }
