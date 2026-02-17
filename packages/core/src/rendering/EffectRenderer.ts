@@ -27,6 +27,10 @@ export class EffectRenderer {
   private renderer: WebGLRenderer;
   private fbManager: FramebufferManager;
   private programs: PostProcessPrograms;
+  // Reusable pixel buffer for reading the default framebuffer content.
+  // Used by compositeWithBlendMode to avoid blitFramebuffer from a
+  // multisampled default FB (which fails on Chrome/ANGLE).
+  private resolvePixelBuffer: Uint8Array | null = null;
 
   constructor(renderer: WebGLRenderer) {
     this.renderer = renderer;
@@ -146,21 +150,37 @@ export class EffectRenderer {
   ): void {
     const gl = this.gl;
 
-    // Read current canvas into a destination FBO
+    // Capture the current canvas content into a destination FBO texture.
+    // We use readPixels + texSubImage2D instead of blitFramebuffer because
+    // the default framebuffer may be multisampled (antialias:true) and
+    // blitFramebuffer from a multisampled FB to a non-multisampled texture
+    // FBO fails on Chrome/ANGLE with GL_INVALID_OPERATION.
     const dstFBO = this.fbManager.acquire(canvasWidth, canvasHeight);
-    gl.bindFramebuffer(gl.READ_FRAMEBUFFER, null);
-    gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, dstFBO.fbo);
-    gl.blitFramebuffer(
+    const bufferSize = canvasWidth * canvasHeight * 4;
+    if (!this.resolvePixelBuffer || this.resolvePixelBuffer.length < bufferSize) {
+      this.resolvePixelBuffer = new Uint8Array(bufferSize);
+    }
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.readPixels(
       0,
       0,
       canvasWidth,
       canvasHeight,
+      gl.RGBA,
+      gl.UNSIGNED_BYTE,
+      this.resolvePixelBuffer
+    );
+    gl.bindTexture(gl.TEXTURE_2D, dstFBO.texture);
+    gl.texSubImage2D(
+      gl.TEXTURE_2D,
+      0,
       0,
       0,
       canvasWidth,
       canvasHeight,
-      gl.COLOR_BUFFER_BIT,
-      gl.NEAREST
+      gl.RGBA,
+      gl.UNSIGNED_BYTE,
+      this.resolvePixelBuffer
     );
 
     // Now composite src over dst using blend mode shader
@@ -378,5 +398,6 @@ export class EffectRenderer {
   dispose(): void {
     disposePostProcessPrograms(this.gl, this.programs);
     this.fbManager.dispose();
+    this.resolvePixelBuffer = null;
   }
 }
