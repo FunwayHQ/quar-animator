@@ -3,7 +3,15 @@
  * Abstract base class for all drawing/editing tools
  */
 
-import type { ToolType, CanvasPointerEvent, Node, Fill, Stroke, Vector2 } from '@quar/types';
+import type {
+  ToolType,
+  CanvasPointerEvent,
+  Node,
+  Fill,
+  Stroke,
+  Vector2,
+  SymbolDefinition,
+} from '@quar/types';
 import type { SceneGraph } from '../SceneGraph';
 import type { Camera } from '../Camera';
 
@@ -35,6 +43,7 @@ export interface ToolContext {
   convertShapeToPath?: (nodeId: string) => string | null;
   getGuides?: () => { id: string; axis: 'x' | 'y'; position: number }[];
   getSnapToGuides?: () => boolean;
+  getSymbolDefinitions?: () => SymbolDefinition[];
 }
 
 export interface ToolState {

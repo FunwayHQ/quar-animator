@@ -28,6 +28,9 @@ import type {
   BoneGroup,
   DynamicChain,
   WindSettings,
+  SymbolDefinition,
+  SymbolOverride,
+  SymbolInstanceNode,
 } from '@quar/types';
 import type { KeyframeClipboard } from '@quar/animation';
 import { createTimeline, KeyframeManager } from '@quar/animation';
@@ -42,6 +45,8 @@ import {
   generateBrushOutline,
   tessellatePathToPoints,
   getShapeOutlinePoints,
+  invalidateSymbolCache,
+  resolveSymbolInstance,
 } from '@quar/core';
 import type { OnionSkinSettings, BooleanOp } from '@quar/core';
 import {
@@ -487,6 +492,27 @@ export interface EditorStore {
   duplicatePage: (pageId: string, sceneGraph: SceneGraphLike) => void;
   switchPage: (pageId: string, sceneGraph: SceneGraphLike) => void;
   reorderPages: (fromIndex: number, toIndex: number) => void;
+
+  // Symbols (reusable components)
+  symbols: SymbolDefinition[];
+  editingSymbolId: string | null;
+  editingSymbolPrevState: {
+    sceneData: { nodes: Node[]; rootNodeIds: string[] };
+    selectedNodeIds: string[];
+  } | null;
+  createSymbol: (sceneGraph: SceneGraphLike) => string | null;
+  deleteSymbol: (symbolId: string, sceneGraph: SceneGraphLike) => void;
+  renameSymbol: (symbolId: string, name: string) => void;
+  detachInstance: (sceneGraph: SceneGraphLike) => void;
+  placeSymbolInstance: (sceneGraph: SceneGraphLike, symbolId: string) => void;
+  enterSymbolEdit: (symbolId: string, sceneGraph: SceneGraphLike) => void;
+  exitSymbolEdit: (sceneGraph: SceneGraphLike) => void;
+  setInstanceOverride: (
+    sceneGraph: SceneGraphLike,
+    instanceId: string,
+    override: SymbolOverride
+  ) => void;
+  resetInstanceOverrides: (sceneGraph: SceneGraphLike, instanceId: string) => void;
 }
 
 // ============================================================================
@@ -1947,6 +1973,9 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
   // Pages
   ...createPageActions(set, get),
+
+  // Symbols
+  ...createSymbolActions(set, get),
 }));
 
 // ============================================================================
@@ -2865,6 +2894,404 @@ function createPageActions(
         newPages.splice(toIndex, 0, moved!);
         return { pages: newPages, isDirty: true };
       });
+    },
+  };
+}
+
+// ============================================================================
+// Symbol Actions
+// ============================================================================
+
+let nextSymbolCounter = 1;
+
+function generateSymbolId(): string {
+  return `sym-${Date.now()}-${nextSymbolCounter++}`;
+}
+
+function createSymbolActions(
+  set: (partial: Partial<EditorStore> | ((state: EditorStore) => Partial<EditorStore>)) => void,
+  get: () => EditorStore
+) {
+  return {
+    symbols: [] as SymbolDefinition[],
+    editingSymbolId: null as string | null,
+    editingSymbolPrevState: null as {
+      sceneData: { nodes: Node[]; rootNodeIds: string[] };
+      selectedNodeIds: string[];
+    } | null,
+
+    createSymbol: (sceneGraph: SceneGraphLike): string | null => {
+      const state = get();
+      const selectedIds = Array.from(state.selectedNodeIds);
+      if (selectedIds.length === 0) return null;
+
+      // Push undo
+      state.pushUndo(sceneGraph);
+
+      // Collect selected nodes + descendants
+      const allNodeIds = new Set<string>();
+      for (const id of selectedIds) {
+        allNodeIds.add(id);
+        const descendants = sceneGraph.getDescendants(id);
+        for (const d of descendants) {
+          allNodeIds.add(d.id);
+        }
+      }
+
+      // Get root-level selected nodes (not descendants of other selected nodes)
+      const rootSelectedIds = selectedIds.filter((id) => {
+        const node = sceneGraph.getNode(id);
+        if (!node) return false;
+        // Walk up to see if any ancestor is also selected
+        let current = node.parent;
+        while (current) {
+          if (allNodeIds.has(current)) return false;
+          const parentNode = sceneGraph.getNode(current);
+          current = parentNode?.parent ?? null;
+        }
+        return true;
+      });
+
+      // Collect all nodes for definition
+      const nodesForDef: Node[] = [];
+      for (const id of allNodeIds) {
+        const node = sceneGraph.getNode(id);
+        if (node) nodesForDef.push(structuredClone(node));
+      }
+
+      // Compute center of selected root nodes for instance position
+      let sumX = 0;
+      let sumY = 0;
+      let count = 0;
+      for (const id of rootSelectedIds) {
+        const node = sceneGraph.getNode(id);
+        if (node) {
+          sumX += node.transform.position.x;
+          sumY += node.transform.position.y;
+          count++;
+        }
+      }
+      const centerX = count > 0 ? sumX / count : 0;
+      const centerY = count > 0 ? sumY / count : 0;
+
+      // Make definition nodes root-relative (clear parent for root nodes)
+      // and re-center positions relative to instance center so rendering
+      // and hit-testing don't double-count the position offset.
+      for (const node of nodesForDef) {
+        if (rootSelectedIds.includes(node.id)) {
+          node.parent = null;
+          node.transform = {
+            ...node.transform,
+            position: {
+              x: node.transform.position.x - centerX,
+              y: node.transform.position.y - centerY,
+            },
+          };
+        }
+      }
+
+      // Create symbol name from first node name or selection
+      const firstNode = sceneGraph.getNode(rootSelectedIds[0]!);
+      const symbolName =
+        rootSelectedIds.length === 1 && firstNode
+          ? firstNode.name
+          : `Symbol ${state.symbols.length + 1}`;
+
+      const symbolId = generateSymbolId();
+      const definition: SymbolDefinition = {
+        id: symbolId,
+        name: symbolName,
+        sceneGraphJSON: {
+          nodes: nodesForDef,
+          rootNodeIds: rootSelectedIds,
+        },
+      };
+
+      // Remove original nodes from scene graph
+      for (const id of rootSelectedIds) {
+        sceneGraph.removeNode(id);
+      }
+
+      // Create instance node at center
+      const instanceId = `inst-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      const instanceNode: SymbolInstanceNode = {
+        id: instanceId,
+        name: symbolName,
+        type: 'symbol-instance',
+        parent: null,
+        children: [],
+        transform: {
+          position: { x: centerX, y: centerY },
+          rotation: 0,
+          scale: { x: 1, y: 1 },
+          anchor: { x: 0, y: 0 },
+          skew: { x: 0, y: 0 },
+        },
+        visible: true,
+        locked: false,
+        opacity: 1,
+        blendMode: 'normal',
+        symbolId,
+        overrides: [],
+      };
+
+      sceneGraph.addNode(instanceNode);
+
+      set({
+        symbols: [...state.symbols, definition],
+        selectedNodeIds: new Set([instanceId]),
+        isDirty: true,
+      });
+
+      return symbolId;
+    },
+
+    deleteSymbol: (symbolId: string, sceneGraph: SceneGraphLike) => {
+      const state = get();
+      const definition = state.symbols.find((s) => s.id === symbolId);
+      if (!definition) return;
+
+      state.pushUndo(sceneGraph);
+
+      // Find all instances referencing this symbol and detach them
+      const instancesToDetach: string[] = [];
+      sceneGraph.traverse((node) => {
+        if (node.type === 'symbol-instance' && (node as SymbolInstanceNode).symbolId === symbolId) {
+          instancesToDetach.push(node.id);
+        }
+      });
+
+      // Detach each instance (convert to group)
+      for (const instId of instancesToDetach) {
+        const inst = sceneGraph.getNode(instId) as SymbolInstanceNode | undefined;
+        if (!inst) continue;
+
+        const resolved = resolveSymbolInstance(inst, definition);
+        const rootIds = new Set(definition.sceneGraphJSON.rootNodeIds);
+        const rootNodes = resolved.filter((n) => rootIds.has(n.id));
+
+        if (rootNodes.length === 1) {
+          // Single root: replace instance with the root node
+          const replacement = structuredClone(rootNodes[0]);
+          replacement.id = `detached-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+          replacement.parent = inst.parent;
+          replacement.transform = { ...inst.transform };
+          sceneGraph.removeNode(instId);
+          sceneGraph.addNode(replacement, inst.parent ?? undefined);
+        } else {
+          // Multiple roots: wrap in group
+          const groupId = `group-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+          const group: GroupNode = {
+            id: groupId,
+            name: inst.name,
+            type: 'group',
+            parent: inst.parent,
+            children: [],
+            transform: { ...inst.transform },
+            visible: inst.visible,
+            locked: inst.locked,
+            opacity: inst.opacity,
+            blendMode: inst.blendMode,
+          };
+          sceneGraph.removeNode(instId);
+          sceneGraph.addNode(group, inst.parent ?? undefined);
+
+          for (const child of rootNodes) {
+            const clone = structuredClone(child);
+            clone.id = `detached-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+            clone.parent = groupId;
+            sceneGraph.addNode(clone, groupId);
+          }
+        }
+      }
+
+      // Remove definition
+      invalidateSymbolCache(symbolId);
+      set({
+        symbols: state.symbols.filter((s) => s.id !== symbolId),
+        isDirty: true,
+      });
+    },
+
+    renameSymbol: (symbolId: string, name: string) => {
+      set((state) => ({
+        symbols: state.symbols.map((s) => (s.id === symbolId ? { ...s, name } : s)),
+        isDirty: true,
+      }));
+    },
+
+    detachInstance: (sceneGraph: SceneGraphLike) => {
+      const state = get();
+      const selectedIds = Array.from(state.selectedNodeIds);
+      if (selectedIds.length !== 1) return;
+
+      const inst = sceneGraph.getNode(selectedIds[0]!) as SymbolInstanceNode | undefined;
+      if (!inst || inst.type !== 'symbol-instance') return;
+
+      const definition = state.symbols.find((s) => s.id === inst.symbolId);
+      if (!definition) return;
+
+      state.pushUndo(sceneGraph);
+
+      const resolved = resolveSymbolInstance(inst, definition);
+      const rootIds = new Set(definition.sceneGraphJSON.rootNodeIds);
+      const rootNodes = resolved.filter((n) => rootIds.has(n.id));
+
+      // Create a group with the resolved children
+      const groupId = `group-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      const group: GroupNode = {
+        id: groupId,
+        name: inst.name,
+        type: 'group',
+        parent: inst.parent,
+        children: [],
+        transform: { ...inst.transform },
+        visible: inst.visible,
+        locked: inst.locked,
+        opacity: inst.opacity,
+        blendMode: inst.blendMode,
+      };
+
+      sceneGraph.removeNode(inst.id);
+      sceneGraph.addNode(group, inst.parent ?? undefined);
+
+      for (const child of rootNodes) {
+        const clone = structuredClone(child);
+        clone.id = `detached-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        sceneGraph.addNode(clone, groupId);
+      }
+
+      set({
+        selectedNodeIds: new Set([groupId]),
+        isDirty: true,
+      });
+    },
+
+    placeSymbolInstance: (sceneGraph: SceneGraphLike, symbolId: string) => {
+      const state = get();
+      const definition = state.symbols.find((s) => s.id === symbolId);
+      if (!definition) return;
+
+      state.pushUndo(sceneGraph);
+
+      const instanceId = `inst-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      const instanceNode: SymbolInstanceNode = {
+        id: instanceId,
+        name: definition.name,
+        type: 'symbol-instance',
+        parent: null,
+        children: [],
+        transform: {
+          position: { x: 0, y: 0 },
+          rotation: 0,
+          scale: { x: 1, y: 1 },
+          anchor: { x: 0, y: 0 },
+          skew: { x: 0, y: 0 },
+        },
+        visible: true,
+        locked: false,
+        opacity: 1,
+        blendMode: 'normal',
+        symbolId,
+        overrides: [],
+      };
+
+      sceneGraph.addNode(instanceNode);
+
+      set({
+        selectedNodeIds: new Set([instanceId]),
+        isDirty: true,
+      });
+    },
+
+    enterSymbolEdit: (symbolId: string, sceneGraph: SceneGraphLike) => {
+      const state = get();
+      const definition = state.symbols.find((s) => s.id === symbolId);
+      if (!definition) return;
+
+      // Save current scene state
+      const prevState = {
+        sceneData: structuredClone(sceneGraph.toJSON()),
+        selectedNodeIds: Array.from(state.selectedNodeIds),
+      };
+
+      // Load symbol definition into scene graph
+      sceneGraph.fromJSON(structuredClone(definition.sceneGraphJSON));
+
+      set({
+        editingSymbolId: symbolId,
+        editingSymbolPrevState: prevState,
+        selectedNodeIds: new Set<string>(),
+        enteredGroupId: null,
+        isDirty: true,
+      });
+    },
+
+    exitSymbolEdit: (sceneGraph: SceneGraphLike) => {
+      const state = get();
+      if (!state.editingSymbolId || !state.editingSymbolPrevState) return;
+
+      // Save edited symbol definition
+      const updatedSceneJSON = structuredClone(sceneGraph.toJSON());
+      const updatedSymbols = state.symbols.map((s) =>
+        s.id === state.editingSymbolId ? { ...s, sceneGraphJSON: updatedSceneJSON } : s
+      );
+
+      // Restore previous scene
+      sceneGraph.fromJSON(structuredClone(state.editingSymbolPrevState.sceneData));
+
+      // Invalidate cache for this symbol
+      invalidateSymbolCache(state.editingSymbolId);
+
+      set({
+        symbols: updatedSymbols,
+        editingSymbolId: null,
+        editingSymbolPrevState: null,
+        selectedNodeIds: new Set(state.editingSymbolPrevState.selectedNodeIds),
+        enteredGroupId: null,
+        isDirty: true,
+      });
+    },
+
+    setInstanceOverride: (
+      sceneGraph: SceneGraphLike,
+      instanceId: string,
+      override: SymbolOverride
+    ) => {
+      const state = get();
+      state.pushUndo(sceneGraph);
+
+      const inst = sceneGraph.getNode(instanceId) as SymbolInstanceNode | undefined;
+      if (!inst || inst.type !== 'symbol-instance') return;
+
+      // Update or add override
+      const existingIdx = inst.overrides.findIndex((o) => o.nodeId === override.nodeId);
+      const newOverrides = [...inst.overrides];
+      if (existingIdx >= 0) {
+        // Merge properties
+        newOverrides[existingIdx] = {
+          nodeId: override.nodeId,
+          properties: { ...newOverrides[existingIdx]!.properties, ...override.properties },
+        };
+      } else {
+        newOverrides.push(override);
+      }
+
+      sceneGraph.updateNode(instanceId, { overrides: newOverrides } as Partial<Node>);
+      invalidateSymbolCache(inst.symbolId);
+      set({ isDirty: true });
+    },
+
+    resetInstanceOverrides: (sceneGraph: SceneGraphLike, instanceId: string) => {
+      const state = get();
+      state.pushUndo(sceneGraph);
+
+      const inst = sceneGraph.getNode(instanceId) as SymbolInstanceNode | undefined;
+      if (!inst || inst.type !== 'symbol-instance') return;
+
+      sceneGraph.updateNode(instanceId, { overrides: [] } as Partial<Node>);
+      invalidateSymbolCache(inst.symbolId);
+      set({ isDirty: true });
     },
   };
 }

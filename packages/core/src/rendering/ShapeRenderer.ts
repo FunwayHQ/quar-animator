@@ -14,6 +14,8 @@ import type {
   GroupNode,
   BoneNode,
   ArtboardNode,
+  SymbolInstanceNode,
+  SymbolDefinition,
   Node,
   Fill,
   Stroke,
@@ -22,6 +24,7 @@ import type {
   BooleanOp,
   SkinData,
 } from '@quar/types';
+import { resolveSymbolInstance, getResolvedRootNodes } from '../symbols/symbolResolver';
 import { WebGLRenderer, type ShaderProgram } from './WebGLRenderer';
 import { EffectRenderer } from './EffectRenderer';
 import {
@@ -451,6 +454,8 @@ function buildGeometryKey(node: Node): string {
       return `B:${node.length}:${node.boneStyle}`;
     case 'artboard':
       return `A:${node.width}:${node.height}:${node.transform.anchor.x}:${node.transform.anchor.y}`;
+    case 'symbol-instance':
+      return ''; // No own geometry — resolved nodes are rendered individually
     default:
       return '';
   }
@@ -634,6 +639,9 @@ export class ShapeRenderer {
   // Effect renderer for drop shadows, blur, blend modes
   private effectRenderer: EffectRenderer;
 
+  // Symbol definitions registry (set by Canvas component)
+  private symbolDefinitions: Map<string, SymbolDefinition> = new Map();
+
   constructor(renderer: WebGLRenderer) {
     this.renderer = renderer;
     this.vertices = new Float32Array(MAX_VERTICES * 2);
@@ -645,6 +653,11 @@ export class ShapeRenderer {
     this.initializeWeightBuffers();
     this.initializeTextureBuffers();
     this.effectRenderer = new EffectRenderer(renderer);
+  }
+
+  /** Set the symbol definitions registry so instances can be resolved during rendering. */
+  setSymbolDefinitions(defs: Map<string, SymbolDefinition>): void {
+    this.symbolDefinitions = defs;
   }
 
   // --------------------------------------------------------------------------
@@ -1160,6 +1173,69 @@ export class ShapeRenderer {
         const worldTransform = sceneGraph.getWorldTransform(node.id);
         this.currentEffectiveOpacity = sceneGraph.getEffectiveOpacity(node.id);
 
+        // Symbol instance: resolve and render master's children
+        if (node.type === 'symbol-instance') {
+          const inst = node as SymbolInstanceNode;
+          const definition = this.symbolDefinitions.get(inst.symbolId);
+          if (!definition) return false; // skip if definition missing
+
+          const resolvedNodes = resolveSymbolInstance(inst, definition);
+          const rootNodes = getResolvedRootNodes(resolvedNodes, definition);
+          const nodeMap = new Map<string, Node>();
+          for (const rn of resolvedNodes) nodeMap.set(rn.id, rn);
+
+          const renderSymbolChildren = () => {
+            for (const child of rootNodes) {
+              this.renderResolvedNode(child, worldTransform, nodeMap);
+            }
+          };
+
+          if (this.effectRenderer.needsMultiPass(node.effects, node.blendMode)) {
+            this.effectRenderer.renderNodeWithEffects(
+              node.effects,
+              node.blendMode,
+              () => {
+                this.renderer.useProgram(this.program!);
+                this.renderer.bindVAO(this.vao);
+                gl.uniformMatrix3fv(
+                  this.program!.uniforms.u_viewProjection ?? null,
+                  false,
+                  vpArray
+                );
+                if (this.gradientProgram) {
+                  this.renderer.useProgram(this.gradientProgram);
+                  gl.uniformMatrix3fv(
+                    this.gradientProgram.uniforms.u_viewProjection ?? null,
+                    false,
+                    vpArray
+                  );
+                  this.renderer.useProgram(this.program!);
+                }
+                this.currentVPArray = vpArray;
+                renderSymbolChildren();
+              },
+              canvasWidth,
+              canvasHeight
+            );
+            this.renderer.useProgram(this.program!);
+            this.renderer.bindVAO(this.vao);
+            gl.uniformMatrix3fv(this.program!.uniforms.u_viewProjection ?? null, false, vpArray);
+            if (this.gradientProgram) {
+              this.renderer.useProgram(this.gradientProgram);
+              gl.uniformMatrix3fv(
+                this.gradientProgram.uniforms.u_viewProjection ?? null,
+                false,
+                vpArray
+              );
+              this.renderer.useProgram(this.program!);
+            }
+            this.currentVPArray = vpArray;
+          } else {
+            renderSymbolChildren();
+          }
+          return false; // skip empty children array
+        }
+
         // Artboard: render background and set up scissor clipping
         if (node.type === 'artboard') {
           this.renderArtboardBackground(node, worldTransform);
@@ -1411,6 +1487,70 @@ export class ShapeRenderer {
     }
 
     this.renderer.bindVAO(null);
+  }
+
+  /**
+   * Render a resolved node from a symbol definition, with a parent transform.
+   * Dispatches to existing render methods based on node type.
+   */
+  private renderResolvedNode(
+    node: Node,
+    parentTransform: Matrix3,
+    nodeMap: Map<string, Node>
+  ): void {
+    if (!node.visible) return;
+    if (node.type === 'ik-target' || node.type === 'vitruvian') return;
+
+    // Compute the node's world transform relative to parent
+    const localMatrix = mat3.compose(
+      node.transform.position,
+      node.transform.rotation,
+      node.transform.scale,
+      node.transform.anchor
+    );
+    const worldTransform = mat3.multiply(parentTransform, localMatrix);
+
+    const savedOpacity = this.currentEffectiveOpacity;
+    this.currentEffectiveOpacity *= node.opacity;
+
+    switch (node.type) {
+      case 'rectangle':
+        this.renderRectangle(node, worldTransform);
+        break;
+      case 'ellipse':
+        this.renderEllipse(node, worldTransform);
+        break;
+      case 'polygon':
+        this.renderPolygon(node, worldTransform);
+        break;
+      case 'path':
+        this.renderPath(node, worldTransform);
+        break;
+      case 'text':
+        this.renderText(node, worldTransform);
+        break;
+      case 'image':
+        this.renderImage(node, worldTransform);
+        break;
+      case 'bone':
+        this.renderBone(node, worldTransform);
+        break;
+      case 'artboard':
+        this.renderArtboardBackground(node, worldTransform);
+        break;
+    }
+
+    // Render children if this is a group
+    if (node.children && node.children.length > 0) {
+      for (const childId of node.children) {
+        const child = nodeMap.get(childId);
+        if (child) {
+          this.renderResolvedNode(child, worldTransform, nodeMap);
+        }
+      }
+    }
+
+    this.currentEffectiveOpacity = savedOpacity;
   }
 
   /**

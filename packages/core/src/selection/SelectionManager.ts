@@ -3,12 +3,21 @@
  * Calculates bounding boxes for selected nodes
  */
 
-import type { Node, ImageNode, TextNode, Rect, Matrix3 } from '@quar/types';
+import type {
+  Node,
+  ImageNode,
+  TextNode,
+  Rect,
+  Matrix3,
+  SymbolDefinition,
+  SymbolInstanceNode,
+} from '@quar/types';
 import type { SceneGraph } from '../SceneGraph';
 import type { SelectionBounds } from './types';
 import { rect, mat3 } from '../math';
 import { getPolygonBounds, getPathBounds } from '../path/pathUtils';
 import { getTextBounds } from '../font/textMetrics';
+import { getSymbolBounds } from '../symbols/symbolResolver';
 
 // ============================================================================
 // Helpers
@@ -46,6 +55,14 @@ function transformBoundsToWorld(localBounds: Rect, worldMatrix: Matrix3): Rect {
 // ============================================================================
 
 export class SelectionManager {
+  /** Symbol definitions for computing symbol-instance bounds */
+  private symbolDefinitions: SymbolDefinition[] = [];
+
+  /** Set symbol definitions for symbol-instance bounds computation */
+  setSymbolDefinitions(defs: SymbolDefinition[]): void {
+    this.symbolDefinitions = defs;
+  }
+
   // --------------------------------------------------------------------------
   // Selection Bounds Calculation
   // --------------------------------------------------------------------------
@@ -131,8 +148,8 @@ export class SelectionManager {
       const node = sceneGraph.getNode(nodeId);
       if (!node || !node.visible) return null;
 
-      // Groups: compute bounds from descendants using world transforms
-      if (node.type === 'group') {
+      // Groups and symbol instances: compute bounds from descendants using world transforms
+      if (node.type === 'group' || node.type === 'symbol-instance') {
         const bounds = this.getGroupBounds(node, sceneGraph);
         if (!bounds) return null;
         return { bounds, rotation: 0 };
@@ -197,6 +214,21 @@ export class SelectionManager {
         const nodeBounds = this.getNodeBounds(node);
         if (nodeBounds) {
           out.push(nodeBounds);
+        }
+      }
+      return;
+    }
+    if (node.type === 'symbol-instance') {
+      // Symbol instances have virtual children from definition — compute bounds from definition nodes
+      const inst = node as SymbolInstanceNode;
+      const def = this.symbolDefinitions.find((d) => d.id === inst.symbolId);
+      if (def && def.sceneGraphJSON.nodes.length > 0) {
+        const symBounds = getSymbolBounds(def.sceneGraphJSON.nodes as Node[]);
+        if (symBounds.width > 0 && symBounds.height > 0) {
+          const worldMatrix = node.parent
+            ? sceneGraph.getWorldTransform(node.id)
+            : mat3.compose(node.transform.position, node.transform.rotation, node.transform.scale);
+          out.push(transformBoundsToWorld(symBounds, worldMatrix));
         }
       }
       return;
@@ -346,6 +378,8 @@ export class SelectionManager {
           height: node.height,
         };
       }
+      case 'symbol-instance':
+        return null; // No own geometry — bounds computed from resolved children
       default:
         return null;
     }

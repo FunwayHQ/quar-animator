@@ -351,6 +351,9 @@ export function getAnimatableProperties(nodeType: string): AnimatableProperty[] 
         { path: 'fills.0.color', displayName: 'Fill Color', interpolationType: 'color' }
       );
       break;
+    case 'symbol-instance':
+      // Symbol instances only get common transform/opacity properties
+      break;
   }
 
   return props;

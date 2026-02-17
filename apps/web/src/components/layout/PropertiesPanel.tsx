@@ -21,6 +21,7 @@ import type {
   DropShadowEffect,
   InnerShadowEffect,
   LayerBlurEffect,
+  SymbolInstanceNode,
 } from '@quar/types';
 import {
   Lock,
@@ -65,6 +66,7 @@ import {
 } from '@quar/core';
 import { findTrack, getEasingDisplayName } from '@quar/animation';
 import type { SceneGraph } from '@quar/core';
+import { getSymbolBounds } from '@quar/core';
 import { getKeyframeState } from '../../hooks/useKeyframeState';
 import { EasingCurvePreview } from '../common/EasingCurvePreview';
 import { EasingEditor } from '../common/EasingEditor';
@@ -183,6 +185,19 @@ function getNodeSize(node: Node, sceneGraph?: SceneGraph): { width: number; heig
         const gsx = node.transform.scale?.x ?? 1;
         const gsy = node.transform.scale?.y ?? 1;
         return { width: bounds.rect.width * gsx, height: bounds.rect.height * gsy };
+      }
+      return { width: 0, height: 0 };
+    }
+    case 'symbol-instance': {
+      // Symbol instances have no scene graph children — compute from definition
+      const symInst = node as SymbolInstanceNode;
+      const symbols = useEditorStore.getState().symbols;
+      const symDef = symbols.find((s: { id: string }) => s.id === symInst.symbolId);
+      if (symDef && symDef.sceneGraphJSON.nodes.length > 0) {
+        const symBounds = getSymbolBounds(symDef.sceneGraphJSON.nodes as Node[]);
+        const ssx = node.transform.scale?.x ?? 1;
+        const ssy = node.transform.scale?.y ?? 1;
+        return { width: symBounds.width * ssx, height: symBounds.height * ssy };
       }
       return { width: 0, height: 0 };
     }
@@ -1327,6 +1342,59 @@ export function PropertiesPanel() {
         <span className={styles.nodeTypeLabel}>{nodeTypeLabel}</span>
       </div>
       <div className={styles.content}>
+        {/* Symbol Instance Section */}
+        {node.type === 'symbol-instance' &&
+          (() => {
+            const symInst = node as SymbolInstanceNode;
+            const symbols = useEditorStore.getState().symbols;
+            const symDef = symbols.find((s: { id: string }) => s.id === symInst.symbolId);
+            return (
+              <div className={styles.section}>
+                <div className={styles.sectionHeader}>
+                  <span className={styles.sectionTitle}>Symbol</span>
+                </div>
+                <div className={styles.row}>
+                  <span className={styles.label} style={{ flex: 1 }}>
+                    {symDef ? symDef.name : 'Unknown Symbol'}
+                  </span>
+                </div>
+                <div className={styles.row} style={{ gap: '4px' }}>
+                  <button
+                    className={styles.booleanButton}
+                    onClick={() => {
+                      if (symDef) {
+                        useEditorStore.getState().enterSymbolEdit(symInst.symbolId, sceneGraph);
+                      }
+                    }}
+                    title="Edit Symbol"
+                    data-testid="edit-symbol-button"
+                  >
+                    Edit Symbol
+                  </button>
+                  <button
+                    className={styles.booleanButton}
+                    onClick={() => {
+                      useEditorStore.getState().detachInstance(sceneGraph);
+                    }}
+                    title="Detach Instance"
+                    data-testid="detach-instance-button"
+                  >
+                    Detach
+                  </button>
+                  <button
+                    className={styles.booleanButton}
+                    onClick={() => {
+                      useEditorStore.getState().resetInstanceOverrides(sceneGraph, symInst.id);
+                    }}
+                    title="Reset Overrides"
+                    data-testid="reset-overrides-button"
+                  >
+                    Reset
+                  </button>
+                </div>
+              </div>
+            );
+          })()}
         {booleanOpsSection}
         <div className={styles.section}>
           <div className={styles.sectionHeader}>

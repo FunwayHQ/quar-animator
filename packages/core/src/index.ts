@@ -14,6 +14,7 @@ export * from './gradient/gradientUtils';
 export * from './svg';
 export * from './boolean';
 export * from './font';
+export * from './symbols/symbolResolver';
 
 // Re-export types for convenience
 export type { Vector2, Vector3, Rect, Matrix3, Node, Transform } from '@quar/types';

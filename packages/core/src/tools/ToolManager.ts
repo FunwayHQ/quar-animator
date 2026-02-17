@@ -3,7 +3,7 @@
  * Manages tool instances and routes events to the active tool
  */
 
-import type { ToolType, CanvasPointerEvent, Fill, Stroke } from '@quar/types';
+import type { ToolType, CanvasPointerEvent, Fill, Stroke, SymbolDefinition } from '@quar/types';
 import { BaseTool, type ToolContext, type TransformType } from './BaseTool';
 import { SelectionTool } from './SelectionTool';
 import { DirectSelectionTool } from './DirectSelectionTool';
@@ -45,6 +45,9 @@ export interface ToolManagerOptions {
   onEnterTextEdit?: (nodeId: string) => void;
   convertShapeToPath?: (nodeId: string) => string | null;
   getTessellatedVertices?: (nodeId: string) => Float32Array | null;
+  getGuides?: () => { id: string; axis: 'x' | 'y'; position: number }[];
+  getSnapToGuides?: () => boolean;
+  getSymbolDefinitions?: () => SymbolDefinition[];
 }
 
 // ============================================================================
@@ -247,6 +250,9 @@ export class ToolManager {
       onEnterTextEdit: options.onEnterTextEdit,
       convertShapeToPath: options.convertShapeToPath,
       getTessellatedVertices: options.getTessellatedVertices,
+      getGuides: options.getGuides,
+      getSnapToGuides: options.getSnapToGuides,
+      getSymbolDefinitions: options.getSymbolDefinitions,
     };
   }
 

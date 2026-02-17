@@ -7,6 +7,7 @@ import { LayerPanel } from '../components/layout/LayerPanel';
 import { Timeline } from '../components/layout/Timeline';
 import { MenuBar } from '../components/layout/MenuBar';
 import { PageTabs } from '../components/layout/PageTabs';
+import SymbolLibraryPanel from '../components/layout/SymbolLibraryPanel';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 import { SceneGraphProvider } from '../contexts/SceneGraphContext';
 import { usePlayback } from '../hooks/usePlayback';
@@ -88,6 +89,7 @@ function EditorInner() {
         <div className={styles.workspace}>
           <div className={styles.leftPanel}>
             <LayerPanel />
+            <SymbolLibraryPanel />
           </div>
           <div className={styles.canvasArea}>
             <ErrorBoundary>

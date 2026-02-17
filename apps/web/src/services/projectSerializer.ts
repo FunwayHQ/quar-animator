@@ -5,7 +5,14 @@
  */
 
 /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access */
-import type { Node, Timeline, VitruvianController, DynamicChain, WindSettings } from '@quar/types';
+import type {
+  Node,
+  Timeline,
+  VitruvianController,
+  DynamicChain,
+  WindSettings,
+  SymbolDefinition,
+} from '@quar/types';
 import type { OnionSkinSettings } from '@quar/core';
 import type { SceneGraph } from '@quar/core';
 import { createTimeline } from '@quar/animation';
@@ -72,6 +79,7 @@ export interface ProjectDataV2 {
     dynamicChains?: DynamicChain[];
     globalWind?: WindSettings;
   };
+  symbols?: SymbolDefinition[];
 }
 
 /** Union type for all supported formats */
@@ -89,6 +97,7 @@ export interface EditorStateSnapshot {
   globalWind?: WindSettings;
   pages?: PageData[];
   activePageId?: string;
+  symbols?: SymbolDefinition[];
 }
 
 // ============================================================================
@@ -164,6 +173,7 @@ export function serializeProject(
       dynamicChains: editorState.dynamicChains ? structuredClone(editorState.dynamicChains) : [],
       globalWind: editorState.globalWind ? { ...editorState.globalWind } : undefined,
     },
+    symbols: editorState.symbols ? structuredClone(editorState.symbols) : [],
   };
 }
 
@@ -386,6 +396,7 @@ export function deserializeProject(
     globalWind: v2.rigging?.globalWind,
     pages,
     activePageId: activePage.id,
+    symbols: v2.symbols ?? [],
   });
 }
 

@@ -3,7 +3,14 @@
  * Selects, moves, and resizes shapes
  */
 
-import type { CanvasPointerEvent, Node, Vector2, Rect, Matrix3 } from '@quar/types';
+import type {
+  CanvasPointerEvent,
+  Node,
+  Vector2,
+  Rect,
+  Matrix3,
+  SymbolInstanceNode,
+} from '@quar/types';
 import { BaseTool, type ToolContext } from './BaseTool';
 import { vec2, rect, mat3 } from '../math';
 import { SelectionManager } from '../selection/SelectionManager';
@@ -11,6 +18,7 @@ import { TransformHandles } from '../selection/TransformHandles';
 import type { HandlePosition, SelectionBounds } from '../selection/types';
 import { getPolygonBounds, getPathBounds } from '../path/pathUtils';
 import { getTextBounds } from '../font/textMetrics';
+import { getSymbolBounds } from '../symbols/symbolResolver';
 
 /**
  * Transform a local-space AABB through a world matrix and return the new AABB.
@@ -107,6 +115,9 @@ export class SelectionTool extends BaseTool {
     // Only handle left mouse button
     if (event.button !== 0) return;
 
+    // Sync symbol definitions to selectionManager for symbol-instance bounds
+    this.selectionManager.setSymbolDefinitions(this.context.getSymbolDefinitions?.() ?? []);
+
     const worldPos = { ...event.worldPosition };
     const screenPos = { ...event.screenPosition };
     this.startPoint = worldPos;
@@ -186,11 +197,13 @@ export class SelectionTool extends BaseTool {
     const enteredGroupId = this.context.getEnteredGroupId?.() ?? null;
     const hitNode = rawHit ? this.resolveHitToScope(rawHit) : null;
 
-    // Double-click on a group or artboard to enter it
+    // Double-click on a group, artboard, or symbol instance to enter it
     if (
       event.clickCount === 2 &&
       hitNode &&
-      (hitNode.type === 'group' || hitNode.type === 'artboard')
+      (hitNode.type === 'group' ||
+        hitNode.type === 'artboard' ||
+        hitNode.type === 'symbol-instance')
     ) {
       this.context.setEnteredGroupId?.(hitNode.id);
       return;
@@ -670,6 +683,24 @@ export class SelectionTool extends BaseTool {
           width: node.width,
           height: node.height,
         };
+        break;
+      }
+      case 'symbol-instance': {
+        // Compute bounds from the resolved symbol definition
+        const defs = this.context.getSymbolDefinitions?.() ?? [];
+        const symNode = node as SymbolInstanceNode;
+        const def = defs.find((d) => d.id === symNode.symbolId);
+        if (def && def.sceneGraphJSON.nodes.length > 0) {
+          const symBounds = getSymbolBounds(def.sceneGraphJSON.nodes as Node[]);
+          if (symBounds.width > 0 && symBounds.height > 0) {
+            localBounds = {
+              x: symBounds.x,
+              y: symBounds.y,
+              width: symBounds.width,
+              height: symBounds.height,
+            };
+          }
+        }
         break;
       }
       case 'ik-target':

@@ -635,6 +635,30 @@ export function MenuBar({ projectActions }: MenuBarProps) {
                     outlineStrokeAction(sceneGraph);
                   }}
                 />
+                <Separator />
+                <SectionHeader label="Symbols" />
+                <MenuItem
+                  label="Create Symbol"
+                  shortcut="Ctrl+Shift+K"
+                  disabled={selectedNodeIds.size === 0}
+                  onClick={() => {
+                    closeMenu();
+                    useEditorStore.getState().createSymbol(sceneGraph);
+                  }}
+                />
+                <MenuItem
+                  label="Detach Instance"
+                  disabled={(() => {
+                    if (selectedNodeIds.size !== 1) return true;
+                    const selId = [...selectedNodeIds][0]!;
+                    const selNode = sceneGraph.getNode(selId);
+                    return !selNode || selNode.type !== 'symbol-instance';
+                  })()}
+                  onClick={() => {
+                    closeMenu();
+                    useEditorStore.getState().detachInstance(sceneGraph);
+                  }}
+                />
               </div>
             )}
           </div>

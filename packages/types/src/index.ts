@@ -179,7 +179,8 @@ export type NodeType =
   | 'bone'
   | 'ik-target'
   | 'vitruvian'
-  | 'artboard';
+  | 'artboard'
+  | 'symbol-instance';
 
 export interface BaseNode {
   id: string;
@@ -347,6 +348,30 @@ export interface ArtboardNode extends BaseNode {
 }
 
 // ============================================================================
+// Symbol Types (Reusable Components)
+// ============================================================================
+
+/** Partial property replacement keyed by descendant node ID within a symbol */
+export interface SymbolOverride {
+  nodeId: string; // ID of descendant within symbol definition
+  properties: Record<string, unknown>; // partial properties to override
+}
+
+/** Symbol definition stored in EditorStore (global, cross-page) */
+export interface SymbolDefinition {
+  id: string;
+  name: string;
+  sceneGraphJSON: { nodes: Node[]; rootNodeIds: string[] };
+}
+
+/** Scene graph node representing an instance of a symbol */
+export interface SymbolInstanceNode extends BaseNode {
+  type: 'symbol-instance';
+  symbolId: string; // references SymbolDefinition.id
+  overrides: SymbolOverride[];
+}
+
+// ============================================================================
 // IK Chain Types
 // ============================================================================
 
@@ -400,7 +425,8 @@ export type Node =
   | BoneNode
   | IKTargetNode
   | VitruvianNode
-  | ArtboardNode;
+  | ArtboardNode
+  | SymbolInstanceNode;
 
 /** Node types that can have skin bindings */
 export type SkinnableNode = RectangleNode | EllipseNode | PolygonNode | PathNode | ImageNode;

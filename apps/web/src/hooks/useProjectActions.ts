@@ -81,6 +81,7 @@ export function useProjectActions(options: UseProjectActionsOptions = {}): Proje
       globalWind: state.globalWind,
       pages: state.pages,
       activePageId: state.activePageId,
+      symbols: state.symbols,
     };
   }, []);
 
@@ -127,6 +128,9 @@ export function useProjectActions(options: UseProjectActionsOptions = {}): Proje
       enteredGroupId: null,
       pages: [defaultPage],
       activePageId: pageId,
+      symbols: [],
+      editingSymbolId: null,
+      editingSymbolPrevState: null,
     });
     useEditorStore.getState().clearHistory();
   }, [sceneGraph]);

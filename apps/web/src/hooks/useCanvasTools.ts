@@ -413,6 +413,7 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
       },
       getGuides: () => useEditorStore.getState().guides,
       getSnapToGuides: () => useEditorStore.getState().snapToGuides,
+      getSymbolDefinitions: () => useEditorStore.getState().symbols,
     });
 
     // Set the active tool from EditorStore (ToolManager defaults to 'selection')

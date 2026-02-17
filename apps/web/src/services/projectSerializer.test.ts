@@ -498,4 +498,176 @@ describe('ProjectSerializer', () => {
       expect(pages[1].sceneGraphJSON.nodes[0].id).toBe('inactive-rect');
     });
   });
+
+  // ============================================================================
+  // Symbol Serialization
+  // ============================================================================
+
+  describe('symbol serialization', () => {
+    const testSymbol = {
+      id: 'sym-1',
+      name: 'Button',
+      sceneGraphJSON: {
+        nodes: [makeTestNode('sym-child-1')],
+        rootNodeIds: ['sym-child-1'],
+      },
+    };
+
+    it('serializeProject includes symbols array', () => {
+      const sg = new SceneGraph();
+      sg.addNode(makeTestNode('rect1'));
+
+      const editorState: EditorStateSnapshot = {
+        timeline: createTimeline({ duration: 300, frameRate: 30 }),
+        timelineDuration: 300,
+        frameRate: 30,
+        autoKeyframe: false,
+        onionSkin: { ...DEFAULT_ONION_SKIN_SETTINGS },
+        symbols: [testSymbol],
+      };
+
+      const data = serializeProject('Test', sg, editorState);
+      expect(data.symbols).toHaveLength(1);
+      expect(data.symbols![0]!.id).toBe('sym-1');
+      expect(data.symbols![0]!.name).toBe('Button');
+    });
+
+    it('deserializeProject restores symbols', () => {
+      const data: ProjectDataV2 = {
+        version: '2.0',
+        name: 'Test',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        pages: [
+          {
+            id: 'page-1',
+            name: 'Page 1',
+            sceneGraph: { nodes: [makeTestNode('r1')], rootNodeIds: ['r1'] },
+            timeline: createTimeline({ duration: 300, frameRate: 30 }),
+          },
+        ],
+        activePageId: 'page-1',
+        settings: {
+          timelineDuration: 300,
+          frameRate: 30,
+          autoKeyframe: false,
+          onionSkin: { ...DEFAULT_ONION_SKIN_SETTINGS },
+        },
+        symbols: [testSymbol],
+      };
+
+      const sg = new SceneGraph();
+      let appliedState: Record<string, unknown> = {};
+      deserializeProject(data, sg, (state) => {
+        appliedState = state;
+      });
+
+      const symbols = appliedState.symbols as typeof data.symbols;
+      expect(symbols).toHaveLength(1);
+      expect(symbols![0]!.id).toBe('sym-1');
+      expect(symbols![0]!.name).toBe('Button');
+    });
+
+    it('round-trip preserves symbols and instances', () => {
+      const sg = new SceneGraph();
+      const instNode = {
+        id: 'inst-1',
+        name: 'Button Instance',
+        type: 'symbol-instance' as const,
+        parent: null,
+        children: [],
+        transform: {
+          position: { x: 100, y: 200 },
+          rotation: 0,
+          scale: { x: 1, y: 1 },
+          anchor: { x: 0.5, y: 0.5 },
+          skew: { x: 0, y: 0 },
+        },
+        visible: true,
+        locked: false,
+        opacity: 1,
+        blendMode: 'normal' as const,
+        symbolId: 'sym-1',
+        overrides: [],
+      };
+      sg.addNode(instNode);
+
+      const editorState: EditorStateSnapshot = {
+        timeline: createTimeline({ duration: 300, frameRate: 30 }),
+        timelineDuration: 300,
+        frameRate: 30,
+        autoKeyframe: false,
+        onionSkin: { ...DEFAULT_ONION_SKIN_SETTINGS },
+        symbols: [testSymbol],
+      };
+
+      const data = serializeProject('Test', sg, editorState);
+
+      // Deserialize
+      const newSg = new SceneGraph();
+      let appliedState: Record<string, unknown> = {};
+      deserializeProject(data, newSg, (state) => {
+        appliedState = state;
+      });
+
+      // Instance should exist in scene graph
+      const restored = newSg.getNode('inst-1') as any;
+      expect(restored).toBeDefined();
+      expect(restored.type).toBe('symbol-instance');
+      expect(restored.symbolId).toBe('sym-1');
+
+      // Symbols should be restored
+      const symbols = appliedState.symbols as typeof data.symbols;
+      expect(symbols).toHaveLength(1);
+    });
+
+    it('empty symbols array handled', () => {
+      const sg = new SceneGraph();
+
+      const editorState: EditorStateSnapshot = {
+        timeline: createTimeline({ duration: 300, frameRate: 30 }),
+        timelineDuration: 300,
+        frameRate: 30,
+        autoKeyframe: false,
+        onionSkin: { ...DEFAULT_ONION_SKIN_SETTINGS },
+        symbols: [],
+      };
+
+      const data = serializeProject('Test', sg, editorState);
+      expect(data.symbols).toEqual([]);
+    });
+
+    it('deserialize without symbols field defaults to empty', () => {
+      const data: ProjectDataV2 = {
+        version: '2.0',
+        name: 'Test',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        pages: [
+          {
+            id: 'page-1',
+            name: 'Page 1',
+            sceneGraph: { nodes: [makeTestNode('r1')], rootNodeIds: ['r1'] },
+            timeline: createTimeline({ duration: 300, frameRate: 30 }),
+          },
+        ],
+        activePageId: 'page-1',
+        settings: {
+          timelineDuration: 300,
+          frameRate: 30,
+          autoKeyframe: false,
+          onionSkin: { ...DEFAULT_ONION_SKIN_SETTINGS },
+        },
+        // No symbols field
+      };
+
+      const sg = new SceneGraph();
+      let appliedState: Record<string, unknown> = {};
+      deserializeProject(data, sg, (state) => {
+        appliedState = state;
+      });
+
+      expect(appliedState.symbols).toEqual([]);
+    });
+  });
 });

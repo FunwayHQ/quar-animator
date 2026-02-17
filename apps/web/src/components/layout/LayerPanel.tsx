@@ -59,6 +59,8 @@ function nodeTypeIcon(type: string, node?: Node): string {
       return '\u2726'; // ✦ four-pointed star (Vitruvian switch)
     case 'artboard':
       return '\u2B1C'; // ⬜ white large square (artboard frame)
+    case 'symbol-instance':
+      return '\u25C7'; // ◇ diamond (Figma convention for component instances)
     default:
       return '\u25FC';
   }

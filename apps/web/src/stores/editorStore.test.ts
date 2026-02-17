@@ -59,6 +59,9 @@ describe('EditorStore', () => {
         enabled: false,
       },
       enteredGroupId: null,
+      symbols: [],
+      editingSymbolId: null,
+      editingSymbolPrevState: null,
       pages: [
         {
           id: defaultPageId,
@@ -2813,6 +2816,294 @@ describe('EditorStore', () => {
 
       // Page 1's undo stack should be restored
       expect(useEditorStore.getState().canUndo).toBe(true);
+    });
+  });
+
+  // ==========================================================================
+  // Symbols (reusable components)
+  // ==========================================================================
+
+  describe('symbols', () => {
+    function createMockSceneGraphForSymbols() {
+      const nodes = new Map<string, any>();
+      let rootNodeIds: string[] = [];
+      return {
+        getNode: (id: string) => nodes.get(id),
+        getRootNodes: () => rootNodeIds.map((id) => nodes.get(id)).filter(Boolean),
+        addNode: vi.fn((node: any, parentId?: string) => {
+          if (parentId) node.parent = parentId;
+          nodes.set(node.id, node);
+          if (!node.parent && !rootNodeIds.includes(node.id)) rootNodeIds.push(node.id);
+        }),
+        removeNode: vi.fn((id: string) => {
+          nodes.delete(id);
+          rootNodeIds = rootNodeIds.filter((rid) => rid !== id);
+        }),
+        updateNode: vi.fn((id: string, updates: any) => {
+          const node = nodes.get(id);
+          if (node) nodes.set(id, { ...node, ...updates });
+        }),
+        moveNode: vi.fn(),
+        getDescendants: (id: string) => {
+          const result: any[] = [];
+          const node = nodes.get(id);
+          if (node?.children) {
+            for (const childId of node.children) {
+              const child = nodes.get(childId);
+              if (child) result.push(child);
+            }
+          }
+          return result;
+        },
+        traverse: (cb: (node: any, depth: number) => void) => {
+          for (const node of nodes.values()) cb(node, 0);
+        },
+        getWorldTransform: () => ({ a: 1, b: 0, c: 0, d: 1, tx: 0, ty: 0 }),
+        toJSON: () => ({
+          nodes: Array.from(nodes.values()),
+          rootNodeIds: [...rootNodeIds],
+        }),
+        fromJSON: (data: { nodes: any[]; rootNodeIds: string[] }) => {
+          nodes.clear();
+          rootNodeIds = [];
+          for (const node of data.nodes) {
+            nodes.set(node.id, node);
+          }
+          rootNodeIds = [...data.rootNodeIds];
+        },
+        _addTestNode: (node: any) => {
+          nodes.set(node.id, node);
+          if (!node.parent && !rootNodeIds.includes(node.id)) rootNodeIds.push(node.id);
+        },
+      };
+    }
+
+    function makeTestRect(id: string) {
+      return {
+        id,
+        name: id,
+        type: 'rectangle' as const,
+        parent: null,
+        children: [],
+        transform: {
+          position: { x: 50, y: 50 },
+          rotation: 0,
+          scale: { x: 1, y: 1 },
+          anchor: { x: 0.5, y: 0.5 },
+          skew: { x: 0, y: 0 },
+        },
+        visible: true,
+        locked: false,
+        opacity: 1,
+        blendMode: 'normal' as const,
+        width: 100,
+        height: 80,
+        cornerRadius: [0, 0, 0, 0],
+        fills: [
+          {
+            type: 'solid' as const,
+            color: { r: 100, g: 149, b: 237, a: 1 },
+            opacity: 1,
+            visible: true,
+          },
+        ],
+        strokes: [],
+      };
+    }
+
+    it('has empty initial state', () => {
+      expect(useEditorStore.getState().symbols).toEqual([]);
+      expect(useEditorStore.getState().editingSymbolId).toBeNull();
+      expect(useEditorStore.getState().editingSymbolPrevState).toBeNull();
+    });
+
+    it('createSymbol returns null with no selection', () => {
+      const sg = createMockSceneGraphForSymbols();
+      useEditorStore.setState({ selectedNodeIds: new Set() });
+      const result = useEditorStore.getState().createSymbol(sg);
+      expect(result).toBeNull();
+    });
+
+    it('createSymbol creates definition and instance', () => {
+      const sg = createMockSceneGraphForSymbols();
+      const rect = makeTestRect('r1');
+      sg._addTestNode(rect);
+
+      useEditorStore.setState({ selectedNodeIds: new Set(['r1']) });
+      const symbolId = useEditorStore.getState().createSymbol(sg);
+
+      expect(symbolId).toBeTruthy();
+      const symbols = useEditorStore.getState().symbols;
+      expect(symbols).toHaveLength(1);
+      expect(symbols[0]!.id).toBe(symbolId);
+
+      // Original node should be removed
+      expect(sg.removeNode).toHaveBeenCalledWith('r1');
+
+      // An instance should be added
+      expect(sg.addNode).toHaveBeenCalled();
+      const addedNode = (sg.addNode as any).mock.calls.find(
+        (call: any[]) => call[0].type === 'symbol-instance'
+      );
+      expect(addedNode).toBeTruthy();
+      expect(addedNode[0].symbolId).toBe(symbolId);
+    });
+
+    it('renameSymbol updates definition name', () => {
+      const sg = createMockSceneGraphForSymbols();
+      const rect = makeTestRect('r1');
+      sg._addTestNode(rect);
+      useEditorStore.setState({ selectedNodeIds: new Set(['r1']) });
+      const symbolId = useEditorStore.getState().createSymbol(sg)!;
+
+      useEditorStore.getState().renameSymbol(symbolId, 'New Name');
+      expect(useEditorStore.getState().symbols[0]!.name).toBe('New Name');
+    });
+
+    it('placeSymbolInstance creates an instance node', () => {
+      const sg = createMockSceneGraphForSymbols();
+      const rect = makeTestRect('r1');
+      sg._addTestNode(rect);
+      useEditorStore.setState({ selectedNodeIds: new Set(['r1']) });
+      const symbolId = useEditorStore.getState().createSymbol(sg)!;
+
+      // Reset mock calls
+      (sg.addNode as any).mockClear();
+
+      useEditorStore.getState().placeSymbolInstance(sg, symbolId);
+      expect(sg.addNode).toHaveBeenCalledTimes(1);
+      const placed = (sg.addNode as any).mock.calls[0][0];
+      expect(placed.type).toBe('symbol-instance');
+      expect(placed.symbolId).toBe(symbolId);
+    });
+
+    it('detachInstance converts symbol-instance to group', () => {
+      const sg = createMockSceneGraphForSymbols();
+      const rect = makeTestRect('r1');
+      sg._addTestNode(rect);
+      useEditorStore.setState({ selectedNodeIds: new Set(['r1']) });
+      const symbolId = useEditorStore.getState().createSymbol(sg)!;
+
+      // Find the instance that was created
+      const selectedIds = useEditorStore.getState().selectedNodeIds;
+      const instId = [...selectedIds][0]!;
+      const inst = sg.getNode(instId);
+      expect(inst?.type).toBe('symbol-instance');
+
+      // Now detach
+      useEditorStore.getState().detachInstance(sg);
+
+      // Instance should be removed, a group or replacement node added
+      expect(sg.removeNode).toHaveBeenCalledWith(instId);
+    });
+
+    it('detachInstance is no-op if selected is not symbol-instance', () => {
+      const sg = createMockSceneGraphForSymbols();
+      const rect = makeTestRect('r1');
+      sg._addTestNode(rect);
+      useEditorStore.setState({ selectedNodeIds: new Set(['r1']) });
+
+      const callCountBefore = (sg.removeNode as any).mock.calls.length;
+      useEditorStore.getState().detachInstance(sg);
+      const callCountAfter = (sg.removeNode as any).mock.calls.length;
+      expect(callCountAfter).toBe(callCountBefore);
+    });
+
+    it('enterSymbolEdit swaps scene graph and sets editingSymbolId', () => {
+      const sg = createMockSceneGraphForSymbols();
+      const rect = makeTestRect('r1');
+      sg._addTestNode(rect);
+      useEditorStore.setState({ selectedNodeIds: new Set(['r1']) });
+      const symbolId = useEditorStore.getState().createSymbol(sg)!;
+
+      useEditorStore.getState().enterSymbolEdit(symbolId, sg);
+
+      expect(useEditorStore.getState().editingSymbolId).toBe(symbolId);
+      expect(useEditorStore.getState().editingSymbolPrevState).not.toBeNull();
+    });
+
+    it('exitSymbolEdit saves changes and restores scene', () => {
+      const sg = createMockSceneGraphForSymbols();
+      const rect = makeTestRect('r1');
+      sg._addTestNode(rect);
+      useEditorStore.setState({ selectedNodeIds: new Set(['r1']) });
+      const symbolId = useEditorStore.getState().createSymbol(sg)!;
+
+      // Enter edit
+      useEditorStore.getState().enterSymbolEdit(symbolId, sg);
+      expect(useEditorStore.getState().editingSymbolId).toBe(symbolId);
+
+      // Exit edit
+      useEditorStore.getState().exitSymbolEdit(sg);
+      expect(useEditorStore.getState().editingSymbolId).toBeNull();
+      expect(useEditorStore.getState().editingSymbolPrevState).toBeNull();
+    });
+
+    it('setInstanceOverride adds override to instance', () => {
+      const sg = createMockSceneGraphForSymbols();
+      const rect = makeTestRect('r1');
+      sg._addTestNode(rect);
+      useEditorStore.setState({ selectedNodeIds: new Set(['r1']) });
+      const symbolId = useEditorStore.getState().createSymbol(sg)!;
+
+      const selectedIds = useEditorStore.getState().selectedNodeIds;
+      const instId = [...selectedIds][0]!;
+
+      useEditorStore.getState().setInstanceOverride(sg, instId, {
+        nodeId: 'r1',
+        properties: { opacity: 0.5 },
+      });
+
+      expect(sg.updateNode).toHaveBeenCalled();
+    });
+
+    it('resetInstanceOverrides clears all overrides', () => {
+      const sg = createMockSceneGraphForSymbols();
+      const rect = makeTestRect('r1');
+      sg._addTestNode(rect);
+      useEditorStore.setState({ selectedNodeIds: new Set(['r1']) });
+      useEditorStore.getState().createSymbol(sg);
+
+      const selectedIds = useEditorStore.getState().selectedNodeIds;
+      const instId = [...selectedIds][0]!;
+
+      // Set an override first
+      useEditorStore.getState().setInstanceOverride(sg, instId, {
+        nodeId: 'r1',
+        properties: { opacity: 0.5 },
+      });
+
+      // Reset
+      useEditorStore.getState().resetInstanceOverrides(sg, instId);
+
+      // updateNode should have been called with empty overrides
+      const lastCall = (sg.updateNode as any).mock.calls.at(-1);
+      expect(lastCall[1].overrides).toEqual([]);
+    });
+
+    it('symbols persist across page switches (global state)', () => {
+      const sg = createMockSceneGraphForSymbols();
+      const rect = makeTestRect('r1');
+      sg._addTestNode(rect);
+      useEditorStore.setState({ selectedNodeIds: new Set(['r1']) });
+      const symbolId = useEditorStore.getState().createSymbol(sg)!;
+
+      // Add a page and switch
+      useEditorStore.getState().addPage(sg);
+      const symbols = useEditorStore.getState().symbols;
+      expect(symbols).toHaveLength(1);
+      expect(symbols[0]!.id).toBe(symbolId);
+    });
+
+    it('deleteSymbol removes definition', () => {
+      const sg = createMockSceneGraphForSymbols();
+      const rect = makeTestRect('r1');
+      sg._addTestNode(rect);
+      useEditorStore.setState({ selectedNodeIds: new Set(['r1']) });
+      const symbolId = useEditorStore.getState().createSymbol(sg)!;
+
+      useEditorStore.getState().deleteSymbol(symbolId, sg);
+      expect(useEditorStore.getState().symbols).toHaveLength(0);
     });
   });
 });

@@ -274,6 +274,10 @@ export function Canvas() {
           e.preventDefault();
           outlineStroke(sceneGraph);
           break;
+        case 'k':
+          e.preventDefault();
+          useEditorStore.getState().createSymbol(sceneGraph);
+          break;
       }
     };
 
@@ -311,6 +315,9 @@ export function Canvas() {
         };
       }
     }
+
+    // Pass symbol definitions so selection bounds work for symbol instances
+    selectionManagerRef.current.setSymbolDefinitions(useEditorStore.getState().symbols);
 
     return selectionManagerRef.current.getSelectionBoundsForDisplay(
       selectedNodeIds,
@@ -658,6 +665,14 @@ export function Canvas() {
 
         // Render shapes from scene graph
         if (sceneGraphRef.current && shapeRenderer) {
+          // Pass symbol definitions to renderer
+          const syms = useEditorStore.getState().symbols;
+          if (syms.length > 0) {
+            const symMap = new Map<string, import('@quar/types').SymbolDefinition>();
+            for (const s of syms) symMap.set(s.id, s);
+            shapeRenderer.setSymbolDefinitions(symMap);
+          }
+
           shapeRenderer.render(
             sceneGraphRef.current,
             viewProjectionMatrix,
@@ -1076,6 +1091,150 @@ export function Canvas() {
   }, [handleWheel]);
 
   // --------------------------------------------------------------------------
+  // Paste from System Clipboard (SVG vector + raster images)
+  // --------------------------------------------------------------------------
+
+  const handlePaste = useCallback(
+    (e: ClipboardEvent) => {
+      // Skip if focus is in an input/textarea
+      const tag = (document.activeElement as HTMLElement)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+
+      const sg = sceneGraphRef.current;
+      const camera = cameraRef.current;
+      if (!sg || !camera) return;
+
+      const items = e.clipboardData?.items;
+      if (!items || items.length === 0) {
+        // No clipboard data — fall back to internal paste
+        pasteClipboard(sg);
+        return;
+      }
+
+      // Scan clipboard items
+      let imageItem: DataTransferItem | null = null;
+      let htmlItem: DataTransferItem | null = null;
+      let plainTextItem: DataTransferItem | null = null;
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        if (item.type.startsWith('image/') && !imageItem) imageItem = item;
+        if (item.type === 'text/html' && !htmlItem) htmlItem = item;
+        if (item.type === 'text/plain' && !plainTextItem) plainTextItem = item;
+      }
+
+      const getCanvasCenter = () =>
+        camera.screenToWorld({
+          x: (canvasRef.current?.clientWidth ?? 800) / 2,
+          y: (canvasRef.current?.clientHeight ?? 600) / 2,
+        });
+
+      const importSvgString = (svgString: string) => {
+        const worldCenter = getCanvasCenter();
+        let idCounter = Date.now();
+        const generateId = () => `node_${idCounter++}`;
+        try {
+          useEditorStore.getState().pushUndo(sg);
+          const result = importSvg(svgString, sg, generateId, {
+            centerAtOrigin: false,
+            position: worldCenter,
+          });
+          if (result.rootIds.length > 0) {
+            useEditorStore.setState({ selectedNodeIds: new Set(result.rootIds) });
+          }
+        } catch {
+          // Invalid SVG — ignore
+        }
+      };
+
+      const importImageBlob = (item: DataTransferItem) => {
+        const blob = item.getAsFile();
+        if (!blob || blob.size > 10 * 1024 * 1024) return;
+
+        const reader = new FileReader();
+        reader.onload = () => {
+          const dataUri = reader.result as string;
+          const img = new Image();
+          img.onload = () => {
+            const worldCenter = getCanvasCenter();
+            const nodeId = `node_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+            const imageNode = {
+              id: nodeId,
+              name: 'Pasted Image',
+              type: 'image' as const,
+              parent: null,
+              children: [],
+              transform: {
+                position: { x: worldCenter.x, y: worldCenter.y },
+                rotation: 0,
+                scale: { x: 1, y: 1 },
+                anchor: { x: 0.5, y: 0.5 },
+                skew: { x: 0, y: 0 },
+              },
+              visible: true,
+              locked: false,
+              opacity: 1,
+              blendMode: 'normal' as const,
+              src: dataUri,
+              width: img.naturalWidth,
+              height: img.naturalHeight,
+              naturalWidth: img.naturalWidth,
+              naturalHeight: img.naturalHeight,
+              cornerRadius: [0, 0, 0, 0] as [number, number, number, number],
+            };
+
+            useEditorStore.getState().pushUndo(sg);
+            sg.addNode(imageNode);
+            useEditorStore.setState({ selectedNodeIds: new Set([nodeId]) });
+          };
+          img.src = dataUri;
+        };
+        reader.readAsDataURL(blob);
+      };
+
+      // Prefer HTML text (Figma/Illustrator copy SVG in text/html), then plain text
+      const textItem = htmlItem || plainTextItem;
+
+      if (textItem) {
+        e.preventDefault();
+        const capturedImageItem = imageItem;
+        textItem.getAsString((text: string) => {
+          const svgMatch = text.match(/<svg[\s\S]*?<\/svg>/i);
+          if (svgMatch) {
+            importSvgString(svgMatch[0]);
+            return;
+          }
+          // No SVG in text — try image blob, or fall back to internal paste
+          if (capturedImageItem) {
+            importImageBlob(capturedImageItem);
+          } else {
+            pasteClipboard(sg);
+          }
+        });
+        return;
+      }
+
+      // No text content — try image blob
+      if (imageItem) {
+        e.preventDefault();
+        importImageBlob(imageItem);
+        return;
+      }
+
+      // No external content — fall back to internal clipboard
+      pasteClipboard(sg);
+    },
+    [pasteClipboard]
+  );
+
+  // Attach paste listener on the canvas element
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    canvas.addEventListener('paste', handlePaste);
+    return () => canvas.removeEventListener('paste', handlePaste);
+  }, [handlePaste]);
+
+  // --------------------------------------------------------------------------
   // Keyboard Handlers
   // --------------------------------------------------------------------------
 
@@ -1096,6 +1255,13 @@ export function Canvas() {
         if (!isPanningRef.current) {
           canvas.style.cursor = 'grab';
         }
+        return;
+      }
+
+      // Escape exits symbol editing mode
+      if (e.key === 'Escape' && useEditorStore.getState().editingSymbolId) {
+        e.preventDefault();
+        useEditorStore.getState().exitSymbolEdit(sceneGraph);
         return;
       }
 
@@ -1175,7 +1341,9 @@ export function Canvas() {
           return;
         }
         if (e.key === 'v') {
-          pasteClipboard(sceneGraph);
+          // Let the native paste event handle this — it will check
+          // for external clipboard content (SVG/images) first, then
+          // fall back to internal clipboard paste.
           return;
         }
         if (e.key === 'd' && !e.shiftKey) {
@@ -1902,6 +2070,37 @@ export function Canvas() {
       onDragOver={handleDragOver}
       onDrop={handleDrop}
     >
+      {/* Symbol editing banner */}
+      {useEditorStore.getState().editingSymbolId &&
+        (() => {
+          const symId = useEditorStore.getState().editingSymbolId!;
+          const symDef = useEditorStore
+            .getState()
+            .symbols.find((s: { id: string }) => s.id === symId);
+          return (
+            <div
+              data-testid="symbol-editing-banner"
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: '50%',
+                transform: 'translateX(-50%)',
+                zIndex: 1000,
+                background: 'var(--color-primary)',
+                color: '#fff',
+                padding: '4px 16px',
+                borderRadius: '0 0 6px 6px',
+                fontSize: '12px',
+                fontWeight: 600,
+                pointerEvents: 'auto',
+                cursor: 'pointer',
+              }}
+              onClick={() => useEditorStore.getState().exitSymbolEdit(sceneGraph)}
+            >
+              Editing Symbol: {symDef?.name ?? 'Unknown'} — Click or press Escape to exit
+            </div>
+          );
+        })()}
       <canvas
         ref={canvasRef}
         className={styles.canvas}
