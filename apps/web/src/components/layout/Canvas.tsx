@@ -39,6 +39,7 @@ import { PointMagnetOverlay } from '../canvas/PointMagnetOverlay';
 import { ContextMenu } from '../common/ContextMenu';
 import type { ContextMenuEntry } from '../common/ContextMenu';
 import { promptDialog } from '../common/PromptDialog';
+import { toast } from '../common/Toast';
 import styles from './Canvas.module.css';
 
 // ============================================================================
@@ -1218,6 +1219,14 @@ export function Canvas() {
                   importSvgString(svgMatch[0]);
                   return true;
                 }
+                // Detect Figma proprietary format
+                if (html.includes('figmeta') || html.includes('data-buffer')) {
+                  toast.info(
+                    'Figma uses a proprietary format. In Figma, right-click → Copy/Paste as → Copy as SVG, then paste here.',
+                    8000
+                  );
+                  return true; // Handled (with message), don't fall through to internal paste
+                }
               } catch {
                 // Failed to read text/html
               }
@@ -1279,6 +1288,14 @@ export function Canvas() {
           const svgMatch = text.match(/<svg[\s\S]*?<\/svg>/i);
           if (svgMatch) {
             importSvgString(svgMatch[0]);
+            return;
+          }
+          // Detect Figma/proprietary clipboard formats — show helpful message
+          if (text.includes('figmeta') || text.includes('data-buffer')) {
+            toast.info(
+              'Figma uses a proprietary format. In Figma, right-click → Copy/Paste as → Copy as SVG, then paste here.',
+              8000
+            );
             return;
           }
           if (capturedImageItem) {
