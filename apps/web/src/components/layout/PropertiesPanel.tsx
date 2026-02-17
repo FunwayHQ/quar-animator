@@ -2381,6 +2381,30 @@ export function PropertiesPanel() {
                 </div>
               </div>
             </div>
+            {/* Shape keyframe indicator for path nodes */}
+            {node.type === 'path' && (
+              <div className={styles.propertyRow} data-testid="shape-tween-row">
+                <div className={styles.propertyHeader}>
+                  <span className={styles.propertyLabel}>Shape</span>
+                  <KeyframeIndicator
+                    state={getKeyframeState(timeline, nodeId, 'points', currentFrame)}
+                    onToggle={() =>
+                      toggleKeyframe('points', structuredClone((node as PathNode).points))
+                    }
+                  />
+                </div>
+                <div className={styles.propertyInputs}>
+                  <span
+                    style={{
+                      fontSize: 11,
+                      color: 'var(--color-text-secondary)',
+                    }}
+                  >
+                    {(node as PathNode).points.length} points
+                  </span>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 

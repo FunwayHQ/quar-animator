@@ -8,8 +8,13 @@
  *   "fill.color.r"
  */
 
-import type { Node, PropertyTrack, Timeline, Effect } from '@quar/types';
+import type { Node, PathPoint, PropertyTrack, Timeline, Effect } from '@quar/types';
 import { interpolateValue, interpolators } from './Timeline';
+import {
+  prepareShapeTween,
+  interpolateShapeTween,
+  type ShapeTweenData,
+} from '../../core/src/tweening/shapeTween';
 
 // ============================================================================
 // Property path get/set
@@ -65,7 +70,7 @@ export function setProperty<N extends Node>(node: N, path: string, value: unknow
 // Animatable property definitions
 // ============================================================================
 
-export type InterpolationType = 'number' | 'vector2' | 'color' | 'rotation' | 'discrete';
+export type InterpolationType = 'number' | 'vector2' | 'color' | 'rotation' | 'discrete' | 'path';
 
 export interface AnimatableProperty {
   path: string;
@@ -282,7 +287,11 @@ export function getAnimatableProperties(nodeType: string): AnimatableProperty[] 
       props.push(...SHAPE_ANIMATABLE_PROPERTIES, ...POLYGON_ANIMATABLE_PROPERTIES);
       break;
     case 'path':
-      props.push(...SHAPE_ANIMATABLE_PROPERTIES);
+      props.push(...SHAPE_ANIMATABLE_PROPERTIES, {
+        path: 'points',
+        displayName: 'Shape',
+        interpolationType: 'path',
+      });
       break;
     case 'text':
       props.push(
@@ -412,6 +421,32 @@ export function getAnimatablePropertiesForNode(node: Node): AnimatableProperty[]
 }
 
 // ============================================================================
+// Path shape interpolator (cached)
+// ============================================================================
+
+/**
+ * Cached path shape interpolator. Prepares ShapeTweenData once per unique
+ * (source, target) pair using a nested WeakMap keyed by array identity.
+ */
+const pathTweenCache = new WeakMap<PathPoint[], WeakMap<PathPoint[], ShapeTweenData>>();
+
+function pathInterpolator(a: PathPoint[], b: PathPoint[], t: number): PathPoint[] {
+  let inner = pathTweenCache.get(a);
+  if (!inner) {
+    inner = new WeakMap();
+    pathTweenCache.set(a, inner);
+  }
+  let data = inner.get(b);
+  if (!data) {
+    // Assume closed paths for shape tweening (most common case).
+    // Open path tweening works too — correspondence just returns offset 0.
+    data = prepareShapeTween(a, b, true, true);
+    inner.set(b, data);
+  }
+  return interpolateShapeTween(data, t);
+}
+
+// ============================================================================
 // Interpolator selection
 // ============================================================================
 
@@ -432,6 +467,8 @@ export function getInterpolator(
       return interpolators.color as (a: unknown, b: unknown, t: number) => unknown;
     case 'discrete':
       return interpolators.discrete as (a: unknown, b: unknown, t: number) => unknown;
+    case 'path':
+      return pathInterpolator as (a: unknown, b: unknown, t: number) => unknown;
   }
 }
 
@@ -439,6 +476,9 @@ export function getInterpolator(
  * Detect interpolation type from a property path.
  */
 export function detectInterpolationType(path: string): InterpolationType {
+  // Path shape (whole PathPoint[] array)
+  if (path === 'points') return 'path';
+
   // Color properties (including gradient stop colors, with array index support)
   if (/^fills\.\d+\.color$/.test(path) || /^strokes\.\d+\.color$/.test(path)) return 'color';
   // Legacy singular paths
