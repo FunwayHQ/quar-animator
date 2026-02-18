@@ -125,6 +125,8 @@ module.exports = {
         'packages/core/src/tools/WeightPaintTool.ts',
         'packages/core/src/tools/SelectionTool.ts',
         'packages/rigging/src/**/*.ts',
+        'packages/export/src/**/*.ts',
+        'apps/web/src/components/common/ExportDialog.tsx',
       ],
       rules: {
         '@typescript-eslint/no-unsafe-assignment': 'off',

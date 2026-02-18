@@ -15,6 +15,7 @@ import type { ProjectActions } from '../../hooks/useProjectActions';
 import type { ProjectListItem } from '../../services/projectStorage';
 import { ProjectListDialog } from '../common/ProjectListDialog';
 import type { SmartBoneAction } from '@quar/types';
+import { showExportDialog } from '../common/ExportDialog';
 import styles from './MenuBar.module.css';
 
 // ============================================================================
@@ -1005,13 +1006,31 @@ export function MenuBar({ projectActions }: MenuBarProps) {
             {menuButton('export', 'Export', 'menu-export')}
             {openMenu === 'export' && (
               <div className={styles.dropdown} role="menu" data-testid="export-menu-dropdown">
-                <MenuItem label="Export as PNG Sequence..." disabled onClick={closeMenu} />
+                <MenuItem
+                  label="Export as PNG Sequence..."
+                  onClick={() => {
+                    closeMenu();
+                    showExportDialog('png-sequence');
+                  }}
+                />
                 <MenuItem label="Export as GIF..." disabled onClick={closeMenu} />
                 <MenuItem label="Export as MP4..." disabled onClick={closeMenu} />
                 <MenuItem label="Export as WebM..." disabled onClick={closeMenu} />
                 <Separator />
-                <MenuItem label="Export as Lottie JSON..." disabled onClick={closeMenu} />
-                <MenuItem label="Export as Sprite Sheet..." disabled onClick={closeMenu} />
+                <MenuItem
+                  label="Export as Lottie JSON..."
+                  onClick={() => {
+                    closeMenu();
+                    showExportDialog('lottie');
+                  }}
+                />
+                <MenuItem
+                  label="Export as Sprite Sheet..."
+                  onClick={() => {
+                    closeMenu();
+                    showExportDialog('sprite-sheet');
+                  }}
+                />
                 <MenuItem label="Export as SVG..." disabled onClick={closeMenu} />
               </div>
             )}

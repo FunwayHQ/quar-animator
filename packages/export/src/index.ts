@@ -3,8 +3,11 @@
  * Export pipeline for Quar Animator
  */
 
-// Placeholder exports - to be implemented
 export const EXPORT_VERSION = '0.1.0';
+
+// ============================================================================
+// Common Types
+// ============================================================================
 
 export type ExportFormat =
   | 'lottie'
@@ -32,10 +35,69 @@ export interface ExportProgress {
   percentage: number;
 }
 
-// Placeholder function
-export async function exportAnimation(
-  _options: ExportOptions,
-  _onProgress?: (progress: ExportProgress) => void
-): Promise<Blob> {
-  throw new Error('Export not yet implemented');
-}
+// ============================================================================
+// Bin Packing
+// ============================================================================
+
+export {
+  packGrid,
+  packMaxRects,
+  nextPowerOfTwo,
+  type PackResult,
+  type PackedRect,
+} from './binPacking';
+
+// ============================================================================
+// Export Utilities (Pure)
+// ============================================================================
+
+export { getFrameCount, generateFrameFilenames } from './exportUtils';
+
+// ============================================================================
+// Frame Renderer
+// ============================================================================
+
+export {
+  createFrameRenderer,
+  type FrameRenderOptions,
+  type FrameRenderContext,
+  type FrameRendererHandle,
+} from './frameRenderer';
+
+// ============================================================================
+// PNG Sequence
+// ============================================================================
+
+export { exportPngSequence, type PngSequenceOptions } from './pngSequence';
+
+// ============================================================================
+// Sprite Sheet
+// ============================================================================
+
+export { exportSpriteSheet, type SpriteSheetOptions } from './spriteSheet';
+
+export {
+  generateSpriteSheetMetadata,
+  type SpriteSheetMetadata,
+  type SpriteFrameData,
+} from './spriteSheetMetadata';
+
+// ============================================================================
+// Lottie
+// ============================================================================
+
+export {
+  exportToLottieJson,
+  exportLottieBlob,
+  analyzeLottieExport,
+  type LottieExportOptions,
+} from './lottie/lottieExporter';
+
+export type {
+  LottieAnimation,
+  LottieLayer,
+  LottieTransform,
+  LottieAnimatedValue,
+  LottieAnimatedMulti,
+  LottieShapeItem,
+} from './lottie/lottieTypes';
