@@ -1,5 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import type { Node, RectangleNode, EllipseNode, Timeline, Transform, Fill } from '@quar/types';
+import type {
+  Node,
+  RectangleNode,
+  EllipseNode,
+  GroupNode,
+  Timeline,
+  Transform,
+  Fill,
+} from '@quar/types';
 import { exportToLottieJson, exportLottieBlob, analyzeLottieExport } from './lottieExporter';
 
 // ============================================================================
@@ -192,5 +200,100 @@ describe('analyzeLottieExport', () => {
     expect(analysis.supportedCount).toBe(1);
     expect(analysis.unsupportedCount).toBe(1);
     expect(analysis.unsupportedTypes).toContain('text');
+  });
+
+  it('returns empty counts for empty array', () => {
+    const analysis = analyzeLottieExport([]);
+    expect(analysis.supportedCount).toBe(0);
+    expect(analysis.unsupportedCount).toBe(0);
+    expect(analysis.unsupportedTypes).toEqual([]);
+  });
+
+  it('deduplicates unsupported types', () => {
+    const textNode1 = {
+      id: 't1',
+      name: 'T1',
+      type: 'text' as const,
+      parent: null,
+      children: [],
+      transform: defaultTransform,
+      visible: true,
+      locked: false,
+      opacity: 1,
+      blendMode: 'normal' as const,
+      content: 'A',
+      fontFamily: 'Inter',
+      fontSize: 16,
+      fontWeight: 400,
+      fontStyle: 'normal' as const,
+      textAlign: 'left' as const,
+      lineHeight: 1.2,
+      letterSpacing: 0,
+      fills: [],
+      strokes: [],
+    };
+    const textNode2 = { ...textNode1, id: 't2', name: 'T2' };
+    const analysis = analyzeLottieExport([textNode1, textNode2]);
+    expect(analysis.unsupportedCount).toBe(2);
+    expect(analysis.unsupportedTypes).toHaveLength(1); // deduplicated
+  });
+
+  it('counts group as supported', () => {
+    const group = {
+      id: 'g1',
+      name: 'Group',
+      type: 'group' as const,
+      parent: null,
+      children: [],
+      transform: defaultTransform,
+      visible: true,
+      locked: false,
+      opacity: 1,
+      blendMode: 'normal' as const,
+    };
+    const analysis = analyzeLottieExport([group, makeRect()]);
+    expect(analysis.supportedCount).toBe(2);
+    expect(analysis.unsupportedCount).toBe(0);
+  });
+});
+
+// ============================================================================
+// Additional exportLottieBlob tests
+// ============================================================================
+
+describe('exportLottieBlob - additional', () => {
+  it('produces parseable JSON round-trip', async () => {
+    const blob = exportLottieBlob([makeRect()], emptyTimeline, { width: 800, height: 600 });
+    const text = await blob.text();
+    const parsed = JSON.parse(text);
+    expect(parsed.v).toBe('5.7.4');
+    expect(parsed.layers).toHaveLength(1);
+    expect(parsed.w).toBe(800);
+    expect(parsed.h).toBe(600);
+  });
+});
+
+// ============================================================================
+// Additional exportToLottieJson tests
+// ============================================================================
+
+describe('exportToLottieJson - additional', () => {
+  it('uses timeline defaults when options omitted', () => {
+    const timeline: Timeline = {
+      ...emptyTimeline,
+      duration: 120,
+      frameRate: 24,
+    };
+    const result = exportToLottieJson([], timeline, { width: 400, height: 300 });
+    expect(result.op).toBe(120);
+    expect(result.fr).toBe(24);
+    expect(result.ip).toBe(0);
+    expect(result.nm).toBe('Quar Animation');
+  });
+
+  it('handles multiple node types', () => {
+    const nodes: Node[] = [makeRect(), makeEllipse()];
+    const result = exportToLottieJson(nodes, emptyTimeline, { width: 800, height: 600 });
+    expect(result.layers).toHaveLength(2);
   });
 });

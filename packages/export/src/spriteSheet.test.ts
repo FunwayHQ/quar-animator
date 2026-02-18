@@ -109,6 +109,54 @@ describe('generateSpriteSheetMetadata', () => {
     expect(Object.keys(meta.frames)).toHaveLength(0);
   });
 
+  it('spriteSourceSize fields are correct', () => {
+    const pack = packGrid(2, 120, 80, 2, 0);
+    const meta = generateSpriteSheetMetadata(
+      pack,
+      { startFrame: 0, endFrame: 1, frameWidth: 120, frameHeight: 80 },
+      'test.png'
+    );
+    const entries = Object.values(meta.frames);
+    for (const entry of entries) {
+      expect(entry.spriteSourceSize).toEqual({ x: 0, y: 0, w: 120, h: 80 });
+    }
+  });
+
+  it('meta.scale is 1', () => {
+    const meta = generateSpriteSheetMetadata(
+      packResult,
+      { startFrame: 0, endFrame: 3, frameWidth: 64, frameHeight: 64 },
+      'sheet.png'
+    );
+    expect(meta.meta.scale).toBe(1);
+  });
+
+  it('meta.version is 1.0.0', () => {
+    const meta = generateSpriteSheetMetadata(
+      packResult,
+      { startFrame: 0, endFrame: 3, frameWidth: 64, frameHeight: 64 },
+      'sheet.png'
+    );
+    expect(meta.meta.version).toBe('1.0.0');
+  });
+
+  it('uses fallback filename for out-of-range rects', () => {
+    const pack: PackResult = {
+      rects: [{ frameIndex: 999, x: 0, y: 0, width: 32, height: 32, rotated: false }],
+      atlasWidth: 32,
+      atlasHeight: 32,
+    };
+    const meta = generateSpriteSheetMetadata(
+      pack,
+      { startFrame: 0, endFrame: 0, frameWidth: 32, frameHeight: 32 },
+      'test.png'
+    );
+    // frameIndex 999 has no filename generated (only frame 0), uses fallback
+    const keys = Object.keys(meta.frames);
+    expect(keys).toHaveLength(1);
+    expect(keys[0]).toBe('frame_999.png');
+  });
+
   it('metadata size matches pack result', () => {
     const pack = packGrid(9, 100, 100, 3, 5);
     const meta = generateSpriteSheetMetadata(

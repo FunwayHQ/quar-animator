@@ -185,4 +185,49 @@ describe('packMaxRects', () => {
     expect(result.rects).toHaveLength(1);
     expect(result.rects[0].x).toBe(-1); // Can't fit
   });
+
+  it('packs single frame', () => {
+    const frames = [{ width: 50, height: 50 }];
+    const result = packMaxRects(frames, 100, 100);
+    expect(result.rects).toHaveLength(1);
+    expect(result.rects[0].x).toBe(0);
+    expect(result.rects[0].y).toBe(0);
+    expect(result.atlasWidth).toBe(50);
+    expect(result.atlasHeight).toBe(50);
+  });
+});
+
+// ============================================================================
+// Additional packGrid tests
+// ============================================================================
+
+describe('packGrid - additional', () => {
+  it('handles columns > frameCount', () => {
+    const result = packGrid(3, 50, 50, 10);
+    expect(result.rects).toHaveLength(3);
+    // All in one row
+    expect(result.atlasHeight).toBe(50);
+    expect(result.rects[0]).toMatchObject({ x: 0, y: 0 });
+    expect(result.rects[1]).toMatchObject({ x: 50, y: 0 });
+    expect(result.rects[2]).toMatchObject({ x: 100, y: 0 });
+  });
+
+  it('single column layout', () => {
+    const result = packGrid(4, 100, 50, 1);
+    expect(result.rects).toHaveLength(4);
+    expect(result.atlasWidth).toBe(100);
+    expect(result.atlasHeight).toBe(200);
+    expect(result.rects[0]).toMatchObject({ x: 0, y: 0 });
+    expect(result.rects[1]).toMatchObject({ x: 0, y: 50 });
+    expect(result.rects[2]).toMatchObject({ x: 0, y: 100 });
+    expect(result.rects[3]).toMatchObject({ x: 0, y: 150 });
+  });
+
+  it('large frame count computes correct dimensions', () => {
+    const result = packGrid(100, 10, 10);
+    expect(result.rects).toHaveLength(100);
+    // ceil(sqrt(100)) = 10 columns
+    expect(result.atlasWidth).toBe(100);
+    expect(result.atlasHeight).toBe(100);
+  });
 });

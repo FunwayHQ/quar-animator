@@ -19,6 +19,7 @@ import {
   ellipseToLottieShapes,
   pathToLottieShapes,
   polygonToLottieShapes,
+  groupToLottieShapes,
   pathPointsToLottieVertices,
   fillsToLottie,
   strokesToLottie,
@@ -552,6 +553,17 @@ describe('generatePolygonPoints', () => {
 });
 
 // ============================================================================
+// groupToLottieShapes
+// ============================================================================
+
+describe('groupToLottieShapes', () => {
+  it('returns empty array', () => {
+    const result = groupToLottieShapes();
+    expect(result).toEqual([]);
+  });
+});
+
+// ============================================================================
 // nodeToLottieShapes routing
 // ============================================================================
 
@@ -597,5 +609,300 @@ describe('nodeToLottieShapes', () => {
       boneColor: '#fff',
     };
     expect(nodeToLottieShapes(bone, emptyTimeline, CANVAS_H)).toBeNull();
+  });
+
+  it('routes group and returns empty array', () => {
+    const group: GroupNode = {
+      id: 'g1',
+      name: 'Group',
+      type: 'group',
+      parent: null,
+      children: [],
+      transform: defaultTransform,
+      visible: true,
+      locked: false,
+      opacity: 1,
+      blendMode: 'normal',
+    };
+    const shapes = nodeToLottieShapes(group, emptyTimeline, CANVAS_H);
+    expect(shapes).not.toBeNull();
+    expect(shapes).toEqual([]);
+  });
+});
+
+// ============================================================================
+// Additional nodeToLottieLayer tests
+// ============================================================================
+
+describe('nodeToLottieLayer - additional', () => {
+  it('uses fallback name when node name is empty', () => {
+    const node = makeRect({ name: '' });
+    const layer = nodeToLottieLayer(node, emptyTimeline, 3, CANVAS_H, 60);
+    expect(layer!.nm).toBe('Layer 3');
+  });
+
+  it('returns null for group with no children shapes', () => {
+    const group: GroupNode = {
+      id: 'g1',
+      name: 'Group',
+      type: 'group',
+      parent: null,
+      children: [],
+      transform: defaultTransform,
+      visible: true,
+      locked: false,
+      opacity: 1,
+      blendMode: 'normal',
+    };
+    const layer = nodeToLottieLayer(group, emptyTimeline, 0, CANVAS_H, 60);
+    // groupToLottieShapes returns [], so null since shapes.length === 0
+    expect(layer).toBeNull();
+  });
+});
+
+// ============================================================================
+// Additional pathPointsToLottieVertices tests
+// ============================================================================
+
+describe('pathPointsToLottieVertices - additional', () => {
+  it('handles single point', () => {
+    const points: PathPoint[] = [
+      { position: { x: 50, y: 50 }, handleIn: null, handleOut: null, type: 'corner' },
+    ];
+    const result = pathPointsToLottieVertices(points, false);
+    expect(result.v).toHaveLength(1);
+    expect(result.v[0]).toEqual([50, 50]);
+    expect(result.i[0]).toEqual([0, 0]);
+    expect(result.o[0]).toEqual([0, 0]);
+  });
+
+  it('handles point with both handles', () => {
+    const points: PathPoint[] = [
+      {
+        position: { x: 100, y: 100 },
+        handleIn: { x: 80, y: 90 },
+        handleOut: { x: 120, y: 110 },
+        type: 'smooth',
+      },
+    ];
+    const result = pathPointsToLottieVertices(points, true);
+    expect(result.v[0]).toEqual([100, 100]);
+    expect(result.i[0]).toEqual([-20, -10]); // 80-100, 90-100
+    expect(result.o[0]).toEqual([20, 10]); // 120-100, 110-100
+  });
+});
+
+// ============================================================================
+// Additional fillsToLottie tests
+// ============================================================================
+
+describe('fillsToLottie - additional', () => {
+  it('nonzero fillRule does not set r field', () => {
+    const fills: Fill[] = [solidFill];
+    const result = fillsToLottie(fills, 'n1', emptyTimeline, 'nonzero');
+    expect(result[0].r).toBeUndefined();
+  });
+
+  it('no fillRule does not set r field', () => {
+    const fills: Fill[] = [solidFill];
+    const result = fillsToLottie(fills, 'n1', emptyTimeline);
+    expect(result[0].r).toBeUndefined();
+  });
+
+  it('converts multiple fills', () => {
+    const blue: Fill = {
+      type: 'solid',
+      color: { r: 0, g: 0, b: 255, a: 1 },
+      opacity: 0.8,
+      visible: true,
+    };
+    const fills: Fill[] = [solidFill, blue];
+    const result = fillsToLottie(fills, 'n1', emptyTimeline);
+    expect(result).toHaveLength(2);
+    expect(result[0].nm).toBe('Fill 1');
+    expect(result[1].nm).toBe('Fill 2');
+    expect(result[1].o.k).toBe(80); // 0.8 * 100
+  });
+
+  it('skips fills without color', () => {
+    const noColor: Fill = { type: 'solid', opacity: 1, visible: true };
+    const result = fillsToLottie([noColor], 'n1', emptyTimeline);
+    expect(result).toHaveLength(0);
+  });
+});
+
+// ============================================================================
+// Additional strokesToLottie tests
+// ============================================================================
+
+describe('strokesToLottie - additional', () => {
+  it('maps butt cap to 1', () => {
+    const strokes: Stroke[] = [{ ...solidStroke, cap: 'butt' }];
+    const result = strokesToLottie(strokes, 'n1', emptyTimeline);
+    expect(result[0].lc).toBe(1);
+  });
+
+  it('maps square cap to 3', () => {
+    const strokes: Stroke[] = [{ ...solidStroke, cap: 'square' }];
+    const result = strokesToLottie(strokes, 'n1', emptyTimeline);
+    expect(result[0].lc).toBe(3);
+  });
+
+  it('maps round join to 2', () => {
+    const strokes: Stroke[] = [{ ...solidStroke, join: 'round' }];
+    const result = strokesToLottie(strokes, 'n1', emptyTimeline);
+    expect(result[0].lj).toBe(2);
+  });
+
+  it('maps bevel join to 3', () => {
+    const strokes: Stroke[] = [{ ...solidStroke, join: 'bevel' }];
+    const result = strokesToLottie(strokes, 'n1', emptyTimeline);
+    expect(result[0].lj).toBe(3);
+  });
+
+  it('defaults unknown cap/join to round/miter', () => {
+    const strokes: Stroke[] = [
+      {
+        ...solidStroke,
+        cap: 'unknown' as Stroke['cap'],
+        join: 'unknown' as Stroke['join'],
+      },
+    ];
+    const result = strokesToLottie(strokes, 'n1', emptyTimeline);
+    expect(result[0].lc).toBe(2); // fallback round
+    expect(result[0].lj).toBe(1); // fallback miter
+  });
+
+  it('omits miterLimit when not set', () => {
+    const strokes: Stroke[] = [{ ...solidStroke, miterLimit: undefined }];
+    const result = strokesToLottie(strokes, 'n1', emptyTimeline);
+    expect(result[0].ml).toBeUndefined();
+  });
+
+  it('converts multiple strokes', () => {
+    const strokes: Stroke[] = [
+      { ...solidStroke, width: 2 },
+      { ...solidStroke, width: 5, cap: 'butt' },
+    ];
+    const result = strokesToLottie(strokes, 'n1', emptyTimeline);
+    expect(result).toHaveLength(2);
+    expect(result[0].nm).toBe('Stroke 1');
+    expect(result[1].nm).toBe('Stroke 2');
+    expect(result[1].w.k).toBe(5);
+    expect(result[1].lc).toBe(1); // butt
+  });
+
+  it('sets stroke opacity', () => {
+    const strokes: Stroke[] = [{ ...solidStroke, opacity: 0.3 }];
+    const result = strokesToLottie(strokes, 'n1', emptyTimeline);
+    expect(result[0].o.k).toBe(30);
+  });
+});
+
+// ============================================================================
+// Additional buildLottieTransform tests
+// ============================================================================
+
+describe('buildLottieTransform - additional', () => {
+  it('handles animated rotation track', () => {
+    const timeline: Timeline = {
+      ...emptyTimeline,
+      tracks: [
+        {
+          id: 't1',
+          nodeId: 'n1',
+          property: 'transform.rotation',
+          keyframes: [
+            { id: 'k1', time: 0, value: 0, easing: 'linear' },
+            { id: 'k2', time: 30, value: 360, easing: 'linear' },
+          ],
+        },
+      ],
+    };
+    const t = buildLottieTransform(defaultTransform, 'n1', timeline, CANVAS_H);
+    expect(t.r.a).toBe(1);
+  });
+
+  it('handles animated scale tracks', () => {
+    const timeline: Timeline = {
+      ...emptyTimeline,
+      tracks: [
+        {
+          id: 't1',
+          nodeId: 'n1',
+          property: 'transform.scale.x',
+          keyframes: [
+            { id: 'k1', time: 0, value: 1, easing: 'linear' },
+            { id: 'k2', time: 30, value: 2, easing: 'linear' },
+          ],
+        },
+      ],
+    };
+    const t = buildLottieTransform(defaultTransform, 'n1', timeline, CANVAS_H);
+    expect(t.s.a).toBe(1);
+  });
+
+  it('handles animated opacity track', () => {
+    const timeline: Timeline = {
+      ...emptyTimeline,
+      tracks: [
+        {
+          id: 't1',
+          nodeId: 'n1',
+          property: 'opacity',
+          keyframes: [
+            { id: 'k1', time: 0, value: 1, easing: 'linear' },
+            { id: 'k2', time: 30, value: 0, easing: 'linear' },
+          ],
+        },
+      ],
+    };
+    const t = buildLottieTransform(defaultTransform, 'n1', timeline, CANVAS_H);
+    expect(t.o.a).toBe(1);
+  });
+
+  it('handles undefined opacity (defaults to 1 → 100)', () => {
+    const transform: Transform = { ...defaultTransform };
+    delete (transform as Record<string, unknown>)['opacity'];
+    const t = buildLottieTransform(transform, 'n1', emptyTimeline, CANVAS_H);
+    expect(t.o.k).toBe(100);
+  });
+
+  it('anchor is always at [0,0]', () => {
+    const t = buildLottieTransform(defaultTransform, 'n1', emptyTimeline, CANVAS_H);
+    expect(t.a.k).toEqual([0, 0]);
+    expect(t.a.a).toBe(0);
+  });
+});
+
+// ============================================================================
+// Additional generatePolygonPoints tests
+// ============================================================================
+
+describe('generatePolygonPoints - additional', () => {
+  it('generates 3 points for triangle', () => {
+    const node = makePolygon({ sides: 3, radius: 100 });
+    const points = generatePolygonPoints(node);
+    expect(points).toHaveLength(3);
+    // All at radius 100
+    for (const p of points) {
+      const dist = Math.sqrt(p.position.x ** 2 + p.position.y ** 2);
+      expect(dist).toBeCloseTo(100);
+    }
+  });
+
+  it('does not treat innerRadius=0 as star', () => {
+    const node = makePolygon({ sides: 5, radius: 50, innerRadius: 0 });
+    const points = generatePolygonPoints(node);
+    // innerRadius=0 means isStar is false (innerRadius > 0 check fails)
+    expect(points).toHaveLength(5);
+  });
+
+  it('first point starts from top (-π/2)', () => {
+    const node = makePolygon({ sides: 4, radius: 100 });
+    const points = generatePolygonPoints(node);
+    // First point at angle -π/2 → (cos(-π/2)*100, sin(-π/2)*100) = (0, -100)
+    expect(points[0].position.x).toBeCloseTo(0);
+    expect(points[0].position.y).toBeCloseTo(-100);
   });
 });

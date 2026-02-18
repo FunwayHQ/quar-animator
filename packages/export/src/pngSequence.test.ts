@@ -65,4 +65,37 @@ describe('PNG Sequence - Export Options Validation', () => {
     const names = generateFrameFilenames('frame_{N}', 0, 1, 'jpg');
     expect(names[0]).toBe('frame_0.jpg');
   });
+
+  it('supports webp extension', () => {
+    const names = generateFrameFilenames('frame_{N}', 0, 0, 'webp');
+    expect(names[0]).toBe('frame_0.webp');
+  });
+});
+
+// ============================================================================
+// Additional edge cases
+// ============================================================================
+
+describe('Frame count edge cases', () => {
+  it('getFrameCount returns 1 for same start and end', () => {
+    expect(getFrameCount(0, 0)).toBe(1);
+    expect(getFrameCount(100, 100)).toBe(1);
+  });
+
+  it('getFrameCount handles large ranges', () => {
+    expect(getFrameCount(0, 999)).toBe(1000);
+  });
+
+  it('generateFrameFilenames pads based on end frame digits', () => {
+    const names = generateFrameFilenames('f_{N}', 0, 9, 'png');
+    expect(names[0]).toBe('f_0.png'); // single digit, pad=1
+    expect(names[9]).toBe('f_9.png');
+  });
+
+  it('generateFrameFilenames zero-pads to 4 digits for large ranges', () => {
+    const names = generateFrameFilenames('f_{N}', 0, 1000, 'png');
+    expect(names[0]).toBe('f_0000.png');
+    expect(names[99]).toBe('f_0099.png');
+    expect(names[1000]).toBe('f_1000.png');
+  });
 });
