@@ -456,10 +456,24 @@ export function PropertiesPanel() {
       const snappedTL = snap ? Math.round(num / grid) * grid : num;
       const anchor = currentNode.transform.anchor ?? { x: 0.5, y: 0.5 };
       const nodeSize = getNodeSize(currentNode, sceneGraph, symbols);
-      const centerValue =
-        axis === 'x'
-          ? snappedTL + nodeSize.width * anchor.x
-          : snappedTL - nodeSize.height * (1 - anchor.y);
+      let centerValue: number;
+      if (currentNode.type === 'group') {
+        // For groups, display value comes from children world bounds, not directly
+        // from node.transform.position. Use delta-based approach: compute the difference
+        // between desired display and current display, apply that to transform.position.
+        const currentCenter = getGroupPosition(currentNode, sceneGraph);
+        const currentTL =
+          axis === 'x'
+            ? currentCenter.x - nodeSize.width * anchor.x
+            : currentCenter.y + nodeSize.height * (1 - anchor.y);
+        const delta = snappedTL - currentTL;
+        centerValue = currentNode.transform.position[axis] + delta;
+      } else {
+        centerValue =
+          axis === 'x'
+            ? snappedTL + nodeSize.width * anchor.x
+            : snappedTL - nodeSize.height * (1 - anchor.y);
+      }
       sceneGraph.updateNode(selectedId, {
         transform: {
           ...currentNode.transform,
