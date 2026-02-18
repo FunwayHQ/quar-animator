@@ -1,7 +1,7 @@
 /**
  * Project Serializer for Quar Animator
  * Converts editor state to/from a portable JSON format
- * Supports v1.0 (single page) and v2.0 (multi-page) formats
+ * Supports v1.0 (single page), v2.0 (multi-page), and v3.0 (binary) formats
  */
 
 /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access */
@@ -16,7 +16,7 @@ import type {
 import type { OnionSkinSettings } from '@quar/core';
 import type { SceneGraph } from '@quar/core';
 import { createTimeline } from '@quar/animation';
-import { DEFAULT_ONION_SKIN_SETTINGS } from '@quar/core';
+import { DEFAULT_ONION_SKIN_SETTINGS, writeQuarFile, parseQuarFile } from '@quar/core';
 import type { Guide, PageData } from '../stores/editorStore';
 
 // ============================================================================
@@ -82,8 +82,13 @@ export interface ProjectDataV2 {
   symbols?: SymbolDefinition[];
 }
 
+/** v3.0 binary format (same structure as v2.0, different version tag) */
+export interface ProjectDataV3 extends Omit<ProjectDataV2, 'version'> {
+  version: '3.0';
+}
+
 /** Union type for all supported formats */
-export type ProjectData = ProjectDataV1 | ProjectDataV2;
+export type ProjectData = ProjectDataV1 | ProjectDataV2 | ProjectDataV3;
 
 export interface EditorStateSnapshot {
   timeline: Timeline;
@@ -177,12 +182,40 @@ export function serializeProject(
   };
 }
 
+/**
+ * Serializes a project directly to a v3.0 binary ArrayBuffer.
+ * Convenience wrapper around serializeProject + writeQuarFile.
+ */
+export function serializeProjectToBinary(
+  name: string,
+  sceneGraph: SceneGraph,
+  editorState: EditorStateSnapshot,
+  existingCreatedAt?: string
+): ArrayBuffer {
+  const json = serializeProject(name, sceneGraph, editorState, existingCreatedAt);
+  return writeQuarFile(json as unknown as Record<string, unknown>);
+}
+
+/**
+ * Deserializes a project from binary ArrayBuffer or legacy JSON string.
+ * Convenience wrapper around parseQuarFile + deserializeProject.
+ */
+export function deserializeProjectFromBinary(
+  data: ArrayBuffer | string,
+  sceneGraph: SceneGraph,
+  applyEditorState: (state: Partial<EditorStateSnapshot & { currentFrame: number }>) => void
+): Record<string, unknown> {
+  const parsed = parseQuarFile(data);
+  deserializeProject(parsed as unknown as ProjectData, sceneGraph, applyEditorState);
+  return parsed;
+}
+
 // ============================================================================
 // Validation
 // ============================================================================
 
 /**
- * Validates that unknown data conforms to a supported ProjectData shape (v1.0 or v2.0).
+ * Validates that unknown data conforms to a supported ProjectData shape (v1.0, v2.0, or v3.0).
  * Lightweight structural checks without a schema library.
  */
 export function validateProjectData(data: unknown): data is ProjectData {
@@ -197,7 +230,7 @@ export function validateProjectData(data: unknown): data is ProjectData {
     return false;
   }
 
-  if (obj.version === '2.0') {
+  if (obj.version === '2.0' || obj.version === '3.0') {
     return validateV2Data(obj);
   }
 
@@ -357,8 +390,11 @@ export function deserializeProject(
   sceneGraph: SceneGraph,
   applyEditorState: (state: Partial<EditorStateSnapshot & { currentFrame: number }>) => void
 ): void {
-  // Normalize to v2.0
-  const v2 = data.version === '2.0' ? data : migrateV1ToV2(data);
+  // Normalize to v2.0 structure (v3.0 has same structure as v2.0)
+  const v2 =
+    data.version === '2.0' || data.version === '3.0'
+      ? (data as ProjectDataV2)
+      : migrateV1ToV2(data);
 
   // Find the active page (or first page as fallback)
   const activePage = v2.pages.find((p) => p.id === v2.activePageId) ?? v2.pages[0]!;
@@ -405,8 +441,8 @@ export function deserializeProject(
 // ============================================================================
 
 export function downloadProjectFile(name: string, data: ProjectData): void {
-  const json = JSON.stringify(data, null, 2);
-  const blob = new Blob([json], { type: 'application/json' });
+  const binary = writeQuarFile(data as unknown as Record<string, unknown>);
+  const blob = new Blob([binary], { type: 'application/octet-stream' });
   const url = URL.createObjectURL(blob);
 
   const a = document.createElement('a');
@@ -441,18 +477,19 @@ export function uploadProjectFile(): Promise<ProjectData> {
       const reader = new FileReader();
       reader.onload = () => {
         try {
-          const parsed: unknown = JSON.parse(reader.result as string);
+          const arrayBuffer = reader.result as ArrayBuffer;
+          const parsed = parseQuarFile(arrayBuffer);
           if (!validateProjectData(parsed)) {
             reject(new Error('Invalid .quar file format'));
             return;
           }
-          resolve(parsed);
+          resolve(parsed as unknown as ProjectData);
         } catch {
           reject(new Error('Failed to parse .quar file'));
         }
       };
       reader.onerror = () => reject(new Error('Failed to read file'));
-      reader.readAsText(file);
+      reader.readAsArrayBuffer(file);
     };
 
     input.click();

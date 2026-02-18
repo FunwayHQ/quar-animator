@@ -16,7 +16,7 @@ export interface StoredProject {
   id: string;
   name: string;
   updatedAt: string;
-  data: string; // JSON-serialized ProjectData
+  data: string | ArrayBuffer; // JSON string (legacy v1/v2) or binary ArrayBuffer (v3)
 }
 
 export interface ProjectListItem {
@@ -75,7 +75,11 @@ export class StorageQuotaError extends Error {
   }
 }
 
-export async function saveProject(id: string, name: string, data: string): Promise<void> {
+export async function saveProject(
+  id: string,
+  name: string,
+  data: string | ArrayBuffer
+): Promise<void> {
   const db = await initDB();
   const record: StoredProject = {
     id,

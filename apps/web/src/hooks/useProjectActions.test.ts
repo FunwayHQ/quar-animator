@@ -35,7 +35,13 @@ const mockSerialize = vi.fn().mockReturnValue({
   nodes: [],
   settings: {},
 });
+const mockSerializeToBinary = vi.fn().mockReturnValue(new ArrayBuffer(16));
 const mockDeserialize = vi.fn();
+const mockDeserializeFromBinary = vi.fn().mockReturnValue({
+  name: 'Test Project',
+  createdAt: '2024-01-01',
+  version: '3.0',
+});
 const mockDownloadFile = vi.fn();
 const mockUploadFile = vi.fn().mockResolvedValue({
   name: 'Imported',
@@ -46,7 +52,9 @@ const mockUploadFile = vi.fn().mockResolvedValue({
 
 vi.mock('../services/projectSerializer', () => ({
   serializeProject: (...args: unknown[]) => mockSerialize(...args),
+  serializeProjectToBinary: (...args: unknown[]) => mockSerializeToBinary(...args),
   deserializeProject: (...args: unknown[]) => mockDeserialize(...args),
+  deserializeProjectFromBinary: (...args: unknown[]) => mockDeserializeFromBinary(...args),
   downloadProjectFile: (...args: unknown[]) => mockDownloadFile(...args),
   uploadProjectFile: (...args: unknown[]) => mockUploadFile(...args),
 }));
@@ -299,6 +307,11 @@ describe('useProjectActions', () => {
           settings: {},
         }),
       });
+      mockDeserializeFromBinary.mockReturnValueOnce({
+        name: 'Saved Project',
+        createdAt: '2024-01-01',
+        version: '3.0',
+      });
 
       const { result } = renderProjectActions();
 
@@ -307,7 +320,7 @@ describe('useProjectActions', () => {
       });
 
       expect(mockLoad).toHaveBeenCalledWith('proj_123');
-      expect(mockDeserialize).toHaveBeenCalled();
+      expect(mockDeserializeFromBinary).toHaveBeenCalled();
     });
 
     it('sets editor state from loaded project', async () => {
@@ -318,6 +331,11 @@ describe('useProjectActions', () => {
           nodes: [],
           settings: {},
         }),
+      });
+      mockDeserializeFromBinary.mockReturnValueOnce({
+        name: 'Loaded Project',
+        createdAt: '2024-06-01',
+        version: '3.0',
       });
 
       const { result } = renderProjectActions();
@@ -339,6 +357,11 @@ describe('useProjectActions', () => {
       mockLoad.mockResolvedValueOnce({
         data: JSON.stringify({ name: 'P', createdAt: '', nodes: [], settings: {} }),
       });
+      mockDeserializeFromBinary.mockReturnValueOnce({
+        name: 'P',
+        createdAt: '',
+        version: '3.0',
+      });
 
       const { result } = renderProjectActions();
 
@@ -358,7 +381,7 @@ describe('useProjectActions', () => {
         await result.current.openProject('nonexistent');
       });
 
-      expect(mockDeserialize).not.toHaveBeenCalled();
+      expect(mockDeserializeFromBinary).not.toHaveBeenCalled();
     });
   });
 

@@ -16,6 +16,7 @@ export * from './boolean';
 export * from './font';
 export * from './symbols/symbolResolver';
 export * from './tweening';
+export * from './format';
 
 // Re-export types for convenience
 export type { Vector2, Vector3, Rect, Matrix3, Node, Transform } from '@quar/types';

@@ -6,7 +6,13 @@ import { describe, it, expect } from 'vitest';
 import { SceneGraph } from '@quar/core';
 import { createTimeline } from '@quar/animation';
 import { DEFAULT_ONION_SKIN_SETTINGS } from '@quar/core';
-import { serializeProject, deserializeProject, validateProjectData } from './projectSerializer';
+import {
+  serializeProject,
+  serializeProjectToBinary,
+  deserializeProject,
+  deserializeProjectFromBinary,
+  validateProjectData,
+} from './projectSerializer';
 import type {
   ProjectData,
   ProjectDataV1,
@@ -668,6 +674,266 @@ describe('ProjectSerializer', () => {
       });
 
       expect(appliedState.symbols).toEqual([]);
+    });
+  });
+
+  // ============================================================================
+  // v3.0 Binary Format
+  // ============================================================================
+
+  describe('v3.0 binary format', () => {
+    it('serializeProjectToBinary returns ArrayBuffer', () => {
+      const sg = new SceneGraph();
+      sg.addNode(makeTestNode('rect1'));
+
+      const editorState: EditorStateSnapshot = {
+        timeline: createTimeline({ duration: 300, frameRate: 30 }),
+        timelineDuration: 300,
+        frameRate: 30,
+        autoKeyframe: false,
+        onionSkin: { ...DEFAULT_ONION_SKIN_SETTINGS },
+      };
+
+      const binary = serializeProjectToBinary('Binary Test', sg, editorState);
+      expect(binary).toBeInstanceOf(ArrayBuffer);
+      expect(binary.byteLength).toBeGreaterThan(0);
+
+      // Check magic bytes
+      const view = new DataView(binary);
+      expect(view.getUint32(0, true)).toBe(0x52415551); // "QUAR"
+    });
+
+    it('deserializeProjectFromBinary with binary input', () => {
+      const sg = new SceneGraph();
+      sg.addNode(makeTestNode('rect1', 42, 84));
+
+      const editorState: EditorStateSnapshot = {
+        timeline: createTimeline({ duration: 300, frameRate: 30 }),
+        timelineDuration: 300,
+        frameRate: 30,
+        autoKeyframe: true,
+        onionSkin: { ...DEFAULT_ONION_SKIN_SETTINGS },
+      };
+
+      const binary = serializeProjectToBinary('Binary Project', sg, editorState);
+
+      // Deserialize from binary
+      const newSg = new SceneGraph();
+      let appliedState: Record<string, unknown> = {};
+      const parsed = deserializeProjectFromBinary(binary, newSg, (state) => {
+        appliedState = state;
+      });
+
+      expect(newSg.getNode('rect1')).toBeDefined();
+      expect(parsed.name).toBe('Binary Project');
+      expect(appliedState.timelineDuration).toBe(300);
+      expect(appliedState.autoKeyframe).toBe(true);
+    });
+
+    it('deserializeProjectFromBinary with legacy JSON string', () => {
+      const v2Data: ProjectDataV2 = {
+        version: '2.0',
+        name: 'Legacy JSON',
+        createdAt: '2024-01-01',
+        updatedAt: '2024-01-01',
+        pages: [
+          {
+            id: 'page-1',
+            name: 'Page 1',
+            sceneGraph: { nodes: [makeTestNode('r1')], rootNodeIds: ['r1'] },
+            timeline: createTimeline({ duration: 300, frameRate: 30 }),
+          },
+        ],
+        activePageId: 'page-1',
+        settings: {
+          timelineDuration: 300,
+          frameRate: 30,
+          autoKeyframe: false,
+          onionSkin: { ...DEFAULT_ONION_SKIN_SETTINGS },
+        },
+      };
+
+      const jsonStr = JSON.stringify(v2Data);
+      const newSg = new SceneGraph();
+      let appliedState: Record<string, unknown> = {};
+      const parsed = deserializeProjectFromBinary(jsonStr, newSg, (state) => {
+        appliedState = state;
+      });
+
+      expect(newSg.getNode('r1')).toBeDefined();
+      expect(parsed.version).toBe('3.0');
+    });
+
+    it('binary round-trip preserves all data', () => {
+      const sg = new SceneGraph();
+      sg.addNode(makeTestNode('rect1', 10, 20));
+      sg.addNode(makeTestNode('rect2', 30, 40));
+
+      const editorState: EditorStateSnapshot = {
+        timeline: createTimeline({ duration: 120, frameRate: 60 }),
+        timelineDuration: 120,
+        frameRate: 60,
+        autoKeyframe: true,
+        onionSkin: {
+          ...DEFAULT_ONION_SKIN_SETTINGS,
+          enabled: true,
+          beforeCount: 3,
+        },
+        symbols: [
+          {
+            id: 'sym-1',
+            name: 'TestSymbol',
+            sceneGraphJSON: {
+              nodes: [makeTestNode('sym-child')],
+              rootNodeIds: ['sym-child'],
+            },
+          },
+        ],
+      };
+
+      const binary = serializeProjectToBinary('Full Round Trip', sg, editorState);
+
+      const newSg = new SceneGraph();
+      let appliedState: Record<string, unknown> = {};
+      deserializeProjectFromBinary(binary, newSg, (state) => {
+        appliedState = state;
+      });
+
+      expect(newSg.getNode('rect1')).toBeDefined();
+      expect(newSg.getNode('rect2')).toBeDefined();
+      expect(appliedState.timelineDuration).toBe(120);
+      expect(appliedState.frameRate).toBe(60);
+      expect(appliedState.autoKeyframe).toBe(true);
+      expect((appliedState.symbols as any[])![0].id).toBe('sym-1');
+    });
+
+    it('binary format is smaller than JSON for image-heavy projects', () => {
+      const sg = new SceneGraph();
+      // Create a node with a fake 1KB base64 image
+      const fakeBase64 = 'A'.repeat(1000);
+      const imageNode = {
+        id: 'img1',
+        name: 'img1',
+        type: 'image' as const,
+        parent: null,
+        children: [],
+        transform: {
+          position: { x: 0, y: 0 },
+          rotation: 0,
+          scale: { x: 1, y: 1 },
+          anchor: { x: 0.5, y: 0.5 },
+          skew: { x: 0, y: 0 },
+        },
+        visible: true,
+        locked: false,
+        opacity: 1,
+        blendMode: 'normal' as const,
+        src: `data:image/png;base64,${fakeBase64}`,
+        width: 100,
+        height: 100,
+        naturalWidth: 100,
+        naturalHeight: 100,
+        cornerRadius: [0, 0, 0, 0] as [number, number, number, number],
+      };
+      sg.addNode(imageNode);
+
+      const editorState: EditorStateSnapshot = {
+        timeline: createTimeline({ duration: 300, frameRate: 30 }),
+        timelineDuration: 300,
+        frameRate: 30,
+        autoKeyframe: false,
+        onionSkin: { ...DEFAULT_ONION_SKIN_SETTINGS },
+      };
+
+      const jsonData = serializeProject('Size Test', sg, editorState);
+      const jsonSize = JSON.stringify(jsonData).length;
+      const binarySize = serializeProjectToBinary('Size Test', sg, editorState).byteLength;
+
+      // Binary should be smaller (base64 → raw bytes = ~33% savings on image data)
+      expect(binarySize).toBeLessThan(jsonSize);
+    });
+
+    it('validateProjectData accepts v3.0 format', () => {
+      const v3 = {
+        version: '3.0',
+        name: 'V3 Project',
+        pages: [
+          {
+            id: 'page-1',
+            name: 'Page 1',
+            sceneGraph: { nodes: [makeTestNode('r1')], rootNodeIds: ['r1'] },
+            timeline: createTimeline({ duration: 300, frameRate: 30 }),
+          },
+        ],
+        activePageId: 'page-1',
+        settings: {
+          timelineDuration: 300,
+          frameRate: 30,
+          autoKeyframe: false,
+          onionSkin: { ...DEFAULT_ONION_SKIN_SETTINGS },
+        },
+      };
+      expect(validateProjectData(v3)).toBe(true);
+    });
+
+    it('storage round-trip with binary (save → load simulation)', () => {
+      const sg = new SceneGraph();
+      sg.addNode(makeTestNode('rect1'));
+
+      const editorState: EditorStateSnapshot = {
+        timeline: createTimeline({ duration: 300, frameRate: 30 }),
+        timelineDuration: 300,
+        frameRate: 30,
+        autoKeyframe: false,
+        onionSkin: { ...DEFAULT_ONION_SKIN_SETTINGS },
+      };
+
+      // Simulate save: serialize to binary
+      const binary = serializeProjectToBinary('Storage Test', sg, editorState);
+
+      // Simulate load: deserialize from binary
+      const newSg = new SceneGraph();
+      let appliedState: Record<string, unknown> = {};
+      deserializeProjectFromBinary(binary, newSg, (state) => {
+        appliedState = state;
+      });
+
+      expect(newSg.getNode('rect1')).toBeDefined();
+      expect(appliedState.timelineDuration).toBe(300);
+    });
+
+    it('legacy string storage can be loaded', () => {
+      const v2Data: ProjectDataV2 = {
+        version: '2.0',
+        name: 'Old Stored',
+        createdAt: '2024-01-01',
+        updatedAt: '2024-01-01',
+        pages: [
+          {
+            id: 'page-1',
+            name: 'Page 1',
+            sceneGraph: { nodes: [makeTestNode('r1')], rootNodeIds: ['r1'] },
+            timeline: createTimeline({ duration: 300, frameRate: 30 }),
+          },
+        ],
+        activePageId: 'page-1',
+        settings: {
+          timelineDuration: 300,
+          frameRate: 30,
+          autoKeyframe: false,
+          onionSkin: { ...DEFAULT_ONION_SKIN_SETTINGS },
+        },
+      };
+
+      // Simulate loading from old string storage
+      const storedString = JSON.stringify(v2Data);
+      const newSg = new SceneGraph();
+      let appliedState: Record<string, unknown> = {};
+      deserializeProjectFromBinary(storedString, newSg, (state) => {
+        appliedState = state;
+      });
+
+      expect(newSg.getNode('r1')).toBeDefined();
     });
   });
 });

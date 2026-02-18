@@ -18,7 +18,9 @@ import {
 } from '../services/projectStorage';
 import {
   serializeProject,
+  serializeProjectToBinary,
   deserializeProject,
+  deserializeProjectFromBinary,
   downloadProjectFile,
   uploadProjectFile,
 } from '../services/projectSerializer';
@@ -159,8 +161,13 @@ export function useProjectActions(options: UseProjectActionsOptions = {}): Proje
         projectCreatedAt: data.createdAt,
       });
 
-      const json = JSON.stringify(data);
-      await dbSave(projectId, state.projectName, json);
+      const binary = serializeProjectToBinary(
+        state.projectName,
+        sceneGraph,
+        getEditorSnapshot(),
+        state.projectCreatedAt ?? undefined
+      );
+      await dbSave(projectId, state.projectName, binary);
       await setLastProjectId(projectId);
       toast.success('Project saved');
     } finally {
@@ -186,8 +193,8 @@ export function useProjectActions(options: UseProjectActionsOptions = {}): Proje
         projectCreatedAt: data.createdAt,
       });
 
-      const json = JSON.stringify(data);
-      await dbSave(newId, name, json);
+      const binary = serializeProjectToBinary(name, sceneGraph, getEditorSnapshot());
+      await dbSave(newId, name, binary);
       await setLastProjectId(newId);
       toast.success(`Project saved as "${name}"`);
     },
@@ -200,14 +207,13 @@ export function useProjectActions(options: UseProjectActionsOptions = {}): Proje
       const stored = await dbLoad(id);
       if (!stored) return;
 
-      const data = JSON.parse(stored.data);
-      deserializeProject(data, sceneGraph, applyEditorState);
+      const data = deserializeProjectFromBinary(stored.data, sceneGraph, applyEditorState);
 
       useEditorStore.setState({
         projectId: id,
-        projectName: data.name,
+        projectName: data.name as string,
         isDirty: false,
-        projectCreatedAt: data.createdAt,
+        projectCreatedAt: data.createdAt as string,
         selectedNodeIds: new Set<string>(),
         selectedKeyframeIds: new Set<string>(),
       });
@@ -235,27 +241,31 @@ export function useProjectActions(options: UseProjectActionsOptions = {}): Proje
   const importProject = useCallback(async () => {
     try {
       const data = await uploadProjectFile();
+
       deserializeProject(data, sceneGraph, applyEditorState);
 
       const newId = generateProjectId();
+      const name = (data as any).name as string;
+      const createdAt = (data as any).createdAt as string;
       useEditorStore.setState({
         projectId: newId,
-        projectName: data.name,
+        projectName: name,
         isDirty: false,
-        projectCreatedAt: data.createdAt,
+        projectCreatedAt: createdAt,
         selectedNodeIds: new Set<string>(),
         selectedKeyframeIds: new Set<string>(),
       });
 
-      const json = JSON.stringify(data);
-      await dbSave(newId, data.name, json);
+      // Re-serialize to binary for storage
+      const binary = serializeProjectToBinary(name, sceneGraph, getEditorSnapshot(), createdAt);
+      await dbSave(newId, name, binary);
       await setLastProjectId(newId);
       useEditorStore.getState().clearHistory();
-      toast.success(`Imported "${data.name}"`);
+      toast.success(`Imported "${name}"`);
     } catch {
       toast.error('Failed to import project file');
     }
-  }, [sceneGraph, applyEditorState]);
+  }, [sceneGraph, applyEditorState, getEditorSnapshot]);
 
   // ------ Import SVG file ------
   const importSvgFile = useCallback(() => {
@@ -402,15 +412,14 @@ export function useProjectActions(options: UseProjectActionsOptions = {}): Proje
         const stored = await dbLoad(targetId);
         if (cancelled || !stored) return;
 
-        const data = JSON.parse(stored.data);
-        deserializeProject(data, sceneGraph, applyEditorState);
+        const data = deserializeProjectFromBinary(stored.data, sceneGraph, applyEditorState);
 
         if (!cancelled) {
           useEditorStore.setState({
             projectId: targetId,
-            projectName: data.name,
+            projectName: data.name as string,
             isDirty: false,
-            projectCreatedAt: data.createdAt,
+            projectCreatedAt: data.createdAt as string,
           });
         }
       } catch {
