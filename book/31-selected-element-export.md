@@ -178,7 +178,7 @@ export function pathPointsToSvgD(points: PathPoint[], closed: boolean): string {
 }
 ```
 
-The function detects linear segments — where both control points coincide with their anchor positions — and emits `L` (lineto) commands instead of `C` (cubic bezier) commands. This produces cleaner SVG for shapes that are mostly straight lines, like rectangles converted to paths.
+The function detects linear segments — where both control points coincide with their anchor positions — and emits `L` (lineto) commands instead of `C` (cubic Bezier) commands. This produces cleaner SVG for shapes that are mostly straight lines, like rectangles converted to paths.
 
 Compound paths with subpaths concatenate their `d` attributes and set the fill rule:
 

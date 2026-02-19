@@ -2,7 +2,7 @@
 
 ## From Keystrokes to Triangles
 
-A rectangle is four vertices. An ellipse is a parametric curve tessellated to a fan of triangles. A path is a sequence of points with bezier handles. But text is none of these — it is a string of Unicode characters that must be resolved through a font file into glyph outlines, converted to bezier paths, tessellated into triangles, and finally sent to the GPU. No other node type in the editor spans this many transformations between user input and rendered pixels.
+A rectangle is four vertices. An ellipse is a parametric curve tessellated to a fan of triangles. A path is a sequence of points with Bezier handles. But text is none of these — it is a string of Unicode characters that must be resolved through a font file into glyph outlines, converted to Bezier paths, tessellated into triangles, and finally sent to the GPU. No other node type in the editor spans this many transformations between user input and rendered pixels.
 
 This chapter traces the full pipeline: from the `TextNode` type definition, through font loading and caching, through glyph-to-path conversion with coordinate system flips, through metrics computation for selection bounds, to the inline editing overlay that positions a `<textarea>` precisely over the text on the canvas. Each stage is a pure function operating on the output of the previous one, with the FontManager as the single point of shared state.
 
@@ -237,7 +237,7 @@ This flip happens once, at the conversion boundary. Every function downstream �
 
 ### Quadratic-to-Cubic Promotion
 
-TrueType fonts use quadratic bezier curves (one control point per segment). The editor's `PathPoint` system uses cubic beziers (two control points — `handleIn` and `handleOut`). Quadratic curves must be promoted to cubic:
+TrueType fonts use quadratic Bezier curves (one control point per segment). The editor's `PathPoint` system uses cubic Beziers (two control points — `handleIn` and `handleOut`). Quadratic curves must be promoted to cubic:
 
 ```typescript
 case 'Q': {
@@ -537,7 +537,7 @@ The cache key ensures that changing any text property — content, font, size, w
 
 **Coordinate system boundaries need a single, clear flip.** Font files are Y-down. The editor is Y-up. The flip happens exactly once, inside `glyphPathToSubpaths`, at the point where external data enters the internal system. Every function downstream operates in the editor's native coordinates. If the flip were scattered across multiple locations, it would inevitably be applied twice somewhere or missed entirely.
 
-**Quadratic-to-cubic promotion is lossless.** The 2/3 formula converts a quadratic bezier to a cubic that traces the same curve — no approximation, no sampling, no error. This means TrueType and OpenType fonts render with identical fidelity despite using different curve orders internally.
+**Quadratic-to-cubic promotion is lossless.** The 2/3 formula converts a quadratic Bezier to a cubic that traces the same curve — no approximation, no sampling, no error. This means TrueType and OpenType fonts render with identical fidelity despite using different curve orders internally.
 
 **Closing point deduplication prevents ghost segments.** Font paths typically end with a Z command after a line or curve back to the start. The last point and the first point coincide. Keeping both would create a zero-length segment that wastes geometry and can cause seam artifacts. Detecting and removing the duplicate, while transferring its incoming handle to the first point, eliminates the problem.
 

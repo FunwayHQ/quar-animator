@@ -4,7 +4,7 @@
 
 How do you test software whose output is visual? You can't screenshot-compare every frame — the tests would be slow, brittle, and impossible to maintain. You can't test the GPU directly — WebGL doesn't run in Node.js. You can't render to a real canvas in a test environment — JSDOM doesn't have a GPU. And yet, the editor has over 3,200 tests that run in seconds, catch real bugs, and give confidence to ship changes.
 
-The strategy is layered. At the bottom, pure function tests verify the mathematical foundations: vector operations, matrix transforms, bezier curve evaluation, path tessellation, boolean geometry. These tests are fast, deterministic, and GPU-independent. In the middle, tool tests simulate pointer events against a real scene graph with a mock rendering context — they verify that clicking, dragging, and releasing produces the correct nodes with the correct geometry. At the top, component tests render React components with mocked stores and scene graph contexts — they verify that the UI responds to state changes, shows the right labels, and fires the right callbacks. Cutting across all layers, a mock infrastructure replaces WebGL with stub functions and opentype.js with a fake font object, letting the entire test suite run in JSDOM without a GPU or font files.
+The strategy is layered. At the bottom, pure function tests verify the mathematical foundations: vector operations, matrix transforms, Bezier curve evaluation, path tessellation, boolean geometry. These tests are fast, deterministic, and GPU-independent. In the middle, tool tests simulate pointer events against a real scene graph with a mock rendering context — they verify that clicking, dragging, and releasing produces the correct nodes with the correct geometry. At the top, component tests render React components with mocked stores and scene graph contexts — they verify that the UI responds to state changes, shows the right labels, and fires the right callbacks. Cutting across all layers, a mock infrastructure replaces WebGL with stub functions and opentype.js with a fake font object, letting the entire test suite run in JSDOM without a GPU or font files.
 
 ## The Test Pyramid
 
@@ -156,7 +156,7 @@ describe('bezier', () => {
 });
 ```
 
-The helper `expectVecNear` standardizes floating-point vector comparisons across the bezier test suite:
+The helper `expectVecNear` standardizes floating-point vector comparisons across the Bezier test suite:
 
 ```typescript
 const expectVecNear = (actual: Vector2, expected: Vector2, epsilon = 0.0001) => {
@@ -167,7 +167,7 @@ const expectVecNear = (actual: Vector2, expected: Vector2, epsilon = 0.0001) => 
 
 ### Parametric Tests for Function Families
 
-The easing system has 28 functions (linear, ease-in/out/inOut for quad, cubic, quart, quint, sine, expo, circ, back, elastic, bounce). Every easing function must satisfy the same boundary conditions: f(0) = 0 and f(1) = 1. A parametric test loop generates 56 test cases from a single block:
+The easing system has 28 functions (linear, ease-in/out/inOut for quad, cubic, quart, quint, expo, circ, back, elastic, bounce). Every easing function must satisfy the same boundary conditions: f(0) = 0 and f(1) = 1. A parametric test loop generates 56 test cases from a single block:
 
 ```typescript
 describe('easing boundary values', () => {
@@ -1055,7 +1055,7 @@ Not everything in a graphic editor benefits from automated tests:
 
 **Pixel-perfect rendering**: Shader output, anti-aliasing quality, gradient smoothness, blend mode visual accuracy. These depend on the GPU, the driver, and the operating system. They change between machines. Screenshot comparison tests would be fragile and slow. Instead, verify the data flowing into the GPU (vertex positions, uniform values, texture coordinates) and trust the GPU to render it correctly.
 
-**Interactive feel**: Whether a drag gesture feels smooth, whether a bezier handle responds naturally, whether a zoom animation eases in correctly. These are subjective and time-dependent. Manual testing with a real browser catches these issues faster than any automated test.
+**Interactive feel**: Whether a drag gesture feels smooth, whether a Bezier handle responds naturally, whether a zoom animation eases in correctly. These are subjective and time-dependent. Manual testing with a real browser catches these issues faster than any automated test.
 
 **Third-party library internals**: Whether `polygon-clipping` handles a specific edge case, whether opentype.js parses a particular font format. Test the integration (your code calling the library with your data), not the library's internal logic.
 

@@ -502,16 +502,13 @@ In code, this is a four-level nesting of flex containers:
 
 ```tsx
 <div className={styles.editor}>
-  {' '}
   {/* column: full viewport */}
   <MenuBar />
   <Toolbar />
   <PageTabs />
   <div className={styles.main}>
-    {' '}
     {/* column: flex: 1 */}
     <div className={styles.workspace}>
-      {' '}
       {/* row: flex: 1 */}
       <div className={styles.leftPanel}>
         <LayerPanel />

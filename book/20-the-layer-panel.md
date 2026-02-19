@@ -429,6 +429,7 @@ const handlePointerUp = useCallback(
       insertIndex = 0;
     } else {
       parentId = targetNode.parent;
+      const parentNode = parentId ? sceneGraph.getNode(parentId) : null;
       const siblings = parentNode
         ? parentNode.children
         : sceneGraph.getRootNodes().map((n) => n.id);

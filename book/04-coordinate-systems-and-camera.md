@@ -628,17 +628,17 @@ The "zoom at cursor" test is the most important. It verifies the invariant that 
 
 The camera system provides:
 
-1. **Three-stage matrix pipeline** — View, projection, and combined view-projection matrices with lazy caching and automatic invalidation.
+- **Three-stage matrix pipeline** — View, projection, and combined view-projection matrices with lazy caching and automatic invalidation.
 
-2. **Bidirectional coordinate conversion** — `screenToWorld` and `worldToScreen` with round-trip accuracy, handling the Y-axis flip between screen-down and world-up.
+- **Bidirectional coordinate conversion** — `screenToWorld` and `worldToScreen` with round-trip accuracy, handling the Y-axis flip between screen-down and world-up.
 
-3. **Intuitive zoom** — Multiplicative zoom factor with cursor-anchored zoom-at behavior, clamped to a sensible range.
+- **Intuitive zoom** — Multiplicative zoom factor with cursor-anchored zoom-at behavior, clamped to a sensible range.
 
-4. **Responsive panning** — Zoom-scaled pan deltas with rotation support, triggered by middle-click or Space+drag.
+- **Responsive panning** — Zoom-scaled pan deltas with rotation support, triggered by middle-click or Space+drag.
 
-5. **Content framing** — `fitBounds` for centering and `getVisibleBounds` for culling.
+- **Content framing** — `fitBounds` for centering and `getVisibleBounds` for culling.
 
-6. **Viewport adaptation** — ResizeObserver integration with rounding to avoid subpixel drift.
+- **Viewport adaptation** — ResizeObserver integration with rounding to avoid subpixel drift.
 
 The camera is one of those systems where correctness matters more than cleverness. A camera with a subtle sign error or off-by-half-pixel drift won't crash — it'll produce shapes that are slightly misaligned, selection handles that don't quite match shape corners, and tooltips that appear a few pixels off from where they should. These bugs are maddening to diagnose because the symptoms are always downstream of the cause. Getting the camera right once, testing it thoroughly, and then trusting it completely is the approach that works.
 

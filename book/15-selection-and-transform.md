@@ -1025,4 +1025,4 @@ This chapter covered the selection tool — about 1,500 lines of code that imple
 
 The selection tool is the editor's gravity well — nearly every interaction passes through it. It's the tool that's active most of the time, the tool that other tools auto-switch to after creation, and the tool that defines how the user _thinks_ about the editor's behavior. Getting it right means getting the editor right.
 
-The next chapter takes selection deeper — into individual path points and bezier handles. Where the selection tool treats nodes as opaque boxes, the direct selection tool reaches inside them to manipulate their internal geometry.
+The next chapter takes selection deeper — into individual path points and Bezier handles. Where the selection tool treats nodes as opaque boxes, the direct selection tool reaches inside them to manipulate their internal geometry.

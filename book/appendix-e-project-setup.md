@@ -414,7 +414,7 @@ jobs:
       - run: pnpm build
       - uses: actions/upload-artifact@v4
         with:
-          name: build
+          name: dist
           path: |
             apps/web/dist
             packages/*/dist
@@ -464,8 +464,8 @@ jobs:
 | ------------------- | ------- | -------------------------------- |
 | typescript          | 5.3+    | Type system                      |
 | vite                | 5.0+    | Dev server and bundler           |
-| vitest              | 4.0+    | Test runner                      |
-| @vitest/coverage-v8 | 4.0+    | Code coverage                    |
+| vitest              | 1.2+    | Test runner                      |
+| @vitest/coverage-v8 | 1.2+    | Code coverage                    |
 | jsdom               | 28+     | Browser DOM simulation for tests |
 | eslint              | 8.56+   | Code linting                     |
 | prettier            | 3.2+    | Code formatting                  |

@@ -165,8 +165,8 @@ If you want to build along, here's what you need:
 npm install -g pnpm
 
 # Clone the starter (or create from scratch — Chapter 1 walks through it)
-git clone https://github.com/user/graphic-editor-book.git
-cd graphic-editor-book
+git clone https://github.com/FunwayHQ/quar-animator.git
+cd quar-animator
 
 # Install dependencies
 pnpm install

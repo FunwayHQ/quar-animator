@@ -67,7 +67,7 @@ function calculateAdaptiveSpacing(zoom: number): number {
 }
 ```
 
-At zoom 1.0, the major spacing is 100 world units — one tick per 100 pixels. Zoom in to 4x, and the ticks are 400 screen pixels apart, which is too sparse. The algorithm doubles the spacing until it fits the range: 100 → 50 → 25 world units. At 25 world units × 4x zoom = 100 screen pixels between major ticks — comfortable and readable. Zoom out to 0.1x, and it goes the other way: 100 → 200 → 400 → 800 → 1000 world units per tick.
+At zoom 1.0, the major spacing is 100 world units — one tick per 100 pixels. Zoom in to 4x, and the ticks are 400 screen pixels apart, which is too sparse. The algorithm doubles the spacing until it fits the range: 100 → 50 → 25 world units. At 25 world units × 4x zoom = 100 screen pixels between major ticks — comfortable and readable. Zoom out to 0.1x, and it goes the other way: 100 → 200 → 400 → 800 world units per tick.
 
 Minor ticks subdivide each major interval by five. At zoom 1.0, major ticks are every 100 units and minor ticks every 20 units. This gives the ruler a visual rhythm without overwhelming the display.
 

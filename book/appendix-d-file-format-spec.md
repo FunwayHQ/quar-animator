@@ -161,7 +161,7 @@ interface RiggingData {
 }
 ```
 
-See Appendix B for complete `VitruvianController`, `DynamicChain`, and `WindSettings` type definitions.
+These rigging types (`VitruvianController`, `DynamicChain`, `WindSettings`) are defined in `packages/types/src/index.ts` alongside the node types documented in Appendix B.
 
 ### Timeline
 
@@ -265,6 +265,7 @@ function migrateV1ToV2(data: ProjectDataV1): ProjectDataV2 {
     activePageId: pageId,
     settings: data.settings,
     rigging: data.rigging,
+    symbols: data.symbols,
   };
 }
 ```

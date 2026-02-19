@@ -316,7 +316,7 @@ const resolvedContour = applyCornerRadius(contour, outline.closed);
 const vertices = tessellatePathToVertices(resolvedContour, outline.closed, 0.5);
 ```
 
-The tessellation tolerance `0.5` produces line segments that deviate at most half a pixel from the true bezier curves. This is tighter than the renderer's typical tolerance because the outline will be re-fitted to smooth curves — any tessellation error becomes permanent.
+The tessellation tolerance `0.5` produces line segments that deviate at most half a pixel from the true Bezier curves. This is tighter than the renderer's typical tolerance because the outline will be re-fitted to smooth curves — any tessellation error becomes permanent.
 
 Next, `generateStrokeOutlineVertices` offsets the tessellated path by the stroke width to produce two parallel polylines — one on each side of the path:
 
@@ -336,9 +336,9 @@ The function returns a flat Float32Array: `[leftSide(N points)... rightSideRever
 
 ### Smoothing with Schneider Curve Fitting
 
-At this point the outline is hundreds or thousands of line segments — the tessellation produces dense polylines with no bezier handles. Converting these raw vertices directly to PathPoints would create a PathNode with hundreds of corner points. This is technically correct but impractical for editing.
+At this point the outline is hundreds or thousands of line segments — the tessellation produces dense polylines with no Bezier handles. Converting these raw vertices directly to PathPoints would create a PathNode with hundreds of corner points. This is technically correct but impractical for editing.
 
-The `simplifyToSmoothPoints` function uses Schneider's curve fitting algorithm to convert the polyline back to smooth bezier curves:
+The `simplifyToSmoothPoints` function uses Schneider's curve fitting algorithm to convert the polyline back to smooth Bezier curves:
 
 ```typescript
 function simplifyToSmoothPoints(verts: Float32Array, startIdx: number, count: number): PathPoint[] {
@@ -364,15 +364,15 @@ function simplifyToSmoothPoints(verts: Float32Array, startIdx: number, count: nu
 }
 ```
 
-Schneider's algorithm (described in _Graphics Gems I_, 1990) fits a chain of G1-continuous cubic bezier curves to a polyline. It works by:
+Schneider's algorithm (described in _Graphics Gems I_, 1990) fits a chain of G1-continuous cubic Bezier curves to a polyline. It works by:
 
 1. Estimating initial control points from endpoint tangents.
 2. Using Newton-Raphson iteration to minimize the maximum deviation from the original points.
 3. Splitting the curve at the point of worst error if the fit is not good enough, then recursively fitting each half.
 
-The error tolerance `SCHNEIDER_MAX_ERROR = 0.25` is tight — a quarter pixel maximum deviation. This preserves the stroke's visual accuracy while reducing hundreds of vertices to a handful of smooth bezier segments.
+The error tolerance `SCHNEIDER_MAX_ERROR = 0.25` is tight — a quarter pixel maximum deviation. This preserves the stroke's visual accuracy while reducing hundreds of vertices to a handful of smooth Bezier segments.
 
-The result, `curvesToPathPoints`, converts each `CubicSegment { p0, p1, p2, p3 }` into PathPoints with relative bezier handles:
+The result, `curvesToPathPoints`, converts each `CubicSegment { p0, p1, p2, p3 }` into PathPoints with relative Bezier handles:
 
 ```typescript
 // End point: handleIn from p2→p3, handleOut from next segment's p0→p1
@@ -515,7 +515,7 @@ The geometric assertions — "thicker strokes produce larger outlines", "both co
 
 **Center at AABB, not at the origin.** Both conversions compute the AABB center of the generated geometry and subtract it from every point. This centers the geometry so that the node's anchor `(0.5, 0.5)` aligns with the visual center. Without centering, rotation would pivot around whatever arbitrary corner the glyph data started at — typically the baseline origin of the first character.
 
-**Fitting curves is the inverse of tessellation.** Outline Stroke tessellates bezier curves into polylines (to compute stroke offsets), then fits the polylines back into bezier curves (for editable output). The round-trip loses some information — the fitted curves are an approximation, not a reconstruction. But with a tight error tolerance, the visual difference is imperceptible, and the result has far fewer control points than the raw tessellation.
+**Fitting curves is the inverse of tessellation.** Outline Stroke tessellates Bezier curves into polylines (to compute stroke offsets), then fits the polylines back into Bezier curves (for editable output). The round-trip loses some information — the fitted curves are an approximation, not a reconstruction. But with a tight error tolerance, the visual difference is imperceptible, and the result has far fewer control points than the raw tessellation.
 
 **Per-glyph centering preserves editability.** `convertTextToPathGroup` centers each letter at its own AABB center, not at the overall text center. This means each letter can be independently rotated, scaled, and transformed around its own visual center — matching the behavior users expect from "breaking apart" text in applications like Illustrator or Figma.
 
@@ -529,8 +529,8 @@ This chapter covered two conversion operations that turn computed visual propert
 - **`convertTextToPath`** converts a TextNode to a single PathNode with all glyph subpaths merged, centered at the AABB, with `fillRule: 'evenodd'` for proper holes.
 - **`convertTextToPathGroup`** converts a TextNode to a GroupNode with one PathNode per glyph. Each letter is centered at its own AABB, positioned relative to the group center, and named with the character it represents. Spaces and other no-contour characters are skipped.
 - **`convertShapeToPath`** in the editor store auto-converts primitives to PathNodes when the Direct Selection tool clicks them, enabling point-level editing of rectangles, ellipses, and polygons.
-- **`outlineStroke`** tessellates a shape's contour, offsets it by the stroke width via `generateStrokeOutlineVertices`, then smooths the raw polyline back to bezier curves using Schneider's curve fitting algorithm. Closed shapes produce two contours (outer ring + inner ring with evenodd fill). Open paths produce a single stitched ribbon.
-- **Schneider curve fitting** (`schneiderFitCurve` + `curvesToPathPoints`) reduces hundreds of tessellation vertices to a handful of smooth bezier segments, with a tight 0.25px error tolerance for visual accuracy.
+- **`outlineStroke`** tessellates a shape's contour, offsets it by the stroke width via `generateStrokeOutlineVertices`, then smooths the raw polyline back to Bezier curves using Schneider's curve fitting algorithm. Closed shapes produce two contours (outer ring + inner ring with evenodd fill). Open paths produce a single stitched ribbon.
+- **Schneider curve fitting** (`schneiderFitCurve` + `curvesToPathPoints`) reduces hundreds of tessellation vertices to a handful of smooth Bezier segments, with a tight 0.25px error tolerance for visual accuracy.
 - **Store integration** handles z-order preservation (inserting at the same index), stroke removal from the original node, font-not-loaded error toasts, and undo snapshots before any mutation.
 
 The next chapter moves from converting individual shapes to combining them — non-destructive boolean operations that union, subtract, intersect, and exclude shapes while preserving the source geometry.

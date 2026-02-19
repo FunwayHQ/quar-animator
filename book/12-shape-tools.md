@@ -390,7 +390,7 @@ Each vertex is placed at a uniform angular interval around the center. The `star
 
 The angle step is `2pi / sides`. For a triangle: 120 degrees between vertices. For a hexagon: 60 degrees. For a 12-sided polygon: 30 degrees. As the side count increases, the polygon approaches a circle — at 12 sides, it's already visually round at normal zoom levels. That's why we cap at 12 — beyond that, you should just use the ellipse tool.
 
-All points are created as corner points (straight line segments). The optional `cornerRadius` parameter rounds the corners by replacing each corner point with a pair of bezier handles — this is handled by `applyCornerRadius`, a function we'll explore in a later chapter when we cover per-vertex corner radius editing.
+All points are created as corner points (straight line segments). The optional `cornerRadius` parameter rounds the corners by replacing each corner point with a pair of Bezier handles — this is handled by `applyCornerRadius`, a function we'll explore in a later chapter when we cover per-vertex corner radius editing.
 
 ## Star: Alternating Radii
 

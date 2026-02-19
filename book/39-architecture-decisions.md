@@ -4,7 +4,7 @@
 
 Every project accumulates architectural decisions. Some are deliberate — chosen after research and debate. Others are accidental — inherited from a tutorial, a library default, or the first thing that compiled. Over twenty-six sprints and 3,000 tests, certain decisions proved their value repeatedly. They didn't just work once — they shaped how every subsequent feature was built, how bugs were found, and how confidently code was shipped.
 
-This chapter examines seven architectural decisions that we would choose again if we started from scratch. Not because they're theoretically elegant, but because they solved real problems we encountered while building a graphic editor. Each one earned its place by making the next sprint easier than the last.
+This chapter examines eight architectural decisions that we would choose again if we started from scratch. Not because they're theoretically elegant, but because they solved real problems we encountered while building a graphic editor. Each one earned its place by making the next sprint easier than the last.
 
 ## Decision 1: Monorepo with Strict Package Boundaries
 

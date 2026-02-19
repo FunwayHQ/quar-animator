@@ -224,11 +224,11 @@ export function parseSvgPath(d: string): ParsedSubpath[] {
 Each command type produces different `PathPoint` structures:
 
 - **M/m** (moveto): Starts a new subpath. If a subpath was already in progress, it's pushed to the result.
-- **L/l, H/h, V/v** (lineto): Creates corner points with no bezier handles.
-- **C/c** (cubic bezier): Sets `handleOut` on the previous point and `handleIn` on the new point. This is the core curve command — most SVG editors export paths as sequences of cubic beziers.
+- **L/l, H/h, V/v** (lineto): Creates corner points with no Bezier handles.
+- **C/c** (cubic Bezier): Sets `handleOut` on the previous point and `handleIn` on the new point. This is the core curve command — most SVG editors export paths as sequences of cubic Beziers.
 - **S/s** (smooth cubic): Reflects the previous control point to create a smooth continuation. The reflected handle is computed as `2 * currentPoint - previousHandleOut`.
-- **Q/q** (quadratic bezier): Promoted to cubic via the standard formula: `cp1 = start + 2/3 * (ctrl - start)`, `cp2 = end + 2/3 * (ctrl - end)`. The editor works exclusively with cubic beziers, so quadratics are upgraded on import.
-- **A/a** (arc): Converted to 1-4 cubic bezier segments via center parameterization. Arcs are split into segments of 90 degrees or less, each approximated by a cubic curve. This is the most complex conversion — SVG arcs use endpoint parameterization (rx, ry, rotation, large-arc, sweep), but bezier approximation requires center parameterization (center, start angle, end angle).
+- **Q/q** (quadratic Bezier): Promoted to cubic via the standard formula: `cp1 = start + 2/3 * (ctrl - start)`, `cp2 = end + 2/3 * (ctrl - end)`. The editor works exclusively with cubic Beziers, so quadratics are upgraded on import.
+- **A/a** (arc): Converted to 1-4 cubic Bezier segments via center parameterization. Arcs are split into segments of 90 degrees or less, each approximated by a cubic curve. This is the most complex conversion — SVG arcs use endpoint parameterization (rx, ry, rotation, large-arc, sweep), but Bezier approximation requires center parameterization (center, start angle, end angle).
 - **Z/z** (close): Marks the subpath as closed. If the last point coincides with the first (within a 0.01 tolerance), the last point is removed and its `handleIn` is transferred to the first point, creating a clean loop without duplicate vertices.
 
 Implicit command repetition is handled: after an `M` command, subsequent coordinate pairs are treated as `L` (lineto). After any other command, repeating coordinates repeat the same command. This matches the SVG specification's implicit repeat rules.
@@ -262,7 +262,7 @@ SVG uses a Y-down coordinate system (positive Y points downward). The editor use
 const centerY = viewBoxHeight - (svgRect.y + svgRect.height / 2);
 ```
 
-For rectangles and ellipses, the center Y coordinate is flipped relative to the viewBox height. For paths, every point position and every bezier handle Y component is negated:
+For rectangles and ellipses, the center Y coordinate is flipped relative to the viewBox height. For paths, every point position and every Bezier handle Y component is negated:
 
 ```typescript
 // Point positions

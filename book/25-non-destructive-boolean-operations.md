@@ -63,7 +63,7 @@ export function nodeToPolygon(
 }
 ```
 
-The `nodeToContours` function dispatches by node type. Rectangles produce four points (with bezier corner arcs tessellated if `cornerRadius` is nonzero). Ellipses are tessellated from the four KAPPA-based control points. Polygons and stars delegate to `createPolygonPath` / `createStarPath`. Paths clone their existing points and apply per-vertex corner radius:
+The `nodeToContours` function dispatches by node type. Rectangles produce four points (with Bezier corner arcs tessellated if `cornerRadius` is nonzero). Ellipses are tessellated from the four KAPPA-based control points. Polygons and stars delegate to `createPolygonPath` / `createStarPath`. Paths clone their existing points and apply per-vertex corner radius:
 
 ```typescript
 function nodeToContours(node: Node, tolerance: number): Vector2[][] | null {
@@ -86,7 +86,7 @@ Unsupported types — groups, text, images, bones — return `null` and are sile
 
 ### Tessellation and Closing Rings
 
-Each helper calls `tessellatePathToVertices` to convert bezier curves into flat coordinate arrays, then converts the `Float32Array` to `Vector2[]`:
+Each helper calls `tessellatePathToVertices` to convert Bezier curves into flat coordinate arrays, then converts the `Float32Array` to `Vector2[]`:
 
 ```typescript
 function tessellateToVector2(points: PathPoint[], closed: boolean, tolerance: number): Vector2[] {
@@ -414,7 +414,7 @@ export function polygonToContours(result: MultiPolygon): PathPoint[][] {
 }
 ```
 
-All points are corner type with null handles — the tessellation has already linearized any curves. This means that a boolean union of two ellipses produces a polygon approximation, not smooth bezier curves. The visual quality depends on the tessellation tolerance (1.0 pixel for boolean operations, tighter for stroke outlines). For most shapes at normal zoom levels, the linearization is invisible.
+All points are corner type with null handles — the tessellation has already linearized any curves. This means that a boolean union of two ellipses produces a polygon approximation, not smooth Bezier curves. The visual quality depends on the tessellation tolerance (1.0 pixel for boolean operations, tighter for stroke outlines). For most shapes at normal zoom levels, the linearization is invisible.
 
 When the result has multiple contours — an outer ring and holes, or disjoint regions from an exclude — `createBooleanResultNode` packages the first contour as the PathNode's `points` and the rest as `subpaths`, with `fillRule: 'evenodd'` to correctly render holes:
 
