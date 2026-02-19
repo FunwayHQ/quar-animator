@@ -68,7 +68,7 @@ private getNodeBounds(node: Node): Rect | null {
 
   switch (node.type) {
     case 'rectangle': {
-      const anchor = transform.anchor;
+      const anchor = node.transform.anchor;
       localBounds = {
         x: -node.width * anchor.x,
         y: -node.height * anchor.y,

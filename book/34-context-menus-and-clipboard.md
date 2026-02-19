@@ -952,6 +952,8 @@ The keydown handler for Ctrl+V does _not_ call `preventDefault()`. This is delib
 
 The 300ms timeout is the fallback. If the native paste event fires (which happens synchronously after keydown), it sets `pasteHandledRef.current = true`, and the timeout exits early. If it doesn't fire — because no focusable element captured it, or the browser doesn't support it — the timeout tries the Clipboard API. If that also fails (user denied permission, API unavailable), it falls back to the internal clipboard.
 
+### Reading Rich Content from the Clipboard API
+
 The `pasteFromSystemClipboard` function uses `navigator.clipboard.readText()` first (which auto-grants in user gesture context without a permission prompt), then `navigator.clipboard.read()` for richer content types (which may show a permission prompt). A 2-second race timeout prevents the permission dialog from blocking indefinitely:
 
 ```typescript
@@ -1133,7 +1135,7 @@ it('shows batch labels in multi-select context menu', () => {
 
 **Adapt menu contents to the current context, not the current tool.** The canvas context menu changes based on what's selected (nothing, shapes, path points, boolean groups), not which tool is active. A user right-clicking two rectangles expects "Group" whether they're using the Selection Tool or the Pen Tool. Context menus should reflect the state of the content, not the state of the tool.
 
-**Use `structuredClone` for clipboard deep copies.** `structuredClone` handles nested objects, arrays, and special types without the limitations of `JSON.parse(JSON.stringify(...))`. It's a single function call that produces a true deep copy — no shared references between the clipboard and the scene graph. This eliminates an entire class of mutation bugs where modifying the original shape after copying silently changes the clipboard.
+**Use `structuredClone` for clipboard deep copies.** A single `structuredClone` call produces a true deep copy with no shared references between the clipboard and the scene graph. Without it, modifying a shape after copying would silently corrupt the clipboard contents.
 
 **Paste offset prevents invisible duplication.** Without the `(+20, -20)` position offset, pasted nodes land exactly on top of their originals. The user clicks Paste, sees no visible change, and doesn't realize the paste worked. The offset is small enough that the pasted shape stays near the original but large enough to be visible. The specific values are a convention — Figma uses `(10, 10)`, Sketch uses `(10, 10)`, we use `(20, -20)` to account for Y-up coordinates.
 

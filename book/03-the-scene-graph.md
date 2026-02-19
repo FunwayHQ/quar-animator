@@ -129,7 +129,7 @@ export type Node =
   | SymbolInstanceNode;
 ```
 
-This union grows as you add features — we started with four types (group, rectangle, ellipse, path) and ended with nine. The `type` discriminant makes it safe to add new types without breaking existing code: a `switch (node.type)` that doesn't handle the new type gets a compile error if you've configured `noFallthroughCasesInSwitch`.
+This union grows as you add features — we started with four types (group, rectangle, ellipse, path) and ended with nine. The `type` discriminant makes it safe to add new types without breaking existing code: a `switch (node.type)` with a `default: assertNever(node)` exhaustiveness check produces a compile error if you forget to handle the new type. TypeScript's `strictNullChecks` powers this pattern — the `never` type in the default branch means any unhandled union member is a type error.
 
 ### The Transform Type
 

@@ -1,8 +1,8 @@
 # Testing Graphic Editors
 
-## 3,000 Tests for Visual Software
+## 3,273 Tests for Visual Software
 
-How do you test software whose output is visual? You can't screenshot-compare every frame — the tests would be slow, brittle, and impossible to maintain. You can't test the GPU directly — WebGL doesn't run in Node.js. You can't render to a real canvas in a test environment — JSDOM doesn't have a GPU. And yet, the editor has over 3,000 tests that run in seconds, catch real bugs, and give confidence to ship changes.
+How do you test software whose output is visual? You can't screenshot-compare every frame — the tests would be slow, brittle, and impossible to maintain. You can't test the GPU directly — WebGL doesn't run in Node.js. You can't render to a real canvas in a test environment — JSDOM doesn't have a GPU. And yet, the editor has over 3,200 tests that run in seconds, catch real bugs, and give confidence to ship changes.
 
 The strategy is layered. At the bottom, pure function tests verify the mathematical foundations: vector operations, matrix transforms, bezier curve evaluation, path tessellation, boolean geometry. These tests are fast, deterministic, and GPU-independent. In the middle, tool tests simulate pointer events against a real scene graph with a mock rendering context — they verify that clicking, dragging, and releasing produces the correct nodes with the correct geometry. At the top, component tests render React components with mocked stores and scene graph contexts — they verify that the UI responds to state changes, shows the right labels, and fires the right callbacks. Cutting across all layers, a mock infrastructure replaces WebGL with stub functions and opentype.js with a fake font object, letting the entire test suite run in JSDOM without a GPU or font files.
 
@@ -1079,7 +1079,7 @@ The testing strategy focuses on where automated tests provide the highest value:
 
 ## What We Built
 
-This chapter covered the testing strategy for a 3,000+ test suite across a graphic editor with five packages:
+This chapter covered the testing strategy for a 3,273-test suite across a graphic editor with five packages:
 
 - **Pure function tests** verify math, paths, beziers, boolean operations, easing functions, and property binding with direct input-output assertions and edge case coverage for degenerate inputs like zero vectors and singular matrices.
 - **Tool tests** use `createMockToolContext` with a real `SceneGraph` and `Camera` but stubbed UI callbacks, simulating complete pointer event sequences (down, move, up) to verify selection, creation, drag, and keyboard modifier behavior.

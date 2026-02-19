@@ -628,14 +628,14 @@ export function getSymbolBounds(resolvedNodes: Node[]): Rect {
     switch (node.type) {
       case 'rectangle':
       case 'artboard':
-        w = (node as any).width ?? 0;
-        h = (node as any).height ?? 0;
+        w = node.width ?? 0;
+        h = node.height ?? 0;
         break;
       case 'ellipse':
-        w = ((node as any).radiusX ?? 0) * 2;
-        h = ((node as any).radiusY ?? 0) * 2;
+        w = (node.radiusX ?? 0) * 2;
+        h = (node.radiusY ?? 0) * 2;
         break;
-      // ... other types
+      // ... other types (TypeScript narrows the union per case)
     }
 
     const anchor = node.transform.anchor;

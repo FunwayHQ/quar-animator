@@ -52,19 +52,20 @@ export function createRectanglePath(
   const points: PathPoint[] = [];
   const [tl, tr, br, bl] = cornerRadius;
 
-  const kappa = 0.5522847498;
+  // Handle length that makes a cubic Bezier best approximate a quarter-circle
+  const BEZIER_CIRCLE_KAPPA = 0.5522847498;
 
   // Top-left corner
   if (tl > 0) {
     points.push({
       position: { x, y: y + tl },
       handleIn: null,
-      handleOut: { x: 0, y: -tl * kappa },
+      handleOut: { x: 0, y: -tl * BEZIER_CIRCLE_KAPPA },
       type: 'smooth',
     });
     points.push({
       position: { x: x + tl, y },
-      handleIn: { x: -tl * kappa, y: 0 },
+      handleIn: { x: -tl * BEZIER_CIRCLE_KAPPA, y: 0 },
       handleOut: null,
       type: 'smooth',
     });
@@ -76,7 +77,7 @@ export function createRectanglePath(
 }
 ```
 
-That magic number `0.5522847498` — the kappa constant — is the handle length that makes a cubic Bezier curve best approximate a quarter-circle. It's derived from the condition that the midpoint of the Bezier and the midpoint of the arc should coincide. You'll see it in every vector graphics library.
+That magic number `0.5522847498` — named `BEZIER_CIRCLE_KAPPA` in the actual codebase — is the handle length that makes a cubic Bezier curve best approximate a quarter-circle. We extract it as a named constant to avoid scattering an unexplained magic number across every function that draws arcs. It's derived from the condition that the midpoint of the Bezier and the midpoint of the arc should coincide. You'll see it in every vector graphics library.
 
 ### Ellipses
 
@@ -84,18 +85,18 @@ An ellipse is four symmetric points — top, right, bottom, left — with kappa-
 
 ```typescript
 export function createEllipsePath(cx: number, cy: number, rx: number, ry: number): PathPoint[] {
-  const kappa = 0.5522847498;
+  const BEZIER_CIRCLE_KAPPA = 0.5522847498;
   return [
     {
       position: { x: cx, y: cy - ry },
-      handleIn: { x: -rx * kappa, y: 0 },
-      handleOut: { x: rx * kappa, y: 0 },
+      handleIn: { x: -rx * BEZIER_CIRCLE_KAPPA, y: 0 },
+      handleOut: { x: rx * BEZIER_CIRCLE_KAPPA, y: 0 },
       type: 'symmetric',
     },
     {
       position: { x: cx + rx, y: cy },
-      handleIn: { x: 0, y: -ry * kappa },
-      handleOut: { x: 0, y: ry * kappa },
+      handleIn: { x: 0, y: -ry * BEZIER_CIRCLE_KAPPA },
+      handleOut: { x: 0, y: ry * BEZIER_CIRCLE_KAPPA },
       type: 'symmetric',
     },
     // ... bottom and left
@@ -155,7 +156,7 @@ Any corner point can have a `cornerRadius` that rounds it into a smooth arc. Thi
 ```typescript
 export function applyCornerRadius(points: PathPoint[]): PathPoint[] {
   const result: PathPoint[] = [];
-  const KAPPA = 0.5522847498;
+  const BEZIER_CIRCLE_KAPPA = 0.5522847498;
 
   for (let i = 0; i < points.length; i++) {
     const pt = points[i];
@@ -187,7 +188,7 @@ export function applyCornerRadius(points: PathPoint[]): PathPoint[] {
     result.push({
       position: entry,
       handleIn: null,
-      handleOut: vec2.scale(uPrev, -clampedR * KAPPA),
+      handleOut: vec2.scale(uPrev, -clampedR * BEZIER_CIRCLE_KAPPA),
       type: 'smooth',
     });
 
@@ -195,7 +196,7 @@ export function applyCornerRadius(points: PathPoint[]): PathPoint[] {
     const exit = vec2.add(pt.position, vec2.scale(uNext, clampedR));
     result.push({
       position: exit,
-      handleIn: vec2.scale(uNext, -clampedR * KAPPA),
+      handleIn: vec2.scale(uNext, -clampedR * BEZIER_CIRCLE_KAPPA),
       handleOut: null,
       type: 'smooth',
     });
