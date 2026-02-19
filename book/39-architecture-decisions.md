@@ -20,14 +20,14 @@ packages:
 ```
 quar-animator/
 ├── packages/
-│   ├── types/       # Shared TypeScript interfaces (zero dependencies)
-│   ├── core/        # Scene graph, math, rendering, tools, SVG, boolean ops
-│   ├── animation/   # Timeline, easing, keyframes, property binding
-│   ├── rigging/     # Bones, IK, skinning, weight painting, smart bones
-│   ├── export/      # Sprite sheets, PNG sequences, Lottie conversion
-│   └── ui/          # React design system components (Button, Input, Panel)
+│   ├── types/      # Shared TS interfaces
+│   ├── core/       # Scene graph, rendering, tools
+│   ├── animation/  # Timeline, easing, keyframes
+│   ├── rigging/    # Bones, IK, skinning
+│   ├── export/     # Sprites, PNG, Lottie
+│   └── ui/         # Design system components
 └── apps/
-    └── web/         # React application (Vite, Zustand store, UI panels)
+    └── web/        # React app (Vite, Zustand)
 ```
 
 The critical rule: `@quar/core` has zero React imports. Its `package.json` depends on `@quar/types`, `@quar/rigging`, `earcut`, `opentype.js`, and `polygon-clipping` — nothing from the React ecosystem:

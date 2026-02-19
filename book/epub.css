@@ -9,7 +9,7 @@ body {
 
 h1 {
   font-size: 1.8em;
-  margin-top: 2em;
+  margin-top: 0.5em;
   margin-bottom: 0.5em;
   page-break-before: always;
   border-bottom: 2px solid #333;
@@ -49,10 +49,13 @@ pre {
   border: 1px solid #ddd;
   border-radius: 4px;
   padding: 0.8em;
-  overflow-x: auto;
-  font-size: 0.8em;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  font-size: 0.75em;
   line-height: 1.4;
-  margin: 1em 0;
+  margin: 0.8em 0;
+  page-break-inside: auto;
 }
 
 pre code {

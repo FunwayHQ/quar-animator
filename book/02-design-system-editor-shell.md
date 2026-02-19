@@ -482,20 +482,20 @@ With the component library built, we compose the editor shell. This is where CSS
 The editor uses a nested flex layout:
 
 ```
-┌─────────────────────────────────────────────────┐
-│ MenuBar (full width)                            │
-├─────────────────────────────────────────────────┤
-│ Toolbar (full width)                            │
-├─────────────────────────────────────────────────┤
-│ PageTabs (full width)                           │
-├────────┬─────────────────────────┬──────────────┤
-│        │                         │              │
-│ Layers │       Canvas            │  Properties  │
-│ 220px  │       (flex: 1)         │  260px       │
-│        │                         │              │
-│ Symbols│                         │              │
-│        │                         │              │
-└────────┴─────────────────────────┴──────────────┘
+┌──────────────────────────────────┐
+│ MenuBar (full width)             │
+├──────────────────────────────────┤
+│ Toolbar (full width)             │
+├──────────────────────────────────┤
+│ PageTabs (full width)            │
+├───────┬────────────────┬─────────┤
+│       │                │         │
+│Layers │   Canvas       │ Props   │
+│220px  │   (flex: 1)    │ 260px   │
+│       │                │         │
+│Symbols│                │         │
+│       │                │         │
+└───────┴────────────────┴─────────┘
 ```
 
 In code, this is a four-level nesting of flex containers:

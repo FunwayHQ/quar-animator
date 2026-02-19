@@ -83,60 +83,53 @@ Create the initial directory structure:
 ```
 graphic-editor/
 ├── apps/
-│   └── web/                    # React + Vite application
+│   └── web/              # React + Vite app
 │       ├── src/
-│       │   ├── components/     # React components
-│       │   ├── stores/         # Zustand state management
-│       │   ├── hooks/          # Custom React hooks
-│       │   ├── services/       # Serialization, storage
-│       │   ├── contexts/       # React contexts
-│       │   ├── styles/         # CSS
-│       │   └── test/           # Test setup
+│       │   ├── components/
+│       │   ├── stores/
+│       │   ├── hooks/
+│       │   ├── services/
+│       │   ├── contexts/
+│       │   ├── styles/
+│       │   └── test/
 │       ├── package.json
 │       └── vite.config.ts
 ├── packages/
-│   ├── types/                  # Shared TypeScript types
-│   │   ├── src/
-│   │   │   └── index.ts
+│   ├── types/            # Shared TS types
+│   │   ├── src/index.ts
 │   │   └── package.json
-│   ├── core/                   # Engine: scene graph, rendering, tools
+│   ├── core/             # Engine
 │   │   ├── src/
-│   │   │   ├── rendering/      # WebGL rendering pipeline
-│   │   │   ├── tools/          # Drawing and editing tools
-│   │   │   ├── path/           # Bezier math, path operations
-│   │   │   ├── selection/      # Selection and transform
-│   │   │   ├── boolean/        # Boolean operations
-│   │   │   ├── svg/            # SVG import/export
-│   │   │   ├── font/           # Typography pipeline
-│   │   │   ├── format/         # Binary file format
-│   │   │   ├── symbols/        # Reusable components
-│   │   │   ├── gradient/       # Gradient utilities
-│   │   │   ├── test/           # Test setup and mocks
-│   │   │   ├── Camera.ts       # Viewport management
-│   │   │   ├── SceneGraph.ts   # Node tree
-│   │   │   ├── math.ts         # Vector and matrix math
-│   │   │   └── index.ts        # Barrel export
+│   │   │   ├── rendering/
+│   │   │   ├── tools/
+│   │   │   ├── path/
+│   │   │   ├── selection/
+│   │   │   ├── boolean/
+│   │   │   ├── svg/
+│   │   │   ├── font/
+│   │   │   ├── format/
+│   │   │   ├── symbols/
+│   │   │   ├── gradient/
+│   │   │   ├── Camera.ts
+│   │   │   ├── SceneGraph.ts
+│   │   │   ├── math.ts
+│   │   │   └── index.ts
 │   │   ├── package.json
 │   │   └── vitest.config.ts
-│   ├── animation/              # Timeline, easing, keyframes
-│   │   ├── src/
-│   │   └── package.json
-│   ├── rigging/                # Bones, IK, skinning
-│   │   ├── src/
-│   │   └── package.json
-│   ├── export/                 # PNG, SVG, Lottie, binary format
-│   │   ├── src/
-│   │   └── package.json
-│   └── ui/                     # Design system components
-│       ├── src/
-│       └── package.json
-├── package.json                # Root workspace config
+│   ├── animation/        # Timeline, easing
+│   │   └── ...
+│   ├── rigging/          # Bones, IK, skinning
+│   │   └── ...
+│   ├── export/           # PNG, Lottie, binary
+│   │   └── ...
+│   └── ui/               # Design system
+│       └── ...
+├── package.json
 ├── pnpm-workspace.yaml
-├── tsconfig.json               # Root TypeScript config
+├── tsconfig.json
 ├── .eslintrc.cjs
 ├── .prettierrc
-└── .husky/
-    └── pre-commit
+└── .husky/pre-commit
 ```
 
 You won't fill all these directories on day one. Most start empty and grow organically as we build each system. But the structure is in place, and the boundaries are clear.

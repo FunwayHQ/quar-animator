@@ -11,24 +11,24 @@ This chapter builds the keyboard shortcut system that makes the editor feel prof
 The keyboard system is distributed across four React hooks, each responsible for a different category of shortcuts. All four attach `keydown` listeners to `window` or the canvas element, creating a layered dispatch:
 
 ```
-Document-level handlers (Canvas.tsx)
-├─ Boolean operations (Ctrl+Shift+U/D/I/X/P/O/K)
-├─ Paste (Ctrl+V with dual strategy)
-├─ Zoom and view (Ctrl+0, Ctrl+1, Ctrl+Plus/Minus)
-├─ Edit commands (undo, redo, cut, copy, duplicate, delete)
+Canvas.tsx (document-level)
+├─ Boolean ops (Ctrl+Shift+U/D/I/X/P/O/K)
+├─ Paste (Ctrl+V, dual strategy)
+├─ Zoom/view (Ctrl+0/1/+/-)
+├─ Edit (undo, redo, cut, copy, delete)
 ├─ Z-order (Ctrl+]/[, Ctrl+Shift+]/[)
-├─ Group/ungroup (Ctrl+G, Ctrl+Shift+G)
+├─ Group (Ctrl+G, Ctrl+Shift+G)
 └─ Space for pan mode
 
-Hook: useToolShortcuts
-└─ Tool switching (V, R, O, P, T, J, F)
+useToolShortcuts
+└─ Tools (V, R, O, P, T, J, F)
 
-Hook: useTimelineShortcuts
-└─ Playback (Space, Home/End, comma/period, L, K, G)
-    └─ Shift-modified (Shift+O, Shift+R, Shift+G, Shift+comma/period)
+useTimelineShortcuts
+└─ Playback (Space, Home/End, ,/., L, K, G)
+    └─ Shift (Shift+O/R/G/,/.)
 
-Hook: useProjectShortcuts
-└─ File operations (Ctrl+S, Ctrl+Shift+S, Ctrl+N, Ctrl+O, Ctrl+I)
+useProjectShortcuts
+└─ File (Ctrl+S, Ctrl+Shift+S, Ctrl+N/O/I)
 ```
 
 This separation has a practical benefit: each hook can be tested independently, and each hook has a clear contract about which keys it owns. Tool shortcuts are single unmodified letters. Project shortcuts are always Ctrl+letter. Timeline shortcuts are a mix of unmodified and Shift-modified keys. The canvas handler owns the compound Ctrl+Shift combinations and the editing commands that need access to the scene graph.

@@ -119,7 +119,11 @@ This defensive copying adds a tiny overhead (object allocation) but prevents an 
 Converting between screen and world coordinates uses the same matrix pipeline that 3D graphics engines use, simplified for 2D. The pipeline has three stages:
 
 ```
-World Space ──[View Matrix]──► Camera Space ──[Projection Matrix]──► NDC
+World Space
+  ──[View Matrix]──►
+Camera Space
+  ──[Projection Matrix]──►
+NDC
 ```
 
 **NDC** (Normalized Device Coordinates) is a -1 to +1 range on both axes, with (0, 0) at the center. This is the coordinate system that WebGL's vertex shader outputs to.
