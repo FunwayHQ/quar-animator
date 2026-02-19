@@ -179,7 +179,7 @@ Several details deserve attention.
 
 **`structuredClone` everywhere.** Every piece of data crossing the boundary between "live state" and "frozen snapshot" passes through `structuredClone`. This prevents the common bug where modifying a keyframe in the live timeline also modifies the stored page's timeline because both hold the same object reference. The clone cost is negligible compared to `sceneGraph.fromJSON()`.
 
-**`Array.from(selectedNodeIds)`.** The store's selection is a `Set<string>`, but `Set` does not survive JSON serialization or `structuredClone` cleanly across all environments. Converting to an array for storage and back to a `Set` for activation keeps the format portable.
+**`Array.from(selectedNodeIds)`.** The store's selection is a `Set<string>`, but `Set` does not survive JSON serialization — `JSON.stringify` produces `{}` for a Set, and `JSON.parse` does not reconstruct it. Converting to an array for storage and back to a `Set` for activation keeps the format portable across all serialization paths.
 
 **Transient state clearing.** `enteredGroupId` is set to `null` — the user cannot be "inside" a group on a page they were not editing. `clipboard` is cleared because the clipboard may reference nodes that do not exist on the target page. `currentFrame` resets to 0 because the target page has its own timeline with potentially different duration. `isPlaying` is set to `false` — more on this shortly.
 

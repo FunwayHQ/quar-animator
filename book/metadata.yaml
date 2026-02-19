@@ -1,0 +1,25 @@
+---
+title: "How to Code a Graphic Editor"
+subtitle: "A Practical Guide from Architecture to Interaction"
+author:
+  - Dimitry Iacoviuc
+rights: "Copyright 2026 Dimitry Iacoviuc. All rights reserved."
+language: en-US
+date: "2026"
+description: |
+  Based on the development of Quar Animator — a production web-native 2D
+  graphic editor built from scratch with TypeScript, React, and WebGL 2.
+  This book teaches you how to build a full-featured graphic editor from
+  the ground up. Not a toy demo — a real application with vector drawing,
+  GPU rendering, visual effects, and file export.
+subject: "Software Engineering, Computer Graphics, TypeScript, WebGL"
+keywords:
+  - graphic editor
+  - TypeScript
+  - WebGL
+  - React
+  - vector graphics
+  - software architecture
+publisher: "QUAR"
+toc-title: "Table of Contents"
+---

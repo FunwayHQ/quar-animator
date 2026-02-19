@@ -1,0 +1,132 @@
+/* EPUB stylesheet for How to Code a Graphic Editor */
+
+body {
+  font-family: Georgia, 'Times New Roman', serif;
+  line-height: 1.6;
+  margin: 1em;
+  color: #1a1a1a;
+}
+
+h1 {
+  font-size: 1.8em;
+  margin-top: 2em;
+  margin-bottom: 0.5em;
+  page-break-before: always;
+  border-bottom: 2px solid #333;
+  padding-bottom: 0.3em;
+}
+
+h2 {
+  font-size: 1.4em;
+  margin-top: 1.5em;
+  margin-bottom: 0.4em;
+  color: #2a2a2a;
+}
+
+h3 {
+  font-size: 1.15em;
+  margin-top: 1.2em;
+  margin-bottom: 0.3em;
+  color: #333;
+}
+
+p {
+  margin-top: 0.4em;
+  margin-bottom: 0.4em;
+  text-align: justify;
+}
+
+code {
+  font-family: 'Source Code Pro', 'Fira Code', 'Consolas', monospace;
+  font-size: 0.85em;
+  background-color: #f4f4f4;
+  padding: 0.1em 0.3em;
+  border-radius: 3px;
+}
+
+pre {
+  background-color: #f4f4f4;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  padding: 0.8em;
+  overflow-x: auto;
+  font-size: 0.8em;
+  line-height: 1.4;
+  margin: 1em 0;
+}
+
+pre code {
+  background-color: transparent;
+  padding: 0;
+  border-radius: 0;
+}
+
+blockquote {
+  border-left: 3px solid #999;
+  padding-left: 1em;
+  margin-left: 0;
+  color: #555;
+  font-style: italic;
+}
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 1em 0;
+  font-size: 0.9em;
+}
+
+th,
+td {
+  border: 1px solid #ccc;
+  padding: 0.4em 0.8em;
+  text-align: left;
+}
+
+th {
+  background-color: #f0f0f0;
+  font-weight: bold;
+}
+
+em {
+  font-style: italic;
+}
+
+strong {
+  font-weight: bold;
+}
+
+/* Title page */
+.title {
+  font-size: 2.2em;
+  text-align: center;
+  margin-top: 3em;
+}
+
+.subtitle {
+  font-size: 1.3em;
+  text-align: center;
+  color: #555;
+  margin-top: 0.5em;
+}
+
+.author {
+  font-size: 1.1em;
+  text-align: center;
+  margin-top: 2em;
+}
+
+/* Part dividers */
+.part-title {
+  font-size: 1.6em;
+  text-align: center;
+  margin-top: 4em;
+  margin-bottom: 2em;
+  font-weight: bold;
+}
+
+hr {
+  border: none;
+  border-top: 1px solid #ccc;
+  margin: 2em 0;
+}
