@@ -95,6 +95,8 @@ export class SelectionTool extends BaseTool {
   private resizeState: ResizeState | null = null;
   private rotationState: RotationState | null = null;
   private currentCursor: string = 'default';
+  private nudgeUndoPushed: boolean = false;
+  private moveUndoPushed: boolean = false;
 
   constructor(context: ToolContext) {
     super(context);
@@ -258,8 +260,8 @@ export class SelectionTool extends BaseTool {
         this.context.setSelectedIds([hitNode.id]);
       }
 
-      // Start move mode
-      this.context.onTransformStart?.();
+      // Start move mode (undo snapshot deferred to first actual move)
+      this.moveUndoPushed = false;
       this.mode = 'moving';
       this.state.isDragging = true;
 
@@ -312,6 +314,11 @@ export class SelectionTool extends BaseTool {
     }
 
     if (this.mode === 'moving') {
+      // Push undo on first actual move, not on click
+      if (!this.moveUndoPushed) {
+        this.context.onTransformStart?.();
+        this.moveUndoPushed = true;
+      }
       // Move selected nodes
       const delta = vec2.subtract(worldPos, this.startPoint);
 
@@ -388,10 +395,13 @@ export class SelectionTool extends BaseTool {
       case 'Delete':
       case 'Backspace':
         // Delete selected nodes
-        for (const id of selectedIds) {
-          this.context.sceneGraph.removeNode(id);
+        if (selectedIds.size > 0) {
+          this.context.onTransformStart?.();
+          for (const id of selectedIds) {
+            this.context.sceneGraph.removeNode(id);
+          }
+          this.context.clearSelection();
         }
-        this.context.clearSelection();
         break;
 
       case 'Escape':
@@ -487,7 +497,12 @@ export class SelectionTool extends BaseTool {
       case 'ArrowLeft':
       case 'ArrowRight': {
         // Nudge selected nodes
+        if (selectedIds.size === 0) break;
         event.preventDefault();
+        if (!this.nudgeUndoPushed) {
+          this.context.onTransformStart?.();
+          this.nudgeUndoPushed = true;
+        }
         const snapOn = this.context.getSnapToGrid?.() ?? false;
         const gridSize = this.context.getGridSize?.() ?? 20;
         const nudgeAmount = snapOn ? gridSize : event.shiftKey ? 10 : 1;
@@ -507,6 +522,21 @@ export class SelectionTool extends BaseTool {
           }
         }
         break;
+      }
+    }
+  }
+
+  onKeyUp(event: KeyboardEvent): void {
+    if (
+      event.key === 'ArrowUp' ||
+      event.key === 'ArrowDown' ||
+      event.key === 'ArrowLeft' ||
+      event.key === 'ArrowRight'
+    ) {
+      if (this.nudgeUndoPushed) {
+        this.nudgeUndoPushed = false;
+        const selectedIds = this.context.getSelectedIds();
+        this.context.onTransformComplete?.([...selectedIds], 'move');
       }
     }
   }

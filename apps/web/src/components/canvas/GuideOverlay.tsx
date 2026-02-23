@@ -64,6 +64,14 @@ export function GuideOverlay({
   const onUpdateGuidePositionRef = useRef(onUpdateGuidePosition);
   onUpdateGuidePositionRef.current = onUpdateGuidePosition;
 
+  // Track active global listener cleanups for unmount safety
+  const guideCleanupRef = useRef<(() => void) | null>(null);
+  useEffect(() => {
+    return () => {
+      guideCleanupRef.current?.();
+    };
+  }, []);
+
   /** Convert browser-viewport clientX/clientY to canvas-local screen coords */
   const toCanvasScreen = useCallback(
     (clientX: number, clientY: number): { x: number; y: number } => {
@@ -140,6 +148,12 @@ export function GuideOverlay({
         }
       };
 
+      const cleanup = () => {
+        window.removeEventListener('pointermove', onMove);
+        window.removeEventListener('pointerup', onUp);
+        guideCleanupRef.current = null;
+      };
+
       const onUp = (ev: PointerEvent) => {
         setDraggingGuideId(null);
         const screen = toCanvasScreen(ev.clientX, ev.clientY);
@@ -151,12 +165,12 @@ export function GuideOverlay({
           onRemoveGuideRef.current(guide.id);
           setSelectedGuideId(null);
         }
-        window.removeEventListener('pointermove', onMove);
-        window.removeEventListener('pointerup', onUp);
+        cleanup();
       };
 
       window.addEventListener('pointermove', onMove);
       window.addEventListener('pointerup', onUp);
+      guideCleanupRef.current = cleanup;
     },
     [toCanvasScreen]
   );

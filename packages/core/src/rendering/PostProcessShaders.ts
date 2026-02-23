@@ -18,23 +18,22 @@ import type { WebGLRenderer, ShaderProgram } from './WebGLRenderer';
  * Create a VAO for a fullscreen quad (two triangles covering NDC -1..1).
  * UV coordinates go from 0..1.
  */
-export function createFullscreenQuad(gl: WebGL2RenderingContext): { vao: WebGLVertexArrayObject; vbo: WebGLBuffer } {
-  const vao = gl.createVertexArray()!;
+export function createFullscreenQuad(gl: WebGL2RenderingContext): {
+  vao: WebGLVertexArrayObject;
+  vbo: WebGLBuffer;
+} {
+  const vao = gl.createVertexArray();
   gl.bindVertexArray(vao);
 
-  const vbo = gl.createBuffer()!;
+  const vbo = gl.createBuffer();
   gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
 
   // positions (x,y) + texcoords (u,v) interleaved
   const data = new Float32Array([
     // Triangle 1
-    -1, -1, 0, 0,
-    1, -1, 1, 0,
-    -1, 1, 0, 1,
+    -1, -1, 0, 0, 1, -1, 1, 0, -1, 1, 0, 1,
     // Triangle 2
-    -1, 1, 0, 1,
-    1, -1, 1, 0,
-    1, 1, 1, 1,
+    -1, 1, 0, 1, 1, -1, 1, 0, 1, 1, 1, 1,
   ]);
   gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
 
@@ -275,22 +274,22 @@ void main() {
 // ============================================================================
 
 const BLEND_MODE_INDICES: Record<string, number> = {
-  'normal': 0,
-  'multiply': 1,
-  'screen': 2,
-  'overlay': 3,
-  'darken': 4,
-  'lighten': 5,
+  normal: 0,
+  multiply: 1,
+  screen: 2,
+  overlay: 3,
+  darken: 4,
+  lighten: 5,
   'color-dodge': 6,
   'color-burn': 7,
   'hard-light': 8,
   'soft-light': 9,
-  'difference': 10,
-  'exclusion': 11,
-  'hue': 12,
-  'saturation': 13,
-  'color': 14,
-  'luminosity': 15,
+  difference: 10,
+  exclusion: 11,
+  hue: 12,
+  saturation: 13,
+  color: 14,
+  luminosity: 15,
 };
 
 export function getBlendModeIndex(mode: string): number {
@@ -344,7 +343,14 @@ export function createPostProcessPrograms(renderer: WebGLRenderer): PostProcessP
   return { blur, blend, shadow, composite, quadVAO, quadVBO };
 }
 
-export function disposePostProcessPrograms(gl: WebGL2RenderingContext, programs: PostProcessPrograms): void {
+export function disposePostProcessPrograms(
+  gl: WebGL2RenderingContext,
+  programs: PostProcessPrograms
+): void {
+  gl.deleteProgram(programs.blur.program);
+  gl.deleteProgram(programs.blend.program);
+  gl.deleteProgram(programs.shadow.program);
+  gl.deleteProgram(programs.composite.program);
   gl.deleteVertexArray(programs.quadVAO);
   gl.deleteBuffer(programs.quadVBO);
 }

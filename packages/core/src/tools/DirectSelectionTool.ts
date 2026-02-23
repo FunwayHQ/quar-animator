@@ -731,6 +731,7 @@ export class DirectSelectionTool extends BaseTool {
   private addPointToSegment(hit: SegmentHit): void {
     const node = this.context.sceneGraph.getNode(hit.nodeId) as PathNode;
     if (!node || node.type !== 'path') return;
+    this.context.onTransformStart?.();
 
     const allPts = getAllPoints(node);
     const boundaries = getSubpathBoundaries(node);

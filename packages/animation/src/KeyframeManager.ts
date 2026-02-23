@@ -88,8 +88,18 @@ export class KeyframeManager {
     keyframes: Array<{ nodeId: string; property: string; keyframeId: string }>,
     deltaFrames: number
   ): number {
+    // Sort to prevent cascading overwrites: move highest-time first for +delta,
+    // lowest-time first for -delta.
+    const sorted = [...keyframes].sort((a, b) => {
+      const trackA = findTrack(this.timeline, a.nodeId, a.property);
+      const trackB = findTrack(this.timeline, b.nodeId, b.property);
+      const timeA = trackA?.keyframes.find((k: Keyframe) => k.id === a.keyframeId)?.time ?? 0;
+      const timeB = trackB?.keyframes.find((k: Keyframe) => k.id === b.keyframeId)?.time ?? 0;
+      return deltaFrames >= 0 ? timeB - timeA : timeA - timeB;
+    });
+
     let moved = 0;
-    for (const kf of keyframes) {
+    for (const kf of sorted) {
       const track = findTrack(this.timeline, kf.nodeId, kf.property);
       if (!track) continue;
       const keyframe = track.keyframes.find((k: Keyframe) => k.id === kf.keyframeId);
@@ -134,7 +144,7 @@ export class KeyframeManager {
 
     // Clean up empty tracks
     if (removed && track.keyframes.length === 0) {
-      const index = this.timeline.tracks.indexOf(track as PropertyTrack);
+      const index = this.timeline.tracks.indexOf(track);
       if (index !== -1) {
         this.timeline.tracks.splice(index, 1);
       }
@@ -216,7 +226,7 @@ export class KeyframeManager {
       const frame = targetFrame + entry.time;
       const track = getOrCreateTrack(this.timeline, nodeId, entry.property);
       const kf = addKeyframe(track, Math.max(0, Math.round(frame)), entry.value, entry.easing);
-      pasted.push(kf as Keyframe);
+      pasted.push(kf);
     }
 
     return pasted;
@@ -246,9 +256,7 @@ export class KeyframeManager {
   ): Keyframe[] {
     const track = findTrack(this.timeline, nodeId, property);
     if (!track) return [];
-    return track.keyframes.filter(
-      (kf: Keyframe) => kf.time >= startFrame && kf.time <= endFrame
-    ) as Keyframe[];
+    return track.keyframes.filter((kf: Keyframe) => kf.time >= startFrame && kf.time <= endFrame);
   }
 
   /**
@@ -259,7 +267,7 @@ export class KeyframeManager {
     for (const track of this.timeline.tracks) {
       if (track.nodeId !== nodeId) continue;
       for (const kf of track.keyframes) {
-        result.push({ property: track.property, keyframe: kf as Keyframe });
+        result.push({ property: track.property, keyframe: kf });
       }
     }
     return result;
@@ -269,13 +277,18 @@ export class KeyframeManager {
    * Check if a node has any keyframes.
    */
   hasKeyframes(nodeId: string): boolean {
-    return this.timeline.tracks.some((t: PropertyTrack) => t.nodeId === nodeId && t.keyframes.length > 0);
+    return this.timeline.tracks.some(
+      (t: PropertyTrack) => t.nodeId === nodeId && t.keyframes.length > 0
+    );
   }
 
   /**
    * Get the total number of keyframes in the timeline.
    */
   getKeyframeCount(): number {
-    return this.timeline.tracks.reduce((sum: number, track: PropertyTrack) => sum + track.keyframes.length, 0);
+    return this.timeline.tracks.reduce(
+      (sum: number, track: PropertyTrack) => sum + track.keyframes.length,
+      0
+    );
   }
 }

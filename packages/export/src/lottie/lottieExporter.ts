@@ -34,7 +34,8 @@ export interface LottieExportOptions {
 export function exportToLottieJson(
   nodes: Node[],
   timeline: Timeline,
-  options: LottieExportOptions
+  options: LottieExportOptions,
+  nodeResolver?: (id: string) => Node | undefined
 ): LottieAnimation {
   const {
     width,
@@ -48,6 +49,9 @@ export function exportToLottieJson(
   const duration = endFrame - startFrame;
   const canvasH = height;
 
+  // Build node resolver from provided nodes if not given
+  const resolver = nodeResolver ?? buildNodeResolver(nodes);
+
   // Convert nodes to layers (reverse order for Lottie render order)
   const layers: LottieLayer[] = [];
   let layerIdx = 0;
@@ -57,7 +61,7 @@ export function exportToLottieJson(
     const node = nodes[i];
     if (!node.visible) continue;
 
-    const layer = nodeToLottieLayer(node, timeline, layerIdx, canvasH, duration);
+    const layer = nodeToLottieLayer(node, timeline, layerIdx, canvasH, duration, resolver);
     if (layer) {
       layers.push(layer);
       layerIdx++;
@@ -84,11 +88,26 @@ export function exportToLottieJson(
 export function exportLottieBlob(
   nodes: Node[],
   timeline: Timeline,
-  options: LottieExportOptions
+  options: LottieExportOptions,
+  nodeResolver?: (id: string) => Node | undefined
 ): Blob {
-  const animation = exportToLottieJson(nodes, timeline, options);
+  const animation = exportToLottieJson(nodes, timeline, options, nodeResolver);
   const json = JSON.stringify(animation, null, 2);
   return new Blob([json], { type: 'application/json' });
+}
+
+/**
+ * Build a node resolver from a flat array of nodes (walks children recursively).
+ */
+function buildNodeResolver(nodes: Node[]): (id: string) => Node | undefined {
+  const map = new Map<string, Node>();
+  const addNode = (node: Node) => {
+    map.set(node.id, node);
+  };
+  for (const node of nodes) {
+    addNode(node);
+  }
+  return (id: string) => map.get(id);
 }
 
 // ============================================================================

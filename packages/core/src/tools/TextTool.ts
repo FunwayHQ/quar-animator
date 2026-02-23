@@ -88,6 +88,12 @@ export class TextTool extends BaseTool {
     }
   }
 
+  onDeactivate(): void {
+    this.previewNode = null;
+    this.startPoint = null;
+    this.resetState();
+  }
+
   getPreviewNode(): TextNode | null {
     return this.previewNode;
   }

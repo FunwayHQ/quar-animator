@@ -11,7 +11,7 @@
  * Mount <ExportDialogHost /> once in the app root.
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { X, AlertTriangle } from 'lucide-react';
 import { useSceneGraph } from '../../contexts/SceneGraphContext';
@@ -87,6 +87,8 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
     cancelled: false,
   }));
 
+  const cancelledRef = useRef(false);
+
   const close = useCallback(() => {
     setExiting(true);
     setTimeout(onClose, EXIT_MS);
@@ -97,6 +99,7 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
       if (e.key === 'Escape') {
         e.preventDefault();
         if (state.exporting) {
+          cancelledRef.current = true;
           setState((s) => ({ ...s, cancelled: true }));
         } else {
           close();
@@ -117,19 +120,25 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
   const handleExport = useCallback(async () => {
     if (!sceneGraph || !timeline) return;
 
+    cancelledRef.current = false;
     setState((s) => ({ ...s, exporting: true, progress: null, cancelled: false }));
 
     try {
       if (state.tab === 'lottie') {
         // Lottie export is synchronous
-        const blob = exportLottieBlob(sceneGraph.getRootNodes(), timeline, {
-          width: state.width,
-          height: state.height,
-          startFrame: state.startFrame,
-          endFrame: state.endFrame,
-          frameRate: timeline.frameRate,
-          name: 'Quar Animation',
-        });
+        const blob = exportLottieBlob(
+          sceneGraph.getRootNodes(),
+          timeline,
+          {
+            width: state.width,
+            height: state.height,
+            startFrame: state.startFrame,
+            endFrame: state.endFrame,
+            frameRate: timeline.frameRate,
+            name: 'Quar Animation',
+          },
+          (id: string) => sceneGraph.getNode(id)
+        );
         downloadBlob(blob, 'animation.json');
         close();
       } else if (state.tab === 'png-sequence') {
@@ -156,7 +165,7 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
 
         try {
           for (let i = 0; i < frameCount; i++) {
-            if (state.cancelled) break;
+            if (cancelledRef.current) break;
 
             const _frame = state.startFrame + i;
             const progress: ExportProgress = {
@@ -175,7 +184,7 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
             await new Promise((r) => setTimeout(r, 0));
           }
 
-          if (!state.cancelled) {
+          if (!cancelledRef.current) {
             setState((s) => ({
               ...s,
               progress: {
@@ -237,7 +246,7 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
 
         try {
           for (let i = 0; i < frameCount; i++) {
-            if (state.cancelled) break;
+            if (cancelledRef.current) break;
 
             const frame = state.startFrame + i;
             const rect = packResult.rects[i];
@@ -259,7 +268,7 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
             await new Promise((r) => setTimeout(r, 0));
           }
 
-          if (!state.cancelled) {
+          if (!cancelledRef.current) {
             setState((s) => ({
               ...s,
               progress: {
@@ -364,7 +373,10 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
             </div>
             <button
               className={styles.btnDanger}
-              onClick={() => setState((s) => ({ ...s, cancelled: true }))}
+              onClick={() => {
+                cancelledRef.current = true;
+                setState((s) => ({ ...s, cancelled: true }));
+              }}
               data-testid="export-cancel"
             >
               Cancel

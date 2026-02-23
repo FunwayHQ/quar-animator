@@ -652,7 +652,7 @@ export class ShapeRenderer {
 
   // Pre-allocated arrays to avoid GC
   private vertices: Float32Array;
-  private indices: Uint16Array;
+  private indices: Uint32Array;
 
   // Cached matrices for gradient program switching
   private currentModelMatrix: Float32Array | null = null;
@@ -674,7 +674,7 @@ export class ShapeRenderer {
   constructor(renderer: WebGLRenderer) {
     this.renderer = renderer;
     this.vertices = new Float32Array(MAX_VERTICES * 2);
-    this.indices = new Uint16Array(MAX_VERTICES * 3); // Triangulated indices
+    this.indices = new Uint32Array(MAX_VERTICES * 3); // Triangulated indices
 
     this.initializeShaders();
     this.initializeBuffers();
@@ -2604,12 +2604,12 @@ export class ShapeRenderer {
     }
 
     // Upload cached indices
-    const indicesArray = new Uint16Array(fillIndices);
+    const indicesArray = new Uint32Array(fillIndices);
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indexBuffer);
     gl.bufferSubData(gl.ELEMENT_ARRAY_BUFFER, 0, indicesArray);
 
     // Draw using indexed triangles
-    gl.drawElements(gl.TRIANGLES, fillIndices.length, gl.UNSIGNED_SHORT, 0);
+    gl.drawElements(gl.TRIANGLES, fillIndices.length, gl.UNSIGNED_INT, 0);
   }
 
   /**
@@ -2782,10 +2782,10 @@ export class ShapeRenderer {
       if (cachedIndices.length === 0) {
         gl.drawArrays(gl.TRIANGLE_FAN, 0, numVertices);
       } else {
-        const indicesArray = new Uint16Array(cachedIndices);
+        const indicesArray = new Uint32Array(cachedIndices);
         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indexBuffer);
         gl.bufferSubData(gl.ELEMENT_ARRAY_BUFFER, 0, indicesArray);
-        gl.drawElements(gl.TRIANGLES, cachedIndices.length, gl.UNSIGNED_SHORT, 0);
+        gl.drawElements(gl.TRIANGLES, cachedIndices.length, gl.UNSIGNED_INT, 0);
       }
     } finally {
       // Switch back to flat program for subsequent rendering
@@ -3148,10 +3148,10 @@ export class ShapeRenderer {
 
         // Upload fill indices and draw
         if (fillIndices.length > 0) {
-          const indexArray = new Uint16Array(fillIndices);
+          const indexArray = new Uint32Array(fillIndices);
           gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indexBuffer);
           gl.bufferSubData(gl.ELEMENT_ARRAY_BUFFER, 0, indexArray);
-          gl.drawElements(gl.TRIANGLES, fillIndices.length, gl.UNSIGNED_SHORT, 0);
+          gl.drawElements(gl.TRIANGLES, fillIndices.length, gl.UNSIGNED_INT, 0);
         }
       } else {
         // Use skinned flat-color program
@@ -3163,10 +3163,10 @@ export class ShapeRenderer {
 
         // Upload fill indices and draw
         if (fillIndices.length > 0) {
-          const indexArray = new Uint16Array(fillIndices);
+          const indexArray = new Uint32Array(fillIndices);
           gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indexBuffer);
           gl.bufferSubData(gl.ELEMENT_ARRAY_BUFFER, 0, indexArray);
-          gl.drawElements(gl.TRIANGLES, fillIndices.length, gl.UNSIGNED_SHORT, 0);
+          gl.drawElements(gl.TRIANGLES, fillIndices.length, gl.UNSIGNED_INT, 0);
         }
       }
     }
@@ -3610,10 +3610,10 @@ export class ShapeRenderer {
 
     // Draw using fill indices
     if (fillIndices.length > 0) {
-      const indexData = new Uint16Array(fillIndices);
+      const indexData = new Uint32Array(fillIndices);
       gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indexBuffer);
       gl.bufferSubData(gl.ELEMENT_ARRAY_BUFFER, 0, indexData);
-      gl.drawElements(gl.TRIANGLES, fillIndices.length, gl.UNSIGNED_SHORT, 0);
+      gl.drawElements(gl.TRIANGLES, fillIndices.length, gl.UNSIGNED_INT, 0);
     }
 
     // Restore normal shader state
@@ -4189,10 +4189,10 @@ export class ShapeRenderer {
       gl.drawArrays(gl.TRIANGLE_FAN, 0, numVertices);
       return;
     }
-    const indicesArray = new Uint16Array(cachedIndices);
+    const indicesArray = new Uint32Array(cachedIndices);
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indexBuffer);
     gl.bufferSubData(gl.ELEMENT_ARRAY_BUFFER, 0, indicesArray);
-    gl.drawElements(gl.TRIANGLES, cachedIndices.length, gl.UNSIGNED_SHORT, 0);
+    gl.drawElements(gl.TRIANGLES, cachedIndices.length, gl.UNSIGNED_INT, 0);
   }
 
   /**

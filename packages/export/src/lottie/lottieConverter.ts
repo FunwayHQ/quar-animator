@@ -18,7 +18,6 @@ import type {
   Fill,
   Stroke,
   Timeline,
-  Transform,
 } from '@quar/types';
 import { findTrack } from '@quar/animation';
 import type {
@@ -60,16 +59,17 @@ export function nodeToLottieLayer(
   timeline: Timeline,
   layerIndex: number,
   canvasH: number,
-  duration: number
+  duration: number,
+  nodeResolver?: (id: string) => Node | undefined
 ): LottieLayer | null {
-  const shapes = nodeToLottieShapes(node, timeline, canvasH);
+  const shapes = nodeToLottieShapes(node, timeline, canvasH, nodeResolver);
   if (!shapes || shapes.length === 0) return null;
 
   return {
     ind: layerIndex,
     ty: 4, // Shape layer
     nm: node.name || `Layer ${layerIndex}`,
-    ks: buildLottieTransform(node.transform, node.id, timeline, canvasH),
+    ks: buildLottieTransform(node, timeline, canvasH),
     ip: 0,
     op: duration,
     st: 0,
@@ -83,7 +83,8 @@ export function nodeToLottieLayer(
 export function nodeToLottieShapes(
   node: Node,
   timeline: Timeline,
-  _canvasH: number
+  canvasH: number,
+  nodeResolver?: (id: string) => Node | undefined
 ): LottieShapeItem[] | null {
   switch (node.type) {
     case 'rectangle':
@@ -95,7 +96,7 @@ export function nodeToLottieShapes(
     case 'polygon':
       return polygonToLottieShapes(node, timeline);
     case 'group':
-      return groupToLottieShapes();
+      return groupToLottieShapes(node, timeline, canvasH, nodeResolver);
     default:
       return null; // Text, Image, Bone, etc. not supported in foundation
   }
@@ -247,12 +248,45 @@ export function polygonToLottieShapes(
 // Group → Lottie Shape Group
 // ============================================================================
 
-export function groupToLottieShapes(): LottieShapeItem[] {
-  // Groups in Lottie are "gr" shape items
-  // We return a single group item, but children need to be resolved by the caller
-  // since we don't have access to child nodes here.
-  // The exporter handles group children traversal.
-  return [];
+export function groupToLottieShapes(
+  node: Node,
+  timeline: Timeline,
+  canvasH: number,
+  nodeResolver?: (id: string) => Node | undefined
+): LottieShapeItem[] {
+  if (!nodeResolver || !node.children || node.children.length === 0) return [];
+
+  // Recursively convert each child into Lottie shape items
+  const childItems: LottieShapeItem[] = [];
+  for (const childId of node.children) {
+    const childNode = nodeResolver(childId);
+    if (!childNode || !childNode.visible) continue;
+    const shapes = nodeToLottieShapes(childNode, timeline, canvasH, nodeResolver);
+    if (shapes && shapes.length > 0) {
+      // Wrap each child's shapes in a group ('gr') item with its transform
+      const grItem: LottieShapeItem = {
+        ty: 'gr',
+        nm: childNode.name || 'Group Child',
+        it: [
+          ...shapes,
+          // Child transform
+          {
+            ty: 'tr',
+            p: {
+              a: 0,
+              k: [childNode.transform.position.x, canvasH - childNode.transform.position.y],
+            },
+            r: { a: 0, k: -childNode.transform.rotation },
+            s: { a: 0, k: [childNode.transform.scale.x * 100, childNode.transform.scale.y * 100] },
+            o: { a: 0, k: (childNode.opacity ?? 1) * 100 },
+          } as LottieShapeTransform,
+        ],
+      } as LottieShapeItem;
+      childItems.push(grItem);
+    }
+  }
+
+  return childItems;
 }
 
 // ============================================================================
@@ -401,11 +435,13 @@ export function strokesToLottie(
  * - Opacity: Quar 0-1 → Lottie 0-100
  */
 export function buildLottieTransform(
-  transform: Transform,
-  nodeId: string,
+  node: Node,
   timeline: Timeline,
   canvasH: number
 ): LottieTransform {
+  const { transform } = node;
+  const nodeId = node.id;
+
   // Tracks
   const posXTrack = findTrack<number>(timeline, nodeId, 'transform.position.x');
   const posYTrack = findTrack<number>(timeline, nodeId, 'transform.position.y');
@@ -416,8 +452,24 @@ export function buildLottieTransform(
 
   const flipY = VALUE_TRANSFORMS.yFlip(canvasH);
 
+  // Compute anchor from node dimensions. In Quar, shapes are drawn relative to
+  // their local origin with anchor determining the pivot. In Lottie, anchor is
+  // in absolute local coordinates.
+  let anchorX = 0;
+  let anchorY = 0;
+  const anchor = transform.anchor ?? { x: 0.5, y: 0.5 };
+  if ('width' in node && 'height' in node) {
+    const n = node as Node & { width: number; height: number };
+    anchorX = n.width * anchor.x;
+    anchorY = n.height * anchor.y;
+  } else if ('radiusX' in node && 'radiusY' in node) {
+    const n = node as Node & { radiusX: number; radiusY: number };
+    anchorX = n.radiusX * 2 * anchor.x;
+    anchorY = n.radiusY * 2 * anchor.y;
+  }
+
   return {
-    a: { a: 0, k: [0, 0] }, // Anchor at center (shapes are drawn relative to their own center)
+    a: { a: 0, k: [anchorX, anchorY] },
     p: positionTracksToLottie(
       posXTrack,
       posYTrack,
@@ -435,7 +487,11 @@ export function buildLottieTransform(
       VALUE_TRANSFORMS.scaleTo100,
       VALUE_TRANSFORMS.scaleTo100
     ),
-    o: trackToLottieAnimated(opacityTrack, transform.opacity ?? 1, VALUE_TRANSFORMS.opacityTo100),
+    o: trackToLottieAnimated(
+      opacityTrack,
+      ((node as unknown as Record<string, unknown>).opacity as number) ?? 1,
+      VALUE_TRANSFORMS.opacityTo100
+    ),
   };
 }
 

@@ -174,6 +174,12 @@ export class PolygonTool extends BaseTool {
     }
   }
 
+  onDeactivate(): void {
+    this.previewNode = null;
+    this.startPoint = null;
+    this.resetState();
+  }
+
   // --------------------------------------------------------------------------
   // Preview
   // --------------------------------------------------------------------------

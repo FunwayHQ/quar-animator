@@ -5,6 +5,7 @@ import type {
   PathNode,
   PolygonNode,
   GroupNode,
+  Node,
   Timeline,
   Transform,
   Fill,
@@ -45,6 +46,24 @@ const defaultTransform: Transform = {
   anchor: { x: 0.5, y: 0.5 },
   skew: { x: 0, y: 0 },
 };
+
+/** Create a minimal node for buildLottieTransform tests */
+function makeMinimalNode(transform: Transform, id = 'n1', overrides: Partial<Node> = {}): Node {
+  return {
+    id,
+    name: 'Test Node',
+    type: 'rectangle',
+    parent: null,
+    children: [],
+    transform,
+    visible: true,
+    locked: false,
+    opacity: 1,
+    width: 100,
+    height: 100,
+    ...overrides,
+  } as Node;
+}
 
 const solidFill: Fill = {
   type: 'solid',
@@ -471,7 +490,7 @@ describe('strokesToLottie', () => {
 
 describe('buildLottieTransform', () => {
   it('builds static transform with Y-flip', () => {
-    const t = buildLottieTransform(defaultTransform, 'n1', emptyTimeline, CANVAS_H);
+    const t = buildLottieTransform(makeMinimalNode(defaultTransform), emptyTimeline, CANVAS_H);
     // Position Y should be flipped: 500 - 200 = 300
     const pos = t.p.k as number[];
     expect(pos[0]).toBe(100);
@@ -486,7 +505,7 @@ describe('buildLottieTransform', () => {
 
   it('negates rotation for Y-flip', () => {
     const transform: Transform = { ...defaultTransform, rotation: 45 };
-    const t = buildLottieTransform(transform, 'n1', emptyTimeline, CANVAS_H);
+    const t = buildLottieTransform(makeMinimalNode(transform), emptyTimeline, CANVAS_H);
     expect(t.r.k).toBe(-45);
   });
 
@@ -505,7 +524,7 @@ describe('buildLottieTransform', () => {
         },
       ],
     };
-    const t = buildLottieTransform(defaultTransform, 'n1', timeline, CANVAS_H);
+    const t = buildLottieTransform(makeMinimalNode(defaultTransform), timeline, CANVAS_H);
     expect(t.p.a).toBe(1); // Animated
   });
 });
@@ -557,8 +576,21 @@ describe('generatePolygonPoints', () => {
 // ============================================================================
 
 describe('groupToLottieShapes', () => {
-  it('returns empty array', () => {
-    const result = groupToLottieShapes();
+  it('returns empty array when no resolver provided', () => {
+    const groupNode = makeMinimalNode(defaultTransform, 'g1', {
+      type: 'group' as const,
+      children: ['c1'],
+    });
+    const result = groupToLottieShapes(groupNode, emptyTimeline, CANVAS_H);
+    expect(result).toEqual([]);
+  });
+
+  it('returns empty array for group with no children', () => {
+    const groupNode = makeMinimalNode(defaultTransform, 'g1', {
+      type: 'group' as const,
+      children: [],
+    });
+    const result = groupToLottieShapes(groupNode, emptyTimeline, CANVAS_H, () => undefined);
     expect(result).toEqual([]);
   });
 });
@@ -819,7 +851,7 @@ describe('buildLottieTransform - additional', () => {
         },
       ],
     };
-    const t = buildLottieTransform(defaultTransform, 'n1', timeline, CANVAS_H);
+    const t = buildLottieTransform(makeMinimalNode(defaultTransform), timeline, CANVAS_H);
     expect(t.r.a).toBe(1);
   });
 
@@ -838,7 +870,7 @@ describe('buildLottieTransform - additional', () => {
         },
       ],
     };
-    const t = buildLottieTransform(defaultTransform, 'n1', timeline, CANVAS_H);
+    const t = buildLottieTransform(makeMinimalNode(defaultTransform), timeline, CANVAS_H);
     expect(t.s.a).toBe(1);
   });
 
@@ -857,20 +889,21 @@ describe('buildLottieTransform - additional', () => {
         },
       ],
     };
-    const t = buildLottieTransform(defaultTransform, 'n1', timeline, CANVAS_H);
+    const t = buildLottieTransform(makeMinimalNode(defaultTransform), timeline, CANVAS_H);
     expect(t.o.a).toBe(1);
   });
 
   it('handles undefined opacity (defaults to 1 → 100)', () => {
-    const transform: Transform = { ...defaultTransform };
-    delete (transform as Record<string, unknown>)['opacity'];
-    const t = buildLottieTransform(transform, 'n1', emptyTimeline, CANVAS_H);
+    const node = makeMinimalNode(defaultTransform);
+    delete (node as Record<string, unknown>)['opacity'];
+    const t = buildLottieTransform(node, emptyTimeline, CANVAS_H);
     expect(t.o.k).toBe(100);
   });
 
-  it('anchor is always at [0,0]', () => {
-    const t = buildLottieTransform(defaultTransform, 'n1', emptyTimeline, CANVAS_H);
-    expect(t.a.k).toEqual([0, 0]);
+  it('anchor is computed from node dimensions and anchor property', () => {
+    const t = buildLottieTransform(makeMinimalNode(defaultTransform), emptyTimeline, CANVAS_H);
+    // width=100, height=100, anchor=(0.5, 0.5) → Lottie anchor = [50, 50]
+    expect(t.a.k).toEqual([50, 50]);
     expect(t.a.a).toBe(0);
   });
 });

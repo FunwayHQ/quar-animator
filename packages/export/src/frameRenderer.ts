@@ -77,35 +77,51 @@ export function createFrameRenderer(options: FrameRenderOptions): FrameRendererH
   function renderFrame(ctx: FrameRenderContext, frame: number): HTMLCanvasElement {
     const { sceneGraph, timeline } = ctx;
 
-    // Apply animation at the given frame to all animated nodes
+    // Snapshot animated nodes before mutation so we can restore them after rendering
+    const snapshots = new Map<string, Record<string, unknown>>();
     for (const track of timeline.tracks) {
       const node = sceneGraph.getNode(track.nodeId);
-      if (!node) continue;
-
-      const animatedValues = evaluateNodeAtFrame(timeline, track.nodeId, frame);
-      if (animatedValues.size > 0) {
-        const updatedNode = applyAnimatedValues(node, animatedValues);
-        sceneGraph.updateNode(track.nodeId, updatedNode as Partial<Node>);
+      if (node && !snapshots.has(track.nodeId)) {
+        snapshots.set(track.nodeId, structuredClone(node));
       }
     }
 
-    // Set viewport and clear
-    gl.viewport(0, 0, pixelW, pixelH);
+    try {
+      // Apply animation at the given frame to all animated nodes
+      for (const track of timeline.tracks) {
+        const node = sceneGraph.getNode(track.nodeId);
+        if (!node) continue;
 
-    if (backgroundColor) {
-      gl.clearColor(
-        backgroundColor.r / 255,
-        backgroundColor.g / 255,
-        backgroundColor.b / 255,
-        backgroundColor.a
-      );
-    } else {
-      gl.clearColor(0, 0, 0, 0);
+        const animatedValues = evaluateNodeAtFrame(timeline, track.nodeId, frame);
+        if (animatedValues.size > 0) {
+          const updatedNode = applyAnimatedValues(node, animatedValues);
+          sceneGraph.updateNode(track.nodeId, updatedNode as Partial<Node>);
+        }
+      }
+
+      // Set viewport and clear
+      gl.viewport(0, 0, pixelW, pixelH);
+
+      if (backgroundColor) {
+        gl.clearColor(
+          backgroundColor.r / 255,
+          backgroundColor.g / 255,
+          backgroundColor.b / 255,
+          backgroundColor.a
+        );
+      } else {
+        gl.clearColor(0, 0, 0, 0);
+      }
+      gl.clear(gl.COLOR_BUFFER_BIT);
+
+      // Render scene
+      shapeRenderer.render(sceneGraph, vpMatrix);
+    } finally {
+      // Restore original node state after rendering
+      for (const [nodeId, snapshot] of snapshots) {
+        sceneGraph.updateNode(nodeId, snapshot as Partial<Node>);
+      }
     }
-    gl.clear(gl.COLOR_BUFFER_BIT);
-
-    // Render scene
-    shapeRenderer.render(sceneGraph, vpMatrix);
 
     return canvas;
   }

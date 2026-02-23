@@ -367,7 +367,7 @@ export function fitKeyframesToView(
   const midVal = (minVal + maxVal) / 2;
 
   const offsetX = midTime * scaleX - viewWidth / 2;
-  const offsetY = midVal * scaleY - viewHeight / 2;
+  const offsetY = midVal * scaleY;
 
   return { offsetX, offsetY, scaleX, scaleY, viewWidth, viewHeight };
 }

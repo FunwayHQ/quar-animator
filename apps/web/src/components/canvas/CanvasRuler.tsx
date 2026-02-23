@@ -6,7 +6,7 @@
  * Supports drag-to-create guide lines.
  */
 
-import { useMemo, useCallback, useRef } from 'react';
+import { useMemo, useCallback, useRef, useEffect } from 'react';
 import type { Camera } from '@quar/core';
 import styles from './CanvasRuler.module.css';
 
@@ -127,6 +127,14 @@ export function CanvasRuler({
   const onGuideDragEndRef = useRef(onGuideDragEnd);
   onGuideDragEndRef.current = onGuideDragEnd;
 
+  // Track active global listener cleanups for unmount safety
+  const cleanupRef = useRef<(() => void) | null>(null);
+  useEffect(() => {
+    return () => {
+      cleanupRef.current?.();
+    };
+  }, []);
+
   /** Convert browser-viewport clientX/clientY to canvas-local screen coords */
   const toCanvasScreen = useCallback(
     (clientX: number, clientY: number): { x: number; y: number } => {
@@ -156,6 +164,12 @@ export function CanvasRuler({
         onGuideDragRef.current?.('y', worldPos.y);
       };
 
+      const cleanup = () => {
+        window.removeEventListener('pointermove', onMove);
+        window.removeEventListener('pointerup', onUp);
+        cleanupRef.current = null;
+      };
+
       const onUp = (ev: PointerEvent) => {
         if (!cameraRef.current) return;
         const screen = toCanvasScreen(ev.clientX, ev.clientY);
@@ -167,12 +181,12 @@ export function CanvasRuler({
           // Cancelled — dragged back onto ruler
           onGuideDragEndRef.current?.('y', NaN);
         }
-        window.removeEventListener('pointermove', onMove);
-        window.removeEventListener('pointerup', onUp);
+        cleanup();
       };
 
       window.addEventListener('pointermove', onMove);
       window.addEventListener('pointerup', onUp);
+      cleanupRef.current = cleanup;
     },
     [onGuideDragStart, toCanvasScreen]
   );
@@ -191,6 +205,12 @@ export function CanvasRuler({
         onGuideDragRef.current?.('x', worldPos.x);
       };
 
+      const cleanup = () => {
+        window.removeEventListener('pointermove', onMove);
+        window.removeEventListener('pointerup', onUp);
+        cleanupRef.current = null;
+      };
+
       const onUp = (ev: PointerEvent) => {
         if (!cameraRef.current) return;
         const screen = toCanvasScreen(ev.clientX, ev.clientY);
@@ -200,12 +220,12 @@ export function CanvasRuler({
         } else {
           onGuideDragEndRef.current?.('x', NaN);
         }
-        window.removeEventListener('pointermove', onMove);
-        window.removeEventListener('pointerup', onUp);
+        cleanup();
       };
 
       window.addEventListener('pointermove', onMove);
       window.addEventListener('pointerup', onUp);
+      cleanupRef.current = cleanup;
     },
     [onGuideDragStart, toCanvasScreen]
   );

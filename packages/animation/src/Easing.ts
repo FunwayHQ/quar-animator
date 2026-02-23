@@ -122,6 +122,23 @@ const easeInOutBounce = (t: number): number =>
 // Cubic Bezier
 // ============================================================================
 
+const cubicBezierCache = new Map<string, (t: number) => number>();
+
+function getCachedCubicBezier(
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number
+): (t: number) => number {
+  const key = `${x1},${y1},${x2},${y2}`;
+  let fn = cubicBezierCache.get(key);
+  if (!fn) {
+    fn = cubicBezier(x1, y1, x2, y2);
+    cubicBezierCache.set(key, fn);
+  }
+  return fn;
+}
+
 function cubicBezier(x1: number, y1: number, x2: number, y2: number): (t: number) => number {
   // Coefficients for x(t) = at^3 + bt^2 + ct where a,b,c derived from control points
   const ax = 1 - 3 * x2 + 3 * x1;
@@ -230,7 +247,7 @@ export function applyEasing(t: number, easing: EasingFunction): number {
 
   if (easing.type === 'cubicBezier') {
     const [x1, y1, x2, y2] = easing.points;
-    return cubicBezier(x1, y1, x2, y2)(t);
+    return getCachedCubicBezier(x1, y1, x2, y2)(t);
   }
 
   return t;
@@ -253,7 +270,7 @@ export function getEasingFunction(easing: EasingFunction): (t: number) => number
 
   if (easing.type === 'cubicBezier') {
     const [x1, y1, x2, y2] = easing.points;
-    return cubicBezier(x1, y1, x2, y2);
+    return getCachedCubicBezier(x1, y1, x2, y2);
   }
 
   return (t) => t;

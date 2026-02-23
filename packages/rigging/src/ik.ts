@@ -160,7 +160,7 @@ export function solveFABRIK(config: FABRIKConfig): IKSolveResult {
 
   // Unreachable target: extend fully toward target
   if (distToTarget > totalLength) {
-    if (distToTarget < 1e-10) return; // target at root — no solution
+    if (distToTarget < 1e-10) return { rotations: new Map(), converged: true, endEffectorError: 0 }; // target at root — no solution
     const dir = v2normalize(v2sub(target, rootPos));
     positions[0] = { ...rootPos };
     for (let i = 0; i < boneLengths.length; i++) {

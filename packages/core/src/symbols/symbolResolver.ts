@@ -56,9 +56,10 @@ export function applyOverrides(nodes: Node[], overrides: SymbolOverride[]): Node
     if (!target) continue; // Skip overrides for non-existent nodes
     if (typeof override.properties !== 'object' || override.properties === null) continue;
 
-    // Shallow-merge override properties onto the node
+    // Shallow-merge override properties onto the node (skip structural fields)
     const props: Record<string, unknown> = override.properties;
     for (const key of Object.keys(props)) {
+      if (key === 'id' || key === 'type' || key === 'parent' || key === 'children') continue;
       (target as Record<string, unknown>)[key] = props[key];
     }
   }

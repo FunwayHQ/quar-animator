@@ -572,6 +572,7 @@ export function LayerPanel() {
           id: 'toggle-visibility',
           label: allVisible ? `Hide ${count} Layers` : `Show ${count} Layers`,
           onClick: () => {
+            pushUndo(sceneGraph);
             const newVisible = !allVisible;
             for (const id of selectedNodeIds) {
               sceneGraph.updateNode(id, { visible: newVisible });
@@ -582,6 +583,7 @@ export function LayerPanel() {
           id: 'toggle-lock',
           label: allLocked ? `Unlock ${count} Layers` : `Lock ${count} Layers`,
           onClick: () => {
+            pushUndo(sceneGraph);
             const newLocked = !allLocked;
             for (const id of selectedNodeIds) {
               sceneGraph.updateNode(id, { locked: newLocked });
@@ -802,6 +804,9 @@ export function LayerPanel() {
         insertIndex = dropTarget.position === 'before' ? targetIndex : targetIndex + 1;
       }
 
+      // Push undo before reorder
+      pushUndo(sceneGraph);
+
       // Execute moves
       for (const id of topIds) {
         try {
@@ -816,7 +821,7 @@ export function LayerPanel() {
       setDragState(null);
       setDropTarget(null);
     },
-    [dragState, dropTarget, sceneGraph]
+    [dragState, dropTarget, sceneGraph, pushUndo]
   );
 
   const handlePointerLeave = useCallback(() => {

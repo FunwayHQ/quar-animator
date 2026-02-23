@@ -281,6 +281,7 @@ export function useProjectActions(options: UseProjectActionsOptions = {}): Proje
         let idCounter = Date.now();
         const generateId = () => `node_${idCounter++}`;
         try {
+          useEditorStore.getState().pushUndo(sceneGraph);
           const result = importSvg(svgString, sceneGraph, generateId, {
             centerAtOrigin: true,
             selectAfterImport: true,
@@ -365,6 +366,7 @@ export function useProjectActions(options: UseProjectActionsOptions = {}): Proje
             cornerRadius: [0, 0, 0, 0] as [number, number, number, number],
           };
 
+          useEditorStore.getState().pushUndo(sceneGraph);
           sceneGraph.addNode(imageNode);
           useEditorStore.setState({ selectedNodeIds: new Set([nodeId]) });
           toast.success(`Imported image "${file.name}"`);

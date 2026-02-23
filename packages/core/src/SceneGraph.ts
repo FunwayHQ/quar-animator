@@ -187,7 +187,15 @@ export class SceneGraph {
     const node = this.nodes.get(id);
     if (!node) return;
 
-    Object.assign(node, updates);
+    // Strip structural fields that should never be overwritten via updateNode
+    const {
+      id: _id,
+      type: _type,
+      parent: _parent,
+      children: _children,
+      ...safeUpdates
+    } = updates as Record<string, unknown>;
+    Object.assign(node, safeUpdates);
 
     if ('transform' in updates) {
       this.invalidateWorldTransform(id);

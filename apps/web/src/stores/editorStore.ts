@@ -1548,9 +1548,20 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     const { selectedNodeIds } = get();
     if (selectedNodeIds.size === 0) return;
     const clones: Node[] = [];
+    const clonedIds = new Set<string>();
     for (const id of selectedNodeIds) {
       const node = sceneGraph.getNode(id);
-      if (node) clones.push(structuredClone(node));
+      if (node) {
+        clones.push(structuredClone(node));
+        clonedIds.add(id);
+        // Also clone descendants so paste can reconstruct hierarchy
+        for (const desc of sceneGraph.getDescendants(id)) {
+          if (!clonedIds.has(desc.id)) {
+            clones.push(structuredClone(desc));
+            clonedIds.add(desc.id);
+          }
+        }
+      }
     }
     if (clones.length > 0) set({ clipboard: clones });
   },
@@ -1558,24 +1569,76 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     const { clipboard } = get();
     if (!clipboard || clipboard.length === 0) return;
     get().pushUndo(sceneGraph);
-    const newIds: string[] = [];
+
+    // Build old-id → cloned-node map for the entire clipboard
+    const oldIdToClone = new Map<string, Node>();
     for (const original of clipboard) {
-      const newNode = structuredClone(original);
-      newNode.id = `node_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-      newNode.parent = null;
-      newNode.children = [];
-      // Offset position
-      newNode.transform = {
-        ...newNode.transform,
-        position: {
-          x: newNode.transform.position.x + 20,
-          y: newNode.transform.position.y - 20,
-        },
-      };
-      sceneGraph.addNode(newNode);
-      newIds.push(newNode.id);
+      oldIdToClone.set(original.id, structuredClone(original));
     }
-    set({ selectedNodeIds: new Set(newIds) });
+
+    // Generate new IDs for every cloned node
+    const oldToNewId = new Map<string, string>();
+    let idCounter = Date.now();
+    for (const oldId of oldIdToClone.keys()) {
+      oldToNewId.set(oldId, `node_${idCounter++}_${Math.random().toString(36).slice(2, 8)}`);
+    }
+
+    // Remap IDs, parent refs, and children refs
+    const newNodes: Node[] = [];
+    for (const [oldId, clone] of oldIdToClone) {
+      clone.id = oldToNewId.get(oldId)!;
+      // Remap children to new IDs (keep only those present in clipboard)
+      clone.children = clone.children
+        .filter((childId: string) => oldToNewId.has(childId))
+        .map((childId: string) => oldToNewId.get(childId)!);
+      // Remap parent
+      if (clone.parent && oldToNewId.has(clone.parent)) {
+        clone.parent = oldToNewId.get(clone.parent)!;
+      } else {
+        clone.parent = null;
+      }
+      newNodes.push(clone);
+    }
+
+    // Find root nodes (those with parent = null) and offset their positions
+    const rootIds: string[] = [];
+    for (const node of newNodes) {
+      if (node.parent === null) {
+        rootIds.push(node.id);
+        node.transform = {
+          ...node.transform,
+          position: {
+            x: node.transform.position.x + 20,
+            y: node.transform.position.y - 20,
+          },
+        };
+      }
+    }
+
+    // Add nodes in parent-first order (roots first, then children)
+    const added = new Set<string>();
+    const addRecursive = (node: Node) => {
+      if (added.has(node.id)) return;
+      // Ensure parent is added first
+      if (node.parent) {
+        const parent = newNodes.find((n) => n.id === node.parent);
+        if (parent && !added.has(parent.id)) {
+          addRecursive(parent);
+        }
+      }
+      sceneGraph.addNode({ ...node, children: [] }, node.parent ?? undefined);
+      added.add(node.id);
+      // Add children in order
+      for (const childId of node.children) {
+        const child = newNodes.find((n) => n.id === childId);
+        if (child) addRecursive(child);
+      }
+    };
+    for (const node of newNodes) {
+      if (node.parent === null) addRecursive(node);
+    }
+
+    set({ selectedNodeIds: new Set(rootIds) });
   },
   duplicateSelection: (sceneGraph: SceneGraphLike) => {
     const { copySelection } = get();
@@ -2819,13 +2882,10 @@ function createHistoryActions(
         redoStack: [],
         canUndo: false,
         canRedo: false,
-        smartBoneActions: [],
         smartBoneRecordingActionId: null,
         smartBoneRecordingTargetId: null,
         smartBoneRecordingPrevTool: null,
         smartBoneRecordingPrevRotation: null,
-        vitruvianControllers: [],
-        dynamicChains: [],
       });
     },
 
