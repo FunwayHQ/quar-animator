@@ -34,6 +34,7 @@ export function createMockWebGL2Context(): WebGL2RenderingContext {
     LEQUAL: 515,
     FLOAT: 5126,
     UNSIGNED_SHORT: 5123,
+    UNSIGNED_INT: 5125,
     LINES: 1,
     TRIANGLES: 4,
     TRIANGLE_STRIP: 5,

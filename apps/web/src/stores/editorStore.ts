@@ -2886,6 +2886,8 @@ function createHistoryActions(
         smartBoneRecordingTargetId: null,
         smartBoneRecordingPrevTool: null,
         smartBoneRecordingPrevRotation: null,
+        vitruvianControllers: [],
+        dynamicChains: [],
       });
     },
 

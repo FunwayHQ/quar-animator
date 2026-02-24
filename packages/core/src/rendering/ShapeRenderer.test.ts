@@ -391,7 +391,7 @@ describe('ShapeRenderer', () => {
       expect(gl.drawElements).toHaveBeenCalledWith(
         gl.TRIANGLES,
         expect.any(Number),
-        gl.UNSIGNED_SHORT,
+        gl.UNSIGNED_INT,
         expect.any(Number)
       );
     });
@@ -521,7 +521,7 @@ describe('ShapeRenderer', () => {
       expect(gl.drawElements).toHaveBeenCalledWith(
         gl.TRIANGLES,
         expect.any(Number),
-        gl.UNSIGNED_SHORT,
+        gl.UNSIGNED_INT,
         expect.any(Number)
       );
     });
