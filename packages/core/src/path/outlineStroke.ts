@@ -154,6 +154,7 @@ export function outlineStroke(
     maxY = -Infinity;
   for (const contour of resultContours) {
     const b = getPathBounds(contour, true);
+    if (!b) continue;
     minX = Math.min(minX, b.x);
     minY = Math.min(minY, b.y);
     maxX = Math.max(maxX, b.x + b.width);
@@ -186,11 +187,11 @@ export function outlineStroke(
 
   // Build fill from the stroke color
   const fill = {
-    type: stroke.type as 'solid' | 'gradient',
+    type: (stroke.gradient ? 'gradient' : 'solid') as 'solid' | 'gradient',
     color: stroke.color,
     opacity: stroke.opacity,
     visible: true,
-    gradient: (stroke as { gradient?: unknown }).gradient,
+    gradient: stroke.gradient,
   };
 
   return {

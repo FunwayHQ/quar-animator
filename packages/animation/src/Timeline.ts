@@ -52,7 +52,9 @@ export function findTrack<T>(
   nodeId: string,
   property: string
 ): PropertyTrack<T> | undefined {
-  return timeline.tracks.find((t: PropertyTrack) => t.nodeId === nodeId && t.property === property);
+  return timeline.tracks.find(
+    (t: PropertyTrack) => t.nodeId === nodeId && t.property === property
+  ) as PropertyTrack<T> | undefined;
 }
 
 export function getOrCreateTrack<T>(

@@ -179,7 +179,7 @@ export class EraserTool extends BaseTool {
       blendMode: 'normal',
       points: outline,
       closed: true,
-      fills: [{ type: 'solid', color: { r: 1, g: 0, b: 0, a: 1 }, visible: true }],
+      fills: [{ type: 'solid', color: { r: 1, g: 0, b: 0, a: 1 }, opacity: 1, visible: true }],
       strokes: [],
     };
   }

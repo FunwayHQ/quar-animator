@@ -23,6 +23,7 @@ module.exports = {
     '.eslintrc.cjs',
     'vite.config.ts',
     'vitest.config.ts',
+    'tsup.config.ts',
     '*.config.js',
     '*.config.cjs',
     'storybook-static',

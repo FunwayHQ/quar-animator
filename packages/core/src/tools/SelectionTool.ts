@@ -536,7 +536,7 @@ export class SelectionTool extends BaseTool {
       if (this.nudgeUndoPushed) {
         this.nudgeUndoPushed = false;
         const selectedIds = this.context.getSelectedIds();
-        this.context.onTransformComplete?.([...selectedIds], 'move');
+        this.context.onTransformComplete?.(selectedIds, 'move');
       }
     }
   }

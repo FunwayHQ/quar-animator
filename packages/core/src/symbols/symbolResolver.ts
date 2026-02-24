@@ -60,7 +60,7 @@ export function applyOverrides(nodes: Node[], overrides: SymbolOverride[]): Node
     const props: Record<string, unknown> = override.properties;
     for (const key of Object.keys(props)) {
       if (key === 'id' || key === 'type' || key === 'parent' || key === 'children') continue;
-      (target as Record<string, unknown>)[key] = props[key];
+      (target as unknown as Record<string, unknown>)[key] = props[key];
     }
   }
 
@@ -121,19 +121,19 @@ export function getSymbolBounds(resolvedNodes: Node[]): Rect {
     switch (node.type) {
       case 'rectangle':
       case 'artboard': {
-        const r = node as Record<string, unknown>;
+        const r = node as unknown as Record<string, unknown>;
         w = typeof r.width === 'number' && isFinite(r.width) ? r.width : 0;
         h = typeof r.height === 'number' && isFinite(r.height) ? r.height : 0;
         break;
       }
       case 'image': {
-        const img = node as Record<string, unknown>;
+        const img = node as unknown as Record<string, unknown>;
         w = typeof img.width === 'number' && isFinite(img.width) ? img.width : 0;
         h = typeof img.height === 'number' && isFinite(img.height) ? img.height : 0;
         break;
       }
       case 'ellipse': {
-        const e = node as Record<string, unknown>;
+        const e = node as unknown as Record<string, unknown>;
         const rx = typeof e.radiusX === 'number' && isFinite(e.radiusX) ? e.radiusX : 0;
         const ry = typeof e.radiusY === 'number' && isFinite(e.radiusY) ? e.radiusY : 0;
         w = rx * 2;
@@ -141,7 +141,7 @@ export function getSymbolBounds(resolvedNodes: Node[]): Rect {
         break;
       }
       case 'polygon': {
-        const p = node as Record<string, unknown>;
+        const p = node as unknown as Record<string, unknown>;
         const rad = typeof p.radius === 'number' && isFinite(p.radius) ? p.radius : 0;
         w = rad * 2;
         h = rad * 2;

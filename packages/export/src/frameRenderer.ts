@@ -82,7 +82,7 @@ export function createFrameRenderer(options: FrameRenderOptions): FrameRendererH
     for (const track of timeline.tracks) {
       const node = sceneGraph.getNode(track.nodeId);
       if (node && !snapshots.has(track.nodeId)) {
-        snapshots.set(track.nodeId, structuredClone(node));
+        snapshots.set(track.nodeId, structuredClone(node) as unknown as Record<string, unknown>);
       }
     }
 
