@@ -2,17 +2,10 @@
  * Tests for FABRIK IK Solver
  */
 
-import { describe, it, expect, vi } from 'vitest';
-import {
-  solveFABRIK,
-  extractIKJoints,
-  applyIKResult,
-  type IKJoint,
-  type FABRIKConfig,
-  type IKSceneGraph,
-} from './ik';
+import { describe, it, expect } from 'vitest';
+import { solveFABRIK, extractIKJoints, applyIKResult, type IKJoint, type IKSceneGraph } from './ik';
 import type { BoneNode, Node, Vector2 } from '@quar/types';
-import { createBoneNode, chainBone } from './boneHelpers';
+import { createBoneNode } from './boneHelpers';
 
 // ============================================================================
 // Helpers
@@ -26,10 +19,6 @@ function makeJoint(
   angleMax?: number
 ): IKJoint {
   return { boneId, worldPos, boneLength, angleMin, angleMax };
-}
-
-function dist(a: Vector2, b: Vector2): number {
-  return Math.sqrt((b.x - a.x) ** 2 + (b.y - a.y) ** 2);
 }
 
 /** Build a simple mock scene graph from bones */
@@ -533,10 +522,10 @@ describe('extractIKJoints', () => {
     const joints = extractIKJoints('root', 'child', sg);
 
     expect(joints.length).toBe(2);
-    expect(joints[0].boneId).toBe('root');
-    expect(joints[1].boneId).toBe('child');
-    expect(joints[0].boneLength).toBe(100);
-    expect(joints[1].boneLength).toBe(80);
+    expect(joints[0]!.boneId).toBe('root');
+    expect(joints[1]!.boneId).toBe('child');
+    expect(joints[0]!.boneLength).toBe(100);
+    expect(joints[1]!.boneLength).toBe(80);
   });
 
   it('returns empty array if root not found', () => {
@@ -574,9 +563,9 @@ describe('extractIKJoints', () => {
     const joints = extractIKJoints('b1', 'b3', sg);
 
     expect(joints.length).toBe(3);
-    expect(joints[0].boneId).toBe('b1');
-    expect(joints[1].boneId).toBe('b2');
-    expect(joints[2].boneId).toBe('b3');
+    expect(joints[0]!.boneId).toBe('b1');
+    expect(joints[1]!.boneId).toBe('b2');
+    expect(joints[2]!.boneId).toBe('b3');
   });
 
   it('preserves angle constraints from bones', () => {
@@ -590,10 +579,10 @@ describe('extractIKJoints', () => {
     const sg = createMockSceneGraph([root, child]);
     const joints = extractIKJoints('root', 'child', sg);
 
-    expect(joints[0].angleMin).toBe(-45);
-    expect(joints[0].angleMax).toBe(45);
-    expect(joints[1].angleMin).toBeUndefined();
-    expect(joints[1].angleMax).toBeUndefined();
+    expect(joints[0]!.angleMin).toBe(-45);
+    expect(joints[0]!.angleMax).toBe(45);
+    expect(joints[1]!.angleMin).toBeUndefined();
+    expect(joints[1]!.angleMax).toBeUndefined();
   });
 
   it('computes correct world positions for rotated bones', () => {
@@ -605,11 +594,11 @@ describe('extractIKJoints', () => {
     const sg = createMockSceneGraph([root, child]);
     const joints = extractIKJoints('root', 'child', sg);
 
-    expect(joints[0].worldPos.x).toBeCloseTo(0, 1);
-    expect(joints[0].worldPos.y).toBeCloseTo(0, 1);
+    expect(joints[0]!.worldPos.x).toBeCloseTo(0, 1);
+    expect(joints[0]!.worldPos.y).toBeCloseTo(0, 1);
     // Child is at parent.length along parent's local X → world (0, 100) due to 90° rotation
-    expect(joints[1].worldPos.x).toBeCloseTo(0, 0);
-    expect(joints[1].worldPos.y).toBeCloseTo(100, 0);
+    expect(joints[1]!.worldPos.x).toBeCloseTo(0, 0);
+    expect(joints[1]!.worldPos.y).toBeCloseTo(100, 0);
   });
 });
 

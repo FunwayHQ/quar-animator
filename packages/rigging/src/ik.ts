@@ -119,7 +119,7 @@ export function solveFABRIK(config: FABRIKConfig): IKSolveResult {
 
   if (joints.length === 1) {
     // Single bone: just rotate toward target
-    const bone = joints[0];
+    const bone = joints[0]!;
     const toTarget = v2sub(target, bone.worldPos);
     let angle = Math.atan2(toTarget.y, toTarget.x) * (180 / Math.PI);
     if (bone.angleMin != null || bone.angleMax != null) {
@@ -138,7 +138,7 @@ export function solveFABRIK(config: FABRIKConfig): IKSolveResult {
   // Build working positions array (one extra for end effector tip)
   const positions: Vector2[] = joints.map((j) => ({ ...j.worldPos }));
   // Add end effector tip position (last bone's tip)
-  const lastJoint = joints[joints.length - 1];
+  const lastJoint = joints[joints.length - 1]!;
   const secondToLast = joints.length >= 2 ? joints[joints.length - 2] : null;
   // Compute tip from last joint's world pos + its bone length in the direction of last bone
   if (secondToLast) {
@@ -151,10 +151,10 @@ export function solveFABRIK(config: FABRIKConfig): IKSolveResult {
   // Bone lengths: distance from positions[i] to positions[i+1]
   const boneLengths: number[] = [];
   for (let i = 0; i < joints.length; i++) {
-    boneLengths.push(joints[i].boneLength);
+    boneLengths.push(joints[i]!.boneLength);
   }
 
-  const rootPos = { ...positions[0] };
+  const rootPos: Vector2 = { ...positions[0]! };
   const totalLength = boneLengths.reduce((sum, l) => sum + l, 0);
   const distToTarget = v2dist(rootPos, target);
 
@@ -164,7 +164,7 @@ export function solveFABRIK(config: FABRIKConfig): IKSolveResult {
     const dir = v2normalize(v2sub(target, rootPos));
     positions[0] = { ...rootPos };
     for (let i = 0; i < boneLengths.length; i++) {
-      positions[i + 1] = v2add(positions[i], v2scale(dir, boneLengths[i]));
+      positions[i + 1] = v2add(positions[i]!, v2scale(dir, boneLengths[i]!));
     }
   } else {
     // FABRIK iterations
@@ -172,21 +172,21 @@ export function solveFABRIK(config: FABRIKConfig): IKSolveResult {
       const endIdx = positions.length - 1;
 
       // Check convergence
-      const error = v2dist(positions[endIdx], target);
+      const error = v2dist(positions[endIdx]!, target);
       if (error <= tolerance) break;
 
       // === Backward pass: start from end effector, move toward root ===
       positions[endIdx] = { ...target };
       for (let i = endIdx - 1; i >= 0; i--) {
-        const dir = v2normalize(v2sub(positions[i], positions[i + 1]));
-        positions[i] = v2add(positions[i + 1], v2scale(dir, boneLengths[i]));
+        const dir = v2normalize(v2sub(positions[i]!, positions[i + 1]!));
+        positions[i] = v2add(positions[i + 1]!, v2scale(dir, boneLengths[i]!));
       }
 
       // === Forward pass: start from root, move toward end effector ===
       positions[0] = { ...rootPos };
       for (let i = 0; i < boneLengths.length; i++) {
-        const dir = v2normalize(v2sub(positions[i + 1], positions[i]));
-        positions[i + 1] = v2add(positions[i], v2scale(dir, boneLengths[i]));
+        const dir = v2normalize(v2sub(positions[i + 1]!, positions[i]!));
+        positions[i + 1] = v2add(positions[i]!, v2scale(dir, boneLengths[i]!));
       }
 
       // === Pole target projection ===
@@ -202,7 +202,7 @@ export function solveFABRIK(config: FABRIKConfig): IKSolveResult {
   // Convert positions to local rotations
   const rotations = positionsToRotations(positions, joints);
 
-  const endEffectorError = v2dist(positions[positions.length - 1], target);
+  const endEffectorError = v2dist(positions[positions.length - 1]!, target);
 
   return {
     rotations,
@@ -218,8 +218,8 @@ export function solveFABRIK(config: FABRIKConfig): IKSolveResult {
 function applyPoleTarget(positions: Vector2[], boneLengths: number[], poleTarget: Vector2): void {
   if (positions.length <= 3) {
     // Only one middle joint — project it toward the pole target
-    const root = positions[0];
-    const end = positions[positions.length - 1];
+    const root = positions[0]!;
+    const end = positions[positions.length - 1]!;
 
     // Chain axis from root to end effector
     const chainDir = v2normalize(v2sub(end, root));
@@ -227,7 +227,7 @@ function applyPoleTarget(positions: Vector2[], boneLengths: number[], poleTarget
     if (chainLen < 1e-10) return;
 
     // For the middle joint, project pole target onto perpendicular
-    const mid = positions[1];
+    const mid = positions[1]!;
     const midRel = v2sub(mid, root);
     const projLen = v2dot(midRel, chainDir);
     const projOnChain = v2add(root, v2scale(chainDir, projLen));
@@ -247,22 +247,22 @@ function applyPoleTarget(positions: Vector2[], boneLengths: number[], poleTarget
     positions[1] = v2add(projOnChain, v2scale(poleDir, offDist));
 
     // Re-enforce bone lengths
-    const dir0 = v2normalize(v2sub(positions[1], positions[0]));
-    positions[1] = v2add(positions[0], v2scale(dir0, boneLengths[0]));
-    const dir1 = v2normalize(v2sub(positions[2], positions[1]));
-    positions[2] = v2add(positions[1], v2scale(dir1, boneLengths[1]));
+    const dir0 = v2normalize(v2sub(positions[1], positions[0]!));
+    positions[1] = v2add(positions[0]!, v2scale(dir0, boneLengths[0]!));
+    const dir1 = v2normalize(v2sub(positions[2]!, positions[1]));
+    positions[2] = v2add(positions[1], v2scale(dir1, boneLengths[1]!));
     return;
   }
 
   // For longer chains, apply pole target to the middle joints
-  const root = positions[0];
-  const end = positions[positions.length - 1];
+  const root = positions[0]!;
+  const end = positions[positions.length - 1]!;
   const chainDir = v2normalize(v2sub(end, root));
   const chainLen = v2dist(root, end);
   if (chainLen < 1e-10) return;
 
   for (let i = 1; i < positions.length - 1; i++) {
-    const joint = positions[i];
+    const joint = positions[i]!;
     const jointRel = v2sub(joint, root);
     const projLen = v2dot(jointRel, chainDir);
     const projOnChain = v2add(root, v2scale(chainDir, projLen));
@@ -281,8 +281,8 @@ function applyPoleTarget(positions: Vector2[], boneLengths: number[], poleTarget
 
   // Re-enforce bone lengths from root forward
   for (let i = 0; i < positions.length - 2; i++) {
-    const dir = v2normalize(v2sub(positions[i + 1], positions[i]));
-    positions[i + 1] = v2add(positions[i], v2scale(dir, boneLengths[i]));
+    const dir = v2normalize(v2sub(positions[i + 1]!, positions[i]!));
+    positions[i + 1] = v2add(positions[i]!, v2scale(dir, boneLengths[i]!));
   }
 }
 
@@ -299,11 +299,11 @@ function applyConstraints(
   positions[0] = { ...rootPos };
 
   for (let i = 0; i < joints.length; i++) {
-    const joint = joints[i];
+    const joint = joints[i]!;
     if (joint.angleMin == null && joint.angleMax == null) continue;
 
     // Compute current angle of bone i (from positions[i] to positions[i+1])
-    const dir = v2sub(positions[i + 1], positions[i]);
+    const dir = v2sub(positions[i + 1]!, positions[i]!);
     const angle = Math.atan2(dir.y, dir.x) * (180 / Math.PI);
 
     // Clamp to constraints
@@ -315,14 +315,14 @@ function applyConstraints(
       // Reposition next joint at clamped angle
       const rad = clamped * (Math.PI / 180);
       positions[i + 1] = {
-        x: positions[i].x + Math.cos(rad) * boneLengths[i],
-        y: positions[i].y + Math.sin(rad) * boneLengths[i],
+        x: positions[i]!.x + Math.cos(rad) * boneLengths[i]!,
+        y: positions[i]!.y + Math.sin(rad) * boneLengths[i]!,
       };
 
       // Re-enforce downstream bone lengths
       for (let j = i + 1; j < boneLengths.length; j++) {
-        const d = v2normalize(v2sub(positions[j + 1], positions[j]));
-        positions[j + 1] = v2add(positions[j], v2scale(d, boneLengths[j]));
+        const d = v2normalize(v2sub(positions[j + 1]!, positions[j]!));
+        positions[j + 1] = v2add(positions[j]!, v2scale(d, boneLengths[j]!));
       }
     }
   }
@@ -340,7 +340,7 @@ function positionsToRotations(positions: Vector2[], joints: IKJoint[]): Map<stri
   const worldRotations: number[] = [];
 
   for (let i = 0; i < joints.length; i++) {
-    const dir = v2sub(positions[i + 1], positions[i]);
+    const dir = v2sub(positions[i + 1]!, positions[i]!);
     const worldAngle = Math.atan2(dir.y, dir.x) * (180 / Math.PI);
     worldRotations.push(worldAngle);
 
@@ -350,10 +350,10 @@ function positionsToRotations(positions: Vector2[], joints: IKJoint[]): Map<stri
     if (i === 0) {
       localAngle = worldAngle;
     } else {
-      localAngle = normalizeAngle(worldAngle - worldRotations[i - 1]);
+      localAngle = normalizeAngle(worldAngle - worldRotations[i - 1]!);
     }
 
-    rotations.set(joints[i].boneId, localAngle);
+    rotations.set(joints[i]!.boneId, localAngle);
   }
 
   return rotations;
@@ -389,7 +389,7 @@ export function extractIKJoints(
   }
 
   // Validate chain starts at root
-  if (chain.length === 0 || chain[0].id !== rootBoneId) {
+  if (chain.length === 0 || chain[0]!.id !== rootBoneId) {
     return [];
   }
 

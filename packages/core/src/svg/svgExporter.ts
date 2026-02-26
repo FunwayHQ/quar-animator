@@ -12,6 +12,9 @@ import type {
   GroupNode,
   TextNode,
   ImageNode,
+  ArtboardNode,
+  SymbolInstanceNode,
+  SymbolDefinition,
   PathPoint,
   Color,
   Fill,
@@ -26,6 +29,7 @@ import {
   createPolygonPath,
   createStarPath,
 } from '../path/pathUtils';
+import { resolveSymbolInstance, getResolvedRootNodes } from '../symbols/symbolResolver';
 import type { SceneGraph } from '../SceneGraph';
 
 // ============================================================================
@@ -229,7 +233,12 @@ export function transformToSvgAttr(transform: Transform): string {
  * Convert a single node to an SVG element string.
  * Recursive for groups.
  */
-export function nodeToSvgElement(node: Node, sceneGraph: SceneGraph, defs: string[]): string {
+export function nodeToSvgElement(
+  node: Node,
+  sceneGraph: SceneGraph,
+  defs: string[],
+  symbolDefs?: Map<string, SymbolDefinition>
+): string {
   switch (node.type) {
     case 'rectangle':
       return rectangleToSvg(node, defs);
@@ -244,7 +253,11 @@ export function nodeToSvgElement(node: Node, sceneGraph: SceneGraph, defs: strin
     case 'image':
       return imageToSvg(node, defs);
     case 'group':
-      return groupToSvg(node, sceneGraph, defs);
+      return groupToSvg(node, sceneGraph, defs, symbolDefs);
+    case 'artboard':
+      return artboardToSvg(node, sceneGraph, defs, symbolDefs);
+    case 'symbol-instance':
+      return symbolInstanceToSvg(node, sceneGraph, defs, symbolDefs);
     case 'bone':
     case 'ik-target':
       return ''; // Non-visual nodes
@@ -399,7 +412,12 @@ function imageToSvg(node: ImageNode, _defs: string[]): string {
   return `<image x="${fmt(-anchorX)}" y="${fmt(-anchorY)}" width="${fmt(node.width)}" height="${fmt(node.height)}" href="${escapeXml(node.src)}"${tfAttr}${opacityAttr}/>`;
 }
 
-function groupToSvg(node: GroupNode, sceneGraph: SceneGraph, defs: string[]): string {
+function groupToSvg(
+  node: GroupNode,
+  sceneGraph: SceneGraph,
+  defs: string[],
+  symbolDefs?: Map<string, SymbolDefinition>
+): string {
   const tfAttr = transformToSvgAttr(node.transform);
   const opacityAttr = node.opacity < 1 ? ` opacity="${fmt(node.opacity)}"` : '';
 
@@ -407,11 +425,118 @@ function groupToSvg(node: GroupNode, sceneGraph: SceneGraph, defs: string[]): st
   for (const childId of node.children) {
     const child = sceneGraph.getNode(childId);
     if (child && child.visible) {
-      childElements.push(nodeToSvgElement(child, sceneGraph, defs));
+      childElements.push(nodeToSvgElement(child, sceneGraph, defs, symbolDefs));
     }
   }
 
   return `<g${tfAttr}${opacityAttr}>${childElements.join('')}</g>`;
+}
+
+function artboardToSvg(
+  node: ArtboardNode,
+  sceneGraph: SceneGraph,
+  defs: string[],
+  symbolDefs?: Map<string, SymbolDefinition>
+): string {
+  const tfAttr = transformToSvgAttr(node.transform);
+  const opacityAttr = node.opacity < 1 ? ` opacity="${fmt(node.opacity)}"` : '';
+
+  const elements: string[] = [];
+
+  // Render artboard background
+  if (node.fills && node.fills.length > 0) {
+    const anchorX = node.transform.anchor.x * node.width;
+    const anchorY = node.transform.anchor.y * node.height;
+    const fillAttr = fillToSvgAttrs(node.fills[0], defs);
+    elements.push(
+      `<rect x="${fmt(-anchorX)}" y="${fmt(-anchorY)}" width="${fmt(node.width)}" height="${fmt(node.height)}" ${fillAttr}/>`
+    );
+  }
+
+  // Render children
+  for (const childId of node.children) {
+    const child = sceneGraph.getNode(childId);
+    if (child && child.visible) {
+      elements.push(nodeToSvgElement(child, sceneGraph, defs, symbolDefs));
+    }
+  }
+
+  return `<g${tfAttr}${opacityAttr}>${elements.join('')}</g>`;
+}
+
+function symbolInstanceToSvg(
+  node: SymbolInstanceNode,
+  _sceneGraph: SceneGraph,
+  defs: string[],
+  symbolDefs?: Map<string, SymbolDefinition>
+): string {
+  if (!symbolDefs) return '';
+  const definition = symbolDefs.get(node.symbolId);
+  if (!definition) return '';
+
+  const tfAttr = transformToSvgAttr(node.transform);
+  const opacityAttr = node.opacity < 1 ? ` opacity="${fmt(node.opacity)}"` : '';
+
+  // Resolve the symbol instance (applies overrides)
+  const resolvedNodes = resolveSymbolInstance(node, definition);
+  const rootNodes = getResolvedRootNodes(resolvedNodes, definition);
+
+  // Build a temporary node map for resolved nodes
+  const nodeMap = new Map<string, Node>();
+  for (const rn of resolvedNodes) nodeMap.set(rn.id, rn);
+
+  const childElements: string[] = [];
+  for (const child of rootNodes) {
+    if (!child.visible) continue;
+    // Render resolved children using a temporary inline traversal
+    childElements.push(renderResolvedNodeToSvg(child, nodeMap, defs, symbolDefs));
+  }
+
+  return `<g${tfAttr}${opacityAttr}>${childElements.join('')}</g>`;
+}
+
+/**
+ * Render a resolved (flattened) symbol node to SVG.
+ * Uses the nodeMap from symbol resolution instead of the scene graph.
+ */
+function renderResolvedNodeToSvg(
+  node: Node,
+  nodeMap: Map<string, Node>,
+  defs: string[],
+  symbolDefs?: Map<string, SymbolDefinition>
+): string {
+  // For leaf types, render directly
+  switch (node.type) {
+    case 'rectangle':
+      return rectangleToSvg(node, defs);
+    case 'ellipse':
+      return ellipseToSvg(node, defs);
+    case 'polygon':
+      return polygonToSvg(node, defs);
+    case 'path':
+      return pathToSvg(node, defs);
+    case 'text':
+      return textToSvg(node, defs);
+    case 'image':
+      return imageToSvg(node, defs);
+    case 'group': {
+      const tfAttr = transformToSvgAttr(node.transform);
+      const opacityAttr = node.opacity < 1 ? ` opacity="${fmt(node.opacity)}"` : '';
+      const childElements: string[] = [];
+      for (const childId of node.children) {
+        const child = nodeMap.get(childId);
+        if (child && child.visible) {
+          childElements.push(renderResolvedNodeToSvg(child, nodeMap, defs, symbolDefs));
+        }
+      }
+      return `<g${tfAttr}${opacityAttr}>${childElements.join('')}</g>`;
+    }
+    case 'bone':
+    case 'ik-target':
+      return '';
+    default:
+      return '';
+  }
 }
 
 // ============================================================================
@@ -423,8 +548,19 @@ function groupToSvg(node: GroupNode, sceneGraph: SceneGraph, defs: string[]): st
  * Computes bounding box, applies Y-flip so the SVG renders correctly
  * (Quar uses Y-up, SVG uses Y-down).
  */
-export function exportNodesToSvg(nodes: Node[], sceneGraph: SceneGraph): string {
+export function exportNodesToSvg(
+  nodes: Node[],
+  sceneGraph: SceneGraph,
+  symbolDefinitions?: import('@quar/types').SymbolDefinition[]
+): string {
   resetDefsCounter();
+
+  // Build symbol definitions map
+  let symbolDefs: Map<string, SymbolDefinition> | undefined;
+  if (symbolDefinitions && symbolDefinitions.length > 0) {
+    symbolDefs = new Map();
+    for (const s of symbolDefinitions) symbolDefs.set(s.id, s);
+  }
 
   // Compute combined bounds of all nodes
   const bounds = computeExportBounds(nodes, sceneGraph);
@@ -439,7 +575,7 @@ export function exportNodesToSvg(nodes: Node[], sceneGraph: SceneGraph): string 
 
   for (const node of nodes) {
     if (!node.visible) continue;
-    elements.push(nodeToSvgElement(node, sceneGraph, defs));
+    elements.push(nodeToSvgElement(node, sceneGraph, defs, symbolDefs));
   }
 
   const defsBlock = defs.length > 0 ? `<defs>${defs.join('')}</defs>` : '';

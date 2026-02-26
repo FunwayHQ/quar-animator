@@ -60,8 +60,8 @@ export function applyBrushDisplacement(
   }
 
   for (let i = 0; i < numVertices; i++) {
-    const vx = vertexWorldPositions[i * 2];
-    const vy = vertexWorldPositions[i * 2 + 1];
+    const vx = vertexWorldPositions[i * 2] ?? 0;
+    const vy = vertexWorldPositions[i * 2 + 1] ?? 0;
     const dx = vx - worldX;
     const dy = vy - worldY;
     const distSq = dx * dx + dy * dy;
@@ -126,8 +126,8 @@ export function morphOffsetsToDense(
   const dense = new Float32Array(vertexCount * 2);
   for (const o of offsets) {
     if (o.vertexIndex >= 0 && o.vertexIndex < vertexCount) {
-      dense[o.vertexIndex * 2] += o.dx;
-      dense[o.vertexIndex * 2 + 1] += o.dy;
+      dense[o.vertexIndex * 2] = (dense[o.vertexIndex * 2] ?? 0) + o.dx;
+      dense[o.vertexIndex * 2 + 1] = (dense[o.vertexIndex * 2 + 1] ?? 0) + o.dy;
     }
   }
   return dense;

@@ -40,7 +40,7 @@ function simplifyToSmoothPoints(verts: Float32Array, startIdx: number, count: nu
   const points: Vector2[] = [];
   for (let i = 0; i < count; i++) {
     const idx = (startIdx + i) * 2;
-    points.push({ x: verts[idx], y: verts[idx + 1] });
+    points.push({ x: verts[idx]!, y: verts[idx + 1]! });
   }
 
   // For very few points, return corners directly (e.g. straight rectangle sides)
@@ -176,7 +176,7 @@ export function outlineStroke(
     }))
   );
 
-  const primaryPoints = centeredContours[0];
+  const primaryPoints = centeredContours[0]!;
   const additionalSubpaths = centeredContours.slice(1);
 
   // Compute world position: node transform position + local center * scale

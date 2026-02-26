@@ -130,7 +130,7 @@ export class WeightPaintTool extends BaseTool {
         if (skin) {
           const boneIds = Object.keys(skin.inverseBindMatrices);
           if (boneIds.length > 0) {
-            this.activeBoneId = boneIds[0];
+            this.activeBoneId = boneIds[0]!;
           }
         }
       }
@@ -266,8 +266,8 @@ export class WeightPaintTool extends BaseTool {
 
     const numVertices = Math.min(vertexWorldPositions.length / 2, skinData.vertices.length);
     for (let i = 0; i < numVertices; i++) {
-      const vx = vertexWorldPositions[i * 2];
-      const vy = vertexWorldPositions[i * 2 + 1];
+      const vx = vertexWorldPositions[i * 2]!;
+      const vy = vertexWorldPositions[i * 2 + 1]!;
       const dx = vx - worldX;
       const dy = vy - worldY;
       const distSq = dx * dx + dy * dy;

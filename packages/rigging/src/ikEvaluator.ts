@@ -3,7 +3,7 @@
  * Evaluates all enabled IK chains: reads target positions, solves, applies results.
  */
 
-import type { IKChain, Node, Vector2 } from '@quar/types';
+import type { IKChain, Vector2 } from '@quar/types';
 import { extractIKJoints, solveFABRIK, applyIKResult, type IKSceneGraph } from './ik';
 
 /**

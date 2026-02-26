@@ -104,8 +104,8 @@ describe('interpolateMorphOffsets', () => {
     const b: MorphVertexOffset[] = [{ vertexIndex: 0, dx: 30, dy: 40 }];
     const result = interpolateMorphOffsets(a, b, 0);
     expect(result).toHaveLength(1);
-    expect(result[0].dx).toBe(10);
-    expect(result[0].dy).toBe(20);
+    expect(result[0]!.dx).toBe(10);
+    expect(result[0]!.dy).toBe(20);
   });
 
   it('returns B at t=1', () => {
@@ -113,16 +113,16 @@ describe('interpolateMorphOffsets', () => {
     const b: MorphVertexOffset[] = [{ vertexIndex: 0, dx: 30, dy: 40 }];
     const result = interpolateMorphOffsets(a, b, 1);
     expect(result).toHaveLength(1);
-    expect(result[0].dx).toBe(30);
-    expect(result[0].dy).toBe(40);
+    expect(result[0]!.dx).toBe(30);
+    expect(result[0]!.dy).toBe(40);
   });
 
   it('interpolates at t=0.5', () => {
     const a: MorphVertexOffset[] = [{ vertexIndex: 0, dx: 0, dy: 0 }];
     const b: MorphVertexOffset[] = [{ vertexIndex: 0, dx: 10, dy: 20 }];
     const result = interpolateMorphOffsets(a, b, 0.5);
-    expect(result[0].dx).toBeCloseTo(5);
-    expect(result[0].dy).toBeCloseTo(10);
+    expect(result[0]!.dx).toBeCloseTo(5);
+    expect(result[0]!.dy).toBeCloseTo(10);
   });
 
   it('handles partial overlap (vertex only in A)', () => {
@@ -144,7 +144,7 @@ describe('interpolateMorphOffsets', () => {
     const a: MorphVertexOffset[] = [{ vertexIndex: 0, dx: 5, dy: 5 }];
     const b: MorphVertexOffset[] = [{ vertexIndex: 0, dx: 15, dy: 15 }];
     const result = interpolateMorphOffsets(a, b, -1);
-    expect(result[0].dx).toBe(5);
+    expect(result[0]!.dx).toBe(5);
   });
 });
 

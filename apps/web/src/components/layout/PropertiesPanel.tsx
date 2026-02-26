@@ -195,11 +195,11 @@ function getNodeSize(
     }
     case 'symbol-instance': {
       // Symbol instances have no scene graph children — compute from definition
-      const symInst = node as SymbolInstanceNode;
+      const symInst = node;
       const syms = symbols ?? useEditorStore.getState().symbols;
       const symDef = syms.find((s: { id: string }) => s.id === symInst.symbolId);
       if (symDef && symDef.sceneGraphJSON.nodes.length > 0) {
-        const symBounds = getSymbolBounds(symDef.sceneGraphJSON.nodes as Node[]);
+        const symBounds = getSymbolBounds(symDef.sceneGraphJSON.nodes);
         const ssx = node.transform.scale?.x ?? 1;
         const ssy = node.transform.scale?.y ?? 1;
         return { width: symBounds.width * ssx, height: symBounds.height * ssy };
@@ -661,7 +661,7 @@ export function PropertiesPanel() {
       if (isNaN(num) || num < 0) return;
       const currentNode = sceneGraph.getNode(selectedId);
       if (!currentNode || currentNode.type !== 'polygon') return;
-      const poly = currentNode as PolygonNode;
+      const poly = currentNode;
       const clamped = Math.min(num, poly.radius);
       sceneGraph.updateNode(selectedId, { innerRadius: clamped } as Partial<Node>);
       if (shouldKeyframe(autoKeyframe, selectedId, 'innerRadius')) {
@@ -1057,7 +1057,7 @@ export function PropertiesPanel() {
       if (!selectedId) return;
       const currentNode = sceneGraph.getNode(selectedId);
       if (!currentNode || currentNode.type !== 'image') return;
-      const imgNode = currentNode as ImageNode;
+      const imgNode = currentNode;
       const adjustments = { ...(imgNode.adjustments ?? DEFAULT_ADJUSTMENTS), [key]: value };
       sceneGraph.updateNode(selectedId, { adjustments } as Partial<Node>);
       if (shouldKeyframe(autoKeyframe, selectedId, `adjustments.${String(key)}`)) {
@@ -1072,7 +1072,7 @@ export function PropertiesPanel() {
       if (!selectedId) return;
       const currentNode = sceneGraph.getNode(selectedId);
       if (!currentNode || currentNode.type !== 'image') return;
-      const imgNode = currentNode as ImageNode;
+      const imgNode = currentNode;
       const adjustments = {
         ...(imgNode.adjustments ?? DEFAULT_ADJUSTMENTS),
         [key]: DEFAULT_ADJUSTMENTS[key],
@@ -1101,7 +1101,7 @@ export function PropertiesPanel() {
       if (!currentNode) return;
 
       if (currentNode.type === 'rectangle') {
-        const rect = currentNode as RectangleNode;
+        const rect = currentNode;
         const newRadius = [...rect.cornerRadius] as [number, number, number, number];
         if (corner !== undefined) {
           newRadius[corner] = num;
@@ -1123,7 +1123,7 @@ export function PropertiesPanel() {
           }
         }
       } else if (currentNode.type === 'image') {
-        const img = currentNode as ImageNode;
+        const img = currentNode;
         const newRadius = [...(img.cornerRadius ?? [0, 0, 0, 0])] as [
           number,
           number,
@@ -1365,7 +1365,7 @@ export function PropertiesPanel() {
         {/* Symbol Instance Section */}
         {node.type === 'symbol-instance' &&
           (() => {
-            const symInst = node as SymbolInstanceNode;
+            const symInst = node;
             const symDef = symbols.find((s: { id: string }) => s.id === symInst.symbolId);
             return (
               <div className={styles.section}>
@@ -1727,7 +1727,7 @@ export function PropertiesPanel() {
               })()}
             {node.type === 'polygon' &&
               (() => {
-                const poly = node as PolygonNode;
+                const poly = node;
                 return (
                   <>
                     <div className={styles.propertyRow}>
@@ -1823,7 +1823,7 @@ export function PropertiesPanel() {
               })()}
             {node.type === 'bone' &&
               (() => {
-                const bone = node as BoneNode;
+                const bone = node;
                 return (
                   <>
                     <div className={styles.propertyRow}>
@@ -2092,7 +2092,7 @@ export function PropertiesPanel() {
               })()}
             {node.type === 'text' &&
               (() => {
-                const textNode = node as TextNode;
+                const textNode = node;
                 const fm = getFontManager();
                 const loadedFonts = fm.getLoadedFamilies();
                 const googleConsent = hasGoogleFontsConsent();
@@ -2402,9 +2402,7 @@ export function PropertiesPanel() {
                   <span className={styles.propertyLabel}>Shape</span>
                   <KeyframeIndicator
                     state={getKeyframeState(timeline, nodeId, 'points', currentFrame)}
-                    onToggle={() =>
-                      toggleKeyframe('points', structuredClone((node as PathNode).points))
-                    }
+                    onToggle={() => toggleKeyframe('points', structuredClone(node.points))}
                   />
                 </div>
                 <div className={styles.propertyInputs}>
@@ -2414,7 +2412,7 @@ export function PropertiesPanel() {
                       color: 'var(--color-text-secondary)',
                     }}
                   >
-                    {(node as PathNode).points.length} points
+                    {node.points.length} points
                   </span>
                 </div>
               </div>
@@ -2473,7 +2471,7 @@ export function PropertiesPanel() {
           dsPoints.length > 0 &&
           node.type === 'path' &&
           (() => {
-            const pathNode = node as PathNode;
+            const pathNode = node;
             const allPts = getAllPoints(pathNode);
             const firstPt = allPts[dsPoints[0].pointIndex];
             if (!firstPt) return null;
@@ -2496,7 +2494,7 @@ export function PropertiesPanel() {
               if (isNaN(num)) return;
               pushUndo(sceneGraph);
               for (const sp of dsPoints) {
-                const n = sceneGraph.getNode(sp.nodeId) as PathNode | undefined;
+                const n = sceneGraph.getNode(sp.nodeId);
                 if (!n || n.type !== 'path') continue;
                 const pts = getAllPoints(n);
                 const pt = pts[sp.pointIndex];
@@ -2533,7 +2531,7 @@ export function PropertiesPanel() {
               if (isNaN(num) || num < 0) return;
               pushUndo(sceneGraph);
               for (const sp of dsPoints) {
-                const n = sceneGraph.getNode(sp.nodeId) as PathNode | undefined;
+                const n = sceneGraph.getNode(sp.nodeId);
                 if (!n || n.type !== 'path') continue;
                 const pts = getAllPoints(n);
                 const pt = pts[sp.pointIndex];
@@ -2700,7 +2698,7 @@ export function PropertiesPanel() {
           })()}
 
         {/* Brush Stroke section — visible only for brush strokes with brushData */}
-        {node.type === 'path' && (node as PathNode).brushData && (
+        {node.type === 'path' && node.brushData && (
           <div className={styles.section}>
             <div className={styles.sectionHeader}>
               <span className={styles.sectionTitle}>Brush Stroke</span>
@@ -2712,8 +2710,7 @@ export function PropertiesPanel() {
                     onScrubStart={handleScrubStart}
                     label="Width"
                     value={Math.round(
-                      (node as PathNode).brushData?.baseWidth ??
-                        Math.max(...((node as PathNode).brushData?.widths ?? [10]))
+                      node.brushData?.baseWidth ?? Math.max(...(node.brushData?.widths ?? [10]))
                     )}
                     onChange={(v) => {
                       const w = Math.max(1, Math.round(v));
@@ -2728,8 +2725,7 @@ export function PropertiesPanel() {
                     className={styles.input}
                     type="text"
                     value={Math.round(
-                      (node as PathNode).brushData?.baseWidth ??
-                        Math.max(...((node as PathNode).brushData?.widths ?? [10]))
+                      node.brushData?.baseWidth ?? Math.max(...(node.brushData?.widths ?? [10]))
                     )}
                     onChange={(e) => {
                       const v = parseFloat(e.target.value);
@@ -2742,8 +2738,7 @@ export function PropertiesPanel() {
                     {...numericInputProps(
                       () =>
                         Math.round(
-                          (node as PathNode).brushData?.baseWidth ??
-                            Math.max(...((node as PathNode).brushData?.widths ?? [10]))
+                          node.brushData?.baseWidth ?? Math.max(...(node.brushData?.widths ?? [10]))
                         ),
                       (v) => {
                         const w = Math.max(1, Math.round(parseFloat(v)));
@@ -2763,7 +2758,7 @@ export function PropertiesPanel() {
                 <select
                   id="brush-stroke-profile"
                   className={styles.select}
-                  value={(node as PathNode).brushData?.profileId ?? 'uniform'}
+                  value={node.brushData?.profileId ?? 'uniform'}
                   onChange={(e) => {
                     const val = e.target.value;
                     useEditorStore
@@ -2785,7 +2780,7 @@ export function PropertiesPanel() {
 
         {node.type === 'artboard' &&
           (() => {
-            const artboard = node as ArtboardNode;
+            const artboard = node;
             return (
               <div className={styles.section}>
                 <div className={styles.sectionHeader}>
@@ -3164,7 +3159,7 @@ export function PropertiesPanel() {
         {node.type === 'image' && (
           <div className={styles.section} data-testid="image-adjustments-section">
             <ImageAdjustments
-              adjustments={(node as ImageNode).adjustments ?? DEFAULT_ADJUSTMENTS}
+              adjustments={node.adjustments ?? DEFAULT_ADJUSTMENTS}
               onChange={handleAdjustmentChange}
               onReset={handleAdjustmentReset}
               onResetAll={handleAdjustmentResetAll}
@@ -3283,7 +3278,7 @@ export function PropertiesPanel() {
                 <div className={styles.effectProperties}>
                   {(effect.type === 'drop-shadow' || effect.type === 'inner-shadow') &&
                     (() => {
-                      const shadow = effect as DropShadowEffect | InnerShadowEffect;
+                      const shadow = effect;
                       return (
                         <>
                           <div className={styles.effectPropRow}>
@@ -3800,7 +3795,7 @@ export function PropertiesPanel() {
                     })()}
                   {effect.type === 'layer-blur' &&
                     (() => {
-                      const blur = effect as LayerBlurEffect;
+                      const blur = effect;
                       return (
                         <div className={styles.effectPropRow}>
                           <div className={styles.inputGroup}>
@@ -4076,16 +4071,16 @@ function ExportSection({
     if (exportSettings.length === 0) return;
     setExporting(true);
     try {
+      const symbolDefinitions = useEditorStore.getState().symbols;
       for (const setting of exportSettings) {
         if (setting.format === 'png') {
-          await exportSelectionAsPng(
-            nodes,
-            sceneGraph,
-            setting.multiplier,
-            setting.includeBackground ?? true
-          );
+          await exportSelectionAsPng(nodes, sceneGraph, {
+            multiplier: setting.multiplier,
+            includeBackground: setting.includeBackground ?? true,
+            symbolDefinitions,
+          });
         } else {
-          exportSelectionAsSvg(nodes, sceneGraph);
+          exportSelectionAsSvg(nodes, sceneGraph, symbolDefinitions);
         }
       }
     } finally {

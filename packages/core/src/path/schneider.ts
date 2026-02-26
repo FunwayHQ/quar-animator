@@ -48,14 +48,14 @@ export function schneiderFitCurve(points: Vector2[], maxError: number): CubicSeg
   if (points.length < 2) return [];
 
   if (points.length === 2) {
-    return [lineSegment(points[0], points[1])];
+    return [lineSegment(points[0]!, points[1]!)];
   }
 
   // Remove duplicate consecutive points
   const cleaned = removeDuplicates(points);
   if (cleaned.length < 2) return [];
   if (cleaned.length === 2) {
-    return [lineSegment(cleaned[0], cleaned[1])];
+    return [lineSegment(cleaned[0]!, cleaned[1]!)];
   }
 
   // Compute endpoint tangents
@@ -77,7 +77,7 @@ export function curvesToPathPoints(curves: CubicSegment[]): PathPoint[] {
   const pathPoints: PathPoint[] = [];
 
   for (let i = 0; i < curves.length; i++) {
-    const seg = curves[i];
+    const seg = curves[i]!;
 
     if (i === 0) {
       // First point of first segment
@@ -94,7 +94,7 @@ export function curvesToPathPoints(curves: CubicSegment[]): PathPoint[] {
     const handleIn = vec2.subtract(seg.p2, seg.p3);
 
     if (i < curves.length - 1) {
-      const nextSeg = curves[i + 1];
+      const nextSeg = curves[i + 1]!;
       const handleOut = vec2.subtract(nextSeg.p1, nextSeg.p0);
       pathPoints.push({
         position: { ...seg.p3 },
@@ -137,7 +137,7 @@ function fitCubic(
 
   // Degenerate: use simple line segment for very short runs
   if (nPts === 2) {
-    result.push(lineSegment(points[first], points[last]));
+    result.push(lineSegment(points[first]!, points[last]!));
     return;
   }
 
@@ -210,13 +210,13 @@ function generateBezier(
   tHat2: Vector2
 ): CubicSegment {
   const nPts = last - first + 1;
-  const p0 = points[first];
-  const p3 = points[last];
+  const p0 = points[first]!;
+  const p3 = points[last]!;
 
   // Compute the A matrix rows: A[i] = [B1(u)*tHat1, B2(u)*tHat2]
   const A: [Vector2, Vector2][] = [];
   for (let i = 0; i < nPts; i++) {
-    const u = uPrime[i];
+    const u = uPrime[i]!;
     const b1 = bernstein1(u); // 3(1-t)^2 * t
     const b2 = bernstein2(u); // 3(1-t) * t^2
     A.push([vec2.multiply(tHat1, b1), vec2.multiply(tHat2, b2)]);
@@ -230,16 +230,16 @@ function generateBezier(
   const X: [number, number] = [0, 0];
 
   for (let i = 0; i < nPts; i++) {
-    C[0][0] += vec2.dot(A[i][0], A[i][0]);
-    C[0][1] += vec2.dot(A[i][0], A[i][1]);
+    C[0][0] += vec2.dot(A[i]![0], A[i]![0]);
+    C[0][1] += vec2.dot(A[i]![0], A[i]![1]);
     C[1][0] = C[0][1]; // symmetric
-    C[1][1] += vec2.dot(A[i][1], A[i][1]);
+    C[1][1] += vec2.dot(A[i]![1], A[i]![1]);
 
-    const u = uPrime[i];
-    const tmp = vec2.subtract(points[first + i], bezier.cubicPoint(p0, p0, p3, p3, u));
+    const u = uPrime[i]!;
+    const tmp = vec2.subtract(points[first + i]!, bezier.cubicPoint(p0, p0, p3, p3, u));
 
-    X[0] += vec2.dot(A[i][0], tmp);
-    X[1] += vec2.dot(A[i][1], tmp);
+    X[0] += vec2.dot(A[i]![0], tmp);
+    X[1] += vec2.dot(A[i]![1], tmp);
   }
 
   // Solve 2x2 system: C * [alpha_l, alpha_r]^T = X
@@ -290,15 +290,21 @@ function reparameterize(
   const uPrime: number[] = [];
 
   for (let i = 0; i < nPts; i++) {
-    const p = points[first + i];
-    const qU = bezier.cubicPoint(bezCurve.p0, bezCurve.p1, bezCurve.p2, bezCurve.p3, u[i]);
-    const qPrime = bezier.cubicDerivative(bezCurve.p0, bezCurve.p1, bezCurve.p2, bezCurve.p3, u[i]);
+    const p = points[first + i]!;
+    const qU = bezier.cubicPoint(bezCurve.p0, bezCurve.p1, bezCurve.p2, bezCurve.p3, u[i]!);
+    const qPrime = bezier.cubicDerivative(
+      bezCurve.p0,
+      bezCurve.p1,
+      bezCurve.p2,
+      bezCurve.p3,
+      u[i]!
+    );
     const qPrimePrime = bezier.cubicSecondDerivative(
       bezCurve.p0,
       bezCurve.p1,
       bezCurve.p2,
       bezCurve.p3,
-      u[i]
+      u[i]!
     );
 
     const diff = vec2.subtract(qU, p);
@@ -306,9 +312,9 @@ function reparameterize(
     const denominator = vec2.dot(qPrime, qPrime) + vec2.dot(diff, qPrimePrime);
 
     if (Math.abs(denominator) > EPSILON) {
-      uPrime.push(Math.max(0, Math.min(1, u[i] - numerator / denominator)));
+      uPrime.push(Math.max(0, Math.min(1, u[i]! - numerator / denominator)));
     } else {
-      uPrime.push(u[i]);
+      uPrime.push(u[i]!);
     }
   }
 
@@ -334,8 +340,8 @@ function computeMaxError(
   let splitPoint = Math.floor((last - first + 1) / 2) + first;
 
   for (let i = first + 1; i < last; i++) {
-    const p = bezier.cubicPoint(bezCurve.p0, bezCurve.p1, bezCurve.p2, bezCurve.p3, u[i - first]);
-    const dist = vec2.distanceSquared(points[i], p);
+    const p = bezier.cubicPoint(bezCurve.p0, bezCurve.p1, bezCurve.p2, bezCurve.p3, u[i - first]!);
+    const dist = vec2.distanceSquared(points[i]!, p);
 
     if (dist >= maxDist) {
       maxDist = dist;
@@ -356,14 +362,14 @@ function computeMaxError(
 function chordLengthParameterize(points: Vector2[], first: number, last: number): number[] {
   const u: number[] = [0];
   for (let i = first + 1; i <= last; i++) {
-    u.push(u[u.length - 1] + vec2.distance(points[i], points[i - 1]));
+    u.push(u[u.length - 1]! + vec2.distance(points[i]!, points[i - 1]!));
   }
 
   // Normalize to [0, 1]
-  const totalLength = u[u.length - 1];
+  const totalLength = u[u.length - 1]!;
   if (totalLength > EPSILON) {
     for (let i = 1; i < u.length; i++) {
-      u[i] /= totalLength;
+      u[i]! /= totalLength;
     }
   }
   // Ensure last value is exactly 1
@@ -377,18 +383,18 @@ function chordLengthParameterize(points: Vector2[], first: number, last: number)
 // ============================================================================
 
 function computeLeftTangent(points: Vector2[], index: number): Vector2 {
-  const tangent = vec2.subtract(points[index + 1], points[index]);
+  const tangent = vec2.subtract(points[index + 1]!, points[index]!);
   return vec2.normalize(tangent);
 }
 
 function computeRightTangent(points: Vector2[], index: number): Vector2 {
-  const tangent = vec2.subtract(points[index - 1], points[index]);
+  const tangent = vec2.subtract(points[index - 1]!, points[index]!);
   return vec2.normalize(tangent);
 }
 
 function computeCenterTangent(points: Vector2[], index: number): Vector2 {
-  const v1 = vec2.subtract(points[index - 1], points[index]);
-  const v2 = vec2.subtract(points[index], points[index + 1]);
+  const v1 = vec2.subtract(points[index - 1]!, points[index]!);
+  const v2 = vec2.subtract(points[index]!, points[index + 1]!);
   const avg = {
     x: (v1.x + v2.x) / 2,
     y: (v1.y + v2.y) / 2,
@@ -428,10 +434,10 @@ function lineSegment(p0: Vector2, p1: Vector2): CubicSegment {
 }
 
 function removeDuplicates(points: Vector2[]): Vector2[] {
-  const result = [points[0]];
+  const result: Vector2[] = [points[0]!];
   for (let i = 1; i < points.length; i++) {
-    if (vec2.distanceSquared(points[i], result[result.length - 1]) > EPSILON * EPSILON) {
-      result.push(points[i]);
+    if (vec2.distanceSquared(points[i]!, result[result.length - 1]!) > EPSILON * EPSILON) {
+      result.push(points[i]!);
     }
   }
   return result;

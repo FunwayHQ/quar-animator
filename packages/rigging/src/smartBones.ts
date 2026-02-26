@@ -143,11 +143,13 @@ export function evaluateSmartBoneAction(
     let upper: MorphTarget | null = null;
 
     for (let i = 0; i < sorted.length; i++) {
-      if (sorted[i].driverValue <= currentDriverVal) {
-        lower = sorted[i];
+      const entry = sorted[i];
+      if (!entry) continue;
+      if (entry.driverValue <= currentDriverVal) {
+        lower = entry;
       }
-      if (sorted[i].driverValue >= currentDriverVal && !upper) {
-        upper = sorted[i];
+      if (entry.driverValue >= currentDriverVal && !upper) {
+        upper = entry;
       }
     }
 
@@ -178,15 +180,15 @@ export function evaluateSmartBoneAction(
     const dense = new Float32Array(vertexCount * 2);
     for (const o of offsets) {
       if (o.vertexIndex >= 0 && o.vertexIndex < vertexCount) {
-        dense[o.vertexIndex * 2] += o.dx;
-        dense[o.vertexIndex * 2 + 1] += o.dy;
+        dense[o.vertexIndex * 2] = (dense[o.vertexIndex * 2] ?? 0) + o.dx;
+        dense[o.vertexIndex * 2 + 1] = (dense[o.vertexIndex * 2 + 1] ?? 0) + o.dy;
       }
     }
 
     // Accumulate into result
     const existing = result.get(nodeId);
     if (existing) {
-      for (let i = 0; i < existing.length; i++) existing[i] += dense[i];
+      for (let i = 0; i < existing.length; i++) existing[i] = (existing[i] ?? 0) + (dense[i] ?? 0);
     } else {
       result.set(nodeId, dense);
     }
@@ -218,7 +220,7 @@ export function evaluateSmartBones(
       const existing = accumulated.get(nodeId);
       if (existing) {
         for (let i = 0; i < Math.min(existing.length, offsets.length); i++) {
-          existing[i] += offsets[i];
+          existing[i] = (existing[i] ?? 0) + (offsets[i] ?? 0);
         }
       } else {
         accumulated.set(nodeId, new Float32Array(offsets));
@@ -242,7 +244,7 @@ export function applyMorphOffsets(
 
   const result = new Float32Array(vertices.length);
   for (let i = 0; i < vertices.length; i++) {
-    result[i] = vertices[i] + morphOffsets[i];
+    result[i] = (vertices[i] ?? 0) + (morphOffsets[i] ?? 0);
   }
   return result;
 }

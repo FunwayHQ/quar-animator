@@ -187,8 +187,8 @@ describe('bakeDynamicChainToKeyframes', () => {
     const kfs = result!.boneKeyframes.get('bone-2')!;
 
     // Later frames should have different rotation than frame 0
-    const rot0 = kfs[0].value;
-    const rot20 = kfs[20].value;
+    const rot0 = kfs[0]!.value;
+    const rot20 = kfs[20]!.value;
     expect(rot0).not.toEqual(rot20);
   });
 });

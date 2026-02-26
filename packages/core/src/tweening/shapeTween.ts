@@ -84,10 +84,10 @@ export function subdivideSegmentPoints(p0: PathPoint, p1: PathPoint, count: numb
   const subCurves = bezier.splitAtMultiple(startPos, cp1, cp2, endPos, tValues);
 
   for (let i = 0; i < subCurves.length; i++) {
-    const curve = subCurves[i];
+    const curve = subCurves[i]!;
 
     // Update the handleOut of the previous point
-    const prevPoint = result[result.length - 1];
+    const prevPoint = result[result.length - 1]!;
     const handleOutAbsolute = curve.p1;
     prevPoint.handleOut = {
       x: handleOutAbsolute.x - prevPoint.position.x,
@@ -238,7 +238,7 @@ function addPointsToPath(points: PathPoint[], closed: boolean, count: number): P
   if (totalLength < 1e-6) {
     // All segments are degenerate; distribute evenly
     for (let i = 0; i < count; i++) {
-      extras[i % segmentCount]++;
+      extras[i % segmentCount]!++;
     }
   } else {
     // Distribute proportionally, then assign remainders to longest segments
@@ -255,7 +255,7 @@ function addPointsToPath(points: PathPoint[], closed: boolean, count: number): P
     // Distribute any leftover to longest segments
     let idx = 0;
     while (remaining > 0) {
-      extras[sorted[idx % sorted.length].i]++;
+      extras[sorted[idx % sorted.length]!.i]!++;
       remaining--;
       idx++;
     }
@@ -265,9 +265,9 @@ function addPointsToPath(points: PathPoint[], closed: boolean, count: number): P
   const result: PathPoint[] = [];
 
   for (let seg = 0; seg < segmentCount; seg++) {
-    const p0 = points[seg];
-    const p1 = points[(seg + 1) % points.length];
-    const extraForSeg = extras[seg];
+    const p0 = points[seg]!;
+    const p1 = points[(seg + 1) % points.length]!;
+    const extraForSeg = extras[seg]!;
 
     if (extraForSeg === 0) {
       result.push(clonePathPoint(p0));
@@ -276,14 +276,14 @@ function addPointsToPath(points: PathPoint[], closed: boolean, count: number): P
       const subPoints = subdivideSegmentPoints(p0, p1, extraForSeg + 1);
       // Push all but the last (which is the next segment's start)
       for (let j = 0; j < subPoints.length - 1; j++) {
-        result.push(subPoints[j]);
+        result.push(subPoints[j]!);
       }
     }
   }
 
   // For open paths, push the last point
   if (!closed) {
-    result.push(clonePathPoint(points[points.length - 1]));
+    result.push(clonePathPoint(points[points.length - 1]!));
   }
 
   return result;
@@ -319,8 +319,8 @@ export function findBestCorrespondence(
   for (let offset = 0; offset < n; offset += stride) {
     let cost = 0;
     for (let i = 0; i < n; i++) {
-      const sp = source[(i + offset) % n].position;
-      const tp = target[i].position;
+      const sp = source[(i + offset) % n]!.position;
+      const tp = target[i]!.position;
       const dx = sp.x - tp.x;
       const dy = sp.y - tp.y;
       cost += dx * dx + dy * dy;
@@ -349,7 +349,7 @@ export function applyCorrespondence(points: PathPoint[], offset: number): PathPo
   const result: PathPoint[] = [];
 
   for (let i = 0; i < n; i++) {
-    result.push(clonePathPoint(points[(i + safeOffset) % n]));
+    result.push(clonePathPoint(points[(i + safeOffset) % n]!));
   }
 
   return result;
@@ -371,8 +371,8 @@ export function interpolatePathPoints(a: PathPoint[], b: PathPoint[], t: number)
   const result: PathPoint[] = [];
 
   for (let i = 0; i < len; i++) {
-    const pa = a[i];
-    const pb = b[i];
+    const pa = a[i]!;
+    const pb = b[i]!;
 
     // Lerp position
     const position: Vector2 = {

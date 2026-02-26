@@ -152,7 +152,7 @@ describe('evaluateDynamicChains', () => {
     }
 
     // bone-2 rotation should have changed from gravity pull
-    expect(bones['bone-2'].transform.rotation).not.toBeCloseTo(0);
+    expect(bones['bone-2']!.transform.rotation).not.toBeCloseTo(0);
   });
 
   it('handles multiple chains', () => {
@@ -203,7 +203,7 @@ describe('evaluateDynamicChains', () => {
 
     // State particles should show wind influence
     const state = stateMap.get('chain-1')!;
-    expect(state.particles[2].position.x).toBeGreaterThan(100);
+    expect(state.particles[2]!.position.x).toBeGreaterThan(100);
   });
 });
 

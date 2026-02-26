@@ -39,7 +39,7 @@ export function generateBrushOutline(
   // Build cumulative distances
   const cumDist: number[] = [0];
   for (let i = 1; i < tessellated.length; i++) {
-    cumDist.push(cumDist[i - 1] + vec2.distance(tessellated[i - 1], tessellated[i]));
+    cumDist.push(cumDist[i - 1]! + vec2.distance(tessellated[i - 1]!, tessellated[i]!));
   }
 
   const samples: Vector2[] = [];
@@ -55,15 +55,15 @@ export function generateBrushOutline(
 
     // Find segment in tessellated array
     let segIdx = 0;
-    while (segIdx < cumDist.length - 2 && cumDist[segIdx + 1] < targetDist) {
+    while (segIdx < cumDist.length - 2 && cumDist[segIdx + 1]! < targetDist) {
       segIdx++;
     }
-    const segLen = cumDist[segIdx + 1] - cumDist[segIdx];
-    const localT = segLen > 0.0001 ? (targetDist - cumDist[segIdx]) / segLen : 0;
+    const segLen = cumDist[segIdx + 1]! - cumDist[segIdx]!;
+    const localT = segLen > 0.0001 ? (targetDist - cumDist[segIdx]!) / segLen : 0;
 
     const p = vec2.lerp(
-      tessellated[segIdx],
-      tessellated[Math.min(segIdx + 1, tessellated.length - 1)],
+      tessellated[segIdx]!,
+      tessellated[Math.min(segIdx + 1, tessellated.length - 1)]!,
       localT
     );
     samples.push(p);
@@ -74,8 +74,8 @@ export function generateBrushOutline(
     const wHi = Math.min(wLo + 1, widths.length - 1);
     const wFrac = widthT - wLo;
     let w =
-      (widths[wLo] ?? widths[0]) +
-      wFrac * ((widths[wHi] ?? widths[0]) - (widths[wLo] ?? widths[0]));
+      (widths[wLo] ?? widths[0]!) +
+      wFrac * ((widths[wHi] ?? widths[0]!) - (widths[wLo] ?? widths[0]!));
 
     // Apply profile multiplier if provided
     if (profileSamples && profileSamples.length >= 2) {
@@ -99,9 +99,9 @@ export function generateBrushOutline(
   let lastPerpY = 1;
 
   for (let i = 0; i < samples.length; i++) {
-    const curr = samples[i];
-    const prev = i > 0 ? samples[i - 1] : null;
-    const next = i < samples.length - 1 ? samples[i + 1] : null;
+    const curr = samples[i]!;
+    const prev = i > 0 ? samples[i - 1]! : null;
+    const next = i < samples.length - 1 ? samples[i + 1]! : null;
 
     let dx = 0;
     let dy = 0;
@@ -129,7 +129,7 @@ export function generateBrushOutline(
       lastPerpY = perpY;
     }
 
-    const halfWidth = Math.max(sampleWidths[i] / 2, 0.5);
+    const halfWidth = Math.max(sampleWidths[i]! / 2, 0.5);
     leftSide.push({
       x: curr.x + perpX * halfWidth,
       y: curr.y + perpY * halfWidth,
@@ -146,15 +146,15 @@ export function generateBrushOutline(
   const capPoints = 4;
   const maxSampleWidth = Math.max(...sampleWidths);
   const capThreshold = maxSampleWidth * 0.3;
-  const startWidth = sampleWidths[0];
-  const endWidth = sampleWidths[sampleWidths.length - 1];
+  const startWidth = sampleWidths[0]!;
+  const endWidth = sampleWidths[sampleWidths.length - 1]!;
 
   // Combine: [start cap] + left forward + [end cap] + right reversed
   const outline: PathPoint[] = [];
 
   // Start cap — only for narrow starts
   if (startWidth < capThreshold) {
-    const startCap = generateRoundCap(samples[0], leftSide[0], rightSide[0], capPoints, true);
+    const startCap = generateRoundCap(samples[0]!, leftSide[0]!, rightSide[0]!, capPoints, true);
     for (const p of startCap) {
       outline.push(cornerPoint(p));
     }
@@ -168,9 +168,9 @@ export function generateBrushOutline(
   // End cap — only for narrow ends
   if (endWidth < capThreshold) {
     const endCap = generateRoundCap(
-      samples[samples.length - 1],
-      leftSide[leftSide.length - 1],
-      rightSide[rightSide.length - 1],
+      samples[samples.length - 1]!,
+      leftSide[leftSide.length - 1]!,
+      rightSide[rightSide.length - 1]!,
       capPoints,
       false
     );
@@ -181,7 +181,7 @@ export function generateBrushOutline(
 
   // Right side reversed
   for (let i = rightSide.length - 1; i >= 0; i--) {
-    outline.push(cornerPoint(rightSide[i]));
+    outline.push(cornerPoint(rightSide[i]!));
   }
 
   return outline;
@@ -203,7 +203,7 @@ export function cornerPoint(pos: Vector2): PathPoint {
 export function computePolylineLength(points: Vector2[]): number {
   let total = 0;
   for (let i = 1; i < points.length; i++) {
-    total += vec2.distance(points[i - 1], points[i]);
+    total += vec2.distance(points[i - 1]!, points[i]!);
   }
   return total;
 }

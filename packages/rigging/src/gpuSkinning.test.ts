@@ -52,17 +52,17 @@ function simulateGPUSkinning(
     sy = 0,
     totalWeight = 0;
   for (let i = 0; i < 4; i++) {
-    const w = boneWeights[i];
+    const w = boneWeights[i]!;
     if (w <= 0) continue;
-    const idx = boneIndices[i];
+    const idx = boneIndices[i]!;
     if (idx < 0 || idx >= MAX_BONES_GPU) continue;
     const off = idx * 9;
     // Column-major mat3: [col0.x, col0.y, 0, col1.x, col1.y, 0, col2.x, col2.y, 1]
     // pos3 = (px, py, 1)
     // result.x = col0.x * px + col1.x * py + col2.x
     // result.y = col0.y * px + col1.y * py + col2.y
-    const rx = boneMatrices[off] * px + boneMatrices[off + 3] * py + boneMatrices[off + 6];
-    const ry = boneMatrices[off + 1] * px + boneMatrices[off + 4] * py + boneMatrices[off + 7];
+    const rx = boneMatrices[off]! * px + boneMatrices[off + 3]! * py + boneMatrices[off + 6]!;
+    const ry = boneMatrices[off + 1]! * px + boneMatrices[off + 4]! * py + boneMatrices[off + 7]!;
     sx += w * rx;
     sy += w * ry;
     totalWeight += w;
@@ -142,7 +142,7 @@ describe('gpuSkinning', () => {
       const map = buildBoneIdToIndex(skinData);
       const keys = Object.keys(ibm);
       for (let i = 0; i < keys.length; i++) {
-        expect(map.get(keys[i])).toBe(i);
+        expect(map.get(keys[i]!)).toBe(i);
       }
     });
   });
@@ -487,15 +487,15 @@ describe('gpuSkinning', () => {
 
       for (let i = 0; i < 2; i++) {
         const base = i * 10;
-        const px = packed[base];
-        const py = packed[base + 1];
-        const bi = [packed[base + 2], packed[base + 3], packed[base + 4], packed[base + 5]];
-        const bw = [packed[base + 6], packed[base + 7], packed[base + 8], packed[base + 9]];
+        const px = packed[base]!;
+        const py = packed[base + 1]!;
+        const bi = [packed[base + 2]!, packed[base + 3]!, packed[base + 4]!, packed[base + 5]!];
+        const bw = [packed[base + 6]!, packed[base + 7]!, packed[base + 8]!, packed[base + 9]!];
 
         const [gx, gy] = simulateGPUSkinning(px, py, bi, bw, boneMatrices);
 
-        expect(gx).toBeCloseTo(cpuResult[i * 2], 4);
-        expect(gy).toBeCloseTo(cpuResult[i * 2 + 1], 4);
+        expect(gx).toBeCloseTo(cpuResult[i * 2]!, 4);
+        expect(gy).toBeCloseTo(cpuResult[i * 2 + 1]!, 4);
       }
     });
 
@@ -536,15 +536,15 @@ describe('gpuSkinning', () => {
 
       const base = 0;
       const [gx, gy] = simulateGPUSkinning(
-        packed[base],
-        packed[base + 1],
-        [packed[base + 2], packed[base + 3], packed[base + 4], packed[base + 5]],
-        [packed[base + 6], packed[base + 7], packed[base + 8], packed[base + 9]],
+        packed[base]!,
+        packed[base + 1]!,
+        [packed[base + 2]!, packed[base + 3]!, packed[base + 4]!, packed[base + 5]!],
+        [packed[base + 6]!, packed[base + 7]!, packed[base + 8]!, packed[base + 9]!],
         boneMatrices
       );
 
-      expect(gx).toBeCloseTo(cpuResult[0], 4);
-      expect(gy).toBeCloseTo(cpuResult[1], 4);
+      expect(gx).toBeCloseTo(cpuResult[0]!, 4);
+      expect(gy).toBeCloseTo(cpuResult[1]!, 4);
     });
 
     it('rotation + meshBind transform matches CPU deformVertices', () => {
@@ -571,15 +571,15 @@ describe('gpuSkinning', () => {
       const packed = packSkinnedVertices(vertices, skinData, boneIdToIndex);
 
       const [gx, gy] = simulateGPUSkinning(
-        packed[0],
-        packed[1],
-        [packed[2], packed[3], packed[4], packed[5]],
-        [packed[6], packed[7], packed[8], packed[9]],
+        packed[0]!,
+        packed[1]!,
+        [packed[2]!, packed[3]!, packed[4]!, packed[5]!],
+        [packed[6]!, packed[7]!, packed[8]!, packed[9]!],
         boneMatrices
       );
 
-      expect(gx).toBeCloseTo(cpuResult[0], 3);
-      expect(gy).toBeCloseTo(cpuResult[1], 3);
+      expect(gx).toBeCloseTo(cpuResult[0]!, 3);
+      expect(gy).toBeCloseTo(cpuResult[1]!, 3);
     });
   });
 });

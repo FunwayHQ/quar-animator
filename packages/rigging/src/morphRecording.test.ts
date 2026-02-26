@@ -74,7 +74,7 @@ describe('applyBrushDisplacement', () => {
     const existing: MorphVertexOffset[] = [{ vertexIndex: 0, dx: 5, dy: 5 }];
     const result = applyBrushDisplacement(existing, 0, 0, 10, 0, 10, 10, 'linear', vertices);
     expect(result).toHaveLength(1);
-    expect(result[0].dx).toBe(5);
+    expect(result[0]!.dx).toBe(5);
   });
 
   it('handles negative direction (push instead of pull)', () => {
@@ -97,7 +97,7 @@ describe('compactMorphOffsets', () => {
     ];
     const result = compactMorphOffsets(offsets);
     expect(result).toHaveLength(1);
-    expect(result[0].vertexIndex).toBe(1);
+    expect(result[0]!.vertexIndex).toBe(1);
   });
 
   it('keeps non-zero offsets', () => {

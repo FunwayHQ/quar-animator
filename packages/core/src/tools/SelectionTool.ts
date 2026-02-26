@@ -32,15 +32,15 @@ function transformBoundsToWorld(localBounds: Rect, worldMatrix: Matrix3): Rect {
     mat3.transformPoint(worldMatrix, { x, y: y + height }),
   ];
 
-  let minX = corners[0].x;
-  let minY = corners[0].y;
-  let maxX = corners[0].x;
-  let maxY = corners[0].y;
+  let minX = corners[0]!.x;
+  let minY = corners[0]!.y;
+  let maxX = corners[0]!.x;
+  let maxY = corners[0]!.y;
   for (let i = 1; i < 4; i++) {
-    if (corners[i].x < minX) minX = corners[i].x;
-    if (corners[i].y < minY) minY = corners[i].y;
-    if (corners[i].x > maxX) maxX = corners[i].x;
-    if (corners[i].y > maxY) maxY = corners[i].y;
+    if (corners[i]!.x < minX) minX = corners[i]!.x;
+    if (corners[i]!.y < minY) minY = corners[i]!.y;
+    if (corners[i]!.x > maxX) maxX = corners[i]!.x;
+    if (corners[i]!.y > maxY) maxY = corners[i]!.y;
   }
 
   return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
@@ -720,10 +720,10 @@ export class SelectionTool extends BaseTool {
       case 'symbol-instance': {
         // Compute bounds from the resolved symbol definition
         const defs = this.context.getSymbolDefinitions?.() ?? [];
-        const symNode = node as SymbolInstanceNode;
+        const symNode = node;
         const def = defs.find((d) => d.id === symNode.symbolId);
         if (def && def.sceneGraphJSON.nodes.length > 0) {
-          const symBounds = getSymbolBounds(def.sceneGraphJSON.nodes as Node[]);
+          const symBounds = getSymbolBounds(def.sceneGraphJSON.nodes);
           if (symBounds.width > 0 && symBounds.height > 0) {
             localBounds = {
               x: symBounds.x,

@@ -20,7 +20,7 @@ interface MockBone {
 }
 
 function makeBone(
-  id: string,
+  _id: string,
   length: number,
   position: Vector2 = { x: 0, y: 0 },
   rotation = 0,
@@ -192,20 +192,20 @@ describe('initializeChainState', () => {
     const state = initializeChainState(chain, sg)!;
 
     // Particle 0 = bone-1 root at (0, 0)
-    expect(state.particles[0].position.x).toBeCloseTo(0);
-    expect(state.particles[0].position.y).toBeCloseTo(0);
+    expect(state.particles[0]!.position.x).toBeCloseTo(0);
+    expect(state.particles[0]!.position.y).toBeCloseTo(0);
 
     // Particle 1 = bone-1 tip at (50, 0)
-    expect(state.particles[1].position.x).toBeCloseTo(50);
-    expect(state.particles[1].position.y).toBeCloseTo(0);
+    expect(state.particles[1]!.position.x).toBeCloseTo(50);
+    expect(state.particles[1]!.position.y).toBeCloseTo(0);
 
     // Particle 2 = bone-2 tip at (100, 0)
-    expect(state.particles[2].position.x).toBeCloseTo(100);
-    expect(state.particles[2].position.y).toBeCloseTo(0);
+    expect(state.particles[2]!.position.x).toBeCloseTo(100);
+    expect(state.particles[2]!.position.y).toBeCloseTo(0);
 
     // Particle 3 = bone-3 tip at (150, 0)
-    expect(state.particles[3].position.x).toBeCloseTo(150);
-    expect(state.particles[3].position.y).toBeCloseTo(0);
+    expect(state.particles[3]!.position.x).toBeCloseTo(150);
+    expect(state.particles[3]!.position.y).toBeCloseTo(0);
   });
 
   it('stores rest lengths from bone lengths', () => {
@@ -214,11 +214,11 @@ describe('initializeChainState', () => {
     const state = initializeChainState(chain, sg)!;
 
     // particle 0 has restLength 0 (root anchor)
-    expect(state.particles[0].restLength).toBe(0);
+    expect(state.particles[0]!.restLength).toBe(0);
     // particles 1-3 have restLength 50 (each bone is 50 units)
-    expect(state.particles[1].restLength).toBe(50);
-    expect(state.particles[2].restLength).toBe(50);
-    expect(state.particles[3].restLength).toBe(50);
+    expect(state.particles[1]!.restLength).toBe(50);
+    expect(state.particles[2]!.restLength).toBe(50);
+    expect(state.particles[3]!.restLength).toBe(50);
   });
 
   it('returns null for empty boneIds', () => {
@@ -253,8 +253,8 @@ describe('stepDynamicChain', () => {
     stepDynamicChain(chain, state, sg, 1 / 60, { x: 0, y: 0 });
 
     // Root particle should follow FK root
-    expect(state.particles[0].position.x).toBeCloseTo(10);
-    expect(state.particles[0].position.y).toBeCloseTo(20);
+    expect(state.particles[0]!.position.x).toBeCloseTo(10);
+    expect(state.particles[0]!.position.y).toBeCloseTo(20);
   });
 
   it('applies gravity to non-root particles', () => {
@@ -262,8 +262,8 @@ describe('stepDynamicChain', () => {
     const chain = makeChain({ gravity: 100, gravityAngle: -90, damping: 0 });
     const state = initializeChainState(chain, sg)!;
 
-    const initialY1 = state.particles[1].position.y;
-    const initialY3 = state.particles[3].position.y;
+    const initialY1 = state.particles[1]!.position.y;
+    const initialY3 = state.particles[3]!.position.y;
 
     // Step several times
     for (let i = 0; i < 10; i++) {
@@ -271,8 +271,8 @@ describe('stepDynamicChain', () => {
     }
 
     // Particles should have moved downward (gravity angle -90 = y decreases in Y-up)
-    expect(state.particles[1].position.y).toBeLessThan(initialY1);
-    expect(state.particles[3].position.y).toBeLessThan(initialY3);
+    expect(state.particles[1]!.position.y).toBeLessThan(initialY1);
+    expect(state.particles[3]!.position.y).toBeLessThan(initialY3);
   });
 
   it('maintains bone lengths via distance constraints', () => {
@@ -287,8 +287,8 @@ describe('stepDynamicChain', () => {
 
     // Check that distances between consecutive particles are approximately 50
     for (let i = 1; i < state.particles.length; i++) {
-      const p = state.particles[i - 1];
-      const c = state.particles[i];
+      const p = state.particles[i - 1]!;
+      const c = state.particles[i]!;
       const dx = c.position.x - p.position.x;
       const dy = c.position.y - p.position.y;
       const dist = Math.sqrt(dx * dx + dy * dy);
@@ -302,12 +302,12 @@ describe('stepDynamicChain', () => {
     const state = initializeChainState(chain, sg)!;
 
     // Perturb particle and step with high damping
-    state.particles[3].position.y = 100;
+    state.particles[3]!.position.y = 100;
 
     stepDynamicChain(chain, state, sg, 1 / 60, { x: 0, y: 0 });
 
     // With 0.9 damping, the velocity should be heavily reduced
-    const vy = state.particles[3].position.y - state.particles[3].prevPosition.y;
+    const vy = state.particles[3]!.position.y - state.particles[3]!.prevPosition.y;
     expect(Math.abs(vy)).toBeLessThan(50);
   });
 
@@ -317,29 +317,29 @@ describe('stepDynamicChain', () => {
     const state = initializeChainState(chain, sg)!;
 
     // Perturb last particle significantly downward
-    state.particles[3].position.y = -50;
-    state.particles[3].prevPosition.y = -50;
+    state.particles[3]!.position.y = -50;
+    state.particles[3]!.prevPosition.y = -50;
 
     stepDynamicChain(chain, state, sg, 1 / 60, { x: 0, y: 0 });
 
     // Stiffness should pull it back toward rest angle (horizontal, y≈0)
-    expect(Math.abs(state.particles[3].position.y)).toBeLessThan(50);
+    expect(Math.abs(state.particles[3]!.position.y)).toBeLessThan(50);
   });
 
   it('ignores invalid dt', () => {
     const { sg } = makeHorizontalChainSG();
     const chain = makeChain({ gravity: 100 });
     const state = initializeChainState(chain, sg)!;
-    const posBefore = { ...state.particles[3].position };
+    const posBefore = { ...state.particles[3]!.position };
 
     stepDynamicChain(chain, state, sg, 0, { x: 0, y: 0 });
-    expect(state.particles[3].position).toEqual(posBefore);
+    expect(state.particles[3]!.position).toEqual(posBefore);
 
     stepDynamicChain(chain, state, sg, -1, { x: 0, y: 0 });
-    expect(state.particles[3].position).toEqual(posBefore);
+    expect(state.particles[3]!.position).toEqual(posBefore);
 
     stepDynamicChain(chain, state, sg, 0.5, { x: 0, y: 0 }); // > 0.1
-    expect(state.particles[3].position).toEqual(posBefore);
+    expect(state.particles[3]!.position).toEqual(posBefore);
   });
 
   it('does nothing for uninitialized state', () => {
@@ -366,7 +366,7 @@ describe('stepDynamicChain', () => {
     }
 
     // Last particle should have moved in wind direction (positive x)
-    expect(state.particles[3].position.x).toBeGreaterThan(150);
+    expect(state.particles[3]!.position.x).toBeGreaterThan(150);
   });
 
   it('elasticity pulls particles toward rest position', () => {
@@ -375,13 +375,13 @@ describe('stepDynamicChain', () => {
     const state = initializeChainState(chain, sg)!;
 
     // Perturb particle
-    state.particles[3].position = { x: 200, y: -100 };
-    state.particles[3].prevPosition = { x: 200, y: -100 };
+    state.particles[3]!.position = { x: 200, y: -100 };
+    state.particles[3]!.prevPosition = { x: 200, y: -100 };
 
     stepDynamicChain(chain, state, sg, 1 / 60, { x: 0, y: 0 });
 
     // Should be pulled back toward rest (150, 0)
-    expect(state.particles[3].position.x).toBeLessThan(200);
+    expect(state.particles[3]!.position.x).toBeLessThan(200);
   });
 
   it('freezeAxis x prevents horizontal movement', () => {
@@ -393,12 +393,12 @@ describe('stepDynamicChain', () => {
     const initialXs = state.particles.map((p) => p.position.x);
 
     // Perturb and step
-    state.particles[3].position = { x: 200, y: -100 };
+    state.particles[3]!.position = { x: 200, y: -100 };
     stepDynamicChain(chain, state, sg, 1 / 60, { x: 0, y: 0 });
 
     // X positions of non-root particles should be at rest x
     for (let i = 1; i < state.particles.length; i++) {
-      expect(state.particles[i].position.x).toBeCloseTo(initialXs[i], 0);
+      expect(state.particles[i]!.position.x).toBeCloseTo(initialXs[i]!, 0);
     }
   });
 
@@ -413,7 +413,7 @@ describe('stepDynamicChain', () => {
 
     // Y positions should be at rest (0)
     for (let i = 1; i < state.particles.length; i++) {
-      expect(state.particles[i].position.y).toBeCloseTo(0, 0);
+      expect(state.particles[i]!.position.y).toBeCloseTo(0, 0);
     }
   });
 });
@@ -429,12 +429,12 @@ describe('applyChainToBones', () => {
     const state = initializeChainState(chain, sg)!;
 
     // Bend the chain: move last particle down
-    state.particles[3].position = { x: 150, y: -50 };
+    state.particles[3]!.position = { x: 150, y: -50 };
 
     applyChainToBones(chain, state, sg);
 
     // bone-3 should have a non-zero rotation since its tip moved down
-    expect(bones['bone-3'].transform.rotation).not.toBeCloseTo(0);
+    expect(bones['bone-3']!.transform.rotation).not.toBeCloseTo(0);
   });
 
   it('preserves straight chain as zero rotation', () => {
@@ -446,7 +446,7 @@ describe('applyChainToBones', () => {
     applyChainToBones(chain, state, sg);
 
     // All bones should have approximately 0 rotation
-    expect(bones['bone-1'].transform.rotation).toBeCloseTo(0, 0);
+    expect(bones['bone-1']!.transform.rotation).toBeCloseTo(0, 0);
   });
 
   it('does nothing for uninitialized state', () => {
@@ -457,9 +457,9 @@ describe('applyChainToBones', () => {
       particles: [],
       initialized: false,
     };
-    const rotBefore = bones['bone-1'].transform.rotation;
+    const rotBefore = bones['bone-1']!.transform.rotation;
     applyChainToBones(chain, state, sg);
-    expect(bones['bone-1'].transform.rotation).toBe(rotBefore);
+    expect(bones['bone-1']!.transform.rotation).toBe(rotBefore);
   });
 
   it('skips missing bones', () => {

@@ -7,7 +7,6 @@
  */
 
 import type {
-  BoneNode,
   DynamicChain,
   DynamicChainState,
   DynamicParticle,
@@ -46,16 +45,6 @@ function v2dist(a: Vector2, b: Vector2): number {
   const dx = b.x - a.x;
   const dy = b.y - a.y;
   return Math.sqrt(dx * dx + dy * dy);
-}
-
-function v2len(v: Vector2): number {
-  return Math.sqrt(v.x * v.x + v.y * v.y);
-}
-
-function v2normalize(v: Vector2): Vector2 {
-  const len = v2len(v);
-  if (len < 1e-10) return { x: 0, y: 0 };
-  return { x: v.x / len, y: v.y / len };
 }
 
 const DEG_TO_RAD = Math.PI / 180;
@@ -98,7 +87,7 @@ export function initializeChainState(
   const particles: DynamicParticle[] = [];
 
   // First particle = root bone's world position
-  const rootPos = getBoneWorldPos(chain.boneIds[0], sceneGraph);
+  const rootPos = getBoneWorldPos(chain.boneIds[0]!, sceneGraph);
   if (!rootPos) return null;
 
   particles.push({
@@ -111,7 +100,7 @@ export function initializeChainState(
 
   // One particle per bone tip
   for (let i = 0; i < chain.boneIds.length; i++) {
-    const boneId = chain.boneIds[i];
+    const boneId = chain.boneIds[i]!;
     const tipPos = getBoneWorldTip(boneId, sceneGraph);
     if (!tipPos) return null;
 
@@ -186,10 +175,10 @@ export function stepDynamicChain(
     chain;
 
   // 1. Pin root to FK position
-  const rootPos = getBoneWorldPos(chain.boneIds[0], sceneGraph);
+  const rootPos = getBoneWorldPos(chain.boneIds[0]!, sceneGraph);
   if (rootPos) {
-    particles[0].position = { ...rootPos };
-    particles[0].prevPosition = { ...rootPos };
+    particles[0]!.position = { ...rootPos };
+    particles[0]!.prevPosition = { ...rootPos };
   }
 
   // Gravity direction
@@ -200,7 +189,7 @@ export function stepDynamicChain(
   // 2. Verlet integration for non-root particles
   const dampFactor = 1 - damping;
   for (let i = 1; i < particles.length; i++) {
-    const p = particles[i];
+    const p = particles[i]!;
     const vx = (p.position.x - p.prevPosition.x) * dampFactor;
     const vy = (p.position.y - p.prevPosition.y) * dampFactor;
 
@@ -219,8 +208,8 @@ export function stepDynamicChain(
   const constraintIterations = 3;
   for (let iter = 0; iter < constraintIterations; iter++) {
     for (let i = 1; i < particles.length; i++) {
-      const parent = particles[i - 1];
-      const child = particles[i];
+      const parent = particles[i - 1]!;
+      const child = particles[i]!;
       const restLen = child.restLength;
       if (restLen <= 0) continue;
 
@@ -250,8 +239,8 @@ export function stepDynamicChain(
   // 4. Angular stiffness (blend toward rest angle)
   if (stiffness > 0) {
     for (let i = 1; i < particles.length; i++) {
-      const parent = particles[i - 1];
-      const child = particles[i];
+      const parent = particles[i - 1]!;
+      const child = particles[i]!;
       const restAngle = child.restAngle;
       const restLen = child.restLength;
       if (restLen <= 0) continue;
@@ -280,18 +269,18 @@ export function stepDynamicChain(
     for (let i = 1; i < particles.length; i++) {
       if (freezeAxis === 'x') {
         // Freeze horizontal movement — keep x from rest chain
-        let restX = particles[0].position.x;
+        let restX = particles[0]!.position.x;
         for (let j = 1; j <= i; j++) {
-          restX += Math.cos(particles[j].restAngle) * particles[j].restLength;
+          restX += Math.cos(particles[j]!.restAngle) * particles[j]!.restLength;
         }
-        particles[i].position.x = restX;
+        particles[i]!.position.x = restX;
       } else if (freezeAxis === 'y') {
         // Freeze vertical movement — keep y from rest chain
-        let restY = particles[0].position.y;
+        let restY = particles[0]!.position.y;
         for (let j = 1; j <= i; j++) {
-          restY += Math.sin(particles[j].restAngle) * particles[j].restLength;
+          restY += Math.sin(particles[j]!.restAngle) * particles[j]!.restLength;
         }
-        particles[i].position.y = restY;
+        particles[i]!.position.y = restY;
       }
     }
   }
@@ -299,11 +288,11 @@ export function stepDynamicChain(
   // 6. Elasticity (spring back to rest positions)
   if (elasticity > 0) {
     // Compute rest positions from root
-    let restX = particles[0].position.x;
-    let restY = particles[0].position.y;
+    let restX = particles[0]!.position.x;
+    let restY = particles[0]!.position.y;
 
     for (let i = 1; i < particles.length; i++) {
-      const p = particles[i];
+      const p = particles[i]!;
       restX += Math.cos(p.restAngle) * p.restLength;
       restY += Math.sin(p.restAngle) * p.restLength;
 
@@ -328,12 +317,12 @@ export function applyChainToBones(
   const { particles } = state;
 
   for (let i = 0; i < chain.boneIds.length; i++) {
-    const boneId = chain.boneIds[i];
+    const boneId = chain.boneIds[i]!;
     const node = sceneGraph.getNode(boneId);
     if (!node || node.type !== 'bone') continue;
 
-    const parentParticle = particles[i];
-    const childParticle = particles[i + 1];
+    const parentParticle = particles[i]!;
+    const childParticle = particles[i + 1]!;
 
     // World angle from parent particle to child particle
     const dx = childParticle.position.x - parentParticle.position.x;
@@ -359,8 +348,8 @@ export function applyChainToBones(
       }
     } else {
       // Child bone: parent is previous bone
-      const parentBoneParticle = particles[i - 1];
-      const parentBoneChildParticle = particles[i];
+      const parentBoneParticle = particles[i - 1]!;
+      const parentBoneChildParticle = particles[i]!;
       const parentWorldAngle = Math.atan2(
         parentBoneChildParticle.position.y - parentBoneParticle.position.y,
         parentBoneChildParticle.position.x - parentBoneParticle.position.x

@@ -218,14 +218,14 @@ describe('skinBinding', () => {
       const result = computeAutoWeights(skin, positions, allStates);
 
       // First vertex should favor b1, second should favor b2
-      expect(result.vertices[0].influences.length).toBeGreaterThan(0);
-      expect(result.vertices[1].influences.length).toBeGreaterThan(0);
+      expect(result.vertices[0]!.influences.length).toBeGreaterThan(0);
+      expect(result.vertices[1]!.influences.length).toBeGreaterThan(0);
 
-      const v0Primary = result.vertices[0].influences[0];
+      const v0Primary = result.vertices[0]!.influences[0]!;
       expect(v0Primary.boneId).toBe('b1');
       expect(v0Primary.weight).toBeGreaterThan(0.5);
 
-      const v1Primary = result.vertices[1].influences[0];
+      const v1Primary = result.vertices[1]!.influences[0]!;
       expect(v1Primary.boneId).toBe('b2');
       expect(v1Primary.weight).toBeGreaterThan(0.5);
     });
@@ -273,7 +273,7 @@ describe('skinBinding', () => {
       // Vertex equidistant from all — should only get 2 nearest
       const positions = new Float32Array([50, 10]);
       const result = computeAutoWeights(skin, positions, allStates);
-      expect(result.vertices[0].influences.length).toBeLessThanOrEqual(2);
+      expect(result.vertices[0]!.influences.length).toBeLessThanOrEqual(2);
     });
   });
 
@@ -304,8 +304,8 @@ describe('skinBinding', () => {
       };
       const result = normalizeWeights(entry);
       expect(result.influences.length).toBe(1);
-      expect(result.influences[0].boneId).toBe('b1');
-      expect(result.influences[0].weight).toBeCloseTo(1.0);
+      expect(result.influences[0]!.boneId).toBe('b1');
+      expect(result.influences[0]!.weight).toBeCloseTo(1.0);
     });
 
     it('caps at 4 influences', () => {
@@ -333,9 +333,9 @@ describe('skinBinding', () => {
         ],
       };
       const result = normalizeWeights(entry);
-      expect(result.influences[0].boneId).toBe('b2');
-      expect(result.influences[1].boneId).toBe('b3');
-      expect(result.influences[2].boneId).toBe('b1');
+      expect(result.influences[0]!.boneId).toBe('b2');
+      expect(result.influences[1]!.boneId).toBe('b3');
+      expect(result.influences[2]!.boneId).toBe('b1');
     });
 
     it('returns empty for no influences', () => {
@@ -378,7 +378,7 @@ describe('skinBinding', () => {
       const skin = createTestSkinData();
       paintWeight(skin, 0, 'b1', 0.2, 'add');
 
-      const b1Weight = skin.vertices[0].influences.find((i) => i.boneId === 'b1')?.weight ?? 0;
+      const b1Weight = skin.vertices[0]!.influences.find((i) => i.boneId === 'b1')?.weight ?? 0;
       expect(b1Weight).toBeGreaterThan(0.7);
     });
 
@@ -386,7 +386,7 @@ describe('skinBinding', () => {
       const skin = createTestSkinData();
       paintWeight(skin, 0, 'b1', 0.3, 'subtract');
 
-      const b1Weight = skin.vertices[0].influences.find((i) => i.boneId === 'b1')?.weight ?? 0;
+      const b1Weight = skin.vertices[0]!.influences.find((i) => i.boneId === 'b1')?.weight ?? 0;
       expect(b1Weight).toBeLessThan(0.7);
     });
 
@@ -395,7 +395,7 @@ describe('skinBinding', () => {
       // Try to add way more than possible
       paintWeight(skin, 0, 'b1', 5.0, 'add');
 
-      const b1Weight = skin.vertices[0].influences.find((i) => i.boneId === 'b1')?.weight ?? 0;
+      const b1Weight = skin.vertices[0]!.influences.find((i) => i.boneId === 'b1')?.weight ?? 0;
       expect(b1Weight).toBeLessThanOrEqual(1.0);
       expect(b1Weight).toBeGreaterThanOrEqual(0);
     });
@@ -404,7 +404,7 @@ describe('skinBinding', () => {
       const skin = createTestSkinData();
       paintWeight(skin, 1, 'b1', 0.3, 'add');
 
-      const total = skin.vertices[1].influences.reduce((s, i) => s + i.weight, 0);
+      const total = skin.vertices[1]!.influences.reduce((s, i) => s + i.weight, 0);
       expect(total).toBeCloseTo(1.0);
     });
 
@@ -428,7 +428,7 @@ describe('skinBinding', () => {
       };
 
       paintWeight(skin, 0, 'b2', 0.3, 'add');
-      const b2 = skin.vertices[0].influences.find((i) => i.boneId === 'b2');
+      const b2 = skin.vertices[0]!.influences.find((i) => i.boneId === 'b2');
       expect(b2).toBeDefined();
       expect(b2!.weight).toBeGreaterThan(0);
     });

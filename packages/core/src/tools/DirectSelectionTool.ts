@@ -93,10 +93,10 @@ function imagePointsToOffsets(
     { x: x1, y: y1 },
   ];
   return [
-    { x: points[0].position.x - bases[0].x, y: points[0].position.y - bases[0].y },
-    { x: points[1].position.x - bases[1].x, y: points[1].position.y - bases[1].y },
-    { x: points[2].position.x - bases[2].x, y: points[2].position.y - bases[2].y },
-    { x: points[3].position.x - bases[3].x, y: points[3].position.y - bases[3].y },
+    { x: points[0]!.position.x - bases[0]!.x, y: points[0]!.position.y - bases[0]!.y },
+    { x: points[1]!.position.x - bases[1]!.x, y: points[1]!.position.y - bases[1]!.y },
+    { x: points[2]!.position.x - bases[2]!.x, y: points[2]!.position.y - bases[2]!.y },
+    { x: points[3]!.position.x - bases[3]!.x, y: points[3]!.position.y - bases[3]!.y },
   ];
 }
 
@@ -257,7 +257,7 @@ export class DirectSelectionTool extends BaseTool {
             node.type === 'image' ? getImagePoints(node) : getAllPoints(node as PathNode);
           if (allPts[sel.pointIndex]) {
             const key = `${sel.nodeId}:${sel.pointIndex}`;
-            this.initialPointPositions.set(key, { ...allPts[sel.pointIndex].position });
+            this.initialPointPositions.set(key, { ...allPts[sel.pointIndex]!.position });
           }
         }
       }
@@ -391,7 +391,7 @@ export class DirectSelectionTool extends BaseTool {
           const imgNode = node;
           const pts = getImagePoints(imgNode);
           pts[sel.pointIndex] = {
-            ...pts[sel.pointIndex],
+            ...pts[sel.pointIndex]!,
             position: vec2.add(initialPos, localDelta),
           };
           const offsets = imagePointsToOffsets(imgNode, pts);
@@ -402,7 +402,7 @@ export class DirectSelectionTool extends BaseTool {
           const allPts = getAllPoints(pathNode);
           const newAll = [...allPts];
           newAll[sel.pointIndex] = {
-            ...newAll[sel.pointIndex],
+            ...newAll[sel.pointIndex]!,
             position: vec2.add(initialPos, localDelta),
           };
 
@@ -420,7 +420,7 @@ export class DirectSelectionTool extends BaseTool {
       if (!node) return;
 
       const allPts = getAllPoints(node);
-      const point = allPts[this.dragHandle.pointIndex];
+      const point = allPts[this.dragHandle.pointIndex]!;
       // Get the point's world position and compute handle offset in world space
       const pointWorldPos = this.getPointWorldPosition(node, point);
       const worldHandleOffset = vec2.subtract(worldPos, pointWorldPos);
@@ -526,7 +526,7 @@ export class DirectSelectionTool extends BaseTool {
     for (const node of paths) {
       const allPts = getAllPoints(node);
       for (let i = 0; i < allPts.length; i++) {
-        const point = allPts[i];
+        const point = allPts[i]!;
         const pointWorldPos = this.getPointWorldPosition(node, point);
         if (vec2.distance(worldPos, pointWorldPos) < hitRadius) {
           return { type: 'point', nodeId: node.id, pointIndex: i };
@@ -539,7 +539,7 @@ export class DirectSelectionTool extends BaseTool {
     for (const node of images) {
       const pts = getImagePoints(node);
       for (let i = 0; i < pts.length; i++) {
-        const pointWorldPos = this.getPointWorldPosition(node as unknown as PathNode, pts[i]);
+        const pointWorldPos = this.getPointWorldPosition(node as unknown as PathNode, pts[i]!);
         if (vec2.distance(worldPos, pointWorldPos) < hitRadius) {
           return { type: 'point', nodeId: node.id, pointIndex: i };
         }
@@ -595,8 +595,8 @@ export class DirectSelectionTool extends BaseTool {
       const boundaries = getSubpathBoundaries(node);
 
       for (let c = 0; c < boundaries.length - 1; c++) {
-        const start = boundaries[c];
-        const end = boundaries[c + 1];
+        const start = boundaries[c]!;
+        const end = boundaries[c + 1]!;
         const contourLen = end - start;
         const numSegments = node.closed ? contourLen : contourLen - 1;
 
@@ -604,8 +604,8 @@ export class DirectSelectionTool extends BaseTool {
           const flatIdx = start + local;
           const nextFlatIdx = start + ((local + 1) % contourLen);
 
-          const p1 = allPts[flatIdx];
-          const p2 = allPts[nextFlatIdx];
+          const p1 = allPts[flatIdx]!;
+          const p2 = allPts[nextFlatIdx]!;
 
           const p1World = this.getPointWorldPosition(node, p1);
           const p2World = this.getPointWorldPosition(node, p2);
@@ -740,8 +740,8 @@ export class DirectSelectionTool extends BaseTool {
     const localIdx = hit.segmentIndex - start;
     const nextLocalIdx = (localIdx + 1) % contourLen;
 
-    const p1 = allPts[hit.segmentIndex];
-    const p2 = allPts[start + nextLocalIdx];
+    const p1 = allPts[hit.segmentIndex]!;
+    const p2 = allPts[start + nextLocalIdx]!;
 
     const p1World = this.getPointWorldPosition(node, p1);
     const p2World = this.getPointWorldPosition(node, p2);
@@ -777,8 +777,8 @@ export class DirectSelectionTool extends BaseTool {
     const newContours: PathPoint[][] = [];
     let offset = 0;
     for (let c = 0; c < boundaries.length - 1; c++) {
-      const cStart = boundaries[c];
-      const cEnd = boundaries[c + 1];
+      const cStart = boundaries[c]!;
+      const cEnd = boundaries[c + 1]!;
       const extra = cStart <= hit.segmentIndex && hit.segmentIndex < cEnd ? 1 : 0;
       newContours.push(newAll.slice(offset, offset + (cEnd - cStart) + extra));
       offset += cEnd - cStart + extra;
@@ -1013,15 +1013,15 @@ export class DirectSelectionTool extends BaseTool {
             { x: x0 + vo[2].x, y: y1 + vo[2].y },
             { x: x1 + vo[3].x, y: y1 + vo[3].y },
           ];
-          let minX = corners[0].x,
-            minY = corners[0].y;
-          let maxX = corners[0].x,
-            maxY = corners[0].y;
+          let minX = corners[0]!.x,
+            minY = corners[0]!.y;
+          let maxX = corners[0]!.x,
+            maxY = corners[0]!.y;
           for (let i = 1; i < 4; i++) {
-            if (corners[i].x < minX) minX = corners[i].x;
-            if (corners[i].y < minY) minY = corners[i].y;
-            if (corners[i].x > maxX) maxX = corners[i].x;
-            if (corners[i].y > maxY) maxY = corners[i].y;
+            if (corners[i]!.x < minX) minX = corners[i]!.x;
+            if (corners[i]!.y < minY) minY = corners[i]!.y;
+            if (corners[i]!.x > maxX) maxX = corners[i]!.x;
+            if (corners[i]!.y > maxY) maxY = corners[i]!.y;
           }
           return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
         }
@@ -1044,15 +1044,15 @@ export class DirectSelectionTool extends BaseTool {
       mat3.transformPoint(worldMatrix, { x: x + width, y: y + height }),
       mat3.transformPoint(worldMatrix, { x, y: y + height }),
     ];
-    let minX = corners[0].x,
-      minY = corners[0].y,
-      maxX = corners[0].x,
-      maxY = corners[0].y;
+    let minX = corners[0]!.x,
+      minY = corners[0]!.y,
+      maxX = corners[0]!.x,
+      maxY = corners[0]!.y;
     for (let i = 1; i < 4; i++) {
-      if (corners[i].x < minX) minX = corners[i].x;
-      if (corners[i].y < minY) minY = corners[i].y;
-      if (corners[i].x > maxX) maxX = corners[i].x;
-      if (corners[i].y > maxY) maxY = corners[i].y;
+      if (corners[i]!.x < minX) minX = corners[i]!.x;
+      if (corners[i]!.y < minY) minY = corners[i]!.y;
+      if (corners[i]!.x > maxX) maxX = corners[i]!.x;
+      if (corners[i]!.y > maxY) maxY = corners[i]!.y;
     }
     return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
   }

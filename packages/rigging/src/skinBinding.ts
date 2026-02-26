@@ -24,7 +24,12 @@ interface SkinSceneGraph {
  * Returns 6-element array or null if singular.
  */
 function invertMatrix6(m: number[]): number[] | null {
-  const [a, b, c, d, tx, ty] = m;
+  const a = m[0]!,
+    b = m[1]!,
+    c = m[2]!,
+    d = m[3]!,
+    tx = m[4]!,
+    ty = m[5]!;
   const det = a * d - b * c;
   if (Math.abs(det) < 1e-12) return null;
   const invDet = 1 / det;
@@ -119,8 +124,8 @@ export function computeAutoWeights(
   const newVertices: VertexSkinEntry[] = [];
 
   for (let i = 0; i < numVertices; i++) {
-    const vx = vertexPositions[i * 2];
-    const vy = vertexPositions[i * 2 + 1];
+    const vx = vertexPositions[i * 2]!;
+    const vy = vertexPositions[i * 2 + 1]!;
 
     // Compute distance to each bone segment
     const distances: { boneId: string; dist: number }[] = [];
@@ -146,19 +151,19 @@ export function computeAutoWeights(
       continue;
     }
 
-    if (nearest.length === 1 || nearest[1].dist === 0) {
-      newVertices.push({ influences: [{ boneId: nearest[0].boneId, weight: 1.0 }] });
+    if (nearest.length === 1 || nearest[1]!.dist === 0) {
+      newVertices.push({ influences: [{ boneId: nearest[0]!.boneId, weight: 1.0 }] });
       continue;
     }
 
     // Inverse-distance weighting
-    const invDist0 = nearest[0].dist === 0 ? 1e10 : 1 / nearest[0].dist;
-    const invDist1 = nearest[1].dist === 0 ? 1e10 : 1 / nearest[1].dist;
+    const invDist0 = nearest[0]!.dist === 0 ? 1e10 : 1 / nearest[0]!.dist;
+    const invDist1 = nearest[1]!.dist === 0 ? 1e10 : 1 / nearest[1]!.dist;
     const totalInv = invDist0 + invDist1;
 
     const influences: VertexBoneWeight[] = [
-      { boneId: nearest[0].boneId, weight: invDist0 / totalInv },
-      { boneId: nearest[1].boneId, weight: invDist1 / totalInv },
+      { boneId: nearest[0]!.boneId, weight: invDist0 / totalInv },
+      { boneId: nearest[1]!.boneId, weight: invDist1 / totalInv },
     ];
 
     // Remove negligible weights
@@ -243,7 +248,7 @@ export function paintWeight(
 ): void {
   if (vertexIndex < 0 || vertexIndex >= skinData.vertices.length) return;
 
-  const entry = skinData.vertices[vertexIndex];
+  const entry = skinData.vertices[vertexIndex]!;
   const influences = [...entry.influences.map((inf) => ({ ...inf }))];
 
   // Find existing influence for this bone

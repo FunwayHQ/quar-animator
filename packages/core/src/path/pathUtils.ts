@@ -149,7 +149,7 @@ export function forEachSegment(
 ): void {
   const segmentCount = closed ? points.length : points.length - 1;
   for (let i = 0; i < segmentCount; i++) {
-    callback(points[i], points[(i + 1) % points.length], i);
+    callback(points[i]!, points[(i + 1) % points.length]!, i);
   }
 }
 
@@ -180,8 +180,8 @@ export function getPathBounds(points: PathPoint[], closed: boolean): Rect | null
   if (points.length === 0) return null;
   if (points.length === 1) {
     return {
-      x: points[0].position.x,
-      y: points[0].position.y,
+      x: points[0]!.position.x,
+      y: points[0]!.position.y,
       width: 0,
       height: 0,
     };
@@ -231,7 +231,7 @@ export function tessellatePathToVertices(
 ): Float32Array {
   if (points.length === 0) return new Float32Array(0);
   if (points.length === 1) {
-    return new Float32Array([points[0].position.x, points[0].position.y]);
+    return new Float32Array([points[0]!.position.x, points[0]!.position.y]);
   }
 
   const vertices: number[] = [];
@@ -242,7 +242,7 @@ export function tessellatePathToVertices(
     // Add segment points (skip first point for subsequent segments to avoid duplicates)
     const startIndex = index === 0 ? 0 : 1;
     for (let j = startIndex; j < segmentPoints.length; j++) {
-      vertices.push(segmentPoints[j].x, segmentPoints[j].y);
+      vertices.push(segmentPoints[j]!.x, segmentPoints[j]!.y);
     }
   });
 
@@ -296,7 +296,7 @@ export function tessellatePathToPoints(
   const result: Vector2[] = [];
 
   for (let i = 0; i < vertices.length; i += 2) {
-    result.push({ x: vertices[i], y: vertices[i + 1] });
+    result.push({ x: vertices[i]!, y: vertices[i + 1]! });
   }
 
   return result;
@@ -349,7 +349,7 @@ export function getSegmentLength(p0: PathPoint, p1: PathPoint): number {
  */
 export function getPointOnPath(points: PathPoint[], closed: boolean, t: number): Vector2 | null {
   if (points.length === 0) return null;
-  if (points.length === 1) return vec2.clone(points[0].position);
+  if (points.length === 1) return vec2.clone(points[0]!.position);
 
   const segmentCount = closed ? points.length : points.length - 1;
   const totalSegments = segmentCount;
@@ -361,8 +361,8 @@ export function getPointOnPath(points: PathPoint[], closed: boolean, t: number):
   const segmentIndex = Math.min(Math.floor(t * totalSegments), totalSegments - 1);
   const segmentT = t * totalSegments - segmentIndex;
 
-  const p0 = points[segmentIndex];
-  const p1 = points[(segmentIndex + 1) % points.length];
+  const p0 = points[segmentIndex]!;
+  const p1 = points[(segmentIndex + 1) % points.length]!;
   const { cp1, cp2 } = getAbsoluteControlPoints(p0, p1);
 
   return bezier.cubicPoint(p0.position, cp1, cp2, p1.position, segmentT);
@@ -382,8 +382,8 @@ export function getTangentOnPath(points: PathPoint[], closed: boolean, t: number
   const segmentIndex = Math.min(Math.floor(t * totalSegments), totalSegments - 1);
   const segmentT = t * totalSegments - segmentIndex;
 
-  const p0 = points[segmentIndex];
-  const p1 = points[(segmentIndex + 1) % points.length];
+  const p0 = points[segmentIndex]!;
+  const p1 = points[(segmentIndex + 1) % points.length]!;
   const { cp1, cp2 } = getAbsoluteControlPoints(p0, p1);
 
   const derivative = bezier.cubicDerivative(p0.position, cp1, cp2, p1.position, segmentT);
@@ -401,15 +401,15 @@ export function getNearestPointOnPath(
   if (points.length === 0) return null;
   if (points.length === 1) {
     return {
-      point: vec2.clone(points[0].position),
+      point: vec2.clone(points[0]!.position),
       t: 0,
-      distance: vec2.distance(queryPoint, points[0].position),
+      distance: vec2.distance(queryPoint, points[0]!.position),
       segmentIndex: 0,
     };
   }
 
   let bestResult = {
-    point: vec2.clone(points[0].position),
+    point: vec2.clone(points[0]!.position),
     t: 0,
     distance: Infinity,
     segmentIndex: 0,
@@ -457,7 +457,7 @@ export function getSubpathBoundaries(node: {
 }): number[] {
   const b = [0, node.points.length];
   if (node.subpaths) {
-    for (const sp of node.subpaths) b.push(b[b.length - 1] + sp.length);
+    for (const sp of node.subpaths) b.push(b[b.length - 1]! + sp.length);
   }
   return b;
 }
@@ -486,8 +486,8 @@ export function getContourRange(
   flatIndex: number
 ): { start: number; end: number } {
   for (let c = 0; c < boundaries.length - 1; c++) {
-    if (flatIndex >= boundaries[c] && flatIndex < boundaries[c + 1]) {
-      return { start: boundaries[c], end: boundaries[c + 1] };
+    if (flatIndex >= boundaries[c]! && flatIndex < boundaries[c + 1]!) {
+      return { start: boundaries[c]!, end: boundaries[c + 1]! };
     }
   }
   return { start: 0, end: boundaries[1] || 0 };
@@ -521,7 +521,7 @@ export function applyCornerRadius(
   const result: PathPoint[] = [];
 
   for (let i = 0; i < points.length; i++) {
-    const point = points[i];
+    const point = points[i]!;
 
     // Only round corner points
     if (point.type !== 'corner') {
@@ -543,8 +543,8 @@ export function applyCornerRadius(
 
     const prevIdx = (i - 1 + points.length) % points.length;
     const nextIdx = (i + 1) % points.length;
-    const prev = points[prevIdx];
-    const next = points[nextIdx];
+    const prev = points[prevIdx]!;
+    const next = points[nextIdx]!;
 
     // Calculate directions and distances to neighbors
     const toPrev = vec2.subtract(prev.position, point.position);

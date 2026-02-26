@@ -47,11 +47,11 @@ export function packSkinnedVertices(
     const base = i * 10;
 
     // Position (with optional morph offsets applied)
-    let px = vertices[i * 2];
-    let py = vertices[i * 2 + 1];
+    let px = vertices[i * 2] ?? 0;
+    let py = vertices[i * 2 + 1] ?? 0;
     if (morphOffsets && morphOffsets.length === vertices.length) {
-      px += morphOffsets[i * 2];
-      py += morphOffsets[i * 2 + 1];
+      px += morphOffsets[i * 2] ?? 0;
+      py += morphOffsets[i * 2 + 1] ?? 0;
     }
     packed[base] = px;
     packed[base + 1] = py;
@@ -95,7 +95,7 @@ export function packSkinnedVertices(
  *   [a, b, 0,  c, d, 0,  tx, ty, 1]
  */
 function affineToMat3(m: number[]): number[] {
-  return [m[0], m[1], 0, m[2], m[3], 0, m[4], m[5], 1];
+  return [m[0] ?? 0, m[1] ?? 0, 0, m[2] ?? 0, m[3] ?? 0, 0, m[4] ?? 0, m[5] ?? 0, 1];
 }
 
 /**
@@ -143,7 +143,7 @@ export function computeBoneMatrixUniforms(
     const mat3 = affineToMat3(finalMatrix);
     const off = idx * 9;
     for (let j = 0; j < 9; j++) {
-      result[off + j] = mat3[j];
+      result[off + j] = mat3[j] ?? 0;
     }
   }
 

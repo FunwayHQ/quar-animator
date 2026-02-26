@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import {
   getActiveGroup,
   getBoneVisibility,
@@ -52,7 +52,7 @@ function makeSG(): VitruvianSceneGraph & { updates: Map<string, Record<string, u
   const updates = new Map<string, Record<string, unknown>>();
   return {
     updates,
-    getNode(id: string) {
+    getNode(_id: string) {
       return { type: 'rectangle', skinData: makeSkinData() };
     },
     updateNode(id: string, data: Record<string, unknown>) {
@@ -178,7 +178,7 @@ describe('getActiveSkinSnapshots', () => {
     });
     const snapshots = getActiveSkinSnapshots(ctrl);
     expect(snapshots).toHaveLength(1);
-    expect(snapshots[0].nodeId).toBe('mesh-1');
+    expect(snapshots[0]!.nodeId).toBe('mesh-1');
   });
 
   it('returns empty array when disabled', () => {

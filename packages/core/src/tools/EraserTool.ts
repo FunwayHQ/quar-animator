@@ -574,7 +574,7 @@ export class EraserTool extends BaseTool {
       // Check each point in the path
       const pointsToKeep: number[] = [];
       for (let i = 0; i < pathNode.points.length; i++) {
-        const point = pathNode.points[i];
+        const point = pathNode.points[i]!;
         const worldPoint = mat3.transformPoint(worldMatrix, point.position);
         const distance = vec2.distance(worldPoint, worldPos);
         if (distance > radius) {
@@ -586,7 +586,7 @@ export class EraserTool extends BaseTool {
         if (pointsToKeep.length < 2) {
           pathsToRemove.push(pathNode.id);
         } else {
-          const newPoints = pointsToKeep.map((i) => pathNode.points[i]);
+          const newPoints = pointsToKeep.map((i) => pathNode.points[i]!);
           pathsToUpdate.set(pathNode.id, {
             ...pathNode,
             points: newPoints,

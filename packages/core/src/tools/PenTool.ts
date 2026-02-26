@@ -74,7 +74,7 @@ export class PenTool extends BaseTool {
 
     // Check if clicking near the first point to close the path
     if (this.currentPath.length > 2) {
-      const firstPoint = this.currentPath[0].position;
+      const firstPoint = this.currentPath[0]!.position;
       const distance = vec2.distance(worldPos, firstPoint);
       const closeThreshold = 10 / this.context.camera.zoom; // Screen pixels converted to world units
 
@@ -117,7 +117,7 @@ export class PenTool extends BaseTool {
         this.updateExistingHandle(worldPos);
       } else {
         // Creating a new point - update handle of the last point
-        const lastPoint = this.currentPath[this.currentPath.length - 1];
+        const lastPoint = this.currentPath[this.currentPath.length - 1]!;
         const handleOut = vec2.subtract(worldPos, lastPoint.position);
 
         // Check if the handle has significant length
@@ -336,7 +336,7 @@ export class PenTool extends BaseTool {
     const hitRadius = 10 / this.context.camera.zoom;
 
     for (let i = 0; i < this.currentPath.length; i++) {
-      const point = this.currentPath[i];
+      const point = this.currentPath[i]!;
       const distance = vec2.distance(worldPos, point.position);
       if (distance < hitRadius) {
         return i;

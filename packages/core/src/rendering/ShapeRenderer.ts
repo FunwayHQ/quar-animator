@@ -1112,7 +1112,8 @@ export class ShapeRenderer {
     viewProjectionMatrix: Matrix3,
     _selectedIds: Set<string> = new Set(),
     skipNodeId?: string | null,
-    morphOffsets?: Map<string, Float32Array>
+    morphOffsets?: Map<string, Float32Array>,
+    exportNodeIds?: string[]
   ): void {
     if (!this.program || !this.vao) return;
 
@@ -1165,7 +1166,7 @@ export class ShapeRenderer {
     const pushScissor = (sx: number, sy: number, sw: number, sh: number) => {
       if (scissorStack.length > 0) {
         // Intersect with current top
-        const top = scissorStack[scissorStack.length - 1];
+        const top = scissorStack[scissorStack.length - 1]!;
         const ix1 = Math.max(sx, top.x);
         const iy1 = Math.max(sy, top.y);
         const ix2 = Math.min(sx + sw, top.x + top.w);
@@ -1185,7 +1186,7 @@ export class ShapeRenderer {
       if (scissorStack.length === 0) {
         gl.disable(gl.SCISSOR_TEST);
       } else {
-        const top = scissorStack[scissorStack.length - 1];
+        const top = scissorStack[scissorStack.length - 1]!;
         gl.scissor(top.x, top.y, top.w, top.h);
       }
     };
@@ -1204,7 +1205,7 @@ export class ShapeRenderer {
 
         // Symbol instance: resolve and render master's children
         if (node.type === 'symbol-instance') {
-          const inst = node as SymbolInstanceNode;
+          const inst = node;
           const definition = this.symbolDefinitions.get(inst.symbolId);
           if (!definition) return false; // skip if definition missing
 
@@ -1447,7 +1448,8 @@ export class ShapeRenderer {
         if (node.type === 'artboard' && node.clipContent) {
           popScissor();
         }
-      }
+      },
+      exportNodeIds
     );
 
     this.renderer.bindVAO(null);
@@ -3395,20 +3397,20 @@ export class ShapeRenderer {
     // Bind-pose vertex order: [BL, BR, TL, TR] (matches renderImage)
     // UV order: BL=(0,1), BR=(1,1), TL=(0,0), TR=(1,0)
     const quadData = new Float32Array([
-      deformed[0],
-      deformed[1],
+      deformed[0]!,
+      deformed[1]!,
       0,
       1, // bottom-left
-      deformed[2],
-      deformed[3],
+      deformed[2]!,
+      deformed[3]!,
       1,
       1, // bottom-right
-      deformed[4],
-      deformed[5],
+      deformed[4]!,
+      deformed[5]!,
       0,
       0, // top-left
-      deformed[6],
-      deformed[7],
+      deformed[6]!,
+      deformed[7]!,
       1,
       0, // top-right
     ]);
@@ -3502,13 +3504,13 @@ export class ShapeRenderer {
     const deformed = deformVertices(cached.vertices, skinData, boneWorldTransforms);
     if (deformed.length < 2) return null;
 
-    let minX = deformed[0];
-    let minY = deformed[1];
-    let maxX = deformed[0];
-    let maxY = deformed[1];
+    let minX = deformed[0]!;
+    let minY = deformed[1]!;
+    let maxX = deformed[0]!;
+    let maxY = deformed[1]!;
     for (let i = 2; i < deformed.length; i += 2) {
-      const x = deformed[i];
-      const y = deformed[i + 1];
+      const x = deformed[i]!;
+      const y = deformed[i + 1]!;
       if (x < minX) minX = x;
       if (y < minY) minY = y;
       if (x > maxX) maxX = x;

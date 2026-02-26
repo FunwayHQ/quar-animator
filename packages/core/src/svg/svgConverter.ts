@@ -386,7 +386,7 @@ function convertCompoundPath(
   );
 
   // First closed contour → points, rest → subpaths
-  const primaryContour = centeredContours[0];
+  const primaryContour = centeredContours[0]!;
   const additionalContours = centeredContours.slice(1);
 
   // Include open subpaths in additionalContours if any

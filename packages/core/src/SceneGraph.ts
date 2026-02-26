@@ -387,7 +387,8 @@ export class SceneGraph {
    */
   traverseVisible(
     callback: (node: Node) => boolean | void,
-    onExitNode?: (node: Node) => void
+    onExitNode?: (node: Node) => void,
+    rootIds?: string[]
   ): void {
     const visit = (nodeId: string): void => {
       const node = this.nodes.get(nodeId);
@@ -399,7 +400,7 @@ export class SceneGraph {
       }
       onExitNode?.(node);
     };
-    for (const rootId of this.rootNodeIds) {
+    for (const rootId of rootIds ?? this.rootNodeIds) {
       visit(rootId);
     }
   }
