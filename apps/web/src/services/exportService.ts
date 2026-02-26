@@ -170,6 +170,11 @@ export async function exportSelectionAsPng(
     sceneGraph.updateNode(artboard.id, { fills: [] } as Partial<Node>);
   }
 
+  // Pre-load all image textures so they're available during render.
+  // A fresh ShapeRenderer has an empty texture cache — without this,
+  // image nodes silently skip rendering because getTexture() returns null.
+  await shapeRenderer.preloadTextures(nodes, sceneGraph);
+
   // Render only the selected nodes and their descendants (not the entire scene).
   // This prevents other root-level nodes from appearing in the export.
   const exportNodeIds = nodes.map((n) => n.id);

@@ -30,6 +30,8 @@ export interface FrameRenderContext {
 }
 
 export interface FrameRendererHandle {
+  /** Pre-load image textures so they render correctly. Must be awaited before renderFrame. */
+  preloadTextures(nodes: Node[], sceneGraph: SceneGraph): Promise<void>;
   /** Render a single frame and return the canvas */
   renderFrame(ctx: FrameRenderContext, frame: number): HTMLCanvasElement;
   /** Render a frame and return a PNG blob */
@@ -138,5 +140,9 @@ export function createFrameRenderer(options: FrameRenderOptions): FrameRendererH
     renderer.dispose();
   }
 
-  return { renderFrame, renderFrameAsBlob, dispose };
+  async function preloadTextures(nodes: Node[], sceneGraph: SceneGraph): Promise<void> {
+    await shapeRenderer.preloadTextures(nodes, sceneGraph);
+  }
+
+  return { preloadTextures, renderFrame, renderFrameAsBlob, dispose };
 }

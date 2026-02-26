@@ -102,6 +102,9 @@ export async function exportSpriteSheet(
     backgroundColor,
   });
 
+  // Pre-load image textures so they render correctly in the fresh WebGL context
+  await frameRenderer.preloadTextures(ctx.sceneGraph.getRootNodes(), ctx.sceneGraph);
+
   try {
     for (let i = 0; i < frameCount; i++) {
       const frame = startFrame + i;

@@ -988,6 +988,99 @@ export class ShapeRenderer {
   }
 
   /**
+   * Synchronously load an image and create a WebGL texture.
+   * Used by the export pipeline where async loading is not viable.
+   */
+  loadTextureSync(src: string): WebGLTexture | null {
+    if (this.textureCache.has(src)) return this.textureCache.get(src)!;
+
+    const gl = this.renderer.context;
+    const img = new Image();
+    // For data URIs this is synchronous in most browsers
+    img.src = src;
+
+    // If the image loaded synchronously (data URI), create texture immediately
+    if (img.complete && img.naturalWidth > 0) {
+      const texture = gl.createTexture();
+      if (!texture) return null;
+      gl.bindTexture(gl.TEXTURE_2D, texture);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
+      gl.generateMipmap(gl.TEXTURE_2D);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      gl.bindTexture(gl.TEXTURE_2D, null);
+      this.textureCache.set(src, texture);
+      return texture;
+    }
+
+    return null;
+  }
+
+  /**
+   * Pre-load all image textures for the given nodes (async).
+   * Must be awaited before rendering to ensure images are available.
+   */
+  async preloadTextures(
+    nodes: import('@quar/types').Node[],
+    sceneGraph: SceneGraph
+  ): Promise<void> {
+    const imageSrcs = new Set<string>();
+    for (const node of nodes) {
+      if (node.type === 'image' && node.src) {
+        imageSrcs.add(node.src);
+      }
+      // Also collect from descendants
+      const descendants = sceneGraph.getDescendants(node.id);
+      for (const desc of descendants) {
+        if (desc.type === 'image' && 'src' in desc) {
+          imageSrcs.add(desc.src);
+        }
+      }
+    }
+
+    const gl = this.renderer.context;
+    const promises: Promise<void>[] = [];
+
+    for (const src of imageSrcs) {
+      if (this.textureCache.has(src)) continue;
+
+      // Try sync first (works for data URIs)
+      if (this.loadTextureSync(src)) continue;
+
+      // Fall back to async load
+      promises.push(
+        new Promise<void>((resolve) => {
+          const img = new Image();
+          img.crossOrigin = 'anonymous';
+          img.onload = () => {
+            const texture = gl.createTexture();
+            if (texture) {
+              gl.bindTexture(gl.TEXTURE_2D, texture);
+              gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
+              gl.generateMipmap(gl.TEXTURE_2D);
+              gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+              gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+              gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+              gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+              gl.bindTexture(gl.TEXTURE_2D, null);
+              this.textureCache.set(src, texture);
+            }
+            resolve();
+          };
+          img.onerror = () => resolve(); // Skip failed images
+          img.src = src;
+        })
+      );
+    }
+
+    if (promises.length > 0) {
+      await Promise.all(promises);
+    }
+  }
+
+  /**
    * Dispose a specific texture from cache
    */
   disposeTexture(src: string): void {

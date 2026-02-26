@@ -163,6 +163,9 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
           backgroundColor: state.pngTransparent ? null : { r: 26, g: 26, b: 26, a: 1 },
         });
 
+        // Pre-load image textures so they render correctly
+        await renderer.preloadTextures(sceneGraph.getRootNodes(), sceneGraph);
+
         try {
           for (let i = 0; i < frameCount; i++) {
             if (cancelledRef.current) break;
@@ -243,6 +246,9 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
           height: state.height,
           multiplier: 1,
         });
+
+        // Pre-load image textures so they render correctly
+        await renderer.preloadTextures(sceneGraph.getRootNodes(), sceneGraph);
 
         try {
           for (let i = 0; i < frameCount; i++) {
