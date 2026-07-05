@@ -15,6 +15,11 @@ export function createMockWebGL2Context(): WebGL2RenderingContext {
   const mockVAO = { __isVAO: true } as unknown as WebGLVertexArrayObject;
   const mockUniformLocation = { __isUniform: true } as unknown as WebGLUniformLocation;
 
+  // Textures and framebuffers get unique handles per call so tests can tell
+  // which specific object was deleted.
+  let textureId = 0;
+  let framebufferId = 0;
+
   return {
     // Constants
     ARRAY_BUFFER: 34962,
@@ -98,6 +103,37 @@ export function createMockWebGL2Context(): WebGL2RenderingContext {
     drawArrays: vi.fn(),
     drawElements: vi.fn(),
     lineWidth: vi.fn(),
+
+    // Texture / framebuffer constants
+    TEXTURE_2D: 3553,
+    RGBA: 6408,
+    RGBA8: 32856,
+    UNSIGNED_BYTE: 5121,
+    TEXTURE_MIN_FILTER: 10241,
+    TEXTURE_MAG_FILTER: 10240,
+    TEXTURE_WRAP_S: 10242,
+    TEXTURE_WRAP_T: 10243,
+    LINEAR: 9729,
+    CLAMP_TO_EDGE: 33071,
+    FRAMEBUFFER: 36160,
+    COLOR_ATTACHMENT0: 36064,
+    FRAMEBUFFER_COMPLETE: 36053,
+
+    // Texture operations (unique handle per createTexture call)
+    createTexture: vi.fn(() => ({ __isTexture: true, id: ++textureId }) as unknown as WebGLTexture),
+    bindTexture: vi.fn(),
+    texImage2D: vi.fn(),
+    texParameteri: vi.fn(),
+    deleteTexture: vi.fn(),
+
+    // Framebuffer operations (unique handle per createFramebuffer call)
+    createFramebuffer: vi.fn(
+      () => ({ __isFramebuffer: true, id: ++framebufferId }) as unknown as WebGLFramebuffer
+    ),
+    bindFramebuffer: vi.fn(),
+    framebufferTexture2D: vi.fn(),
+    checkFramebufferStatus: vi.fn(() => 36053), // FRAMEBUFFER_COMPLETE
+    deleteFramebuffer: vi.fn(),
 
     // Canvas reference
     canvas: document.createElement('canvas'),

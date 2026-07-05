@@ -18,6 +18,8 @@ export class FramebufferManager {
   private gl: WebGL2RenderingContext;
   private pool: Map<string, FramebufferEntry[]> = new Map();
   private active: Set<FramebufferEntry> = new Set();
+  /** Size key of the most recent acquire, used to detect a size change. */
+  private lastKey: string | null = null;
 
   constructor(gl: WebGL2RenderingContext) {
     this.gl = gl;
@@ -32,6 +34,24 @@ export class FramebufferManager {
    */
   acquire(width: number, height: number): FramebufferEntry {
     const key = this.sizeKey(width, height);
+
+    // When the requested size changes, purge pooled entries of every other size.
+    // EffectRenderer acquires at exactly one (canvasWidth, canvasHeight) per
+    // frame, so a size transition is a clean signal: without this, a canvas
+    // resize leaves the pool full of dead-size FBOs, the global cap forces every
+    // new-size release() to destroy its entry, and we alloc/free full-canvas GPU
+    // textures every frame indefinitely.
+    if (this.lastKey !== null && key !== this.lastKey) {
+      const staleKeys: string[] = [];
+      for (const [bucketKey, bucket] of this.pool) {
+        if (bucketKey === key) continue;
+        for (const entry of bucket) this.destroyEntry(entry);
+        staleKeys.push(bucketKey);
+      }
+      for (const k of staleKeys) this.pool.delete(k);
+    }
+    this.lastKey = key;
+
     const bucket = this.pool.get(key);
 
     if (bucket && bucket.length > 0) {
