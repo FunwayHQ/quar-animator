@@ -158,8 +158,12 @@ export function evaluateSmartBoneAction(
     if (!lower && !upper) {
       continue;
     } else if (!lower) {
-      // Before first target — use first target scaled by position
-      offsets = (upper!.offsets[nodeId] ?? []).map((o) => ({ ...o }));
+      // Before the first target: ramp from the rest pose (zero displacement) up
+      // to the first target as the driver moves from rangeMin to its driverValue
+      // — previously the FULL morph was applied even at rest.
+      const denom = upper!.driverValue - action.driver.rangeMin;
+      const t = denom !== 0 ? (currentDriverVal - action.driver.rangeMin) / denom : 1;
+      offsets = interpolateMorphOffsets([], upper!.offsets[nodeId] ?? [], t);
     } else if (!upper || lower === upper) {
       // At or past a single target
       offsets = (lower.offsets[nodeId] ?? []).map((o) => ({ ...o }));

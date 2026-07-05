@@ -528,6 +528,41 @@ describe('extractIKJoints', () => {
     expect(joints[1]!.boneLength).toBe(80);
   });
 
+  it('records the root parent world rotation (F062)', () => {
+    const parent = createBoneNode('p', 'P', { x: 0, y: 0 }, 50, 90); // rotated parent
+    const root = createBoneNode('root', 'Root', { x: 0, y: 0 }, 100, 0);
+    root.parent = 'p';
+    const child = createBoneNode('child', 'Child', { x: 100, y: 0 }, 80, 0);
+    child.parent = 'root';
+    const sg = createMockSceneGraph([parent, root, child]);
+
+    const joints = extractIKJoints('root', 'child', sg);
+    expect(joints[0]!.rootParentWorldRotation).toBeCloseTo(90, 3);
+  });
+
+  it('offsets the root local rotation by the parent world rotation (F062)', () => {
+    const j0: IKJoint = { boneId: 'root', worldPos: { x: 0, y: 0 }, boneLength: 100 };
+    const j1: IKJoint = { boneId: 'child', worldPos: { x: 100, y: 0 }, boneLength: 80 };
+    const target = { x: 100, y: 120 };
+    const base = solveFABRIK({
+      joints: [{ ...j0 }, { ...j1 }],
+      target,
+      maxIterations: 20,
+      tolerance: 0.1,
+    });
+    const rotated = solveFABRIK({
+      joints: [{ ...j0, rootParentWorldRotation: 90 }, { ...j1 }],
+      target,
+      maxIterations: 20,
+      tolerance: 0.1,
+    });
+    const baseRoot = base.rotations.get('root')!;
+    const rotRoot = rotated.rotations.get('root')!;
+    // Same world solve; the parent's 90deg is subtracted from the root's local angle.
+    const diff = (((rotRoot - (baseRoot - 90)) % 360) + 360) % 360;
+    expect(Math.min(diff, 360 - diff)).toBeLessThan(0.01);
+  });
+
   it('returns empty array if root not found', () => {
     const child = createBoneNode('child', 'Child', { x: 0, y: 0 }, 80, 0);
     const sg = createMockSceneGraph([child]);
@@ -628,6 +663,23 @@ describe('applyIKResult', () => {
 
     expect(sg.nodes.get('root')!.transform.rotation).toBeCloseTo(45, 1);
     expect(sg.nodes.get('child')!.transform.rotation).toBeCloseTo(-10, 1);
+  });
+
+  it('skips the scene-graph write when the pose is unchanged (F063)', () => {
+    const root = createBoneNode('root', 'Root', { x: 0, y: 0 }, 100, 45); // already at 45
+    const sg = createMockSceneGraph([root]);
+    let updateCount = 0;
+    const origUpdate = sg.updateNode.bind(sg);
+    sg.updateNode = (id: string, data: Partial<Node>) => {
+      updateCount++;
+      origUpdate(id, data);
+    };
+
+    applyIKResult({ rotations: new Map([['root', 45]]), converged: true, endEffectorError: 0 }, sg);
+    expect(updateCount).toBe(0); // no-op pose, no event
+
+    applyIKResult({ rotations: new Map([['root', 90]]), converged: true, endEffectorError: 0 }, sg);
+    expect(updateCount).toBe(1); // real change writes
   });
 
   it('clamps rotations to bone angle constraints', () => {

@@ -26,6 +26,9 @@ export interface IKJoint {
   boneLength: number;
   angleMin?: number;
   angleMax?: number;
+  /** World rotation (degrees) of the chain root's parent, so the root's local
+   * rotation is expressed correctly when the chain sits under a rotated parent. */
+  rootParentWorldRotation?: number;
 }
 
 /** Result of an IK solve */
@@ -120,8 +123,11 @@ export function solveFABRIK(config: FABRIKConfig): IKSolveResult {
   if (joints.length === 1) {
     // Single bone: just rotate toward target
     const bone = joints[0]!;
+    const rootParentRot = bone.rootParentWorldRotation ?? 0;
     const toTarget = v2sub(target, bone.worldPos);
     let angle = Math.atan2(toTarget.y, toTarget.x) * (180 / Math.PI);
+    // Express as a local rotation under the (possibly rotated) parent.
+    if (rootParentRot) angle = normalizeAngle(angle - rootParentRot);
     if (bone.angleMin != null || bone.angleMax != null) {
       const min = bone.angleMin ?? -Infinity;
       const max = bone.angleMax ?? Infinity;
@@ -200,7 +206,11 @@ export function solveFABRIK(config: FABRIKConfig): IKSolveResult {
   }
 
   // Convert positions to local rotations
-  const rotations = positionsToRotations(positions, joints);
+  const rotations = positionsToRotations(
+    positions,
+    joints,
+    joints[0]?.rootParentWorldRotation ?? 0
+  );
 
   const endEffectorError = v2dist(positions[positions.length - 1]!, target);
 
@@ -335,7 +345,11 @@ function applyConstraints(
  * in world space. For the root bone, this is the absolute world rotation.
  * For child bones, we subtract the parent's world rotation to get local rotation.
  */
-function positionsToRotations(positions: Vector2[], joints: IKJoint[]): Map<string, number> {
+function positionsToRotations(
+  positions: Vector2[],
+  joints: IKJoint[],
+  rootParentRot: number = 0
+): Map<string, number> {
   const rotations = new Map<string, number>();
   const worldRotations: number[] = [];
 
@@ -348,7 +362,7 @@ function positionsToRotations(positions: Vector2[], joints: IKJoint[]): Map<stri
     // Root bone: local = world (no parent)
     let localAngle: number;
     if (i === 0) {
-      localAngle = worldAngle;
+      localAngle = rootParentRot ? normalizeAngle(worldAngle - rootParentRot) : worldAngle;
     } else {
       localAngle = normalizeAngle(worldAngle - worldRotations[i - 1]!);
     }
@@ -394,7 +408,7 @@ export function extractIKJoints(
   }
 
   // Build IKJoint array with world positions
-  return chain.map((bone) => {
+  const joints: IKJoint[] = chain.map((bone) => {
     const wt = sceneGraph.getWorldTransform(bone.id);
     return {
       boneId: bone.id,
@@ -404,6 +418,20 @@ export function extractIKJoints(
       angleMax: bone.angleMax,
     };
   });
+
+  // World rotation of the chain root's parent (0 if none) so the root's local
+  // rotation is computed relative to it (the scene graph re-applies it on write).
+  const rootParent = chain[0]!.parent;
+  if (joints[0]) {
+    if (rootParent) {
+      const pwt = sceneGraph.getWorldTransform(rootParent);
+      joints[0].rootParentWorldRotation = Math.atan2(pwt.b, pwt.a) * (180 / Math.PI);
+    } else {
+      joints[0].rootParentWorldRotation = 0;
+    }
+  }
+
+  return joints;
 }
 
 /**
@@ -424,6 +452,11 @@ export function applyIKResult(result: IKSolveResult, sceneGraph: IKSceneGraph): 
       const max = bone.angleMax ?? Infinity;
       clamped = Math.max(min, Math.min(max, clamped));
     }
+
+    // Skip the write when the pose is unchanged: evaluateIKChains runs every
+    // frame in the render loop while any enabled chain exists, and updateNode
+    // unconditionally invalidates the world transform and emits nodeChanged.
+    if (Math.abs(clamped - bone.transform.rotation) < 1e-4) continue;
 
     sceneGraph.updateNode(boneId, {
       transform: {

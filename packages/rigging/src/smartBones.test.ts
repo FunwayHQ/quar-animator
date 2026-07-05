@@ -201,6 +201,38 @@ describe('evaluateSmartBoneAction', () => {
     expect(offsets[1]).toBeCloseTo(20); // dy at vertex 0
   });
 
+  it('ramps a single target up from rest, not full strength before it (F064)', () => {
+    const action = makeAction({
+      targets: [
+        {
+          id: 't1',
+          name: 'Target 1',
+          driverValue: 90,
+          offsets: { 'mesh-1': [{ vertexIndex: 0, dx: 10, dy: 20 }] },
+        },
+      ],
+    });
+
+    // At rest (rotation 0) the mesh must be undeformed (before the fix it applied
+    // the full 10/20 morph even at rest).
+    let result = evaluateSmartBoneAction(
+      action,
+      makeSG({ 'bone-1': { type: 'bone', rotation: 0 } }),
+      nodeVertexCounts
+    );
+    expect(result!.get('mesh-1')![0]).toBeCloseTo(0);
+    expect(result!.get('mesh-1')![1]).toBeCloseTo(0);
+
+    // Halfway to the target → half strength.
+    result = evaluateSmartBoneAction(
+      action,
+      makeSG({ 'bone-1': { type: 'bone', rotation: 45 } }),
+      nodeVertexCounts
+    );
+    expect(result!.get('mesh-1')![0]).toBeCloseTo(5);
+    expect(result!.get('mesh-1')![1]).toBeCloseTo(10);
+  });
+
   it('interpolates between two targets', () => {
     const action = makeAction({
       targets: [
