@@ -15,13 +15,19 @@ export type SceneGraphEventType =
   | 'nodeRemoved'
   | 'nodeChanged'
   | 'nodeMoved'
-  | 'selectionChanged';
+  | 'selectionChanged'
+  // The entire node set was replaced atomically (fromJSON) — no per-node
+  // nodeRemoved events fire, so consumers holding per-node caches must react.
+  | 'graphReplaced';
 
 export interface SceneGraphEvent {
   type: SceneGraphEventType;
   nodeId?: string;
   parentId?: string;
   previousParentId?: string;
+  /** The removed node, included on 'nodeRemoved' (it is gone from the graph by
+   * the time the event fires, so listeners that need it get it here). */
+  node?: Node;
 }
 
 type EventCallback = (event: SceneGraphEvent) => void;
@@ -121,7 +127,7 @@ export class SceneGraph {
 
     this.nodes.delete(id);
     this.worldTransformCache.delete(id);
-    this.emit({ type: 'nodeRemoved', nodeId: id });
+    this.emit({ type: 'nodeRemoved', nodeId: id, node });
   }
 
   moveNode(id: string, newParentId: string | null, index?: number): void {
@@ -456,6 +462,10 @@ export class SceneGraph {
     this.nodes = newNodes;
     this.rootNodeIds = validRootIds;
     this.worldTransformCache.clear();
+
+    // No per-node nodeRemoved events fire for the replaced nodes; notify
+    // consumers (e.g. the renderer's geometry cache) to evict stale entries.
+    this.emit({ type: 'graphReplaced' });
   }
 
   /**

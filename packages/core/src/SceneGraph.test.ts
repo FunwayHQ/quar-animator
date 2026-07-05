@@ -151,7 +151,7 @@ describe('SceneGraph', () => {
       expect(() => sceneGraph.removeNode('nonexistent')).not.toThrow();
     });
 
-    it('emits nodeRemoved event', () => {
+    it('emits nodeRemoved event carrying the removed node', () => {
       const callback = vi.fn();
       const node = createGroupNode('node-1', 'Node 1');
       sceneGraph.addNode(node);
@@ -159,10 +159,12 @@ describe('SceneGraph', () => {
       sceneGraph.on('nodeRemoved', callback);
       sceneGraph.removeNode('node-1');
 
-      expect(callback).toHaveBeenCalledWith({
-        type: 'nodeRemoved',
-        nodeId: 'node-1',
-      });
+      expect(callback).toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'nodeRemoved', nodeId: 'node-1' })
+      );
+      // The node itself is included so listeners can react (it is already gone
+      // from the graph by the time the event fires).
+      expect(callback.mock.calls[0]![0]!.node?.id).toBe('node-1');
     });
   });
 
@@ -699,6 +701,20 @@ describe('SceneGraph', () => {
       sceneGraph.fromJSON(json);
 
       expect(sceneGraph.getNode('existing')).toBeUndefined();
+      expect(sceneGraph.getNode('new')).toBeDefined();
+    });
+
+    it('emits a graphReplaced event after the atomic swap (F037)', () => {
+      const callback = vi.fn();
+      sceneGraph.on('graphReplaced', callback);
+
+      sceneGraph.fromJSON({
+        nodes: [createGroupNode('new', 'New')],
+        rootNodeIds: ['new'],
+      });
+
+      expect(callback).toHaveBeenCalledWith(expect.objectContaining({ type: 'graphReplaced' }));
+      // The event fires after the swap, so the new state is already visible.
       expect(sceneGraph.getNode('new')).toBeDefined();
     });
   });

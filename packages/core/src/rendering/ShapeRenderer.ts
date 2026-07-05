@@ -1092,6 +1092,16 @@ export class ShapeRenderer {
     this.pendingImages.delete(src);
   }
 
+  /** Delete every cached GPU texture (e.g. when the whole scene is replaced). */
+  clearTextures(): void {
+    const gl = this.renderer.context;
+    for (const texture of this.textureCache.values()) {
+      gl.deleteTexture(texture);
+    }
+    this.textureCache.clear();
+    this.pendingImages.clear();
+  }
+
   // --------------------------------------------------------------------------
   // Tessellation Cache
   // --------------------------------------------------------------------------
@@ -4520,6 +4530,7 @@ export class ShapeRenderer {
     this.skinnedGradientProgram = null;
 
     this.geometryCache.clear();
+    this.booleanRingCache.clear();
 
     // Effect renderer cleanup
     this.effectRenderer.dispose();

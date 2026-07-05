@@ -10,6 +10,7 @@ import {
   importSvg,
   createGroupNode,
 } from '@quar/core';
+import type { SceneGraphEvent } from '@quar/core';
 import type { Node, ImageNode, TextNode, GroupNode, Vector2 } from '@quar/types';
 import { evaluateNodeAtFrame, applyAnimatedValues, getAnimatedNodes } from '@quar/animation';
 import {
@@ -188,23 +189,39 @@ export function Canvas() {
 
     const incrementVersion = () => setSceneGraphVersion((v) => v + 1);
 
-    // Dispose texture when an image node is removed
-    const handleNodeRemoved = (node: Node) => {
+    // Evict the removed node's cached geometry (all node types) and free its
+    // texture if it was an image, so the renderer's per-node caches don't grow
+    // unbounded as nodes are deleted.
+    const handleNodeRemoved = (event: SceneGraphEvent) => {
       incrementVersion();
-      if (node.type === 'image' && shapeRendererRef.current) {
-        shapeRendererRef.current.disposeTexture(node.src);
-      }
+      const renderer = shapeRendererRef.current;
+      if (!renderer) return;
+      if (event.nodeId) renderer.invalidateCache(event.nodeId);
+      if (event.node?.type === 'image') renderer.disposeTexture(event.node.src);
+    };
+
+    // The whole node set was replaced (project/page switch, undo, symbol edit).
+    // No per-node nodeRemoved events fire, so purge the renderer's caches wholesale
+    // to release every prior scene's geometry and textures.
+    const handleGraphReplaced = () => {
+      incrementVersion();
+      const renderer = shapeRendererRef.current;
+      if (!renderer) return;
+      renderer.clearCache();
+      renderer.clearTextures();
     };
 
     // Subscribe to all scene graph events that affect selection bounds
     const unsubscribeChanged = sceneGraph.on('nodeChanged', incrementVersion);
     const unsubscribeAdded = sceneGraph.on('nodeAdded', incrementVersion);
     const unsubscribeRemoved = sceneGraph.on('nodeRemoved', handleNodeRemoved);
+    const unsubscribeReplaced = sceneGraph.on('graphReplaced', handleGraphReplaced);
 
     return () => {
       unsubscribeChanged();
       unsubscribeAdded();
       unsubscribeRemoved();
+      unsubscribeReplaced();
     };
   }, [sceneGraphRef]);
 
@@ -358,7 +375,7 @@ export function Canvas() {
     const targets: import('@quar/types').IKTargetNode[] = [];
     sceneGraphRef.current.traverse((node) => {
       if (node.type === 'ik-target') {
-        targets.push(node as import('@quar/types').IKTargetNode);
+        targets.push(node);
       }
     });
     return targets;
@@ -371,7 +388,7 @@ export function Canvas() {
     const artboards: import('@quar/types').ArtboardNode[] = [];
     sceneGraphRef.current.traverse((node) => {
       if (node.type === 'artboard') {
-        artboards.push(node as import('@quar/types').ArtboardNode);
+        artboards.push(node);
       }
     });
     return artboards;
@@ -1596,7 +1613,7 @@ export function Canvas() {
       // Check if any selected node is a boolean group
       const hasBooleanGroup = Array.from(selectedNodeIds).some((id) => {
         const n = sceneGraph.getNode(id);
-        return n && n.type === 'group' && (n as GroupNode).booleanOp !== undefined;
+        return n && n.type === 'group' && n.booleanOp !== undefined;
       });
 
       return [
@@ -2398,7 +2415,7 @@ export function Canvas() {
           if (!textNode || textNode.type !== 'text') return null;
           return (
             <TextEditOverlay
-              node={textNode as TextNode}
+              node={textNode}
               camera={cameraRef.current}
               onCommit={(content: string) => {
                 if (content.trim() === '') {
@@ -2416,7 +2433,7 @@ export function Canvas() {
               onCancel={() => {
                 // If the node has no content (new node that was never edited), remove it
                 const n = sceneGraph.getNode(editingTextNodeId);
-                if (n && n.type === 'text' && !(n as TextNode).content) {
+                if (n && n.type === 'text' && !n.content) {
                   useEditorStore.getState().pushUndo(sceneGraph);
                   sceneGraph.removeNode(editingTextNodeId);
                   useEditorStore.getState().setSelection([]);

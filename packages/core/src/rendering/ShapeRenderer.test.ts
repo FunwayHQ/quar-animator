@@ -1275,6 +1275,26 @@ describe('ShapeRenderer', () => {
   });
 
   // ==========================================================================
+  // Cache eviction (F037)
+  // ==========================================================================
+
+  describe('cache eviction (F037)', () => {
+    it('invalidateCache drops a node’s cached geometry', () => {
+      const rect = createRectangleNode('evict_me', 100, 50);
+      sceneGraph.addNode(rect);
+      shapeRenderer.render(sceneGraph, mat3.identity());
+      expect(shapeRenderer.getTessellatedVertices('evict_me')).not.toBeNull();
+
+      shapeRenderer.invalidateCache('evict_me');
+      expect(shapeRenderer.getTessellatedVertices('evict_me')).toBeNull();
+    });
+
+    it('clearTextures runs without error when no textures are cached', () => {
+      expect(() => shapeRenderer.clearTextures()).not.toThrow();
+    });
+  });
+
+  // ==========================================================================
   // Dispose
   // ==========================================================================
 
