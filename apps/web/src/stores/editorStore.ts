@@ -525,6 +525,8 @@ export interface EditorStore {
   editingSymbolPrevState: {
     sceneData: { nodes: Node[]; rootNodeIds: string[] };
     selectedNodeIds: string[];
+    undoStack: HistorySnapshot[];
+    redoStack: HistorySnapshot[];
   } | null;
   createSymbol: (sceneGraph: SceneGraphLike) => string | null;
   deleteSymbol: (symbolId: string, sceneGraph: SceneGraphLike) => void;
@@ -2482,12 +2484,12 @@ function createBooleanActions(
     const group = createGroupNode(groupId, `Boolean ${op.charAt(0).toUpperCase() + op.slice(1)}`);
     // Boolean groups use identity transform — anchor (0,0) avoids any offset
     group.transform.anchor = { x: 0, y: 0 };
-    (group as GroupNode).booleanOp = op;
-    (group as GroupNode).fills =
+    group.booleanOp = op;
+    group.fills =
       fills.length > 0
         ? structuredClone(fills)
         : [{ type: 'solid', color: { r: 100, g: 149, b: 237, a: 1 }, opacity: 1, visible: true }];
-    (group as GroupNode).strokes = strokes.length > 0 ? structuredClone(strokes) : [];
+    group.strokes = strokes.length > 0 ? structuredClone(strokes) : [];
 
     // Add group at the first node's parent position
     sceneGraph.addNode(group, commonParent ?? undefined);
@@ -2931,6 +2933,9 @@ function createPageActions(
     activePageId: defaultPage.id,
 
     addPage: (sceneGraph: SceneGraphLike) => {
+      // If a symbol is being edited, exit first so the live scene is the real
+      // page content (not the symbol) before we snapshot the active page.
+      if (get().editingSymbolId) get().exitSymbolEdit(sceneGraph);
       const state = get();
       // Save current page state first (immutable update)
       const updatedPages = state.pages.map((p) => {
@@ -2970,6 +2975,9 @@ function createPageActions(
     },
 
     deletePage: (pageId: string, sceneGraph: SceneGraphLike) => {
+      // Exit symbol-edit first so the live scene is the real page content and
+      // editingSymbolId is cleared before page records are rewritten.
+      if (get().editingSymbolId) get().exitSymbolEdit(sceneGraph);
       const state = get();
       if (state.pages.length <= 1) return; // Must keep at least 1 page
 
@@ -3014,6 +3022,9 @@ function createPageActions(
     },
 
     duplicatePage: (pageId: string, sceneGraph: SceneGraphLike) => {
+      // Exit symbol-edit first so a duplicate of the active page captures the
+      // real page scene, not the symbol being edited.
+      if (get().editingSymbolId) get().exitSymbolEdit(sceneGraph);
       const state = get();
       let sourcePage = state.pages.find((p) => p.id === pageId);
       if (!sourcePage) return;
@@ -3054,9 +3065,16 @@ function createPageActions(
     },
 
     switchPage: (pageId: string, sceneGraph: SceneGraphLike) => {
-      const state = get();
-      if (pageId === state.activePageId) return;
+      const initial = get();
+      if (pageId === initial.activePageId) return;
 
+      // If a symbol is being edited, exit first so the live scene and the
+      // page's undo/redo stacks are restored before we snapshot the active page.
+      if (initial.editingSymbolId) {
+        get().exitSymbolEdit(sceneGraph);
+      }
+
+      const state = get();
       const targetPage = state.pages.find((p) => p.id === pageId);
       if (!targetPage) return;
 
@@ -3145,6 +3163,8 @@ function createSymbolActions(
     editingSymbolPrevState: null as {
       sceneData: { nodes: Node[]; rootNodeIds: string[] };
       selectedNodeIds: string[];
+      undoStack: HistorySnapshot[];
+      redoStack: HistorySnapshot[];
     } | null,
 
     createSymbol: (sceneGraph: SceneGraphLike): string | null => {
@@ -3283,7 +3303,7 @@ function createSymbolActions(
       // Find all instances referencing this symbol and detach them
       const instancesToDetach: string[] = [];
       sceneGraph.traverse((node) => {
-        if (node.type === 'symbol-instance' && (node as SymbolInstanceNode).symbolId === symbolId) {
+        if (node.type === 'symbol-instance' && node.symbolId === symbolId) {
           instancesToDetach.push(node.id);
         }
       });
@@ -3436,10 +3456,13 @@ function createSymbolActions(
       const definition = state.symbols.find((s) => s.id === symbolId);
       if (!definition) return;
 
-      // Save current scene state
+      // Save current scene state and stash the page's undo/redo history so
+      // symbol edits get their own isolated history (restored on exit).
       const prevState = {
         sceneData: structuredClone(sceneGraph.toJSON()),
         selectedNodeIds: Array.from(state.selectedNodeIds),
+        undoStack: state.undoStack,
+        redoStack: state.redoStack,
       };
 
       // Load symbol definition into scene graph
@@ -3450,6 +3473,10 @@ function createSymbolActions(
         editingSymbolPrevState: prevState,
         selectedNodeIds: new Set<string>(),
         enteredGroupId: null,
+        undoStack: [],
+        redoStack: [],
+        canUndo: false,
+        canRedo: false,
         isDirty: true,
       });
     },
@@ -3470,12 +3497,20 @@ function createSymbolActions(
       // Invalidate cache for this symbol
       invalidateSymbolCache(state.editingSymbolId);
 
+      // Restore the page's undo/redo history stashed on enter.
+      const restoredUndo = state.editingSymbolPrevState.undoStack;
+      const restoredRedo = state.editingSymbolPrevState.redoStack;
+
       set({
         symbols: updatedSymbols,
         editingSymbolId: null,
         editingSymbolPrevState: null,
         selectedNodeIds: new Set(state.editingSymbolPrevState.selectedNodeIds),
         enteredGroupId: null,
+        undoStack: restoredUndo,
+        redoStack: restoredRedo,
+        canUndo: restoredUndo.length > 0,
+        canRedo: restoredRedo.length > 0,
         isDirty: true,
       });
     },

@@ -3039,6 +3039,70 @@ describe('EditorStore', () => {
       expect(useEditorStore.getState().editingSymbolPrevState).toBeNull();
     });
 
+    it('isolates the page undo/redo history during symbol edit (F029)', () => {
+      const sg = createMockSceneGraphForSymbols();
+      const rect = makeTestRect('r1');
+      sg._addTestNode(rect);
+      useEditorStore.setState({ selectedNodeIds: new Set(['r1']) });
+      const symbolId = useEditorStore.getState().createSymbol(sg)!;
+
+      // Establish a page-level undo entry.
+      useEditorStore.getState().pushUndo(sg);
+      const pageUndoLen = useEditorStore.getState().undoStack.length;
+      expect(pageUndoLen).toBeGreaterThan(0);
+
+      // Enter symbol edit: page history is stashed, symbol history starts empty.
+      useEditorStore.getState().enterSymbolEdit(symbolId, sg);
+      expect(useEditorStore.getState().canUndo).toBe(false);
+      expect(useEditorStore.getState().undoStack).toHaveLength(0);
+
+      // Undo inside symbol edit must NOT reach into the page's history / scene.
+      const symbolSceneBefore = JSON.stringify(sg.toJSON());
+      useEditorStore.getState().undo(sg);
+      expect(JSON.stringify(sg.toJSON())).toBe(symbolSceneBefore);
+
+      // Exit restores the page's undo history.
+      useEditorStore.getState().exitSymbolEdit(sg);
+      expect(useEditorStore.getState().undoStack).toHaveLength(pageUndoLen);
+      expect(useEditorStore.getState().canUndo).toBe(true);
+    });
+
+    it('switching pages while editing a symbol does not corrupt the page scene (F002)', () => {
+      const sg = createMockSceneGraphForSymbols();
+      const rect = makeTestRect('r1');
+      sg._addTestNode(rect);
+      useEditorStore.setState({ selectedNodeIds: new Set(['r1']) });
+      const symbolId = useEditorStore.getState().createSymbol(sg)!;
+
+      // Create a second page and return to the first so it holds real content.
+      useEditorStore.getState().addPage(sg);
+      const pageIds = useEditorStore.getState().pages.map((p) => p.id);
+      const page1Id = pageIds[0]!;
+      const page2Id = pageIds[1]!;
+      useEditorStore.getState().switchPage(page1Id, sg);
+
+      // Enter symbol edit and make a distinctive change to the symbol.
+      useEditorStore.getState().enterSymbolEdit(symbolId, sg);
+      expect(useEditorStore.getState().editingSymbolId).toBe(symbolId);
+      sg._addTestNode(makeTestRect('symbol-extra'));
+
+      // Navigate away while editing the symbol.
+      useEditorStore.getState().switchPage(page2Id, sg);
+
+      // (1) symbol-edit mode was exited by the guard.
+      expect(useEditorStore.getState().editingSymbolId).toBeNull();
+
+      // (2) page 1's stored scene is its real content, not the symbol's nodes.
+      const page1 = useEditorStore.getState().pages.find((p) => p.id === page1Id)!;
+      const page1NodeIds = page1.sceneGraphJSON.nodes.map((n) => n.id);
+      expect(page1NodeIds).not.toContain('symbol-extra');
+
+      // (3) the symbol definition captured the edit made during symbol edit.
+      const symDef = useEditorStore.getState().symbols.find((s) => s.id === symbolId)!;
+      const symNodeIds = symDef.sceneGraphJSON.nodes.map((n) => n.id);
+      expect(symNodeIds).toContain('symbol-extra');
+    });
+
     it('setInstanceOverride adds override to instance', () => {
       const sg = createMockSceneGraphForSymbols();
       const rect = makeTestRect('r1');
