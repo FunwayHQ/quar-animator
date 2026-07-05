@@ -2997,6 +2997,82 @@ describe('EditorStore', () => {
       expect(sg.removeNode).toHaveBeenCalledWith(instId);
     });
 
+    it('detachInstance preserves nested artwork with no dangling refs (F028)', () => {
+      const sg = new SceneGraph();
+      const tf = () => ({
+        position: { x: 0, y: 0 },
+        rotation: 0,
+        scale: { x: 1, y: 1 },
+        anchor: { x: 0.5, y: 0.5 },
+        skew: { x: 0, y: 0 },
+      });
+      const base = { visible: true, locked: false, opacity: 1, blendMode: 'normal' };
+      const groupDef = {
+        ...base,
+        id: 'gdef',
+        name: 'G',
+        type: 'group',
+        parent: null,
+        children: ['rdef'],
+        transform: tf(),
+      };
+      const rectDef = {
+        ...base,
+        id: 'rdef',
+        name: 'R',
+        type: 'rectangle',
+        parent: 'gdef',
+        children: [],
+        transform: tf(),
+        width: 10,
+        height: 10,
+        cornerRadius: [0, 0, 0, 0],
+        fills: [],
+        strokes: [],
+      };
+      const def = {
+        id: 'sym1',
+        name: 'Sym',
+        sceneGraphJSON: { nodes: [groupDef, rectDef], rootNodeIds: ['gdef'] },
+        createdAt: '',
+        updatedAt: '',
+      };
+      const inst = {
+        ...base,
+        id: 'inst1',
+        name: 'Inst',
+        type: 'symbol-instance',
+        symbolId: 'sym1',
+        overrides: [],
+        parent: null,
+        children: [],
+        transform: tf(),
+      };
+
+      sg.addNode(inst as never);
+      useEditorStore.setState({ symbols: [def] as never, selectedNodeIds: new Set(['inst1']) });
+      useEditorStore.getState().detachInstance(sg);
+
+      const outerId = Array.from(useEditorStore.getState().selectedNodeIds)[0]!;
+      const outer = sg.getNode(outerId)!;
+      expect(outer.type).toBe('group');
+      expect(outer.children).toHaveLength(1);
+
+      const innerGroup = sg.getNode(outer.children[0]!)!;
+      expect(innerGroup.type).toBe('group');
+      expect(innerGroup.children).toHaveLength(1); // nested rect survived
+
+      const nested = sg.getNode(innerGroup.children[0]!)!;
+      expect(nested.type).toBe('rectangle');
+
+      // No child id anywhere dangles.
+      for (const n of sg.toJSON().nodes) {
+        for (const cid of n.children ?? []) {
+          expect(sg.getNode(cid)).toBeDefined();
+        }
+      }
+    });
+
     it('detachInstance is no-op if selected is not symbol-instance', () => {
       const sg = createMockSceneGraphForSymbols();
       const rect = makeTestRect('r1');

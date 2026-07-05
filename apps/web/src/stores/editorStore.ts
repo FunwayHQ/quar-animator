@@ -134,6 +134,55 @@ function restoredFieldsFrom(snapshot: HistorySnapshot) {
   };
 }
 
+/**
+ * Clone a fully-resolved symbol subtree (definition roots + ALL descendants)
+ * into the scene graph under newParentId, remapping every id and rewriting
+ * parent/children so no dangling references remain (F028). Adds nodes parent-
+ * first (addNode wires each into its parent's children). Returns the new root
+ * ids. `rootTransform`, when given, is applied to the root clones.
+ */
+function cloneResolvedSubtree(
+  resolved: Node[],
+  rootIds: Set<string>,
+  newParentId: string | null | undefined,
+  sceneGraph: SceneGraphLike,
+  rootTransform?: Node['transform']
+): string[] {
+  const oldToNewId = new Map<string, string>();
+  let idCounter = Date.now();
+  for (const n of resolved) {
+    oldToNewId.set(n.id, `detached_${idCounter++}_${Math.random().toString(36).slice(2, 8)}`);
+  }
+  const byOldId = new Map(resolved.map((n) => [n.id, n]));
+  const newRootIds: string[] = [];
+  const added = new Set<string>();
+
+  const addRecursive = (n: Node) => {
+    if (added.has(n.id)) return;
+    const isRoot = rootIds.has(n.id);
+    // Ensure a same-subtree parent is added before its child.
+    if (!isRoot && n.parent && byOldId.has(n.parent)) {
+      addRecursive(byOldId.get(n.parent)!);
+    }
+    const clone = structuredClone(n);
+    clone.id = oldToNewId.get(n.id)!;
+    if (isRoot && rootTransform) clone.transform = { ...rootTransform };
+    const parentForAdd = isRoot ? (newParentId ?? undefined) : oldToNewId.get(n.parent!);
+    // Add with empty children — addNode repopulates the parent link as each
+    // child is added below.
+    sceneGraph.addNode({ ...clone, children: [] }, parentForAdd ?? undefined);
+    added.add(n.id);
+    if (isRoot) newRootIds.push(clone.id);
+    for (const childId of n.children ?? []) {
+      const child = byOldId.get(childId);
+      if (child) addRecursive(child);
+    }
+  };
+
+  for (const n of resolved) addRecursive(n);
+  return newRootIds;
+}
+
 // ============================================================================
 // Eraser Mode Type (matches EraserTool)
 // ============================================================================
@@ -3377,13 +3426,10 @@ function createSymbolActions(
         const rootNodes = resolved.filter((n) => rootIds.has(n.id));
 
         if (rootNodes.length === 1) {
-          // Single root: replace instance with the root node
-          const replacement = structuredClone(rootNodes[0]);
-          replacement.id = `detached-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-          replacement.parent = inst.parent;
-          replacement.transform = { ...inst.transform };
+          // Single root: the root replaces the instance (with its transform), and
+          // its full subtree comes along (F028).
           sceneGraph.removeNode(instId);
-          sceneGraph.addNode(replacement, inst.parent ?? undefined);
+          cloneResolvedSubtree(resolved, rootIds, inst.parent, sceneGraph, inst.transform);
         } else {
           // Multiple roots: wrap in group
           const groupId = `group-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -3402,12 +3448,8 @@ function createSymbolActions(
           sceneGraph.removeNode(instId);
           sceneGraph.addNode(group, inst.parent ?? undefined);
 
-          for (const child of rootNodes) {
-            const clone = structuredClone(child);
-            clone.id = `detached-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-            clone.parent = groupId;
-            sceneGraph.addNode(clone, groupId);
-          }
+          // Full subtree, not just roots (F028).
+          cloneResolvedSubtree(resolved, rootIds, groupId, sceneGraph);
         }
       }
 
@@ -3441,7 +3483,6 @@ function createSymbolActions(
 
       const resolved = resolveSymbolInstance(inst, definition);
       const rootIds = new Set(definition.sceneGraphJSON.rootNodeIds);
-      const rootNodes = resolved.filter((n) => rootIds.has(n.id));
 
       // Create a group with the resolved children
       const groupId = `group-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -3461,11 +3502,9 @@ function createSymbolActions(
       sceneGraph.removeNode(inst.id);
       sceneGraph.addNode(group, inst.parent ?? undefined);
 
-      for (const child of rootNodes) {
-        const clone = structuredClone(child);
-        clone.id = `detached-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-        sceneGraph.addNode(clone, groupId);
-      }
+      // Clone the FULL subtree (roots + descendants), not just the roots, so
+      // nested artwork survives and no child ids dangle (F028).
+      cloneResolvedSubtree(resolved, rootIds, groupId, sceneGraph);
 
       set({
         selectedNodeIds: new Set([groupId]),
