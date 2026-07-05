@@ -196,6 +196,60 @@ describe('WeightPaintTool', () => {
       const node = context.sceneGraph.getNode('rect1') as any;
       expect(node.skinData).toBeDefined();
     });
+
+    it('targets vertices in world space, not local (F055)', () => {
+      const skinData = createTestSkinData();
+      const rect = createBoundRectangle('rect1', skinData); // positioned at (100,100)
+      context.sceneGraph.addNode(rect);
+      context.setSelectedIds(['rect1']);
+      // Local tessellated corners; index 0 = (-50,-50).
+      context.getTessellatedVertices = () => new Float32Array([-50, -50, 50, -50, -50, 50, 50, 50]);
+
+      tool.onActivate!();
+      tool.setActiveBoneId('b1');
+      tool.setBrushRadius(30);
+
+      const b1Weight = (id: string) => {
+        const sk = (context.sceneGraph.getNode(id) as RectangleNode).skinData!;
+        return sk.vertices[0]!.influences.find((inf) => inf.boneId === 'b1')!.weight;
+      };
+      const before = b1Weight('rect1');
+
+      // World position of local corner (-50,-50) — far from the local coord.
+      const m = context.sceneGraph.getWorldTransform('rect1');
+      const wx = m.a * -50 + m.c * -50 + m.tx;
+      const wy = m.b * -50 + m.d * -50 + m.ty;
+
+      tool.onPointerDown(createMockPointerEvent({ worldPosition: { x: wx, y: wy }, button: 0 }));
+
+      // The vertex at that world position was painted (broken code compared the
+      // world cursor against local coords and would have missed it entirely).
+      expect(b1Weight('rect1')).not.toBeCloseTo(before, 5);
+    });
+
+    it('does not paint when the cursor is far from every world vertex (F055)', () => {
+      const skinData = createTestSkinData();
+      const rect = createBoundRectangle('rect1', skinData);
+      context.sceneGraph.addNode(rect);
+      context.setSelectedIds(['rect1']);
+      context.getTessellatedVertices = () => new Float32Array([-50, -50, 50, -50, -50, 50, 50, 50]);
+
+      tool.onActivate!();
+      tool.setActiveBoneId('b1');
+      tool.setBrushRadius(30);
+
+      const weights = () =>
+        (context.sceneGraph.getNode('rect1') as RectangleNode).skinData!.vertices.map(
+          (v) => v.influences.find((inf) => inf.boneId === 'b1')?.weight ?? 0
+        );
+      const before = weights();
+
+      tool.onPointerDown(
+        createMockPointerEvent({ worldPosition: { x: 5000, y: 5000 }, button: 0 })
+      );
+
+      expect(weights()).toEqual(before);
+    });
   });
 
   // --------------------------------------------------------------------------

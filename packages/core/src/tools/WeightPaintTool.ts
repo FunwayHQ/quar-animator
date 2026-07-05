@@ -223,11 +223,23 @@ export class WeightPaintTool extends BaseTool {
     const skinData = getSkinData(node);
     if (!skinData?.vertices) return;
 
-    // Get tessellated vertex positions from the geometry cache via the context
-    const vertexPositions = this.context.getTessellatedVertices?.(this.boundNodeId);
-    if (vertexPositions && vertexPositions.length >= 2) {
-      // Use spatial brush with falloff
-      this.paintAtPositionWithVertices(worldX, worldY, vertexPositions);
+    // Get tessellated vertex positions from the geometry cache via the context.
+    // These are node-LOCAL coordinates, but paintAtPositionWithVertices compares
+    // them against the WORLD cursor position — so transform them to world first
+    // (matching editorStore.bindMeshToBones), else the brush mis-targets for any
+    // node not at the origin.
+    const localVertexPositions = this.context.getTessellatedVertices?.(this.boundNodeId);
+    if (localVertexPositions && localVertexPositions.length >= 2) {
+      const m = this.context.sceneGraph.getWorldTransform(this.boundNodeId);
+      const worldVertexPositions = new Float32Array(localVertexPositions.length);
+      for (let i = 0; i < localVertexPositions.length; i += 2) {
+        const lx = localVertexPositions[i]!;
+        const ly = localVertexPositions[i + 1]!;
+        worldVertexPositions[i] = m.a * lx + m.c * ly + m.tx;
+        worldVertexPositions[i + 1] = m.b * lx + m.d * ly + m.ty;
+      }
+      // Use spatial brush with falloff (brushRadius stays in world units)
+      this.paintAtPositionWithVertices(worldX, worldY, worldVertexPositions);
     } else {
       // Fallback: paint all vertices (no spatial filtering)
       const vertexCount = skinData.vertexCount;
