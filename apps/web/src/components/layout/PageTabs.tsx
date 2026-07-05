@@ -25,6 +25,15 @@ export function PageTabs() {
 
   const renameInputRef = useRef<HTMLInputElement>(null);
 
+  // Deleting a page destroys its scene immediately, so require a confirming
+  // second click within 3s (mirrors Projects.tsx) (F014).
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  useEffect(() => {
+    if (!pendingDeleteId) return;
+    const t = setTimeout(() => setPendingDeleteId(null), 3000);
+    return () => clearTimeout(t);
+  }, [pendingDeleteId]);
+
   // Focus rename input when it appears
   useEffect(() => {
     if (renamingPageId && renameInputRef.current) {
@@ -61,6 +70,19 @@ export function PageTabs() {
       useEditorStore.getState().deletePage(pageId, sceneGraph);
     },
     [sceneGraph]
+  );
+
+  // First click arms deletion; a second click within 3s confirms it.
+  const requestDeletePage = useCallback(
+    (pageId: string) => {
+      if (pendingDeleteId === pageId) {
+        setPendingDeleteId(null);
+        handleDeletePage(pageId);
+      } else {
+        setPendingDeleteId(pageId);
+      }
+    },
+    [pendingDeleteId, handleDeletePage]
   );
 
   const handleStartRename = useCallback(
@@ -135,14 +157,15 @@ export function PageTabs() {
                 className={styles.tabClose}
                 role="button"
                 tabIndex={-1}
+                title={pendingDeleteId === page.id ? 'Click again to delete page' : 'Delete page'}
                 onClick={(e) => {
                   e.stopPropagation();
-                  handleDeletePage(page.id);
+                  requestDeletePage(page.id);
                 }}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' || e.key === ' ') {
                     e.stopPropagation();
-                    handleDeletePage(page.id);
+                    requestDeletePage(page.id);
                   }
                 }}
                 data-testid={`page-tab-close-${page.id}`}

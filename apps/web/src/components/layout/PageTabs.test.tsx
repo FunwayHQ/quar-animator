@@ -112,6 +112,28 @@ describe('PageTabs', () => {
     expect(closeButtons.length).toBe(2);
   });
 
+  it('deletes a page only after a confirming second click (F014)', () => {
+    const deleteSpy = vi.fn();
+    const orig = useEditorStore.getState().deletePage;
+    useEditorStore.setState({
+      pages: [createTestPage('page-1', 'Page 1'), createTestPage('page-2', 'Page 2')],
+      activePageId: 'page-1',
+      deletePage: deleteSpy,
+    });
+    try {
+      render(<PageTabs />);
+      const close = screen.getByTestId('page-tab-close-page-2');
+
+      fireEvent.click(close);
+      expect(deleteSpy).not.toHaveBeenCalled(); // first click only arms
+
+      fireEvent.click(close);
+      expect(deleteSpy).toHaveBeenCalledWith('page-2', expect.anything());
+    } finally {
+      useEditorStore.setState({ deletePage: orig });
+    }
+  });
+
   it('should switch page on tab click', () => {
     useEditorStore.setState({
       pages: [createTestPage('page-1', 'Page 1'), createTestPage('page-2', 'Page 2')],
