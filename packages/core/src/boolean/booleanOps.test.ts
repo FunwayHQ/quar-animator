@@ -694,6 +694,81 @@ describe('booleanOperation', () => {
     expect(result).toBeNull();
   });
 
+  const makeNestedGroup = (): Node =>
+    ({
+      id: 'nested',
+      name: 'nested',
+      type: 'group',
+      parent: null,
+      children: ['R1', 'R2'],
+      transform: {
+        position: { x: 0, y: 0 },
+        rotation: 0,
+        scale: { x: 1, y: 1 },
+        anchor: { x: 0.5, y: 0.5 },
+        skew: { x: 0, y: 0 },
+      },
+      visible: true,
+      locked: false,
+      opacity: 1,
+      blendMode: 'normal',
+      booleanOp: 'union',
+    }) as unknown as Node;
+
+  it('preserves a nested boolean group child when flattening (F031)', () => {
+    const rectA = makeRect('A', 0, 0, 40, 40); // near the origin
+    const r1 = makeRect('R1', 200, 0, 40, 40); // far away, overlapping R2
+    const r2 = makeRect('R2', 220, 0, 40, 40);
+    const nested = makeNestedGroup();
+
+    const resolver = (group: Node) =>
+      group.id === 'nested'
+        ? { children: [r1, r2], worldTransforms: [nodeTransform(r1), nodeTransform(r2)] }
+        : null;
+
+    const transforms = [nodeTransform(rectA), mat3.identity()];
+    const maxX = (r: PathNode | null): number =>
+      Math.max(
+        ...(r ? r.points.map((p) => p.position.x) : [0]),
+        ...((r?.subpaths ?? []).flat().map((p) => p.position.x) as number[])
+      );
+
+    // Without a resolver the nested boolean group cannot be converted and is
+    // dropped, leaving only rectA. With the resolver its geometry survives.
+    const without = booleanOperation([rectA, nested], transforms, 'union', generateId);
+    const withResolver = booleanOperation(
+      [rectA, nested],
+      transforms,
+      'union',
+      generateId,
+      resolver
+    );
+
+    expect(withResolver).not.toBeNull();
+    expect(maxX(withResolver)).toBeGreaterThan(maxX(without) + 50);
+  });
+
+  it('returns non-null with the nested group as the first operand (F031)', () => {
+    const r1 = makeRect('R1', 200, 0, 40, 40);
+    const r2 = makeRect('R2', 220, 0, 40, 40);
+    const rectA = makeRect('A', 210, 0, 40, 40); // overlaps the nested region
+    const nested = makeNestedGroup();
+
+    const resolver = (group: Node) =>
+      group.id === 'nested'
+        ? { children: [r1, r2], worldTransforms: [nodeTransform(r1), nodeTransform(r2)] }
+        : null;
+
+    const result = booleanOperation(
+      [nested, rectA],
+      [mat3.identity(), nodeTransform(rectA)],
+      'union',
+      generateId,
+      resolver
+    );
+    expect(result).not.toBeNull();
+  });
+
   it('performs union on two overlapping rectangles', () => {
     const r1 = makeRect('r1', 50, 50, 100, 100);
     const r2 = makeRect('r2', 100, 50, 100, 100);

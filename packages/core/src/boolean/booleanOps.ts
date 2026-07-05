@@ -434,21 +434,52 @@ function computeNestedBooleanGroup(
  * Nodes are processed in order: result = A op B op C op ...
  * Returns the resulting PathNode, or null if the result is empty.
  */
+/** Supplies a boolean group's children and their world transforms so nested
+ *  boolean groups can be flattened recursively. */
+export type ResolveGroupChildren = (
+  group: GroupNode
+) => { children: Node[]; worldTransforms: Matrix3[] } | null;
+
 export function booleanOperation(
   nodes: Node[],
   worldTransforms: Matrix3[],
   op: BooleanOp,
-  generateId: () => string
+  generateId: () => string,
+  resolveGroupChildren?: ResolveGroupChildren
 ): PathNode | null {
   if (nodes.length < 2) return null;
 
+  // Convert a node to a MultiPolygon. If it is itself a boolean group and a
+  // resolver is supplied, recursively fold its children with its own op — so a
+  // nested boolean group's geometry is preserved rather than dropped (which
+  // previously lost that artwork when the group was flattened).
+  const toPolygon = (node: Node, transform: Matrix3, depth: number): MultiPolygon | null => {
+    if (
+      node.type === 'group' &&
+      node.booleanOp &&
+      resolveGroupChildren &&
+      depth < MAX_BOOLEAN_GROUP_DEPTH
+    ) {
+      const resolved = resolveGroupChildren(node);
+      if (!resolved || resolved.children.length < 2) return null;
+      let acc: MultiPolygon | null = null;
+      for (let i = 0; i < resolved.children.length; i++) {
+        const poly = toPolygon(resolved.children[i]!, resolved.worldTransforms[i]!, depth + 1);
+        if (!poly) continue;
+        acc = acc ? performBoolean(acc, poly, node.booleanOp) : poly;
+      }
+      return acc && acc.length > 0 ? acc : null;
+    }
+    return nodeToPolygon(node, transform);
+  };
+
   // Convert first node to polygon
-  let accum = nodeToPolygon(nodes[0]!, worldTransforms[0]!);
+  let accum = toPolygon(nodes[0]!, worldTransforms[0]!, 0);
   if (!accum) return null;
 
   // Iteratively apply the operation with each subsequent node
   for (let i = 1; i < nodes.length; i++) {
-    const poly = nodeToPolygon(nodes[i]!, worldTransforms[i]!);
+    const poly = toPolygon(nodes[i]!, worldTransforms[i]!, 0);
     if (!poly) continue;
     accum = performBoolean(accum, poly, op);
   }

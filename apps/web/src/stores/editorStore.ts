@@ -2514,7 +2514,6 @@ function createBooleanActions(
     flattenBooleanGroup: (sceneGraph: SceneGraphLike) => {
       const { selectedNodeIds } = get();
       if (selectedNodeIds.size !== 1) return;
-      get().pushUndo(sceneGraph);
 
       const groupId = [...selectedNodeIds][0];
       const node = sceneGraph.getNode(groupId);
@@ -2539,16 +2538,35 @@ function createBooleanActions(
       const worldTransforms = children.map((c) => sceneGraph.getWorldTransform(c.id));
       const generateId = () => `bool_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
+      // Resolve nested boolean groups so their geometry is preserved.
+      const resolveGroupChildren = (group: Node) => {
+        const kids: Node[] = [];
+        for (const id of group.children) {
+          const kid = sceneGraph.getNode(id);
+          if (kid) kids.push(kid);
+        }
+        if (kids.length < 2) return null;
+        return {
+          children: kids,
+          worldTransforms: kids.map((k) => sceneGraph.getWorldTransform(k.id)),
+        };
+      };
+
       const resultNode = booleanOperation(
         children,
         worldTransforms,
         groupNode.booleanOp!,
-        generateId
+        generateId,
+        resolveGroupChildren
       );
       if (!resultNode) {
         toast.info('Boolean operation produced an empty result');
         return;
       }
+
+      // Push undo only now that we know the operation will mutate the scene
+      // (the early returns above no longer leave a spurious no-op undo entry).
+      get().pushUndo(sceneGraph);
 
       // Use the group's fills/strokes for the flattened result
       resultNode.fills = groupNode.fills ?? resultNode.fills;
