@@ -6,6 +6,41 @@
 import type { TextNode, PathNode, PathPoint, GroupNode } from '@quar/types';
 import { textToSubpaths, computeSubpathsBounds } from './glyphConverter';
 import { getFontManager } from './FontManager';
+import { getTextBounds } from './textMetrics';
+
+/**
+ * Offset the converted node's world center so it lands where the renderer draws
+ * the text. renderText places transform.position at the ANCHOR-based METRIC
+ * center, not the glyph-geometry center used when centering the subpaths. The
+ * offset (geometryCenter - anchoredMetricCenter) is pushed through the node's
+ * local linear transform (scale then rotate, matching mat3.compose).
+ */
+function textWorldCenter(
+  textNode: TextNode,
+  geometryCenterX: number,
+  geometryCenterY: number
+): { x: number; y: number } {
+  const mb = getTextBounds(
+    textNode.content,
+    textNode.fontFamily,
+    textNode.fontSize,
+    textNode.lineHeight,
+    textNode.letterSpacing,
+    textNode.textAlign
+  );
+  const anchor = textNode.transform.anchor;
+  const offsetX = geometryCenterX - (mb.x + mb.width * anchor.x);
+  const offsetY = geometryCenterY - (mb.y + mb.height * anchor.y);
+  const sx = offsetX * textNode.transform.scale.x;
+  const sy = offsetY * textNode.transform.scale.y;
+  const rad = (textNode.transform.rotation * Math.PI) / 180;
+  const cos = Math.cos(rad);
+  const sin = Math.sin(rad);
+  return {
+    x: textNode.transform.position.x + (cos * sx - sin * sy),
+    y: textNode.transform.position.y + (sin * sx + cos * sy),
+  };
+}
 
 /**
  * Convert a TextNode to a PathNode by converting text glyphs to path points.
@@ -53,9 +88,8 @@ export function convertTextToPath(textNode: TextNode, generateId: () => string):
   const primaryPoints = centeredSubpaths[0] ?? [];
   const additionalSubpaths = centeredSubpaths.slice(1);
 
-  // Position the PathNode at the text's center in world space
-  const worldCenterX = textNode.transform.position.x + centerX * textNode.transform.scale.x;
-  const worldCenterY = textNode.transform.position.y + centerY * textNode.transform.scale.y;
+  // Position the PathNode at the text's rendered center in world space.
+  const { x: worldCenterX, y: worldCenterY } = textWorldCenter(textNode, centerX, centerY);
 
   const pathNode: PathNode = {
     id: generateId(),
@@ -140,8 +174,7 @@ export function convertTextToPathGroup(
   const overallCY = overallBounds.y + overallBounds.height / 2;
 
   // Group position in world space
-  const groupWorldX = textNode.transform.position.x + overallCX * textNode.transform.scale.x;
-  const groupWorldY = textNode.transform.position.y + overallCY * textNode.transform.scale.y;
+  const { x: groupWorldX, y: groupWorldY } = textWorldCenter(textNode, overallCX, overallCY);
 
   const groupId = generateId();
   const group: GroupNode = {

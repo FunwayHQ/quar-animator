@@ -14,6 +14,18 @@ vi.mock('./FontManager', () => ({
   }),
 }));
 
+// Mock glyph/metric helpers so tests can control the geometry vs metric centers.
+const mockTextToSubpaths = vi.fn();
+const mockComputeSubpathsBounds = vi.fn();
+vi.mock('./glyphConverter', () => ({
+  textToSubpaths: (...args: unknown[]) => mockTextToSubpaths(...args),
+  computeSubpathsBounds: (...args: unknown[]) => mockComputeSubpathsBounds(...args),
+}));
+const mockGetTextBounds = vi.fn();
+vi.mock('./textMetrics', () => ({
+  getTextBounds: (...args: unknown[]) => mockGetTextBounds(...args),
+}));
+
 // Import after mock setup
 import { convertTextToPath, convertTextToPathGroup } from './textToShape';
 
@@ -79,5 +91,44 @@ describe('textToShape – font weight passing', () => {
     convertTextToPathGroup(node, () => 'id-1');
 
     expect(mockGetFontOrFallback).toHaveBeenCalledWith('Roboto', 300);
+  });
+});
+
+describe('textToShape – rendered center placement (F033)', () => {
+  beforeEach(() => {
+    mockGetFontOrFallback.mockReturnValue({}); // truthy font so it proceeds
+    mockTextToSubpaths.mockReturnValue({
+      subpaths: [
+        [
+          { position: { x: 0, y: 0 }, handleIn: null, handleOut: null, type: 'corner' },
+          { position: { x: 20, y: 0 }, handleIn: null, handleOut: null, type: 'corner' },
+          { position: { x: 20, y: 20 }, handleIn: null, handleOut: null, type: 'corner' },
+        ],
+      ],
+    });
+    // Geometry center (10,10) differs from the anchored metric center (20,20).
+    mockComputeSubpathsBounds.mockReturnValue({ x: 0, y: 0, width: 20, height: 20 });
+    mockGetTextBounds.mockReturnValue({ x: 0, y: 0, width: 40, height: 40 });
+  });
+
+  it('offsets the path node to the rendered (anchored metric) center', () => {
+    const node = convertTextToPath(createTestTextNode(), () => 'id');
+    expect(node).not.toBeNull();
+    // position + (geometryCenter(10,10) - anchoredMetric(20,20)) = (100-10, 200-10)
+    expect(node!.transform.position.x).toBeCloseTo(90);
+    expect(node!.transform.position.y).toBeCloseTo(190);
+  });
+
+  it('rotates the offset into the node local frame', () => {
+    const node = convertTextToPath(
+      createTestTextNode({
+        transform: { ...createDefaultTransform(), position: { x: 100, y: 200 }, rotation: 90 },
+      }),
+      () => 'id'
+    );
+    expect(node).not.toBeNull();
+    // offset (-10,-10) rotated 90deg -> (10,-10); (100,200)+(10,-10) = (110,190)
+    expect(node!.transform.position.x).toBeCloseTo(110);
+    expect(node!.transform.position.y).toBeCloseTo(190);
   });
 });
