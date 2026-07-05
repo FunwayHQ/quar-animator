@@ -243,16 +243,26 @@ function numericInputProps(
     onKeyDown: (e) => handleNumericInputKeyDown(e, getValue(), onChange),
     ref: (el) => {
       if (!el) return;
-      // Avoid duplicate listeners via a data attribute marker
-      if ((el as unknown as Record<string, unknown>).__numWheel) return;
-      (el as unknown as Record<string, unknown>).__numWheel = true;
+      // The one-time wheel listener must not close over this render's getValue/
+      // onChange — numericInputProps returns a fresh closure every render, but
+      // the listener is only attached once. Stash the live handlers on the
+      // element each render and read through them so the wheel always sees
+      // current values (F015/F016).
+      const rec = el as unknown as Record<string, unknown>;
+      rec.__numWheelHandlers = { getValue, onChange };
+      if (rec.__numWheel) return;
+      rec.__numWheel = true;
       el.addEventListener(
         'wheel',
         (we: WheelEvent) => {
           if (document.activeElement !== el) return;
+          const h = rec.__numWheelHandlers as {
+            getValue: () => number;
+            onChange: (v: string) => void;
+          };
           we.preventDefault();
           const delta = (we.deltaY < 0 ? 1 : -1) * (we.shiftKey ? 10 : 1);
-          onChange(String(getValue() + delta));
+          h.onChange(String(h.getValue() + delta));
         },
         { passive: false }
       );

@@ -951,6 +951,30 @@ describe('EditorStore', () => {
       expect(timeline.tracks[0].keyframes.length).toBe(2);
     });
 
+    it('updateKeyframeTimeAndValueById replaces an occupied destination frame (F020)', () => {
+      const { addKeyframeAtFrame } = useEditorStore.getState();
+      addKeyframeAtFrame('node1', 'opacity', 0, 0.1);
+      addKeyframeAtFrame('node1', 'opacity', 10, 0.9);
+      const track = useEditorStore
+        .getState()
+        .timeline.tracks.find((t) => t.nodeId === 'node1' && t.property === 'opacity')!;
+      const kfAt0 = track.keyframes.find((k) => k.time === 0)!;
+
+      // Drag the frame-0 keyframe onto the occupied frame 10.
+      useEditorStore
+        .getState()
+        .updateKeyframeTimeAndValueById('node1', 'opacity', kfAt0.id, 10, 0.1);
+
+      const after = useEditorStore
+        .getState()
+        .timeline.tracks.find((t) => t.nodeId === 'node1' && t.property === 'opacity')!;
+      // No stacking: exactly one keyframe, on frame 10, and it is the moved one.
+      expect(after.keyframes).toHaveLength(1);
+      expect(after.keyframes[0].time).toBe(10);
+      expect(after.keyframes[0].id).toBe(kfAt0.id);
+      expect(after.keyframes[0].value).toBe(0.1);
+    });
+
     it('should remove selected keyframes', () => {
       const { addKeyframeAtFrame, removeSelectedKeyframes } = useEditorStore.getState();
       addKeyframeAtFrame('node1', 'opacity', 0, 1);

@@ -9,7 +9,7 @@
 import { useRef, useCallback, useState, useEffect, useMemo } from 'react';
 import { useEditorStore } from '../../stores/editorStore';
 import { useSceneGraph } from '../../contexts/SceneGraphContext';
-import type { Node, PropertyTrack } from '@quar/types';
+import type { PropertyTrack } from '@quar/types';
 import {
   screenToGraph,
   findNearestKeyframe,
@@ -70,7 +70,7 @@ export function GraphEditor() {
   const addKeyframeToSelection = useEditorStore((s) => s.addKeyframeToSelection);
   const clearKeyframeSelection = useEditorStore((s) => s.clearKeyframeSelection);
   const setSelectedKeyframeIds = useEditorStore((s) => s.setSelectedKeyframeIds);
-  const updateKeyframeTimeAndValue = useEditorStore((s) => s.updateKeyframeTimeAndValue);
+  const updateKeyframeTimeAndValueById = useEditorStore((s) => s.updateKeyframeTimeAndValueById);
   const setCurrentFrame = useEditorStore((s) => s.setCurrentFrame);
 
   // Build node name map for property list
@@ -342,10 +342,12 @@ export function GraphEditor() {
         // Snap time to integer frames
         newTime = Math.max(0, Math.round(newTime));
 
-        updateKeyframeTimeAndValue(
+        // Id-based + dedup-safe: dragging across an occupied frame replaces it
+        // instead of leaving two keyframes on one frame (F020).
+        updateKeyframeTimeAndValueById(
           dragMode.nodeId,
           dragMode.property,
-          dragMode.startTime,
+          dragMode.kfId,
           newTime,
           newValue
         );
@@ -432,7 +434,7 @@ export function GraphEditor() {
         return;
       }
     },
-    [dragMode, graphViewTransform, timeline, setGraphViewTransform, updateKeyframeTimeAndValue]
+    [dragMode, graphViewTransform, timeline, setGraphViewTransform, updateKeyframeTimeAndValueById]
   );
 
   const handleMouseUp = useCallback(() => {
@@ -541,44 +543,47 @@ export function GraphEditor() {
         e.preventDefault();
         const delta = e.shiftKey ? 10 : 1;
 
-        // Find all selected keyframes and nudge them
+        // Identify the selected keyframes by ID from FRESH state — nudging by
+        // stale kf.time as each mutation lands (and the old non-dedup time-keyed
+        // update) merged/duplicated adjacent keyframes (F021).
+        const keyframeMap = new Map<string, { nodeId: string; property: string }>();
+        const valueTargets: Array<{
+          nodeId: string;
+          property: string;
+          kfId: string;
+          time: number;
+          value: number;
+        }> = [];
         for (const track of state.timeline.tracks) {
           for (const kf of track.keyframes) {
-            if (state.selectedKeyframeIds.has(kf.id) && typeof kf.value === 'number') {
-              if (e.key === 'ArrowLeft') {
-                state.updateKeyframeTimeAndValue(
-                  track.nodeId,
-                  track.property,
-                  kf.time,
-                  kf.time - delta,
-                  kf.value
-                );
-              } else if (e.key === 'ArrowRight') {
-                state.updateKeyframeTimeAndValue(
-                  track.nodeId,
-                  track.property,
-                  kf.time,
-                  kf.time + delta,
-                  kf.value
-                );
-              } else if (e.key === 'ArrowUp') {
-                state.updateKeyframeTimeAndValue(
-                  track.nodeId,
-                  track.property,
-                  kf.time,
-                  kf.time,
-                  kf.value + delta
-                );
-              } else if (e.key === 'ArrowDown') {
-                state.updateKeyframeTimeAndValue(
-                  track.nodeId,
-                  track.property,
-                  kf.time,
-                  kf.time,
-                  kf.value - delta
-                );
-              }
+            if (!state.selectedKeyframeIds.has(kf.id)) continue;
+            keyframeMap.set(kf.id, { nodeId: track.nodeId, property: track.property });
+            if (typeof kf.value === 'number') {
+              valueTargets.push({
+                nodeId: track.nodeId,
+                property: track.property,
+                kfId: kf.id,
+                time: kf.time,
+                value: kf.value,
+              });
             }
+          }
+        }
+
+        if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+          // Cascade-safe, direction-ordered move (KeyframeManager.moveKeyframes).
+          state.moveSelectedKeyframes(keyframeMap, e.key === 'ArrowLeft' ? -delta : delta);
+        } else {
+          // Value nudge only — time is unchanged, so id-based updates can't collide.
+          const dv = e.key === 'ArrowUp' ? delta : -delta;
+          for (const t of valueTargets) {
+            state.updateKeyframeTimeAndValueById(
+              t.nodeId,
+              t.property,
+              t.kfId,
+              t.time,
+              t.value + dv
+            );
           }
         }
       }

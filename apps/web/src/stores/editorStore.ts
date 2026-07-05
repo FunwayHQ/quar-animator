@@ -505,6 +505,14 @@ export interface EditorStore {
     newTime: number,
     newValue: number
   ) => void;
+  /** Id-based, dedup-safe variant for graph-editor drags (F020). */
+  updateKeyframeTimeAndValueById: (
+    nodeId: string,
+    property: string,
+    keyframeId: string,
+    newTime: number,
+    newValue: number
+  ) => void;
   setKeyframeTangents: (
     nodeId: string,
     property: string,
@@ -2034,6 +2042,24 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     newKeyframes[kfIndex] = { ...newKeyframes[kfIndex], time: roundedTime, value: newValue };
     // Sort by time after moving
     newKeyframes.sort((a, b) => a.time - b.time);
+    const newTracks = timeline.tracks.map((t) =>
+      t.id === track.id ? { ...t, keyframes: newKeyframes } : t
+    );
+    set({ timeline: { ...timeline, tracks: newTracks }, isDirty: true });
+  },
+  updateKeyframeTimeAndValueById: (nodeId, property, keyframeId, newTime, newValue) => {
+    const { timeline } = get();
+    const track = timeline.tracks.find((t) => t.nodeId === nodeId && t.property === property);
+    if (!track) return;
+    if (!track.keyframes.some((kf) => kf.id === keyframeId)) return;
+    const roundedTime = Math.max(0, Math.round(newTime));
+    // Drop any DIFFERENT keyframe already sitting on the destination frame so the
+    // moved keyframe replaces it — keeps the sorted-unique invariant instead of
+    // silently stacking two keyframes on one frame (F020).
+    const newKeyframes = track.keyframes
+      .filter((kf) => kf.id === keyframeId || kf.time !== roundedTime)
+      .map((kf) => (kf.id === keyframeId ? { ...kf, time: roundedTime, value: newValue } : kf))
+      .sort((a, b) => a.time - b.time);
     const newTracks = timeline.tracks.map((t) =>
       t.id === track.id ? { ...t, keyframes: newKeyframes } : t
     );

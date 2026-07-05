@@ -145,6 +145,36 @@ describe('SymbolLibraryPanel', () => {
     expect(useEditorStore.getState().editingSymbolId).toBe('sym-1');
   });
 
+  it('double-click cancels the pending single-click placement (F018)', () => {
+    const placeSpy = vi.fn();
+    const orig = useEditorStore.getState().placeSymbolInstance;
+    useEditorStore.setState({
+      symbols: [makeSymbolDef('sym-1', 'Button')],
+      placeSymbolInstance: placeSpy,
+    });
+    vi.useFakeTimers();
+    try {
+      renderWithProvider(<SymbolLibraryPanel />);
+      const item = screen.getByTestId('symbol-item-sym-1');
+
+      // A real double-click fires click, click, dblclick.
+      act(() => {
+        fireEvent.click(item);
+        fireEvent.doubleClick(item);
+      });
+      // Let the debounce window elapse.
+      act(() => {
+        vi.advanceTimersByTime(300);
+      });
+
+      expect(placeSpy).not.toHaveBeenCalled(); // no stray instance
+      expect(useEditorStore.getState().editingSymbolId).toBe('sym-1');
+    } finally {
+      vi.useRealTimers();
+      useEditorStore.setState({ placeSymbolInstance: orig });
+    }
+  });
+
   it('right-click shows context menu', () => {
     useEditorStore.setState({
       symbols: [makeSymbolDef('sym-1', 'Button')],

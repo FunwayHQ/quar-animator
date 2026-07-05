@@ -4,8 +4,8 @@
  * supports click-to-place, double-click-to-edit, right-click context menu.
  */
 
-import { useState, useCallback } from 'react';
-import type { SymbolDefinition, SymbolInstanceNode } from '@quar/types';
+import { useState, useCallback, useRef } from 'react';
+import type { SymbolDefinition } from '@quar/types';
 import { useSceneGraph } from '../../contexts/SceneGraphContext';
 import { useEditorStore } from '../../stores/editorStore';
 import { ContextMenu, type ContextMenuItem } from '../common/ContextMenu';
@@ -41,15 +41,27 @@ export default function SymbolLibraryPanel() {
     [sceneGraph]
   );
 
+  // A double-click fires click, click, dblclick — debounce single-click
+  // placement so a double-click (enter-edit) cancels the stray instance (F018).
+  const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const handleClick = useCallback(
     (symbolId: string) => {
-      placeSymbolInstance(sceneGraph, symbolId);
+      if (clickTimerRef.current) clearTimeout(clickTimerRef.current);
+      clickTimerRef.current = setTimeout(() => {
+        clickTimerRef.current = null;
+        placeSymbolInstance(sceneGraph, symbolId);
+      }, 250);
     },
     [sceneGraph, placeSymbolInstance]
   );
 
   const handleDoubleClick = useCallback(
     (symbolId: string) => {
+      if (clickTimerRef.current) {
+        clearTimeout(clickTimerRef.current);
+        clickTimerRef.current = null;
+      }
       enterSymbolEdit(symbolId, sceneGraph);
     },
     [sceneGraph, enterSymbolEdit]
