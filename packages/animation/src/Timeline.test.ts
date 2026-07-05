@@ -249,6 +249,24 @@ describe('moveKeyframe', () => {
     const moved = moveKeyframe(track, 'nonexistent', 5);
     expect(moved).toBe(false);
   });
+
+  it('refuses to move onto an occupied slot instead of destroying it (F030)', () => {
+    const target = track.keyframes[1]; // the keyframe at time 10
+    const targetId = target.id;
+    const targetValue = target.value;
+    const kfAt0 = track.keyframes[0].id;
+
+    const moved = moveKeyframe(track, kfAt0, 10);
+    expect(moved).toBe(false);
+    expect(track.keyframes.length).toBe(3);
+    // The stationary keyframe at time 10 is untouched.
+    const still = track.keyframes.find((kf: Keyframe<number>) => kf.id === targetId);
+    expect(still?.time).toBe(10);
+    expect(still?.value).toBe(targetValue);
+
+    // Moving to an unoccupied time still works.
+    expect(moveKeyframe(track, kfAt0, 15)).toBe(true);
+  });
 });
 
 // ============================================================================

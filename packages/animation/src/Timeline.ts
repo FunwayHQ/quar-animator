@@ -155,19 +155,20 @@ export function moveKeyframe<T>(
 ): boolean {
   const keyframe = track.keyframes.find((kf: Keyframe<T>) => kf.id === keyframeId);
   if (!keyframe) return false;
+  if (keyframe.time === newTime) return true;
+
+  // Refuse to move onto a slot already held by a DIFFERENT keyframe — otherwise
+  // dragging a keyframe onto a stationary one would silently destroy it.
+  if (track.keyframes.some((kf) => kf.time === newTime && kf.id !== keyframeId)) {
+    return false;
+  }
 
   // Remove and re-insert to maintain sorted order
   removeKeyframe(track, keyframeId);
   keyframe.time = newTime;
 
   const insertIndex = binarySearchKeyframes(track.keyframes, newTime);
-
-  // Replace existing keyframe at newTime if present (maintain sorted-unique invariant)
-  if (insertIndex < track.keyframes.length && track.keyframes[insertIndex].time === newTime) {
-    track.keyframes[insertIndex] = keyframe;
-  } else {
-    track.keyframes.splice(insertIndex, 0, keyframe);
-  }
+  track.keyframes.splice(insertIndex, 0, keyframe);
 
   return true;
 }
