@@ -79,6 +79,9 @@ export function Canvas() {
 
   // Track active drag listener cleanup to prevent leaks on unmount
   const activeDragCleanupRef = useRef<(() => void) | null>(null);
+  // Holds setupGlobalDragListeners (defined later) so the canvas mouse-down
+  // handler can arm document-level move/up for tool drags without a TDZ ref (F011).
+  const setupGlobalDragListenersRef = useRef<(() => void) | null>(null);
 
   // Dynamic chain physics state (transient, not persisted)
   const dynamicChainStatesRef = useRef<Map<string, DynamicChainState>>(new Map());
@@ -1040,6 +1043,10 @@ export function Canvas() {
             e as unknown as React.PointerEvent,
             e.detail
           );
+          // Arm document-level move/up so a tool drag (marquee, move, resize)
+          // still receives its pointer-up when released outside the canvas —
+          // otherwise the drag got stuck (F011).
+          setupGlobalDragListenersRef.current?.();
         }
       }
     },
@@ -1072,8 +1079,15 @@ export function Canvas() {
         return;
       }
 
-      // Pass to tool system
-      toolPointerMove(positions.screenPos, positions.worldPos, e as unknown as React.PointerEvent);
+      // Pass to tool system — unless a global drag is active, in which case the
+      // document pointermove handles it (avoids double-dispatch over the canvas).
+      if (!activeDragCleanupRef.current) {
+        toolPointerMove(
+          positions.screenPos,
+          positions.worldPos,
+          e as unknown as React.PointerEvent
+        );
+      }
 
       // Update cursor based on state
       if (!isPanningRef.current && !isSpaceHeldRef.current) {
@@ -1096,6 +1110,10 @@ export function Canvas() {
 
       // Don't pass events to tool system while text editing overlay is active
       if (useEditorStore.getState().editingTextNodeId) return;
+
+      // A global drag is active — its document pointerup delivers the release
+      // (and cleans up), so skip the local dispatch to avoid a double up (F011).
+      if (activeDragCleanupRef.current) return;
 
       // Pass to tool system
       const positions = getCanvasPositions(e);
@@ -2089,6 +2107,9 @@ export function Canvas() {
     document.addEventListener('pointermove', handleGlobalMove);
     document.addEventListener('pointerup', handleGlobalUp);
   }, [toolPointerMove, toolPointerUp]);
+
+  // Expose to the canvas mouse-down handler (defined earlier) via a ref (F011).
+  setupGlobalDragListenersRef.current = setupGlobalDragListeners;
 
   // --------------------------------------------------------------------------
   // Handle Overlay Interactions
