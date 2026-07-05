@@ -157,12 +157,7 @@ describe('BaseTool', () => {
 
   describe('getRectFromPoints', () => {
     it('should calculate basic rectangle', () => {
-      const rect = tool.testGetRectFromPoints(
-        { x: 10, y: 20 },
-        { x: 110, y: 70 },
-        false,
-        false
-      );
+      const rect = tool.testGetRectFromPoints({ x: 10, y: 20 }, { x: 110, y: 70 }, false, false);
       expect(rect.x).toBe(10);
       expect(rect.y).toBe(20);
       expect(rect.width).toBe(100);
@@ -170,12 +165,7 @@ describe('BaseTool', () => {
     });
 
     it('should handle negative direction (dragging up-left)', () => {
-      const rect = tool.testGetRectFromPoints(
-        { x: 100, y: 100 },
-        { x: 50, y: 60 },
-        false,
-        false
-      );
+      const rect = tool.testGetRectFromPoints({ x: 100, y: 100 }, { x: 50, y: 60 }, false, false);
       expect(rect.x).toBe(50);
       expect(rect.y).toBe(60);
       expect(rect.width).toBe(50);
@@ -183,36 +173,33 @@ describe('BaseTool', () => {
     });
 
     it('should constrain to square', () => {
-      const rect = tool.testGetRectFromPoints(
-        { x: 0, y: 0 },
-        { x: 100, y: 50 },
-        true,
-        false
-      );
+      const rect = tool.testGetRectFromPoints({ x: 0, y: 0 }, { x: 100, y: 50 }, true, false);
       expect(rect.width).toBe(100);
       expect(rect.height).toBe(100);
     });
 
     it('should draw from center', () => {
-      const rect = tool.testGetRectFromPoints(
-        { x: 50, y: 50 },
-        { x: 100, y: 80 },
-        false,
-        true
-      );
+      const rect = tool.testGetRectFromPoints({ x: 50, y: 50 }, { x: 100, y: 80 }, false, true);
       expect(rect.x).toBe(0); // 50 - 50
       expect(rect.y).toBe(20); // 50 - 30
       expect(rect.width).toBe(100); // 50 * 2
       expect(rect.height).toBe(60); // 30 * 2
     });
 
+    it('draws from center for an up-left drag (F049)', () => {
+      const rect = tool.testGetRectFromPoints({ x: 100, y: 100 }, { x: 50, y: 60 }, false, true);
+      // Negative deltas must still yield a positive rect centered at (100,100).
+      expect(rect.x).toBe(50);
+      expect(rect.y).toBe(60);
+      expect(rect.width).toBe(100);
+      expect(rect.height).toBe(80);
+      // Center stays at the anchor point.
+      expect(rect.x + rect.width / 2).toBe(100);
+      expect(rect.y + rect.height / 2).toBe(100);
+    });
+
     it('should combine constrained and from center', () => {
-      const rect = tool.testGetRectFromPoints(
-        { x: 50, y: 50 },
-        { x: 100, y: 80 },
-        true,
-        true
-      );
+      const rect = tool.testGetRectFromPoints({ x: 50, y: 50 }, { x: 100, y: 80 }, true, true);
       expect(rect.width).toBe(100);
       expect(rect.height).toBe(100);
     });

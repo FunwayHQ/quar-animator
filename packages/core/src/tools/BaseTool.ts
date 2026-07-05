@@ -183,11 +183,15 @@ export abstract class BaseTool {
     }
 
     if (fromCenter) {
+      // Normalize to positive extents so up/left drags still produce a valid
+      // rect (the geometric center stays at `start`).
+      const aw = Math.abs(width);
+      const ah = Math.abs(height);
       return {
-        x: start.x - width,
-        y: start.y - height,
-        width: width * 2,
-        height: height * 2,
+        x: start.x - aw,
+        y: start.y - ah,
+        width: aw * 2,
+        height: ah * 2,
       };
     }
 

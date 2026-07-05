@@ -746,6 +746,39 @@ describe('EraserTool', () => {
       expect(updatedPath.points.length).toBe(3);
     });
 
+    it('does not erase points from a locked path (F048)', () => {
+      const path = createTestPath(0, 0, [
+        { x: 0, y: 0 },
+        { x: 50, y: 50 },
+        { x: 100, y: 0 },
+        { x: 150, y: 50 },
+      ]);
+      path.locked = true;
+      context.sceneGraph.addNode(path);
+
+      tool.onPointerDown(createMockPointerEvent({ worldPosition: { x: 5, y: 5 }, button: 0 }));
+      tool.onPointerUp(createMockPointerEvent({ worldPosition: { x: 5, y: 5 }, button: 0 }));
+
+      expect(context.sceneGraph.getNode(path.id)).toBeDefined();
+      expect((context.sceneGraph.getNode(path.id) as PathNode).points.length).toBe(4);
+    });
+
+    it('does not erase points from a hidden path (F048)', () => {
+      const path = createTestPath(0, 0, [
+        { x: 0, y: 0 },
+        { x: 50, y: 50 },
+        { x: 100, y: 0 },
+        { x: 150, y: 50 },
+      ]);
+      path.visible = false;
+      context.sceneGraph.addNode(path);
+
+      tool.onPointerDown(createMockPointerEvent({ worldPosition: { x: 5, y: 5 }, button: 0 }));
+      tool.onPointerUp(createMockPointerEvent({ worldPosition: { x: 5, y: 5 }, button: 0 }));
+
+      expect((context.sceneGraph.getNode(path.id) as PathNode).points.length).toBe(4);
+    });
+
     it('should delete entire path when less than 2 points remain', () => {
       const path = createTestPath(0, 0, [
         { x: 0, y: 0 },

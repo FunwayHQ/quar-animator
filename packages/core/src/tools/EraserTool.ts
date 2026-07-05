@@ -565,8 +565,12 @@ export class EraserTool extends BaseTool {
     const pathsToUpdate: Map<string, PathNode> = new Map();
     const pathsToRemove: string[] = [];
 
-    this.context.sceneGraph.traverse((node) => {
+    // traverseVisible skips hidden nodes (and their subtrees); the locked guard
+    // mirrors stroke-mode erasing so point mode also leaves locked/hidden paths
+    // untouched.
+    this.context.sceneGraph.traverseVisible((node) => {
       if (node.type !== 'path') return;
+      if (node.locked) return;
 
       const pathNode = node;
       const worldMatrix = this.context.sceneGraph.getWorldTransform(node.id);
