@@ -7,6 +7,7 @@ Import SVG files (string or file upload) into the Quar Animator scene graph, con
 ## Scope
 
 ### In Scope (P0)
+
 - `<rect>`, `<ellipse>`, `<circle>`, `<polygon>`, `<polyline>`, `<line>`, `<path>`, `<g>`
 - SVG `d` path commands: M, L, H, V, C, S, Q, T, A, Z (absolute + relative)
 - `fill`, `stroke`, `stroke-width`, `opacity`, `fill-opacity`, `stroke-opacity`
@@ -18,12 +19,14 @@ Import SVG files (string or file upload) into the Quar Animator scene graph, con
 - Stroke properties: `stroke-linecap`, `stroke-linejoin`, `stroke-miterlimit`, `stroke-dasharray`, `stroke-dashoffset`
 
 ### In Scope (P1)
+
 - `<text>` / `<tspan>` basic text import
 - `<use>` / `<symbol>` (clone referenced element)
 - CSS `<style>` block class-based styling
 - `clip-path` (basic rectangle clips)
 
 ### Out of Scope
+
 - `<filter>`, `<mask>`, `<pattern>`, `<marker>`
 - CSS animations / SMIL `<animate>`
 - `<foreignObject>`, `<switch>`
@@ -81,33 +84,35 @@ The most complex piece. Converts SVG `d` attribute string to `PathPoint[]`.
 
 ### SVG Path Commands → PathPoint Mapping
 
-| SVG Command | Description | PathPoint Result |
-|---|---|---|
-| `M x,y` | Move to | Sets current position (start of subpath) |
-| `L x,y` | Line to | `{position: {x,y}, handleIn: null, handleOut: null, type: 'corner'}` |
-| `H x` | Horizontal line | `{position: {x, prevY}, handleIn: null, handleOut: null, type: 'corner'}` |
-| `V y` | Vertical line | `{position: {prevX, y}, handleIn: null, handleOut: null, type: 'corner'}` |
-| `C x1,y1 x2,y2 x,y` | Cubic bezier | Previous point gets `handleOut = {x1-px, y1-py}`, new point `{position: {x,y}, handleIn: {x2-x, y2-y}, type: 'smooth'}` |
-| `S x2,y2 x,y` | Smooth cubic | Reflect previous handleOut → handleIn of prev, then like C |
-| `Q x1,y1 x,y` | Quadratic bezier | Convert to cubic: `cp1 = prev + 2/3*(ctrl-prev)`, `cp2 = end + 2/3*(ctrl-end)` |
-| `T x,y` | Smooth quadratic | Reflect previous quadratic control point |
-| `A rx,ry rot large-arc sweep x,y` | Elliptical arc | Decompose into cubic bezier segments (see Arc Conversion below) |
-| `Z` | Close path | Set `closed = true`, connect last → first point |
+| SVG Command                       | Description      | PathPoint Result                                                                                                        |
+| --------------------------------- | ---------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `M x,y`                           | Move to          | Sets current position (start of subpath)                                                                                |
+| `L x,y`                           | Line to          | `{position: {x,y}, handleIn: null, handleOut: null, type: 'corner'}`                                                    |
+| `H x`                             | Horizontal line  | `{position: {x, prevY}, handleIn: null, handleOut: null, type: 'corner'}`                                               |
+| `V y`                             | Vertical line    | `{position: {prevX, y}, handleIn: null, handleOut: null, type: 'corner'}`                                               |
+| `C x1,y1 x2,y2 x,y`               | Cubic bezier     | Previous point gets `handleOut = {x1-px, y1-py}`, new point `{position: {x,y}, handleIn: {x2-x, y2-y}, type: 'smooth'}` |
+| `S x2,y2 x,y`                     | Smooth cubic     | Reflect previous handleOut → handleIn of prev, then like C                                                              |
+| `Q x1,y1 x,y`                     | Quadratic bezier | Convert to cubic: `cp1 = prev + 2/3*(ctrl-prev)`, `cp2 = end + 2/3*(ctrl-end)`                                          |
+| `T x,y`                           | Smooth quadratic | Reflect previous quadratic control point                                                                                |
+| `A rx,ry rot large-arc sweep x,y` | Elliptical arc   | Decompose into cubic bezier segments (see Arc Conversion below)                                                         |
+| `Z`                               | Close path       | Set `closed = true`, connect last → first point                                                                         |
 
 ### Key Design Decisions
 
 **Handles are relative offsets** from their anchor position (not absolute):
+
 ```typescript
 // SVG: C 150,50 250,50 300,100
 // Previous point at (100, 100)
 // New point at (300, 100)
-previousPoint.handleOut = { x: 150-100, y: 50-100 }  // = {50, -50}
-newPoint.handleIn = { x: 250-300, y: 50-100 }         // = {-50, -50}
+previousPoint.handleOut = { x: 150 - 100, y: 50 - 100 }; // = {50, -50}
+newPoint.handleIn = { x: 250 - 300, y: 50 - 100 }; // = {-50, -50}
 ```
 
 **Subpaths**: SVG `d` can contain multiple `M` commands creating separate subpaths. Each subpath becomes a separate `PathNode`.
 
 **Arc conversion**: SVG arcs (`A` command) have no direct PathPoint equivalent. Convert to cubic bezier approximation:
+
 1. Convert endpoint parameterization → center parameterization
 2. Split arc into segments ≤ 90° each
 3. Approximate each segment with a cubic bezier using the standard formula:
@@ -153,14 +158,15 @@ function parseSvgColor(value: string): Color | null;
 ```
 
 Named colors map (148 CSS named colors):
+
 ```typescript
 const NAMED_COLORS: Record<string, string> = {
-  'aliceblue': '#f0f8ff',
-  'antiquewhite': '#faebd7',
+  aliceblue: '#f0f8ff',
+  antiquewhite: '#faebd7',
   // ... all 148
-  'black': '#000000',
-  'white': '#ffffff',
-  'red': '#ff0000',
+  black: '#000000',
+  white: '#ffffff',
+  red: '#ff0000',
   // etc.
 };
 ```
@@ -177,11 +183,13 @@ function parseSvgTransform(attr: string): Transform;
 ```
 
 Strategy:
+
 1. Parse each transform function into a 3x3 matrix
 2. Multiply all matrices together (left-to-right)
 3. Decompose the final matrix into `{position, rotation, scale, skew}`
 
 Matrix decomposition (QR-style):
+
 ```
 Given matrix [a b tx; c d ty; 0 0 1]:
   scaleX = sqrt(a² + c²)
@@ -206,7 +214,10 @@ function parseSvgLength(value: string, reference?: number): number;
 SVG style priority: `style` attribute > `class` CSS > presentation attributes.
 
 ```typescript
-function resolveStyle(element: Element, stylesheets: Map<string, Record<string, string>>): ResolvedStyle;
+function resolveStyle(
+  element: Element,
+  stylesheets: Map<string, Record<string, string>>
+): ResolvedStyle;
 
 interface ResolvedStyle {
   fill: string | null;
@@ -254,17 +265,31 @@ interface ParsedGradient {
   type: 'linear' | 'radial';
   stops: { offset: number; color: Color }[];
   // Linear: x1, y1, x2, y2 (0-1 normalized or userSpaceOnUse)
-  x1?: number; y1?: number; x2?: number; y2?: number;
+  x1?: number;
+  y1?: number;
+  x2?: number;
+  y2?: number;
   // Radial: cx, cy, r, fx, fy
-  cx?: number; cy?: number; r?: number; fx?: number; fy?: number;
+  cx?: number;
+  cy?: number;
+  r?: number;
+  fx?: number;
+  fy?: number;
   gradientUnits: 'objectBoundingBox' | 'userSpaceOnUse';
   gradientTransform?: string;
   spreadMethod: 'pad' | 'reflect' | 'repeat';
 }
 
 type SvgElement =
-  | SvgRect | SvgEllipse | SvgCircle | SvgLine
-  | SvgPolygon | SvgPolyline | SvgPath | SvgGroup | SvgText;
+  | SvgRect
+  | SvgEllipse
+  | SvgCircle
+  | SvgLine
+  | SvgPolygon
+  | SvgPolyline
+  | SvgPath
+  | SvgGroup
+  | SvgText;
 
 interface SvgElementBase {
   tag: string;
@@ -274,15 +299,60 @@ interface SvgElementBase {
   classes: string[];
 }
 
-interface SvgRect extends SvgElementBase { tag: 'rect'; x: number; y: number; width: number; height: number; rx?: number; ry?: number; }
-interface SvgEllipse extends SvgElementBase { tag: 'ellipse'; cx: number; cy: number; rx: number; ry: number; }
-interface SvgCircle extends SvgElementBase { tag: 'circle'; cx: number; cy: number; r: number; }
-interface SvgLine extends SvgElementBase { tag: 'line'; x1: number; y1: number; x2: number; y2: number; }
-interface SvgPolygon extends SvgElementBase { tag: 'polygon'; points: Vector2[]; }
-interface SvgPolyline extends SvgElementBase { tag: 'polyline'; points: Vector2[]; }
-interface SvgPath extends SvgElementBase { tag: 'path'; d: string; }
-interface SvgGroup extends SvgElementBase { tag: 'g'; children: SvgElement[]; }
-interface SvgText extends SvgElementBase { tag: 'text'; content: string; x: number; y: number; fontSize?: number; fontFamily?: string; fontWeight?: number; }
+interface SvgRect extends SvgElementBase {
+  tag: 'rect';
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  rx?: number;
+  ry?: number;
+}
+interface SvgEllipse extends SvgElementBase {
+  tag: 'ellipse';
+  cx: number;
+  cy: number;
+  rx: number;
+  ry: number;
+}
+interface SvgCircle extends SvgElementBase {
+  tag: 'circle';
+  cx: number;
+  cy: number;
+  r: number;
+}
+interface SvgLine extends SvgElementBase {
+  tag: 'line';
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+}
+interface SvgPolygon extends SvgElementBase {
+  tag: 'polygon';
+  points: Vector2[];
+}
+interface SvgPolyline extends SvgElementBase {
+  tag: 'polyline';
+  points: Vector2[];
+}
+interface SvgPath extends SvgElementBase {
+  tag: 'path';
+  d: string;
+}
+interface SvgGroup extends SvgElementBase {
+  tag: 'g';
+  children: SvgElement[];
+}
+interface SvgText extends SvgElementBase {
+  tag: 'text';
+  content: string;
+  x: number;
+  y: number;
+  fontSize?: number;
+  fontFamily?: string;
+  fontWeight?: number;
+}
 ```
 
 ### DOM Walking Algorithm
@@ -308,25 +378,22 @@ interface SvgText extends SvgElementBase { tag: 'text'; content: string; x: numb
 Convert parsed SVG elements to Quar node types.
 
 ```typescript
-function convertSvgToNodes(
-  parsed: ParsedSvg,
-  generateId: () => string
-): Node[];
+function convertSvgToNodes(parsed: ParsedSvg, generateId: () => string): Node[];
 ```
 
 ### Element → Node Mapping
 
-| SVG Element | Quar Node | Conversion Notes |
-|---|---|---|
-| `<rect>` | `RectangleNode` | `width`, `height`, `cornerRadius` from `rx`/`ry` |
-| `<ellipse>` | `EllipseNode` | `radiusX = rx`, `radiusY = ry` |
-| `<circle>` | `EllipseNode` | `radiusX = radiusY = r` |
-| `<line>` | `PathNode` | 2-point open path |
-| `<polyline>` | `PathNode` | Corner points, `closed = false` |
-| `<polygon>` | `PathNode` | Corner points, `closed = true` |
-| `<path>` | `PathNode` | Via `parseSvgPath(d)` |
-| `<g>` | `GroupNode` | Recursive children |
-| `<text>` | `TextNode` (P1) | Basic text content |
+| SVG Element  | Quar Node       | Conversion Notes                                 |
+| ------------ | --------------- | ------------------------------------------------ |
+| `<rect>`     | `RectangleNode` | `width`, `height`, `cornerRadius` from `rx`/`ry` |
+| `<ellipse>`  | `EllipseNode`   | `radiusX = rx`, `radiusY = ry`                   |
+| `<circle>`   | `EllipseNode`   | `radiusX = radiusY = r`                          |
+| `<line>`     | `PathNode`      | 2-point open path                                |
+| `<polyline>` | `PathNode`      | Corner points, `closed = false`                  |
+| `<polygon>`  | `PathNode`      | Corner points, `closed = true`                   |
+| `<path>`     | `PathNode`      | Via `parseSvgPath(d)`                            |
+| `<g>`        | `GroupNode`     | Recursive children                               |
+| `<text>`     | `TextNode` (P1) | Basic text content                               |
 
 ### Coordinate System Conversion
 
@@ -339,6 +406,7 @@ function svgToWorld(x: number, y: number, viewBoxHeight: number): Vector2 {
 ```
 
 This applies to:
+
 - All positions (rect x/y, circle cx/cy, path points, etc.)
 - Transform translations
 - Gradient coordinates
@@ -459,12 +527,14 @@ function convertFills(style: ResolvedStyle, defs: SvgDefs): Fill[] {
   if (gradientRef) {
     const gradient = defs.gradients.get(gradientRef);
     if (gradient) {
-      return [{
-        type: 'gradient',
-        gradient: convertGradient(gradient),
-        opacity: style.fillOpacity,
-        visible: true,
-      }];
+      return [
+        {
+          type: 'gradient',
+          gradient: convertGradient(gradient),
+          opacity: style.fillOpacity,
+          visible: true,
+        },
+      ];
     }
   }
 
@@ -472,12 +542,14 @@ function convertFills(style: ResolvedStyle, defs: SvgDefs): Fill[] {
   const color = parseSvgColor(style.fill);
   if (!color) return [];
 
-  return [{
-    type: 'solid',
-    color,
-    opacity: style.fillOpacity,
-    visible: true,
-  }];
+  return [
+    {
+      type: 'solid',
+      color,
+      opacity: style.fillOpacity,
+      visible: true,
+    },
+  ];
 }
 
 function convertStrokes(style: ResolvedStyle, defs: SvgDefs): Stroke[] {
@@ -485,18 +557,20 @@ function convertStrokes(style: ResolvedStyle, defs: SvgDefs): Stroke[] {
 
   const color = parseSvgColor(style.stroke) ?? { r: 0, g: 0, b: 0, a: 1 };
 
-  return [{
-    color,
-    width: style.strokeWidth,
-    opacity: style.strokeOpacity,
-    cap: style.strokeLinecap,
-    join: style.strokeLinejoin,
-    miterLimit: style.strokeMiterlimit,
-    dashArray: style.strokeDasharray ?? undefined,
-    dashOffset: style.strokeDashoffset || undefined,
-    visible: true,
-    align: 'center',
-  }];
+  return [
+    {
+      color,
+      width: style.strokeWidth,
+      opacity: style.strokeOpacity,
+      cap: style.strokeLinecap,
+      join: style.strokeLinejoin,
+      miterLimit: style.strokeMiterlimit,
+      dashArray: style.strokeDasharray ?? undefined,
+      dashOffset: style.strokeDashoffset || undefined,
+      visible: true,
+      align: 'center',
+    },
+  ];
 }
 ```
 
@@ -504,7 +578,7 @@ function convertStrokes(style: ResolvedStyle, defs: SvgDefs): Stroke[] {
 
 ```typescript
 function convertGradient(g: ParsedGradient): Gradient {
-  const stops: GradientStop[] = g.stops.map(s => ({
+  const stops: GradientStop[] = g.stops.map((s) => ({
     offset: s.offset,
     color: s.color,
   }));
@@ -535,15 +609,18 @@ function convertGradient(g: ParsedGradient): Gradient {
 When an SVG element has a `transform`, it's applied differently depending on the node type:
 
 **Shapes (rect, ellipse, circle):**
+
 1. Decompose SVG transform matrix → position, rotation, scale, skew
 2. Merge with element's position (rect.x, circle.cx, etc.)
 3. Set on the node's `transform` property
 
 **Groups:**
+
 1. Full decomposition → group node's `transform`
 2. Children inherit parent transform automatically via scene graph
 
 **Paths:**
+
 1. For simple transforms (translate only), offset all point positions
 2. For complex transforms (rotate, scale, skew), bake into the node's `transform`
 
@@ -650,14 +727,14 @@ function handlePaste(e: ClipboardEvent) {
 
 ## Implementation Order
 
-| Step | Files | Estimated Tests | Description |
-|------|-------|----------------|-------------|
-| 1 | `svgUtils.ts` + tests | ~40 | Color parsing, transform parsing, unit conversion |
-| 2 | `svgPathParser.ts` + tests | ~60 | SVG `d` tokenizer + command parser → PathPoint[] |
-| 3 | `svgParser.ts` + tests | ~30 | DOMParser wrapper, defs collection, element parsing |
-| 4 | `svgConverter.ts` + tests | ~40 | SVG elements → Quar nodes, Y-flip, fill/stroke/gradient |
-| 5 | `svgImporter.ts` + tests | ~15 | Orchestrator, scene graph wiring, options |
-| 6 | UI integration | ~10 | MenuBar item, file upload, clipboard paste |
+| Step | Files                      | Estimated Tests | Description                                             |
+| ---- | -------------------------- | --------------- | ------------------------------------------------------- |
+| 1    | `svgUtils.ts` + tests      | ~40             | Color parsing, transform parsing, unit conversion       |
+| 2    | `svgPathParser.ts` + tests | ~60             | SVG `d` tokenizer + command parser → PathPoint[]        |
+| 3    | `svgParser.ts` + tests     | ~30             | DOMParser wrapper, defs collection, element parsing     |
+| 4    | `svgConverter.ts` + tests  | ~40             | SVG elements → Quar nodes, Y-flip, fill/stroke/gradient |
+| 5    | `svgImporter.ts` + tests   | ~15             | Orchestrator, scene graph wiring, options               |
+| 6    | UI integration             | ~10             | MenuBar item, file upload, clipboard paste              |
 
 **Total estimated: ~195 new tests**
 
@@ -666,12 +743,15 @@ function handlePaste(e: ClipboardEvent) {
 ## Edge Cases & Gotchas
 
 ### Y-Axis Flip
+
 SVG is Y-down, Quar is Y-up. Every Y coordinate and every handle Y component must be negated. Gradients in `objectBoundingBox` space must also flip.
 
 ### SVG `viewBox` Scaling
+
 If SVG has `viewBox="0 0 100 100"` but `width="200" height="200"`, all coordinates are in viewBox space (100x100). The import should use viewBox dimensions for coordinate conversion and apply the width/height ratio as a scale factor if desired.
 
 ### Implicit SVG Defaults
+
 - `fill` defaults to `black` (not `none`)
 - `stroke` defaults to `none`
 - `stroke-width` defaults to `1`
@@ -679,12 +759,15 @@ If SVG has `viewBox="0 0 100 100"` but `width="200" height="200"`, all coordinat
 - `fill-opacity` and `stroke-opacity` default to `1`
 
 ### Path d Implicit Commands
+
 - After `M`, subsequent coordinate pairs are treated as implicit `L` commands
 - After `m`, subsequent pairs are implicit `l` (relative)
 - Numbers can run together: `M0,0L10-20` is valid (negative sign is separator)
 
 ### Arc to Bezier Approximation
+
 SVG arc (`A` command) needs decomposition to cubic bezier segments. Standard algorithm:
+
 1. Convert endpoint → center parameterization
 2. Split arc span into ≤90° chunks
 3. Each chunk → cubic bezier using:
@@ -694,19 +777,24 @@ SVG arc (`A` command) needs decomposition to cubic bezier segments. Standard alg
    ```
 
 ### Gradient `gradientUnits`
+
 - `objectBoundingBox` (default): coordinates 0-1 relative to shape bounds
 - `userSpaceOnUse`: absolute coordinates in SVG space → need to normalize to shape bounds
 
 ### Multiple Fill/Stroke
+
 SVG elements have exactly one fill and one stroke. The Quar model supports arrays. Import creates single-element arrays: `fills: [fill]`, `strokes: [stroke]`.
 
 ### Group Transform Composition
+
 SVG group transforms compound with children. Quar's scene graph handles this automatically via `getWorldTransform()`. Import should preserve the SVG hierarchy as-is: group transform on the GroupNode, child transforms on child nodes.
 
 ### Named Colors
+
 Must support all 148 CSS named colors. Use a lookup table.
 
 ### Percentage Values in Gradients
+
 `<stop offset="50%">` → `0.5`. Colors like `rgb(100%, 0%, 0%)` → `{r: 255, g: 0, b: 0}`.
 
 ---
@@ -716,12 +804,14 @@ Must support all 148 CSS named colors. Use a lookup table.
 ### Unit Tests per Module
 
 **svgUtils.test.ts** (~40 tests):
+
 - Color parsing: hex3, hex6, hex8, rgb(), rgba(), hsl(), hsla(), named, none
 - Transform parsing: translate, rotate, scale, matrix, skewX, skewY, combined
 - Unit parsing: px, pt, em, %
 - Style resolution priority
 
 **svgPathParser.test.ts** (~60 tests):
+
 - Each command: M, L, H, V, C, S, Q, T, A, Z (absolute + relative)
 - Implicit commands after M
 - Multiple subpaths
@@ -729,6 +819,7 @@ Must support all 148 CSS named colors. Use a lookup table.
 - Edge cases: empty d, single point, degenerate curves
 
 **svgConverter.test.ts** (~40 tests):
+
 - Each element type → correct node type
 - Y-axis flip correctness
 - Fill/stroke/gradient conversion
@@ -737,6 +828,7 @@ Must support all 148 CSS named colors. Use a lookup table.
 - viewBox scaling
 
 **svgImporter.test.ts** (~15 tests):
+
 - Full SVG → scene graph pipeline
 - Center at origin
 - Scale factor
@@ -746,6 +838,7 @@ Must support all 148 CSS named colors. Use a lookup table.
 ### Integration Tests
 
 Test with real-world SVGs:
+
 - Simple icon (rect + circle + path)
 - Logo with gradients
 - Complex illustration with nested groups
