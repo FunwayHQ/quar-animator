@@ -12,6 +12,8 @@ import type {
   DynamicChain,
   WindSettings,
   SymbolDefinition,
+  IKChain,
+  SmartBoneAction,
 } from '@quar/types';
 import type { OnionSkinSettings } from '@quar/core';
 import type { SceneGraph } from '@quar/core';
@@ -45,6 +47,8 @@ export interface ProjectDataV1 {
     vitruvianControllers?: VitruvianController[];
     dynamicChains?: DynamicChain[];
     globalWind?: WindSettings;
+    ikChains?: IKChain[];
+    smartBoneActions?: SmartBoneAction[];
   };
 }
 
@@ -78,6 +82,8 @@ export interface ProjectDataV2 {
     vitruvianControllers?: VitruvianController[];
     dynamicChains?: DynamicChain[];
     globalWind?: WindSettings;
+    ikChains?: IKChain[];
+    smartBoneActions?: SmartBoneAction[];
   };
   symbols?: SymbolDefinition[];
 }
@@ -100,6 +106,8 @@ export interface EditorStateSnapshot {
   vitruvianControllers?: VitruvianController[];
   dynamicChains?: DynamicChain[];
   globalWind?: WindSettings;
+  ikChains?: IKChain[];
+  smartBoneActions?: SmartBoneAction[];
   pages?: PageData[];
   activePageId?: string;
   symbols?: SymbolDefinition[];
@@ -177,6 +185,10 @@ export function serializeProject(
         : [],
       dynamicChains: editorState.dynamicChains ? structuredClone(editorState.dynamicChains) : [],
       globalWind: editorState.globalWind ? { ...editorState.globalWind } : undefined,
+      ikChains: editorState.ikChains ? structuredClone(editorState.ikChains) : [],
+      smartBoneActions: editorState.smartBoneActions
+        ? structuredClone(editorState.smartBoneActions)
+        : [],
     },
     symbols: editorState.symbols ? structuredClone(editorState.symbols) : [],
   };
@@ -430,6 +442,8 @@ export function deserializeProject(
     vitruvianControllers: v2.rigging?.vitruvianControllers ?? [],
     dynamicChains: v2.rigging?.dynamicChains ?? [],
     globalWind: v2.rigging?.globalWind,
+    ikChains: v2.rigging?.ikChains ?? [],
+    smartBoneActions: v2.rigging?.smartBoneActions ?? [],
     pages,
     activePageId: activePage.id,
     symbols: v2.symbols ?? [],

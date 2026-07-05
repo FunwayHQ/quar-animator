@@ -19,6 +19,7 @@ import type {
   ProjectDataV2,
   EditorStateSnapshot,
 } from './projectSerializer';
+import type { IKChain, SmartBoneAction } from '@quar/types';
 
 function makeTestNode(id: string, x = 0, y = 0) {
   return {
@@ -502,6 +503,121 @@ describe('ProjectSerializer', () => {
       expect(pages[0].name).toBe('Page A');
       expect(pages[1].name).toBe('Page B');
       expect(pages[1].sceneGraphJSON.nodes[0].id).toBe('inactive-rect');
+    });
+  });
+
+  // ============================================================================
+  // Rigging Serialization (IK chains + Smart Bone actions) — regression for F001
+  // ============================================================================
+
+  describe('rigging serialization', () => {
+    const makeIKChain = (id: string): IKChain => ({
+      id,
+      name: 'chain',
+      rootBoneId: 'bone-root',
+      endEffectorBoneId: 'bone-tip',
+      targetNodeId: 'target',
+      maxIterations: 10,
+      tolerance: 0.01,
+      enabled: true,
+    });
+
+    const makeSmartBoneAction = (id: string): SmartBoneAction => ({
+      id,
+      name: 'action',
+      driver: { boneId: 'bone-root', property: 'transform.rotation', rangeMin: 0, rangeMax: 90 },
+      targets: [],
+      enabled: true,
+    });
+
+    function makeRiggedState(): EditorStateSnapshot {
+      return {
+        timeline: createTimeline({ duration: 60, frameRate: 30 }),
+        timelineDuration: 60,
+        frameRate: 30,
+        autoKeyframe: false,
+        onionSkin: { ...DEFAULT_ONION_SKIN_SETTINGS },
+        ikChains: [makeIKChain('ik1')],
+        smartBoneActions: [makeSmartBoneAction('sba1')],
+      };
+    }
+
+    it('serializes ikChains and smartBoneActions under rigging', () => {
+      const sg = new SceneGraph();
+      sg.addNode(makeTestNode('rect1'));
+
+      const data = serializeProject('Rigged', sg, makeRiggedState());
+
+      expect(data.rigging?.ikChains).toHaveLength(1);
+      expect(data.rigging?.ikChains?.[0]!.id).toBe('ik1');
+      expect(data.rigging?.smartBoneActions).toHaveLength(1);
+      expect(data.rigging?.smartBoneActions?.[0]!.id).toBe('sba1');
+    });
+
+    it('round-trips ikChains and smartBoneActions through JSON serialize/deserialize', () => {
+      const sg = new SceneGraph();
+      sg.addNode(makeTestNode('rect1'));
+
+      const data = serializeProject('Rigged', sg, makeRiggedState());
+      const parsed = JSON.parse(JSON.stringify(data)) as ProjectData;
+
+      const newSg = new SceneGraph();
+      let applied: Record<string, unknown> = {};
+      deserializeProject(parsed, newSg, (state) => {
+        applied = state;
+      });
+
+      expect((applied.ikChains as IKChain[])[0]!.id).toBe('ik1');
+      expect((applied.smartBoneActions as SmartBoneAction[])[0]!.id).toBe('sba1');
+    });
+
+    it('round-trips ikChains and smartBoneActions through the binary .quar path', () => {
+      const sg = new SceneGraph();
+      sg.addNode(makeTestNode('rect1'));
+
+      const binary = serializeProjectToBinary('Rigged', sg, makeRiggedState());
+
+      const newSg = new SceneGraph();
+      let applied: Record<string, unknown> = {};
+      deserializeProjectFromBinary(binary, newSg, (state) => {
+        applied = state;
+      });
+
+      expect((applied.ikChains as IKChain[])[0]!.id).toBe('ik1');
+      expect((applied.smartBoneActions as SmartBoneAction[])[0]!.id).toBe('sba1');
+    });
+
+    it('defaults to empty arrays when a project has no rigging data', () => {
+      const v2: ProjectDataV2 = {
+        version: '2.0',
+        name: 'No Rig',
+        createdAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-01-01T00:00:00.000Z',
+        pages: [
+          {
+            id: 'p1',
+            name: 'Page 1',
+            sceneGraph: { nodes: [], rootNodeIds: [] },
+            timeline: createTimeline({ duration: 60, frameRate: 30 }),
+          },
+        ],
+        activePageId: 'p1',
+        settings: {
+          timelineDuration: 60,
+          frameRate: 30,
+          autoKeyframe: false,
+          onionSkin: { ...DEFAULT_ONION_SKIN_SETTINGS },
+        },
+      };
+
+      const newSg = new SceneGraph();
+      let applied: Record<string, unknown> = {};
+      deserializeProject(v2, newSg, (state) => {
+        applied = state;
+      });
+
+      expect(applied.ikChains).toEqual([]);
+      expect(applied.smartBoneActions).toEqual([]);
     });
   });
 

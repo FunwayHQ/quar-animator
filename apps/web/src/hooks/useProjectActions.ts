@@ -81,6 +81,8 @@ export function useProjectActions(options: UseProjectActionsOptions = {}): Proje
       vitruvianControllers: state.vitruvianControllers,
       dynamicChains: state.dynamicChains,
       globalWind: state.globalWind,
+      ikChains: state.ikChains,
+      smartBoneActions: state.smartBoneActions,
       pages: state.pages,
       activePageId: state.activePageId,
       symbols: state.symbols,
