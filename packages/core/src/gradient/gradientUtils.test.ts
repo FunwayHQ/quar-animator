@@ -4,8 +4,10 @@ import {
   normalizeGradientStops,
   sampleGradientColor,
   createDefaultGradient,
+  getNodeLocalBounds,
 } from './gradientUtils';
-import type { GradientStop } from '@quar/types';
+import { createPolygonPath, tessellatePathToVertices } from '../path/pathUtils';
+import type { GradientStop, Node } from '@quar/types';
 
 // ============================================================================
 // computeBounds
@@ -45,9 +47,7 @@ describe('normalizeGradientStops', () => {
   });
 
   it('duplicates single stop to start and end', () => {
-    const stops: GradientStop[] = [
-      { offset: 0.5, color: { r: 255, g: 0, b: 0, a: 1 } },
-    ];
+    const stops: GradientStop[] = [{ offset: 0.5, color: { r: 255, g: 0, b: 0, a: 1 } }];
     const result = normalizeGradientStops(stops);
     expect(result).toHaveLength(2);
     expect(result[0].offset).toBe(0);
@@ -165,5 +165,86 @@ describe('createDefaultGradient', () => {
       expect(g.stops[0].color.a).toBe(1);
       expect(g.stops[1].color.a).toBe(1);
     }
+  });
+});
+
+// ============================================================================
+// getNodeLocalBounds (F034)
+// ============================================================================
+
+describe('getNodeLocalBounds', () => {
+  const polygon = (radius: number, sides: number, sx: number, sy: number): Node =>
+    ({
+      type: 'polygon',
+      radius,
+      sides,
+      transform: {
+        position: { x: 0, y: 0 },
+        rotation: 0,
+        scale: { x: sx, y: sy },
+        anchor: { x: 0.5, y: 0.5 },
+        skew: { x: 0, y: 0 },
+      },
+    }) as unknown as Node;
+
+  it('is scale-invariant for polygons and matches the renderer bbox (F034)', () => {
+    const b1 = getNodeLocalBounds(polygon(100, 5, 1, 1));
+    const b2 = getNodeLocalBounds(polygon(100, 5, 2, 2));
+    // Scale is applied via the world matrix, so it must NOT be baked in here.
+    expect(b2).toEqual(b1);
+
+    // Matches the renderer's unscaled tessellated-vertex bbox...
+    const verts = tessellatePathToVertices(
+      createPolygonPath(0, 0, 100, 5, undefined, undefined),
+      true,
+      1.0
+    );
+    let minX = Infinity;
+    let maxX = -Infinity;
+    for (let i = 0; i < verts.length; i += 2) {
+      minX = Math.min(minX, verts[i]!);
+      maxX = Math.max(maxX, verts[i]!);
+    }
+    expect(b1[0]).toBeCloseTo(minX, 3);
+    expect(b1[2]).toBeCloseTo(maxX, 3);
+    // ...and is NOT the circumscribed-circle box.
+    expect(b1).not.toEqual([-100, -100, 100, 100]);
+  });
+
+  it('returns a tighter-than-circumscribed box for a triangle (F034)', () => {
+    const [, minY, maxX] = getNodeLocalBounds(polygon(100, 3, 1, 1));
+    expect(maxX).toBeLessThan(100);
+    expect(minY).toBeGreaterThan(-100);
+  });
+
+  it('includes bezier curve extrema for paths (F034)', () => {
+    const path = {
+      type: 'path',
+      closed: true,
+      transform: {
+        position: { x: 0, y: 0 },
+        rotation: 0,
+        scale: { x: 1, y: 1 },
+        anchor: { x: 0.5, y: 0.5 },
+        skew: { x: 0, y: 0 },
+      },
+      points: [
+        {
+          position: { x: 0, y: 0 },
+          handleIn: { x: 0, y: 0 },
+          handleOut: { x: 50, y: 120 },
+          type: 'smooth',
+        },
+        {
+          position: { x: 100, y: 0 },
+          handleIn: { x: -50, y: 120 },
+          handleOut: { x: 0, y: 0 },
+          type: 'smooth',
+        },
+      ],
+    } as unknown as Node;
+    const [, , , maxY] = getNodeLocalBounds(path);
+    // The anchor-only bbox has maxY = 0; the curve bulges well beyond it.
+    expect(maxY).toBeGreaterThan(10);
   });
 });

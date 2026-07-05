@@ -5,6 +5,34 @@
 
 import type { Gradient, GradientStop, Color, Vector2, Matrix3, Node } from '@quar/types';
 import { mat3 } from '../math';
+import {
+  createPolygonPath,
+  createStarPath,
+  tessellatePathToVertices,
+  applyCornerRadius,
+} from '../path/pathUtils';
+
+/** Mirrors ShapeRenderer's DEFAULT_TESSELLATION_TOLERANCE (module-local there);
+ *  the exact value barely affects a bounding box. */
+const GRADIENT_BOUNDS_TOLERANCE = 1.0;
+
+/** [minX, minY, maxX, maxY] of an interleaved xy vertex array, or all-zero. */
+function boundsFromVertices(vertices: Float32Array): [number, number, number, number] {
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (let i = 0; i < vertices.length; i += 2) {
+    const x = vertices[i]!;
+    const y = vertices[i + 1]!;
+    if (x < minX) minX = x;
+    if (y < minY) minY = y;
+    if (x > maxX) maxX = x;
+    if (y > maxY) maxY = y;
+  }
+  if (minX === Infinity) return [0, 0, 0, 0];
+  return [minX, minY, maxX, maxY];
+}
 
 // ============================================================================
 // Bounds computation
@@ -190,7 +218,13 @@ export function createDefaultGradient(type: 'linear' | 'radial' | 'conic' = 'lin
         end: { x: 1, y: 0.5 },
       };
     case 'radial':
-      return { type: 'radial', stops, center: { x: 0.5, y: 0.5 }, radius: 0.5, end: { x: 1, y: 0.5 } };
+      return {
+        type: 'radial',
+        stops,
+        center: { x: 0.5, y: 0.5 },
+        radius: 0.5,
+        end: { x: 1, y: 0.5 },
+      };
     case 'conic':
       return { type: 'conic', stops, center: { x: 0.5, y: 0.5 }, angle: 0 };
   }
@@ -238,22 +272,46 @@ export function getNodeLocalBounds(node: Node): [number, number, number, number]
     case 'ellipse':
       return [-node.radiusX, -node.radiusY, node.radiusX, node.radiusY];
     case 'polygon': {
-      const r = node.radius;
-      const sx = node.transform.scale?.x ?? 1;
-      const sy = node.transform.scale?.y ?? 1;
-      return [-r * sx, -r * sy, r * sx, r * sy];
+      // Match the renderer: it tessellates at the UNSCALED radius and applies
+      // scale only via the world matrix. Reading transform.scale here would
+      // double-apply it (the gradient overlay also uses the world matrix), and
+      // the circumscribed-circle box does not match the real vertex bbox.
+      const pathPoints =
+        node.innerRadius !== undefined
+          ? createStarPath(
+              0,
+              0,
+              node.radius,
+              node.innerRadius,
+              node.sides,
+              undefined,
+              node.cornerRadius
+            )
+          : createPolygonPath(0, 0, node.radius, node.sides, undefined, node.cornerRadius);
+      return boundsFromVertices(
+        tessellatePathToVertices(pathPoints, true, GRADIENT_BOUNDS_TOLERANCE)
+      );
     }
     case 'path': {
       if (node.points.length === 0) return [0, 0, 0, 0];
-      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-      for (const pt of node.points) {
-        const px = pt.position.x;
-        const py = pt.position.y;
-        if (px < minX) minX = px;
-        if (py < minY) minY = py;
-        if (px > maxX) maxX = px;
-        if (py > maxY) maxY = py;
+      // Match the renderer: tessellate the actual curves (incl. bezier extrema)
+      // of every contour rather than using only anchor-point positions.
+      const contours = [node.points, ...(node.subpaths ?? [])];
+      let minX = Infinity;
+      let minY = Infinity;
+      let maxX = -Infinity;
+      let maxY = -Infinity;
+      for (const contour of contours) {
+        const processed = applyCornerRadius(contour, node.closed);
+        const verts = tessellatePathToVertices(processed, node.closed, GRADIENT_BOUNDS_TOLERANCE);
+        if (verts.length === 0) continue;
+        const [cx0, cy0, cx1, cy1] = boundsFromVertices(verts);
+        if (cx0 < minX) minX = cx0;
+        if (cy0 < minY) minY = cy0;
+        if (cx1 > maxX) maxX = cx1;
+        if (cy1 > maxY) maxY = cy1;
       }
+      if (minX === Infinity) return [0, 0, 0, 0];
       return [minX, minY, maxX, maxY];
     }
     default:
