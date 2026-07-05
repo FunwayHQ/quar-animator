@@ -82,11 +82,15 @@ export class FontManager {
       const font = opentype.parse(buffer);
       this.fontCache.set(key, font);
       this.availableFonts.set(family, { family, source });
-      this.loadingPromises.delete(key);
       return font;
     })();
 
     this.loadingPromises.set(key, promise);
+    // Clear the in-flight entry on BOTH settle paths so a failed load doesn't
+    // leave a rejected promise cached (which would make the font unloadable for
+    // the session). The `.catch` swallows only the derived cleanup promise; the
+    // original `promise` returned to the caller still rejects.
+    void promise.catch(() => {}).finally(() => this.loadingPromises.delete(key));
     return promise;
   }
 
@@ -118,11 +122,12 @@ export class FontManager {
       const font = opentype.parse(buffer);
       this.fontCache.set(key, font);
       this.availableFonts.set(family, { family, source: 'google' });
-      this.loadingPromises.delete(key);
       return font;
     })();
 
     this.loadingPromises.set(key, promise);
+    // Clear the in-flight entry on both settle paths (see loadFontFromUrl).
+    void promise.catch(() => {}).finally(() => this.loadingPromises.delete(key));
     return promise;
   }
 
