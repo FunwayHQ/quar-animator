@@ -717,6 +717,41 @@ describe('SceneGraph', () => {
       // The event fires after the swap, so the new state is already visible.
       expect(sceneGraph.getNode('new')).toBeDefined();
     });
+
+    it('sanitizes cyclic children arrays (F042)', () => {
+      const a = createGroupNode('A', 'A');
+      const b = createGroupNode('B', 'B');
+      a.children = ['B'];
+      b.children = ['A'];
+
+      sceneGraph.fromJSON({ nodes: [a, b], rootNodeIds: ['A'] });
+
+      expect(() => sceneGraph.traverse(() => {})).not.toThrow();
+      // The back-edge B -> A is removed so traversal terminates.
+      expect(sceneGraph.getNode('B')!.children).not.toContain('A');
+    });
+
+    it('coerces missing or non-array children to [] (F042)', () => {
+      const a = createGroupNode('A', 'A');
+      const b = createGroupNode('B', 'B');
+      (a as unknown as { children: unknown }).children = undefined;
+      (b as unknown as { children: unknown }).children = 'oops';
+
+      sceneGraph.fromJSON({ nodes: [a, b], rootNodeIds: ['A', 'B'] });
+
+      expect(sceneGraph.getNode('A')!.children).toEqual([]);
+      expect(sceneGraph.getNode('B')!.children).toEqual([]);
+      expect(() => sceneGraph.traverse(() => {})).not.toThrow();
+    });
+
+    it('drops dangling child ids (F042)', () => {
+      const a = createGroupNode('A', 'A');
+      a.children = ['ghost'];
+
+      sceneGraph.fromJSON({ nodes: [a], rootNodeIds: ['A'] });
+
+      expect(sceneGraph.getNode('A')!.children).toEqual([]);
+    });
   });
 
   // ==========================================================================

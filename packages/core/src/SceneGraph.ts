@@ -458,6 +458,55 @@ export class SceneGraph {
     // Filter rootNodeIds to only valid IDs
     const validRootIds = data.rootNodeIds.filter((id) => newNodes.has(id));
 
+    // Sanitize the hierarchy so a corrupt or hand-crafted .quar cannot make the
+    // downstream traversal/removal/transform code (which has no cycle guards)
+    // infinite-loop or throw. (1) Coerce children arrays and drop dangling ids.
+    for (const [, node] of newNodes) {
+      if (!Array.isArray(node.children)) {
+        node.children = [];
+      } else {
+        node.children = node.children.filter((childId) => newNodes.has(childId));
+      }
+    }
+    // (2) BFS from the roots giving every node a single parent and dropping
+    // back-edges (cycles) and shared-child edges, turning the graph into an
+    // acyclic forest. Unreachable nodes are attached as their own roots so their
+    // subtrees are sanitized too. For a well-formed file this is a no-op.
+    const visited = new Set<string>();
+    const queue: string[] = [];
+    let qi = 0;
+    const enqueueRoot = (id: string): void => {
+      const n = newNodes.get(id);
+      if (!n || visited.has(id)) return;
+      n.parent = null;
+      visited.add(id);
+      queue.push(id);
+    };
+    const processQueue = (): void => {
+      while (qi < queue.length) {
+        const node = newNodes.get(queue[qi++]!)!;
+        const kept: string[] = [];
+        for (const childId of node.children) {
+          if (visited.has(childId)) continue; // cycle back-edge or shared child
+          const child = newNodes.get(childId);
+          if (!child) continue;
+          child.parent = node.id;
+          visited.add(childId);
+          kept.push(childId);
+          queue.push(childId);
+        }
+        node.children = kept;
+      }
+    };
+    for (const id of validRootIds) enqueueRoot(id);
+    processQueue();
+    for (const [id] of newNodes) {
+      if (!visited.has(id)) {
+        enqueueRoot(id);
+        processQueue();
+      }
+    }
+
     // Atomic swap — only after successful parsing
     this.nodes = newNodes;
     this.rootNodeIds = validRootIds;
