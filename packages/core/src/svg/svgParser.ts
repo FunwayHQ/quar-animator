@@ -193,6 +193,17 @@ function collectDefs(svgEl: Element): SvgDefs {
   return defs;
 }
 
+/**
+ * Parse a gradient coordinate. The Quar gradient convention is normalized 0-1
+ * (objectBoundingBox), so percentages must be divided by 100 — a bare parseFloat
+ * turns "100%" into 100, placing the gradient stop 100x outside the shape.
+ * (userSpaceOnUse absolute coordinates are not yet normalized — separate issue.)
+ */
+function parseGradientCoord(v: string): number {
+  const t = v.trim();
+  return t.endsWith('%') ? parseFloat(t) / 100 : parseFloat(t);
+}
+
 function collectGradients(parent: Element, gradients: Map<string, ParsedGradient>): void {
   for (const el of parent.querySelectorAll('linearGradient, radialGradient')) {
     const id = el.getAttribute('id');
@@ -214,21 +225,21 @@ function collectGradients(parent: Element, gradients: Map<string, ParsedGradient
       const y1 = el.getAttribute('y1');
       const x2 = el.getAttribute('x2');
       const y2 = el.getAttribute('y2');
-      if (x1 !== null) gradient.x1 = parseFloat(x1);
-      if (y1 !== null) gradient.y1 = parseFloat(y1);
-      if (x2 !== null) gradient.x2 = parseFloat(x2);
-      if (y2 !== null) gradient.y2 = parseFloat(y2);
+      if (x1 !== null) gradient.x1 = parseGradientCoord(x1);
+      if (y1 !== null) gradient.y1 = parseGradientCoord(y1);
+      if (x2 !== null) gradient.x2 = parseGradientCoord(x2);
+      if (y2 !== null) gradient.y2 = parseGradientCoord(y2);
     } else {
       const cx = el.getAttribute('cx');
       const cy = el.getAttribute('cy');
       const r = el.getAttribute('r');
       const fx = el.getAttribute('fx');
       const fy = el.getAttribute('fy');
-      if (cx !== null) gradient.cx = parseFloat(cx);
-      if (cy !== null) gradient.cy = parseFloat(cy);
-      if (r !== null) gradient.r = parseFloat(r);
-      if (fx !== null) gradient.fx = parseFloat(fx);
-      if (fy !== null) gradient.fy = parseFloat(fy);
+      if (cx !== null) gradient.cx = parseGradientCoord(cx);
+      if (cy !== null) gradient.cy = parseGradientCoord(cy);
+      if (r !== null) gradient.r = parseGradientCoord(r);
+      if (fx !== null) gradient.fx = parseGradientCoord(fx);
+      if (fy !== null) gradient.fy = parseGradientCoord(fy);
     }
 
     // Store href for later inheritance resolution

@@ -30,23 +30,6 @@ function tokenizePath(d: string): PathToken[] {
   const tokens: PathToken[] = [];
   if (!d) return tokens;
 
-  // Split into command segments: letter followed by numbers/separators until next letter
-  // Regex matches: optional command letter, then sequence of numbers
-  const commandRegex = /([MmZzLlHhVvCcSsQqTtAa])|([+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?)/g;
-  let match: RegExpExecArray | null;
-  let currentCommand = '';
-  let currentArgs: number[] = [];
-
-  const flush = () => {
-    if (currentCommand) {
-      // Only push tokens that have args (or Z which has 0 args)
-      if (currentArgs.length > 0 || currentCommand === 'Z' || currentCommand === 'z') {
-        tokens.push({ command: currentCommand, args: currentArgs });
-      }
-      currentArgs = [];
-    }
-  };
-
   const argCounts: Record<string, number> = {
     M: 2,
     m: 2,
@@ -70,33 +53,85 @@ function tokenizePath(d: string): PathToken[] {
     z: 0,
   };
 
-  while ((match = commandRegex.exec(d)) !== null) {
-    if (match[1]) {
-      // It's a command letter
-      flush();
-      currentCommand = match[1];
+  const numberRe = /[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?/y;
+  const isCommand = (ch: string): boolean => /[MmZzLlHhVvCcSsQqTtAa]/.test(ch);
+  const isSep = (ch: string): boolean =>
+    ch === ' ' || ch === '\t' || ch === '\n' || ch === '\r' || ch === '\f' || ch === ',';
 
-      if (currentCommand === 'Z' || currentCommand === 'z') {
-        flush();
-        currentCommand = '';
-      }
-    } else if (match[2] !== undefined) {
-      // It's a number
-      currentArgs.push(parseFloat(match[2]));
+  const n = d.length;
+  let i = 0;
+  const skipSep = (): void => {
+    while (i < n && isSep(d[i]!)) i++;
+  };
 
-      // Check if we have enough args for the current command
-      const expected = argCounts[currentCommand] || 0;
-      if (expected > 0 && currentArgs.length >= expected) {
-        flush();
-        // Implicit repeat: after M→L, after m→l, others repeat themselves
-        if (currentCommand === 'M') currentCommand = 'L';
-        else if (currentCommand === 'm') currentCommand = 'l';
-        // Other commands repeat as themselves
+  const readNumber = (): number | null => {
+    skipSep();
+    numberRe.lastIndex = i;
+    const m = numberRe.exec(d);
+    if (!m || m.index !== i) return null;
+    i = numberRe.lastIndex;
+    const v = parseFloat(m[0]);
+    return Number.isFinite(v) ? v : null;
+  };
+
+  // Arc flags (largeArc, sweep) are a single '0' or '1' and may be written with
+  // no separator (e.g. SVGO's "011" = flag 0, flag 1, number 1), so they must be
+  // scanned one char at a time — a plain number regex greedily misreads them.
+  const readFlag = (): number | null => {
+    skipSep();
+    if (i >= n) return null;
+    const ch = d[i]!;
+    if (ch !== '0' && ch !== '1') return null;
+    i++;
+    return ch === '0' ? 0 : 1;
+  };
+
+  let cmd = '';
+  while (i < n) {
+    skipSep();
+    if (i >= n) break;
+    const ch = d[i]!;
+
+    if (isCommand(ch)) {
+      cmd = ch;
+      i++;
+      if (cmd === 'Z' || cmd === 'z') {
+        tokens.push({ command: cmd, args: [] });
+        cmd = '';
       }
+      continue;
     }
+
+    if (!cmd) {
+      i++; // stray character before any command
+      continue;
+    }
+
+    const count = argCounts[cmd] ?? 0;
+    if (count === 0) {
+      i++;
+      continue;
+    }
+
+    const isArc = cmd === 'A' || cmd === 'a';
+    const args: number[] = [];
+    let ok = true;
+    for (let k = 0; k < count; k++) {
+      const val = isArc && (k === 3 || k === 4) ? readFlag() : readNumber();
+      if (val === null) {
+        ok = false;
+        break;
+      }
+      args.push(val);
+    }
+    if (!ok) break; // malformed / incomplete group — never emit a partial token
+
+    tokens.push({ command: cmd, args });
+    // Implicit repeat: a following number reuses the command (M→L, m→l).
+    if (cmd === 'M') cmd = 'L';
+    else if (cmd === 'm') cmd = 'l';
   }
 
-  flush();
   return tokens;
 }
 

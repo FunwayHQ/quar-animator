@@ -21,7 +21,9 @@ describe('parseSvg', () => {
   });
 
   it('parses explicit width/height', () => {
-    const result = parseSvg('<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300"></svg>');
+    const result = parseSvg(
+      '<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300"></svg>'
+    );
     expect(result.width).toBe(400);
     expect(result.height).toBe(300);
   });
@@ -191,6 +193,28 @@ describe('parseSvg', () => {
     expect(grad.type).toBe('radial');
     expect(grad.cx).toBe(0.5);
     expect(grad.r).toBe(0.5);
+  });
+
+  it('normalizes percentage gradient coordinates to 0-1 (F046)', () => {
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="pct" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" stop-color="red" />
+          <stop offset="100%" stop-color="blue" />
+        </linearGradient>
+        <radialGradient id="rpct" cx="50%" cy="50%" r="50%">
+          <stop offset="0" stop-color="white" />
+          <stop offset="1" stop-color="black" />
+        </radialGradient>
+      </defs>
+    </svg>`;
+    const result = parseSvg(svg);
+    const lin = result.defs.gradients.get('pct')!;
+    expect(lin.x1).toBe(0);
+    expect(lin.x2).toBe(1); // 100% -> 1, not 100
+    const rad = result.defs.gradients.get('rpct')!;
+    expect(rad.cx).toBe(0.5);
+    expect(rad.r).toBe(0.5);
   });
 
   it('parses gradient stop opacity', () => {

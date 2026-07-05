@@ -419,9 +419,13 @@ function convertCompoundPath(
 
 function convertGroup(el: SvgGroup, ctx: ConvertContext): GroupNode {
   const svgTransform = el.transform ? parseSvgTransform(el.transform) : createDefaultTransform();
-  // Flip Y for group transform position
   if (el.transform) {
-    svgTransform.position.y = ctx.viewBoxHeight - svgTransform.position.y;
+    // A group transform is a RELATIVE parent->child delta (leaf children are
+    // already Y-flipped with the global viewBox height), so the Y delta is just
+    // negated — not flipped about viewBoxHeight (which added a full viewBox
+    // offset). Rotation is negated to match buildTransform's Y-flip convention.
+    svgTransform.position.y = -svgTransform.position.y;
+    svgTransform.rotation = -svgTransform.rotation;
   }
 
   const group: GroupNode = {

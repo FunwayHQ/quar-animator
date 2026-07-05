@@ -259,7 +259,7 @@ describe('convertSvgToNodes', () => {
         </svg>
       `);
       expect(rootIds).toHaveLength(1);
-      const group = nodes.find(n => n.type === 'group') as GroupNode;
+      const group = nodes.find((n) => n.type === 'group') as GroupNode;
       expect(group).toBeTruthy();
       expect(group.name).toBe('myGroup');
       expect(group.children).toHaveLength(2);
@@ -273,8 +273,8 @@ describe('convertSvgToNodes', () => {
           </g>
         </svg>
       `);
-      const group = nodes.find(n => n.type === 'group')!;
-      const rect = nodes.find(n => n.type === 'rectangle')!;
+      const group = nodes.find((n) => n.type === 'group')!;
+      const rect = nodes.find((n) => n.type === 'rectangle')!;
       expect(rect.parent).toBe(group.id);
     });
   });
@@ -367,5 +367,29 @@ describe('convertSvgToNodes', () => {
     expect(node.visible).toBe(true);
     expect(node.locked).toBe(false);
     expect(node.blendMode).toBe('normal');
+  });
+
+  describe('group transform (F043)', () => {
+    it('applies a relative Y-delta to a group translate, not a viewBox flip', () => {
+      const { nodes } = convert(`
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
+          <g transform="translate(30, 40)"><rect width="10" height="10"/></g>
+        </svg>
+      `);
+      const group = nodes[0] as GroupNode;
+      expect(group.type).toBe('group');
+      expect(group.transform.position.x).toBeCloseTo(30);
+      expect(group.transform.position.y).toBeCloseTo(-40); // NOT 160
+    });
+
+    it('negates a group rotation for the Y-flip convention', () => {
+      const { nodes } = convert(`
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
+          <g transform="rotate(30)"><rect width="10" height="10"/></g>
+        </svg>
+      `);
+      const group = nodes[0] as GroupNode;
+      expect(group.transform.rotation).toBeCloseTo(-30);
+    });
   });
 });

@@ -92,7 +92,7 @@ describe('parseSvgPath', () => {
       const result = parseSvgPath('M 100 100 c 10 20 30 40 50 60');
       const second = result[0].points[1];
       expect(second.position).toEqual({ x: 150, y: 160 });
-      expect(second.handleIn).toEqual({ x: (100 + 30) - 150, y: (100 + 40) - 160 });
+      expect(second.handleIn).toEqual({ x: 100 + 30 - 150, y: 100 + 40 - 160 });
     });
   });
 
@@ -236,11 +236,47 @@ describe('parseSvgPath', () => {
     });
 
     it('parses a heart shape (cubic beziers)', () => {
-      const d = 'M 10 30 C 10 27 12 25 15 25 C 18 25 20 27 20 30 C 20 35 10 45 10 45 C 10 45 0 35 0 30 C 0 27 2 25 5 25 C 8 25 10 27 10 30 Z';
+      const d =
+        'M 10 30 C 10 27 12 25 15 25 C 18 25 20 27 20 30 C 20 35 10 45 10 45 C 10 45 0 35 0 30 C 0 27 2 25 5 25 C 8 25 10 27 10 30 Z';
       const result = parseSvgPath(d);
       expect(result).toHaveLength(1);
       expect(result[0].closed).toBe(true);
       expect(result[0].points.length).toBeGreaterThanOrEqual(5);
+    });
+  });
+
+  describe('arc compact flags (F047)', () => {
+    const allFinite = (subs: ReturnType<typeof parseSvgPath>) => {
+      for (const sub of subs) {
+        for (const pt of sub.points) {
+          expect(Number.isFinite(pt.position.x)).toBe(true);
+          expect(Number.isFinite(pt.position.y)).toBe(true);
+          if (pt.handleIn) expect(Number.isFinite(pt.handleIn.x)).toBe(true);
+          if (pt.handleOut) expect(Number.isFinite(pt.handleOut.x)).toBe(true);
+        }
+      }
+    };
+
+    it('parses compact flags (011 => flag 0, flag 1) without NaN', () => {
+      const subs = parseSvgPath('M0 0a1 1 0 011 1');
+      allFinite(subs);
+      const last = subs[subs.length - 1]!.points.at(-1)!;
+      expect(last.position.x).toBeCloseTo(1, 1);
+      expect(last.position.y).toBeCloseTo(1, 1);
+    });
+
+    it('parses an SVGO compact circle without NaN', () => {
+      const subs = parseSvgPath('M8 0a8 8 0 100 16 8 8 0 100-16z');
+      expect(subs).toHaveLength(1);
+      expect(subs[0]!.closed).toBe(true);
+      allFinite(subs);
+    });
+
+    it('still parses spaced arc flags (regression)', () => {
+      const subs = parseSvgPath('M 0 50 A 50 50 0 0 1 100 50');
+      const last = subs[subs.length - 1]!.points.at(-1)!;
+      expect(last.position.x).toBeCloseTo(100, 0);
+      expect(last.position.y).toBeCloseTo(50, 0);
     });
   });
 });
