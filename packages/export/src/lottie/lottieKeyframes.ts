@@ -35,7 +35,50 @@ export interface LottieTangents {
  * Convert a Quar easing function to Lottie i/o tangent handles.
  * Returns null for non-cubic-bezier easings (bounce, elastic, etc.) that need baking.
  */
+/**
+ * Standard control points for the single-cubic-representable named easings.
+ * easingToBezierPoints returns null for these named strings, so without this map
+ * they would all export as a HOLD. Bounce/elastic are genuinely multi-
+ * oscillation and are handled by baking instead (see trackToLottieAnimated).
+ */
+const NAMED_EASING_BEZIER: Record<string, [number, number, number, number]> = {
+  easeInSine: [0.12, 0, 0.39, 0],
+  easeOutSine: [0.61, 1, 0.88, 1],
+  easeInOutSine: [0.37, 0, 0.63, 1],
+  easeInQuad: [0.11, 0, 0.5, 0],
+  easeOutQuad: [0.5, 1, 0.89, 1],
+  easeInOutQuad: [0.45, 0, 0.55, 1],
+  easeInCubic: [0.32, 0, 0.67, 0],
+  easeOutCubic: [0.33, 1, 0.68, 1],
+  easeInOutCubic: [0.65, 0, 0.35, 1],
+  easeInQuart: [0.5, 0, 0.75, 0],
+  easeOutQuart: [0.25, 1, 0.5, 1],
+  easeInOutQuart: [0.76, 0, 0.24, 1],
+  easeInQuint: [0.64, 0, 0.78, 0],
+  easeOutQuint: [0.22, 1, 0.36, 1],
+  easeInOutQuint: [0.83, 0, 0.17, 1],
+  easeInExpo: [0.7, 0, 0.84, 0],
+  easeOutExpo: [0.16, 1, 0.3, 1],
+  easeInOutExpo: [0.87, 0, 0.13, 1],
+  easeInCirc: [0.55, 0, 1, 0.45],
+  easeOutCirc: [0, 0.55, 0.45, 1],
+  easeInOutCirc: [0.85, 0, 0.15, 1],
+  easeInBack: [0.6, -0.28, 0.735, 0.045],
+  easeOutBack: [0.175, 0.885, 0.32, 1.275],
+  easeInOutBack: [0.68, -0.55, 0.265, 1.55],
+};
+
 export function quarEasingToLottieTangents(easing: EasingFunction): LottieTangents | null {
+  // Map named cubic-representable easings first (easingToBezierPoints returns
+  // null for them). Lottie accepts tangent y outside 0..1 for back overshoot.
+  if (typeof easing === 'string') {
+    const mapped = NAMED_EASING_BEZIER[easing];
+    if (mapped) {
+      const [x1, y1, x2, y2] = mapped;
+      return { o: { x: [x1], y: [y1] }, i: { x: [x2], y: [y2] } };
+    }
+  }
+
   const points = easingToBezierPoints(easing);
   if (!points) return null;
 
@@ -85,6 +128,12 @@ export function trackToLottieAnimated(
 
   if (track.keyframes.length === 1) {
     return { a: 0, k: transform(track.keyframes[0].value) };
+  }
+
+  // Bounce/elastic cannot be a single cubic bezier; bake the track to per-frame
+  // linear keyframes so the oscillation is preserved instead of exported as hold.
+  if (track.keyframes.some((kf) => easingNeedsBaking(kf.easing))) {
+    return { a: 1, k: bakeTrackToLinearKeyframes(track, 0, transform) };
   }
 
   const keyframes: LottieKeyframe[] = [];

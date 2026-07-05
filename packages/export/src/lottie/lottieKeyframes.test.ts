@@ -58,10 +58,22 @@ describe('quarEasingToLottieTangents', () => {
     });
   });
 
-  it('returns null for named non-bezier easings', () => {
+  it('returns null only for genuinely multi-oscillation easings (F061)', () => {
+    // Bounce/elastic still need baking...
     expect(quarEasingToLottieTangents('easeInBounce')).toBeNull();
     expect(quarEasingToLottieTangents('easeOutElastic')).toBeNull();
-    expect(quarEasingToLottieTangents('easeInBack')).toBeNull();
+  });
+
+  it('maps named cubic-representable easings to tangents (F061)', () => {
+    // ...but cubic-representable named easings (incl. back overshoot) now map.
+    expect(quarEasingToLottieTangents('easeInOutCubic')).toEqual({
+      o: { x: [0.65], y: [0] },
+      i: { x: [0.35], y: [1] },
+    });
+    const back = quarEasingToLottieTangents('easeInBack');
+    expect(back).not.toBeNull();
+    // Back overshoot: tangent y goes negative (allowed by Lottie).
+    expect(back!.o.y[0]).toBeLessThan(0);
   });
 });
 
@@ -153,6 +165,29 @@ describe('trackToLottieAnimated', () => {
     const track = makeTrack([{ time: 0, value: 0.5 }]);
     const result = trackToLottieAnimated(track, 0, VALUE_TRANSFORMS.opacityTo100);
     expect(result.k).toBe(50);
+  });
+
+  it('bakes a track using a bounce easing to per-frame keyframes (F061)', () => {
+    const track = makeTrack([
+      { time: 0, value: 0 },
+      { time: 10, value: 100, easing: 'easeOutBounce' },
+    ]);
+    const result = trackToLottieAnimated(track, 0);
+    expect(result.a).toBe(1);
+    // One keyframe per frame across [0,10].
+    expect((result.k as unknown[]).length).toBe(11);
+  });
+
+  it('exports a cubic-representable easing as tangents, not baked (F061)', () => {
+    const track = makeTrack([
+      { time: 0, value: 0 },
+      { time: 10, value: 100, easing: 'easeInOutCubic' },
+    ]);
+    const result = trackToLottieAnimated(track, 0);
+    const kfs = result.k as Array<{ i?: unknown; h?: number }>;
+    expect(kfs.length).toBe(2); // not baked
+    expect(kfs[0].i).toBeDefined(); // tangents, not a hold
+    expect(kfs[0].h).toBeUndefined();
   });
 });
 
