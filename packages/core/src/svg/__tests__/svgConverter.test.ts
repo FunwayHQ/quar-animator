@@ -392,4 +392,54 @@ describe('convertSvgToNodes', () => {
       expect(group.transform.rotation).toBeCloseTo(-30);
     });
   });
+
+  describe('shape transform through the full matrix (F044)', () => {
+    it('rotates a circle center through the matrix', () => {
+      const { nodes } = convert(`
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
+          <circle cx="50" cy="0" r="10" transform="rotate(90)"/>
+        </svg>
+      `);
+      const node = nodes[0] as EllipseNode;
+      // (50,0) rotated 90deg -> (0,50); Y-flip 200 -> (0,150).
+      expect(node.transform.position.x).toBeCloseTo(0);
+      expect(node.transform.position.y).toBeCloseTo(150);
+    });
+
+    it('scales a circle center through the matrix', () => {
+      const { nodes } = convert(`
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400">
+          <circle cx="50" cy="50" r="10" transform="scale(2)"/>
+        </svg>
+      `);
+      const node = nodes[0] as EllipseNode;
+      // (50,50) scaled x2 -> (100,100); Y-flip 400 -> (100,300).
+      expect(node.transform.position.x).toBeCloseTo(100);
+      expect(node.transform.position.y).toBeCloseTo(300);
+    });
+
+    it('rotates a centered path through the matrix', () => {
+      const { nodes } = convert(`
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
+          <path d="M 40 0 L 60 0" transform="rotate(90)" stroke="black" fill="none"/>
+        </svg>
+      `);
+      const node = nodes[0] as PathNode;
+      // Segment center (50,0) rotated 90deg -> (0,50); Y-flip -> (0,150).
+      expect(node.transform.position.x).toBeCloseTo(0);
+      expect(node.transform.position.y).toBeCloseTo(150);
+    });
+
+    it('leaves a pure-translate shape unchanged (regression)', () => {
+      const { nodes } = convert(`
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
+          <rect x="0" y="0" width="100" height="100" transform="translate(10, 20)"/>
+        </svg>
+      `);
+      const node = nodes[0] as RectangleNode;
+      // center (50,50) + translate(10,20) = (60,70); Y-flip 200 -> (60,130).
+      expect(node.transform.position.x).toBeCloseTo(60);
+      expect(node.transform.position.y).toBeCloseTo(130);
+    });
+  });
 });

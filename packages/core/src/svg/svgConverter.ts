@@ -16,7 +16,14 @@ import type {
   Transform,
 } from '@quar/types';
 import { createDefaultTransform } from '../SceneGraph';
-import { parseSvgTransform, parseSvgColor, parseUrlRef, type ResolvedStyle } from './svgUtils';
+import {
+  parseSvgTransform,
+  parseSvgColor,
+  parseUrlRef,
+  parseSvgTransformToMatrix,
+  decomposeMatrix,
+  type ResolvedStyle,
+} from './svgUtils';
 import { parseSvgPath } from './svgPathParser';
 import type {
   ParsedSvg,
@@ -501,21 +508,26 @@ function centerPathPoints(points: import('@quar/types').PathPoint[]): {
 function buildCenteredPathTransform(
   center: import('@quar/types').Vector2,
   svgTransformAttr: string | undefined,
-  _viewBoxHeight: number
+  viewBoxHeight: number
 ): Transform {
   const transform = createDefaultTransform();
   // Anchor at center — matches rectangle/ellipse pattern
   transform.anchor = { x: 0.5, y: 0.5 };
 
   if (svgTransformAttr) {
-    const svgTransform = parseSvgTransform(svgTransformAttr);
-    transform.position = {
-      x: center.x + svgTransform.position.x,
-      y: center.y - svgTransform.position.y, // Flip Y translation
-    };
-    transform.rotation = -svgTransform.rotation;
-    transform.scale = svgTransform.scale;
-    transform.skew = svgTransform.skew;
+    // `center` is already in Y-up space, so reconstruct the SVG-space center Y
+    // before applying the matrix, then flip back. Same center-through-matrix fix
+    // as buildTransform (reduces to the old center+translation for translate).
+    const m = parseSvgTransformToMatrix(svgTransformAttr);
+    const [a, b, c, d, tx, ty] = m;
+    const cySvg = viewBoxHeight - center.y;
+    const tX = a * center.x + c * cySvg + tx;
+    const tYsvg = b * center.x + d * cySvg + ty;
+    transform.position = { x: tX, y: viewBoxHeight - tYsvg };
+    const dec = decomposeMatrix(m);
+    transform.rotation = -dec.rotation;
+    transform.scale = dec.scale;
+    transform.skew = dec.skew;
   } else {
     transform.position = { x: center.x, y: center.y };
   }
@@ -540,17 +552,20 @@ function buildTransform(
   const transform = createDefaultTransform();
 
   if (svgTransformAttr) {
-    const svgTransform = parseSvgTransform(svgTransformAttr);
-    // The SVG transform applies to the element's coordinate system.
-    // We need to transform the center point through it.
-    // For simple translate, rotate, scale: apply to center position.
-    transform.position = {
-      x: centerX + svgTransform.position.x,
-      y: viewBoxHeight - (centerY + svgTransform.position.y),
-    };
-    transform.rotation = -svgTransform.rotation; // SVG clockwise → Quar counterclockwise
-    transform.scale = svgTransform.scale;
-    transform.skew = svgTransform.skew;
+    // Transform the center THROUGH the full affine matrix. rotate/scale/matrix
+    // have non-identity linear parts that move the center even when their
+    // translation is 0 — the old code added only the decomposed translation, so
+    // a rotated/scaled shape stayed at its untransformed spot. (Reduces exactly
+    // to center+translation for pure-translate.)
+    const m = parseSvgTransformToMatrix(svgTransformAttr);
+    const [a, b, c, d, tx, ty] = m;
+    const tCx = a * centerX + c * centerY + tx;
+    const tCy = b * centerX + d * centerY + ty;
+    transform.position = { x: tCx, y: viewBoxHeight - tCy };
+    const dec = decomposeMatrix(m);
+    transform.rotation = -dec.rotation; // SVG clockwise → Quar counterclockwise
+    transform.scale = dec.scale;
+    transform.skew = dec.skew;
   } else {
     transform.position = { x: centerX, y: viewBoxHeight - centerY };
   }
