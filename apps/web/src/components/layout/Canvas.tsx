@@ -239,6 +239,9 @@ export function Canvas() {
   // Global keyboard shortcuts for group/ungroup (works regardless of focus)
   useEffect(() => {
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      // The focused canvas handler already ran group/ungroup and called
+      // preventDefault; bail so we don't toggle a second time (F009).
+      if (e.defaultPrevented) return;
       if (!(e.ctrlKey || e.metaKey)) return;
       if (e.key !== 'g' && e.key !== 'G') return;
 

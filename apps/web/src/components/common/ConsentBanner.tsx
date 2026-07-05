@@ -39,15 +39,25 @@ export function setGoogleFontsConsent(enabled: boolean): void {
 }
 
 export function ConsentBanner() {
-  // Show banner if either: never accepted OR Google Fonts consent not yet granted
-  const [visible, setVisible] = useState(
-    () => localStorage.getItem(STORAGE_KEY) !== 'true' || !hasGoogleFontsConsent()
-  );
+  // Show the banner only until the user has dismissed it once. Google Fonts
+  // consent is a separate opt-in checkbox — declining it stores no flag, so it
+  // must NOT keep the banner up (that reappeared forever). (F007)
+  const [visible, setVisible] = useState(() => {
+    try {
+      return localStorage.getItem(STORAGE_KEY) !== 'true';
+    } catch {
+      return false;
+    }
+  });
   const [exiting, setExiting] = useState(false);
   const [googleFonts, setGoogleFonts] = useState(hasGoogleFontsConsent);
 
   const handleAccept = useCallback(() => {
-    localStorage.setItem(STORAGE_KEY, 'true');
+    try {
+      localStorage.setItem(STORAGE_KEY, 'true');
+    } catch {
+      // localStorage not available — dismiss for this session anyway.
+    }
     if (googleFonts) {
       setGoogleFontsConsent(true);
     }

@@ -182,4 +182,38 @@ describe('GuideOverlay', () => {
     const lines = container.querySelectorAll('line');
     expect(lines.length).toBe(0);
   });
+
+  it('does not delete the selected guide on Backspace while typing in an input (F006)', () => {
+    const camera = new Camera();
+    camera.setViewport(800, 600);
+    const onRemoveGuide = vi.fn();
+    render(
+      <GuideOverlay
+        guides={[createGuide('g1', 'x', 100)]}
+        camera={camera}
+        viewportWidth={800}
+        viewportHeight={600}
+        cameraVersion={0}
+        dragPreview={null}
+        onRemoveGuide={onRemoveGuide}
+        onUpdateGuidePosition={vi.fn()}
+      />
+    );
+
+    // Select the guide.
+    fireEvent.pointerDown(screen.getAllByTestId('guide-hit')[0]!);
+
+    // Backspace while an input is focused must NOT remove the guide.
+    const input = document.createElement('input');
+    document.body.appendChild(input);
+    input.focus();
+    fireEvent.keyDown(window, { key: 'Backspace' });
+    expect(onRemoveGuide).not.toHaveBeenCalled();
+
+    // With no field focused, Delete removes it.
+    input.blur();
+    document.body.removeChild(input);
+    fireEvent.keyDown(window, { key: 'Delete' });
+    expect(onRemoveGuide).toHaveBeenCalledWith('g1');
+  });
 });

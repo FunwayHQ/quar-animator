@@ -119,6 +119,12 @@ export function GuideOverlay({
   useEffect(() => {
     if (!selectedGuideId) return;
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't hijack Delete/Backspace while typing in a field (matches Canvas).
+      const ae = document.activeElement as HTMLElement | null;
+      const tag = ae?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || ae?.isContentEditable) {
+        return;
+      }
       if (e.key === 'Delete' || e.key === 'Backspace') {
         e.preventDefault();
         onRemoveGuideRef.current(selectedGuideId);
@@ -206,6 +212,7 @@ export function GuideOverlay({
             <g key={g.id}>
               {/* Invisible hit area */}
               <line
+                data-testid="guide-hit"
                 x1={g.screenPos}
                 y1={0}
                 x2={g.screenPos}
@@ -233,6 +240,7 @@ export function GuideOverlay({
           return (
             <g key={g.id}>
               <line
+                data-testid="guide-hit"
                 x1={0}
                 y1={g.screenPos}
                 x2={viewportWidth}
