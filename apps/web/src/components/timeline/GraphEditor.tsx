@@ -77,10 +77,10 @@ export function GraphEditor() {
   const nodeNames = useMemo(() => {
     const map = new Map<string, string>();
     if (sceneGraph) {
-      const roots = sceneGraph.getRootNodes() as Node[];
+      const roots = sceneGraph.getRootNodes();
       for (const node of roots) {
         map.set(node.id, node.name ?? node.id);
-        const descendants = sceneGraph.getDescendants(node.id) as Node[];
+        const descendants = sceneGraph.getDescendants(node.id);
         for (const desc of descendants) {
           map.set(desc.id, desc.name ?? desc.id);
         }
