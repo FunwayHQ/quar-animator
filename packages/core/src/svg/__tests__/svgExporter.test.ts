@@ -537,6 +537,47 @@ describe('nodeToSvgElement', () => {
     expect(svg).toContain('href="data:image/png;base64,AAAA"');
   });
 
+  it('appends a local counter-flip so exported text renders upright (F045)', () => {
+    const node: TextNode = {
+      ...makeBaseNodeFields('tf', 'text'),
+      type: 'text',
+      content: 'Hi',
+      fontFamily: 'Arial',
+      fontSize: 20,
+      fontWeight: 400,
+      fontStyle: 'normal',
+      textAlign: 'left',
+      lineHeight: 1.2,
+      letterSpacing: 0,
+      fills: [makeSolidFill()],
+      strokes: [],
+    };
+    sceneGraph.addNode(node);
+    const svg = nodeToSvgElement(node, sceneGraph, []);
+    // The <text> carries its own scale(1,-1), cancelling the root flip so glyphs
+    // are upright (net y-axis positive).
+    expect(svg).toContain('scale(1,-1)');
+  });
+
+  it('un-mirrors an exported image with a compensating translate (F045)', () => {
+    const node: ImageNode = {
+      ...makeBaseNodeFields('imgf', 'image'),
+      type: 'image',
+      src: 'data:image/png;base64,AAAA',
+      width: 200,
+      height: 150,
+      naturalWidth: 200,
+      naturalHeight: 150,
+      cornerRadius: [0, 0, 0, 0],
+      fills: [],
+      strokes: [],
+    } as unknown as ImageNode;
+    sceneGraph.addNode(node);
+    const svg = nodeToSvgElement(node, sceneGraph, []);
+    expect(svg).toContain('scale(1,-1)');
+    expect(svg).toContain('translate(0,150)'); // height 150, anchor.y 0
+  });
+
   // --------------------------------------------------------------------------
   // Group
   // --------------------------------------------------------------------------

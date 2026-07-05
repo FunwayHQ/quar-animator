@@ -207,7 +207,9 @@ export function strokeToSvgAttrs(stroke: Stroke | undefined, defs: string[]): st
 /**
  * Build SVG transform attribute from a Transform.
  */
-export function transformToSvgAttr(transform: Transform): string {
+/** The translate/rotate/scale part-string for a node transform (no wrapper), so
+ *  text/image can append a local counter-flip. */
+function transformParts(transform: Transform): string {
   const parts: string[] = [];
 
   if (transform.position.x !== 0 || transform.position.y !== 0) {
@@ -222,7 +224,12 @@ export function transformToSvgAttr(transform: Transform): string {
     parts.push(`scale(${fmt(transform.scale.x)},${fmt(transform.scale.y)})`);
   }
 
-  return parts.length > 0 ? ` transform="${parts.join(' ')}"` : '';
+  return parts.join(' ');
+}
+
+export function transformToSvgAttr(transform: Transform): string {
+  const parts = transformParts(transform);
+  return parts ? ` transform="${parts}"` : '';
 }
 
 // ============================================================================
@@ -382,7 +389,11 @@ function pathToSvg(node: PathNode, defs: string[]): string {
 function textToSvg(node: TextNode, defs: string[]): string {
   const fillAttr = fillToSvgAttrs(node.fills[0], defs);
   const strokeAttr = strokeToSvgAttrs(node.strokes[0], defs);
-  const tfAttr = transformToSvgAttr(node.transform);
+  // The root export wraps everything in scale(1,-1) to convert Y-up geometry to
+  // SVG Y-down, but the SVG engine already lays out <text> glyphs in Y-down, so
+  // append a local scale(1,-1) to cancel the double flip (else text is mirrored).
+  const parts = transformParts(node.transform);
+  const tfAttr = ` transform="${parts ? parts + ' ' : ''}scale(1,-1)"`;
   const opacityAttr = node.opacity < 1 ? ` opacity="${fmt(node.opacity)}"` : '';
 
   const fontAttrs = [`font-family="${escapeXml(node.fontFamily)}"`, `font-size="${node.fontSize}"`];
@@ -403,11 +414,16 @@ function textAlignToAnchor(align: string): string {
 }
 
 function imageToSvg(node: ImageNode, _defs: string[]): string {
-  const tfAttr = transformToSvgAttr(node.transform);
   const opacityAttr = node.opacity < 1 ? ` opacity="${fmt(node.opacity)}"` : '';
 
   const anchorX = node.transform.anchor.x * node.width;
   const anchorY = node.transform.anchor.y * node.height;
+
+  // Un-mirror the raster inside the root scale(1,-1): scale(1,-1) flips the box,
+  // translate(0, H-2*anchorY) shifts it back so the box region is invariant.
+  const parts = transformParts(node.transform);
+  const translateY = node.height - 2 * anchorY;
+  const tfAttr = ` transform="${parts ? parts + ' ' : ''}translate(0,${fmt(translateY)}) scale(1,-1)"`;
 
   return `<image x="${fmt(-anchorX)}" y="${fmt(-anchorY)}" width="${fmt(node.width)}" height="${fmt(node.height)}" href="${escapeXml(node.src)}"${tfAttr}${opacityAttr}/>`;
 }
