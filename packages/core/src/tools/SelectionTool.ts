@@ -56,6 +56,9 @@ interface ResizeState {
   handle: HandlePosition;
   initialBounds: SelectionBounds;
   initialNodeStates: Map<string, NodeResizeState>;
+  /** Display rotation (degrees) of a single rotated node, so the drag delta can
+   * be mapped into the node's own axes. 0 for multi-selection / unrotated. */
+  rotation: number;
 }
 
 interface RotationState {
@@ -169,9 +172,9 @@ export class SelectionTool extends BaseTool {
             worldPos.x - bounds.center.x
           );
 
-          // Capture initial rotations of all selected nodes
+          // Capture initial rotations of the movable selected nodes.
           const initialRotations = new Map<string, number>();
-          for (const id of selectedIds) {
+          for (const id of this.movableSelectionIds(selectedIds)) {
             const node = this.context.sceneGraph.getNode(id);
             if (node) {
               initialRotations.set(id, node.transform.rotation);
@@ -193,7 +196,10 @@ export class SelectionTool extends BaseTool {
           this.resizeState = {
             handle: hitHandle,
             initialBounds: bounds,
-            initialNodeStates: this.captureNodeStates(selectedIds),
+            initialNodeStates: this.captureNodeStates(
+              new Set(this.movableSelectionIds(selectedIds))
+            ),
+            rotation,
           };
           return;
         }
@@ -269,10 +275,10 @@ export class SelectionTool extends BaseTool {
       this.mode = 'moving';
       this.state.isDragging = true;
 
-      // Store initial positions of all selected nodes
+      // Store initial positions of the movable selected nodes (skip locked
+      // nodes and descendants of other selected nodes).
       this.moveStartPositions.clear();
-      const currentSelectedIds = this.context.getSelectedIds();
-      for (const id of currentSelectedIds) {
+      for (const id of this.movableSelectionIds(this.context.getSelectedIds())) {
         const node = this.context.sceneGraph.getNode(id);
         if (node) {
           this.moveStartPositions.set(id, { ...node.transform.position });
@@ -325,13 +331,15 @@ export class SelectionTool extends BaseTool {
         this.context.onTransformStart?.();
         this.moveUndoPushed = true;
       }
-      // Move selected nodes
-      const delta = vec2.subtract(worldPos, this.startPoint);
+      // Move selected nodes. Convert the world delta into each node's parent
+      // frame so children of scaled/rotated groups track the cursor correctly.
+      const worldDelta = vec2.subtract(worldPos, this.startPoint);
 
       for (const [id, startPos] of this.moveStartPositions) {
         const node = this.context.sceneGraph.getNode(id);
         if (node) {
-          const rawPos = vec2.add(startPos, delta);
+          const localDelta = this.worldDeltaToLocal(node, worldDelta);
+          const rawPos = vec2.add(startPos, localDelta);
           const newPos = this.snapNodePosition(node, rawPos);
           this.context.sceneGraph.updateNode(id, {
             transform: {
@@ -403,13 +411,16 @@ export class SelectionTool extends BaseTool {
     switch (event.key) {
       case 'Delete':
       case 'Backspace':
-        // Delete selected nodes
+        // Delete selected nodes (never delete locked nodes from the canvas)
         if (selectedIds.size > 0) {
-          this.context.onTransformStart?.();
-          for (const id of selectedIds) {
-            this.context.sceneGraph.removeNode(id);
+          const deletable = [...selectedIds].filter((id) => !this.isLocked(id));
+          if (deletable.length > 0) {
+            this.context.onTransformStart?.();
+            for (const id of deletable) {
+              this.context.sceneGraph.removeNode(id);
+            }
+            this.context.clearSelection();
           }
-          this.context.clearSelection();
         }
         break;
 
@@ -517,10 +528,11 @@ export class SelectionTool extends BaseTool {
         const nudgeAmount = snapOn ? gridSize : event.shiftKey ? 10 : 1;
         const delta = this.getArrowDelta(event.key, nudgeAmount);
 
-        for (const id of selectedIds) {
+        for (const id of this.movableSelectionIds(selectedIds)) {
           const node = this.context.sceneGraph.getNode(id);
           if (node) {
-            const rawPos = vec2.add(node.transform.position, delta);
+            const localDelta = this.worldDeltaToLocal(node, delta);
+            const rawPos = vec2.add(node.transform.position, localDelta);
             const newPos = snapOn ? this.snapNodePosition(node, rawPos) : rawPos;
             this.context.sceneGraph.updateNode(id, {
               transform: {
@@ -554,6 +566,49 @@ export class SelectionTool extends BaseTool {
   // Hit Testing
   // --------------------------------------------------------------------------
 
+  /** True if the node exists and is locked (protected from canvas edits). */
+  private isLocked(id: string): boolean {
+    return this.context.sceneGraph.getNode(id)?.locked === true;
+  }
+
+  /**
+   * Ids that should actually receive a move/resize/rotate: drops locked nodes
+   * (F053) and any node whose ancestor is also selected, so a selected group and
+   * its descendant don't both get the transform and double-apply it (F052).
+   */
+  private movableSelectionIds(ids: Set<string>): string[] {
+    const sg = this.context.sceneGraph;
+    const result: string[] = [];
+    for (const id of ids) {
+      const node = sg.getNode(id);
+      if (!node || node.locked) continue;
+      let parentId = node.parent;
+      let ancestorSelected = false;
+      while (parentId) {
+        if (ids.has(parentId)) {
+          ancestorSelected = true;
+          break;
+        }
+        parentId = sg.getNode(parentId)?.parent ?? null;
+      }
+      if (!ancestorSelected) result.push(id);
+    }
+    return result;
+  }
+
+  /**
+   * Convert a world-space delta into a node's parent-local frame using the
+   * linear part (rotation + scale, no translation) of the parent world
+   * transform, so children of scaled/rotated groups move correctly (F050).
+   */
+  private worldDeltaToLocal(node: Node, worldDelta: Vector2): Vector2 {
+    if (!node.parent) return worldDelta;
+    const pw = this.context.sceneGraph.getWorldTransform(node.parent);
+    const linear = { a: pw.a, b: pw.b, c: pw.c, d: pw.d, tx: 0, ty: 0 };
+    const inv = mat3.invert(linear);
+    return inv ? mat3.transformPoint(inv, worldDelta) : worldDelta;
+  }
+
   /**
    * Find the topmost node at the given world position
    */
@@ -562,6 +617,7 @@ export class SelectionTool extends BaseTool {
 
     // Traverse in reverse order (top to bottom in render order)
     this.context.sceneGraph.traverseVisible((node) => {
+      if (node.locked) return; // clicks pass through locked nodes (F053)
       if (this.isPointInNode(worldPoint, node)) {
         hitNode = node;
       }
@@ -785,6 +841,7 @@ export class SelectionTool extends BaseTool {
     const scopedNodes: Node[] = [];
 
     this.context.sceneGraph.traverseVisible((node) => {
+      if (node.locked) return; // marquee ignores locked nodes (F053)
       let bounds = this.getNodeBounds(node);
       if (!bounds) return;
 
@@ -1107,8 +1164,12 @@ export class SelectionTool extends BaseTool {
   ): void {
     if (!this.resizeState || !this.startPoint) return;
 
-    const { handle, initialBounds, initialNodeStates } = this.resizeState;
-    const delta = vec2.subtract(worldPos, this.startPoint);
+    const { handle, initialBounds, initialNodeStates, rotation } = this.resizeState;
+    const rad = (rotation * Math.PI) / 180;
+    const worldDelta = vec2.subtract(worldPos, this.startPoint);
+    // For a single rotated node, map the drag into the bounds' un-rotated frame
+    // so a handle resizes along the node's own axes (F054).
+    const delta = rad ? vec2.rotate(worldDelta, -rad) : worldDelta;
 
     // Calculate new bounds based on handle position
     const newBounds = this.calculateNewBounds(
@@ -1138,19 +1199,32 @@ export class SelectionTool extends BaseTool {
           ? (initialState.worldPosition.y - initialBounds.rect.y) / initialBounds.rect.height
           : 0;
 
-      // Compute new position in world coordinates
+      // Compute new position in the (un-rotated) bounds frame.
       const newWorldPosition = {
         x: newBounds.x + relX * newBounds.width,
         y: newBounds.y + relY * newBounds.height,
       };
 
+      // Rotate the position back around the original center so the fixed anchor
+      // corner stays put in world space for a rotated node (F054).
+      let rotatedWorldPosition = newWorldPosition;
+      if (rad) {
+        const c = initialBounds.center;
+        const dx = newWorldPosition.x - c.x;
+        const dy = newWorldPosition.y - c.y;
+        rotatedWorldPosition = {
+          x: c.x + Math.cos(rad) * dx - Math.sin(rad) * dy,
+          y: c.y + Math.sin(rad) * dx + Math.cos(rad) * dy,
+        };
+      }
+
       // Convert back to local coordinates if node has a parent
       let newPosition: Vector2;
       if (initialState.parentWorldTransform) {
         const inv = mat3.invert(initialState.parentWorldTransform);
-        newPosition = inv ? mat3.transformPoint(inv, newWorldPosition) : newWorldPosition;
+        newPosition = inv ? mat3.transformPoint(inv, rotatedWorldPosition) : rotatedWorldPosition;
       } else {
-        newPosition = newWorldPosition;
+        newPosition = rotatedWorldPosition;
       }
 
       if (

@@ -2041,4 +2041,136 @@ describe('SelectionTool', () => {
       expect(context.sceneGraph.getNode('childBone')!.parent).toBe('rootBone');
     });
   });
+
+  // ==========================================================================
+  // Nested / locked / rotated transforms (R3: F050, F052, F053, F054)
+  // ==========================================================================
+
+  describe('nested, locked and rotated transforms', () => {
+    it('moves a nested node in its parent frame, not world (F050)', () => {
+      const group = createTestGroup('grp', 0, 0);
+      group.transform.scale = { x: 2, y: 2 };
+      const child = createTestRectangle('child', 0, 0, 20, 20);
+      context.sceneGraph.addNode(group);
+      context.sceneGraph.addNode(child);
+      context.sceneGraph.moveNode('child', 'grp');
+      context.setEnteredGroupId?.('grp');
+      context.setSelectedIds(['child']);
+
+      const start = { x: 0, y: 0 };
+      tool.onPointerDown(
+        createMockPointerEvent({
+          worldPosition: start,
+          screenPosition: context.camera.worldToScreen(start),
+          button: 0,
+        })
+      );
+      const end = { x: 40, y: 20 };
+      tool.onPointerMove(
+        createMockPointerEvent({
+          worldPosition: end,
+          screenPosition: context.camera.worldToScreen(end),
+        })
+      );
+      tool.onPointerUp(
+        createMockPointerEvent({
+          worldPosition: end,
+          screenPosition: context.camera.worldToScreen(end),
+          button: 0,
+        })
+      );
+
+      // World delta (40,20) / parent scale 2 = local (20,10).
+      const moved = context.sceneGraph.getNode('child')!;
+      expect(moved.transform.position.x).toBeCloseTo(20, 1);
+      expect(moved.transform.position.y).toBeCloseTo(10, 1);
+    });
+
+    it('does not double-apply a nudge to a selected group and its child (F052)', () => {
+      const group = createTestGroup('grp', 0, 0);
+      const child = createTestRectangle('child', 10, 0, 20, 20);
+      context.sceneGraph.addNode(group);
+      context.sceneGraph.addNode(child);
+      context.sceneGraph.moveNode('child', 'grp');
+      context.setSelectedIds(['grp', 'child']);
+
+      const childX0 = context.sceneGraph.getNode('child')!.transform.position.x;
+      const groupX0 = context.sceneGraph.getNode('grp')!.transform.position.x;
+
+      tool.onKeyDown(new KeyboardEvent('keydown', { key: 'ArrowRight' }));
+
+      // Only the group moves; the child's local position is unchanged, so its
+      // world position advances by exactly 1 (not 2).
+      expect(context.sceneGraph.getNode('grp')!.transform.position.x).toBeCloseTo(groupX0 + 1, 5);
+      expect(context.sceneGraph.getNode('child')!.transform.position.x).toBeCloseTo(childX0, 5);
+    });
+
+    it('does not select or delete a locked node from the canvas (F053)', () => {
+      const rect = createTestRectangle('locked', 100, 100, 100, 100);
+      rect.locked = true;
+      context.sceneGraph.addNode(rect);
+
+      const pos = { x: 100, y: 100 };
+      tool.onPointerDown(
+        createMockPointerEvent({
+          worldPosition: pos,
+          screenPosition: context.camera.worldToScreen(pos),
+          button: 0,
+        })
+      );
+      tool.onPointerUp(
+        createMockPointerEvent({
+          worldPosition: pos,
+          screenPosition: context.camera.worldToScreen(pos),
+          button: 0,
+        })
+      );
+      expect(context.getSelectedIds().has('locked')).toBe(false);
+
+      context.setSelectedIds(['locked']);
+      tool.onKeyDown(new KeyboardEvent('keydown', { key: 'Delete' }));
+      expect(context.sceneGraph.getNode('locked')).toBeDefined();
+    });
+
+    it('resizes a rotated node along its own axes (F054)', () => {
+      const rect = createTestRectangle('rect1', 100, 100, 100, 100);
+      rect.transform.rotation = 90;
+      context.sceneGraph.addNode(rect);
+      context.setSelectedIds(['rect1']);
+
+      // Visual bottom-right handle = un-rotated (150,150) rotated 90deg about
+      // the center (100,100) = (50,150).
+      const handleWorld = { x: 50, y: 150 };
+      tool.onPointerDown(
+        createMockPointerEvent({
+          worldPosition: handleWorld,
+          screenPosition: context.camera.worldToScreen(handleWorld),
+          button: 0,
+        })
+      );
+      expect(tool.getMode()).toBe('resizing');
+
+      // Drag the handle +50 in world x. For a 90deg-rotated node this maps to
+      // the node's local axis, so ONE local dimension changes — not width.
+      const end = { x: 100, y: 150 };
+      tool.onPointerMove(
+        createMockPointerEvent({
+          worldPosition: end,
+          screenPosition: context.camera.worldToScreen(end),
+        })
+      );
+      tool.onPointerUp(
+        createMockPointerEvent({
+          worldPosition: end,
+          screenPosition: context.camera.worldToScreen(end),
+          button: 0,
+        })
+      );
+
+      const resized = context.sceneGraph.getNode('rect1') as RectangleNode;
+      // A pure world-x drag on the visual handle of a 90deg-rotated rect must
+      // NOT simply grow the width to 150 (that is the un-rotated/broken result).
+      expect(resized.width).not.toBeCloseTo(150, 0);
+    });
+  });
 });
