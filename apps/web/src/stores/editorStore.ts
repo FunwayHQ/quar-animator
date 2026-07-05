@@ -85,6 +85,53 @@ const MAX_UNDO_STACK_SIZE = 50;
 interface HistorySnapshot {
   sceneData: { nodes: Node[]; rootNodeIds: string[] };
   selectedNodeIds: string[];
+  // Timeline + rigging arrays are mutated by delete/cut (removeAllKeyframesForNode,
+  // chain filtering) but live outside the SceneGraph, so undo/redo must snapshot
+  // and restore them too or they are lost permanently (F026).
+  timeline: Timeline;
+  ikChains: IKChain[];
+  smartBoneActions: SmartBoneAction[];
+  dynamicChains: DynamicChain[];
+  vitruvianControllers: VitruvianController[];
+}
+
+interface HistoryCapturable {
+  selectedNodeIds: Set<string>;
+  timeline: Timeline;
+  ikChains: IKChain[];
+  smartBoneActions: SmartBoneAction[];
+  dynamicChains: DynamicChain[];
+  vitruvianControllers: VitruvianController[];
+}
+
+function makeHistorySnapshot(
+  sceneGraph: SceneGraphLike,
+  state: HistoryCapturable
+): HistorySnapshot {
+  return {
+    sceneData: structuredClone(sceneGraph.toJSON()),
+    selectedNodeIds: Array.from(state.selectedNodeIds),
+    timeline: structuredClone(state.timeline),
+    ikChains: structuredClone(state.ikChains),
+    smartBoneActions: structuredClone(state.smartBoneActions),
+    dynamicChains: structuredClone(state.dynamicChains),
+    vitruvianControllers: structuredClone(state.vitruvianControllers),
+  };
+}
+
+/** Store fields to restore from a popped history snapshot (F026). */
+function restoredFieldsFrom(snapshot: HistorySnapshot) {
+  const timeline = structuredClone(snapshot.timeline);
+  return {
+    selectedNodeIds: new Set(snapshot.selectedNodeIds),
+    timeline,
+    timelineDuration: timeline.duration,
+    frameRate: timeline.frameRate,
+    ikChains: structuredClone(snapshot.ikChains),
+    smartBoneActions: structuredClone(snapshot.smartBoneActions),
+    dynamicChains: structuredClone(snapshot.dynamicChains),
+    vitruvianControllers: structuredClone(snapshot.vitruvianControllers),
+  };
 }
 
 // ============================================================================
@@ -2827,11 +2874,9 @@ function createHistoryActions(
     canRedo: false,
 
     pushUndo: (sceneGraph: SceneGraphLike) => {
-      const { undoStack, selectedNodeIds } = get();
-      const snapshot: HistorySnapshot = {
-        sceneData: structuredClone(sceneGraph.toJSON()),
-        selectedNodeIds: Array.from(selectedNodeIds),
-      };
+      const state = get();
+      const { undoStack } = state;
+      const snapshot = makeHistorySnapshot(sceneGraph, state);
       const newStack = [...undoStack, snapshot];
       if (newStack.length > MAX_UNDO_STACK_SIZE) {
         newStack.shift();
@@ -2845,15 +2890,12 @@ function createHistoryActions(
     },
 
     undo: (sceneGraph: SceneGraphLike) => {
-      const { undoStack, redoStack, selectedNodeIds } = get();
+      const state = get();
+      const { undoStack, redoStack } = state;
       if (undoStack.length === 0) return;
 
       // Save current state to redo stack
-      const currentSnapshot: HistorySnapshot = {
-        sceneData: structuredClone(sceneGraph.toJSON()),
-        selectedNodeIds: Array.from(selectedNodeIds),
-      };
-      const newRedoStack = [...redoStack, currentSnapshot];
+      const newRedoStack = [...redoStack, makeHistorySnapshot(sceneGraph, state)];
 
       // Pop and restore from undo stack
       const newUndoStack = [...undoStack];
@@ -2865,22 +2907,19 @@ function createHistoryActions(
         redoStack: newRedoStack,
         canUndo: newUndoStack.length > 0,
         canRedo: true,
-        selectedNodeIds: new Set(snapshot.selectedNodeIds),
         enteredGroupId: null,
         isDirty: true,
+        ...restoredFieldsFrom(snapshot),
       });
     },
 
     redo: (sceneGraph: SceneGraphLike) => {
-      const { undoStack, redoStack, selectedNodeIds } = get();
+      const state = get();
+      const { undoStack, redoStack } = state;
       if (redoStack.length === 0) return;
 
       // Save current state to undo stack
-      const currentSnapshot: HistorySnapshot = {
-        sceneData: structuredClone(sceneGraph.toJSON()),
-        selectedNodeIds: Array.from(selectedNodeIds),
-      };
-      const newUndoStack = [...undoStack, currentSnapshot];
+      const newUndoStack = [...undoStack, makeHistorySnapshot(sceneGraph, state)];
 
       // Pop and restore from redo stack
       const newRedoStack = [...redoStack];
@@ -2892,9 +2931,9 @@ function createHistoryActions(
         redoStack: newRedoStack,
         canUndo: true,
         canRedo: newRedoStack.length > 0,
-        selectedNodeIds: new Set(snapshot.selectedNodeIds),
         enteredGroupId: null,
         isDirty: true,
+        ...restoredFieldsFrom(snapshot),
       });
     },
 

@@ -3171,7 +3171,7 @@ describe('EditorStore', () => {
     });
   });
 
-  describe('z-order (F027)', () => {
+  describe('undo & z-order (F026, F027)', () => {
     const mkNode = (id: string) =>
       ({
         id,
@@ -3209,6 +3209,22 @@ describe('EditorStore', () => {
       useEditorStore.setState({ selectedNodeIds: new Set(['C']) });
       useEditorStore.getState().bringForward(sg);
       expect(sg.getRootNodes().map((n) => n.id)).toEqual(['B', 'A', 'D', 'C']);
+    });
+
+    it('undo restores keyframe tracks removed by deleteSelection (F026)', () => {
+      const sg = new SceneGraph();
+      sg.addNode(mkNode('R'));
+      useEditorStore.getState().addKeyframeAtFrame('R', 'opacity', 10, 0.5);
+      expect(useEditorStore.getState().timeline.tracks.some((t) => t.nodeId === 'R')).toBe(true);
+
+      useEditorStore.setState({ selectedNodeIds: new Set(['R']) });
+      useEditorStore.getState().deleteSelection(sg);
+      // deleteSelection strips the node's keyframe track...
+      expect(useEditorStore.getState().timeline.tracks.some((t) => t.nodeId === 'R')).toBe(false);
+
+      // ...and undo brings it back (previously lost permanently).
+      useEditorStore.getState().undo(sg);
+      expect(useEditorStore.getState().timeline.tracks.some((t) => t.nodeId === 'R')).toBe(true);
     });
   });
 });
