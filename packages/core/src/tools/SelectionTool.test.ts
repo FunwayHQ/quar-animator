@@ -2,12 +2,36 @@
  * Tests for SelectionTool
  */
 
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { SelectionTool } from './SelectionTool';
 import type { ToolContext } from './BaseTool';
 import { createMockToolContext, createMockPointerEvent } from '../test/setup';
 import { createDefaultTransform } from '../SceneGraph';
-import type { RectangleNode, EllipseNode, PolygonNode, BoneNode, ArtboardNode } from '@quar/types';
+import type {
+  RectangleNode,
+  EllipseNode,
+  PolygonNode,
+  BoneNode,
+  ArtboardNode,
+  GroupNode,
+} from '@quar/types';
+
+function createTestGroup(id: string, x: number, y: number): GroupNode {
+  const transform = createDefaultTransform();
+  transform.position = { x, y };
+  return {
+    id,
+    name: `Group ${id}`,
+    type: 'group',
+    parent: null,
+    children: [],
+    transform,
+    visible: true,
+    locked: false,
+    opacity: 1,
+    blendMode: 'normal',
+  };
+}
 
 function createTestRectangle(
   id: string,
@@ -1876,6 +1900,145 @@ describe('SelectionTool', () => {
 
       // Node should stay at root since artboard is invisible
       expect(context.sceneGraph.getNode('rect1')!.parent).toBeNull();
+    });
+  });
+
+  // ==========================================================================
+  // Transform completion gating (F051) — a click without movement must not
+  // fire onTransformComplete (which would pollute animation tracks with
+  // keyframes) or trigger auto-reparenting.
+  // ==========================================================================
+
+  describe('transform completion gating (F051)', () => {
+    it('does not fire onTransformComplete on a click without movement', () => {
+      const rect = createTestRectangle('rect1', 50, 50, 100, 100);
+      context.sceneGraph.addNode(rect);
+      context.setSelectedIds(['rect1']);
+      const spy = vi.fn();
+      context.onTransformComplete = spy;
+
+      const pos = { x: 50, y: 50 };
+      tool.onPointerDown(
+        createMockPointerEvent({
+          worldPosition: pos,
+          screenPosition: context.camera.worldToScreen(pos),
+          button: 0,
+        })
+      );
+      tool.onPointerUp(
+        createMockPointerEvent({
+          worldPosition: pos,
+          screenPosition: context.camera.worldToScreen(pos),
+          button: 0,
+        })
+      );
+
+      expect(spy).not.toHaveBeenCalled();
+    });
+
+    it('fires onTransformComplete("move") when the node is actually dragged', () => {
+      const rect = createTestRectangle('rect1', 50, 50, 100, 100);
+      context.sceneGraph.addNode(rect);
+      context.setSelectedIds(['rect1']);
+      const spy = vi.fn();
+      context.onTransformComplete = spy;
+
+      const start = { x: 50, y: 50 };
+      tool.onPointerDown(
+        createMockPointerEvent({
+          worldPosition: start,
+          screenPosition: context.camera.worldToScreen(start),
+          button: 0,
+        })
+      );
+      const end = { x: 120, y: 90 };
+      tool.onPointerMove(
+        createMockPointerEvent({
+          worldPosition: end,
+          screenPosition: context.camera.worldToScreen(end),
+        })
+      );
+      tool.onPointerUp(
+        createMockPointerEvent({
+          worldPosition: end,
+          screenPosition: context.camera.worldToScreen(end),
+          button: 0,
+        })
+      );
+
+      expect(spy).toHaveBeenCalledWith(expect.anything(), 'move');
+    });
+  });
+
+  // ==========================================================================
+  // Hierarchy-preserving auto-reparent (F004) — auto-reparent is only for
+  // artboard containment; it must never rip group/bone children out to root.
+  // ==========================================================================
+
+  describe('hierarchy-preserving auto-reparent (F004)', () => {
+    it('keeps a group child parented when dragged outside any artboard', () => {
+      const group = createTestGroup('grp1', 0, 0);
+      const child = createTestRectangle('child1', 50, 50, 40, 40);
+      context.sceneGraph.addNode(group);
+      context.sceneGraph.addNode(child);
+      context.sceneGraph.moveNode('child1', 'grp1');
+      expect(context.sceneGraph.getNode('child1')!.parent).toBe('grp1');
+
+      context.setEnteredGroupId?.('grp1');
+      context.setSelectedIds(['child1']);
+
+      const start = { x: 50, y: 50 };
+      tool.onPointerDown(
+        createMockPointerEvent({
+          worldPosition: start,
+          screenPosition: context.camera.worldToScreen(start),
+          button: 0,
+        })
+      );
+      const end = { x: 130, y: 130 };
+      tool.onPointerMove(
+        createMockPointerEvent({
+          worldPosition: end,
+          screenPosition: context.camera.worldToScreen(end),
+        })
+      );
+      tool.onPointerUp(
+        createMockPointerEvent({
+          worldPosition: end,
+          screenPosition: context.camera.worldToScreen(end),
+          button: 0,
+        })
+      );
+
+      // The child must never be detached from its group.
+      expect(context.sceneGraph.getNode('child1')!.parent).toBe('grp1');
+    });
+
+    it('keeps a mid-chain bone parented on a click without drag', () => {
+      const rootBone = createTestBone('rootBone', 100, 100, 60);
+      const childBone = createTestBone('childBone', 60, 0, 40);
+      context.sceneGraph.addNode(rootBone);
+      context.sceneGraph.addNode(childBone);
+      context.sceneGraph.moveNode('childBone', 'rootBone');
+      context.setSelectedIds(['childBone']);
+
+      const pos = { x: 160, y: 100 };
+      tool.onPointerDown(
+        createMockPointerEvent({
+          worldPosition: pos,
+          screenPosition: context.camera.worldToScreen(pos),
+          button: 0,
+        })
+      );
+      tool.onPointerUp(
+        createMockPointerEvent({
+          worldPosition: pos,
+          screenPosition: context.camera.worldToScreen(pos),
+          button: 0,
+        })
+      );
+
+      expect(context.sceneGraph.getNode('childBone')!.parent).toBe('rootBone');
     });
   });
 });

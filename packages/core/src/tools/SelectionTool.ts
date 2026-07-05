@@ -97,6 +97,8 @@ export class SelectionTool extends BaseTool {
   private currentCursor: string = 'default';
   private nudgeUndoPushed: boolean = false;
   private moveUndoPushed: boolean = false;
+  /** True once a resize/rotate gesture has actually moved the pointer (not just a click). */
+  private dragMoved: boolean = false;
 
   constructor(context: ToolContext) {
     super(context);
@@ -159,6 +161,7 @@ export class SelectionTool extends BaseTool {
           this.context.onTransformStart?.();
           this.mode = 'rotating';
           this.state.isDragging = true;
+          this.dragMoved = false;
 
           // Calculate initial angle from center to mouse
           const initialAngle = Math.atan2(
@@ -186,6 +189,7 @@ export class SelectionTool extends BaseTool {
           this.context.onTransformStart?.();
           this.mode = 'resizing';
           this.state.isDragging = true;
+          this.dragMoved = false;
           this.resizeState = {
             handle: hitHandle,
             initialBounds: bounds,
@@ -304,11 +308,13 @@ export class SelectionTool extends BaseTool {
     this.state.currentWorldPos = worldPos;
 
     if (this.mode === 'resizing' && this.resizeState) {
+      this.dragMoved = true;
       this.performResize(worldPos, event.shiftKey, event.altKey);
       return;
     }
 
     if (this.mode === 'rotating' && this.rotationState) {
+      this.dragMoved = true;
       this.performRotation(worldPos, event.shiftKey);
       return;
     }
@@ -344,18 +350,20 @@ export class SelectionTool extends BaseTool {
   onPointerUp(event: CanvasPointerEvent): void {
     const selectedIds = this.context.getSelectedIds();
 
-    if (this.mode === 'moving' && this.moveStartPositions.size > 0) {
+    if (this.mode === 'moving' && this.moveUndoPushed) {
+      // Only reached when the pointer actually moved (moveUndoPushed is set on the
+      // first real move), so a zero-movement click never reparents or keyframes.
       // Auto-reparent: check if moved nodes should be placed in/out of artboards
       this.autoReparentAfterMove(selectedIds);
       // Move completed - notify for auto-keyframe
       this.context.onTransformComplete?.(selectedIds, 'move');
     } else if (this.mode === 'resizing') {
-      // Resize completed - state already updated
-      this.context.onTransformComplete?.(selectedIds, 'resize');
+      // Resize completed - only fire completion if an actual drag occurred
+      if (this.dragMoved) this.context.onTransformComplete?.(selectedIds, 'resize');
       this.resizeState = null;
     } else if (this.mode === 'rotating') {
-      // Rotation completed - state already updated
-      this.context.onTransformComplete?.(selectedIds, 'rotate');
+      // Rotation completed - only fire completion if an actual drag occurred
+      if (this.dragMoved) this.context.onTransformComplete?.(selectedIds, 'rotate');
       this.rotationState = null;
     } else if (this.mode === 'marquee' && this.startPoint) {
       // Update marquee rect with final position
@@ -380,6 +388,7 @@ export class SelectionTool extends BaseTool {
     this.startPoint = null;
     this.marqueeRect = null;
     this.moveStartPositions.clear();
+    this.dragMoved = false;
     this.state.isDragging = false;
     this.currentCursor = 'default';
   }
@@ -1445,6 +1454,14 @@ export class SelectionTool extends BaseTool {
 
       const targetArtboard = this.findArtboardAtPoint(center);
       const currentParent = node.parent;
+
+      // Only auto-reparent nodes that are free (root) or already inside an artboard.
+      // Group children, bone children and symbol-instance children must keep their
+      // parent — reparenting them to root/an artboard would destroy the hierarchy.
+      if (currentParent !== null) {
+        const p = sg.getNode(currentParent);
+        if (!p || p.type !== 'artboard') continue;
+      }
 
       // Determine target parent ID (null = root)
       const targetParentId = targetArtboard?.id ?? null;
