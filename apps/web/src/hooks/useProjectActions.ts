@@ -4,9 +4,8 @@
  */
 
 import { useCallback, useEffect, useRef } from 'react';
-import { createTimeline } from '@quar/animation';
 import { useSceneGraph } from '../contexts/SceneGraphContext';
-import { useEditorStore, type PageData } from '../stores/editorStore';
+import { useEditorStore } from '../stores/editorStore';
 import { toast } from '../components/common/Toast';
 import {
   saveProject as dbSave,
@@ -96,46 +95,14 @@ export function useProjectActions(options: UseProjectActionsOptions = {}): Proje
 
   // ------ New Project ------
   const newProject = useCallback(() => {
-    // Clear scene graph
+    // Clear the live scene graph (the store has no direct handle to it)...
     const data = sceneGraph.toJSON();
     for (const node of data.nodes) {
       sceneGraph.removeNode(node.id);
     }
 
-    // Create a fresh default page
-    const defaultTimeline = createTimeline({ duration: 300, frameRate: 30 });
-    const pageId = `page-${Date.now()}-new`;
-    const defaultPage: PageData = {
-      id: pageId,
-      name: 'Page 1',
-      sceneGraphJSON: { nodes: [], rootNodeIds: [] },
-      timeline: defaultTimeline,
-      selectedNodeIds: [],
-      undoStack: [],
-      redoStack: [],
-    };
-
-    // Reset editor state
-    useEditorStore.setState({
-      projectId: null,
-      projectName: 'Untitled Project',
-      isDirty: false,
-      projectCreatedAt: null,
-      currentFrame: 0,
-      isPlaying: false,
-      timeline: defaultTimeline,
-      autoKeyframe: false,
-      selectedNodeIds: new Set<string>(),
-      selectedKeyframeIds: new Set<string>(),
-      keyframeClipboard: null,
-      clipboard: null,
-      enteredGroupId: null,
-      pages: [defaultPage],
-      activePageId: pageId,
-      symbols: [],
-      editingSymbolId: null,
-      editingSymbolPrevState: null,
-    });
+    // ...then reset every project-scoped field via the shared action (F024).
+    useEditorStore.getState().resetProject();
     useEditorStore.getState().clearHistory();
   }, [sceneGraph]);
 

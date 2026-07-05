@@ -75,13 +75,9 @@ export function Projects() {
   }, [pendingDeleteId]);
 
   const handleNewProject = useCallback(() => {
-    // Reset store to fresh state — editor will start clean
-    useEditorStore.setState({
-      projectId: null,
-      projectName: 'Untitled Project',
-      isDirty: false,
-      projectCreatedAt: null,
-    });
+    // Reset ALL project-scoped state (not just the 4 header fields) so a stale
+    // project's pages/symbols/timeline don't leak into the new one (F024).
+    useEditorStore.getState().resetProject();
     navigate('/editor');
   }, [navigate]);
 

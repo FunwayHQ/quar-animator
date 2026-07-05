@@ -3303,4 +3303,35 @@ describe('EditorStore', () => {
       expect(useEditorStore.getState().timeline.tracks.some((t) => t.nodeId === 'R')).toBe(true);
     });
   });
+
+  describe('resetProject (F024)', () => {
+    it('clears all project-scoped state from a stale project', () => {
+      useEditorStore.setState({
+        projectId: 'A',
+        projectName: 'Old',
+        symbols: [{ id: 's1' }] as never,
+        guides: [{ id: 'g1' }] as never,
+        vitruvianControllers: [{ id: 'v1' }] as never,
+        dynamicChains: [{ id: 'd1' }] as never,
+        pages: [{ id: 'p1' }, { id: 'p2' }] as never,
+        activePageId: 'p1',
+        isDirty: true,
+        selectedNodeIds: new Set(['x']),
+      });
+
+      useEditorStore.getState().resetProject();
+
+      const s = useEditorStore.getState();
+      expect(s.projectId).toBeNull();
+      expect(s.projectName).toBe('Untitled Project');
+      expect(s.isDirty).toBe(false);
+      expect(s.pages).toHaveLength(1);
+      expect(s.activePageId).toBe(s.pages[0]!.id);
+      expect(s.symbols).toHaveLength(0);
+      expect(s.guides).toHaveLength(0);
+      expect(s.vitruvianControllers).toHaveLength(0);
+      expect(s.dynamicChains).toHaveLength(0);
+      expect(s.selectedNodeIds.size).toBe(0);
+    });
+  });
 });

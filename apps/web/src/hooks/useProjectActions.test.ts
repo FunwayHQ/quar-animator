@@ -121,6 +121,7 @@ const mockEditorState: Record<string, unknown> = {
   timelineDuration: 300,
   frameRate: 30,
   clearHistory: vi.fn(),
+  resetProject: vi.fn(),
 };
 
 vi.mock('../stores/editorStore', () => ({
@@ -175,7 +176,7 @@ describe('useProjectActions', () => {
       expect(mockSceneGraph.toJSON).toHaveBeenCalled();
     });
 
-    it('resets editor state', () => {
+    it('resets editor state via the shared resetProject action', () => {
       const { result } = renderProjectActions();
       mockEditorState.projectId = 'old-id';
       mockEditorState.projectName = 'Old Project';
@@ -184,16 +185,9 @@ describe('useProjectActions', () => {
         result.current.newProject();
       });
 
-      expect(useEditorStore.setState).toHaveBeenCalledWith(
-        expect.objectContaining({
-          projectId: null,
-          projectName: 'Untitled Project',
-          isDirty: false,
-          currentFrame: 0,
-          isPlaying: false,
-          autoKeyframe: false,
-        })
-      );
+      // The full reset now lives in the store action (unit-tested there), so
+      // newProject just delegates.
+      expect(mockEditorState.resetProject).toHaveBeenCalled();
     });
 
     it('clears undo history', () => {

@@ -603,6 +603,8 @@ export interface EditorStore {
   undo: (sceneGraph: SceneGraphLike) => void;
   redo: (sceneGraph: SceneGraphLike) => void;
   clearHistory: () => void;
+  /** Reset all project-scoped state to a fresh empty project (F024). */
+  resetProject: () => void;
   cutSelection: (sceneGraph: SceneGraphLike) => void;
 
   // Pages
@@ -2998,6 +3000,46 @@ function createHistoryActions(
         smartBoneRecordingPrevRotation: null,
         vitruvianControllers: [],
         dynamicChains: [],
+      });
+    },
+
+    resetProject: () => {
+      // Single source of truth for a fresh project. The Zustand store is a global
+      // singleton, so New Project must clear every project-scoped field or the
+      // previous project's pages/symbols/timeline/rigging leak into the new one.
+      const defaultPage = createDefaultPage();
+      set({
+        projectId: null,
+        projectName: 'Untitled Project',
+        isDirty: false,
+        projectCreatedAt: null,
+        currentFrame: 0,
+        isPlaying: false,
+        timeline: createTimeline({ duration: 300, frameRate: 30 }),
+        timelineDuration: 300,
+        frameRate: 30,
+        autoKeyframe: false,
+        selectedNodeIds: new Set<string>(),
+        selectedKeyframeIds: new Set<string>(),
+        keyframeClipboard: null,
+        clipboard: null,
+        enteredGroupId: null,
+        editingSymbolId: null,
+        editingSymbolPrevState: null,
+        symbols: [],
+        guides: [],
+        ikChains: [],
+        smartBoneActions: [],
+        vitruvianControllers: [],
+        dynamicChains: [],
+        globalWind: { strength: 0, direction: 0, turbulence: 0, frequency: 1, enabled: false },
+        onionSkin: { ...DEFAULT_ONION_SKIN_SETTINGS },
+        pages: [defaultPage],
+        activePageId: defaultPage.id,
+        undoStack: [],
+        redoStack: [],
+        canUndo: false,
+        canRedo: false,
       });
     },
 
