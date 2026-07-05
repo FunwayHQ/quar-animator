@@ -92,15 +92,19 @@ export async function saveProject(
     const tx = db.transaction(PROJECTS_STORE, 'readwrite');
     tx.objectStore(PROJECTS_STORE).put(record);
     tx.oncomplete = () => resolve();
-    tx.onerror = () => {
+    const rejectWithQuota = () => {
       // Detect quota exceeded errors
       const error = tx.error;
       if (error?.name === 'QuotaExceededError') {
         reject(new StorageQuotaError());
       } else {
-        reject(error);
+        reject(error ?? new DOMException('Transaction aborted', 'AbortError'));
       }
     };
+    tx.onerror = rejectWithQuota;
+    // A quota failure detected only at commit fires onabort (not onerror), so the
+    // Promise would otherwise hang forever.
+    tx.onabort = rejectWithQuota;
   });
 }
 
@@ -143,6 +147,7 @@ export async function deleteProject(id: string): Promise<void> {
     tx.objectStore(PROJECTS_STORE).delete(id);
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
+    tx.onabort = () => reject(tx.error ?? new DOMException('Transaction aborted', 'AbortError'));
   });
 }
 
@@ -172,6 +177,7 @@ export async function setSetting(key: string, value: string): Promise<void> {
     tx.objectStore(SETTINGS_STORE).put({ key, value });
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
+    tx.onabort = () => reject(tx.error ?? new DOMException('Transaction aborted', 'AbortError'));
   });
 }
 

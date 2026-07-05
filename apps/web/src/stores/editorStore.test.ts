@@ -5,7 +5,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { useEditorStore, DEFAULT_FILL, DEFAULT_STROKE } from './editorStore';
 import { createTimeline } from '@quar/animation';
-import { DEFAULT_ONION_SKIN_SETTINGS } from '@quar/core';
+import { DEFAULT_ONION_SKIN_SETTINGS, SceneGraph } from '@quar/core';
 
 describe('EditorStore', () => {
   // Reset store before each test
@@ -3168,6 +3168,47 @@ describe('EditorStore', () => {
 
       useEditorStore.getState().deleteSymbol(symbolId, sg);
       expect(useEditorStore.getState().symbols).toHaveLength(0);
+    });
+  });
+
+  describe('z-order (F027)', () => {
+    const mkNode = (id: string) =>
+      ({
+        id,
+        name: id,
+        type: 'rectangle',
+        parent: null,
+        children: [],
+        transform: {
+          position: { x: 0, y: 0 },
+          rotation: 0,
+          scale: { x: 1, y: 1 },
+          anchor: { x: 0.5, y: 0.5 },
+          skew: { x: 0, y: 0 },
+        },
+        visible: true,
+        locked: false,
+        opacity: 1,
+        blendMode: 'normal',
+        width: 10,
+        height: 10,
+        cornerRadius: [0, 0, 0, 0],
+        fills: [],
+        strokes: [],
+      }) as never;
+
+    it('bringForward moves a node exactly one slot forward', () => {
+      const sg = new SceneGraph();
+      for (const id of ['A', 'B', 'C', 'D']) sg.addNode(mkNode(id));
+      useEditorStore.setState({ selectedNodeIds: new Set(['A']) });
+
+      useEditorStore.getState().bringForward(sg);
+      expect(sg.getRootNodes().map((n) => n.id)).toEqual(['B', 'A', 'C', 'D']);
+
+      // Second-to-last case: C forward -> [B, A, D, C].
+      useEditorStore.setState({ selectedNodeIds: new Set(['C']) });
+      useEditorStore.getState().bringForward(sg);
+      expect(sg.getRootNodes().map((n) => n.id)).toEqual(['B', 'A', 'D', 'C']);
     });
   });
 });

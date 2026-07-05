@@ -158,11 +158,6 @@ export function useProjectActions(options: UseProjectActionsOptions = {}): Proje
         state.projectCreatedAt ?? undefined
       );
 
-      useEditorStore.setState({
-        isDirty: false,
-        projectCreatedAt: data.createdAt,
-      });
-
       const binary = serializeProjectToBinary(
         state.projectName,
         sceneGraph,
@@ -171,6 +166,12 @@ export function useProjectActions(options: UseProjectActionsOptions = {}): Proje
       );
       await dbSave(projectId, state.projectName, binary);
       await setLastProjectId(projectId);
+      // Clear dirty only after the write succeeds — a failed save must keep the
+      // project marked dirty (and surface the error to the caller).
+      useEditorStore.setState({
+        isDirty: false,
+        projectCreatedAt: data.createdAt,
+      });
       toast.success('Project saved');
     } finally {
       manualSavingRef.current = false;
@@ -190,14 +191,14 @@ export function useProjectActions(options: UseProjectActionsOptions = {}): Proje
 
       const data = serializeProject(name, sceneGraph, getEditorSnapshot());
 
+      const binary = serializeProjectToBinary(name, sceneGraph, getEditorSnapshot());
+      await dbSave(newId, name, binary);
+      await setLastProjectId(newId);
+      // Clear dirty only after the write succeeds (see saveProject).
       useEditorStore.setState({
         isDirty: false,
         projectCreatedAt: data.createdAt,
       });
-
-      const binary = serializeProjectToBinary(name, sceneGraph, getEditorSnapshot());
-      await dbSave(newId, name, binary);
-      await setLastProjectId(newId);
       toast.success(`Project saved as "${name}"`);
     },
     [sceneGraph, getEditorSnapshot]

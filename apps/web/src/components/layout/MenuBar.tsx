@@ -16,6 +16,7 @@ import type { ProjectListItem } from '../../services/projectStorage';
 import { ProjectListDialog } from '../common/ProjectListDialog';
 import type { SmartBoneAction } from '@quar/types';
 import { showExportDialog } from '../common/ExportDialog';
+import { toast } from '../common/Toast';
 import styles from './MenuBar.module.css';
 
 // ============================================================================
@@ -321,7 +322,7 @@ export function MenuBar({ projectActions }: MenuBarProps) {
   const handleSave = useCallback(() => {
     closeMenu();
     if (!projectActions) return;
-    void projectActions.saveProject();
+    projectActions.saveProject().catch(() => toast.error('Failed to save project'));
   }, [projectActions, closeMenu]);
 
   const handleSaveAs = useCallback(() => {
@@ -333,7 +334,9 @@ export function MenuBar({ projectActions }: MenuBarProps) {
   const handleSaveAsConfirm = useCallback(() => {
     if (!projectActions || !saveAsName.trim()) return;
     setShowSaveAsPrompt(false);
-    void projectActions.saveProjectAs(saveAsName.trim());
+    projectActions
+      .saveProjectAs(saveAsName.trim())
+      .catch(() => toast.error('Failed to save project'));
   }, [projectActions, saveAsName]);
 
   const handleDownload = useCallback(() => {

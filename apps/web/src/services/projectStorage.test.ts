@@ -2,7 +2,7 @@
  * Tests for Project Storage Service (IndexedDB)
  */
 
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import 'fake-indexeddb/auto';
 import {
   initDB,
@@ -13,6 +13,7 @@ import {
   deleteProject,
   getLastProjectId,
   setLastProjectId,
+  StorageQuotaError,
 } from './projectStorage';
 
 describe('ProjectStorage', () => {
@@ -20,6 +21,36 @@ describe('ProjectStorage', () => {
     resetDB();
     // Clear the fake-indexeddb databases
     indexedDB = new IDBFactory();
+  });
+
+  describe('transaction abort handling (F025)', () => {
+    it('rejects with StorageQuotaError when a write aborts on quota', async () => {
+      const db = await initDB();
+      const fakeTx = {
+        error: new DOMException('quota', 'QuotaExceededError'),
+        objectStore: () => ({ put: () => undefined }) as unknown as IDBObjectStore,
+      } as unknown as IDBTransaction & { onabort?: () => void };
+      vi.spyOn(db, 'transaction').mockReturnValueOnce(fakeTx);
+
+      const p = saveProject('p', 'n', '{}');
+      await new Promise((r) => setTimeout(r, 0)); // let handler registration run
+      fakeTx.onabort?.();
+      await expect(p).rejects.toBeInstanceOf(StorageQuotaError);
+    });
+
+    it('rejects (does not hang) when a delete transaction aborts', async () => {
+      const db = await initDB();
+      const fakeTx = {
+        error: new DOMException('aborted', 'AbortError'),
+        objectStore: () => ({ delete: () => undefined }) as unknown as IDBObjectStore,
+      } as unknown as IDBTransaction & { onabort?: () => void };
+      vi.spyOn(db, 'transaction').mockReturnValueOnce(fakeTx);
+
+      const p = deleteProject('p');
+      await new Promise((r) => setTimeout(r, 0));
+      fakeTx.onabort?.();
+      await expect(p).rejects.toThrow();
+    });
   });
 
   describe('initDB', () => {

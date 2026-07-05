@@ -100,6 +100,10 @@ export function useTimelineShortcuts(callbacks: TimelineShortcutCallbacks) {
 
       switch (event.key) {
         case ' ':
+          // Space toggles play/pause — but on the drawing canvas Space is the
+          // pan modifier, so skip when the canvas is focused (its keydown bubbles
+          // to this window listener).
+          if (target && target.tagName?.toLowerCase() === 'canvas') break;
           // Space: toggle play/pause (tap only, not hold)
           if (!event.repeat) {
             event.preventDefault();

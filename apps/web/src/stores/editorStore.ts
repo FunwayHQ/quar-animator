@@ -2340,7 +2340,9 @@ function createZOrderActions(
         if (!node) continue;
         const siblings = getSiblings(node, sceneGraph);
         if (index >= siblings.length - 1) continue; // Already at top
-        sceneGraph.moveNode(id, parentId, index + 2);
+        // moveNode removes the node before splicing, shifting later indices left
+        // by one, so index+1 lands exactly one slot forward (not index+2).
+        sceneGraph.moveNode(id, parentId, index + 1);
       }
       set({ isDirty: true });
     },

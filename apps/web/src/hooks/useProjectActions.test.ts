@@ -244,6 +244,20 @@ describe('useProjectActions', () => {
       expect(mockSave).toHaveBeenCalled();
     });
 
+    it('keeps the project dirty when the write fails (F022)', async () => {
+      const { result } = renderProjectActions();
+      mockEditorState.projectId = 'existing-id';
+      mockEditorState.isDirty = true;
+      mockSave.mockRejectedValueOnce(new Error('write failed'));
+
+      await act(async () => {
+        await expect(result.current.saveProject()).rejects.toThrow('write failed');
+      });
+
+      // Dirty must NOT be cleared on a failed save.
+      expect(mockEditorState.isDirty).toBe(true);
+    });
+
     it('sets last project ID', async () => {
       const { result } = renderProjectActions();
       mockEditorState.projectId = 'existing-id';

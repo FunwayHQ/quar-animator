@@ -66,6 +66,20 @@ describe('useTimelineShortcuts', () => {
     expect(callbacks.togglePlay).not.toHaveBeenCalled();
   });
 
+  it('Space does not toggle play when the drawing canvas is focused (F023)', () => {
+    const callbacks = createCallbacks();
+    renderHook(() => useTimelineShortcuts(callbacks));
+
+    // Dispatch from a <canvas> so the bubbled event's target is the canvas
+    // (where Space is the pan modifier).
+    const canvas = document.createElement('canvas');
+    document.body.appendChild(canvas);
+    canvas.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
+    document.body.removeChild(canvas);
+
+    expect(callbacks.togglePlay).not.toHaveBeenCalled();
+  });
+
   it('Home should call goToStart', () => {
     const callbacks = createCallbacks();
     renderHook(() => useTimelineShortcuts(callbacks));
