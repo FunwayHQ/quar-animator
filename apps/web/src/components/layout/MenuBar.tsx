@@ -96,6 +96,7 @@ export function MenuBar({ projectActions }: MenuBarProps) {
   const [openMenu, setOpenMenu] = useState<MenuId>(null);
   const [showProjectList, setShowProjectList] = useState(false);
   const [showSaveAsPrompt, setShowSaveAsPrompt] = useState(false);
+  const [showNewConfirm, setShowNewConfirm] = useState(false);
   const [showShortcutsDialog, setShowShortcutsDialog] = useState(false);
   const [showAboutDialog, setShowAboutDialog] = useState(false);
   const [saveAsName, setSaveAsName] = useState('');
@@ -308,8 +309,19 @@ export function MenuBar({ projectActions }: MenuBarProps) {
   const handleNew = useCallback(() => {
     closeMenu();
     if (!projectActions) return;
-    projectActions.newProject();
-  }, [projectActions, closeMenu]);
+    // New Project clears the scene, timeline and undo history — confirm first if
+    // there are unsaved changes (F013).
+    if (isDirty) {
+      setShowNewConfirm(true);
+    } else {
+      projectActions.newProject();
+    }
+  }, [projectActions, closeMenu, isDirty]);
+
+  const handleNewConfirm = useCallback(() => {
+    setShowNewConfirm(false);
+    projectActions?.newProject();
+  }, [projectActions]);
 
   const handleOpen = useCallback(async () => {
     closeMenu();
@@ -1128,6 +1140,38 @@ export function MenuBar({ projectActions }: MenuBarProps) {
                 disabled={!saveAsName.trim()}
               >
                 Save
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {showNewConfirm && (
+        <>
+          {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions */}
+          <div className={styles.saveAsOverlay} onClick={() => setShowNewConfirm(false)} />
+          <div
+            className={styles.saveAsDialog}
+            role="dialog"
+            aria-label="Discard unsaved changes"
+            data-testid="new-confirm-dialog"
+          >
+            <h3 className={styles.saveAsTitle}>Discard unsaved changes?</h3>
+            <p>Creating a new project will discard your unsaved changes.</p>
+            <div className={styles.saveAsActions}>
+              <button
+                className={styles.saveAsCancel}
+                onClick={() => setShowNewConfirm(false)}
+                data-testid="new-confirm-cancel"
+              >
+                Cancel
+              </button>
+              <button
+                className={styles.saveAsConfirm}
+                onClick={handleNewConfirm}
+                data-testid="new-confirm-discard"
+              >
+                Discard
               </button>
             </div>
           </div>

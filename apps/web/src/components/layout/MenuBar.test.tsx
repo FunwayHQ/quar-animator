@@ -129,6 +129,22 @@ describe('MenuBar', () => {
     expect(actions.newProject).toHaveBeenCalledOnce();
   });
 
+  it('confirms before New Project when there are unsaved changes (F013)', () => {
+    const actions = createMockProjectActions();
+    useEditorStore.setState({ isDirty: true });
+    render(<MenuBar projectActions={actions} />);
+    fireEvent.click(screen.getByTestId('menu-file'));
+    fireEvent.click(screen.getByText('New Project'));
+
+    // Not created yet — a confirm dialog is shown instead.
+    expect(actions.newProject).not.toHaveBeenCalled();
+    expect(screen.getByTestId('new-confirm-dialog')).toBeInTheDocument();
+
+    // Discard confirms the destructive action.
+    fireEvent.click(screen.getByTestId('new-confirm-discard'));
+    expect(actions.newProject).toHaveBeenCalledOnce();
+  });
+
   it('calls saveProject when Save clicked', () => {
     const actions = createMockProjectActions();
     render(<MenuBar projectActions={actions} />);
