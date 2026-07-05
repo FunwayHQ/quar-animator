@@ -5,7 +5,7 @@ import { SceneGraphProvider, useSceneGraph } from '../../contexts/SceneGraphCont
 import { createDefaultTransform } from '@quar/core';
 import type { SceneGraph } from '@quar/core';
 import type { RectangleNode, EllipseNode, GroupNode, ArtboardNode } from '@quar/types';
-import { LayerPanel } from './LayerPanel';
+import { LayerPanel, computeInsertIndex } from './LayerPanel';
 import { useEditorStore } from '../../stores/editorStore';
 import type { ReactNode } from 'react';
 
@@ -1019,6 +1019,25 @@ describe('LayerPanel', () => {
 
       expect(screen.getByText('Canvas')).toBeInTheDocument();
       expect(screen.getByText('Child Rect')).toBeInTheDocument();
+    });
+  });
+
+  describe('computeInsertIndex (F012)', () => {
+    it('inverts before/after for reversed root rows', () => {
+      // rootNodeIds [A,B,C] shown C,B,A: dropping 'before' A (visually above the
+      // bottom row) must land AFTER A in raw order.
+      expect(computeInsertIndex('before', 0, true)).toBe(1);
+      expect(computeInsertIndex('after', 0, true)).toBe(0);
+    });
+
+    it('maps before/after directly for array-order group children', () => {
+      expect(computeInsertIndex('before', 2, false)).toBe(2);
+      expect(computeInsertIndex('after', 2, false)).toBe(3);
+    });
+
+    it('drops inside at index 0', () => {
+      expect(computeInsertIndex('inside', 5, true)).toBe(0);
+      expect(computeInsertIndex('inside', 5, false)).toBe(0);
     });
   });
 });

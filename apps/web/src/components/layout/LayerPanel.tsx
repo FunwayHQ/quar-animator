@@ -6,6 +6,22 @@ import { ContextMenu } from '../common/ContextMenu';
 import type { ContextMenuEntry } from '../common/ContextMenu';
 import styles from './LayerPanel.module.css';
 
+/**
+ * Base array-order insert index for a layer drop, before the same-parent
+ * removal shift. Root rows are displayed REVERSED, so a drop 'before' a root row
+ * (visually above it) means a HIGHER raw index; group children render in array
+ * order, so before/after map directly (F012).
+ */
+export function computeInsertIndex(
+  position: 'before' | 'after' | 'inside',
+  targetIndex: number,
+  isRoot: boolean
+): number {
+  if (position === 'inside') return 0;
+  if (isRoot) return position === 'before' ? targetIndex + 1 : targetIndex;
+  return position === 'before' ? targetIndex : targetIndex + 1;
+}
+
 // ============================================================================
 // Constants
 // ============================================================================
@@ -801,18 +817,31 @@ export function LayerPanel() {
           ? parentNode.children
           : sceneGraph.getRootNodes().map((n: Node) => n.id);
         const targetIndex = siblings.indexOf(dropTarget.nodeId);
-        insertIndex = dropTarget.position === 'before' ? targetIndex : targetIndex + 1;
+        // Root rows are DISPLAYED reversed, so visual before/after invert vs raw
+        // array order; group children are shown in array order (F012).
+        insertIndex = computeInsertIndex(dropTarget.position, targetIndex, parentId === null);
       }
 
       // Push undo before reorder
       pushUndo(sceneGraph);
 
       // Execute moves
+      let base = insertIndex;
       for (const id of topIds) {
         try {
-          sceneGraph.moveNode(id, parentId, insertIndex);
-          // After inserting, subsequent nodes should go after
-          insertIndex++;
+          const node = sceneGraph.getNode(id);
+          const currentParent = node?.parent ?? null;
+          const curSiblings = currentParent
+            ? (sceneGraph.getNode(currentParent)?.children ?? [])
+            : sceneGraph.getRootNodes().map((n: Node) => n.id);
+          const curIndex = curSiblings.indexOf(id);
+          // moveNode removes the node before splicing, so a same-parent move from
+          // a lower index shifts the destination left by one (F012 defect 2).
+          const target =
+            currentParent === parentId && curIndex > -1 && curIndex < base ? base - 1 : base;
+          sceneGraph.moveNode(id, parentId, target);
+          // Next dragged node inserts just after the one we placed.
+          base = target + 1;
         } catch {
           // SceneGraph.moveNode throws on circular refs — skip
         }
