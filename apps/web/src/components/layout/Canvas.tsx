@@ -197,7 +197,18 @@ export function Canvas() {
       const renderer = shapeRendererRef.current;
       if (!renderer) return;
       if (event.nodeId) renderer.invalidateCache(event.nodeId);
-      if (event.node?.type === 'image') renderer.disposeTexture(event.node.src);
+      const removed = event.node;
+      if (removed?.type === 'image') {
+        // The node is already out of the graph here (removeNode emits after
+        // deleting), so only free the shared GPU texture when no OTHER image node
+        // still references this src — data URLs are commonly shared by duplicates.
+        const { src } = removed;
+        let stillUsed = false;
+        sceneGraph.traverse((n) => {
+          if (n.type === 'image' && n.src === src) stillUsed = true;
+        });
+        if (!stillUsed) renderer.disposeTexture(src);
+      }
     };
 
     // The whole node set was replaced (project/page switch, undo, symbol edit).

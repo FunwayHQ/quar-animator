@@ -232,6 +232,27 @@ function handleNumericInputKeyDown(
  * ArrowUp/Down keys (±1, ±10 with Shift) and mouse wheel scrolling.
  * The ref callback attaches a non-passive wheel listener (React onWheel is passive).
  */
+/**
+ * Map a flattened vertex index (getAllPoints order: node.points, then each
+ * subpath in turn) to its real keyframe property path. Subpath vertices live
+ * under `subpaths.<i>.<localIdx>`, not `points.<combinedIdx>` — using the latter
+ * keyframed the wrong (or a nonexistent) vertex on multi-subpath paths (F017).
+ */
+function vertexPropPath(node: PathNode, combinedIdx: number, suffix: string): string {
+  const primaryLen = node.points.length;
+  if (combinedIdx < primaryLen) return `points.${combinedIdx}.${suffix}`;
+  let offset = primaryLen;
+  const subs = node.subpaths ?? [];
+  for (let si = 0; si < subs.length; si++) {
+    const len = subs[si]!.length;
+    if (combinedIdx < offset + len) {
+      return `subpaths.${si}.${combinedIdx - offset}.${suffix}`;
+    }
+    offset += len;
+  }
+  return `points.${combinedIdx}.${suffix}`; // fallback (index out of range)
+}
+
 function numericInputProps(
   getValue: () => number,
   onChange: (v: string) => void
@@ -2523,12 +2544,12 @@ export function PropertiesPanel() {
                   shouldKeyframe(
                     autoKeyframe,
                     sp.nodeId,
-                    `points.${sp.pointIndex}.position.${axis}`
+                    vertexPropPath(n, sp.pointIndex, `position.${axis}`)
                   )
                 ) {
                   addKeyframeAtFrame(
                     sp.nodeId,
-                    `points.${sp.pointIndex}.position.${axis}`,
+                    vertexPropPath(n, sp.pointIndex, `position.${axis}`),
                     currentFrame,
                     num
                   );
@@ -2557,11 +2578,15 @@ export function PropertiesPanel() {
                   subpaths: split.subpaths,
                 });
                 if (
-                  shouldKeyframe(autoKeyframe, sp.nodeId, `points.${sp.pointIndex}.cornerRadius`)
+                  shouldKeyframe(
+                    autoKeyframe,
+                    sp.nodeId,
+                    vertexPropPath(n, sp.pointIndex, 'cornerRadius')
+                  )
                 ) {
                   addKeyframeAtFrame(
                     sp.nodeId,
-                    `points.${sp.pointIndex}.cornerRadius`,
+                    vertexPropPath(n, sp.pointIndex, 'cornerRadius'),
                     currentFrame,
                     num
                   );
@@ -2602,7 +2627,7 @@ export function PropertiesPanel() {
                               ? getKeyframeState(
                                   timeline,
                                   selectedId,
-                                  `points.${dsPoints[0].pointIndex}.position.x`,
+                                  vertexPropPath(node, dsPoints[0].pointIndex, 'position.x'),
                                   currentFrame
                                 )
                               : 'none'
@@ -2610,7 +2635,7 @@ export function PropertiesPanel() {
                           onToggle={() => {
                             if (selectedId)
                               toggleKeyframe(
-                                `points.${dsPoints[0].pointIndex}.position.x`,
+                                vertexPropPath(node, dsPoints[0].pointIndex, 'position.x'),
                                 firstPt.position.x
                               );
                           }}
@@ -2641,7 +2666,7 @@ export function PropertiesPanel() {
                               ? getKeyframeState(
                                   timeline,
                                   selectedId,
-                                  `points.${dsPoints[0].pointIndex}.position.y`,
+                                  vertexPropPath(node, dsPoints[0].pointIndex, 'position.y'),
                                   currentFrame
                                 )
                               : 'none'
@@ -2649,7 +2674,7 @@ export function PropertiesPanel() {
                           onToggle={() => {
                             if (selectedId)
                               toggleKeyframe(
-                                `points.${dsPoints[0].pointIndex}.position.y`,
+                                vertexPropPath(node, dsPoints[0].pointIndex, 'position.y'),
                                 firstPt.position.y
                               );
                           }}
@@ -2686,7 +2711,7 @@ export function PropertiesPanel() {
                               ? getKeyframeState(
                                   timeline,
                                   selectedId,
-                                  `points.${dsPoints[0].pointIndex}.cornerRadius`,
+                                  vertexPropPath(node, dsPoints[0].pointIndex, 'cornerRadius'),
                                   currentFrame
                                 )
                               : 'none'
@@ -2694,7 +2719,7 @@ export function PropertiesPanel() {
                           onToggle={() => {
                             if (selectedId)
                               toggleKeyframe(
-                                `points.${dsPoints[0].pointIndex}.cornerRadius`,
+                                vertexPropPath(node, dsPoints[0].pointIndex, 'cornerRadius'),
                                 crValues[0] ?? 0
                               );
                           }}
