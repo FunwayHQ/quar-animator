@@ -260,6 +260,28 @@ describe('rectangleToLottieShapes', () => {
     // rc + tr only (no fill, no stroke)
     expect(shapes.length).toBe(2);
   });
+
+  it('places the rect at [0,0] for a centered anchor, offset otherwise (F059)', () => {
+    const centered = rectangleToLottieShapes(
+      makeRect(),
+      emptyTimeline,
+      CANVAS_H
+    )[0] as LottieShapeRect;
+    // + 0 normalizes -0 (produced by -h*(0.5-0.5)) to +0 for the equality check.
+    expect((centered.p.k as number[]).map((v) => v + 0)).toEqual([0, 0]);
+
+    const cornerAnchored = rectangleToLottieShapes(
+      makeRect({
+        width: 100,
+        height: 50,
+        transform: { ...defaultTransform, anchor: { x: 0, y: 0 } },
+      }),
+      emptyTimeline,
+      CANVAS_H
+    )[0] as LottieShapeRect;
+    // width*(0.5-0)=50, -height*(0.5-0)=-25
+    expect(cornerAnchored.p.k).toEqual([50, -25]);
+  });
 });
 
 // ============================================================================
@@ -286,6 +308,24 @@ describe('ellipseToLottieShapes', () => {
 // ============================================================================
 
 describe('pathToLottieShapes', () => {
+  it('negates path vertex and handle Y for Lottie Y-down space (F058)', () => {
+    const shapes = pathToLottieShapes(makePath(), emptyTimeline, CANVAS_H);
+    const sh = shapes.find((s) => s.ty === 'sh') as unknown as {
+      ks: { k: { v: number[][]; o: number[][] } };
+    };
+    // Vertex (50,50) -> [50,-50]; out-handle (10,20) rel -> [10,-20].
+    expect(sh.ks.k.v[1]).toEqual([50, -50]);
+    expect(sh.ks.k.o[0]).toEqual([10, -20]);
+  });
+
+  it('does not negate polygon vertices (F058 regression)', () => {
+    const node = makePolygon({ sides: 6, radius: 100 });
+    const pts = generatePolygonPoints(node);
+    const shapes = nodeToLottieShapes(node, emptyTimeline, CANVAS_H)!;
+    const sh = shapes.find((s) => s.ty === 'sh') as unknown as { ks: { k: { v: number[][] } } };
+    expect(sh.ks.k.v[0]).toEqual([pts[0].position.x, pts[0].position.y]);
+  });
+
   it('converts path points to Lottie shape', () => {
     const node = makePath();
     const shapes = pathToLottieShapes(node, emptyTimeline, CANVAS_H);
@@ -509,6 +549,28 @@ describe('buildLottieTransform', () => {
     expect(t.r.k).toBe(-45);
   });
 
+  it('negates keyframed rotation values too (F060)', () => {
+    const timeline: Timeline = {
+      ...emptyTimeline,
+      tracks: [
+        {
+          id: 'r',
+          nodeId: 'n1',
+          property: 'transform.rotation',
+          keyframes: [
+            { id: 'k1', time: 0, value: 0, easing: 'linear' },
+            { id: 'k2', time: 30, value: 90, easing: 'linear' },
+          ],
+        },
+      ],
+    };
+    const t = buildLottieTransform(makeMinimalNode(defaultTransform), timeline, CANVAS_H);
+    expect(t.r.a).toBe(1); // animated
+    const kfs = t.r.k as unknown as Array<{ s: number[]; e?: number[] }>;
+    // Keyframe values are negated (not passed through un-negated as before).
+    expect(kfs[0].e?.[0]).toBeCloseTo(-90);
+  });
+
   it('handles animated transform with tracks', () => {
     const timeline: Timeline = {
       ...emptyTimeline,
@@ -592,6 +654,26 @@ describe('groupToLottieShapes', () => {
     });
     const result = groupToLottieShapes(groupNode, emptyTimeline, CANVAS_H, () => undefined);
     expect(result).toEqual([]);
+  });
+
+  it("emits a child's tr position in the group's local space (F057)", () => {
+    const child = makeRect({
+      id: 'c1',
+      transform: { ...defaultTransform, position: { x: 100, y: 200 } },
+    });
+    const groupNode = makeMinimalNode(defaultTransform, 'g1', {
+      type: 'group' as const,
+      children: ['c1'],
+    });
+    const result = groupToLottieShapes(groupNode, emptyTimeline, CANVAS_H, (id) =>
+      id === 'c1' ? child : undefined
+    );
+    const gr = result[0] as unknown as { it: Array<{ ty: string; p?: { k: number[] } }> };
+    // The child's group transform is the LAST item (its shapes contain an
+    // identity shape-transform 'tr' too).
+    const tr = gr.it[gr.it.length - 1]!;
+    // Local space: only Y negated (not canvasH - y, which was a full canvas off).
+    expect(tr.p!.k).toEqual([100, -200]);
   });
 });
 
@@ -900,10 +982,11 @@ describe('buildLottieTransform - additional', () => {
     expect(t.o.k).toBe(100);
   });
 
-  it('anchor is computed from node dimensions and anchor property', () => {
+  it('layer anchor is the pivot origin [0,0] (F059)', () => {
     const t = buildLottieTransform(makeMinimalNode(defaultTransform), emptyTimeline, CANVAS_H);
-    // width=100, height=100, anchor=(0.5, 0.5) → Lottie anchor = [50, 50]
-    expect(t.a.k).toEqual([50, 50]);
+    // The Quar pivot is the local origin (maps to the Lottie position), so the
+    // layer anchor is [0,0]; anchor offset lives in the shape's local p instead.
+    expect(t.a.k).toEqual([0, 0]);
     expect(t.a.a).toBe(0);
   });
 });

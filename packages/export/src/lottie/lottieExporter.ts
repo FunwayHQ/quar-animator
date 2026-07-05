@@ -61,7 +61,15 @@ export function exportToLottieJson(
     const node = nodes[i];
     if (!node.visible) continue;
 
-    const layer = nodeToLottieLayer(node, timeline, layerIdx, canvasH, duration, resolver);
+    const layer = nodeToLottieLayer(
+      node,
+      timeline,
+      layerIdx,
+      canvasH,
+      duration,
+      resolver,
+      startFrame
+    );
     if (layer) {
       layers.push(layer);
       layerIdx++;

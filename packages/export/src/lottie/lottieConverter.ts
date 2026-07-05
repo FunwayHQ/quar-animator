@@ -60,7 +60,8 @@ export function nodeToLottieLayer(
   layerIndex: number,
   canvasH: number,
   duration: number,
-  nodeResolver?: (id: string) => Node | undefined
+  nodeResolver?: (id: string) => Node | undefined,
+  startFrame: number = 0
 ): LottieLayer | null {
   const shapes = nodeToLottieShapes(node, timeline, canvasH, nodeResolver);
   if (!shapes || shapes.length === 0) return null;
@@ -70,8 +71,11 @@ export function nodeToLottieLayer(
     ty: 4, // Shape layer
     nm: node.name || `Layer ${layerIndex}`,
     ks: buildLottieTransform(node, timeline, canvasH),
-    ip: 0,
-    op: duration,
+    // Match the composition window [startFrame, endFrame). Keyframe times are
+    // absolute so st stays 0; using a raw duration made startFrame>0 layers
+    // disappear for the final `startFrame` frames.
+    ip: startFrame,
+    op: startFrame + duration,
     st: 0,
     shapes,
   };
@@ -118,10 +122,13 @@ export function rectangleToLottieShapes(
   const heightTrack = findTrack<number>(timeline, node.id, 'height');
   const crTrack = findTrack<number>(timeline, node.id, 'cornerRadius.0');
 
+  // Rect center relative to the pivot (local origin, = the Lottie position),
+  // Y-negated. [0,0] for the default centered anchor.
+  const rectAnchor = node.transform.anchor ?? { x: 0.5, y: 0.5 };
   const rect: LottieShapeRect = {
     ty: 'rc',
     nm: 'Rectangle',
-    p: { a: 0, k: [0, 0] }, // Local center
+    p: { a: 0, k: [node.width * (0.5 - rectAnchor.x), -node.height * (0.5 - rectAnchor.y)] },
     s: positionTracksToLottie(widthTrack, heightTrack, node.width, node.height),
     r: trackToLottieAnimated(crTrack, node.cornerRadius[0]),
   };
@@ -187,8 +194,8 @@ export function pathToLottieShapes(
 ): LottieShapeItem[] {
   const items: LottieShapeItem[] = [];
 
-  // Convert primary path
-  const vertices = pathPointsToLottieVertices(node.points, node.closed);
+  // Convert primary path (negate Y to map Quar Y-up geometry into Lottie space)
+  const vertices = pathPointsToLottieVertices(node.points, node.closed, true);
   const shapePath: LottieShapePath = {
     ty: 'sh',
     nm: 'Path',
@@ -199,7 +206,7 @@ export function pathToLottieShapes(
   // Convert subpaths
   if (node.subpaths) {
     for (let i = 0; i < node.subpaths.length; i++) {
-      const subVertices = pathPointsToLottieVertices(node.subpaths[i], true);
+      const subVertices = pathPointsToLottieVertices(node.subpaths[i], true, true);
       const subPath: LottieShapePath = {
         ty: 'sh',
         nm: `Subpath ${i + 1}`,
@@ -274,7 +281,10 @@ export function groupToLottieShapes(
             ty: 'tr',
             p: {
               a: 0,
-              k: [childNode.transform.position.x, canvasH - childNode.transform.position.y],
+              // Child position is in the group LAYER's local space (the layer is
+              // already placed at flipY(group pos)); only negate Y here, don't
+              // add another canvasH (that pushed children a full canvas too low).
+              k: [childNode.transform.position.x, -childNode.transform.position.y],
             },
             r: { a: 0, k: -childNode.transform.rotation },
             s: { a: 0, k: [childNode.transform.scale.x * 100, childNode.transform.scale.y * 100] },
@@ -308,25 +318,30 @@ export function groupToLottieShapes(
  */
 export function pathPointsToLottieVertices(
   points: PathPoint[],
-  closed: boolean
+  closed: boolean,
+  negateY: boolean = false
 ): LottieShapeVertices {
   const v: number[][] = [];
   const i: number[][] = [];
   const o: number[][] = [];
+  // The layer uses positive scale (no Y reflection), so to reproduce the Quar
+  // Y-up -> Lottie Y-down flip the LOCAL path geometry must be Y-negated. Only
+  // real paths need this; generatePolygonPoints already emits Lottie-space Y.
+  const sy = negateY ? -1 : 1;
 
   for (const pt of points) {
-    v.push([pt.position.x, pt.position.y]);
+    v.push([pt.position.x, sy * pt.position.y]);
 
     // In-handle (relative to vertex)
     if (pt.handleIn) {
-      i.push([pt.handleIn.x - pt.position.x, pt.handleIn.y - pt.position.y]);
+      i.push([pt.handleIn.x - pt.position.x, sy * (pt.handleIn.y - pt.position.y)]);
     } else {
       i.push([0, 0]);
     }
 
     // Out-handle (relative to vertex)
     if (pt.handleOut) {
-      o.push([pt.handleOut.x - pt.position.x, pt.handleOut.y - pt.position.y]);
+      o.push([pt.handleOut.x - pt.position.x, sy * (pt.handleOut.y - pt.position.y)]);
     } else {
       o.push([0, 0]);
     }
@@ -452,24 +467,13 @@ export function buildLottieTransform(
 
   const flipY = VALUE_TRANSFORMS.yFlip(canvasH);
 
-  // Compute anchor from node dimensions. In Quar, shapes are drawn relative to
-  // their local origin with anchor determining the pivot. In Lottie, anchor is
-  // in absolute local coordinates.
-  let anchorX = 0;
-  let anchorY = 0;
-  const anchor = transform.anchor ?? { x: 0.5, y: 0.5 };
-  if ('width' in node && 'height' in node) {
-    const n = node as Node & { width: number; height: number };
-    anchorX = n.width * anchor.x;
-    anchorY = n.height * anchor.y;
-  } else if ('radiusX' in node && 'radiusY' in node) {
-    const n = node as Node & { radiusX: number; radiusY: number };
-    anchorX = n.radiusX * 2 * anchor.x;
-    anchorY = n.radiusY * 2 * anchor.y;
-  }
-
   return {
-    a: { a: 0, k: [anchorX, anchorY] },
+    // The Quar pivot IS the local origin, which maps directly to the Lottie
+    // position, so the layer anchor is [0,0]. Any anchor-dependent geometry
+    // offset lives in the shape's local p (see rectangleToLottieShapes) — the
+    // old width/height-based anchor mis-placed the shape and orbited rotation
+    // about a corner.
+    a: { a: 0, k: [0, 0] },
     p: positionTracksToLottie(
       posXTrack,
       posYTrack,
@@ -478,7 +482,10 @@ export function buildLottieTransform(
       VALUE_TRANSFORMS.identity,
       flipY
     ),
-    r: trackToLottieAnimated(rotTrack, -transform.rotation), // Negate for Y-flip
+    // Negate rotation for the Y-flip. Pass the negation as the value transform so
+    // KEYFRAMED rotation is negated too (the default-value arg only applies when
+    // there is no track).
+    r: trackToLottieAnimated(rotTrack, transform.rotation, (v) => -v),
     s: positionTracksToLottie(
       scaleXTrack,
       scaleYTrack,

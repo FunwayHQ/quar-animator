@@ -102,6 +102,21 @@ describe('exportToLottieJson', () => {
     expect(result.layers[0].nm).toBe('Rect');
   });
 
+  it('layer in/out points match the composition window (F056)', () => {
+    const nodes: Node[] = [makeRect()];
+    const result = exportToLottieJson(nodes, emptyTimeline, {
+      width: 800,
+      height: 600,
+      startFrame: 30,
+      endFrame: 90,
+    });
+    expect(result.ip).toBe(30);
+    expect(result.op).toBe(90);
+    // The layer window must span the whole comp, else frames 60..90 go blank.
+    expect(result.layers[0].ip).toBe(30);
+    expect(result.layers[0].op).toBe(90);
+  });
+
   it('respects custom options', () => {
     const result = exportToLottieJson([], emptyTimeline, {
       width: 1920,
