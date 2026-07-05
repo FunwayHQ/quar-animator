@@ -863,6 +863,27 @@ export function generateStrokeOutlineVertices(
     rightOffset = -halfWidth;
   }
 
+  // The perpendicular (-dy, dx) points toward the interior when the loop is
+  // positively wound (every app-generated closed shape is), which inverts the
+  // meaning of inside/outside. Detect winding via the signed (shoelace) area and
+  // flip the offsets so 'inside' offsets toward the interior and 'outside' away.
+  // Center stays symmetric, so this is a no-op there and for open paths.
+  if (closed) {
+    let signedArea = 0;
+    for (let i = 0; i < numVertices; i++) {
+      const j = (i + 1) % numVertices;
+      const xi = vertices[i * 2] as number;
+      const yi = vertices[i * 2 + 1] as number;
+      const xj = vertices[j * 2] as number;
+      const yj = vertices[j * 2 + 1] as number;
+      signedArea += xi * yj - xj * yi;
+    }
+    if (signedArea > 0) {
+      leftOffset = -leftOffset;
+      rightOffset = -rightOffset;
+    }
+  }
+
   const leftSide: number[] = [];
   const rightSide: number[] = [];
 

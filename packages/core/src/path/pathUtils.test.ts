@@ -649,6 +649,26 @@ describe('generateStrokeOutlineVertices', () => {
     expect(outside[7]).toBeCloseTo(0); // right start Y: no inward offset
   });
 
+  it('closed inside stroke stays within the shape, outside stays beyond it (F035)', () => {
+    // Positively-wound rectangle centered at origin (all app shapes wind this way).
+    const rect = new Float32Array([-50, -30, 50, -30, 50, 30, -50, 30]);
+    const width = 10;
+
+    const inside = generateStrokeOutlineVertices(rect, 4, width, true, 'inside');
+    for (let i = 0; i < inside.length; i += 2) {
+      expect(Math.abs(inside[i]!)).toBeLessThanOrEqual(50 + 1e-3);
+      expect(Math.abs(inside[i + 1]!)).toBeLessThanOrEqual(30 + 1e-3);
+    }
+
+    const outside = generateStrokeOutlineVertices(rect, 4, width, true, 'outside');
+    for (let i = 0; i < outside.length; i += 2) {
+      // No outside-stroke point may fall strictly inside the shape.
+      const onOrBeyond =
+        Math.abs(outside[i]!) >= 50 - 1e-3 || Math.abs(outside[i + 1]!) >= 30 - 1e-3;
+      expect(onOrBeyond).toBe(true);
+    }
+  });
+
   it('inside and outside produce distinct results from center on multi-point open path', () => {
     // L-shaped open path: (0,0) -> (100,0) -> (100,100)
     const vertices = new Float32Array([0, 0, 100, 0, 100, 100]);
