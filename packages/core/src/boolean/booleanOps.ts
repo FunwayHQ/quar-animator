@@ -5,7 +5,7 @@
  */
 
 import polygonClipping from 'polygon-clipping';
-import type { Polygon, MultiPolygon, Ring } from 'polygon-clipping';
+import type { MultiPolygon, Ring } from 'polygon-clipping';
 import type {
   Node,
   PathNode,
@@ -59,8 +59,79 @@ export function nodeToPolygon(
     })
   );
 
-  // First contour is outer, rest are holes → one Polygon
-  return [transformedContours as Ring[]];
+  // Single contour → one Polygon (fast path).
+  if (transformedContours.length === 1) {
+    return [transformedContours];
+  }
+
+  // Multiple contours: classify by even-odd nesting depth (matching the evenodd
+  // fill rule the renderer uses) so DISJOINT subpaths become separate Polygons
+  // instead of being lumped as holes of the first contour — which would treat
+  // them as holes and silently destroy their area in later boolean/eraser ops.
+  const rings = transformedContours;
+  const depths = rings.map((ring, i) => {
+    const rep = ring[0];
+    if (!rep) return 0;
+    let depth = 0;
+    for (let j = 0; j < rings.length; j++) {
+      if (j !== i && pointInRing(rep, rings[j]!)) depth++;
+    }
+    return depth;
+  });
+
+  // Even depth → exterior ring (its own Polygon); odd depth → hole.
+  const polygons: MultiPolygon = [];
+  const exteriorPolygonIndex = new Map<number, number>();
+  for (let i = 0; i < rings.length; i++) {
+    if (depths[i]! % 2 === 0) {
+      exteriorPolygonIndex.set(i, polygons.length);
+      polygons.push([rings[i]!]);
+    }
+  }
+
+  // Assign each hole to its immediate container: the exterior ring that contains
+  // it with the greatest nesting depth.
+  for (let i = 0; i < rings.length; i++) {
+    if (depths[i]! % 2 === 0) continue;
+    const rep = rings[i]![0];
+    let parent = -1;
+    let parentDepth = -1;
+    if (rep) {
+      for (let j = 0; j < rings.length; j++) {
+        if (j === i || depths[j]! % 2 !== 0) continue;
+        if (depths[j]! > parentDepth && pointInRing(rep, rings[j]!)) {
+          parent = j;
+          parentDepth = depths[j]!;
+        }
+      }
+    }
+    if (parent >= 0) {
+      polygons[exteriorPolygonIndex.get(parent)!]!.push(rings[i]!);
+    } else {
+      // No container found — keep the piece as its own Polygon.
+      polygons.push([rings[i]!]);
+    }
+  }
+
+  return polygons;
+}
+
+/**
+ * Even-odd ray-cast point-in-ring test. `ring` is a closed contour of [x, y].
+ */
+function pointInRing(pt: [number, number], ring: Ring): boolean {
+  const x = pt[0];
+  const y = pt[1];
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const xi = ring[i]![0];
+    const yi = ring[i]![1];
+    const xj = ring[j]![0];
+    const yj = ring[j]![1];
+    const intersects = yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi;
+    if (intersects) inside = !inside;
+  }
+  return inside;
 }
 
 /**
@@ -167,15 +238,19 @@ export function performBoolean(
   polyB: MultiPolygon,
   op: BooleanOp
 ): MultiPolygon {
+  // Pass polyB as a single geometry operand (not spread). Spreading a
+  // multi-part MultiPolygon turns each piece into a separate operand, which is
+  // wrong for intersect: intersection(A, ...[B1,B2]) computes A ∩ B1 ∩ B2
+  // instead of A ∩ (B1 ∪ B2). The unspread form is correct for every op.
   switch (op) {
     case 'union':
-      return polygonClipping.union(polyA as Polygon[], ...(polyB as Polygon[]));
+      return polygonClipping.union(polyA, polyB);
     case 'subtract':
-      return polygonClipping.difference(polyA as Polygon[], ...(polyB as Polygon[]));
+      return polygonClipping.difference(polyA, polyB);
     case 'intersect':
-      return polygonClipping.intersection(polyA as Polygon[], ...(polyB as Polygon[]));
+      return polygonClipping.intersection(polyA, polyB);
     case 'exclude':
-      return polygonClipping.xor(polyA as Polygon[], ...(polyB as Polygon[]));
+      return polygonClipping.xor(polyA, polyB);
   }
 }
 

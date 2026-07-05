@@ -259,6 +259,63 @@ describe('nodeToPolygon', () => {
     // Should have 2 rings in the polygon (outer + hole)
     expect(result![0].length).toBe(2);
   });
+
+  it('keeps a disjoint subpath as a separate polygon, not a hole (F003)', () => {
+    const primary = [
+      makeCornerPoint(0, 0),
+      makeCornerPoint(40, 0),
+      makeCornerPoint(40, 40),
+      makeCornerPoint(0, 40),
+    ];
+    const disjoint = [
+      makeCornerPoint(60, 0),
+      makeCornerPoint(100, 0),
+      makeCornerPoint(100, 40),
+      makeCornerPoint(60, 40),
+    ];
+    const path = makePath('disjoint', primary, true, [disjoint]);
+
+    const result = nodeToPolygon(path, mat3.identity());
+    expect(result).not.toBeNull();
+    // Two separate Polygons — the disjoint piece is NOT a hole of the first.
+    expect(result!.length).toBe(2);
+    expect(result![0].length).toBe(1);
+    expect(result![1].length).toBe(1);
+  });
+
+  it('does not destroy a disjoint piece on a boolean pass that misses it (F003)', () => {
+    const primary = [
+      makeCornerPoint(0, 0),
+      makeCornerPoint(40, 0),
+      makeCornerPoint(40, 40),
+      makeCornerPoint(0, 40),
+    ];
+    const disjoint = [
+      makeCornerPoint(60, 0),
+      makeCornerPoint(100, 0),
+      makeCornerPoint(100, 40),
+      makeCornerPoint(60, 40),
+    ];
+    const poly = nodeToPolygon(makePath('two-piece', primary, true, [disjoint]), mat3.identity())!;
+
+    // Subtract an eraser far from both pieces → both must survive.
+    const eraserFar = [
+      [
+        [
+          [500, 500],
+          [600, 500],
+          [600, 600],
+          [500, 600],
+          [500, 500],
+        ],
+      ],
+    ] as import('polygon-clipping').MultiPolygon;
+    const result = performBoolean(poly, eraserFar, 'subtract');
+    const contours = polygonToContours(result);
+
+    // Both disjoint pieces remain (the old lumping destroyed the second one).
+    expect(contours.length).toBe(2);
+  });
 });
 
 // ============================================================================
@@ -341,6 +398,38 @@ describe('performBoolean', () => {
     ] as import('polygon-clipping').MultiPolygon;
     const result = performBoolean(squareA, farSquare, 'intersect');
     expect(result.length).toBe(0);
+  });
+
+  it('intersects a multi-part second operand as a union, not per-piece (F110)', () => {
+    // polyB = two disjoint squares: one overlaps A (50..150), one is far away.
+    const multiB = [
+      [
+        [
+          [50, 0],
+          [150, 0],
+          [150, 100],
+          [50, 100],
+          [50, 0],
+        ],
+      ],
+      [
+        [
+          [500, 500],
+          [600, 500],
+          [600, 600],
+          [500, 600],
+          [500, 500],
+        ],
+      ],
+    ] as import('polygon-clipping').MultiPolygon;
+
+    const result = performBoolean(squareA, multiB, 'intersect');
+    // A ∩ (B1 ∪ B2) = A ∩ B1 = the 50..100 overlap (non-empty). The old spread
+    // bug computed A ∩ B1 ∩ B2 = empty because A does not meet the far square.
+    expect(result.length).toBeGreaterThan(0);
+    const xs = result[0][0].map(([x]) => x);
+    expect(Math.min(...xs)).toBeCloseTo(50, 0);
+    expect(Math.max(...xs)).toBeCloseTo(100, 0);
   });
 });
 
