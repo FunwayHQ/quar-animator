@@ -112,6 +112,28 @@ describe('WebGLRenderer', () => {
       expect(renderer.isContextLost()).toBe(false);
       expect(handler).toHaveBeenCalled();
     });
+
+    it('clears stale program/buffer wrappers on context restore (F041)', () => {
+      const renderer = new WebGLRenderer({ canvas });
+      renderer.createShaderProgram('x', 'void main(){}', 'void main(){}', [], []);
+      renderer.createBuffer('b', new Float32Array([0, 0, 1, 1]), 2);
+      expect(renderer.getProgram('x')).toBeDefined();
+      expect(renderer.getBuffer('b')).toBeDefined();
+
+      const restoredHandler = vi.fn();
+      renderer.setContextRestoredHandler(restoredHandler);
+
+      const lost = new Event('webglcontextlost');
+      Object.defineProperty(lost, 'preventDefault', { value: vi.fn() });
+      canvas.dispatchEvent(lost);
+      canvas.dispatchEvent(new Event('webglcontextrestored'));
+
+      // The GPU objects created on the dead context are gone; their stale JS
+      // wrappers must be dropped so consumers recreate everything.
+      expect(renderer.getProgram('x')).toBeUndefined();
+      expect(renderer.getBuffer('b')).toBeUndefined();
+      expect(restoredHandler).toHaveBeenCalled();
+    });
   });
 
   // ==========================================================================

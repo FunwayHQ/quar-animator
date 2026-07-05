@@ -501,19 +501,19 @@ export function Canvas() {
       cameraRef.current = camera;
       setCameraReady(true);
 
-      // Initialize grid
-      const grid = new Grid(renderer, {
+      // Initialize grid (let: rebuilt on WebGL context restore)
+      let grid = new Grid(renderer, {
         majorSpacing: 100,
         minorDivisions: 5,
       });
       gridRef.current = grid;
 
-      // Initialize shape renderer
-      const shapeRenderer = new ShapeRenderer(renderer);
+      // Initialize shape renderer (let: rebuilt on WebGL context restore)
+      let shapeRenderer = new ShapeRenderer(renderer);
       shapeRendererRef.current = shapeRenderer;
 
-      // Initialize onion skin renderer
-      const onionSkinRenderer = new OnionSkinRenderer(shapeRenderer);
+      // Initialize onion skin renderer (let: rebuilt on WebGL context restore)
+      let onionSkinRenderer = new OnionSkinRenderer(shapeRenderer);
       onionSkinRendererRef.current = onionSkinRenderer;
 
       // Listen to camera changes
@@ -522,12 +522,16 @@ export function Canvas() {
         setCameraVersion((v) => v + 1);
       });
 
-      // Set up resize observer
+      // Set up resize observer (track last size to re-apply on context restore)
+      let lastWidth = 0;
+      let lastHeight = 0;
       const resizeObserver = new ResizeObserver((entries) => {
         for (const entry of entries) {
           const width = Math.round(entry.contentRect.width);
           const height = Math.round(entry.contentRect.height);
           if (width > 0 && height > 0) {
+            lastWidth = width;
+            lastHeight = height;
             renderer.setViewport(width, height);
             camera.setViewport(width, height);
             setViewportSize({ width, height });
@@ -805,6 +809,23 @@ export function Canvas() {
       };
 
       animationFrameRef.current = requestAnimationFrame(render);
+
+      // Rebuild GPU-dependent renderers when the WebGL context is restored.
+      // WebGLRenderer has already dropped its stale program/buffer wrappers;
+      // recreate the renderers so their programs/VAOs/buffers are re-made on the
+      // fresh context, reassign the closure vars (the render loop reads them) and
+      // the refs, and re-apply the last known viewport.
+      renderer.setContextRestoredHandler(() => {
+        grid = new Grid(renderer, { majorSpacing: 100, minorDivisions: 5 });
+        gridRef.current = grid;
+        shapeRenderer = new ShapeRenderer(renderer);
+        shapeRendererRef.current = shapeRenderer;
+        onionSkinRenderer = new OnionSkinRenderer(shapeRenderer);
+        onionSkinRendererRef.current = onionSkinRenderer;
+        if (lastWidth > 0 && lastHeight > 0) {
+          renderer.setViewport(lastWidth, lastHeight);
+        }
+      });
 
       // Cleanup
       return () => {

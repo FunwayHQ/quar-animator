@@ -143,6 +143,14 @@ export class WebGLRenderer {
 
   private handleContextRestored(): void {
     this.contextLost = false;
+    // Every GPU object created on the lost context is gone. Drop the stale JS
+    // wrappers so consumers recreate programs/buffers/VAOs from scratch. Do NOT
+    // gl.delete* them — the browser already destroyed the underlying objects, so
+    // deleting would target the fresh context. Reset the state cache too.
+    this.programs.clear();
+    this.buffers.clear();
+    this.currentProgram = null;
+    this.currentVAO = null;
     this.initializeState();
     this.onContextRestored?.();
   }
