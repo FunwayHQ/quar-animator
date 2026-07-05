@@ -3268,6 +3268,12 @@ export class ShapeRenderer {
 
     // Restore standard VAO
     this.renderer.bindVAO(this.vao);
+
+    // Restore the flat program. Subsequent flat nodes upload u_model directly
+    // (without a useProgram call), assuming the flat program is bound — if we
+    // leave the skinned program bound, that uniform upload targets the wrong
+    // program and is dropped, so the next node draws with a stale model matrix.
+    if (this.program) this.renderer.useProgram(this.program);
   }
 
   /**
@@ -3362,6 +3368,98 @@ export class ShapeRenderer {
   }
 
   /**
+   * Ensure a skinned node's bind-pose tessellation is present in the geometry
+   * cache. Skinned nodes are dispatched straight to the skinned render path and
+   * never go through the non-skinned render methods that normally seed the
+   * cache, so a freshly loaded or pasted skinned node would otherwise have no
+   * cached geometry and be invisible. Returns the entry, or null for a node type
+   * this cannot tessellate here (leaving behaviour unchanged for that type).
+   */
+  private ensureBindPoseGeometry(node: Node): TessellationCacheEntry | null {
+    const existing = this.geometryCache.get(node.id);
+    if (existing && existing.geoKey === buildGeometryKey(node)) return existing;
+
+    switch (node.type) {
+      case 'rectangle': {
+        const n = node;
+        const pathPoints = createRectanglePath(
+          -n.width * n.transform.anchor.x,
+          -n.height * n.transform.anchor.y,
+          n.width,
+          n.height,
+          n.cornerRadius
+        );
+        this.getCachedTessellation(n.id, n, pathPoints, true, DEFAULT_TESSELLATION_TOLERANCE);
+        break;
+      }
+      case 'ellipse': {
+        const n = node;
+        const pathPoints = createEllipsePath(0, 0, n.radiusX, n.radiusY);
+        this.getCachedTessellation(n.id, n, pathPoints, true, ELLIPSE_TESSELLATION_TOLERANCE);
+        break;
+      }
+      case 'polygon': {
+        const n = node;
+        const pathPoints =
+          n.innerRadius !== undefined
+            ? createStarPath(0, 0, n.radius, n.innerRadius, n.sides, undefined, n.cornerRadius)
+            : createPolygonPath(0, 0, n.radius, n.sides, undefined, n.cornerRadius);
+        this.getCachedTessellation(n.id, n, pathPoints, true, DEFAULT_TESSELLATION_TOLERANCE);
+        break;
+      }
+      case 'path': {
+        const n = node;
+        if (n.points.length < 2) return null;
+        if (n.subpaths && n.subpaths.length > 0 && n.closed) {
+          this.getCachedMultiContourTessellation(n.id, n);
+        } else {
+          const processed = applyCornerRadius(n.points, n.closed);
+          this.getCachedTessellation(n.id, n, processed, n.closed, DEFAULT_TESSELLATION_TOLERANCE);
+        }
+        break;
+      }
+      default:
+        return null;
+    }
+    return this.geometryCache.get(node.id) ?? null;
+  }
+
+  /**
+   * Ensure a skinned image node's bind-pose quad is cached, mirroring the quad
+   * that renderImage() would otherwise have seeded.
+   */
+  private ensureBindPoseImageGeometry(node: ImageNode): TessellationCacheEntry | null {
+    const geoKey = buildGeometryKey(node);
+    const existing = this.geometryCache.get(node.id);
+    if (existing && existing.geoKey === geoKey) return existing;
+
+    const ax = node.transform.anchor.x;
+    const ay = node.transform.anchor.y;
+    const x0 = -node.width * ax;
+    const y0 = -node.height * ay;
+    const x1 = x0 + node.width;
+    const y1 = y0 + node.height;
+    const vo = node.vertexOffsets;
+    const blX = x0 + (vo?.[0]?.x ?? 0),
+      blY = y0 + (vo?.[0]?.y ?? 0);
+    const brX = x1 + (vo?.[1]?.x ?? 0),
+      brY = y0 + (vo?.[1]?.y ?? 0);
+    const tlX = x0 + (vo?.[2]?.x ?? 0),
+      tlY = y1 + (vo?.[2]?.y ?? 0);
+    const trX = x1 + (vo?.[3]?.x ?? 0),
+      trY = y1 + (vo?.[3]?.y ?? 0);
+
+    const entry: TessellationCacheEntry = {
+      geoKey,
+      vertices: new Float32Array([blX, blY, brX, brY, tlX, tlY, trX, trY]),
+      fillIndices: [0, 1, 2, 2, 1, 3],
+      strokeCache: new Map(),
+    };
+    this.geometryCache.set(node.id, entry);
+    return entry;
+  }
+
+  /**
    * Render a skinned node using hybrid GPU/CPU approach:
    * - GPU path for fills (vertex shader LBS) when available and bone count ≤ 32
    * - CPU path for strokes (needs deformed positions for outline generation)
@@ -3372,8 +3470,10 @@ export class ShapeRenderer {
     const skinData = (node as any).skinData as SkinData;
     if (!skinData) return;
 
-    // Get bind-pose tessellation from geometry cache
-    const cached = this.geometryCache.get(node.id);
+    // Get bind-pose tessellation, computing it on demand when the non-skinned
+    // render path never seeded the cache (fresh project load, or paste/duplicate
+    // producing a new node id) — otherwise the skinned node is invisible.
+    const cached = this.ensureBindPoseGeometry(node);
     if (!cached) return;
 
     // Get fills/strokes from node
@@ -3460,8 +3560,9 @@ export class ShapeRenderer {
     const texture = this.getTexture(node.src);
     if (!texture) return;
 
-    // Get bind-pose quad from geometry cache
-    const cached = this.geometryCache.get(node.id);
+    // Get bind-pose quad, computing it on demand if the non-skinned image path
+    // never seeded the cache (fresh load / paste) — else the node is invisible.
+    const cached = this.ensureBindPoseImageGeometry(node);
     if (!cached) return;
 
     const gl = this.renderer.context;

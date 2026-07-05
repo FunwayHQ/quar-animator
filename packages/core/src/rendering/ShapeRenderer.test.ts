@@ -1126,6 +1126,79 @@ describe('ShapeRenderer', () => {
         const vpMatrix = mat3.identity();
         expect(() => shapeRenderer.render(sceneGraph, vpMatrix)).not.toThrow();
       });
+
+      it('renders a skinned node whose geometry was never seeded non-skinned (F040)', () => {
+        const rect = createRectangleNode('skinned_fresh', 100, 50);
+        (rect as any).skinData = {
+          vertices: [{ influences: [{ boneId: 'bone1', weight: 1.0 }] }],
+          inverseBindMatrices: { bone1: [1, 0, 0, 1, 0, 0] },
+          meshBindMatrix: [1, 0, 0, 1, 0, 0],
+          vertexCount: 1,
+        };
+        sceneGraph.addNode(rect);
+        sceneGraph.addNode({
+          id: 'bone1',
+          name: 'Bone 1',
+          type: 'bone' as any,
+          parent: null,
+          children: [],
+          transform: createDefaultTransform(),
+          visible: true,
+          locked: false,
+          opacity: 1,
+          blendMode: 'normal',
+          length: 100,
+          boneColor: '#ff0000',
+        } as any);
+
+        vi.clearAllMocks();
+        // No prior non-skinned render seeded the cache; on-demand bind-pose
+        // tessellation must still let the node draw.
+        shapeRenderer.render(sceneGraph, mat3.identity());
+        expect(gl.drawElements).toHaveBeenCalled();
+      });
+
+      it('restores the flat program after a skinned fill with empty strokes (F039)', () => {
+        const rect = createRectangleNode('skinned_nostroke', 100, 50);
+        rect.strokes = [];
+        (rect as any).skinData = {
+          vertices: [{ influences: [{ boneId: 'bone1', weight: 1.0 }] }],
+          inverseBindMatrices: { bone1: [1, 0, 0, 1, 0, 0] },
+          meshBindMatrix: [1, 0, 0, 1, 0, 0],
+          vertexCount: 1,
+        };
+        sceneGraph.addNode(rect);
+        sceneGraph.addNode({
+          id: 'bone1',
+          name: 'Bone 1',
+          type: 'bone' as any,
+          parent: null,
+          children: [],
+          transform: createDefaultTransform(),
+          visible: true,
+          locked: false,
+          opacity: 1,
+          blendMode: 'normal',
+          length: 100,
+          boneColor: '#ff0000',
+        } as any);
+
+        // The mock returns one shared WebGLProgram for every program, so compare
+        // the distinct ShaderProgram wrappers via a spy on renderer.useProgram.
+        const flatProgram = (shapeRenderer as any).program;
+        const skinnedProgram = (shapeRenderer as any).skinnedProgram;
+        const useProgramSpy = vi.spyOn(renderer, 'useProgram');
+
+        shapeRenderer.render(sceneGraph, mat3.identity());
+
+        const bound = useProgramSpy.mock.calls.map((c) => c[0]);
+        const lastSkinned = bound.lastIndexOf(skinnedProgram);
+        const lastFlat = bound.lastIndexOf(flatProgram);
+        // The GPU skinned-fill path ran, and the flat program was rebound after
+        // it so the next flat node's model-matrix upload targets the right program.
+        expect(lastSkinned).toBeGreaterThanOrEqual(0);
+        expect(lastFlat).toBeGreaterThan(lastSkinned);
+      });
     });
 
     describe('cache integration', () => {
