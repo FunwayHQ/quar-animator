@@ -34,7 +34,7 @@ function getAllPoints(node: PathNode): PathPoint[] {
 function getSubpathBoundaries(node: PathNode): number[] {
   const b = [0, node.points.length];
   if (node.subpaths) {
-    for (const sp of node.subpaths) b.push(b[b.length - 1] + sp.length);
+    for (const sp of node.subpaths) b.push(b[b.length - 1]! + sp.length);
   }
   return b;
 }
@@ -116,10 +116,30 @@ function getImagePoints(node: ImageNode): PathPoint[] {
   const y1 = y0 + node.height;
   const vo = node.vertexOffsets;
   return [
-    { position: { x: x0 + (vo?.[0]?.x ?? 0), y: y0 + (vo?.[0]?.y ?? 0) }, type: 'corner' },
-    { position: { x: x1 + (vo?.[1]?.x ?? 0), y: y0 + (vo?.[1]?.y ?? 0) }, type: 'corner' },
-    { position: { x: x0 + (vo?.[2]?.x ?? 0), y: y1 + (vo?.[2]?.y ?? 0) }, type: 'corner' },
-    { position: { x: x1 + (vo?.[3]?.x ?? 0), y: y1 + (vo?.[3]?.y ?? 0) }, type: 'corner' },
+    {
+      position: { x: x0 + (vo?.[0]?.x ?? 0), y: y0 + (vo?.[0]?.y ?? 0) },
+      type: 'corner',
+      handleIn: null,
+      handleOut: null,
+    },
+    {
+      position: { x: x1 + (vo?.[1]?.x ?? 0), y: y0 + (vo?.[1]?.y ?? 0) },
+      type: 'corner',
+      handleIn: null,
+      handleOut: null,
+    },
+    {
+      position: { x: x0 + (vo?.[2]?.x ?? 0), y: y1 + (vo?.[2]?.y ?? 0) },
+      type: 'corner',
+      handleIn: null,
+      handleOut: null,
+    },
+    {
+      position: { x: x1 + (vo?.[3]?.x ?? 0), y: y1 + (vo?.[3]?.y ?? 0) },
+      type: 'corner',
+      handleIn: null,
+      handleOut: null,
+    },
   ];
 }
 
@@ -235,10 +255,10 @@ export function DirectSelectionOverlay({
             {(() => {
               const transformPt = (p: PathPoint) =>
                 toScreen(mat3.transformPoint(worldMatrix, p.position));
-              const bl = transformPt(pts[0]);
-              const br = transformPt(pts[1]);
-              const tl = transformPt(pts[2]);
-              const tr = transformPt(pts[3]);
+              const bl = transformPt(pts[0]!);
+              const br = transformPt(pts[1]!);
+              const tl = transformPt(pts[2]!);
+              const tr = transformPt(pts[3]!);
               return (
                 <path
                   className={styles.pathOutline}
@@ -286,13 +306,13 @@ function buildContourD(
   const parts: string[] = [];
 
   for (let i = 0; i < contour.length; i++) {
-    const p = contour[i];
+    const p = contour[i]!;
     const screen = toScreen(getPointWorldPos(node, p, sceneGraph));
 
     if (i === 0) {
       parts.push(`M ${screen.x} ${screen.y}`);
     } else {
-      const prev = contour[i - 1];
+      const prev = contour[i - 1]!;
       const prevScreen = toScreen(getPointWorldPos(node, prev, sceneGraph));
 
       if (prev.handleOut || p.handleIn) {
@@ -314,8 +334,8 @@ function buildContourD(
 
   // Close path if needed
   if (closed && contour.length >= 3) {
-    const first = contour[0];
-    const last = contour[contour.length - 1];
+    const first = contour[0]!;
+    const last = contour[contour.length - 1]!;
     const firstScreen = toScreen(getPointWorldPos(node, first, sceneGraph));
     const lastScreen = toScreen(getPointWorldPos(node, last, sceneGraph));
 

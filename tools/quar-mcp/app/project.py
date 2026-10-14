@@ -147,6 +147,10 @@ class Project:
         if node is None:
             return False
 
+        structural_keys = {"parent", "children"} & updates.keys()
+        if structural_keys:
+            raise ValueError("Node hierarchy cannot be changed with update_node")
+
         for key, value in updates.items():
             if key in ("id", "type"):
                 continue  # Never change id or type

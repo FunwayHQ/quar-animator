@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, HashRouter, Routes, Route } from 'react-router-dom';
 import { Editor } from './pages/Editor';
 import { Projects } from './pages/Projects';
 import { ToastContainer } from './components/common/Toast';
@@ -11,6 +11,7 @@ import interFontUrl400 from '@fontsource/inter/files/inter-latin-400-normal.woff
 import interFontUrl700 from '@fontsource/inter/files/inter-latin-700-normal.woff?url';
 
 export function App() {
+  const Router = window.location.protocol === 'file:' ? HashRouter : BrowserRouter;
   // Load bundled Inter font weights on startup for text rendering
   useEffect(() => {
     /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access */
@@ -29,7 +30,7 @@ export function App() {
   }, []);
 
   return (
-    <BrowserRouter>
+    <Router>
       <ToastContainer />
       <ConsentBanner />
       <PromptDialogHost />
@@ -38,7 +39,7 @@ export function App() {
         <Route path="/" element={<Projects />} />
         <Route path="/editor" element={<Editor />} />
       </Routes>
-    </BrowserRouter>
+    </Router>
   );
 }
 

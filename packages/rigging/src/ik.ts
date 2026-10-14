@@ -173,6 +173,14 @@ export function solveFABRIK(config: FABRIKConfig): IKSolveResult {
       positions[i + 1] = v2add(positions[i]!, v2scale(dir, boneLengths[i]!));
     }
   } else {
+    // A straight two-bone chain can remain straight under FABRIK when the
+    // target lies on its axis. Seed the exact bend selected by the pole.
+    if (poleTarget && joints.length === 2) {
+      positions[2] = { ...target };
+      applyPoleTarget(positions, boneLengths, poleTarget);
+      applyConstraints(positions, boneLengths, joints, rootPos);
+    }
+
     // FABRIK iterations
     for (let iter = 0; iter < maxIterations; iter++) {
       const endIdx = positions.length - 1;
@@ -196,7 +204,7 @@ export function solveFABRIK(config: FABRIKConfig): IKSolveResult {
       }
 
       // === Pole target projection ===
-      if (poleTarget && joints.length >= 3) {
+      if (poleTarget && joints.length >= 2) {
         applyPoleTarget(positions, boneLengths, poleTarget);
       }
 
@@ -226,41 +234,26 @@ export function solveFABRIK(config: FABRIKConfig): IKSolveResult {
  * Projects intermediate joints toward the pole target plane.
  */
 function applyPoleTarget(positions: Vector2[], boneLengths: number[], poleTarget: Vector2): void {
-  if (positions.length <= 3) {
-    // Only one middle joint — project it toward the pole target
+  if (positions.length === 3) {
+    // The middle joint has two circle-intersection solutions. Choose the one
+    // on the pole side even when the initial chain is perfectly straight.
     const root = positions[0]!;
-    const end = positions[positions.length - 1]!;
-
-    // Chain axis from root to end effector
-    const chainDir = v2normalize(v2sub(end, root));
+    const end = positions[2]!;
     const chainLen = v2dist(root, end);
     if (chainLen < 1e-10) return;
-
-    // For the middle joint, project pole target onto perpendicular
-    const mid = positions[1]!;
-    const midRel = v2sub(mid, root);
-    const projLen = v2dot(midRel, chainDir);
-    const projOnChain = v2add(root, v2scale(chainDir, projLen));
-
-    // Direction from chain to pole target
-    const poleRel = v2sub(poleTarget, projOnChain);
-    const poleDist = Math.sqrt(poleRel.x * poleRel.x + poleRel.y * poleRel.y);
-    if (poleDist < 1e-10) return;
-
-    // Distance from chain axis to current mid joint
-    const currentOff = v2sub(mid, projOnChain);
-    const offDist = Math.sqrt(currentOff.x * currentOff.x + currentOff.y * currentOff.y);
-    if (offDist < 1e-10) return;
-
-    // Move mid joint to same distance but in pole target direction
-    const poleDir = v2normalize(poleRel);
-    positions[1] = v2add(projOnChain, v2scale(poleDir, offDist));
-
-    // Re-enforce bone lengths
-    const dir0 = v2normalize(v2sub(positions[1], positions[0]!));
-    positions[1] = v2add(positions[0]!, v2scale(dir0, boneLengths[0]!));
-    const dir1 = v2normalize(v2sub(positions[2]!, positions[1]));
-    positions[2] = v2add(positions[1], v2scale(dir1, boneLengths[1]!));
+    const axis = v2normalize(v2sub(end, root));
+    const firstLength = boneLengths[0]!;
+    const secondLength = boneLengths[1]!;
+    const along =
+      (firstLength * firstLength - secondLength * secondLength + chainLen * chainLen) /
+      (2 * chainLen);
+    const height = Math.sqrt(Math.max(0, firstLength * firstLength - along * along));
+    const poleOffset = v2sub(poleTarget, root);
+    const side = axis.x * poleOffset.y - axis.y * poleOffset.x >= 0 ? 1 : -1;
+    positions[1] = {
+      x: root.x + axis.x * along - axis.y * height * side,
+      y: root.y + axis.y * along + axis.x * height * side,
+    };
     return;
   }
 

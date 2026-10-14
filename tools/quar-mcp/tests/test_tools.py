@@ -210,6 +210,21 @@ async def test_update_node_transform(client):
 
 
 @pytest.mark.asyncio
+async def test_update_node_rejects_hierarchy_changes(client):
+    await client.call_tool("create_project", {})
+    add_result = await client.call_tool("add_node", {"node_type": "group"})
+    node_id = _parse(add_result)["nodeId"]
+    result = await client.call_tool("update_node", {
+        "node_id": node_id,
+        "updates": {"parent": "other", "children": ["missing"]},
+    })
+    assert _parse(result)["status"] == "error"
+    node_result = await client.call_tool("get_node", {"node_id": node_id})
+    assert _parse(node_result)["node"]["parent"] is None
+    assert _parse(node_result)["node"]["children"] == []
+
+
+@pytest.mark.asyncio
 async def test_delete_node(client):
     await client.call_tool("create_project", {})
     add_result = await client.call_tool("add_node", {"node_type": "rectangle"})

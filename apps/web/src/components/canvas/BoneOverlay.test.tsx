@@ -84,6 +84,23 @@ function createIKTarget(
 }
 
 describe('BoneOverlay', () => {
+  it('recomputes screen positions when the camera changes in place', () => {
+    const bone = createBone('bone1', 'Root', 100, 0);
+    const nodes = new Map<string, any>([['bone1', bone]]);
+    const camera = createMockCamera();
+    const props = {
+      boneNodes: [bone],
+      selectedNodeIds: new Set<string>(),
+      camera,
+      sceneGraph: createMockSceneGraph(nodes),
+    };
+    const { container, rerender } = render(<BoneOverlay {...props} cameraVersion={0} />);
+    const initialX = container.querySelector('circle')?.getAttribute('cx');
+    camera.worldToScreen = (pos) => ({ x: pos.x + 50, y: -pos.y });
+    rerender(<BoneOverlay {...props} cameraVersion={1} />);
+    expect(container.querySelector('circle')?.getAttribute('cx')).not.toBe(initialX);
+  });
+
   it('renders bone markers', () => {
     const bone = createBone('bone1', 'Root', 100, 200, 50);
     const nodes = new Map<string, any>([['bone1', bone]]);

@@ -9,12 +9,9 @@
  */
 
 import type { Node, PathPoint, PropertyTrack, Timeline, Effect } from '@quar/types';
+import { prepareShapeTween, interpolateShapeTween } from '@quar/core';
+import type { ShapeTweenData } from '@quar/core';
 import { interpolateValue, interpolators } from './Timeline';
-import {
-  prepareShapeTween,
-  interpolateShapeTween,
-  type ShapeTweenData,
-} from '../../core/src/tweening/shapeTween';
 
 // ============================================================================
 // Property path get/set

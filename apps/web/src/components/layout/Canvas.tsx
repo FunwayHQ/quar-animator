@@ -11,7 +11,7 @@ import {
   createGroupNode,
 } from '@quar/core';
 import type { SceneGraphEvent } from '@quar/core';
-import type { Node, ImageNode, TextNode, GroupNode, Vector2 } from '@quar/types';
+import type { Node, Vector2 } from '@quar/types';
 import { evaluateNodeAtFrame, applyAnimatedValues, getAnimatedNodes } from '@quar/animation';
 import {
   evaluateIKChains,
@@ -692,7 +692,7 @@ export function Canvas() {
                   if (existing) {
                     // Merge additively
                     for (let i = 0; i < Math.min(dense.length, existing.length); i++) {
-                      existing[i] += dense[i];
+                      existing[i] = existing[i]! + dense[i]!;
                     }
                   } else {
                     morphOffsetsMap.set(nodeId, dense);
@@ -885,26 +885,28 @@ export function Canvas() {
 
     // Rigging commands from MenuBar
     const handleBindToBones = () => {
+      const graph = sceneGraphRef.current;
+      if (!graph) return;
       const state = useEditorStore.getState();
       const selectedArr = Array.from(state.selectedNodeIds);
       const boneIds: string[] = [];
-      sceneGraphRef.current?.traverse((n) => {
+      graph.traverse((n) => {
         if (n.type === 'bone') boneIds.push(n.id);
       });
       if (boneIds.length === 0) return;
 
       for (const nodeId of selectedArr) {
-        const node = sceneGraphRef.current?.getNode(nodeId);
+        const node = graph.getNode(nodeId);
         if (!node) continue;
         const isShape = ['rectangle', 'ellipse', 'polygon', 'path', 'image'].includes(node.type);
         const isGroup = node.type === 'group';
 
         if (isShape) {
           const tessVerts = shapeRendererRef.current?.getTessellatedVertices(nodeId) ?? undefined;
-          bindMeshToBones(sceneGraphRef.current, nodeId, boneIds, tessVerts);
+          bindMeshToBones(graph, nodeId, boneIds, tessVerts);
         } else if (isGroup) {
-          const children = sceneGraphRef
-            .current!.getChildren(nodeId)
+          const children = graph
+            .getChildren(nodeId)
             .filter(
               (c: Node) =>
                 c.type === 'rectangle' ||
@@ -916,25 +918,27 @@ export function Canvas() {
           for (const child of children) {
             const tessVerts =
               shapeRendererRef.current?.getTessellatedVertices(child.id) ?? undefined;
-            bindMeshToBones(sceneGraphRef.current, child.id, boneIds, tessVerts);
+            bindMeshToBones(graph, child.id, boneIds, tessVerts);
           }
         }
       }
     };
 
     const handleUnbindMesh = () => {
+      const graph = sceneGraphRef.current;
+      if (!graph) return;
       const state = useEditorStore.getState();
       const selectedArr = Array.from(state.selectedNodeIds);
       for (const nodeId of selectedArr) {
-        const node = sceneGraphRef.current?.getNode(nodeId);
+        const node = graph.getNode(nodeId);
         if (!node) continue;
         if ((node as any).skinData) {
-          unbindMesh(sceneGraphRef.current, nodeId);
+          unbindMesh(graph, nodeId);
         } else if (node.type === 'group') {
-          const children = sceneGraphRef.current!.getChildren(nodeId);
+          const children = graph.getChildren(nodeId);
           for (const child of children) {
             if ((child as any).skinData) {
-              unbindMesh(sceneGraphRef.current, child.id);
+              unbindMesh(graph, child.id);
             }
           }
         }
@@ -942,26 +946,30 @@ export function Canvas() {
     };
 
     const handleCreateIKChain = () => {
+      const graph = sceneGraphRef.current;
+      if (!graph) return;
       const state = useEditorStore.getState();
       const selectedArr = Array.from(state.selectedNodeIds);
       for (const nodeId of selectedArr) {
-        const node = sceneGraphRef.current?.getNode(nodeId);
+        const node = graph.getNode(nodeId);
         if (node && node.type === 'bone') {
-          createIKChain(sceneGraphRef.current, nodeId);
+          createIKChain(graph, nodeId);
           break;
         }
       }
     };
 
     const handleRemoveIKChain = () => {
+      const graph = sceneGraphRef.current;
+      if (!graph) return;
       const state = useEditorStore.getState();
       const selectedArr = Array.from(state.selectedNodeIds);
       for (const nodeId of selectedArr) {
-        const node = sceneGraphRef.current?.getNode(nodeId);
+        const node = graph.getNode(nodeId);
         if (!node) continue;
         // If an IK target is selected, remove its chain
         if (node.type === 'ik-target') {
-          removeIKChain(sceneGraphRef.current, (node as any).ikChainId);
+          removeIKChain(graph, (node as any).ikChainId);
           break;
         }
         // If a bone is selected, find its chain
@@ -970,7 +978,7 @@ export function Canvas() {
             (c) => c.rootBoneId === nodeId || c.endEffectorBoneId === nodeId
           );
           if (chain) {
-            removeIKChain(sceneGraphRef.current, chain.id);
+            removeIKChain(graph, chain.id);
             break;
           }
         }
@@ -1354,7 +1362,7 @@ export function Canvas() {
       let htmlItem: DataTransferItem | null = null;
       let plainTextItem: DataTransferItem | null = null;
       for (let i = 0; i < items.length; i++) {
-        const item = items[i];
+        const item = items[i]!;
         if (item.type.startsWith('image/') && !imageItem) imageItem = item;
         if (item.type === 'text/html' && !htmlItem) htmlItem = item;
         if (item.type === 'text/plain' && !plainTextItem) plainTextItem = item;
@@ -2407,6 +2415,7 @@ export function Canvas() {
             ikChains={ikChains}
             selectedNodeIds={selectedNodeIds}
             camera={cameraRef.current}
+            cameraVersion={cameraVersion}
             sceneGraph={sceneGraph}
             hiddenBoneIds={hiddenBoneIds}
             dynamicChainBoneIds={dynamicChainBoneIds}

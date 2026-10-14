@@ -612,6 +612,22 @@ describe('PropertiesPanel', () => {
       expect(indicators.length).toBeGreaterThanOrEqual(1);
     });
 
+    it('adds an opacity keyframe from the opacity control', () => {
+      const sg = renderWithSceneGraph();
+
+      act(() => {
+        sg.addNode(createTestRect('rect1', 'Rectangle 1'));
+        useEditorStore.getState().setSelection(['rect1']);
+      });
+
+      fireEvent.click(screen.getByRole('button', { name: 'Add opacity keyframe' }));
+
+      const opacityTrack = useEditorStore
+        .getState()
+        .timeline.tracks.find((track) => track.nodeId === 'rect1' && track.property === 'opacity');
+      expect(opacityTrack?.keyframes[0]?.value).toBe(0.8);
+    });
+
     it('should show active when keyframe exists at current frame', () => {
       const sg = renderWithSceneGraph();
 

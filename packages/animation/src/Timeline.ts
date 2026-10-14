@@ -91,7 +91,7 @@ export function binarySearchKeyframes<T>(
 
   while (lo < hi) {
     const mid = (lo + hi) >>> 1;
-    if (keyframes[mid].time < targetTime) {
+    if (keyframes[mid]!.time < targetTime) {
       lo = mid + 1;
     } else {
       hi = mid;
@@ -129,7 +129,7 @@ export function addKeyframe<T>(
   // Binary search: find index of first keyframe with time >= target
   const index = binarySearchKeyframes(track.keyframes, time);
 
-  if (index < track.keyframes.length && track.keyframes[index].time === time) {
+  if (index < track.keyframes.length && track.keyframes[index]!.time === time) {
     // Update existing keyframe at this time
     track.keyframes[index] = keyframe;
   } else {
@@ -192,7 +192,7 @@ export function findSurroundingKeyframes<T>(
 
   // Determine the "before" keyframe (at or before the given time)
   let beforeIndex: number;
-  if (index < keyframes.length && keyframes[index].time === time) {
+  if (index < keyframes.length && keyframes[index]!.time === time) {
     // Exact match — this keyframe is the "before"
     beforeIndex = index;
   } else {
@@ -200,8 +200,8 @@ export function findSurroundingKeyframes<T>(
     beforeIndex = index - 1;
   }
 
-  const before = beforeIndex >= 0 ? keyframes[beforeIndex] : null;
-  const after = beforeIndex < keyframes.length - 1 ? keyframes[beforeIndex + 1] : null;
+  const before = beforeIndex >= 0 ? (keyframes[beforeIndex] ?? null) : null;
+  const after = beforeIndex < keyframes.length - 1 ? (keyframes[beforeIndex + 1] ?? null) : null;
 
   return [before, after];
 }

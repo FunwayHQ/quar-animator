@@ -1,7 +1,7 @@
 /**
  * Export Dialog for Quar Animator
  *
- * Modal dialog with tabs for PNG Sequence, Sprite Sheet, and Lottie JSON export.
+ * Modal dialog with tabs for PNG Sequence, Sprite Sheet, GIF, MP4, and Lottie JSON export.
  * Follows the PromptDialog imperative + host pattern.
  *
  * Usage (imperative):
@@ -25,7 +25,7 @@ import styles from './ExportDialog.module.css';
 // Types
 // ============================================================================
 
-export type ExportTab = 'png-sequence' | 'sprite-sheet' | 'lottie';
+export type ExportTab = 'png-sequence' | 'sprite-sheet' | 'gif' | 'mp4' | 'lottie';
 
 interface ExportDialogState {
   tab: ExportTab;
@@ -38,6 +38,8 @@ interface ExportDialogState {
   pngMultiplier: 1 | 2 | 3 | 4;
   pngTransparent: boolean;
   pngPattern: string;
+  // GIF
+  gifTransparent: boolean;
   // Sprite Sheet
   spriteLayout: 'grid' | 'packed';
   spriteColumns: number;
@@ -48,6 +50,7 @@ interface ExportDialogState {
   exporting: boolean;
   progress: ExportProgress | null;
   cancelled: boolean;
+  error: string | null;
 }
 
 const EXIT_MS = 120;
@@ -55,6 +58,8 @@ const EXIT_MS = 120;
 const TABS: { id: ExportTab; label: string }[] = [
   { id: 'png-sequence', label: 'PNG Sequence' },
   { id: 'sprite-sheet', label: 'Sprite Sheet' },
+  { id: 'gif', label: 'GIF' },
+  { id: 'mp4', label: 'MP4' },
   { id: 'lottie', label: 'Lottie JSON' },
 ];
 
@@ -73,10 +78,11 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
     width: 800,
     height: 600,
     startFrame: 0,
-    endFrame: timelineDuration,
+    endFrame: Math.max(0, timelineDuration - 1),
     pngMultiplier: 1,
     pngTransparent: false,
     pngPattern: 'frame_{N}',
+    gifTransparent: false,
     spriteLayout: 'grid',
     spriteColumns: 0, // 0 = auto
     spritePadding: 0,
@@ -85,6 +91,7 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
     exporting: false,
     progress: null,
     cancelled: false,
+    error: null,
   }));
 
   const cancelledRef = useRef(false);
@@ -110,7 +117,7 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
   );
 
   const update = <K extends keyof ExportDialogState>(key: K, value: ExportDialogState[K]) => {
-    setState((s) => ({ ...s, [key]: value }));
+    setState((s) => ({ ...s, [key]: value, error: null }));
   };
 
   // Lottie analysis
@@ -119,6 +126,32 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
 
   const handleExport = useCallback(async () => {
     if (!sceneGraph || !timeline) return;
+
+    const lastFrame = Math.max(0, timelineDuration - 1);
+    if (
+      !Number.isInteger(state.startFrame) ||
+      !Number.isInteger(state.endFrame) ||
+      state.startFrame < 0 ||
+      state.endFrame < state.startFrame ||
+      state.endFrame > lastFrame
+    ) {
+      setState((s) => ({
+        ...s,
+        error: `Choose a valid frame range between 0 and ${lastFrame}.`,
+      }));
+      return;
+    }
+    if (
+      !Number.isInteger(state.width) ||
+      !Number.isInteger(state.height) ||
+      state.width < 1 ||
+      state.height < 1 ||
+      state.width > 8192 ||
+      state.height > 8192
+    ) {
+      setState((s) => ({ ...s, error: 'Export dimensions must be between 1 and 8192 pixels.' }));
+      return;
+    }
 
     cancelledRef.current = false;
     setState((s) => ({ ...s, exporting: true, progress: null, cancelled: false }));
@@ -141,6 +174,43 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
         );
         downloadBlob(blob, 'animation.json');
         close();
+      } else if (state.tab === 'gif') {
+        const { exportGif } = await import('@quar/export');
+        const blob = await exportGif(
+          { sceneGraph, timeline },
+          {
+            width: state.width,
+            height: state.height,
+            frameRate: timeline.frameRate,
+            startFrame: state.startFrame,
+            endFrame: state.endFrame,
+            transparent: state.gifTransparent,
+          },
+          (progress) => setState((s) => ({ ...s, progress })),
+          () => cancelledRef.current
+        );
+        if (blob && !cancelledRef.current) {
+          downloadBlob(blob, 'animation.gif');
+          close();
+        }
+      } else if (state.tab === 'mp4') {
+        const { exportMp4 } = await import('@quar/export');
+        const blob = await exportMp4(
+          { sceneGraph, timeline },
+          {
+            width: state.width,
+            height: state.height,
+            frameRate: timeline.frameRate,
+            startFrame: state.startFrame,
+            endFrame: state.endFrame,
+          },
+          (progress) => setState((s) => ({ ...s, progress })),
+          () => cancelledRef.current
+        );
+        if (blob && !cancelledRef.current) {
+          downloadBlob(blob, 'animation.mp4');
+          close();
+        }
       } else if (state.tab === 'png-sequence') {
         // PNG Sequence requires dynamic import of frameRenderer (WebGL)
         const { createFrameRenderer, getFrameCount, generateFrameFilenames } =
@@ -181,7 +251,7 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
 
             const blob = await renderer.renderFrameAsBlob({ sceneGraph, timeline }, _frame);
             if (blob) {
-              zip.file(filenames[i], blob);
+              zip.file(filenames[i]!, blob);
             }
 
             await new Promise((r) => setTimeout(r, 0));
@@ -318,11 +388,19 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
           renderer.dispose();
         }
       }
+      if (cancelledRef.current) {
+        setState((s) => ({ ...s, exporting: false, progress: null, cancelled: false }));
+      }
     } catch (err) {
       console.error('Export failed:', err);
-      setState((s) => ({ ...s, exporting: false, progress: null }));
+      setState((s) => ({
+        ...s,
+        exporting: false,
+        progress: null,
+        error: err instanceof Error ? err.message : 'Export failed. Please try again.',
+      }));
     }
-  }, [state, sceneGraph, timeline, close]);
+  }, [state, sceneGraph, timeline, timelineDuration, close]);
 
   return createPortal(
     <div
@@ -367,9 +445,13 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
         {state.exporting && state.progress ? (
           <div className={styles.progress} data-testid="export-progress">
             <div className={styles.progressLabel}>
-              {state.progress.phase === 'rendering'
-                ? `Rendering frame ${state.progress.current} / ${state.progress.total}...`
-                : 'Finalizing...'}
+              {state.progress.phase === 'preparing'
+                ? `Preparing palette from frame ${state.progress.current} / ${state.progress.total}...`
+                : state.progress.phase === 'rendering'
+                  ? `Rendering frame ${state.progress.current} / ${state.progress.total}...`
+                  : state.progress.phase === 'encoding'
+                    ? `Encoding frame ${state.progress.current} / ${state.progress.total}...`
+                    : 'Finalizing...'}
             </div>
             <div className={styles.progressBar}>
               <div
@@ -420,8 +502,11 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
                 className={styles.inputSmall}
                 type="number"
                 value={state.startFrame}
-                onChange={(e) => update('startFrame', parseInt(e.target.value) || 0)}
+                onChange={(e) =>
+                  update('startFrame', e.target.value === '' ? 0 : parseInt(e.target.value))
+                }
                 min={0}
+                max={Math.max(0, timelineDuration - 1)}
                 data-testid="export-start-frame"
               />
               <span className={styles.dimSeparator}>to</span>
@@ -429,8 +514,11 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
                 className={styles.inputSmall}
                 type="number"
                 value={state.endFrame}
-                onChange={(e) => update('endFrame', parseInt(e.target.value) || 60)}
+                onChange={(e) =>
+                  update('endFrame', e.target.value === '' ? 0 : parseInt(e.target.value))
+                }
                 min={0}
+                max={Math.max(0, timelineDuration - 1)}
                 data-testid="export-end-frame"
               />
             </div>
@@ -478,6 +566,30 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
                   />
                 </div>
               </>
+            )}
+
+            {state.tab === 'gif' && (
+              <div className={styles.formRow}>
+                <span className={styles.label}>Background</span>
+                <label className={styles.checkbox}>
+                  <input
+                    type="checkbox"
+                    checked={state.gifTransparent}
+                    onChange={(e) => update('gifTransparent', e.target.checked)}
+                    data-testid="export-gif-transparent"
+                  />
+                  <span>Transparent</span>
+                </label>
+              </div>
+            )}
+
+            {state.tab === 'mp4' && (
+              <div className={styles.warning} role="note">
+                <span className={styles.warningText}>
+                  MP4 uses H.264 encoding and a solid background. Availability depends on your
+                  browser and device.
+                </span>
+              </div>
             )}
 
             {state.tab === 'sprite-sheet' && (
@@ -562,6 +674,13 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
                 )}
               </>
             )}
+          </div>
+        )}
+
+        {state.error && !state.exporting && (
+          <div className={styles.warning} role="alert" data-testid="export-error">
+            <AlertTriangle size={14} className={styles.warningIcon} />
+            <span className={styles.warningText}>{state.error}</span>
           </div>
         )}
 

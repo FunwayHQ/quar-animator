@@ -254,7 +254,6 @@ export function useProjectActions(options: UseProjectActionsOptions = {}): Proje
           useEditorStore.getState().pushUndo(sceneGraph);
           const result = importSvg(svgString, sceneGraph, generateId, {
             centerAtOrigin: true,
-            selectAfterImport: true,
           });
           if (result.rootIds.length > 1) {
             const groupId = generateId();

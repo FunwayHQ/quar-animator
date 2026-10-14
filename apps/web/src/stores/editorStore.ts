@@ -25,7 +25,6 @@ import type {
   SmartBoneAction,
   MorphVertexOffset,
   VitruvianController,
-  BoneGroup,
   DynamicChain,
   WindSettings,
   SymbolDefinition,
@@ -38,8 +37,6 @@ import {
   DEFAULT_ONION_SKIN_SETTINGS,
   createGroupNode,
   booleanOperation,
-  createBooleanResultNode,
-  computeBooleanGroupResult,
   convertTextToPathGroup as convertTextToPathGroupFn,
   outlineStroke as outlineStrokeFn,
   generateBrushOutline,
@@ -49,12 +46,7 @@ import {
   resolveSymbolInstance,
 } from '@quar/core';
 import type { OnionSkinSettings, BooleanOp } from '@quar/core';
-import {
-  createSkinBinding,
-  computeAutoWeights,
-  computeFKChain,
-  evaluateIKChains,
-} from '@quar/rigging';
+import { createSkinBinding, computeAutoWeights, computeFKChain } from '@quar/rigging';
 import type { FKBoneState } from '@quar/rigging';
 import { toast } from '../components/common/Toast';
 
@@ -840,7 +832,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       // If baseWidth is set, use uniform widths array instead of pressure-based widths
       const effectiveWidths =
         bd.baseWidth != null && bd.baseWidth > 0 ? spine.map(() => bd.baseWidth as number) : widths;
-      const newOutline = generateBrushOutline(spine, effectiveWidths, profile);
+      const newOutline = generateBrushOutline(spine, effectiveWidths, profile ?? undefined);
       sceneGraph.updateNode(nodeId, {
         points: newOutline,
         brushData: { ...bd, profileId },
@@ -870,7 +862,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         ? (state.brushProfiles.find((p) => p.id === bd.profileId) ?? null)
         : null;
       const effectiveWidths = spine.map(() => baseWidth);
-      const newOutline = generateBrushOutline(spine, effectiveWidths, profile);
+      const newOutline = generateBrushOutline(spine, effectiveWidths, profile ?? undefined);
       sceneGraph.updateNode(nodeId, {
         points: newOutline,
         brushData: { ...bd, baseWidth },
@@ -924,8 +916,8 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     const tessellated: { x: number; y: number }[] = [];
     const maxSegLen = 2; // add a point every ~2 units
     for (let i = 0; i < rawPoints.length; i++) {
-      const curr = rawPoints[i];
-      const next = rawPoints[(i + 1) % rawPoints.length];
+      const curr = rawPoints[i]!;
+      const next = rawPoints[(i + 1) % rawPoints.length]!;
       tessellated.push(curr);
       // Only densify between consecutive points (not wrap-around for open paths)
       if (i < rawPoints.length - 1 || outline.closed) {
@@ -1001,14 +993,14 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         let prev = 0;
         let next = 0;
         for (let j = i - 1; j >= 0; j--) {
-          if (samples[j] > 0) {
-            prev = samples[j];
+          if (samples[j]! > 0) {
+            prev = samples[j]!;
             break;
           }
         }
         for (let j = i + 1; j < samples.length; j++) {
-          if (samples[j] > 0) {
-            next = samples[j];
+          if (samples[j]! > 0) {
+            next = samples[j]!;
             break;
           }
         }
@@ -1020,7 +1012,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     const maxW = Math.max(...samples);
     if (maxW > 0) {
       for (let i = 0; i < samples.length; i++) {
-        samples[i] = samples[i] / maxW;
+        samples[i] = samples[i]! / maxW;
       }
     }
 
@@ -1097,8 +1089,8 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       const meshWorld = sceneGraph.getWorldTransform(nodeId);
       positions = new Float32Array(tessellatedVertices.length);
       for (let i = 0; i < vertexCount; i++) {
-        const lx = tessellatedVertices[i * 2];
-        const ly = tessellatedVertices[i * 2 + 1];
+        const lx = tessellatedVertices[i * 2] ?? 0;
+        const ly = tessellatedVertices[i * 2 + 1] ?? 0;
         positions[i * 2] = meshWorld.a * lx + meshWorld.c * ly + meshWorld.tx;
         positions[i * 2 + 1] = meshWorld.b * lx + meshWorld.d * ly + meshWorld.ty;
       }
@@ -1150,7 +1142,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       return;
     }
 
-    const rootBoneId = chain[0].id;
+    const rootBoneId = chain[0]!.id;
 
     // Check for overlapping chains
     const { ikChains } = get();
@@ -1589,7 +1581,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       });
       if (childBones.length === 0) break;
       // Follow first bone child
-      currentId = childBones[0];
+      currentId = childBones[0]!;
       boneIds.push(currentId);
     }
 
@@ -1831,7 +1823,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     const siblings = commonParent
       ? (sceneGraph.getNode(commonParent)?.children ?? [])
       : sceneGraph.getRootNodes().map((n) => n.id);
-    const firstIndex = siblings.indexOf(orderedSelected[0]);
+    const firstIndex = siblings.indexOf(orderedSelected[0]!);
     const insertIndex = firstIndex !== -1 ? firstIndex : 0;
 
     // Create and add the group node
@@ -1875,8 +1867,8 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       // Move children out to the group's parent, preserving order
       const childIds = [...node.children];
       for (let i = 0; i < childIds.length; i++) {
-        sceneGraph.moveNode(childIds[i], parentId ?? null, insertAt + i);
-        movedChildIds.push(childIds[i]);
+        sceneGraph.moveNode(childIds[i]!, parentId ?? null, insertAt + i);
+        movedChildIds.push(childIds[i]!);
       }
 
       // Remove the now-empty group
@@ -2019,7 +2011,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     const kfIndex = track.keyframes.findIndex((kf) => kf.time === time);
     if (kfIndex === -1) return;
     const newKeyframes = [...track.keyframes];
-    newKeyframes[kfIndex] = { ...newKeyframes[kfIndex], value: newValue };
+    newKeyframes[kfIndex] = { ...newKeyframes[kfIndex]!, value: newValue };
     const newTracks = timeline.tracks.map((t) =>
       t.id === track.id ? { ...t, keyframes: newKeyframes } : t
     );
@@ -2039,7 +2031,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     if (kfIndex === -1) return;
     const roundedTime = Math.max(0, Math.round(newTime));
     const newKeyframes = [...track.keyframes];
-    newKeyframes[kfIndex] = { ...newKeyframes[kfIndex], time: roundedTime, value: newValue };
+    newKeyframes[kfIndex] = { ...newKeyframes[kfIndex]!, time: roundedTime, value: newValue };
     // Sort by time after moving
     newKeyframes.sort((a, b) => a.time - b.time);
     const newTracks = timeline.tracks.map((t) =>
@@ -2079,7 +2071,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     const kfIndex = track.keyframes.findIndex((kf) => kf.time === time);
     if (kfIndex === -1) return;
 
-    const kf = track.keyframes[kfIndex];
+    const kf = track.keyframes[kfIndex]!;
     const newKeyframes = [...track.keyframes];
     const updated: Keyframe = {
       ...kf,
@@ -2091,7 +2083,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     // Derive easing from tangents if both tangentOut and tangentIn are set
     // and there's a next keyframe
     if (tangentOut && kfIndex < track.keyframes.length - 1) {
-      const nextKf = track.keyframes[kfIndex + 1];
+      const nextKf = track.keyframes[kfIndex + 1]!;
       const dt = nextKf.time - kf.time;
       const dv = (nextKf.value as number) - (kf.value as number);
       // Get the tangentIn of the next keyframe for the easing
@@ -2392,10 +2384,8 @@ function createEffectActions(
       if (!node || !node.effects || !node.effects[effectIndex]) return;
       get().pushUndo(sceneGraph);
       const effects = [...node.effects];
-      effects[effectIndex] = {
-        ...effects[effectIndex],
-        visible: !effects[effectIndex].visible,
-      } as Effect;
+      const effect = effects[effectIndex]!;
+      effects[effectIndex] = { ...effect, visible: !effect.visible } as Effect;
       sceneGraph.updateNode(nodeId, { effects } as Partial<Node>);
       set({ isDirty: true });
     },
@@ -2589,7 +2579,7 @@ function createBooleanActions(
     }
 
     // Get fills/strokes from the first node for the group's appearance
-    const firstNode = orderedNodes[0];
+    const firstNode = orderedNodes[0]!;
     const fills: Fill[] = 'fills' in firstNode ? (firstNode as { fills: Fill[] }).fills : [];
     const strokes: Stroke[] =
       'strokes' in firstNode ? (firstNode as { strokes: Stroke[] }).strokes : [];
@@ -2641,7 +2631,7 @@ function createBooleanActions(
       const { selectedNodeIds } = get();
       if (selectedNodeIds.size !== 1) return;
 
-      const groupId = [...selectedNodeIds][0];
+      const groupId = [...selectedNodeIds][0]!;
       const node = sceneGraph.getNode(groupId);
       if (!node || node.type !== 'group' || !node.booleanOp) {
         toast.error('Select a boolean group to flatten');
@@ -2735,8 +2725,8 @@ function createBooleanActions(
         // Move children out
         const childIds = [...node.children];
         for (let i = 0; i < childIds.length; i++) {
-          sceneGraph.moveNode(childIds[i], parentId ?? null, insertAt + i);
-          movedChildIds.push(childIds[i]);
+          sceneGraph.moveNode(childIds[i]!, parentId ?? null, insertAt + i);
+          movedChildIds.push(childIds[i]!);
         }
 
         // Remove the now-empty group
@@ -3024,8 +3014,6 @@ function createHistoryActions(
         smartBoneRecordingTargetId: null,
         smartBoneRecordingPrevTool: null,
         smartBoneRecordingPrevRotation: null,
-        vitruvianControllers: [],
-        dynamicChains: [],
       });
     },
 

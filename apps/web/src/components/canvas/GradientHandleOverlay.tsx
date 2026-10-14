@@ -43,7 +43,10 @@ type DraggingHandle = 'start' | 'end' | 'center' | 'radius' | null;
 const HANDLE_RADIUS = 6;
 
 function getGradient(node: Node, fillIndex: number, source: 'fill' | 'stroke'): Gradient | null {
-  const shaped = node as { fills?: Array<{ gradient?: Gradient }>; strokes?: Array<{ gradient?: Gradient }> };
+  const shaped = node as {
+    fills?: Array<{ gradient?: Gradient }>;
+    strokes?: Array<{ gradient?: Gradient }>;
+  };
   if (source === 'fill') {
     return shaped.fills?.[fillIndex]?.gradient ?? null;
   }
@@ -82,6 +85,7 @@ export function GradientHandleOverlay({
       e.stopPropagation();
       e.preventDefault();
       draggingRef.current = handle;
+      let undoPushed = false;
 
       // Cache canvas rect for pointer move
       const canvasEl = document.querySelector('canvas');
@@ -109,8 +113,10 @@ export function GradientHandleOverlay({
         let updatedGradient: Gradient;
 
         if (draggingRef.current === 'start' || draggingRef.current === 'end') {
-          const currentStart = currentGradient.start ?? linearGradientFromAngle(currentGradient.angle ?? 0).start;
-          const currentEnd = currentGradient.end ?? linearGradientFromAngle(currentGradient.angle ?? 0).end;
+          const currentStart =
+            currentGradient.start ?? linearGradientFromAngle(currentGradient.angle ?? 0).start;
+          const currentEnd =
+            currentGradient.end ?? linearGradientFromAngle(currentGradient.angle ?? 0).end;
           const newStart = draggingRef.current === 'start' ? normalizedPos : currentStart;
           const newEnd = draggingRef.current === 'end' ? normalizedPos : currentEnd;
           const newAngle = angleFromLinearGradient(newStart, newEnd);
@@ -123,7 +129,10 @@ export function GradientHandleOverlay({
         } else if (draggingRef.current === 'center') {
           // Move center and keep relative radius position
           const oldCenter = currentGradient.center ?? { x: 0.5, y: 0.5 };
-          const oldEnd = currentGradient.end ?? { x: oldCenter.x + (currentGradient.radius ?? 0.5), y: oldCenter.y };
+          const oldEnd = currentGradient.end ?? {
+            x: oldCenter.x + (currentGradient.radius ?? 0.5),
+            y: oldCenter.y,
+          };
           const dx = normalizedPos.x - oldCenter.x;
           const dy = normalizedPos.y - oldCenter.y;
           updatedGradient = {
@@ -146,6 +155,10 @@ export function GradientHandleOverlay({
         }
 
         // Update the node
+        if (!undoPushed) {
+          useEditorStore.getState().pushUndo(sceneGraph);
+          undoPushed = true;
+        }
         type FillEntry = { gradient?: Gradient; [key: string]: unknown };
         if (source === 'fill') {
           const fills = [...((currentNode as { fills?: FillEntry[] }).fills ?? [])];
@@ -218,13 +231,7 @@ export function GradientHandleOverlay({
     const { start, end } = screenPositions;
     return (
       <svg className={styles.overlay} data-testid="gradient-handle-overlay">
-        <line
-          x1={start.x}
-          y1={start.y}
-          x2={end.x}
-          y2={end.y}
-          className={styles.gradientLine}
-        />
+        <line x1={start.x} y1={start.y} x2={end.x} y2={end.y} className={styles.gradientLine} />
         <circle
           cx={start.x}
           cy={start.y}

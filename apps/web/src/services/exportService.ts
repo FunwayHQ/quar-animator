@@ -5,8 +5,7 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access */
 
 import type { Node, ArtboardNode, SymbolDefinition } from '@quar/types';
-import type { SceneGraph } from '@quar/core';
-import { SelectionManager, WebGLRenderer, ShapeRenderer, mat3 } from '@quar/core';
+import { SceneGraph, SelectionManager, WebGLRenderer, ShapeRenderer, mat3 } from '@quar/core';
 import { exportNodesToSvg } from '@quar/core';
 
 // ============================================================================
@@ -162,38 +161,30 @@ export async function exportSelectionAsPng(
   gl.clearColor(0, 0, 0, 0);
   gl.clear(gl.COLOR_BUFFER_BIT);
 
-  // When exporting artboard without background, temporarily clear artboard fills
-  // so render() skips the background rectangle but still renders children
-  let savedFills: import('@quar/types').Fill[] | null = null;
+  // Render against a copy when omitting the artboard background. The live graph
+  // must remain intact while image textures load and the PNG is generated.
+  let exportGraph = sceneGraph;
   if (artboard && !includeBackground) {
-    savedFills = artboard.fills;
-    sceneGraph.updateNode(artboard.id, { fills: [] } as Partial<Node>);
+    exportGraph = new SceneGraph();
+    exportGraph.fromJSON(structuredClone(sceneGraph.toJSON()));
+    exportGraph.updateNode(artboard.id, { fills: [] } as Partial<Node>);
   }
 
-  // Pre-load all image textures so they're available during render.
-  // A fresh ShapeRenderer has an empty texture cache — without this,
-  // image nodes silently skip rendering because getTexture() returns null.
-  await shapeRenderer.preloadTextures(nodes, sceneGraph);
+  try {
+    // A fresh ShapeRenderer has an empty texture cache.
+    await shapeRenderer.preloadTextures(nodes, exportGraph);
 
-  // Render only the selected nodes and their descendants (not the entire scene).
-  // This prevents other root-level nodes from appearing in the export.
-  const exportNodeIds = nodes.map((n) => n.id);
-  shapeRenderer.render(sceneGraph, vpMatrix, new Set(), null, undefined, exportNodeIds);
+    const exportNodeIds = nodes.map((n) => n.id);
+    shapeRenderer.render(exportGraph, vpMatrix, new Set(), null, undefined, exportNodeIds);
 
-  // Restore artboard fills if they were temporarily removed
-  if (artboard && savedFills !== null) {
-    sceneGraph.updateNode(artboard.id, { fills: savedFills } as Partial<Node>);
+    const blob = await canvasToBlob(canvas, 'image/png');
+    if (blob) {
+      downloadBlob(blob, getExportFilename(nodes, 'png'));
+    }
+  } finally {
+    shapeRenderer.dispose();
+    renderer.dispose();
   }
-
-  // Convert to PNG blob and download
-  const blob = await canvasToBlob(canvas, 'image/png');
-  if (blob) {
-    downloadBlob(blob, getExportFilename(nodes, 'png'));
-  }
-
-  // Cleanup
-  shapeRenderer.dispose();
-  renderer.dispose();
 }
 
 function canvasToBlob(canvas: HTMLCanvasElement, type: string): Promise<Blob | null> {

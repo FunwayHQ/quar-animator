@@ -222,10 +222,12 @@ describe('playback advancement', () => {
   });
 
   it('should pause at last frame when not looping', () => {
+    const onPlaybackEnd = vi.fn();
     const { controller, timer } = createController({
       duration: 5,
       frameRate: 30,
       looping: false,
+      onPlaybackEnd,
     });
     controller.play();
     timer.tick(0);
@@ -233,6 +235,7 @@ describe('playback advancement', () => {
     timer.tick(200);
     expect(controller.currentFrame).toBe(4); // duration - 1
     expect(controller.isPlaying).toBe(false);
+    expect(onPlaybackEnd).toHaveBeenCalledOnce();
   });
 
   it('should loop to frame 0 when looping is enabled', () => {
@@ -436,6 +439,16 @@ describe('work area', () => {
     controller.goToFrame(100);
     controller.play();
     // Should have rewound to 50
+    expect(controller.currentFrame).toBe(50);
+    expect(controller.isPlaying).toBe(true);
+  });
+
+  it('play() should start at workAreaStart when looping from outside the selected range', () => {
+    const { controller } = createController({ looping: true });
+    controller.setWorkArea(true, 50, 100);
+    controller.goToFrame(20);
+    controller.play();
+
     expect(controller.currentFrame).toBe(50);
     expect(controller.isPlaying).toBe(true);
   });

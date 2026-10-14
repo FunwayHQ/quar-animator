@@ -72,6 +72,7 @@ export function Timeline({ playback }: TimelineProps = {}) {
   const addKeyframeToSelection = useEditorStore((s) => s.addKeyframeToSelection);
   const clearKeyframeSelection = useEditorStore((s) => s.clearKeyframeSelection);
   const removeSelectedKeyframes = useEditorStore((s) => s.removeSelectedKeyframes);
+  const addKeyframeAtFrame = useEditorStore((s) => s.addKeyframeAtFrame);
   const setKeyframeEasing = useEditorStore((s) => s.setKeyframeEasing);
   const copySelectedKeyframes = useEditorStore((s) => s.copySelectedKeyframes);
   const pasteKeyframes = useEditorStore((s) => s.pasteKeyframes);
@@ -90,8 +91,8 @@ export function Timeline({ playback }: TimelineProps = {}) {
   const setWorkAreaStart = useEditorStore((s) => s.setWorkAreaStart);
   const setWorkAreaEnd = useEditorStore((s) => s.setWorkAreaEnd);
   const setWorkAreaRange = useEditorStore((s) => s.setWorkAreaRange);
+  const setWorkAreaEnabled = useEditorStore((s) => s.setWorkAreaEnabled);
   const toggleWorkArea = useEditorStore((s) => s.toggleWorkArea);
-  const setWorkAreaToCurrentFrame = useEditorStore((s) => s.setWorkAreaToCurrentFrame);
   const clearWorkArea = useEditorStore((s) => s.clearWorkArea);
 
   const [showOnionSkinPanel, setShowOnionSkinPanel] = useState(false);
@@ -127,11 +128,28 @@ export function Timeline({ playback }: TimelineProps = {}) {
     initialEnd: number;
     rulerWidth: number;
   } | null>(null);
+  const rangeSelectionRef = useRef<{
+    startFrame: number;
+    rulerLeft: number;
+    rulerWidth: number;
+  } | null>(null);
+  const suppressRulerClickRef = useRef(false);
 
   // Track scene graph changes for layer labels
   const [nodes, setNodes] = useState<Node[]>([]);
   useEffect(() => {
-    const update = () => setNodes([...sceneGraph.getRootNodes()].reverse());
+    const update = () => {
+      const rows: Node[] = [];
+      const visit = (node: Node) => {
+        rows.push(node);
+        for (const childId of [...node.children].reverse()) {
+          const child = sceneGraph.getNode(childId);
+          if (child) visit(child);
+        }
+      };
+      for (const root of [...sceneGraph.getRootNodes()].reverse()) visit(root);
+      setNodes(rows);
+    };
     update();
     const unsub = sceneGraph.on('nodeAdded', update);
     const unsub2 = sceneGraph.on('nodeRemoved', update);
@@ -179,6 +197,10 @@ export function Timeline({ playback }: TimelineProps = {}) {
 
   const handleRulerClick = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
+      if (suppressRulerClickRef.current) {
+        suppressRulerClickRef.current = false;
+        return;
+      }
       const ruler = rulerRef.current;
       if (!ruler) return;
       const rect = ruler.getBoundingClientRect();
@@ -189,6 +211,59 @@ export function Timeline({ playback }: TimelineProps = {}) {
     },
     [duration, setCurrentFrame, clearKeyframeSelection]
   );
+
+  // Dragging on the ruler selects a work area and turns looping on. A normal
+  // click continues to scrub the playhead.
+  const handleRulerPointerDown = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      if (e.button !== 0) return;
+      const ruler = rulerRef.current;
+      if (!ruler) return;
+      const rect = ruler.getBoundingClientRect();
+      if (rect.width <= 0) return;
+      const startFrame = Math.max(
+        0,
+        Math.min(duration - 1, Math.round(((e.clientX - rect.left) / rect.width) * duration))
+      );
+      rangeSelectionRef.current = {
+        startFrame,
+        rulerLeft: rect.left,
+        rulerWidth: rect.width,
+      };
+      if (typeof e.currentTarget.setPointerCapture === 'function') {
+        e.currentTarget.setPointerCapture(e.pointerId);
+      }
+    },
+    [duration]
+  );
+
+  const handleRulerPointerMove = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      const selection = rangeSelectionRef.current;
+      if (!selection) return;
+      const frame = Math.max(
+        0,
+        Math.min(
+          duration - 1,
+          Math.round(((e.clientX - selection.rulerLeft) / selection.rulerWidth) * duration)
+        )
+      );
+      if (frame === selection.startFrame) return;
+
+      suppressRulerClickRef.current = true;
+      setWorkAreaRange(
+        Math.min(selection.startFrame, frame),
+        Math.max(selection.startFrame, frame)
+      );
+      setWorkAreaEnabled(true);
+      setIsLooping(true);
+    },
+    [duration, setWorkAreaRange, setWorkAreaEnabled, setIsLooping]
+  );
+
+  const handleRulerPointerUp = useCallback(() => {
+    rangeSelectionRef.current = null;
+  }, []);
 
   const togglePlay = useCallback(() => {
     if (playback) {
@@ -367,11 +442,10 @@ export function Timeline({ playback }: TimelineProps = {}) {
   // ------- Context menu handlers -------
 
   const handleTimelineContextMenu = useCallback(
-    (e: React.MouseEvent) => {
+    (e: React.MouseEvent<HTMLDivElement>) => {
       e.preventDefault();
-      const ruler = rulerRef.current;
-      if (!ruler) return;
-      const rect = ruler.getBoundingClientRect();
+      const rect = e.currentTarget.getBoundingClientRect();
+      if (rect.width <= 0) return;
       const x = e.clientX - rect.left;
       const frame = Math.max(0, Math.min(duration - 1, Math.round((x / rect.width) * duration)));
       setContextMenu({ x: e.clientX, y: e.clientY, frame });
@@ -459,6 +533,18 @@ export function Timeline({ playback }: TimelineProps = {}) {
         label: `Go To Frame ${contextMenu.frame}`,
         onClick: () => setCurrentFrame(contextMenu.frame),
       },
+      {
+        id: 'add-opacity-keyframe',
+        label: `Add Opacity Keyframe at Frame ${contextMenu.frame}`,
+        disabled: selectedNodeIds.size === 0,
+        onClick: () => {
+          setCurrentFrame(contextMenu.frame);
+          for (const nodeId of selectedNodeIds) {
+            const node = sceneGraph.getNode(nodeId);
+            if (node) addKeyframeAtFrame(nodeId, 'opacity', contextMenu.frame, node.opacity);
+          }
+        },
+      },
       { type: 'separator' },
       {
         id: 'go-to-start',
@@ -529,6 +615,8 @@ export function Timeline({ playback }: TimelineProps = {}) {
     keyframeMap,
     setCurrentFrame,
     setIsPlaying,
+    addKeyframeAtFrame,
+    sceneGraph,
     setKeyframeEasing,
     copySelectedKeyframes,
     removeSelectedKeyframes,
@@ -902,12 +990,16 @@ export function Timeline({ playback }: TimelineProps = {}) {
               className={styles.ruler}
               ref={rulerRef}
               onClick={handleRulerClick}
+              onPointerDown={handleRulerPointerDown}
+              onPointerMove={handleRulerPointerMove}
+              onPointerUp={handleRulerPointerUp}
+              onPointerCancel={handleRulerPointerUp}
               onContextMenu={handleTimelineContextMenu}
               role="slider"
               aria-valuenow={currentFrame}
               aria-valuemin={0}
               aria-valuemax={duration - 1}
-              aria-label="Timeline scrubber"
+              aria-label="Timeline scrubber. Drag to select a looping range."
               tabIndex={0}
               data-testid="timeline-ruler"
             >
@@ -973,7 +1065,13 @@ export function Timeline({ playback }: TimelineProps = {}) {
 
             {/* Tracks */}
             {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- click deselects keyframes, keyboard handled by useTimelineShortcuts */}
-            <div className={styles.tracks} ref={tracksRef} onClick={handleTrackClick}>
+            <div
+              className={styles.tracks}
+              ref={tracksRef}
+              onClick={handleTrackClick}
+              onContextMenu={handleTimelineContextMenu}
+              data-testid="timeline-tracks"
+            >
               {nodes.map((node) => {
                 const kfs = nodeKeyframes.get(node.id);
                 return (

@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, act } from '@testing-library/react';
+import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
+import { exportGif, exportMp4 } from '@quar/export';
+import { downloadBlob } from '../../services/exportService';
 
 // Mock the SceneGraph context
 const mockGetRootNodes = vi.fn().mockReturnValue([]);
@@ -31,6 +33,8 @@ vi.mock('../../stores/editorStore', () => ({
 // Mock export functions
 vi.mock('@quar/export', () => ({
   exportLottieBlob: vi.fn().mockReturnValue(new Blob(['{}'], { type: 'application/json' })),
+  exportGif: vi.fn().mockResolvedValue(new Blob(['gif'], { type: 'image/gif' })),
+  exportMp4: vi.fn().mockResolvedValue(new Blob(['mp4'], { type: 'video/mp4' })),
   analyzeLottieExport: vi.fn().mockReturnValue({
     supportedCount: 2,
     unsupportedCount: 1,
@@ -73,11 +77,13 @@ describe('ExportDialog', () => {
     expect(screen.getByText('Export Animation')).toBeInTheDocument();
   });
 
-  it('shows three format tabs', () => {
+  it('shows all format tabs', () => {
     render(<ExportDialogHost />);
     act(() => showExportDialog('png-sequence'));
     expect(screen.getByTestId('export-tab-png-sequence')).toBeInTheDocument();
     expect(screen.getByTestId('export-tab-sprite-sheet')).toBeInTheDocument();
+    expect(screen.getByTestId('export-tab-gif')).toBeInTheDocument();
+    expect(screen.getByTestId('export-tab-mp4')).toBeInTheDocument();
     expect(screen.getByTestId('export-tab-lottie')).toBeInTheDocument();
   });
 
@@ -118,6 +124,46 @@ describe('ExportDialog', () => {
     act(() => showExportDialog('sprite-sheet'));
     expect(screen.getByTestId('export-sprite-layout')).toBeInTheDocument();
     expect(screen.getByTestId('export-sprite-padding')).toBeInTheDocument();
+  });
+
+  it('shows GIF transparency control on GIF tab', () => {
+    render(<ExportDialogHost />);
+    act(() => showExportDialog('gif'));
+    expect(screen.getByTestId('export-gif-transparent')).toBeInTheDocument();
+  });
+
+  it('shows MP4 encoder requirements on MP4 tab', () => {
+    render(<ExportDialogHost />);
+    act(() => showExportDialog('mp4'));
+    expect(screen.getByText(/MP4 uses H\.264 encoding/)).toBeInTheDocument();
+  });
+
+  it('runs the GIF exporter and downloads its output', async () => {
+    render(<ExportDialogHost />);
+    act(() => showExportDialog('gif'));
+    fireEvent.click(screen.getByTestId('export-dialog-export'));
+
+    await waitFor(() => expect(exportGif).toHaveBeenCalledOnce());
+    expect(exportGif).toHaveBeenCalledWith(
+      expect.objectContaining({ sceneGraph: expect.any(Object), timeline: mockStore.timeline }),
+      expect.objectContaining({ startFrame: 0, endFrame: 59, transparent: false }),
+      expect.any(Function),
+      expect.any(Function)
+    );
+    expect(downloadBlob).toHaveBeenCalledWith(expect.any(Blob), 'animation.gif');
+  });
+
+  it('shows an MP4 capability error returned by the encoder', async () => {
+    vi.mocked(exportMp4).mockRejectedValueOnce(
+      new Error('This browser or device does not support H.264 MP4 encoding.')
+    );
+    render(<ExportDialogHost />);
+    act(() => showExportDialog('mp4'));
+    fireEvent.click(screen.getByTestId('export-dialog-export'));
+
+    expect(await screen.findByTestId('export-error')).toHaveTextContent(
+      /does not support H\.264 MP4 encoding/
+    );
   });
 
   it('shows unsupported warnings on Lottie tab', () => {

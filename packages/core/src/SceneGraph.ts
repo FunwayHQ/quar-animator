@@ -80,13 +80,14 @@ export class SceneGraph {
       throw new Error(`Node with id "${node.id}" already exists`);
     }
 
+    const parent = parentId ? this.nodes.get(parentId) : undefined;
+    if (parentId && !parent) {
+      throw new Error(`Parent node "${parentId}" not found`);
+    }
+
     this.nodes.set(node.id, node);
 
-    if (parentId) {
-      const parent = this.nodes.get(parentId);
-      if (!parent) {
-        throw new Error(`Parent node "${parentId}" not found`);
-      }
+    if (parentId && parent) {
       node.parent = parentId;
       parent.children.push(node.id);
     } else {
@@ -141,6 +142,11 @@ export class SceneGraph {
       );
     }
 
+    const newParent = newParentId ? this.nodes.get(newParentId) : undefined;
+    if (newParentId && !newParent) {
+      throw new Error(`Parent node "${newParentId}" not found`);
+    }
+
     const previousParentId = node.parent;
 
     // Remove from old parent
@@ -160,11 +166,7 @@ export class SceneGraph {
     }
 
     // Add to new parent
-    if (newParentId) {
-      const newParent = this.nodes.get(newParentId);
-      if (!newParent) {
-        throw new Error(`Parent node "${newParentId}" not found`);
-      }
+    if (newParentId && newParent) {
       node.parent = newParentId;
       if (index !== undefined) {
         newParent.children.splice(index, 0, id);

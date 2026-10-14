@@ -77,7 +77,7 @@ export async function exportPngSequence(
       // Render frame
       const blob = await renderer.renderFrameAsBlob(ctx, frame);
       if (blob) {
-        zip.file(filenames[i], blob);
+        zip.file(filenames[i]!, blob);
       }
 
       // Yield to UI between frames

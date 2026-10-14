@@ -12,10 +12,12 @@
     "clean": "rimraf dist"
   },
   "dependencies": {
-    "@quar/types": "workspace:*",
-    "@quar/core": "workspace:*",
     "@quar/animation": "workspace:*",
-    "jszip": "^3.10.1"
+    "@quar/core": "workspace:*",
+    "@quar/types": "workspace:*",
+    "gifenc": "^1.0.3",
+    "jszip": "^3.10.1",
+    "mediabunny": "^1.61.4"
   },
   "devDependencies": {
     "tsup": "^8.0.1",

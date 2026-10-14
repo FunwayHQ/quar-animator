@@ -206,7 +206,7 @@ export function pathToLottieShapes(
   // Convert subpaths
   if (node.subpaths) {
     for (let i = 0; i < node.subpaths.length; i++) {
-      const subVertices = pathPointsToLottieVertices(node.subpaths[i], true, true);
+      const subVertices = pathPointsToLottieVertices(node.subpaths[i]!, true, true);
       const subPath: LottieShapePath = {
         ty: 'sh',
         nm: `Subpath ${i + 1}`,
@@ -360,21 +360,16 @@ export function pathPointsToLottieVertices(
  */
 export function fillsToLottie(
   fills: Fill[] | undefined,
-  nodeId: string,
-  timeline: Timeline,
+  _nodeId: string,
+  _timeline: Timeline,
   fillRule?: 'nonzero' | 'evenodd'
 ): LottieShapeFill[] {
   if (!fills) return [];
 
   const result: LottieShapeFill[] = [];
   for (let idx = 0; idx < fills.length; idx++) {
-    const fill = fills[idx];
+    const fill = fills[idx]!;
     if (!fill.visible || fill.type !== 'solid' || !fill.color) continue;
-
-    // Color tracks reserved for future animated color support
-    const _colorTrackR = findTrack<number>(timeline, nodeId, `fills.${idx}.color.r`);
-    const _colorTrackG = findTrack<number>(timeline, nodeId, `fills.${idx}.color.g`);
-    const _colorTrackB = findTrack<number>(timeline, nodeId, `fills.${idx}.color.b`);
 
     // Static color (animation support deferred for color tracks with multiple components)
     const lottieFill: LottieShapeFill = {
@@ -410,7 +405,7 @@ export function strokesToLottie(
 
   const result: LottieShapeStroke[] = [];
   for (let idx = 0; idx < strokes.length; idx++) {
-    const stroke = strokes[idx];
+    const stroke = strokes[idx]!;
     if (!stroke.visible) continue;
 
     const widthTrack = findTrack<number>(timeline, nodeId, `strokes.${idx}.width`);

@@ -49,8 +49,7 @@ describe('PNG Sequence - Frame Utilities', () => {
 
     it('handles pattern without {N} placeholder', () => {
       const names = generateFrameFilenames('static_name', 0, 1, 'png');
-      expect(names[0]).toBe('static_name.png');
-      expect(names[1]).toBe('static_name.png');
+      expect(names).toEqual(['static_name_0.png', 'static_name_1.png']);
     });
   });
 });

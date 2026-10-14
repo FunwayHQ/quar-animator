@@ -370,6 +370,8 @@ describe('solveFABRIK', () => {
     // Both should converge
     expect(resultUp.rotations.size).toBe(2);
     expect(resultDown.rotations.size).toBe(2);
+    expect(resultUp.rotations.get('bone1')).toBeGreaterThan(0);
+    expect(resultDown.rotations.get('bone1')).toBeLessThan(0);
   });
 
   it('pole target on 3-bone chain affects middle joints', () => {

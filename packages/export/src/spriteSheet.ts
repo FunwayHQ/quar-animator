@@ -59,15 +59,17 @@ export async function exportSpriteSheet(
   } = options;
 
   const frameCount = getFrameCount(startFrame, endFrame);
+  const pixelFrameWidth = Math.ceil(frameWidth * multiplier);
+  const pixelFrameHeight = Math.ceil(frameHeight * multiplier);
 
   // Compute atlas layout
   let packResult: PackResult;
   if (layout === 'grid') {
-    packResult = packGrid(frameCount, frameWidth, frameHeight, columns, padding);
+    packResult = packGrid(frameCount, pixelFrameWidth, pixelFrameHeight, columns, padding);
   } else {
     const frames = Array.from({ length: frameCount }, () => ({
-      width: frameWidth,
-      height: frameHeight,
+      width: pixelFrameWidth,
+      height: pixelFrameHeight,
     }));
     const maxDim = 4096;
     packResult = packMaxRects(frames, maxDim, maxDim, padding);
@@ -156,7 +158,7 @@ export async function exportSpriteSheet(
     // Generate metadata
     const metadata = generateSpriteSheetMetadata(
       packResult,
-      { startFrame, endFrame, frameWidth, frameHeight },
+      { startFrame, endFrame, frameWidth: pixelFrameWidth, frameHeight: pixelFrameHeight },
       'spritesheet.png'
     );
 

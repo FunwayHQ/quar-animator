@@ -3,12 +3,13 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render as baseRender, screen, fireEvent } from '../../test/utils';
+import { render as baseRender, screen, fireEvent, act } from '../../test/utils';
 import { useEditorStore, DEFAULT_FILL, DEFAULT_STROKE } from '../../stores/editorStore';
 import { createTimeline } from '@quar/animation';
 import { DEFAULT_ONION_SKIN_SETTINGS } from '@quar/core';
 import { SceneGraphProvider } from '../../contexts/SceneGraphContext';
 import { MenuBar } from './MenuBar';
+import { ExportDialogHost } from '../common/ExportDialog';
 import type { ProjectActions } from '../../hooks/useProjectActions';
 import type { ReactElement } from 'react';
 
@@ -108,6 +109,29 @@ describe('MenuBar', () => {
     render(<MenuBar projectActions={createMockProjectActions()} />);
     fireEvent.click(screen.getByTestId('menu-file'));
     expect(screen.getByTestId('file-menu-dropdown')).toBeInTheDocument();
+  });
+
+  it('opens GIF and MP4 export dialogs from enabled menu items', async () => {
+    render(
+      <>
+        <MenuBar />
+        <ExportDialogHost />
+      </>
+    );
+
+    fireEvent.click(screen.getByTestId('menu-export'));
+    expect(screen.getByText('Export as GIF...')).not.toBeDisabled();
+    fireEvent.click(screen.getByText('Export as GIF...'));
+    expect(screen.getByTestId('export-tab-gif').className).toContain('active');
+    fireEvent.click(screen.getByTestId('export-dialog-close'));
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 150));
+    });
+
+    fireEvent.click(screen.getByTestId('menu-export'));
+    expect(screen.getByText('Export as MP4...')).not.toBeDisabled();
+    fireEvent.click(screen.getByText('Export as MP4...'));
+    expect(screen.getByTestId('export-tab-mp4').className).toContain('active');
   });
 
   it('shows all file menu items', () => {

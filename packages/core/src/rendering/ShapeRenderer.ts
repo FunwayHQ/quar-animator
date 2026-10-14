@@ -14,7 +14,6 @@ import type {
   GroupNode,
   BoneNode,
   ArtboardNode,
-  SymbolInstanceNode,
   SymbolDefinition,
   Node,
   Fill,

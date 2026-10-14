@@ -63,6 +63,7 @@ export function usePlayback() {
         // Apply animations directly from the playback callback (single evaluation)
         applyAnimations(frame);
       },
+      onPlaybackEnd: () => useEditorStore.getState().setIsPlaying(false),
     });
     // Initialize work area from store
     ctrl.setWorkArea(state.workAreaEnabled, state.workAreaStart, state.workAreaEnd);

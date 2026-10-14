@@ -3,14 +3,7 @@
  * Selects, moves, and resizes shapes
  */
 
-import type {
-  CanvasPointerEvent,
-  Node,
-  Vector2,
-  Rect,
-  Matrix3,
-  SymbolInstanceNode,
-} from '@quar/types';
+import type { CanvasPointerEvent, Node, Vector2, Rect, Matrix3 } from '@quar/types';
 import { BaseTool, type ToolContext } from './BaseTool';
 import { vec2, rect, mat3 } from '../math';
 import { SelectionManager } from '../selection/SelectionManager';

@@ -14,6 +14,7 @@ interface BoneOverlayProps {
   ikChains?: IKChain[];
   selectedNodeIds: Set<string>;
   camera: Camera | null;
+  cameraVersion?: number;
   sceneGraph: SceneGraph;
   hiddenBoneIds?: Set<string>;
   dynamicChainBoneIds?: Set<string>;
@@ -33,6 +34,7 @@ export function BoneOverlay({
   ikChains = [],
   selectedNodeIds,
   camera,
+  cameraVersion = 0,
   sceneGraph,
   hiddenBoneIds,
   dynamicChainBoneIds,
@@ -71,7 +73,15 @@ export function BoneOverlay({
         isDynamic,
       };
     });
-  }, [boneNodes, selectedNodeIds, camera, sceneGraph, hiddenBoneIds, dynamicChainBoneIds]);
+  }, [
+    boneNodes,
+    selectedNodeIds,
+    camera,
+    cameraVersion,
+    sceneGraph,
+    hiddenBoneIds,
+    dynamicChainBoneIds,
+  ]);
 
   // IK target markers
   const ikMarkers = useMemo(() => {
@@ -88,7 +98,7 @@ export function BoneOverlay({
         ikChainId: target.ikChainId,
       };
     });
-  }, [ikTargetNodes, selectedNodeIds, camera, sceneGraph]);
+  }, [ikTargetNodes, selectedNodeIds, camera, cameraVersion, sceneGraph]);
 
   // Dashed lines from end effector tip to IK target
   const chainLines = useMemo(() => {
@@ -105,7 +115,7 @@ export function BoneOverlay({
       const targetNode = sceneGraph.getNode(chain.targetNodeId);
       if (!endBone || !targetNode || endBone.type !== 'bone') continue;
 
-      const bone = endBone as BoneNode;
+      const bone = endBone;
       const boneWT = sceneGraph.getWorldTransform(bone.id);
       const tipX = boneWT.a * bone.length + boneWT.tx;
       const tipY = boneWT.b * bone.length + boneWT.ty;
@@ -118,7 +128,7 @@ export function BoneOverlay({
     }
 
     return lines;
-  }, [ikChains, camera, sceneGraph]);
+  }, [ikChains, camera, cameraVersion, sceneGraph]);
 
   if (!camera || (markers.length === 0 && ikMarkers.length === 0)) return null;
 

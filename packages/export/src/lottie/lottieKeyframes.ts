@@ -127,7 +127,7 @@ export function trackToLottieAnimated(
   }
 
   if (track.keyframes.length === 1) {
-    return { a: 0, k: transform(track.keyframes[0].value) };
+    return { a: 0, k: transform(track.keyframes[0]!.value) };
   }
 
   // Bounce/elastic cannot be a single cubic bezier; bake the track to per-frame
@@ -138,7 +138,7 @@ export function trackToLottieAnimated(
 
   const keyframes: LottieKeyframe[] = [];
   for (let i = 0; i < track.keyframes.length; i++) {
-    const kf = track.keyframes[i];
+    const kf = track.keyframes[i]!;
     const nextKf = track.keyframes[i + 1];
     keyframes.push(quarKeyframeToLottie(kf, nextKf, transform));
   }
@@ -207,7 +207,7 @@ export function positionTracksToLottie(
 
   const keyframes: LottieMultiKeyframe[] = [];
   for (let i = 0; i < times.length; i++) {
-    const t = times[i];
+    const t = times[i]!;
     const nextT = times[i + 1];
 
     const xVal = sampleTrackAt(trackX, t, defaultX);
@@ -228,8 +228,14 @@ export function positionTracksToLottie(
       const easing = nextKfX?.easing ?? 'linear';
       const tangents = quarEasingToLottieTangents(easing);
       if (tangents) {
-        result.i = { x: [tangents.i.x[0], tangents.i.x[0]], y: [tangents.i.y[0], tangents.i.y[0]] };
-        result.o = { x: [tangents.o.x[0], tangents.o.x[0]], y: [tangents.o.y[0], tangents.o.y[0]] };
+        result.i = {
+          x: [tangents.i.x[0]!, tangents.i.x[0]!],
+          y: [tangents.i.y[0]!, tangents.i.y[0]!],
+        };
+        result.o = {
+          x: [tangents.o.x[0]!, tangents.o.x[0]!],
+          y: [tangents.o.y[0]!, tangents.o.y[0]!],
+        };
       }
     }
 
@@ -248,7 +254,7 @@ export function colorToLottieAnimated(
   component: 'r' | 'g' | 'b' | 'a'
 ): number {
   if (track && track.keyframes.length > 0) {
-    return track.keyframes[0].value / (component === 'a' ? 1 : 255);
+    return track.keyframes[0]!.value / (component === 'a' ? 1 : 255);
   }
   if (!defaultColor) return component === 'a' ? 1 : 0;
   return defaultColor[component] / (component === 'a' ? 1 : 255);
@@ -297,7 +303,7 @@ export function colorTracksToLottie(
   const keyframes: LottieColorKeyframe[] = [];
 
   for (let i = 0; i < times.length; i++) {
-    const t = times[i];
+    const t = times[i]!;
     const nextT = times[i + 1];
 
     const r = sampleTrackAt(trackR, t, defaultColor?.r ?? 0) / 255;
@@ -334,24 +340,25 @@ export function colorTracksToLottie(
  */
 export function bakeTrackToLinearKeyframes(
   track: PropertyTrack<number>,
-  fps: number,
+  _fps: number,
   transform: ValueTransform = VALUE_TRANSFORMS.identity
 ): LottieKeyframe[] {
   if (track.keyframes.length === 0) return [];
   if (track.keyframes.length === 1) {
-    return [{ t: track.keyframes[0].time, s: [transform(track.keyframes[0].value)] }];
+    const first = track.keyframes[0]!;
+    return [{ t: first.time, s: [transform(first.value)] }];
   }
 
   const keyframes: LottieKeyframe[] = [];
-  const firstTime = track.keyframes[0].time;
-  const lastTime = track.keyframes[track.keyframes.length - 1].time;
+  const firstTime = track.keyframes[0]!.time;
+  const lastTime = track.keyframes[track.keyframes.length - 1]!.time;
 
   // Add a keyframe for every frame in the range
   for (let frame = firstTime; frame <= lastTime; frame++) {
-    const value = sampleTrackAt(track, frame, track.keyframes[0].value);
+    const value = sampleTrackAt(track, frame, track.keyframes[0]!.value);
     const nextFrame = frame + 1;
     const nextValue =
-      nextFrame <= lastTime ? sampleTrackAt(track, nextFrame, track.keyframes[0].value) : value;
+      nextFrame <= lastTime ? sampleTrackAt(track, nextFrame, track.keyframes[0]!.value) : value;
 
     const kf: LottieKeyframe = {
       t: frame,
@@ -400,17 +407,19 @@ function sampleTrackAt(
   const kfs = track.keyframes;
 
   // Before first keyframe
-  if (frame <= kfs[0].time) return kfs[0].value;
+  if (frame <= kfs[0]!.time) return kfs[0]!.value;
   // After last keyframe
-  if (frame >= kfs[kfs.length - 1].time) return kfs[kfs.length - 1].value;
+  if (frame >= kfs[kfs.length - 1]!.time) return kfs[kfs.length - 1]!.value;
 
   // Find surrounding keyframes
   for (let i = 0; i < kfs.length - 1; i++) {
-    if (kfs[i].time <= frame && frame <= kfs[i + 1].time) {
-      const duration = kfs[i + 1].time - kfs[i].time;
-      if (duration === 0) return kfs[i].value;
-      const t = (frame - kfs[i].time) / duration;
-      return kfs[i].value + (kfs[i + 1].value - kfs[i].value) * t;
+    const current = kfs[i]!;
+    const next = kfs[i + 1]!;
+    if (current.time <= frame && frame <= next.time) {
+      const duration = next.time - current.time;
+      if (duration === 0) return current.value;
+      const t = (frame - current.time) / duration;
+      return current.value + (next.value - current.value) * t;
     }
   }
 

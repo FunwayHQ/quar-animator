@@ -390,7 +390,6 @@ export function LayerPanel() {
   const bringToFront = useEditorStore((state) => state.bringToFront);
   const sendToBack = useEditorStore((state) => state.sendToBack);
   const enteredGroupId = useEditorStore((state) => state.enteredGroupId);
-  const enterGroup = useEditorStore((state) => state.enterGroup);
 
   // Track scene graph version to re-render when nodes change
   const [, setVersion] = useState(0);

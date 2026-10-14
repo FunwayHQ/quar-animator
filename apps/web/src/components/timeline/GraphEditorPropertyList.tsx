@@ -18,7 +18,7 @@ interface GraphEditorPropertyListProps {
 /** Short display name from a dot-notation property path */
 function shortPropertyName(property: string): string {
   const parts = property.split('.');
-  const last = parts[parts.length - 1];
+  const last = parts[parts.length - 1]!;
   // Capitalize first letter
   return last.charAt(0).toUpperCase() + last.slice(1);
 }

@@ -1,27 +1,17 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import type {
   Node,
-  RectangleNode,
   EllipseNode,
-  PolygonNode,
   PathNode,
-  TextNode,
-  ImageNode,
   GroupNode,
   BoneNode,
-  ArtboardNode,
   Color,
   Gradient,
   Fill,
   Stroke,
   Effect,
-  EffectType,
   BlendMode,
   BooleanOp,
-  DropShadowEffect,
-  InnerShadowEffect,
-  LayerBlurEffect,
-  SymbolInstanceNode,
   SymbolDefinition,
 } from '@quar/types';
 import {
@@ -36,7 +26,6 @@ import {
   Minus,
   Combine,
   Diff,
-  ChevronDown,
   Download,
 } from 'lucide-react';
 import { useSceneGraph } from '../../contexts/SceneGraphContext';
@@ -59,7 +48,6 @@ import {
   SelectionManager,
   getPathBounds,
   getTextBounds,
-  WEB_SAFE_FONTS,
   getFontManager,
   GOOGLE_FONTS_CATALOG,
   getAllPoints,
@@ -210,8 +198,6 @@ function getNodeSize(
       return { width: 0, height: 0 };
   }
 }
-
-const noop = () => {};
 
 /** Handle ArrowUp/ArrowDown on numeric inputs: ±1 or ±10 with Shift */
 function handleNumericInputKeyDown(
@@ -1357,9 +1343,9 @@ export function PropertiesPanel() {
   const getSizePropertyValue = (path: string): number => {
     switch (path) {
       case 'width':
-        return node.width ?? 0;
+        return ('width' in node ? node.width : 0) ?? 0;
       case 'height':
-        return node.height ?? 0;
+        return ('height' in node ? node.height : 0) ?? 0;
       case 'radiusX':
         return (node as EllipseNode).radiusX ?? 0;
       case 'radiusY':
@@ -2023,12 +2009,18 @@ export function PropertiesPanel() {
               node.type !== 'text' &&
               ((node.type !== 'group' && 'skinData' in node && (node as any).skinData != null) ||
                 (node.type === 'group' &&
-                  sceneGraph.getChildren(node.id).some((c) => c.skinData != null))) &&
+                  sceneGraph
+                    .getChildren(node.id)
+                    .some((c) => 'skinData' in c && c.skinData != null))) &&
               (() => {
                 // For groups, use skinData from first skinned child
                 const skinData =
                   node.type === 'group'
-                    ? (sceneGraph.getChildren(node.id).find((c) => c.skinData) as any)?.skinData
+                    ? (
+                        sceneGraph
+                          .getChildren(node.id)
+                          .find((c) => 'skinData' in c && c.skinData) as any
+                      )?.skinData
                     : (node as any).skinData;
                 if (!skinData) return null;
                 const boneCount = Object.keys(skinData.inverseBindMatrices || {}).length;
@@ -2504,7 +2496,7 @@ export function PropertiesPanel() {
           (() => {
             const pathNode = node;
             const allPts = getAllPoints(pathNode);
-            const firstPt = allPts[dsPoints[0].pointIndex];
+            const firstPt = allPts[dsPoints[0]!.pointIndex];
             if (!firstPt) return null;
 
             // Check if all selected are corner type (for cornerRadius editing)
@@ -2517,8 +2509,9 @@ export function PropertiesPanel() {
             const crValues = allCorner
               ? dsPoints.map((sp) => allPts[sp.pointIndex]?.cornerRadius ?? 0)
               : [];
-            const crAllSame = crValues.length > 0 && crValues.every((v) => v === crValues[0]);
-            const crDisplay = allCorner ? (crAllSame ? String(crValues[0]) : '') : null;
+            const crAllSame =
+              crValues.length > 0 && crValues.every((v) => v === (crValues[0] ?? 0));
+            const crDisplay = allCorner ? (crAllSame ? String(crValues[0] ?? 0) : '') : null;
 
             const handleVertexPosChange = (axis: 'x' | 'y', value: string) => {
               const num = parseFloat(value);
@@ -2627,7 +2620,7 @@ export function PropertiesPanel() {
                               ? getKeyframeState(
                                   timeline,
                                   selectedId,
-                                  vertexPropPath(node, dsPoints[0].pointIndex, 'position.x'),
+                                  vertexPropPath(node, dsPoints[0]!.pointIndex, 'position.x'),
                                   currentFrame
                                 )
                               : 'none'
@@ -2635,7 +2628,7 @@ export function PropertiesPanel() {
                           onToggle={() => {
                             if (selectedId)
                               toggleKeyframe(
-                                vertexPropPath(node, dsPoints[0].pointIndex, 'position.x'),
+                                vertexPropPath(node, dsPoints[0]!.pointIndex, 'position.x'),
                                 firstPt.position.x
                               );
                           }}
@@ -2666,7 +2659,7 @@ export function PropertiesPanel() {
                               ? getKeyframeState(
                                   timeline,
                                   selectedId,
-                                  vertexPropPath(node, dsPoints[0].pointIndex, 'position.y'),
+                                  vertexPropPath(node, dsPoints[0]!.pointIndex, 'position.y'),
                                   currentFrame
                                 )
                               : 'none'
@@ -2674,7 +2667,7 @@ export function PropertiesPanel() {
                           onToggle={() => {
                             if (selectedId)
                               toggleKeyframe(
-                                vertexPropPath(node, dsPoints[0].pointIndex, 'position.y'),
+                                vertexPropPath(node, dsPoints[0]!.pointIndex, 'position.y'),
                                 firstPt.position.y
                               );
                           }}
@@ -2688,7 +2681,7 @@ export function PropertiesPanel() {
                         <ScrubLabel
                           onScrubStart={handleScrubStart}
                           label="R"
-                          value={crAllSame ? crValues[0] : 0}
+                          value={crAllSame ? (crValues[0] ?? 0) : 0}
                           onChange={(v) => handleVertexCornerRadiusChange(String(Math.max(0, v)))}
                           sensitivity={0.5}
                           min={0}
@@ -2700,7 +2693,7 @@ export function PropertiesPanel() {
                           placeholder={crAllSame ? undefined : 'Mixed'}
                           onChange={(e) => handleVertexCornerRadiusChange(e.target.value)}
                           {...numericInputProps(
-                            () => (crAllSame ? crValues[0] : 0),
+                            () => (crAllSame ? (crValues[0] ?? 0) : 0),
                             (v) => handleVertexCornerRadiusChange(v)
                           )}
                           data-testid="vertex-corner-radius"
@@ -2711,7 +2704,7 @@ export function PropertiesPanel() {
                               ? getKeyframeState(
                                   timeline,
                                   selectedId,
-                                  vertexPropPath(node, dsPoints[0].pointIndex, 'cornerRadius'),
+                                  vertexPropPath(node, dsPoints[0]!.pointIndex, 'cornerRadius'),
                                   currentFrame
                                 )
                               : 'none'
@@ -2719,7 +2712,7 @@ export function PropertiesPanel() {
                           onToggle={() => {
                             if (selectedId)
                               toggleKeyframe(
-                                vertexPropPath(node, dsPoints[0].pointIndex, 'cornerRadius'),
+                                vertexPropPath(node, dsPoints[0]!.pointIndex, 'cornerRadius'),
                                 crValues[0] ?? 0
                               );
                           }}
@@ -3163,6 +3156,7 @@ export function PropertiesPanel() {
                 <KeyframeIndicator
                   state={getKeyframeState(timeline, nodeId, 'opacity', currentFrame)}
                   onToggle={() => toggleKeyframe('opacity', node.opacity)}
+                  propertyLabel="opacity"
                 />
               </div>
               <div className={styles.propertyInputs}>
@@ -3938,15 +3932,11 @@ export function PropertiesPanel() {
           (() => {
             // Find easing of first selected keyframe
             let kfEasing: import('@quar/types').EasingFunction = 'linear';
-            let kfNodeId = '';
-            let kfProperty = '';
             let kfId = '';
             for (const track of timeline.tracks) {
               for (const kf of track.keyframes) {
                 if (selectedKeyframeIds.has(kf.id)) {
                   kfEasing = kf.easing;
-                  kfNodeId = track.nodeId;
-                  kfProperty = track.property;
                   kfId = kf.id;
                   break;
                 }
@@ -4047,7 +4037,7 @@ export function PropertiesPanel() {
         <ExportSection
           nodes={selectedNodes}
           sceneGraph={sceneGraph}
-          selectedId={selectedId}
+          selectedId={selectedId ?? null}
           node={node}
         />
       </div>

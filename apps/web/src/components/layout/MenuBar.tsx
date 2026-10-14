@@ -415,7 +415,11 @@ export function MenuBar({ projectActions }: MenuBarProps) {
     <>
       <header className={styles.menuBar} ref={menuBarRef}>
         <div className={styles.logo}>
-          <img src="/logo.svg" alt="Quar Animator" className={styles.logoImage} />
+          <img
+            src={window.location.protocol === 'file:' ? './logo.svg' : '/logo.svg'}
+            alt="Quar Animator"
+            className={styles.logoImage}
+          />
         </div>
 
         <nav className={styles.menus}>
@@ -972,7 +976,7 @@ export function MenuBar({ projectActions }: MenuBarProps) {
                     if (vitruvianControllers.length > 0) {
                       // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-member-access
                       removeVitruvianController(
-                        vitruvianControllers[vitruvianControllers.length - 1].id
+                        vitruvianControllers[vitruvianControllers.length - 1]!.id
                       );
                     }
                   }}
@@ -1028,8 +1032,20 @@ export function MenuBar({ projectActions }: MenuBarProps) {
                     showExportDialog('png-sequence');
                   }}
                 />
-                <MenuItem label="Export as GIF..." disabled onClick={closeMenu} />
-                <MenuItem label="Export as MP4..." disabled onClick={closeMenu} />
+                <MenuItem
+                  label="Export as GIF..."
+                  onClick={() => {
+                    closeMenu();
+                    showExportDialog('gif');
+                  }}
+                />
+                <MenuItem
+                  label="Export as MP4..."
+                  onClick={() => {
+                    closeMenu();
+                    showExportDialog('mp4');
+                  }}
+                />
                 <MenuItem label="Export as WebM..." disabled onClick={closeMenu} />
                 <Separator />
                 <MenuItem

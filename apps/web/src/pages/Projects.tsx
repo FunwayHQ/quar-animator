@@ -6,6 +6,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Upload, Trash2, Film } from 'lucide-react';
+import { parseQuarFile, writeQuarFile } from '@quar/core';
 import {
   listProjects,
   deleteProject as dbDelete,
@@ -14,6 +15,7 @@ import {
 } from '../services/projectStorage';
 import { uploadProjectFile } from '../services/projectSerializer';
 import { useEditorStore } from '../stores/editorStore';
+import { toast } from '../components/common/Toast';
 import type { ProjectListItem } from '../services/projectStorage';
 import styles from './Projects.module.css';
 
@@ -119,14 +121,13 @@ export function Projects() {
     // Update in IndexedDB: load project data, re-save with new name
     try {
       const stored = await dbLoad(renamingId);
-      if (stored) {
-        const data = JSON.parse(stored.data) as { name: string };
-        data.name = newName;
-        await dbSave(renamingId, newName, JSON.stringify(data));
-        setProjects((prev) => prev.map((p) => (p.id === renamingId ? { ...p, name: newName } : p)));
-      }
+      if (!stored) throw new Error('Project not found');
+      const data = parseQuarFile(stored.data);
+      data.name = newName;
+      await dbSave(renamingId, newName, writeQuarFile(data));
+      setProjects((prev) => prev.map((p) => (p.id === renamingId ? { ...p, name: newName } : p)));
     } catch {
-      // Silently fail rename
+      toast.error('Could not rename project');
     }
     setRenamingId(null);
   }, [renamingId, renameValue]);
@@ -178,7 +179,11 @@ export function Projects() {
       {/* Header */}
       <header className={styles.header}>
         <div className={styles.brand}>
-          <img src="/logo.svg" alt="Quar Animator" className={styles.logoImage} />
+          <img
+            src={window.location.protocol === 'file:' ? './logo.svg' : '/logo.svg'}
+            alt="Quar Animator"
+            className={styles.logoImage}
+          />
         </div>
         <div className={styles.headerActions}>
           <button

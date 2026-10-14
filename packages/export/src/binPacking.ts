@@ -131,14 +131,17 @@ export function packMaxRects(
   // Sort frames by area descending for better packing
   const indices = frames.map((_, i) => i);
   indices.sort((a, b) => {
-    const areaA = (frames[a].width + padding) * (frames[a].height + padding);
-    const areaB = (frames[b].width + padding) * (frames[b].height + padding);
+    const frameA = frames[a]!;
+    const frameB = frames[b]!;
+    const areaA = (frameA.width + padding) * (frameA.height + padding);
+    const areaB = (frameB.width + padding) * (frameB.height + padding);
     return areaB - areaA;
   });
 
   for (const frameIdx of indices) {
-    const fw = frames[frameIdx].width + padding;
-    const fh = frames[frameIdx].height + padding;
+    const frame = frames[frameIdx]!;
+    const fw = frame.width + padding;
+    const fh = frame.height + padding;
 
     const placement = findBestShortSideFit(freeRects, fw, fh, allowRotation);
     if (!placement) {
@@ -147,15 +150,15 @@ export function packMaxRects(
         frameIndex: frameIdx,
         x: -1,
         y: -1,
-        width: frames[frameIdx].width,
-        height: frames[frameIdx].height,
+        width: frame.width,
+        height: frame.height,
         rotated: false,
       });
       continue;
     }
 
     const { rectIdx, rotated } = placement;
-    const freeRect = freeRects[rectIdx];
+    const freeRect = freeRects[rectIdx]!;
     const placedW = rotated ? fh : fw;
     const placedH = rotated ? fw : fh;
 
@@ -163,8 +166,8 @@ export function packMaxRects(
       frameIndex: frameIdx,
       x: freeRect.x,
       y: freeRect.y,
-      width: rotated ? frames[frameIdx].height : frames[frameIdx].width,
-      height: rotated ? frames[frameIdx].width : frames[frameIdx].height,
+      width: rotated ? frame.height : frame.width,
+      height: rotated ? frame.width : frame.height,
       rotated,
     });
 
@@ -194,7 +197,7 @@ function findBestShortSideFit(
   let bestRotated = false;
 
   for (let i = 0; i < freeRects.length; i++) {
-    const r = freeRects[i];
+    const r = freeRects[i]!;
 
     // Try normal orientation
     if (fw <= r.width && fh <= r.height) {
@@ -234,7 +237,7 @@ function splitFreeRects(
   const toAdd: FreeRect[] = [];
 
   for (let i = freeRects.length - 1; i >= 0; i--) {
-    const r = freeRects[i];
+    const r = freeRects[i]!;
 
     // Check overlap
     if (px >= r.x + r.width || px + pw <= r.x || py >= r.y + r.height || py + ph <= r.y) {
@@ -270,8 +273,8 @@ function pruneFreeRects(freeRects: FreeRect[]): void {
   for (let i = freeRects.length - 1; i >= 0; i--) {
     for (let j = freeRects.length - 1; j >= 0; j--) {
       if (i === j) continue;
-      const a = freeRects[i];
-      const b = freeRects[j];
+      const a = freeRects[i]!;
+      const b = freeRects[j]!;
       // If a is fully contained in b, remove a
       if (
         a.x >= b.x &&

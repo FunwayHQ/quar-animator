@@ -126,7 +126,7 @@ export class KeyframeManager {
     const index = track.keyframes.findIndex((kf: Keyframe) => kf.id === keyframeId);
     if (index === -1) return false;
     // Clone-and-replace to maintain immutability
-    track.keyframes[index] = { ...track.keyframes[index], easing };
+    track.keyframes[index] = { ...track.keyframes[index]!, easing };
     return true;
   }
 

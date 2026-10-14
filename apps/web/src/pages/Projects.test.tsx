@@ -6,6 +6,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '../test/utils';
 import { Projects } from './Projects';
 import type { ProjectListItem } from '../services/projectStorage';
+import { parseQuarFile, writeQuarFile } from '@quar/core';
 
 // ============================================================================
 // Mocks
@@ -29,11 +30,14 @@ const mockProjects: ProjectListItem[] = [
 
 const mockListProjects = vi.fn<[], Promise<ProjectListItem[]>>();
 const mockDeleteProject = vi.fn<[string], Promise<void>>();
+const mockLoadProject = vi.fn();
+const mockSaveProject = vi.fn();
 
 vi.mock('../services/projectStorage', () => ({
   listProjects: (...args: unknown[]) => mockListProjects(...(args as [])),
   deleteProject: (...args: unknown[]) => mockDeleteProject(...(args as [string])),
-  saveProject: vi.fn(),
+  loadProject: (...args: unknown[]) => mockLoadProject(...args),
+  saveProject: (...args: unknown[]) => mockSaveProject(...args),
 }));
 
 vi.mock('../services/projectSerializer', () => ({
@@ -49,6 +53,7 @@ describe('Projects', () => {
     vi.clearAllMocks();
     mockListProjects.mockResolvedValue(mockProjects);
     mockDeleteProject.mockResolvedValue(undefined);
+    mockSaveProject.mockResolvedValue(undefined);
   });
 
   it('should render the page logo and import button', async () => {
@@ -149,5 +154,30 @@ describe('Projects', () => {
     });
     fireEvent.click(screen.getByTestId('empty-new-button'));
     expect(mockNavigate).toHaveBeenCalledWith('/editor');
+  });
+
+  it('renames a binary project without losing its data', async () => {
+    const data = writeQuarFile({
+      version: '3.0',
+      name: 'Walk Cycle',
+      pages: [{ id: 'page_1', name: 'Scene', sceneGraph: { nodes: [] } }],
+      rigging: { dynamicChains: [{ id: 'chain_1' }] },
+    });
+    mockLoadProject.mockResolvedValue({ id: 'proj_1', name: 'Walk Cycle', data });
+
+    render(<Projects />);
+    fireEvent.doubleClick(await screen.findByText('Walk Cycle'));
+    const input = screen.getByTestId('rename-input-proj_1');
+    fireEvent.change(input, { target: { value: 'New Name' } });
+    fireEvent.blur(input);
+
+    await waitFor(() => expect(mockSaveProject).toHaveBeenCalledOnce());
+    const [id, name, saved] = mockSaveProject.mock.calls[0] as [string, string, ArrayBuffer];
+    expect([id, name]).toEqual(['proj_1', 'New Name']);
+    expect(parseQuarFile(saved)).toMatchObject({
+      name: 'New Name',
+      pages: [{ id: 'page_1' }],
+      rigging: { dynamicChains: [{ id: 'chain_1' }] },
+    });
   });
 });

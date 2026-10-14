@@ -12,6 +12,7 @@ export default defineConfig({
     },
     alias: {
       'opentype.js': path.resolve(__dirname, '../core/src/test/__mocks__/opentype.js.ts'),
+      '@quar/core': path.resolve(__dirname, '../core/src'),
     },
   },
 });

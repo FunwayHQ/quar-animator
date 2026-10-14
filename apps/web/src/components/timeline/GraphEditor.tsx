@@ -266,7 +266,7 @@ export function GraphEditor() {
 
   const handleTangentMouseDown = useCallback(
     (
-      e: React.MouseEvent,
+      _e: React.MouseEvent,
       kfId: string,
       nodeId: string,
       property: string,
@@ -378,10 +378,10 @@ export function GraphEditor() {
 
         const kfIndex = track.keyframes.findIndex((kf) => kf.id === dragMode.kfId);
         if (kfIndex === -1) return;
-        const kf = track.keyframes[kfIndex];
+        const kf = track.keyframes[kfIndex]!;
 
         if (dragMode.side === 'out' && kfIndex < track.keyframes.length - 1) {
-          const nextKf = track.keyframes[kfIndex + 1];
+          const nextKf = track.keyframes[kfIndex + 1]!;
           const dt = nextKf.time - kf.time;
           const dv = (nextKf.value as number) - (kf.value as number);
           // Get the current tangentIn from easing
@@ -406,7 +406,7 @@ export function GraphEditor() {
             isDirty: true,
           });
         } else if (dragMode.side === 'in' && kfIndex > 0) {
-          const prevKf = track.keyframes[kfIndex - 1];
+          const prevKf = track.keyframes[kfIndex - 1]!;
           const dt = kf.time - prevKf.time;
           const dv = (kf.value as number) - (prevKf.value as number);
           // Get the current tangentOut from easing

@@ -3,7 +3,7 @@
  * Calculates bounding boxes for selected nodes
  */
 
-import type { Node, Rect, Matrix3, SymbolDefinition, SymbolInstanceNode } from '@quar/types';
+import type { Node, Rect, Matrix3, SymbolDefinition } from '@quar/types';
 import type { SceneGraph } from '../SceneGraph';
 import type { SelectionBounds } from './types';
 import { rect, mat3 } from '../math';

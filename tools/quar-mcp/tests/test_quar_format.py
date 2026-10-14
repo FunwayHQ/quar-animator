@@ -113,6 +113,7 @@ def test_migrate_v1_to_v3():
         "name": "Old Project",
         "sceneGraph": {"nodes": [{"id": "n1"}], "rootNodeIds": ["n1"]},
         "timeline": {"id": "t1", "tracks": [], "markers": [], "duration": 100, "frameRate": 24},
+        "rigging": {"ikChains": [{"id": "ik1"}]},
     }
 
     result = migrate_project(v1)
@@ -120,6 +121,7 @@ def test_migrate_v1_to_v3():
     assert len(result["pages"]) == 1
     assert result["pages"][0]["sceneGraph"]["nodes"][0]["id"] == "n1"
     assert result["activePageId"] == "page_default"
+    assert result["rigging"]["ikChains"] == [{"id": "ik1"}]
 
 
 def test_migrate_v2_to_v3():

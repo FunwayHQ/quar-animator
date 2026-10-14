@@ -7,6 +7,7 @@ export interface PlaybackOptions {
   frameRate: number;
   looping: boolean;
   onFrameChange?: (frame: number) => void;
+  onPlaybackEnd?: () => void;
   requestFrame?: (cb: FrameRequestCallback) => number;
   cancelFrame?: (id: number) => void;
 }
@@ -21,6 +22,7 @@ export class PlaybackController {
   private _accumulator: number = 0;
   private _rafId: number = 0;
   private _onFrameChange: ((frame: number) => void) | undefined;
+  private _onPlaybackEnd: (() => void) | undefined;
   private _requestFrame: (cb: FrameRequestCallback) => number;
   private _cancelFrame: (id: number) => void;
   private _disposed: boolean = false;
@@ -35,6 +37,7 @@ export class PlaybackController {
     this._frameRate = Math.max(1, Math.min(120, options.frameRate));
     this._looping = options.looping;
     this._onFrameChange = options.onFrameChange;
+    this._onPlaybackEnd = options.onPlaybackEnd;
     this._requestFrame = options.requestFrame ?? requestAnimationFrame.bind(window);
     this._cancelFrame = options.cancelFrame ?? cancelAnimationFrame.bind(window);
   }
@@ -111,8 +114,13 @@ export class PlaybackController {
 
   play(): void {
     if (this._disposed || this._playing) return;
-    // Auto-rewind to effective start if at the effective end
-    if (!this._looping && this._currentFrame >= this._effectiveEnd) {
+    // Start from the active range when the playhead is outside it. This keeps
+    // work-area playback useful whether looping is enabled or not.
+    if (
+      this._currentFrame < this._effectiveStart ||
+      this._currentFrame > this._effectiveEnd ||
+      (!this._looping && this._currentFrame >= this._effectiveEnd)
+    ) {
       this._setFrame(this._effectiveStart);
     }
     this._playing = true;
@@ -237,6 +245,7 @@ export class PlaybackController {
         } else {
           this._setFrame(effectiveEnd);
           this.pause();
+          this._onPlaybackEnd?.();
           return;
         }
       } else {

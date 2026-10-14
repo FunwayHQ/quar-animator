@@ -31,6 +31,7 @@ function EditorInner() {
       sceneGraph.on('nodeAdded', markDirty),
       sceneGraph.on('nodeChanged', markDirty),
       sceneGraph.on('nodeRemoved', markDirty),
+      sceneGraph.on('nodeMoved', markDirty),
     ];
     return () => unsubs.forEach((u) => u());
   }, [sceneGraph]);

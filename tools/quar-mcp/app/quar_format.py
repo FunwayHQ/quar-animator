@@ -225,6 +225,7 @@ def migrate_v1_to_v2(data: dict[str, Any]) -> dict[str, Any]:
         "pages": [page],
         "activePageId": "page_default",
         "settings": data.get("settings", _default_settings()),
+        "rigging": data.get("rigging", {}),
         "symbols": data.get("symbols", []),
     }
 

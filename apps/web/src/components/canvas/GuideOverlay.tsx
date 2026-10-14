@@ -11,7 +11,6 @@
 import { useMemo, useState, useCallback, useRef, useEffect } from 'react';
 import type { Camera } from '@quar/core';
 import type { Guide } from '../../stores/editorStore';
-import { RULER_SIZE } from './CanvasRuler';
 
 // ============================================================================
 // Constants

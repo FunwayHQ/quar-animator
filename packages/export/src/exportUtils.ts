@@ -30,7 +30,12 @@ export function generateFrameFilenames(
   for (let i = 0; i < count; i++) {
     const frame = startFrame + i;
     const paddedFrame = String(frame).padStart(padLength, '0');
-    const filename = pattern.replace('{N}', paddedFrame) + '.' + extension;
+    const base = pattern.includes('{N}')
+      ? pattern.replace('{N}', paddedFrame)
+      : count > 1
+        ? `${pattern}_${paddedFrame}`
+        : pattern;
+    const filename = base + '.' + extension;
     names.push(filename);
   }
 

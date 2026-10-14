@@ -1,7 +1,18 @@
-import { describe, it, expect } from 'vitest';
+// @vitest-environment jsdom
+import { describe, it, expect, vi } from 'vitest';
 import { generateSpriteSheetMetadata } from './spriteSheetMetadata';
 import { packGrid, packMaxRects } from './binPacking';
 import type { PackResult } from './binPacking';
+import { exportSpriteSheet } from './spriteSheet';
+import type { FrameRenderContext } from './frameRenderer';
+
+const mockFrameRenderer = vi.hoisted(() => ({
+  preloadTextures: vi.fn(async () => {}),
+  renderFrame: vi.fn(() => ({ width: 20, height: 10 })),
+  dispose: vi.fn(),
+}));
+
+vi.mock('./frameRenderer', () => ({ createFrameRenderer: () => mockFrameRenderer }));
 
 // ============================================================================
 // generateSpriteSheetMetadata
@@ -207,6 +218,58 @@ describe('Sprite Sheet - Grid + MaxRects Integration', () => {
         const overlapsY = a.y < b.y + b.height && b.y < a.y + a.height;
         expect(overlapsX && overlapsY).toBe(false);
       }
+    }
+  });
+});
+
+describe('exportSpriteSheet', () => {
+  it('allocates and positions frames at the rendered pixel size', async () => {
+    const draws: number[][] = [];
+    const atlas = {
+      width: 0,
+      height: 0,
+      getContext: () => ({
+        drawImage: (_image: unknown, x: number, y: number) => draws.push([x, y]),
+      }),
+      toBlob: (callback: (blob: Blob) => void) => callback(new Blob(['png'])),
+    };
+    const originalCreateElement = document.createElement.bind(document);
+    vi.spyOn(document, 'createElement').mockImplementation((tag, options) =>
+      tag === 'canvas'
+        ? (atlas as unknown as HTMLCanvasElement)
+        : originalCreateElement(tag, options)
+    );
+
+    try {
+      const context = {
+        sceneGraph: { getRootNodes: () => [] },
+      } as unknown as FrameRenderContext;
+      const result = await exportSpriteSheet(context, {
+        startFrame: 0,
+        endFrame: 1,
+        frameWidth: 10,
+        frameHeight: 5,
+        layout: 'grid',
+        columns: 2,
+        multiplier: 2,
+      });
+      const metadata = JSON.parse(result.metadata) as {
+        meta: { size: { w: number; h: number } };
+        frames: Record<string, { sourceSize: { w: number; h: number } }>;
+      };
+
+      expect([atlas.width, atlas.height]).toEqual([40, 10]);
+      expect(draws).toEqual([
+        [0, 0],
+        [20, 0],
+      ]);
+      expect(metadata.meta.size).toEqual({ w: 40, h: 10 });
+      expect(Object.values(metadata.frames).map((frame) => frame.sourceSize)).toEqual([
+        { w: 20, h: 10 },
+        { w: 20, h: 10 },
+      ]);
+    } finally {
+      vi.restoreAllMocks();
     }
   });
 });

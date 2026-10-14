@@ -212,8 +212,11 @@ async def update_node(
     except ValueError as e:
         return {"status": "error", "error": str(e)}
 
-    if not project.update_node(node_id, updates, page_id):
-        return {"status": "error", "error": f"Node '{node_id}' not found"}
+    try:
+        if not project.update_node(node_id, updates, page_id):
+            return {"status": "error", "error": f"Node '{node_id}' not found"}
+    except ValueError as e:
+        return {"status": "error", "error": str(e)}
 
     node = project.find_node(node_id, page_id)
     if ctx:

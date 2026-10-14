@@ -77,6 +77,8 @@ export interface UseCanvasToolsReturn {
   isDirectSelectionActive: boolean;
   /** Selected point indices when DirectSelectionTool is active */
   directSelectionPoints: Array<{ nodeId: string; pointIndex: number }>;
+  /** Delete selected points in DirectSelectionTool */
+  deleteDirectSelectionPoints: () => void;
   /** All visible path nodes (for DirectSelection overlay) */
   directSelectionPathNodes: PathNode[];
   /** All visible image nodes with vertex editing (for DirectSelection overlay) */
@@ -268,9 +270,8 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
           if (shouldKf(nodeId, 'transform.scale.y'))
             addKf(nodeId, 'transform.scale.y', frame, node.transform.scale.y);
         } else if (node.type === 'image') {
-          if (shouldKf(nodeId, 'width')) addKf(nodeId, 'width', frame, (node as ImageNode).width);
-          if (shouldKf(nodeId, 'height'))
-            addKf(nodeId, 'height', frame, (node as ImageNode).height);
+          if (shouldKf(nodeId, 'width')) addKf(nodeId, 'width', frame, node.width);
+          if (shouldKf(nodeId, 'height')) addKf(nodeId, 'height', frame, node.height);
         }
       } else if (type === 'rotate') {
         if (shouldKf(nodeId, 'transform.rotation'))
@@ -293,7 +294,7 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
         if (!hasVertexTracks) continue;
 
         if (node.type === 'path') {
-          const pathNode = node as PathNode;
+          const pathNode = node;
           const allPts = getAllPoints(pathNode);
 
           // Determine if node uses subpaths
@@ -302,7 +303,7 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
           if (hasSubpaths) {
             // Primary contour
             for (let i = 0; i < pathNode.points.length; i++) {
-              const pt = pathNode.points[i];
+              const pt = pathNode.points[i]!;
               addKf(nodeId, `points.${i}.position.x`, frame, pt.position.x);
               addKf(nodeId, `points.${i}.position.y`, frame, pt.position.y);
               if (pt.cornerRadius !== undefined) {
@@ -319,9 +320,9 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
             }
             // Subpaths
             for (let s = 0; s < pathNode.subpaths!.length; s++) {
-              const sp = pathNode.subpaths![s];
+              const sp = pathNode.subpaths![s]!;
               for (let i = 0; i < sp.length; i++) {
-                const pt = sp[i];
+                const pt = sp[i]!;
                 addKf(nodeId, `subpaths.${s}.${i}.position.x`, frame, pt.position.x);
                 addKf(nodeId, `subpaths.${s}.${i}.position.y`, frame, pt.position.y);
                 if (pt.cornerRadius !== undefined) {
@@ -340,7 +341,7 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
           } else {
             // Simple path — no subpaths
             for (let i = 0; i < allPts.length; i++) {
-              const pt = allPts[i];
+              const pt = allPts[i]!;
               addKf(nodeId, `points.${i}.position.x`, frame, pt.position.x);
               addKf(nodeId, `points.${i}.position.y`, frame, pt.position.y);
               if (pt.cornerRadius !== undefined) {
@@ -358,12 +359,12 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
           }
         } else if (node.type === 'image') {
           // Keyframe all 4 vertex offsets for image distortion
-          const imgNode = node as ImageNode;
+          const imgNode = node;
           const vo = imgNode.vertexOffsets;
           if (vo) {
             for (let i = 0; i < 4; i++) {
-              addKf(nodeId, `vertexOffsets.${i}.x`, frame, vo[i].x);
-              addKf(nodeId, `vertexOffsets.${i}.y`, frame, vo[i].y);
+              addKf(nodeId, `vertexOffsets.${i}.x`, frame, vo[i]!.x);
+              addKf(nodeId, `vertexOffsets.${i}.y`, frame, vo[i]!.y);
             }
           }
         }
@@ -420,7 +421,7 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
     manager.setActiveTool(activeToolRef.current);
 
     toolManagerRef.current = manager;
-    setCursor(manager.getCursor() as string);
+    setCursor(manager.getCursor());
 
     return () => {
       manager.dispose();
@@ -502,14 +503,14 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
   useEffect(() => {
     if (toolManagerRef.current) {
       toolManagerRef.current.setActiveTool(activeTool);
-      setCursor(toolManagerRef.current.getCursor() as string);
+      setCursor(toolManagerRef.current.getCursor());
       syncDirectSelectionState();
 
       // Sync weight paint tool state to store
       if (activeTool === 'weight-paint') {
         const wpTool = toolManagerRef.current.getActiveTool();
         if (wpTool && wpTool.type === 'weight-paint') {
-          const boneId = wpTool.getActiveBoneId();
+          const boneId = (wpTool as WeightPaintTool).getActiveBoneId();
           if (boneId) {
             useEditorStore.getState().setWeightPaintBoneId(boneId);
           }
@@ -620,7 +621,7 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
       setPreviewNode(preview);
 
       // Update cursor (for dynamic cursors like resize handles)
-      setCursor(toolManagerRef.current.getCursor() as string);
+      setCursor(toolManagerRef.current.getCursor());
 
       // Sync tool overlay state during drag
       syncPenToolState();

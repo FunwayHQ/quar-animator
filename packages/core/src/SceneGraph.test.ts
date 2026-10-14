@@ -85,6 +85,8 @@ describe('SceneGraph', () => {
     it('throws error when parent not found', () => {
       const child = createGroupNode('child', 'Child');
       expect(() => sceneGraph.addNode(child, 'nonexistent')).toThrow('not found');
+      expect(sceneGraph.getNode('child')).toBeUndefined();
+      expect(sceneGraph.getNodeCount()).toBe(0);
     });
 
     it('emits nodeAdded event', () => {
@@ -251,6 +253,8 @@ describe('SceneGraph', () => {
       sceneGraph.addNode(child);
 
       expect(() => sceneGraph.moveNode('child', 'nonexistent')).toThrow('not found');
+      expect(child.parent).toBeNull();
+      expect(sceneGraph.getRootNodes().map((node) => node.id)).toContain('child');
     });
 
     // X1-5: Circular reference prevention

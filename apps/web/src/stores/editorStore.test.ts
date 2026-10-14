@@ -2367,11 +2367,11 @@ describe('EditorStore', () => {
       expect(useEditorStore.getState().vitruvianControllers[0].activeGroupId).toBe(groups[1].id);
     });
 
-    it('clearHistory resets vitruvianControllers', () => {
+    it('clearHistory preserves vitruvianControllers', () => {
       useEditorStore.getState().createVitruvianController();
       expect(useEditorStore.getState().vitruvianControllers).toHaveLength(1);
       useEditorStore.getState().clearHistory();
-      expect(useEditorStore.getState().vitruvianControllers).toHaveLength(0);
+      expect(useEditorStore.getState().vitruvianControllers).toHaveLength(1);
     });
   });
 
@@ -2449,7 +2449,7 @@ describe('EditorStore', () => {
       expect(wind.enabled).toBe(true);
     });
 
-    it('clearHistory resets dynamicChains', () => {
+    it('clearHistory preserves dynamicChains', () => {
       const sg = {
         getNode: (id: string) =>
           id === 'bone-1' ? { id: 'bone-1', type: 'bone', children: [] } : undefined,
@@ -2457,7 +2457,7 @@ describe('EditorStore', () => {
       useEditorStore.getState().createDynamicChain(sg, 'bone-1');
       expect(useEditorStore.getState().dynamicChains).toHaveLength(1);
       useEditorStore.getState().clearHistory();
-      expect(useEditorStore.getState().dynamicChains).toHaveLength(0);
+      expect(useEditorStore.getState().dynamicChains).toHaveLength(1);
     });
   });
 

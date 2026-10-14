@@ -8,7 +8,7 @@ import { useState, useCallback, useRef } from 'react';
 import type { SymbolDefinition } from '@quar/types';
 import { useSceneGraph } from '../../contexts/SceneGraphContext';
 import { useEditorStore } from '../../stores/editorStore';
-import { ContextMenu, type ContextMenuItem } from '../common/ContextMenu';
+import { ContextMenu, type ContextMenuEntry } from '../common/ContextMenu';
 import styles from './SymbolLibraryPanel.module.css';
 
 export default function SymbolLibraryPanel() {
@@ -32,7 +32,7 @@ export default function SymbolLibraryPanel() {
     (symbolId: string): number => {
       let count = 0;
       sceneGraph.traverse((node) => {
-        if (node.type === 'symbol-instance' && (node as SymbolInstanceNode).symbolId === symbolId) {
+        if (node.type === 'symbol-instance' && node.symbolId === symbolId) {
           count++;
         }
       });
@@ -85,9 +85,10 @@ export default function SymbolLibraryPanel() {
     setRenameValue('');
   }, [renamingId, renameValue, renameSymbol]);
 
-  const contextMenuItems: ContextMenuItem[] = contextMenu
+  const contextMenuItems: ContextMenuEntry[] = contextMenu
     ? [
         {
+          id: 'edit-symbol',
           label: 'Edit Symbol',
           onClick: () => {
             enterSymbolEdit(contextMenu.symbolId, sceneGraph);
@@ -95,6 +96,7 @@ export default function SymbolLibraryPanel() {
           },
         },
         {
+          id: 'rename-symbol',
           label: 'Rename',
           onClick: () => {
             const sym = symbols.find((s) => s.id === contextMenu.symbolId);
@@ -104,6 +106,7 @@ export default function SymbolLibraryPanel() {
         },
         { type: 'separator' as const },
         {
+          id: 'delete-symbol',
           label: 'Delete Symbol',
           danger: true,
           onClick: () => {

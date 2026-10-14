@@ -1,10 +1,14 @@
 import { describe, it, expect, beforeEach } from 'vitest';
+import { act, fireEvent } from '@testing-library/react';
 import { render, screen } from '../../test/utils';
 import userEvent from '@testing-library/user-event';
 import { Timeline } from './Timeline';
-import { SceneGraphProvider } from '../../contexts/SceneGraphContext';
+import { SceneGraphProvider, useSceneGraph } from '../../contexts/SceneGraphContext';
 import { useEditorStore } from '../../stores/editorStore';
 import { DEFAULT_FILL, DEFAULT_STROKE } from '../../stores/editorStore';
+import { createTimeline, createTrack, addKeyframe } from '@quar/animation';
+import type { SceneGraph } from '@quar/core';
+import type { Node } from '@quar/types';
 
 function renderTimeline() {
   return render(
@@ -30,6 +34,9 @@ describe('Timeline', () => {
       currentFrame: 0,
       isPlaying: false,
       isLooping: false,
+      workAreaEnabled: false,
+      workAreaStart: 0,
+      workAreaEnd: 299,
       timelineDuration: 300,
       frameRate: 30,
       timelineExpanded: true,
@@ -69,6 +76,88 @@ describe('Timeline', () => {
     expect(screen.getByText('No layers')).toBeInTheDocument();
   });
 
+  it('shows keyframes for nodes nested inside a group', () => {
+    let graph: SceneGraph | undefined;
+    function CaptureGraph() {
+      graph = useSceneGraph();
+      return null;
+    }
+    const track = createTrack<number>('child', 'transform.rotation');
+    const keyframe = addKeyframe(track, 12, 45);
+    useEditorStore.setState({ timeline: createTimeline({ tracks: [track] }) });
+
+    render(
+      <SceneGraphProvider>
+        <CaptureGraph />
+        <Timeline />
+      </SceneGraphProvider>
+    );
+    act(() => {
+      graph!.addNode({ id: 'parent', name: 'Parent', children: [] } as unknown as Node);
+      graph!.addNode({ id: 'child', name: 'Child', children: [] } as unknown as Node, 'parent');
+    });
+
+    expect(screen.getByText('Parent')).toBeInTheDocument();
+    expect(screen.getByText('Child')).toBeInTheDocument();
+    expect(screen.getByTestId(`keyframe-${keyframe.id}`)).toBeInTheDocument();
+  });
+
+  it('adds an opacity keyframe from the empty timeline context menu', () => {
+    let graph: SceneGraph | undefined;
+    function CaptureGraph() {
+      graph = useSceneGraph();
+      return null;
+    }
+
+    render(
+      <SceneGraphProvider>
+        <CaptureGraph />
+        <Timeline />
+      </SceneGraphProvider>
+    );
+    act(() => {
+      graph!.addNode({
+        id: 'opacity-node',
+        name: 'Opacity layer',
+        type: 'rectangle',
+        parent: null,
+        children: [],
+        opacity: 0.4,
+      } as unknown as Node);
+      useEditorStore.setState({ selectedNodeIds: new Set(['opacity-node']) });
+    });
+
+    const tracks = screen.getByTestId('timeline-tracks');
+    Object.defineProperty(tracks, 'getBoundingClientRect', {
+      configurable: true,
+      value: () =>
+        ({
+          x: 0,
+          y: 0,
+          left: 0,
+          top: 0,
+          right: 300,
+          bottom: 80,
+          width: 300,
+          height: 80,
+          toJSON: () => ({}),
+        }) as DOMRect,
+    });
+
+    fireEvent.contextMenu(tracks, { clientX: 75, clientY: 30 });
+    fireEvent.click(screen.getByText('Add Opacity Keyframe at Frame 75'));
+
+    const opacityTrack = useEditorStore
+      .getState()
+      .timeline.tracks.find(
+        (track) => track.nodeId === 'opacity-node' && track.property === 'opacity'
+      );
+    expect(useEditorStore.getState().currentFrame).toBe(75);
+    expect(opacityTrack?.keyframes).toHaveLength(1);
+    expect(opacityTrack?.keyframes[0]?.time).toBe(75);
+    expect(opacityTrack?.keyframes[0]?.value).toBe(0.4);
+  });
+
   it('displays ruler marks', () => {
     renderTimeline();
 
@@ -77,6 +166,47 @@ describe('Timeline', () => {
     expect(screen.getByText('30')).toBeInTheDocument();
     expect(screen.getByText('60')).toBeInTheDocument();
     expect(screen.getByText('90')).toBeInTheDocument();
+  });
+
+  it('selects a ruler range and enables looping playback for that range', () => {
+    useEditorStore.setState({
+      workAreaEnabled: false,
+      workAreaStart: 0,
+      workAreaEnd: 299,
+      isLooping: false,
+      currentFrame: 10,
+    });
+    renderTimeline();
+
+    const ruler = screen.getByTestId('timeline-ruler');
+    Object.defineProperty(ruler, 'getBoundingClientRect', {
+      configurable: true,
+      value: () =>
+        ({
+          x: 0,
+          y: 0,
+          left: 0,
+          top: 0,
+          right: 300,
+          bottom: 28,
+          width: 300,
+          height: 28,
+          toJSON: () => ({}),
+        }) as DOMRect,
+    });
+
+    fireEvent.pointerDown(ruler, { button: 0, clientX: 20, pointerId: 1 });
+    fireEvent.pointerMove(ruler, { button: 0, clientX: 120, pointerId: 1 });
+    fireEvent.pointerUp(ruler, { button: 0, clientX: 120, pointerId: 1 });
+    fireEvent.click(ruler, { clientX: 120 });
+
+    const state = useEditorStore.getState();
+    expect(state.workAreaEnabled).toBe(true);
+    expect(state.workAreaStart).toBe(20);
+    expect(state.workAreaEnd).toBe(120);
+    expect(state.isLooping).toBe(true);
+    // Completing a range drag must not also scrub the playhead.
+    expect(state.currentFrame).toBe(10);
   });
 
   it('toggles play state when play button clicked', async () => {

@@ -53,7 +53,7 @@ const TRACK_COLORS = [
  * Get a distinct color for a track by index.
  */
 export function getTrackColor(index: number): string {
-  return TRACK_COLORS[index % TRACK_COLORS.length];
+  return TRACK_COLORS[index % TRACK_COLORS.length]!;
 }
 
 // ============================================================================
@@ -426,7 +426,6 @@ export function findNearestTangentHandle(
 
     // Check tangentIn handle
     if (kf.tangentIn) {
-      const basePos = graphToScreen(kf.time, kf.value, transform);
       const handlePos = graphToScreen(
         kf.time + kf.tangentIn.x,
         kf.value + kf.tangentIn.y,
@@ -538,21 +537,22 @@ export function buildTrackCurvePath(
 
   // Single keyframe: just a dot position (no line)
   if (kfs.length === 1) {
-    const pos = graphToScreen(kfs[0].time, kfs[0].value, transform);
+    const pos = graphToScreen(kfs[0]!.time, kfs[0]!.value, transform);
     return `M${pos.x},${pos.y}`;
   }
 
   // Extend line from start to first keyframe (constant value)
-  const firstPos = graphToScreen(kfs[0].time, kfs[0].value, transform);
-  const leftEdge = graphToScreen(0, kfs[0].value, transform);
+  const firstKf = kfs[0]!;
+  const firstPos = graphToScreen(firstKf.time, firstKf.value, transform);
+  const leftEdge = graphToScreen(0, firstKf.value, transform);
   if (leftEdge.x < firstPos.x) {
     parts.push(`M${leftEdge.x},${leftEdge.y} L${firstPos.x},${firstPos.y}`);
   }
 
   // Draw curve segments between keyframes
   for (let i = 0; i < kfs.length - 1; i++) {
-    const kf1 = kfs[i];
-    const kf2 = kfs[i + 1];
+    const kf1 = kfs[i]!;
+    const kf2 = kfs[i + 1]!;
     // Easing convention: after.easing controls the incoming transition
     const easing = kf2.easing;
     const samples = sampleCurveSegment(
@@ -565,7 +565,8 @@ export function buildTrackCurvePath(
     );
 
     for (let j = 0; j < samples.length; j++) {
-      const pos = graphToScreen(samples[j].frame, samples[j].value, transform);
+      const sample = samples[j]!;
+      const pos = graphToScreen(sample.frame, sample.value, transform);
       if (i === 0 && j === 0) {
         parts.push(`M${pos.x.toFixed(1)},${pos.y.toFixed(1)}`);
       } else {
@@ -575,8 +576,7 @@ export function buildTrackCurvePath(
   }
 
   // Extend line from last keyframe to the right (constant value)
-  const lastKf = kfs[kfs.length - 1];
-  const lastPos = graphToScreen(lastKf.time, lastKf.value, transform);
+  const lastKf = kfs[kfs.length - 1]!;
   const rightEdge = graphToScreen(lastKf.time + 30, lastKf.value, transform);
   parts.push(`L${rightEdge.x.toFixed(1)},${rightEdge.y.toFixed(1)}`);
 

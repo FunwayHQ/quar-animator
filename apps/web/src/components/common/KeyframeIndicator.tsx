@@ -3,6 +3,8 @@ export type KeyframeState = 'none' | 'inactive' | 'active';
 export interface KeyframeIndicatorProps {
   state: KeyframeState;
   onToggle: () => void;
+  /** Property name used to make the keyframe action clearer to users. */
+  propertyLabel?: string;
 }
 
 const TITLES: Record<KeyframeState, string> = {
@@ -11,12 +13,16 @@ const TITLES: Record<KeyframeState, string> = {
   active: 'Remove keyframe',
 };
 
-export function KeyframeIndicator({ state, onToggle }: KeyframeIndicatorProps) {
+export function KeyframeIndicator({ state, onToggle, propertyLabel }: KeyframeIndicatorProps) {
+  const action = state === 'active' ? 'Remove' : 'Add';
+  const label = propertyLabel ? ` ${propertyLabel}` : '';
   return (
     <button
+      type="button"
       className={`keyframe-indicator keyframe-indicator--${state}`}
       onClick={onToggle}
-      title={TITLES[state]}
+      title={propertyLabel ? `${action}${label} keyframe` : TITLES[state]}
+      aria-label={propertyLabel ? `${action}${label} keyframe` : TITLES[state]}
       data-testid="keyframe-indicator"
       style={{
         width: 10,

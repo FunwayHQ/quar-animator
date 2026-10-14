@@ -6,10 +6,6 @@
     "rootDir": "src"
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist"],
-  "references": [
-    { "path": "../types" },
-    { "path": "../core" },
-    { "path": "../animation" }
-  ]
+  "exclude": ["node_modules", "dist", "**/*.test.ts", "**/*.test.tsx"],
+  "references": [{ "path": "../types" }, { "path": "../core" }, { "path": "../animation" }]
 }
