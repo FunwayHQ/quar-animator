@@ -17,6 +17,7 @@ import { ProjectListDialog } from '../common/ProjectListDialog';
 import type { SmartBoneAction } from '@quar/types';
 import { showExportDialog } from '../common/ExportDialog';
 import { toast } from '../common/Toast';
+import { setUiTheme, useUiTheme } from '../../hooks/useUiTheme';
 import styles from './MenuBar.module.css';
 
 // ============================================================================
@@ -65,7 +66,8 @@ function MenuItem({
   return (
     <button
       className={`${styles.dropdownItem} ${disabled ? styles.dropdownItemDisabled : ''}`}
-      role="menuitem"
+      role={checked == null ? 'menuitem' : 'menuitemcheckbox'}
+      aria-checked={checked}
       onClick={onClick}
       disabled={disabled}
     >
@@ -91,6 +93,7 @@ function SectionHeader({ label }: { label: string }) {
 // ============================================================================
 
 export function MenuBar({ projectActions }: MenuBarProps) {
+  const uiTheme = useUiTheme();
   const projectName = useProjectName();
   const isDirty = useIsDirty();
   const [openMenu, setOpenMenu] = useState<MenuId>(null);
@@ -770,6 +773,15 @@ export function MenuBar({ projectActions }: MenuBarProps) {
                   onClick={() => {
                     closeMenu();
                     toggleOnionSkinAction();
+                  }}
+                />
+                <Separator />
+                <MenuItem
+                  label="Light Appearance"
+                  checked={uiTheme === 'light'}
+                  onClick={() => {
+                    closeMenu();
+                    setUiTheme(uiTheme === 'light' ? 'dark' : 'light');
                   }}
                 />
               </div>

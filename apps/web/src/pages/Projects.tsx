@@ -5,7 +5,7 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Upload, Trash2, Film } from 'lucide-react';
+import { Plus, Upload, Trash2, Film, Moon, Sun } from 'lucide-react';
 import { parseQuarFile, writeQuarFile } from '@quar/core';
 import {
   listProjects,
@@ -16,6 +16,7 @@ import {
 import { uploadProjectFile } from '../services/projectSerializer';
 import { useEditorStore } from '../stores/editorStore';
 import { toast } from '../components/common/Toast';
+import { setUiTheme, useUiTheme } from '../hooks/useUiTheme';
 import type { ProjectListItem } from '../services/projectStorage';
 import styles from './Projects.module.css';
 
@@ -41,6 +42,7 @@ function formatDate(dateStr: string): string {
 // ============================================================================
 
 export function Projects() {
+  const uiTheme = useUiTheme();
   const navigate = useNavigate();
   const [projects, setProjects] = useState<ProjectListItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -186,6 +188,15 @@ export function Projects() {
           />
         </div>
         <div className={styles.headerActions}>
+          <button
+            className={styles.appearanceButton}
+            onClick={() => setUiTheme(uiTheme === 'light' ? 'dark' : 'light')}
+            aria-label={`Switch to ${uiTheme === 'light' ? 'dark' : 'light'} appearance`}
+            title={`Switch to ${uiTheme === 'light' ? 'dark' : 'light'} appearance`}
+            data-testid="appearance-toggle"
+          >
+            {uiTheme === 'light' ? <Moon size={16} /> : <Sun size={16} />}
+          </button>
           <button
             className={styles.importButton}
             onClick={() => void handleImport()}

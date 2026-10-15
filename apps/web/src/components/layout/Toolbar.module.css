@@ -4,7 +4,11 @@
   align-items: center;
   justify-content: center;
   height: 44px;
-  background: linear-gradient(180deg, var(--color-bg-secondary) 0%, rgba(17, 17, 19, 0.95) 100%);
+  background: linear-gradient(
+    180deg,
+    var(--color-bg-secondary) 0%,
+    var(--color-panel-gradient-end) 100%
+  );
   border-bottom: 1px solid var(--color-border-subtle);
   padding: 0 var(--space-md);
   position: relative;
@@ -20,10 +24,10 @@
   height: 1px;
   background: linear-gradient(
     90deg,
-    rgba(255, 255, 255, 0.04),
+    var(--color-surface-highlight),
     transparent 20%,
     transparent 80%,
-    rgba(255, 255, 255, 0.04)
+    var(--color-surface-highlight)
   );
   pointer-events: none;
 }
@@ -66,7 +70,7 @@
   content: '';
   position: absolute;
   inset: 0;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.04) 0%, transparent 50%);
+  background: linear-gradient(135deg, var(--color-surface-highlight) 0%, transparent 50%);
   pointer-events: none;
 }
 

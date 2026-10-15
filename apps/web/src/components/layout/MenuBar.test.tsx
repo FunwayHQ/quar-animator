@@ -10,6 +10,7 @@ import { DEFAULT_ONION_SKIN_SETTINGS } from '@quar/core';
 import { SceneGraphProvider } from '../../contexts/SceneGraphContext';
 import { MenuBar } from './MenuBar';
 import { ExportDialogHost } from '../common/ExportDialog';
+import { setUiTheme } from '../../hooks/useUiTheme';
 import type { ProjectActions } from '../../hooks/useProjectActions';
 import type { ReactElement } from 'react';
 
@@ -34,6 +35,7 @@ function createMockProjectActions(): ProjectActions {
 
 describe('MenuBar', () => {
   beforeEach(() => {
+    setUiTheme('dark');
     useEditorStore.setState({
       activeTool: 'selection',
       selectedNodeIds: new Set<string>(),
@@ -132,6 +134,15 @@ describe('MenuBar', () => {
     expect(screen.getByText('Export as MP4...')).not.toBeDisabled();
     fireEvent.click(screen.getByText('Export as MP4...'));
     expect(screen.getByTestId('export-tab-mp4').className).toContain('active');
+  });
+
+  it('toggles light appearance from the View menu and persists the choice', () => {
+    render(<MenuBar />);
+    fireEvent.click(screen.getByTestId('menu-view'));
+    fireEvent.click(screen.getByRole('menuitemcheckbox', { name: 'Light Appearance' }));
+
+    expect(document.documentElement).toHaveAttribute('data-theme', 'light');
+    expect(window.localStorage.getItem('quar-animator-ui-theme')).toBe('light');
   });
 
   it('shows all file menu items', () => {

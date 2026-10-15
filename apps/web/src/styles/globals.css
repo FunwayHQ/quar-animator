@@ -7,6 +7,8 @@
 
 /* CSS Variables from theme */
 :root {
+  color-scheme: dark;
+
   /* Colors - Background (warm charcoal blacks) */
   --color-bg-primary: #0a0a0b;
   --color-bg-secondary: #111113;
@@ -15,6 +17,12 @@
   --color-bg-hover: rgba(255, 255, 255, 0.04);
   --color-bg-active: rgba(255, 255, 255, 0.08);
   --color-bg-canvas: #09090a;
+  --color-panel-gradient-end: rgba(17, 17, 19, 0.98);
+  --color-surface-highlight: rgba(255, 255, 255, 0.04);
+  --color-surface-sheen: rgba(255, 255, 255, 0.03);
+  --color-canvas-vignette: rgba(0, 0, 0, 0.15);
+  --color-scrollbar-thumb: rgba(255, 255, 255, 0.1);
+  --color-scrollbar-thumb-hover: rgba(255, 255, 255, 0.2);
 
   /* Glass effect backgrounds */
   --color-glass: rgba(17, 17, 19, 0.85);
@@ -126,6 +134,66 @@
   --noise-opacity: 0.015;
 }
 
+:root[data-theme='light'] {
+  color-scheme: light;
+
+  --color-bg-primary: #f3f4f6;
+  --color-bg-secondary: #fafafa;
+  --color-bg-tertiary: #f0f1f4;
+  --color-bg-elevated: #ffffff;
+  --color-bg-hover: rgba(24, 24, 27, 0.045);
+  --color-bg-active: rgba(24, 24, 27, 0.08);
+  --color-bg-canvas: #e4e7ec;
+  --color-panel-gradient-end: rgba(250, 250, 250, 0.98);
+  --color-surface-highlight: rgba(24, 24, 27, 0.045);
+  --color-surface-sheen: rgba(24, 24, 27, 0.025);
+  --color-canvas-vignette: rgba(24, 24, 27, 0.08);
+  --color-scrollbar-thumb: rgba(24, 24, 27, 0.16);
+  --color-scrollbar-thumb-hover: rgba(24, 24, 27, 0.28);
+
+  --color-glass: rgba(250, 250, 250, 0.9);
+  --color-glass-border: rgba(24, 24, 27, 0.1);
+  --color-glass-highlight: rgba(255, 255, 255, 0.82);
+
+  --color-text-primary: #18181b;
+  --color-text-secondary: #52525b;
+  --color-text-tertiary: #71717a;
+  --color-text-disabled: #a1a1aa;
+  --color-text-inverse: #ffffff;
+
+  --color-border-default: rgba(24, 24, 27, 0.1);
+  --color-border-subtle: rgba(24, 24, 27, 0.065);
+  --color-border-strong: rgba(24, 24, 27, 0.16);
+  --color-border-focus: #b45309;
+
+  --color-accent-primary: #7c3aed;
+  --color-accent-primary-hover: #6d28d9;
+  --color-accent-primary-active: #5b21b6;
+  --color-accent-primary-glow: rgba(124, 58, 237, 0.2);
+  --color-accent-secondary: #be123c;
+  --color-accent-secondary-glow: rgba(190, 18, 60, 0.18);
+  --color-accent-success: #059669;
+  --color-accent-warning: #b45309;
+  --color-accent-error: #e11d48;
+
+  --color-timeline-playhead: #e11d48;
+  --color-timeline-keyframe: #7c3aed;
+  --color-timeline-keyframe-selected: #6d28d9;
+  --color-timeline-keyframe-glow: rgba(124, 58, 237, 0.26);
+  --color-timeline-onion-before: rgba(225, 29, 72, 0.55);
+  --color-timeline-onion-after: rgba(5, 150, 105, 0.55);
+  --color-timeline-work-area: rgba(124, 58, 237, 0.12);
+  --color-timeline-work-area-border: rgba(124, 58, 237, 0.55);
+  --color-timeline-work-area-bar: rgba(124, 58, 237, 0.32);
+  --color-keyframe-active: #b45309;
+
+  --shadow-sm: 0 1px 2px rgba(24, 24, 27, 0.08);
+  --shadow-md: 0 4px 12px rgba(24, 24, 27, 0.1), 0 1px 3px rgba(24, 24, 27, 0.06);
+  --shadow-lg: 0 8px 24px rgba(24, 24, 27, 0.12), 0 2px 8px rgba(24, 24, 27, 0.06);
+  --shadow-xl: 0 16px 48px rgba(24, 24, 27, 0.16), 0 4px 16px rgba(24, 24, 27, 0.08);
+  --noise-opacity: 0.006;
+}
+
 /* Reset */
 *,
 *::before,
@@ -217,13 +285,13 @@ a {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--color-scrollbar-thumb);
   border-radius: var(--radius-full);
   transition: background var(--duration-fast);
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.2);
+  background: var(--color-scrollbar-thumb-hover);
 }
 
 ::-webkit-scrollbar-corner {

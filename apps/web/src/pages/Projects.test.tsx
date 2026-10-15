@@ -7,6 +7,7 @@ import { render, screen, fireEvent, waitFor } from '../test/utils';
 import { Projects } from './Projects';
 import type { ProjectListItem } from '../services/projectStorage';
 import { parseQuarFile, writeQuarFile } from '@quar/core';
+import { setUiTheme } from '../hooks/useUiTheme';
 
 // ============================================================================
 // Mocks
@@ -50,6 +51,7 @@ vi.mock('../services/projectSerializer', () => ({
 
 describe('Projects', () => {
   beforeEach(() => {
+    setUiTheme('dark');
     vi.clearAllMocks();
     mockListProjects.mockResolvedValue(mockProjects);
     mockDeleteProject.mockResolvedValue(undefined);
@@ -62,6 +64,17 @@ describe('Projects', () => {
       expect(screen.getByAltText('Quar Animator')).toBeInTheDocument();
     });
     expect(screen.getByTestId('import-button')).toBeInTheDocument();
+  });
+
+  it('should switch appearance from the projects header', async () => {
+    render(<Projects />);
+    const toggle = await screen.findByTestId('appearance-toggle');
+    expect(toggle).toHaveAttribute('aria-label', 'Switch to light appearance');
+
+    fireEvent.click(toggle);
+
+    expect(document.documentElement).toHaveAttribute('data-theme', 'light');
+    expect(toggle).toHaveAttribute('aria-label', 'Switch to dark appearance');
   });
 
   it('should render project cards from data', async () => {
