@@ -21,6 +21,7 @@ import { PointMagnetTool } from './PointMagnetTool';
 import { ArtboardTool } from './ArtboardTool';
 import type { SceneGraph } from '../SceneGraph';
 import type { Camera } from '../Camera';
+import type { SmartGuide } from './smartGuides';
 
 // ============================================================================
 // Types
@@ -48,6 +49,7 @@ export interface ToolManagerOptions {
   getGuides?: () => { id: string; axis: 'x' | 'y'; position: number }[];
   getSnapToGuides?: () => boolean;
   getSymbolDefinitions?: () => SymbolDefinition[];
+  onSmartGuidesChange?: (guides: SmartGuide[]) => void;
 }
 
 // ============================================================================
@@ -253,6 +255,7 @@ export class ToolManager {
       getGuides: options.getGuides,
       getSnapToGuides: options.getSnapToGuides,
       getSymbolDefinitions: options.getSymbolDefinitions,
+      onSmartGuidesChange: options.onSmartGuidesChange,
     };
   }
 

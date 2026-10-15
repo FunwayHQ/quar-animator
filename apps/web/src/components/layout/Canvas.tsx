@@ -36,6 +36,7 @@ import { TextEditOverlay } from '../canvas/TextEditOverlay';
 import { BoneOverlay } from '../canvas/BoneOverlay';
 import { ArtboardOverlay } from '../canvas/ArtboardOverlay';
 import { GuideOverlay } from '../canvas/GuideOverlay';
+import { SmartGuidesOverlay } from '../canvas/SmartGuidesOverlay';
 import { WeightPaintOverlay } from '../canvas/WeightPaintOverlay';
 import { PointMagnetOverlay } from '../canvas/PointMagnetOverlay';
 import { ContextMenu } from '../common/ContextMenu';
@@ -178,6 +179,7 @@ export function Canvas() {
     directSelectionImageNodes,
     deleteDirectSelectionPoints,
     marqueeRect,
+    smartGuides,
   } = useCanvasTools({
     camera: cameraReady ? cameraRef.current : null,
     sceneGraph,
@@ -2374,6 +2376,12 @@ export function Canvas() {
           />
         </svg>
       )}
+      <SmartGuidesOverlay
+        guides={smartGuides}
+        camera={cameraRef.current}
+        viewportWidth={viewportSize.width}
+        viewportHeight={viewportSize.height}
+      />
       {editingGradient &&
         (() => {
           const editingNode = sceneGraph.getNode(editingGradient.nodeId);

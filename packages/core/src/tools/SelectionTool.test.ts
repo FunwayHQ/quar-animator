@@ -2173,4 +2173,49 @@ describe('SelectionTool', () => {
       expect(resized.width).not.toBeCloseTo(150, 0);
     });
   });
+
+  describe('smart guides', () => {
+    it('snaps a dragged object to another object edge and reports the alignment guide', () => {
+      const moving = createTestRectangle('moving', 50, 50, 100, 100);
+      const target = createTestRectangle('target', 200, 200, 100, 100);
+      context.sceneGraph.addNode(moving);
+      context.sceneGraph.addNode(target);
+      context.getSnapToGuides = () => true;
+      const onSmartGuidesChange = vi.fn();
+      context.onSmartGuidesChange = onSmartGuidesChange;
+
+      const start = { x: 50, y: 50 };
+      tool.onPointerDown(
+        createMockPointerEvent({
+          worldPosition: start,
+          screenPosition: context.camera.worldToScreen(start),
+          button: 0,
+        })
+      );
+
+      const end = { x: 99, y: 50 };
+      tool.onPointerMove(
+        createMockPointerEvent({
+          worldPosition: end,
+          screenPosition: context.camera.worldToScreen(end),
+        })
+      );
+
+      expect(context.sceneGraph.getNode('moving')!.transform.position.x).toBe(100);
+      expect(onSmartGuidesChange).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          expect.objectContaining({ kind: 'alignment', axis: 'x', position: 150 }),
+        ])
+      );
+
+      tool.onPointerUp(
+        createMockPointerEvent({
+          worldPosition: end,
+          screenPosition: context.camera.worldToScreen(end),
+          button: 0,
+        })
+      );
+      expect(onSmartGuidesChange).toHaveBeenLastCalledWith([]);
+    });
+  });
 });

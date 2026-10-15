@@ -12,6 +12,7 @@ import type { HandlePosition, SelectionBounds } from '../selection/types';
 import { getPolygonBounds, getPathBounds } from '../path/pathUtils';
 import { getTextBounds } from '../font/textMetrics';
 import { getSymbolBounds } from '../symbols/symbolResolver';
+import { calculateSmartGuideSnap, type SmartGuide, type SmartGuideTarget } from './smartGuides';
 
 /**
  * Transform a local-space AABB through a world matrix and return the new AABB.
@@ -37,6 +38,37 @@ function transformBoundsToWorld(localBounds: Rect, worldMatrix: Matrix3): Rect {
   }
 
   return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
+}
+
+function translateRect(bounds: Rect, offset: Vector2): Rect {
+  return { ...bounds, x: bounds.x + offset.x, y: bounds.y + offset.y };
+}
+
+function smartGuidesEqual(a: SmartGuide[], b: SmartGuide[]): boolean {
+  return (
+    a.length === b.length &&
+    a.every((guide, index) => {
+      const other = b[index];
+      if (!other || guide.kind !== other.kind || guide.id !== other.id) return false;
+      if (guide.kind === 'alignment' && other.kind === 'alignment') {
+        return (
+          guide.position === other.position &&
+          guide.start === other.start &&
+          guide.end === other.end
+        );
+      }
+      if (guide.kind === 'spacing' && other.kind === 'spacing') {
+        return (
+          guide.label === other.label &&
+          guide.from.x === other.from.x &&
+          guide.from.y === other.from.y &&
+          guide.to.x === other.to.x &&
+          guide.to.y === other.to.y
+        );
+      }
+      return false;
+    })
+  );
 }
 
 // ============================================================================
@@ -84,6 +116,9 @@ export class SelectionTool extends BaseTool {
   private startPoint: Vector2 | null = null;
   private marqueeRect: Rect | null = null;
   private moveStartPositions: Map<string, Vector2> = new Map();
+  private moveStartBounds: Rect | null = null;
+  private moveGuideTargets: SmartGuideTarget[] = [];
+  private activeSmartGuides: SmartGuide[] = [];
 
   // Resize/rotation infrastructure
   private selectionManager: SelectionManager;
@@ -245,7 +280,7 @@ export class SelectionTool extends BaseTool {
     }
 
     if (hitNode) {
-      const selectedIds = this.context.getSelectedIds();
+      const selectedIds = new Set(this.context.getSelectedIds());
       const isAlreadySelected = selectedIds.has(hitNode.id);
 
       if (this.isAdditive(event) || event.shiftKey) {
@@ -253,13 +288,17 @@ export class SelectionTool extends BaseTool {
         if (isAlreadySelected) {
           // Remove from selection
           const newIds = [...selectedIds].filter((id) => id !== hitNode.id);
+          selectedIds.delete(hitNode.id);
           this.context.setSelectedIds(newIds);
         } else {
           // Add to selection
+          selectedIds.add(hitNode.id);
           this.context.addToSelection(hitNode.id);
         }
       } else if (!isAlreadySelected) {
         // Click on unselected node: select only this node
+        selectedIds.clear();
+        selectedIds.add(hitNode.id);
         this.context.setSelectedIds([hitNode.id]);
       }
 
@@ -271,12 +310,15 @@ export class SelectionTool extends BaseTool {
       // Store initial positions of the movable selected nodes (skip locked
       // nodes and descendants of other selected nodes).
       this.moveStartPositions.clear();
-      for (const id of this.movableSelectionIds(this.context.getSelectedIds())) {
+      const movingIds = this.movableSelectionIds(selectedIds);
+      for (const id of movingIds) {
         const node = this.context.sceneGraph.getNode(id);
         if (node) {
           this.moveStartPositions.set(id, { ...node.transform.position });
         }
       }
+      this.prepareSmartGuideTargets(movingIds);
+      this.publishSmartGuides([]);
     } else {
       // Clicked on empty space
       if (!this.isAdditive(event) && !event.shiftKey) {
@@ -326,7 +368,18 @@ export class SelectionTool extends BaseTool {
       }
       // Move selected nodes. Convert the world delta into each node's parent
       // frame so children of scaled/rotated groups track the cursor correctly.
-      const worldDelta = vec2.subtract(worldPos, this.startPoint);
+      const pointerDelta = vec2.subtract(worldPos, this.startPoint);
+      const guideEnabled = this.context.getSnapToGuides?.() ?? false;
+      const smartSnap =
+        guideEnabled && this.moveStartBounds
+          ? calculateSmartGuideSnap(
+              translateRect(this.moveStartBounds, pointerDelta),
+              this.moveGuideTargets,
+              6 / this.context.camera.zoom
+            )
+          : { offset: { x: 0, y: 0 }, guides: [] };
+      this.publishSmartGuides(smartSnap.guides);
+      const worldDelta = vec2.add(pointerDelta, smartSnap.offset);
 
       for (const [id, startPos] of this.moveStartPositions) {
         const node = this.context.sceneGraph.getNode(id);
@@ -389,6 +442,9 @@ export class SelectionTool extends BaseTool {
     this.startPoint = null;
     this.marqueeRect = null;
     this.moveStartPositions.clear();
+    this.moveStartBounds = null;
+    this.moveGuideTargets = [];
+    this.publishSmartGuides([]);
     this.dragMoved = false;
     this.state.isDragging = false;
     this.currentCursor = 'default';
@@ -435,6 +491,9 @@ export class SelectionTool extends BaseTool {
           this.mode = 'idle';
           this.state.isDragging = false;
           this.moveStartPositions.clear();
+          this.moveStartBounds = null;
+          this.moveGuideTargets = [];
+          this.publishSmartGuides([]);
         } else if (this.mode === 'resizing' && this.resizeState) {
           // Revert resize to initial node states
           for (const [id, initialState] of this.resizeState.initialNodeStates) {
@@ -881,6 +940,50 @@ export class SelectionTool extends BaseTool {
   // --------------------------------------------------------------------------
   // Snap Helpers
   // --------------------------------------------------------------------------
+
+  private publishSmartGuides(guides: SmartGuide[]): void {
+    if (smartGuidesEqual(this.activeSmartGuides, guides)) return;
+    this.activeSmartGuides = guides;
+    this.context.onSmartGuidesChange?.(guides);
+  }
+
+  private prepareSmartGuideTargets(movingIds: string[]): void {
+    const sceneGraph = this.context.sceneGraph;
+    const movingSet = new Set(movingIds);
+    this.moveStartBounds =
+      this.selectionManager.getSelectionBounds(movingSet, sceneGraph)?.rect ?? null;
+    this.moveGuideTargets = [];
+
+    if (movingSet.size === 0) return;
+
+    const isInsideMovingGroup = (node: Node): boolean => {
+      let parentId = node.parent;
+      while (parentId) {
+        if (movingSet.has(parentId)) return true;
+        parentId = sceneGraph.getNode(parentId)?.parent ?? null;
+      }
+      return false;
+    };
+
+    sceneGraph.traverseVisible((node) => {
+      if (movingSet.has(node.id) || isInsideMovingGroup(node)) return;
+      // A group bound contains its descendants. Don't use it as a target while
+      // one of those descendants is being moved independently.
+      if (
+        node.type === 'group' &&
+        movingIds.some((id) =>
+          sceneGraph.getAncestors(id).some((ancestor) => ancestor.id === node.id)
+        )
+      ) {
+        return;
+      }
+      // Rigging handles are editor controls rather than layout objects.
+      if (node.type === 'bone' || node.type === 'ik-target' || node.type === 'vitruvian') return;
+
+      const bounds = this.selectionManager.getSelectionBounds(new Set([node.id]), sceneGraph)?.rect;
+      if (bounds) this.moveGuideTargets.push({ id: node.id, bounds });
+    });
+  }
 
   private snapValue(value: number): number {
     if (!this.context.getSnapToGrid?.()) return value;
@@ -1579,6 +1682,9 @@ export class SelectionTool extends BaseTool {
     this.startPoint = null;
     this.marqueeRect = null;
     this.moveStartPositions.clear();
+    this.moveStartBounds = null;
+    this.moveGuideTargets = [];
+    this.publishSmartGuides([]);
     this.resizeState = null;
     this.rotationState = null;
     this.currentCursor = 'default';

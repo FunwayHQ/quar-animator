@@ -14,6 +14,7 @@ import {
   WeightPaintTool,
   PointMagnetTool,
   getAllPoints,
+  type SmartGuide,
 } from '@quar/core';
 import type { TransformType } from '@quar/core';
 import { findTrack } from '@quar/animation';
@@ -67,6 +68,8 @@ export interface UseCanvasToolsReturn {
   cursor: string;
   /** Current path points when using PenTool */
   penToolPath: PathPoint[];
+  /** Dynamic alignment and spacing guides shown while moving a selection */
+  smartGuides: SmartGuide[];
   /** Whether PenTool is currently drawing */
   isPenToolDrawing: boolean;
   /** Start dragging a handle in PenTool */
@@ -136,6 +139,7 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
   // Track preview node for rendering
   const [previewNode, setPreviewNode] = useState<Node | null>(null);
   const [cursor, setCursor] = useState<string>('default');
+  const [smartGuides, setSmartGuides] = useState<SmartGuide[]>([]);
 
   // Track PenTool state for overlay
   const [penToolPath, setPenToolPath] = useState<PathPoint[]>([]);
@@ -202,6 +206,7 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
   const getDefaultFill = useCallback(() => defaultFillRef.current, []);
   const getDefaultStroke = useCallback(() => defaultStrokeRef.current, []);
   const getSnapToGrid = useCallback(() => snapToGridRef.current, []);
+  const onSmartGuidesChange = useCallback((guides: SmartGuide[]) => setSmartGuides(guides), []);
   // Compute adaptive grid size matching the visible Grid rendering
   const getGridSize = useCallback(() => {
     if (!camera) return gridSizeRef.current;
@@ -415,6 +420,7 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
       getGuides: () => useEditorStore.getState().guides,
       getSnapToGuides: () => useEditorStore.getState().snapToGuides,
       getSymbolDefinitions: () => useEditorStore.getState().symbols,
+      onSmartGuidesChange,
     });
 
     // Set the active tool from EditorStore (ToolManager defaults to 'selection')
@@ -724,6 +730,7 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
     previewNode,
     cursor,
     penToolPath,
+    smartGuides,
     isPenToolDrawing,
     startPenHandleDrag,
     startPenPointDrag,

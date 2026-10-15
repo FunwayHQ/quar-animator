@@ -18,3 +18,4 @@ export * from './WeightPaintTool';
 export * from './PointMagnetTool';
 export * from './ArtboardTool';
 export * from './ToolManager';
+export * from './smartGuides';

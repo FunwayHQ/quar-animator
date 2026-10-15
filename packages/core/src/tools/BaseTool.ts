@@ -14,6 +14,7 @@ import type {
 } from '@quar/types';
 import type { SceneGraph } from '../SceneGraph';
 import type { Camera } from '../Camera';
+import type { SmartGuide } from './smartGuides';
 
 // ============================================================================
 // Types
@@ -44,6 +45,7 @@ export interface ToolContext {
   getGuides?: () => { id: string; axis: 'x' | 'y'; position: number }[];
   getSnapToGuides?: () => boolean;
   getSymbolDefinitions?: () => SymbolDefinition[];
+  onSmartGuidesChange?: (guides: SmartGuide[]) => void;
 }
 
 export interface ToolState {
