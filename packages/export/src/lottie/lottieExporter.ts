@@ -16,6 +16,7 @@ export interface LottieExportOptions {
   width: number;
   height: number;
   startFrame?: number;
+  /** Inclusive final frame, matching Quar's timeline/export range controls. */
   endFrame?: number;
   frameRate?: number;
   name?: string;
@@ -41,12 +42,13 @@ export function exportToLottieJson(
     width,
     height,
     startFrame = 0,
-    endFrame = timeline.duration,
+    endFrame = Math.max(0, timeline.duration - 1),
     frameRate = timeline.frameRate,
     name = 'Quar Animation',
   } = options;
 
-  const duration = endFrame - startFrame;
+  // Quar export ranges are inclusive. Lottie `op` is exclusive.
+  const duration = endFrame - startFrame + 1;
   const canvasH = height;
 
   // Build node resolver from provided nodes if not given
@@ -80,7 +82,7 @@ export function exportToLottieJson(
     v: '5.7.4',
     fr: frameRate,
     ip: startFrame,
-    op: endFrame,
+    op: endFrame + 1,
     w: width,
     h: height,
     nm: name,
@@ -128,7 +130,10 @@ const SUPPORTED_TYPES = new Set(['rectangle', 'ellipse', 'path', 'polygon', 'gro
 /**
  * Count supported and unsupported nodes for an export summary.
  */
-export function analyzeLottieExport(nodes: Node[]): {
+export function analyzeLottieExport(
+  nodes: Node[],
+  nodeResolver?: (id: string) => Node | undefined
+): {
   supportedCount: number;
   unsupportedCount: number;
   unsupportedTypes: string[];
@@ -138,14 +143,24 @@ export function analyzeLottieExport(nodes: Node[]): {
   let unsupportedCount = 0;
   const unsupportedTypeSet = new Set<string>();
 
-  for (const node of nodes) {
+  const visit = (node: Node) => {
+    if (!node.visible) return;
     if (SUPPORTED_TYPES.has(node.type)) {
       supportedCount++;
     } else {
       unsupportedCount++;
       unsupportedTypeSet.add(node.type);
     }
-  }
+
+    if (node.type === 'group' && nodeResolver) {
+      for (const childId of node.children) {
+        const child = nodeResolver(childId);
+        if (child) visit(child);
+      }
+    }
+  };
+
+  for (const node of nodes) visit(node);
 
   return {
     supportedCount,

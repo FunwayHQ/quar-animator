@@ -71,7 +71,7 @@ export function nodeToLottieLayer(
     ty: 4, // Shape layer
     nm: node.name || `Layer ${layerIndex}`,
     ks: buildLottieTransform(node, timeline, canvasH),
-    // Match the composition window [startFrame, endFrame). Keyframe times are
+    // Match the composition window [startFrame, endFrameInclusive + 1). Keyframe times are
     // absolute so st stays 0; using a raw duration made startFrame>0 layers
     // disappear for the final `startFrame` frames.
     ip: startFrame,

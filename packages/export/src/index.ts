@@ -43,6 +43,7 @@ export {
   packGrid,
   packMaxRects,
   nextPowerOfTwo,
+  assertAllFramesPacked,
   type PackResult,
   type PackedRect,
 } from './binPacking';

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
-import { exportGif, exportMp4 } from '@quar/export';
+import { analyzeLottieExport, exportGif, exportMp4 } from '@quar/export';
 import { downloadBlob } from '../../services/exportService';
 
 // Mock the SceneGraph context
@@ -171,6 +171,7 @@ describe('ExportDialog', () => {
     act(() => showExportDialog('lottie'));
     expect(screen.getByText(/unsupported node/i)).toBeInTheDocument();
     expect(screen.getByText(/text/)).toBeInTheDocument();
+    expect(analyzeLottieExport).toHaveBeenCalledWith([], expect.any(Function));
   });
 
   it('closes on Cancel button click', async () => {

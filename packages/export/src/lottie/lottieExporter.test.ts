@@ -111,10 +111,10 @@ describe('exportToLottieJson', () => {
       endFrame: 90,
     });
     expect(result.ip).toBe(30);
-    expect(result.op).toBe(90);
+    expect(result.op).toBe(91);
     // The layer window must span the whole comp, else frames 60..90 go blank.
     expect(result.layers[0].ip).toBe(30);
-    expect(result.layers[0].op).toBe(90);
+    expect(result.layers[0].op).toBe(91);
   });
 
   it('respects custom options', () => {
@@ -128,7 +128,7 @@ describe('exportToLottieJson', () => {
     });
     expect(result.fr).toBe(60);
     expect(result.ip).toBe(10);
-    expect(result.op).toBe(50);
+    expect(result.op).toBe(51);
     expect(result.w).toBe(1920);
     expect(result.h).toBe(1080);
     expect(result.nm).toBe('My Animation');
@@ -269,6 +269,50 @@ describe('analyzeLottieExport', () => {
     const analysis = analyzeLottieExport([group, makeRect()]);
     expect(analysis.supportedCount).toBe(2);
     expect(analysis.unsupportedCount).toBe(0);
+  });
+
+  it('reports unsupported descendants nested inside groups', () => {
+    const textNode: Node = {
+      id: 'nested-text',
+      name: 'Nested text',
+      type: 'text',
+      parent: 'nested-group',
+      children: [],
+      transform: defaultTransform,
+      visible: true,
+      locked: false,
+      opacity: 1,
+      blendMode: 'normal',
+      content: 'Hello',
+      fontFamily: 'Inter',
+      fontSize: 16,
+      fontWeight: 400,
+      fontStyle: 'normal',
+      textAlign: 'left',
+      lineHeight: 1.2,
+      letterSpacing: 0,
+      fills: [],
+      strokes: [],
+    };
+    const group: GroupNode = {
+      id: 'nested-group',
+      name: 'Group',
+      type: 'group',
+      parent: null,
+      children: [textNode.id],
+      transform: defaultTransform,
+      visible: true,
+      locked: false,
+      opacity: 1,
+      blendMode: 'normal',
+    };
+
+    const analysis = analyzeLottieExport([group], (id) =>
+      id === textNode.id ? textNode : undefined
+    );
+    expect(analysis.supportedCount).toBe(1);
+    expect(analysis.unsupportedCount).toBe(1);
+    expect(analysis.unsupportedTypes).toEqual(['text']);
   });
 });
 

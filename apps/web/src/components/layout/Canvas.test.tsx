@@ -3,10 +3,10 @@ import { render, screen, fireEvent } from '../../test/utils';
 import { SceneGraphProvider } from '../../contexts/SceneGraphContext';
 import { Canvas } from './Canvas';
 
-function renderCanvas() {
+function renderCanvas(onProjectFileDrop?: (file: File) => void | Promise<void>) {
   return render(
     <SceneGraphProvider>
-      <Canvas />
+      <Canvas onProjectFileDrop={onProjectFileDrop} />
     </SceneGraphProvider>
   );
 }
@@ -67,5 +67,25 @@ describe('Canvas', () => {
     renderCanvas();
     const canvas = document.querySelector('canvas');
     expect(canvas?.parentElement).toBeInTheDocument();
+  });
+
+  it('shows a drop hint while a file is dragged over the canvas', () => {
+    renderCanvas();
+    const dropZone = screen.getByTestId('canvas-drop-zone');
+
+    fireEvent.dragOver(dropZone, { dataTransfer: { types: ['Files'] } });
+
+    expect(screen.getByText('Drop an image, SVG, or project file to import')).toBeInTheDocument();
+  });
+
+  it('forwards a dropped project file to the project importer', () => {
+    const onProjectFileDrop = vi.fn();
+    renderCanvas(onProjectFileDrop);
+    const dropZone = screen.getByTestId('canvas-drop-zone');
+    const file = new File(['project'], 'animation.quar', { type: 'application/octet-stream' });
+
+    fireEvent.drop(dropZone, { dataTransfer: { files: [file], types: ['Files'] } });
+
+    expect(onProjectFileDrop).toHaveBeenCalledWith(file);
   });
 });

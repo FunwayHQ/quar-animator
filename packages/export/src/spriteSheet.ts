@@ -9,7 +9,13 @@ import type { Color } from '@quar/types';
 import type { FrameRenderContext } from './frameRenderer';
 import { createFrameRenderer } from './frameRenderer';
 import { getFrameCount } from './exportUtils';
-import { packGrid, packMaxRects, nextPowerOfTwo, type PackResult } from './binPacking';
+import {
+  packGrid,
+  packMaxRects,
+  nextPowerOfTwo,
+  assertAllFramesPacked,
+  type PackResult,
+} from './binPacking';
 import { generateSpriteSheetMetadata } from './spriteSheetMetadata';
 import type { ExportProgress } from './index';
 
@@ -74,6 +80,7 @@ export async function exportSpriteSheet(
     const maxDim = 4096;
     packResult = packMaxRects(frames, maxDim, maxDim, padding);
   }
+  assertAllFramesPacked(packResult);
 
   let atlasW = packResult.atlasWidth;
   let atlasH = packResult.atlasHeight;
@@ -111,7 +118,7 @@ export async function exportSpriteSheet(
     for (let i = 0; i < frameCount; i++) {
       const frame = startFrame + i;
       const rect = packResult.rects[i];
-      if (!rect || rect.x < 0) continue; // Skip frames that didn't fit
+      if (!rect) throw new Error(`Sprite sheet packing did not place frame ${frame}.`);
 
       onProgress?.({
         phase: 'rendering',
@@ -158,7 +165,13 @@ export async function exportSpriteSheet(
     // Generate metadata
     const metadata = generateSpriteSheetMetadata(
       packResult,
-      { startFrame, endFrame, frameWidth: pixelFrameWidth, frameHeight: pixelFrameHeight },
+      {
+        startFrame,
+        endFrame,
+        frameWidth: pixelFrameWidth,
+        frameHeight: pixelFrameHeight,
+        imageSize: { width: atlasW, height: atlasH },
+      },
       'spritesheet.png'
     );
 

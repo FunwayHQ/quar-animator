@@ -57,9 +57,14 @@ const ZOOM_SPEED = 0.001;
 // Canvas Component
 // ============================================================================
 
-export function Canvas() {
+export function Canvas({
+  onProjectFileDrop,
+}: {
+  onProjectFileDrop?: (file: File) => void | Promise<void>;
+}) {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [isFileDragOver, setIsFileDragOver] = useState(false);
 
   // Renderer refs (not state to avoid re-renders)
   const rendererRef = useRef<WebGLRenderer | null>(null);
@@ -2195,106 +2200,140 @@ export function Canvas() {
   // --------------------------------------------------------------------------
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
+    const isFileDrag = Array.from(e.dataTransfer.types).includes('Files');
     e.preventDefault();
+    if (!isFileDrag) return;
     e.dataTransfer.dropEffect = 'copy';
+    setIsFileDragOver(true);
   }, []);
 
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    const camera = cameraRef.current;
-    const sg = sceneGraphRef.current;
-    if (!camera || !sg) return;
-
-    const files = Array.from(e.dataTransfer.files);
-    const imageFile = files.find((f) => f.type.startsWith('image/'));
-    if (!imageFile) return;
-
-    const MAX_SIZE = 10 * 1024 * 1024;
-    if (imageFile.size > MAX_SIZE) return;
-
-    // Get world position at drop location
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const rect = canvas.getBoundingClientRect();
-    const screenPos = {
-      x: e.clientX - rect.left,
-      y: e.clientY - rect.top,
-    };
-    const worldPos = camera.screenToWorld(screenPos);
-
-    const isSvg = imageFile.type === 'image/svg+xml' || imageFile.name.endsWith('.svg');
-
-    if (isSvg) {
-      // SVG → import as vector paths
-      const reader = new FileReader();
-      reader.onload = () => {
-        const svgString = reader.result as string;
-        let idCounter = Date.now();
-        const generateId = () => `node_${idCounter++}`;
-        try {
-          useEditorStore.getState().pushUndo(sg);
-          const result = importSvg(svgString, sg, generateId, {
-            centerAtOrigin: false,
-            position: worldPos,
-          });
-          if (result.rootIds.length > 1) {
-            const groupId = generateId();
-            const group = createGroupNode(groupId, 'Imported SVG');
-            sg.addNode(group);
-            for (const rootId of result.rootIds) {
-              sg.moveNode(rootId, groupId);
-            }
-            useEditorStore.setState({ selectedNodeIds: new Set([groupId]) });
-          } else if (result.rootIds.length === 1) {
-            useEditorStore.setState({ selectedNodeIds: new Set(result.rootIds) });
-          }
-        } catch {
-          // silently fail on invalid SVG
-        }
-      };
-      reader.readAsText(imageFile);
-    } else {
-      // Raster image (PNG, JPG, etc.) → import as ImageNode
-      const reader = new FileReader();
-      reader.onload = () => {
-        const dataUri = reader.result as string;
-        const img = new Image();
-        img.onload = () => {
-          const nodeId = `node_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
-          const imageNode = {
-            id: nodeId,
-            name: imageFile.name.replace(/\.[^.]+$/, ''),
-            type: 'image' as const,
-            parent: null,
-            children: [],
-            transform: {
-              position: { x: worldPos.x, y: worldPos.y },
-              rotation: 0,
-              scale: { x: 1, y: 1 },
-              anchor: { x: 0.5, y: 0.5 },
-              skew: { x: 0, y: 0 },
-            },
-            visible: true,
-            locked: false,
-            opacity: 1,
-            blendMode: 'normal' as const,
-            src: dataUri,
-            width: img.naturalWidth,
-            height: img.naturalHeight,
-            naturalWidth: img.naturalWidth,
-            naturalHeight: img.naturalHeight,
-            cornerRadius: [0, 0, 0, 0] as [number, number, number, number],
-          };
-
-          useEditorStore.getState().pushUndo(sg);
-          sg.addNode(imageNode);
-          useEditorStore.setState({ selectedNodeIds: new Set([nodeId]) });
-        };
-        img.src = dataUri;
-      };
-      reader.readAsDataURL(imageFile);
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    const nextTarget = e.relatedTarget;
+    if (!(nextTarget instanceof HTMLElement) || !e.currentTarget.contains(nextTarget)) {
+      setIsFileDragOver(false);
     }
   }, []);
+
+  const handleDrop = useCallback(
+    (e: React.DragEvent) => {
+      const files = Array.from(e.dataTransfer.files);
+      if (files.length === 0) return;
+      e.preventDefault();
+      setIsFileDragOver(false);
+
+      const projectFile = files.find((file) => /\.(quar|json)$/i.test(file.name));
+      if (projectFile) {
+        if (onProjectFileDrop) {
+          void onProjectFileDrop(projectFile);
+        } else {
+          toast.error('Project file importing is unavailable here');
+        }
+        return;
+      }
+
+      const isSvgFile = (file: File) =>
+        file.type === 'image/svg+xml' || file.name.toLowerCase().endsWith('.svg');
+      const imageFile = files.find((file) => file.type.startsWith('image/') || isSvgFile(file));
+      if (!imageFile) {
+        toast.info('Drop an image, SVG, or .quar project file onto the canvas');
+        return;
+      }
+
+      const camera = cameraRef.current;
+      const sg = sceneGraphRef.current;
+      if (!camera || !sg) return;
+
+      const MAX_SIZE = 10 * 1024 * 1024;
+      if (imageFile.size > MAX_SIZE) {
+        toast.error('Image too large (max 10MB)');
+        return;
+      }
+
+      // Get world position at drop location
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const rect = canvas.getBoundingClientRect();
+      const screenPos = {
+        x: e.clientX - rect.left,
+        y: e.clientY - rect.top,
+      };
+      const worldPos = camera.screenToWorld(screenPos);
+
+      const isSvg = isSvgFile(imageFile);
+
+      if (isSvg) {
+        // SVG → import as vector paths
+        const reader = new FileReader();
+        reader.onload = () => {
+          const svgString = reader.result as string;
+          let idCounter = Date.now();
+          const generateId = () => `node_${idCounter++}`;
+          try {
+            useEditorStore.getState().pushUndo(sg);
+            const result = importSvg(svgString, sg, generateId, {
+              centerAtOrigin: false,
+              position: worldPos,
+            });
+            if (result.rootIds.length > 1) {
+              const groupId = generateId();
+              const group = createGroupNode(groupId, 'Imported SVG');
+              sg.addNode(group);
+              for (const rootId of result.rootIds) {
+                sg.moveNode(rootId, groupId);
+              }
+              useEditorStore.setState({ selectedNodeIds: new Set([groupId]) });
+            } else if (result.rootIds.length === 1) {
+              useEditorStore.setState({ selectedNodeIds: new Set(result.rootIds) });
+            }
+          } catch {
+            // silently fail on invalid SVG
+          }
+        };
+        reader.readAsText(imageFile);
+      } else {
+        // Raster image (PNG, JPG, etc.) → import as ImageNode
+        const reader = new FileReader();
+        reader.onload = () => {
+          const dataUri = reader.result as string;
+          const img = new Image();
+          img.onload = () => {
+            const nodeId = `node_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+            const imageNode = {
+              id: nodeId,
+              name: imageFile.name.replace(/\.[^.]+$/, ''),
+              type: 'image' as const,
+              parent: null,
+              children: [],
+              transform: {
+                position: { x: worldPos.x, y: worldPos.y },
+                rotation: 0,
+                scale: { x: 1, y: 1 },
+                anchor: { x: 0.5, y: 0.5 },
+                skew: { x: 0, y: 0 },
+              },
+              visible: true,
+              locked: false,
+              opacity: 1,
+              blendMode: 'normal' as const,
+              src: dataUri,
+              width: img.naturalWidth,
+              height: img.naturalHeight,
+              naturalWidth: img.naturalWidth,
+              naturalHeight: img.naturalHeight,
+              cornerRadius: [0, 0, 0, 0] as [number, number, number, number],
+            };
+
+            useEditorStore.getState().pushUndo(sg);
+            sg.addNode(imageNode);
+            useEditorStore.setState({ selectedNodeIds: new Set([nodeId]) });
+          };
+          img.src = dataUri;
+        };
+        reader.readAsDataURL(imageFile);
+      }
+    },
+    [onProjectFileDrop, sceneGraphRef]
+  );
 
   // --------------------------------------------------------------------------
   // Render
@@ -2305,8 +2344,15 @@ export function Canvas() {
       className={styles.canvasContainer}
       ref={containerRef}
       onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
       onDrop={handleDrop}
+      data-testid="canvas-drop-zone"
     >
+      {isFileDragOver && (
+        <div className={styles.fileDropOverlay} role="status" aria-live="polite">
+          Drop an image, SVG, or project file to import
+        </div>
+      )}
       {/* Symbol editing banner */}
       {useEditorStore.getState().editingSymbolId &&
         (() => {

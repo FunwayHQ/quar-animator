@@ -477,6 +477,34 @@ export class ProjectFileCancelledError extends Error {
   }
 }
 
+const MAX_PROJECT_FILE_SIZE = 50 * 1024 * 1024;
+
+/** Read and validate a project file without opening a file picker. */
+export function readProjectFile(file: File): Promise<ProjectData> {
+  if (file.size > MAX_PROJECT_FILE_SIZE) {
+    return Promise.reject(new Error('File too large. Maximum size is 50MB.'));
+  }
+
+  return new Promise<ProjectData>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const parsed = parseQuarFile(reader.result as ArrayBuffer);
+        if (!validateProjectData(parsed)) {
+          reject(new Error('Invalid .quar file format'));
+          return;
+        }
+        resolve(parsed as unknown as ProjectData);
+      } catch (error) {
+        reject(error instanceof Error ? error : new Error('Failed to parse .quar file'));
+      }
+    };
+    reader.onerror = () => reject(new Error('Failed to read file'));
+    reader.onabort = () => reject(new Error('Reading the project file was aborted'));
+    reader.readAsArrayBuffer(file);
+  });
+}
+
 export function uploadProjectFile(): Promise<ProjectData> {
   return new Promise<ProjectData>((resolve, reject) => {
     const input = document.createElement('input');
@@ -510,33 +538,10 @@ export function uploadProjectFile(): Promise<ProjectData> {
         return;
       }
 
-      // Reject files over 50MB to prevent memory exhaustion
-      const MAX_FILE_SIZE = 50 * 1024 * 1024;
-      if (file.size > MAX_FILE_SIZE) {
-        finish(() => reject(new Error('File too large. Maximum size is 50MB.')));
-        return;
-      }
-
-      const reader = new FileReader();
-      reader.onload = () => {
-        try {
-          const arrayBuffer = reader.result as ArrayBuffer;
-          const parsed = parseQuarFile(arrayBuffer);
-          if (!validateProjectData(parsed)) {
-            finish(() => reject(new Error('Invalid .quar file format')));
-            return;
-          }
-          finish(() => resolve(parsed as unknown as ProjectData));
-        } catch (error) {
-          finish(() =>
-            reject(error instanceof Error ? error : new Error('Failed to parse .quar file'))
-          );
-        }
-      };
-      reader.onerror = () => finish(() => reject(new Error('Failed to read file')));
-      reader.onabort = () =>
-        finish(() => reject(new Error('Reading the project file was aborted')));
-      reader.readAsArrayBuffer(file);
+      void readProjectFile(file).then(
+        (data) => finish(() => resolve(data)),
+        (error: unknown) => finish(() => reject(error))
+      );
     };
 
     input.addEventListener('cancel', handleCancel, { once: true });

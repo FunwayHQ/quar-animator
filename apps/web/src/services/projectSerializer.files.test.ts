@@ -4,6 +4,7 @@ import { createTimeline } from '@quar/animation';
 import {
   ProjectFileCancelledError,
   downloadProjectFile,
+  readProjectFile,
   serializeProject,
   uploadProjectFile,
 } from './projectSerializer';
@@ -87,6 +88,23 @@ describe('project file import/export', () => {
       name: 'File Test',
     });
     expect(picker?.isConnected).toBe(false);
+  });
+
+  it('reads a dropped binary .quar file directly', async () => {
+    const file = new File([writeQuarFile(project)], 'dropped-project.quar', {
+      type: 'application/octet-stream',
+    });
+
+    await expect(readProjectFile(file)).resolves.toMatchObject({
+      version: '3.0',
+      name: 'File Test',
+    });
+  });
+
+  it('rejects dropped project files larger than 50MB', async () => {
+    const file = { size: 50 * 1024 * 1024 + 1 } as File;
+
+    await expect(readProjectFile(file)).rejects.toThrow('Maximum size is 50MB');
   });
 
   it('settles and removes the picker when file selection is cancelled', async () => {

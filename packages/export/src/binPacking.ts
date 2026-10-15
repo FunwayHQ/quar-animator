@@ -24,6 +24,16 @@ export interface PackResult {
   atlasHeight: number;
 }
 
+/** Fail instead of allowing exporters to silently omit frames that did not fit. */
+export function assertAllFramesPacked(result: PackResult): void {
+  const unplaced = result.rects.filter((rect) => rect.x < 0 || rect.y < 0);
+  if (unplaced.length > 0) {
+    throw new Error(
+      'The sprite sheet is too large for the 4096 × 4096 atlas. Reduce the frame range, dimensions, or padding and try again.'
+    );
+  }
+}
+
 // ============================================================================
 // Utility
 // ============================================================================

@@ -17,6 +17,9 @@ import type {
   GroupNode,
   TextNode,
   ImageNode,
+  ArtboardNode,
+  SymbolInstanceNode,
+  SymbolDefinition,
   Fill,
   Stroke,
   Transform,
@@ -310,6 +313,26 @@ describe('nodeToSvgElement', () => {
     expect(svg).toContain('width="200"');
     expect(svg).toContain('height="100"');
     expect(svg).toContain('fill="#0080ff"');
+  });
+
+  it('exports every visible fill and stroke in paint order', () => {
+    const node: RectangleNode = {
+      ...makeBaseNodeFields('paint-stack', 'rectangle'),
+      type: 'rectangle',
+      width: 40,
+      height: 20,
+      cornerRadius: [0, 0, 0, 0],
+      fills: [makeSolidFill(makeColor(255, 0, 0)), makeSolidFill(makeColor(0, 0, 255), 0.5)],
+      strokes: [makeStroke(makeColor(0, 255, 0), 2), makeStroke(makeColor(255, 255, 0), 4)],
+    };
+    sceneGraph.addNode(node);
+
+    const svg = exportNodesToSvg([node], sceneGraph);
+    expect(svg).toContain('fill="#ff0000"');
+    expect(svg).toContain('fill="#0000ff"');
+    expect(svg).toContain('stroke="#00ff00"');
+    expect(svg).toContain('stroke="#ffff00"');
+    expect(svg.match(/<rect/g)).toHaveLength(4);
   });
 
   it('converts RectangleNode with uniform corner radius to rx/ry', () => {
@@ -683,6 +706,101 @@ describe('exportNodesToSvg', () => {
     const svg = exportNodesToSvg([], sceneGraph);
     expect(svg).toContain('<svg');
     expect(svg).toContain('</svg>');
+  });
+
+  it('exports selected artboards using their dimensions and children', () => {
+    const artboard: ArtboardNode = {
+      ...makeBaseNodeFields('ab-export', 'artboard'),
+      type: 'artboard',
+      width: 320,
+      height: 180,
+      fills: [makeSolidFill(makeColor(20, 30, 40))],
+      clipContent: true,
+    };
+    sceneGraph.addNode(artboard);
+
+    const svg = exportNodesToSvg([artboard], sceneGraph);
+    expect(svg).toContain('viewBox="0 0 320 180"');
+    expect(svg).toContain('fill="#141e28"');
+  });
+
+  it('uses resolved symbol content to compute the selected instance bounds', () => {
+    const symbolRect: RectangleNode = {
+      ...makeBaseNodeFields('symbol-rect', 'rectangle', {
+        transform: makeTransform({ position: { x: 10, y: 20 } }),
+      }),
+      type: 'rectangle',
+      width: 40,
+      height: 20,
+      cornerRadius: [0, 0, 0, 0],
+      fills: [makeSolidFill()],
+      strokes: [],
+    };
+    const definition: SymbolDefinition = {
+      id: 'symbol-bounds-test',
+      name: 'Bounded symbol',
+      sceneGraphJSON: { nodes: [symbolRect], rootNodeIds: [symbolRect.id] },
+    };
+    const instance: SymbolInstanceNode = {
+      ...makeBaseNodeFields('symbol-instance', 'symbol-instance', {
+        transform: makeTransform({ position: { x: 100, y: 50 } }),
+      }),
+      type: 'symbol-instance',
+      symbolId: definition.id,
+      overrides: [],
+    };
+    sceneGraph.addNode(instance);
+
+    const svg = exportNodesToSvg([instance], sceneGraph, [definition]);
+    expect(svg).toContain('viewBox="0 0 40 20"');
+    expect(svg).toContain('<rect');
+  });
+
+  it('includes stroke expansion in exported bounds', () => {
+    const node: RectangleNode = {
+      ...makeBaseNodeFields('stroked-bounds', 'rectangle'),
+      type: 'rectangle',
+      width: 20,
+      height: 10,
+      cornerRadius: [0, 0, 0, 0],
+      fills: [makeSolidFill()],
+      strokes: [makeStroke(makeColor(0, 0, 0), 8)],
+    };
+    sceneGraph.addNode(node);
+
+    const svg = exportNodesToSvg([node], sceneGraph);
+    const width = Number(svg.match(/viewBox="0 0 ([\d.]+)/)?.[1]);
+    const height = Number(svg.match(/viewBox="0 0 [\d.]+ ([\d.]+)/)?.[1]);
+    expect(width).toBeGreaterThan(20);
+    expect(height).toBeGreaterThan(10);
+  });
+
+  it('computes cubic curve extrema instead of bounding only path anchors', () => {
+    const path: PathNode = {
+      ...makeBaseNodeFields('curve-bounds', 'path'),
+      type: 'path',
+      points: [
+        {
+          position: { x: 0, y: 0 },
+          handleIn: null,
+          handleOut: { x: 0, y: 100 },
+          type: 'smooth',
+        },
+        {
+          position: { x: 100, y: 0 },
+          handleIn: { x: 0, y: 100 },
+          handleOut: null,
+          type: 'smooth',
+        },
+      ],
+      closed: false,
+      fills: [],
+      strokes: [],
+    };
+    sceneGraph.addNode(path);
+
+    const svg = exportNodesToSvg([path], sceneGraph);
+    expect(svg).toContain('viewBox="0 0 100 75"');
   });
 
   it('applies Y-flip transform', () => {

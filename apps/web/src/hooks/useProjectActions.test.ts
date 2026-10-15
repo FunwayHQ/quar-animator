@@ -49,6 +49,13 @@ const mockUploadFile = vi.fn().mockResolvedValue({
   nodes: [],
   settings: {},
 });
+const mockReadProjectFile = vi.fn().mockResolvedValue({
+  name: 'Dropped Project',
+  createdAt: '2024-01-01',
+  version: '3.0',
+  pages: [],
+  settings: {},
+});
 
 vi.mock('../services/projectSerializer', () => ({
   serializeProject: (...args: unknown[]) => mockSerialize(...args),
@@ -57,6 +64,7 @@ vi.mock('../services/projectSerializer', () => ({
   deserializeProjectFromBinary: (...args: unknown[]) => mockDeserializeFromBinary(...args),
   downloadProjectFile: (...args: unknown[]) => mockDownloadFile(...args),
   uploadProjectFile: (...args: unknown[]) => mockUploadFile(...args),
+  readProjectFile: (...args: unknown[]) => mockReadProjectFile(...args),
   ProjectFileCancelledError: class ProjectFileCancelledError extends Error {},
 }));
 
@@ -197,6 +205,26 @@ describe('useProjectActions', () => {
         result.current.newProject();
       });
       expect(mockEditorState.clearHistory).toHaveBeenCalled();
+    });
+  });
+
+  describe('importProjectFile', () => {
+    it('loads and persists the project file dropped on the canvas', async () => {
+      const { result } = renderProjectActions();
+      const file = new File(['project'], 'dropped.quar');
+
+      await act(async () => {
+        await result.current.importProjectFile(file);
+      });
+
+      expect(mockReadProjectFile).toHaveBeenCalledWith(file);
+      expect(mockDeserialize).toHaveBeenCalledWith(
+        expect.objectContaining({ name: 'Dropped Project' }),
+        mockSceneGraph,
+        expect.any(Function)
+      );
+      expect(mockSave).toHaveBeenCalled();
+      expect(mockSetLastProjectId).toHaveBeenCalled();
     });
   });
 

@@ -178,6 +178,22 @@ describe('generateSpriteSheetMetadata', () => {
     expect(meta.meta.size.w).toBe(pack.atlasWidth);
     expect(meta.meta.size.h).toBe(pack.atlasHeight);
   });
+
+  it('uses the final image dimensions when the atlas is padded to powers of two', () => {
+    const pack = packGrid(2, 20, 10, 2, 0);
+    const meta = generateSpriteSheetMetadata(
+      pack,
+      {
+        startFrame: 0,
+        endFrame: 1,
+        frameWidth: 20,
+        frameHeight: 10,
+        imageSize: { width: 64, height: 16 },
+      },
+      'power-of-two.png'
+    );
+    expect(meta.meta.size).toEqual({ w: 64, h: 16 });
+  });
 });
 
 describe('Sprite Sheet - Grid + MaxRects Integration', () => {
@@ -252,18 +268,19 @@ describe('exportSpriteSheet', () => {
         layout: 'grid',
         columns: 2,
         multiplier: 2,
+        powerOfTwo: true,
       });
       const metadata = JSON.parse(result.metadata) as {
         meta: { size: { w: number; h: number } };
         frames: Record<string, { sourceSize: { w: number; h: number } }>;
       };
 
-      expect([atlas.width, atlas.height]).toEqual([40, 10]);
+      expect([atlas.width, atlas.height]).toEqual([64, 16]);
       expect(draws).toEqual([
         [0, 0],
         [20, 0],
       ]);
-      expect(metadata.meta.size).toEqual({ w: 40, h: 10 });
+      expect(metadata.meta.size).toEqual({ w: 64, h: 16 });
       expect(Object.values(metadata.frames).map((frame) => frame.sourceSize)).toEqual([
         { w: 20, h: 10 },
         { w: 20, h: 10 },
@@ -271,5 +288,23 @@ describe('exportSpriteSheet', () => {
     } finally {
       vi.restoreAllMocks();
     }
+  });
+
+  it('fails when packed frames exceed the atlas instead of returning a partial sheet', async () => {
+    mockFrameRenderer.preloadTextures.mockClear();
+    const context = {
+      sceneGraph: { getRootNodes: () => [] },
+    } as unknown as FrameRenderContext;
+
+    await expect(
+      exportSpriteSheet(context, {
+        startFrame: 0,
+        endFrame: 0,
+        frameWidth: 4097,
+        frameHeight: 8,
+        layout: 'packed',
+      })
+    ).rejects.toThrow(/too large for the 4096 × 4096 atlas/);
+    expect(mockFrameRenderer.preloadTextures).not.toHaveBeenCalled();
   });
 });

@@ -21,6 +21,7 @@ import type {
   Stroke,
   Gradient,
   GradientStop,
+  Matrix3,
   Transform,
 } from '@quar/types';
 import {
@@ -30,7 +31,7 @@ import {
   createStarPath,
 } from '../path/pathUtils';
 import { resolveSymbolInstance, getResolvedRootNodes } from '../symbols/symbolResolver';
-import type { SceneGraph } from '../SceneGraph';
+import { SceneGraph } from '../SceneGraph';
 
 // ============================================================================
 // Color Helpers
@@ -274,8 +275,6 @@ export function nodeToSvgElement(
 }
 
 function rectangleToSvg(node: RectangleNode, defs: string[]): string {
-  const fillAttr = fillToSvgAttrs(node.fills[0], defs);
-  const strokeAttr = strokeToSvgAttrs(node.strokes[0], defs);
   const tfAttr = transformToSvgAttr(node.transform);
   const opacityAttr = node.opacity < 1 ? ` opacity="${fmt(node.opacity)}"` : '';
 
@@ -295,10 +294,18 @@ function rectangleToSvg(node: RectangleNode, defs: string[]): string {
   if (hasPerVertexRadius) {
     // SVG <rect> doesn't support per-corner radius natively; use a <path> instead
     const d = roundedRectPath(node.width, node.height, tl, tr, br, bl, anchorX, anchorY);
-    return `<path d="${d}" ${fillAttr}${strokeAttr ? ' ' + strokeAttr : ''}${tfAttr}${opacityAttr}/>`;
+    return paintedShape('path', ` d="${d}"`, node.fills, node.strokes, tfAttr, opacityAttr, defs);
   }
 
-  return `<rect x="${fmt(-anchorX)}" y="${fmt(-anchorY)}" width="${fmt(node.width)}" height="${fmt(node.height)}"${rxRy} ${fillAttr}${strokeAttr ? ' ' + strokeAttr : ''}${tfAttr}${opacityAttr}/>`;
+  return paintedShape(
+    'rect',
+    ` x="${fmt(-anchorX)}" y="${fmt(-anchorY)}" width="${fmt(node.width)}" height="${fmt(node.height)}"${rxRy}`,
+    node.fills,
+    node.strokes,
+    tfAttr,
+    opacityAttr,
+    defs
+  );
 }
 
 function roundedRectPath(
@@ -330,8 +337,6 @@ function roundedRectPath(
 }
 
 function ellipseToSvg(node: EllipseNode, defs: string[]): string {
-  const fillAttr = fillToSvgAttrs(node.fills[0], defs);
-  const strokeAttr = strokeToSvgAttrs(node.strokes[0], defs);
   const tfAttr = transformToSvgAttr(node.transform);
   const opacityAttr = node.opacity < 1 ? ` opacity="${fmt(node.opacity)}"` : '';
 
@@ -339,12 +344,18 @@ function ellipseToSvg(node: EllipseNode, defs: string[]): string {
   const cx = node.radiusX * (1 - 2 * node.transform.anchor.x);
   const cy = node.radiusY * (1 - 2 * node.transform.anchor.y);
 
-  return `<ellipse cx="${fmt(cx)}" cy="${fmt(cy)}" rx="${fmt(node.radiusX)}" ry="${fmt(node.radiusY)}" ${fillAttr}${strokeAttr ? ' ' + strokeAttr : ''}${tfAttr}${opacityAttr}/>`;
+  return paintedShape(
+    'ellipse',
+    ` cx="${fmt(cx)}" cy="${fmt(cy)}" rx="${fmt(node.radiusX)}" ry="${fmt(node.radiusY)}"`,
+    node.fills,
+    node.strokes,
+    tfAttr,
+    opacityAttr,
+    defs
+  );
 }
 
 function polygonToSvg(node: PolygonNode, defs: string[]): string {
-  const fillAttr = fillToSvgAttrs(node.fills[0], defs);
-  const strokeAttr = strokeToSvgAttrs(node.strokes[0], defs);
   const tfAttr = transformToSvgAttr(node.transform);
   const opacityAttr = node.opacity < 1 ? ` opacity="${fmt(node.opacity)}"` : '';
 
@@ -364,12 +375,10 @@ function polygonToSvg(node: PolygonNode, defs: string[]): string {
   }
 
   const d = pathPointsToSvgD(points, true);
-  return `<path d="${d}" ${fillAttr}${strokeAttr ? ' ' + strokeAttr : ''}${tfAttr}${opacityAttr}/>`;
+  return paintedShape('path', ` d="${d}"`, node.fills, node.strokes, tfAttr, opacityAttr, defs);
 }
 
 function pathToSvg(node: PathNode, defs: string[]): string {
-  const fillAttr = fillToSvgAttrs(node.fills[0], defs);
-  const strokeAttr = strokeToSvgAttrs(node.strokes[0], defs);
   const tfAttr = transformToSvgAttr(node.transform);
   const opacityAttr = node.opacity < 1 ? ` opacity="${fmt(node.opacity)}"` : '';
 
@@ -383,12 +392,18 @@ function pathToSvg(node: PathNode, defs: string[]): string {
 
   const fillRule = node.fillRule === 'evenodd' ? ' fill-rule="evenodd"' : '';
 
-  return `<path d="${d}"${fillRule} ${fillAttr}${strokeAttr ? ' ' + strokeAttr : ''}${tfAttr}${opacityAttr}/>`;
+  return paintedShape(
+    'path',
+    ` d="${d}"${fillRule}`,
+    node.fills,
+    node.strokes,
+    tfAttr,
+    opacityAttr,
+    defs
+  );
 }
 
 function textToSvg(node: TextNode, defs: string[]): string {
-  const fillAttr = fillToSvgAttrs(node.fills[0], defs);
-  const strokeAttr = strokeToSvgAttrs(node.strokes[0], defs);
   // The root export wraps everything in scale(1,-1) to convert Y-up geometry to
   // SVG Y-down, but the SVG engine already lays out <text> glyphs in Y-down, so
   // append a local scale(1,-1) to cancel the double flip (else text is mirrored).
@@ -404,7 +419,56 @@ function textToSvg(node: TextNode, defs: string[]): string {
   if (node.letterSpacing !== 0) fontAttrs.push(`letter-spacing="${fmt(node.letterSpacing)}"`);
 
   const content = escapeXml(node.content);
-  return `<text ${fontAttrs.join(' ')} ${fillAttr}${strokeAttr ? ' ' + strokeAttr : ''}${tfAttr}${opacityAttr}>${content}</text>`;
+  return paintedShape(
+    'text',
+    ` ${fontAttrs.join(' ')}`,
+    node.fills,
+    node.strokes,
+    tfAttr,
+    opacityAttr,
+    defs,
+    content
+  );
+}
+
+/** Apply every fill and stroke in the same order as the canvas renderer. */
+function paintedShape(
+  tag: string,
+  geometry: string,
+  fills: Fill[] | undefined,
+  strokes: Stroke[] | undefined,
+  transformAttr: string,
+  opacityAttr: string,
+  defs: string[],
+  innerContent?: string
+): string {
+  const visibleFills = (fills ?? []).filter((fill) => fill.visible && fill.type !== 'none');
+  const visibleStrokes = (strokes ?? []).filter((stroke) => stroke.visible && stroke.width > 0);
+  const render = (fillAttr: string, strokeAttr = '', tf = transformAttr, opacity = opacityAttr) =>
+    innerContent !== undefined
+      ? `<${tag}${geometry} ${fillAttr}${strokeAttr ? ` ${strokeAttr}` : ''}${tf}${opacity}>${innerContent}</${tag}>`
+      : `<${tag}${geometry} ${fillAttr}${strokeAttr ? ` ${strokeAttr}` : ''}${tf}${opacity}/>`;
+
+  if (visibleFills.length <= 1 && visibleStrokes.length <= 1) {
+    const fill = fillToSvgAttrs(visibleFills[0], defs);
+    const stroke = strokeToSvgAttrs(visibleStrokes[0], defs);
+    return render(fill, stroke);
+  }
+
+  // SVG applies opacity per element; group the duplicate geometry so node
+  // opacity composites the complete stack just as it does in the renderer.
+  const elements: string[] = [];
+  for (const fill of visibleFills) {
+    const fillAttr = fillToSvgAttrs(fill, defs);
+    elements.push(render(fillAttr, '', '', ''));
+  }
+  if (visibleFills.length === 0 && visibleStrokes.length === 0) {
+    elements.push(render('fill="none"', '', '', ''));
+  }
+  for (const stroke of visibleStrokes) {
+    elements.push(render('fill="none"', strokeToSvgAttrs(stroke, defs), '', ''));
+  }
+  return `<g${transformAttr}${opacityAttr}>${elements.join('')}</g>`;
 }
 
 function textAlignToAnchor(align: string): string {
@@ -463,9 +527,16 @@ function artboardToSvg(
   if (node.fills && node.fills.length > 0) {
     const anchorX = node.transform.anchor.x * node.width;
     const anchorY = node.transform.anchor.y * node.height;
-    const fillAttr = fillToSvgAttrs(node.fills[0], defs);
     elements.push(
-      `<rect x="${fmt(-anchorX)}" y="${fmt(-anchorY)}" width="${fmt(node.width)}" height="${fmt(node.height)}" ${fillAttr}/>`
+      paintedShape(
+        'rect',
+        ` x="${fmt(-anchorX)}" y="${fmt(-anchorY)}" width="${fmt(node.width)}" height="${fmt(node.height)}"`,
+        node.fills,
+        [],
+        '',
+        '',
+        defs
+      )
     );
   }
 
@@ -579,7 +650,7 @@ export function exportNodesToSvg(
   }
 
   // Compute combined bounds of all nodes
-  const bounds = computeExportBounds(nodes, sceneGraph);
+  const bounds = computeExportBounds(nodes, sceneGraph, symbolDefs);
   if (!bounds) return '<svg xmlns="http://www.w3.org/2000/svg"></svg>';
 
   const { minX, minY, maxX, maxY } = bounds;
@@ -621,7 +692,11 @@ interface ExportBounds {
   maxY: number;
 }
 
-function computeExportBounds(nodes: Node[], sceneGraph: SceneGraph): ExportBounds | null {
+function computeExportBounds(
+  nodes: Node[],
+  sceneGraph: SceneGraph,
+  symbolDefs?: Map<string, SymbolDefinition>
+): ExportBounds | null {
   let minX = Infinity;
   let minY = Infinity;
   let maxX = -Infinity;
@@ -630,7 +705,7 @@ function computeExportBounds(nodes: Node[], sceneGraph: SceneGraph): ExportBound
 
   for (const node of nodes) {
     if (!node.visible) continue;
-    const b = getNodeWorldBounds(node, sceneGraph);
+    const b = getNodeWorldBounds(node, sceneGraph, symbolDefs);
     if (b) {
       minX = Math.min(minX, b.minX);
       minY = Math.min(minY, b.minY);
@@ -643,8 +718,12 @@ function computeExportBounds(nodes: Node[], sceneGraph: SceneGraph): ExportBound
   return found ? { minX, minY, maxX, maxY } : null;
 }
 
-function getNodeWorldBounds(node: Node, sceneGraph: SceneGraph): ExportBounds | null {
-  const local = getLocalExtent(node, sceneGraph);
+function getNodeWorldBounds(
+  node: Node,
+  sceneGraph: SceneGraph,
+  symbolDefs?: Map<string, SymbolDefinition>
+): ExportBounds | null {
+  const local = getLocalExtent(node, sceneGraph, symbolDefs);
   if (!local) return null;
 
   const wt = sceneGraph.getWorldTransform(node.id);
@@ -673,106 +752,240 @@ function getNodeWorldBounds(node: Node, sceneGraph: SceneGraph): ExportBounds | 
   return { minX, minY, maxX, maxY };
 }
 
-function getLocalExtent(node: Node, sceneGraph: SceneGraph): ExportBounds | null {
+function getLocalExtent(
+  node: Node,
+  sceneGraph: SceneGraph,
+  symbolDefs?: Map<string, SymbolDefinition>
+): ExportBounds | null {
+  let bounds: ExportBounds | null;
   switch (node.type) {
     case 'rectangle': {
       const ax = node.transform.anchor.x * node.width;
       const ay = node.transform.anchor.y * node.height;
-      return { minX: -ax, minY: -ay, maxX: node.width - ax, maxY: node.height - ay };
+      bounds = { minX: -ax, minY: -ay, maxX: node.width - ax, maxY: node.height - ay };
+      break;
     }
     case 'ellipse': {
-      return { minX: -node.radiusX, minY: -node.radiusY, maxX: node.radiusX, maxY: node.radiusY };
+      bounds = { minX: -node.radiusX, minY: -node.radiusY, maxX: node.radiusX, maxY: node.radiusY };
+      break;
     }
     case 'polygon': {
       const r = node.radius;
-      return { minX: -r, minY: -r, maxX: r, maxY: r };
+      bounds = { minX: -r, minY: -r, maxX: r, maxY: r };
+      break;
     }
     case 'path': {
-      if (node.points.length === 0) return null;
-      let minX = Infinity,
-        minY = Infinity,
-        maxX = -Infinity,
-        maxY = -Infinity;
-      for (const p of node.points) {
-        minX = Math.min(minX, p.position.x);
-        minY = Math.min(minY, p.position.y);
-        maxX = Math.max(maxX, p.position.x);
-        maxY = Math.max(maxY, p.position.y);
-      }
-      if (node.subpaths) {
-        for (const sp of node.subpaths) {
-          for (const p of sp) {
-            minX = Math.min(minX, p.position.x);
-            minY = Math.min(minY, p.position.y);
-            maxX = Math.max(maxX, p.position.x);
-            maxY = Math.max(maxY, p.position.y);
-          }
-        }
-      }
-      return { minX, minY, maxX, maxY };
+      bounds = pathLocalBounds(node);
+      break;
     }
     case 'text': {
       // Approximate text bounds from font size
       const approxWidth = node.content.length * node.fontSize * 0.6;
       const approxHeight = node.fontSize * node.lineHeight;
-      return { minX: 0, minY: -approxHeight, maxX: approxWidth, maxY: 0 };
+      bounds = { minX: 0, minY: -approxHeight, maxX: approxWidth, maxY: 0 };
+      break;
     }
     case 'image': {
       const ax = node.transform.anchor.x * node.width;
       const ay = node.transform.anchor.y * node.height;
-      return { minX: -ax, minY: -ay, maxX: node.width - ax, maxY: node.height - ay };
+      bounds = { minX: -ax, minY: -ay, maxX: node.width - ax, maxY: node.height - ay };
+      break;
+    }
+    case 'artboard': {
+      const ax = node.transform.anchor.x * node.width;
+      const ay = node.transform.anchor.y * node.height;
+      const artboardBounds = {
+        minX: -ax,
+        minY: -ay,
+        maxX: node.width - ax,
+        maxY: node.height - ay,
+      };
+      bounds = containerLocalBounds(node, sceneGraph, symbolDefs, artboardBounds);
+      break;
     }
     case 'group': {
-      // Union of children world bounds, transformed back to group local
-      let wMinX = Infinity,
-        wMinY = Infinity,
-        wMaxX = -Infinity,
-        wMaxY = -Infinity;
-      let found = false;
-      for (const childId of node.children) {
-        const child = sceneGraph.getNode(childId);
-        if (!child || !child.visible) continue;
-        const childBounds = getNodeWorldBounds(child, sceneGraph);
-        if (childBounds) {
-          wMinX = Math.min(wMinX, childBounds.minX);
-          wMinY = Math.min(wMinY, childBounds.minY);
-          wMaxX = Math.max(wMaxX, childBounds.maxX);
-          wMaxY = Math.max(wMaxY, childBounds.maxY);
-          found = true;
-        }
+      bounds = containerLocalBounds(node, sceneGraph, symbolDefs, null);
+      break;
+    }
+    case 'symbol-instance': {
+      const definition = symbolDefs?.get(node.symbolId);
+      if (!definition) return null;
+      const resolvedNodes = resolveSymbolInstance(node, definition);
+      const resolvedGraph = new SceneGraph();
+      resolvedGraph.fromJSON({
+        nodes: resolvedNodes,
+        rootNodeIds: definition.sceneGraphJSON.rootNodeIds,
+      });
+      let localBounds: ExportBounds | null = null;
+      for (const root of getResolvedRootNodes(resolvedNodes, definition)) {
+        if (!root.visible) continue;
+        localBounds = unionBounds(localBounds, getNodeWorldBounds(root, resolvedGraph, symbolDefs));
       }
-      if (!found) return null;
-      // Transform world bounds back to group-local space by inverting the group's world transform
-      const gwt = sceneGraph.getWorldTransform(node.id);
-      const det = gwt.a * gwt.d - gwt.b * gwt.c;
-      if (Math.abs(det) < 1e-10) return { minX: wMinX, minY: wMinY, maxX: wMaxX, maxY: wMaxY };
-      const invDet = 1 / det;
-      // Inverse affine: inv(M) * (p - t)
-      const worldCorners = [
-        { x: wMinX, y: wMinY },
-        { x: wMaxX, y: wMinY },
-        { x: wMaxX, y: wMaxY },
-        { x: wMinX, y: wMaxY },
-      ];
-      let lMinX = Infinity,
-        lMinY = Infinity,
-        lMaxX = -Infinity,
-        lMaxY = -Infinity;
-      for (const c of worldCorners) {
-        const dx = c.x - gwt.tx;
-        const dy = c.y - gwt.ty;
-        const lx = (gwt.d * dx - gwt.c * dy) * invDet;
-        const ly = (-gwt.b * dx + gwt.a * dy) * invDet;
-        lMinX = Math.min(lMinX, lx);
-        lMinY = Math.min(lMinY, ly);
-        lMaxX = Math.max(lMaxX, lx);
-        lMaxY = Math.max(lMaxY, ly);
-      }
-      return { minX: lMinX, minY: lMinY, maxX: lMaxX, maxY: lMaxY };
+      bounds = localBounds;
+      break;
     }
     default:
       return null;
   }
+
+  if (!bounds) return null;
+  const strokePadding = getStrokePadding(node);
+  return strokePadding > 0
+    ? {
+        minX: bounds.minX - strokePadding,
+        minY: bounds.minY - strokePadding,
+        maxX: bounds.maxX + strokePadding,
+        maxY: bounds.maxY + strokePadding,
+      }
+    : bounds;
+}
+
+function containerLocalBounds(
+  node: GroupNode | ArtboardNode,
+  sceneGraph: SceneGraph,
+  symbolDefs: Map<string, SymbolDefinition> | undefined,
+  ownLocalBounds: ExportBounds | null
+): ExportBounds | null {
+  const worldTransform = sceneGraph.getWorldTransform(node.id);
+  let worldBounds = ownLocalBounds ? transformBounds(ownLocalBounds, worldTransform) : null;
+  for (const childId of node.children) {
+    const child = sceneGraph.getNode(childId);
+    if (!child || !child.visible) continue;
+    worldBounds = unionBounds(worldBounds, getNodeWorldBounds(child, sceneGraph, symbolDefs));
+  }
+  return worldBounds ? inverseTransformBounds(worldBounds, worldTransform) : null;
+}
+
+function transformBounds(bounds: ExportBounds, matrix: Matrix3): ExportBounds {
+  const corners = [
+    { x: bounds.minX, y: bounds.minY },
+    { x: bounds.maxX, y: bounds.minY },
+    { x: bounds.maxX, y: bounds.maxY },
+    { x: bounds.minX, y: bounds.maxY },
+  ];
+  const points = corners.map((point) => ({
+    x: matrix.a * point.x + matrix.c * point.y + matrix.tx,
+    y: matrix.b * point.x + matrix.d * point.y + matrix.ty,
+  }));
+  return {
+    minX: Math.min(...points.map((point) => point.x)),
+    minY: Math.min(...points.map((point) => point.y)),
+    maxX: Math.max(...points.map((point) => point.x)),
+    maxY: Math.max(...points.map((point) => point.y)),
+  };
+}
+
+function inverseTransformBounds(bounds: ExportBounds, matrix: Matrix3): ExportBounds {
+  const determinant = matrix.a * matrix.d - matrix.b * matrix.c;
+  if (Math.abs(determinant) < 1e-10) return bounds;
+  const inverse = 1 / determinant;
+  const corners = [
+    { x: bounds.minX, y: bounds.minY },
+    { x: bounds.maxX, y: bounds.minY },
+    { x: bounds.maxX, y: bounds.maxY },
+    { x: bounds.minX, y: bounds.maxY },
+  ];
+  const points = corners.map((point) => {
+    const dx = point.x - matrix.tx;
+    const dy = point.y - matrix.ty;
+    return {
+      x: (matrix.d * dx - matrix.c * dy) * inverse,
+      y: (-matrix.b * dx + matrix.a * dy) * inverse,
+    };
+  });
+  return {
+    minX: Math.min(...points.map((point) => point.x)),
+    minY: Math.min(...points.map((point) => point.y)),
+    maxX: Math.max(...points.map((point) => point.x)),
+    maxY: Math.max(...points.map((point) => point.y)),
+  };
+}
+
+function unionBounds(a: ExportBounds | null, b: ExportBounds | null): ExportBounds | null {
+  if (!a) return b;
+  if (!b) return a;
+  return {
+    minX: Math.min(a.minX, b.minX),
+    minY: Math.min(a.minY, b.minY),
+    maxX: Math.max(a.maxX, b.maxX),
+    maxY: Math.max(a.maxY, b.maxY),
+  };
+}
+
+function getStrokePadding(node: Node): number {
+  if (!['rectangle', 'ellipse', 'polygon', 'path', 'text'].includes(node.type)) return 0;
+  if (!('strokes' in node) || !Array.isArray(node.strokes)) return 0;
+  let padding = 0;
+  for (const stroke of node.strokes) {
+    if (!stroke.visible || stroke.width <= 0) continue;
+    const alignmentPadding =
+      stroke.align === 'outside' ? stroke.width : stroke.align === 'inside' ? 0 : stroke.width / 2;
+    const joinPadding =
+      stroke.join === 'miter' ? alignmentPadding * (stroke.miterLimit ?? 4) : alignmentPadding;
+    const capPadding = stroke.cap === 'square' ? (stroke.width / 2) * Math.SQRT2 : 0;
+    padding = Math.max(padding, joinPadding, capPadding);
+  }
+  return padding;
+}
+
+function pathLocalBounds(node: PathNode): ExportBounds | null {
+  let bounds: ExportBounds | null = null;
+  const includePoints = (points: PathPoint[], closed: boolean) => {
+    if (points.length === 0) return;
+    const contourBounds: ExportBounds = {
+      minX: points[0]!.position.x,
+      minY: points[0]!.position.y,
+      maxX: points[0]!.position.x,
+      maxY: points[0]!.position.y,
+    };
+    const addPoint = (x: number, y: number) => {
+      contourBounds.minX = Math.min(contourBounds.minX, x);
+      contourBounds.minY = Math.min(contourBounds.minY, y);
+      contourBounds.maxX = Math.max(contourBounds.maxX, x);
+      contourBounds.maxY = Math.max(contourBounds.maxY, y);
+    };
+    for (const point of points) addPoint(point.position.x, point.position.y);
+    forEachSegment(points, closed, (from, to) => {
+      const { cp1, cp2 } = getAbsoluteControlPoints(from, to);
+      for (const t of cubicExtrema(from.position.x, cp1.x, cp2.x, to.position.x)) {
+        const x = cubicValue(from.position.x, cp1.x, cp2.x, to.position.x, t);
+        const y = cubicValue(from.position.y, cp1.y, cp2.y, to.position.y, t);
+        addPoint(x, y);
+      }
+      for (const t of cubicExtrema(from.position.y, cp1.y, cp2.y, to.position.y)) {
+        const x = cubicValue(from.position.x, cp1.x, cp2.x, to.position.x, t);
+        const y = cubicValue(from.position.y, cp1.y, cp2.y, to.position.y, t);
+        addPoint(x, y);
+      }
+    });
+    bounds = unionBounds(bounds, contourBounds);
+  };
+
+  includePoints(node.points, node.closed);
+  for (const subpath of node.subpaths ?? []) includePoints(subpath, true);
+  return bounds;
+}
+
+function cubicExtrema(p0: number, p1: number, p2: number, p3: number): number[] {
+  const a = -p0 + 3 * p1 - 3 * p2 + p3;
+  const b = 3 * p0 - 6 * p1 + 3 * p2;
+  const c = -3 * p0 + 3 * p1;
+  const qa = 3 * a;
+  const qb = 2 * b;
+  if (Math.abs(qa) < 1e-12) {
+    if (Math.abs(qb) < 1e-12) return [];
+    const t = -c / qb;
+    return t > 0 && t < 1 ? [t] : [];
+  }
+  const discriminant = qb * qb - 4 * qa * c;
+  if (discriminant < 0) return [];
+  const root = Math.sqrt(discriminant);
+  return [(-qb + root) / (2 * qa), (-qb - root) / (2 * qa)].filter((t) => t > 0 && t < 1);
+}
+
+function cubicValue(p0: number, p1: number, p2: number, p3: number, t: number): number {
+  const mt = 1 - t;
+  return mt ** 3 * p0 + 3 * mt ** 2 * t * p1 + 3 * mt * t ** 2 * p2 + t ** 3 * p3;
 }
 
 // ============================================================================

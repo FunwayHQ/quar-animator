@@ -122,7 +122,9 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
 
   // Lottie analysis
   const lottieAnalysis =
-    state.tab === 'lottie' && sceneGraph ? analyzeLottieExport(sceneGraph.getRootNodes()) : null;
+    state.tab === 'lottie' && sceneGraph
+      ? analyzeLottieExport(sceneGraph.getRootNodes(), (id) => sceneGraph.getNode(id))
+      : null;
 
   const handleExport = useCallback(async () => {
     if (!sceneGraph || !timeline) return;
@@ -281,6 +283,7 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
           packGrid,
           packMaxRects,
           nextPowerOfTwo,
+          assertAllFramesPacked,
           generateSpriteSheetMetadata,
         } = await import('@quar/export');
 
@@ -297,6 +300,8 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
           }));
           packResult = packMaxRects(frames, 4096, 4096, state.spritePadding);
         }
+
+        assertAllFramesPacked(packResult);
 
         let atlasW = packResult.atlasWidth;
         let atlasH = packResult.atlasHeight;
@@ -326,7 +331,7 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
 
             const frame = state.startFrame + i;
             const rect = packResult.rects[i];
-            if (!rect || rect.x < 0) continue;
+            if (!rect) throw new Error(`Sprite sheet packing did not place frame ${frame}.`);
 
             setState((s) => ({
               ...s,
@@ -373,6 +378,7 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
                   endFrame: state.endFrame,
                   frameWidth: state.width,
                   frameHeight: state.height,
+                  imageSize: { width: atlasW, height: atlasH },
                 },
                 'spritesheet.png'
               );

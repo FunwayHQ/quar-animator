@@ -47,10 +47,18 @@ export function generateSpriteSheetMetadata(
     frameWidth: number;
     frameHeight: number;
     filenamePattern?: string;
+    imageSize?: { width: number; height: number };
   },
   imageFilename: string
 ): SpriteSheetMetadata {
-  const { startFrame, endFrame, frameWidth, frameHeight, filenamePattern = 'frame_{N}' } = options;
+  const {
+    startFrame,
+    endFrame,
+    frameWidth,
+    frameHeight,
+    filenamePattern = 'frame_{N}',
+    imageSize,
+  } = options;
 
   const filenames = generateFrameFilenames(filenamePattern, startFrame, endFrame, 'png');
   const frames: Record<string, SpriteFrameData> = {};
@@ -73,7 +81,10 @@ export function generateSpriteSheetMetadata(
       version: '1.0.0',
       image: imageFilename,
       format: 'RGBA8888',
-      size: { w: packResult.atlasWidth, h: packResult.atlasHeight },
+      size: {
+        w: imageSize?.width ?? packResult.atlasWidth,
+        h: imageSize?.height ?? packResult.atlasHeight,
+      },
       scale: 1,
     },
   };

@@ -94,7 +94,7 @@ function EditorInner() {
           </div>
           <div className={styles.canvasArea}>
             <ErrorBoundary>
-              <Canvas />
+              <Canvas onProjectFileDrop={(file) => projectActions.importProjectFile(file)} />
             </ErrorBoundary>
           </div>
           <div className={styles.rightPanel}>

@@ -22,8 +22,10 @@ import {
   deserializeProjectFromBinary,
   downloadProjectFile,
   uploadProjectFile,
+  readProjectFile,
   ProjectFileCancelledError,
 } from '../services/projectSerializer';
+import type { ProjectData } from '../services/projectSerializer';
 import { importSvg, createGroupNode } from '@quar/core';
 import type { ProjectListItem } from '../services/projectStorage';
 
@@ -52,6 +54,7 @@ export interface ProjectActions {
   openProject: (id: string) => Promise<void>;
   downloadProject: () => void;
   importProject: () => Promise<void>;
+  importProjectFile: (file: File) => Promise<void>;
   importSvg: () => void;
   importImage: () => void;
   deleteProject: (id: string) => Promise<void>;
@@ -208,16 +211,13 @@ export function useProjectActions(options: UseProjectActionsOptions = {}): Proje
     toast.success('Project exported');
   }, [sceneGraph, getEditorSnapshot]);
 
-  // ------ Import .quar file ------
-  const importProject = useCallback(async () => {
-    try {
-      const data = await uploadProjectFile();
-
+  const loadImportedProject = useCallback(
+    async (data: ProjectData) => {
       deserializeProject(data, sceneGraph, applyEditorState);
 
       const newId = generateProjectId();
-      const name = (data as any).name as string;
-      const createdAt = (data as any).createdAt as string;
+      const name = data.name;
+      const createdAt = data.createdAt;
       useEditorStore.setState({
         projectId: newId,
         projectName: name,
@@ -233,11 +233,30 @@ export function useProjectActions(options: UseProjectActionsOptions = {}): Proje
       await setLastProjectId(newId);
       useEditorStore.getState().clearHistory();
       toast.success(`Imported "${name}"`);
+    },
+    [sceneGraph, applyEditorState, getEditorSnapshot]
+  );
+
+  // ------ Import .quar file ------
+  const importProject = useCallback(async () => {
+    try {
+      await loadImportedProject(await uploadProjectFile());
     } catch (error) {
       if (error instanceof ProjectFileCancelledError) return;
       toast.error(error instanceof Error ? error.message : 'Failed to import project file');
     }
-  }, [sceneGraph, applyEditorState, getEditorSnapshot]);
+  }, [loadImportedProject]);
+
+  const importProjectFile = useCallback(
+    async (file: File) => {
+      try {
+        await loadImportedProject(await readProjectFile(file));
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : 'Failed to import project file');
+      }
+    },
+    [loadImportedProject]
+  );
 
   // ------ Import SVG file ------
   const importSvgFile = useCallback(() => {
@@ -438,6 +457,7 @@ export function useProjectActions(options: UseProjectActionsOptions = {}): Proje
     openProject,
     downloadProject,
     importProject,
+    importProjectFile,
     importSvg: importSvgFile,
     importImage: importImageFile,
     deleteProject: deleteProjectAction,

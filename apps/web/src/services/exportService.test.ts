@@ -37,7 +37,8 @@ function makeNode(id: string, name: string): Node {
 // ============================================================================
 
 describe('downloadBlob', () => {
-  it('creates anchor element, clicks it, and revokes URL', () => {
+  it('creates an anchor and revokes the URL after the browser can start the download', () => {
+    vi.useFakeTimers();
     const createObjectURL = vi.fn(() => 'blob:test-url');
     const revokeObjectURL = vi.fn();
     Object.defineProperty(globalThis, 'URL', {
@@ -66,9 +67,12 @@ describe('downloadBlob', () => {
     expect(click).toHaveBeenCalled();
     expect(appendChild).toHaveBeenCalled();
     expect(removeChild).toHaveBeenCalled();
+    expect(revokeObjectURL).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(1000);
     expect(revokeObjectURL).toHaveBeenCalledWith('blob:test-url');
 
     vi.restoreAllMocks();
+    vi.useRealTimers();
   });
 });
 

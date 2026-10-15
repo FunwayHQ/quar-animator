@@ -15,6 +15,22 @@
   outline: none;
 }
 
+.fileDropOverlay {
+  position: absolute;
+  inset: 12px;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  border: 2px dashed var(--color-accent-primary);
+  border-radius: var(--radius-lg);
+  background: var(--color-glass);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
+  text-align: center;
+  pointer-events: none;
+}
+
 .marqueeOverlay {
   position: absolute;
   top: 0;
