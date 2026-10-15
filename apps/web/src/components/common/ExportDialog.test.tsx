@@ -1,17 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
+import { render as baseRender, screen, fireEvent, act, waitFor } from '@testing-library/react';
+import type { ReactElement } from 'react';
 import { analyzeLottieExport, exportGif, exportMp4 } from '@quar/export';
 import { downloadBlob } from '../../services/exportService';
-
-// Mock the SceneGraph context
-const mockGetRootNodes = vi.fn().mockReturnValue([]);
-vi.mock('../../contexts/SceneGraphContext', () => ({
-  useSceneGraph: () => ({
-    getRootNodes: mockGetRootNodes,
-    getNode: vi.fn(),
-    updateNode: vi.fn(),
-  }),
-}));
+import { SceneGraphProvider } from '../../contexts/SceneGraphContext';
 
 // Mock the editor store
 const mockStore = {
@@ -59,6 +51,10 @@ vi.mock('jszip', () => ({
 }));
 
 import { ExportDialogHost, showExportDialog } from './ExportDialog';
+
+function render(ui: ReactElement) {
+  return baseRender(<SceneGraphProvider>{ui}</SceneGraphProvider>);
+}
 
 describe('ExportDialog', () => {
   beforeEach(() => {

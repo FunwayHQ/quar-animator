@@ -8,7 +8,7 @@
  *   import { showExportDialog } from './ExportDialog';
  *   showExportDialog('png-sequence');
  *
- * Mount <ExportDialogHost /> once in the app root.
+ * Mount <ExportDialogHost /> inside the editor's SceneGraphProvider.
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';

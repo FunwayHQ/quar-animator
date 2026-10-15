@@ -9,6 +9,7 @@ import { MenuBar } from '../components/layout/MenuBar';
 import { PageTabs } from '../components/layout/PageTabs';
 import SymbolLibraryPanel from '../components/layout/SymbolLibraryPanel';
 import { ErrorBoundary } from '../components/ErrorBoundary';
+import { ExportDialogHost } from '../components/common/ExportDialog';
 import { SceneGraphProvider } from '../contexts/SceneGraphContext';
 import { usePlayback } from '../hooks/usePlayback';
 import { useTimelineShortcuts } from '../hooks/useTimelineShortcuts';
@@ -110,7 +111,10 @@ function EditorInner() {
 export function Editor() {
   return (
     <SceneGraphProvider>
-      <EditorInner />
+      <>
+        <EditorInner />
+        <ExportDialogHost />
+      </>
     </SceneGraphProvider>
   );
 }
