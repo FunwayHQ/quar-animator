@@ -1,0 +1,81 @@
+.screen {
+  min-height: 100vh;
+  min-height: 100dvh;
+  overflow-y: auto;
+  display: grid;
+  place-items: center;
+  padding: 28px 20px;
+  background:
+    radial-gradient(ellipse at 50% 45%, rgba(168, 85, 247, 0.1), transparent 68%),
+    var(--color-bg-primary);
+}
+
+.card {
+  width: min(100%, 420px);
+  padding: 32px;
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-xl);
+  background: var(--color-bg-secondary);
+  box-shadow: var(--shadow-lg);
+  text-align: center;
+}
+
+.icon {
+  width: 56px;
+  height: 56px;
+  margin: 0 auto 22px;
+  display: grid;
+  place-items: center;
+  color: var(--color-accent-primary);
+  border: 1px solid var(--color-glass-border);
+  border-radius: 16px;
+  background: var(--color-glass);
+  box-shadow: 0 0 28px var(--color-accent-primary-glow);
+}
+
+.eyebrow {
+  margin: 0 0 10px;
+  color: var(--color-accent-primary);
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.title {
+  margin: 0;
+  color: var(--color-text-primary);
+  font-size: clamp(22px, 6vw, 28px);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: -0.04em;
+  line-height: 1.2;
+}
+
+.description {
+  max-width: 330px;
+  margin: 14px auto 0;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-md);
+  line-height: 1.65;
+}
+
+.deviceHint {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 26px;
+  padding: 8px 11px;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-full);
+  color: var(--color-text-tertiary);
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-2xs);
+  letter-spacing: 0.02em;
+}
+
+@media (max-width: 360px) {
+  .card {
+    padding: 26px 20px;
+  }
+}
