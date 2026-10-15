@@ -44,10 +44,12 @@ import {
   generateStrokeOutlineVertices,
   applyCornerRadius,
 } from '../path/pathUtils';
+import { trimPathToProgress } from '../path/pathReveal';
 import earcut from 'earcut';
 import { getFontManager } from '../font/FontManager';
 import { textToSubpaths } from '../font/glyphConverter';
 import { getTextBounds } from '../font/textMetrics';
+import { getVisibleTextContent } from '../font/textReveal';
 import {
   deformVertices,
   MAX_BONES_GPU,
@@ -2041,6 +2043,30 @@ export class ShapeRenderer {
   renderPath(node: PathNode, worldMatrix: Matrix3): void {
     if (!this.program || node.points.length < 2) return;
 
+    if (node.strokeProgress !== undefined && node.strokeProgress < 1) {
+      const progress = Math.max(0, Math.min(1, node.strokeProgress));
+      if (progress <= 0) return;
+
+      const contours = [node.points, ...(node.subpaths ?? [])];
+      contours.forEach((points, index) => {
+        const partialPoints = trimPathToProgress(points, node.closed, progress);
+        if (partialPoints.length < 2) return;
+        this.renderPath(
+          {
+            ...node,
+            id: `${node.id}__draw_${index}`,
+            points: partialPoints,
+            subpaths: undefined,
+            closed: false,
+            fills: [],
+            strokeProgress: undefined,
+          },
+          worldMatrix
+        );
+      });
+      return;
+    }
+
     const gl = this.renderer.context;
 
     // Set model matrix
@@ -2116,7 +2142,8 @@ export class ShapeRenderer {
    * Uses the same multi-contour rendering pipeline as compound paths.
    */
   private renderText(node: TextNode, worldMatrix: Matrix3): void {
-    if (!this.program || !node.content) return;
+    const content = getVisibleTextContent(node);
+    if (!this.program || !content) return;
 
     const fm = getFontManager();
     // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
@@ -2131,7 +2158,7 @@ export class ShapeRenderer {
     const ay = node.transform.anchor.y;
     if (ax !== 0 || ay !== 0) {
       const rawBounds = getTextBounds(
-        node.content,
+        content,
         node.fontFamily,
         node.fontSize,
         node.lineHeight,
@@ -2149,7 +2176,7 @@ export class ShapeRenderer {
     gl.uniformMatrix3fv(this.program.uniforms.u_model ?? null, false, modelArray);
 
     // Get cached tessellation for this text
-    const geoKey = buildGeometryKey(node);
+    const geoKey = buildGeometryKey({ ...node, content });
     const cached = this.geometryCache.get(node.id);
 
     if (cached && cached.geoKey === geoKey) {
@@ -2184,7 +2211,7 @@ export class ShapeRenderer {
     }
 
     // Convert text to subpaths
-    const result = textToSubpaths(node.content, font, node.fontSize, {
+    const result = textToSubpaths(content, font, node.fontSize, {
       textAlign: node.textAlign,
       lineHeight: node.lineHeight,
       letterSpacing: node.letterSpacing,
@@ -4232,7 +4259,8 @@ export class ShapeRenderer {
     worldMatrix: Matrix3,
     colorOverride: { tint: [number, number, number]; alpha: number }
   ): void {
-    if (!node.content) return;
+    const content = getVisibleTextContent(node);
+    if (!content) return;
 
     const fm = getFontManager();
     // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
@@ -4245,7 +4273,7 @@ export class ShapeRenderer {
     const ay = node.transform.anchor.y;
     if (ax !== 0 || ay !== 0) {
       const rawBounds = getTextBounds(
-        node.content,
+        content,
         node.fontFamily,
         node.fontSize,
         node.lineHeight,
@@ -4257,7 +4285,7 @@ export class ShapeRenderer {
       adjustedMatrix = mat3.translate(worldMatrix, offsetX, offsetY);
     }
 
-    const result = textToSubpaths(node.content, font, node.fontSize, {
+    const result = textToSubpaths(content, font, node.fontSize, {
       textAlign: node.textAlign,
       lineHeight: node.lineHeight,
       letterSpacing: node.letterSpacing,

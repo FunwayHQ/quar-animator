@@ -8,3 +8,4 @@ export { glyphPathToSubpaths, textToSubpaths, computeSubpathsBounds } from './gl
 export type { TextLayoutOptions, TextToSubpathsResult, GlyphSubpathGroup } from './glyphConverter';
 export { getTextBounds, getScaledMetrics } from './textMetrics';
 export { convertTextToPath, convertTextToPathGroup } from './textToShape';
+export { getVisibleTextContent } from './textReveal';

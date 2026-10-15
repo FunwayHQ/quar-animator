@@ -76,6 +76,57 @@
   font: inherit;
 }
 
+.presetOptions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--space-sm);
+  margin-bottom: var(--space-xs);
+}
+
+.optionControl {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-2xs);
+}
+
+.optionControl select {
+  width: 100%;
+  padding: 3px 6px;
+  color: var(--color-text-primary);
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  font: inherit;
+}
+
+.optionControl input[type='range'] {
+  width: 100%;
+  min-height: 22px;
+  padding: 0;
+  accent-color: var(--color-accent-primary);
+  cursor: pointer;
+}
+
+.intensityLabel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.intensityLabel output {
+  color: var(--color-text-tertiary);
+  font-family: var(--font-family-mono);
+}
+
+.optionsHint {
+  margin: 0 0 var(--space-sm);
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-2xs);
+}
+
 .category + .category {
   margin-top: var(--space-sm);
 }
@@ -117,7 +168,9 @@
 }
 
 .presetButton:focus-visible,
-.durationRow select:focus-visible {
+.durationRow select:focus-visible,
+.optionControl select:focus-visible,
+.optionControl input:focus-visible {
   outline: 2px solid var(--color-accent-primary);
   outline-offset: 1px;
 }

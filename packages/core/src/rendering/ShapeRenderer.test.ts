@@ -626,6 +626,30 @@ describe('ShapeRenderer', () => {
       expect(gl.drawArrays).toHaveBeenCalled();
     });
 
+    it('should reveal only a partial stroke before the draw-on animation completes', () => {
+      const path = createPathNode('path1');
+      path.strokeProgress = 0.5;
+      sceneGraph.addNode(path);
+
+      vi.clearAllMocks();
+      shapeRenderer.render(sceneGraph, mat3.identity());
+
+      expect(gl.drawArrays).toHaveBeenCalled();
+      expect(gl.drawElements).not.toHaveBeenCalled();
+    });
+
+    it('should hide a path stroke at zero draw-on progress', () => {
+      const path = createPathNode('path1');
+      path.strokeProgress = 0;
+      sceneGraph.addNode(path);
+
+      vi.clearAllMocks();
+      shapeRenderer.render(sceneGraph, mat3.identity());
+
+      expect(gl.drawArrays).not.toHaveBeenCalled();
+      expect(gl.drawElements).not.toHaveBeenCalled();
+    });
+
     it('should use triangle strip for open path stroke', () => {
       const path = createPathNode('path1');
       path.closed = false;

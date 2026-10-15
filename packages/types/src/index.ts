@@ -271,6 +271,8 @@ export interface PathNode extends BaseNode {
   points: PathPoint[]; // Primary contour (backward compat)
   subpaths?: PathPoint[][]; // Additional contours (holes or disjoint regions)
   closed: boolean;
+  /** Animated 0–1 reveal amount for drawing the path's stroke on. */
+  strokeProgress?: number;
   fillRule?: 'nonzero' | 'evenodd'; // Default: 'nonzero'
   fills: Fill[];
   strokes: Stroke[];
@@ -281,6 +283,8 @@ export interface PathNode extends BaseNode {
 export interface TextNode extends BaseNode {
   type: 'text';
   content: string;
+  /** Animated visible character count used by typewriter reveals. */
+  visibleCharacters?: number;
   fontFamily: string;
   fontSize: number;
   fontWeight: number;

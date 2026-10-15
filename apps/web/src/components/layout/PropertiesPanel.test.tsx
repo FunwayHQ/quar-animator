@@ -4,7 +4,14 @@ import { SceneGraphProvider, useSceneGraph } from '../../contexts/SceneGraphCont
 import { createDefaultTransform } from '@quar/core';
 import { createTimeline } from '@quar/animation';
 import type { SceneGraph } from '@quar/core';
-import type { RectangleNode, EllipseNode, PolygonNode, PathNode, ArtboardNode } from '@quar/types';
+import type {
+  RectangleNode,
+  EllipseNode,
+  PolygonNode,
+  PathNode,
+  TextNode,
+  ArtboardNode,
+} from '@quar/types';
 import { PropertiesPanel } from './PropertiesPanel';
 import { useEditorStore } from '../../stores/editorStore';
 import type { ReactNode } from 'react';
@@ -90,6 +97,21 @@ function createTestPolygon(id: string, name: string): PolygonNode {
   };
 }
 
+function createTestText(id: string, name: string): TextNode {
+  return {
+    ...createTestRect(id, name),
+    type: 'text',
+    content: 'Hello',
+    fontFamily: 'Arial',
+    fontSize: 24,
+    fontWeight: 400,
+    fontStyle: 'normal',
+    textAlign: 'left',
+    lineHeight: 1.2,
+    letterSpacing: 0,
+  };
+}
+
 function renderWithSceneGraph() {
   let sg: SceneGraph | null = null;
   render(
@@ -161,6 +183,64 @@ describe('PropertiesPanel', () => {
     act(() => useEditorStore.getState().undo(sg));
     expect(useEditorStore.getState().timeline.tracks).toHaveLength(0);
     expect(sg.getNode('rect1')?.opacity).toBe(0.8);
+  });
+
+  it('applies selected direction and intensity to motion presets', () => {
+    const sg = renderWithSceneGraph();
+
+    act(() => {
+      sg.addNode(createTestRect('rect1', 'Rectangle 1'));
+      useEditorStore.getState().setSelection(['rect1']);
+    });
+
+    fireEvent.change(screen.getByLabelText('Animation direction'), {
+      target: { value: 'bottom' },
+    });
+    fireEvent.change(screen.getByLabelText('Animation intensity'), {
+      target: { value: '1.5' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Apply Drop entrance animation' }));
+
+    const yTrack = useEditorStore
+      .getState()
+      .timeline.tracks.find(
+        (track) => track.nodeId === 'rect1' && track.property === 'transform.position.y'
+      );
+    expect(yTrack?.keyframes.map((keyframe) => [keyframe.time, keyframe.value])).toEqual([
+      [0, 104],
+      [18, 212],
+      [24, 200],
+    ]);
+  });
+
+  it('shows typewriter and draw-on presets only for matching node types', () => {
+    const sg = renderWithSceneGraph();
+
+    act(() => {
+      sg.addNode(createTestText('text1', 'Text 1'));
+      sg.addNode({
+        ...createTestRect('path1', 'Path 1'),
+        type: 'path',
+        points: [
+          { position: { x: 0, y: 0 }, handleIn: null, handleOut: null, type: 'corner' },
+          { position: { x: 50, y: 0 }, handleIn: null, handleOut: null, type: 'corner' },
+        ],
+        closed: false,
+      });
+      useEditorStore.getState().setSelection(['text1']);
+    });
+
+    expect(
+      screen.getByRole('button', { name: 'Apply Typewriter entrance animation' })
+    ).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Apply Draw On entrance animation' })).toBeNull();
+
+    act(() => useEditorStore.getState().setSelection(['path1']));
+
+    expect(screen.getByRole('button', { name: 'Apply Draw On entrance animation' })).toBeVisible();
+    expect(
+      screen.queryByRole('button', { name: 'Apply Typewriter entrance animation' })
+    ).toBeNull();
   });
 
   it('collapses and expands the animation preset controls', () => {
@@ -259,7 +339,7 @@ describe('PropertiesPanel', () => {
     });
 
     // Opacity is 0.8 = 80%
-    const slider = screen.getByRole('slider');
+    const slider = screen.getByLabelText('Opacity');
     expect(slider).toHaveValue('80');
     expect(screen.getByDisplayValue('80%')).toBeInTheDocument();
   });

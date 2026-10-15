@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { RectangleNode } from '@quar/types';
+import type { PathNode, RectangleNode, TextNode } from '@quar/types';
 import { addKeyframe, createTimeline, getOrCreateTrack } from './Timeline';
 import { applyAnimationPreset, createAnimationPresetKeyframes } from './AnimationPresets';
 
@@ -29,6 +29,37 @@ function makeNode(): RectangleNode {
   };
 }
 
+function makeTextNode(): TextNode {
+  return {
+    ...makeNode(),
+    id: 'text1',
+    name: 'Text',
+    type: 'text',
+    content: 'Hi 🌟',
+    fontFamily: 'Arial',
+    fontSize: 24,
+    fontWeight: 400,
+    fontStyle: 'normal',
+    textAlign: 'left',
+    lineHeight: 1.2,
+    letterSpacing: 0,
+  };
+}
+
+function makePathNode(): PathNode {
+  return {
+    ...makeNode(),
+    id: 'path1',
+    name: 'Path',
+    type: 'path',
+    points: [
+      { position: { x: 0, y: 0 }, handleIn: null, handleOut: null, type: 'corner' },
+      { position: { x: 100, y: 0 }, handleIn: null, handleOut: null, type: 'corner' },
+    ],
+    closed: false,
+  };
+}
+
 describe('animation presets', () => {
   it('creates entrance keyframes from the node’s current values', () => {
     const preset = createAnimationPresetKeyframes(makeNode(), 'rise-in', 10, 24);
@@ -41,6 +72,25 @@ describe('animation presets', () => {
         expect.objectContaining({ property: 'transform.position.y', time: 34, value: 80 }),
       ])
     );
+  });
+
+  it('creates typewriter and draw-on keyframes for compatible node types', () => {
+    const typewriter = createAnimationPresetKeyframes(makeTextNode(), 'typewriter', 4, 12);
+    expect(typewriter.keyframes).toEqual([
+      { property: 'visibleCharacters', time: 4, value: 0, easing: 'linear' },
+      { property: 'visibleCharacters', time: 16, value: 4, easing: 'linear' },
+    ]);
+    expect(typewriter.baseValues.get('visibleCharacters')).toBe(4);
+
+    const drawOn = createAnimationPresetKeyframes(makePathNode(), 'draw-on', 8, 12);
+    expect(drawOn.keyframes.map(({ property, time, value }) => [property, time, value])).toEqual([
+      ['strokeProgress', 8, 0],
+      ['strokeProgress', 20, 1],
+    ]);
+    expect(drawOn.baseValues.get('strokeProgress')).toBe(1);
+
+    expect(createAnimationPresetKeyframes(makeNode(), 'typewriter', 0, 12).keyframes).toEqual([]);
+    expect(createAnimationPresetKeyframes(makeNode(), 'draw-on', 0, 12).keyframes).toEqual([]);
   });
 
   it('creates multi-beat emphasis and exit motion', () => {
@@ -62,6 +112,82 @@ describe('animation presets', () => {
         expect.objectContaining({ property: 'transform.position.x', time: 29, value: 164 }),
       ])
     );
+  });
+
+  it('creates a drop with a landing overshoot and supports directional intensity', () => {
+    const node = makeNode();
+    const drop = createAnimationPresetKeyframes(node, 'drop-in', 0, 24);
+    const dropY = drop.keyframes.filter((keyframe) => keyframe.property === 'transform.position.y');
+    expect(dropY.map((keyframe) => [keyframe.time, keyframe.value])).toEqual([
+      [0, 144],
+      [18, 72],
+      [24, 80],
+    ]);
+
+    const slideFromBottom = createAnimationPresetKeyframes(node, 'slide-in', 10, 24, {
+      direction: 'bottom',
+      intensity: 1.5,
+    });
+    expect(
+      slideFromBottom.keyframes
+        .filter((keyframe) => keyframe.property === 'transform.position.y')
+        .map((keyframe) => [keyframe.time, keyframe.value])
+    ).toEqual([
+      [10, -16],
+      [34, 80],
+    ]);
+
+    const bounceRight = createAnimationPresetKeyframes(node, 'bounce', 0, 24, {
+      direction: 'right',
+      intensity: 1.5,
+    });
+    expect(
+      bounceRight.keyframes
+        .filter((keyframe) => keyframe.property === 'transform.position.x')
+        .map((keyframe) => keyframe.value)
+    ).toEqual([100, 136, 100, 115, 100]);
+  });
+
+  it('segments full-spin keyframes so shortest-path rotation still spins', () => {
+    const node = makeNode();
+    const spinIn = createAnimationPresetKeyframes(node, 'spin-in', 0, 24);
+    const spinOut = createAnimationPresetKeyframes(node, 'spin-out', 0, 24);
+    const spinInValues = spinIn.keyframes
+      .filter((keyframe) => keyframe.property === 'transform.rotation')
+      .map((keyframe) => keyframe.value);
+    const spinOutValues = spinOut.keyframes
+      .filter((keyframe) => keyframe.property === 'transform.rotation')
+      .map((keyframe) => keyframe.value);
+
+    expect(spinInValues).toEqual([0, -120, -240, -360]);
+    expect(spinOutValues).toEqual([0, 120, 240, 360]);
+    expect(
+      spinInValues.slice(1).map((value, index) => Math.abs(value - spinInValues[index]!))
+    ).toEqual([120, 120, 120]);
+  });
+
+  it('creates wobble, heartbeat, and a float cycle that returns to its start pose', () => {
+    const node = makeNode();
+    const wobble = createAnimationPresetKeyframes(node, 'wobble', 0, 24);
+    expect(
+      wobble.keyframes
+        .filter((keyframe) => keyframe.property === 'transform.rotation')
+        .map((keyframe) => keyframe.value)
+    ).toEqual([0, -12, 9, -4, 0]);
+
+    const heartbeat = createAnimationPresetKeyframes(node, 'heartbeat', 0, 24);
+    expect(
+      heartbeat.keyframes
+        .filter((keyframe) => keyframe.property === 'transform.scale.x')
+        .map((keyframe) => keyframe.value)
+    ).toEqual([1, 1.12, 1, 1.18, 1]);
+
+    const float = createAnimationPresetKeyframes(node, 'float', 0, 24);
+    expect(
+      float.keyframes
+        .filter((keyframe) => keyframe.property === 'transform.position.y')
+        .map((keyframe) => keyframe.value)
+    ).toEqual([80, 92, 80, 68, 80]);
   });
 
   it('keeps earlier keyframes, replaces future ones on affected properties, and leaves other tracks intact', () => {

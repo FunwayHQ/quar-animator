@@ -473,6 +473,17 @@ describe('corner radius animation support', () => {
     expect(detectInterpolationType('subpaths.0.1.handleOut.y')).toBe('number');
   });
 
+  it('exposes animatable reveal properties for text and paths', () => {
+    expect(getAnimatableProperties('text')).toContainEqual(
+      expect.objectContaining({ path: 'visibleCharacters', interpolationType: 'number' })
+    );
+    expect(getAnimatableProperties('path')).toContainEqual(
+      expect.objectContaining({ path: 'strokeProgress', interpolationType: 'number' })
+    );
+    expect(detectInterpolationType('visibleCharacters')).toBe('number');
+    expect(detectInterpolationType('strokeProgress')).toBe('number');
+  });
+
   it('getProperty/setProperty works for vertex paths', () => {
     const node = {
       id: 'n1',

@@ -284,15 +284,24 @@ export function getAnimatableProperties(nodeType: string): AnimatableProperty[] 
       props.push(...SHAPE_ANIMATABLE_PROPERTIES, ...POLYGON_ANIMATABLE_PROPERTIES);
       break;
     case 'path':
-      props.push(...SHAPE_ANIMATABLE_PROPERTIES, {
-        path: 'points',
-        displayName: 'Shape',
-        interpolationType: 'path',
-      });
+      props.push(
+        ...SHAPE_ANIMATABLE_PROPERTIES,
+        {
+          path: 'points',
+          displayName: 'Shape',
+          interpolationType: 'path',
+        },
+        {
+          path: 'strokeProgress',
+          displayName: 'Stroke Reveal',
+          interpolationType: 'number',
+        }
+      );
       break;
     case 'text':
       props.push(
         ...SHAPE_ANIMATABLE_PROPERTIES,
+        { path: 'visibleCharacters', displayName: 'Text Reveal', interpolationType: 'number' },
         { path: 'fontSize', displayName: 'Font Size', interpolationType: 'number' },
         { path: 'lineHeight', displayName: 'Line Height', interpolationType: 'number' },
         { path: 'letterSpacing', displayName: 'Letter Spacing', interpolationType: 'number' },
@@ -503,6 +512,8 @@ export function detectInterpolationType(path: string): InterpolationType {
     path.endsWith('.b') ||
     path.endsWith('.a') ||
     path === 'opacity' ||
+    path === 'visibleCharacters' ||
+    path === 'strokeProgress' ||
     path === 'width' ||
     path === 'height' ||
     path === 'radiusX' ||

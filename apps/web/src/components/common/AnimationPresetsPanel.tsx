@@ -6,7 +6,11 @@ import {
   applyAnimatedValues,
   evaluateNodeAtFrame,
 } from '@quar/animation';
-import type { AnimationPresetCategory, AnimationPresetId } from '@quar/animation';
+import type {
+  AnimationPresetCategory,
+  AnimationPresetDirection,
+  AnimationPresetId,
+} from '@quar/animation';
 import type { Node } from '@quar/types';
 import { useSceneGraph } from '../../contexts/SceneGraphContext';
 import { useEditorStore } from '../../stores/editorStore';
@@ -24,6 +28,16 @@ export function AnimationPresetsPanel({ nodeIds }: AnimationPresetsPanelProps) {
   const sceneGraph = useSceneGraph();
   const [isExpanded, setIsExpanded] = useState(true);
   const [durationSeconds, setDurationSeconds] = useState(0.8);
+  const [direction, setDirection] = useState<AnimationPresetDirection>('auto');
+  const [intensity, setIntensity] = useState(1);
+  const selectedNodes = nodeIds
+    .map((id) => sceneGraph.getNode(id))
+    .filter((node): node is Node => node !== undefined);
+  const availablePresets = ANIMATION_PRESETS.filter(
+    (preset) =>
+      !preset.nodeType ||
+      (selectedNodes.length > 0 && selectedNodes.every((node) => node.type === preset.nodeType))
+  );
 
   const applyPreset = useCallback(
     (presetId: AnimationPresetId) => {
@@ -42,7 +56,8 @@ export function AnimationPresetsPanel({ nodeIds }: AnimationPresetsPanelProps) {
           node,
           presetId,
           state.currentFrame,
-          durationFrames
+          durationFrames,
+          { direction, intensity }
         );
       }
 
@@ -61,7 +76,7 @@ export function AnimationPresetsPanel({ nodeIds }: AnimationPresetsPanelProps) {
           sceneGraph.updateNode(node.id, applyAnimatedValues(currentNode, values));
       }
     },
-    [durationSeconds, nodeIds, sceneGraph]
+    [direction, durationSeconds, intensity, nodeIds, sceneGraph]
   );
 
   return (
@@ -107,12 +122,45 @@ export function AnimationPresetsPanel({ nodeIds }: AnimationPresetsPanelProps) {
               ))}
             </select>
           </label>
+          <div className={styles.presetOptions}>
+            <label className={styles.optionControl}>
+              <span>Direction</span>
+              <select
+                aria-label="Animation direction"
+                value={direction}
+                onChange={(event) => setDirection(event.target.value as AnimationPresetDirection)}
+              >
+                <option value="auto">Auto</option>
+                <option value="left">Left</option>
+                <option value="right">Right</option>
+                <option value="top">Top</option>
+                <option value="bottom">Bottom</option>
+              </select>
+            </label>
+            <label className={styles.optionControl}>
+              <span className={styles.intensityLabel}>
+                <span>Intensity</span>
+                <output>{Math.round(intensity * 100)}%</output>
+              </span>
+              <input
+                type="range"
+                aria-label="Animation intensity"
+                min="0.5"
+                max="2"
+                step="0.25"
+                value={intensity}
+                onChange={(event) => setIntensity(Number(event.target.value))}
+              />
+            </label>
+          </div>
+          <p className={styles.optionsHint}>Direction applies to rise, drop, slide, and bounce.</p>
           {CATEGORIES.map((category) => (
             <div className={styles.category} key={category}>
               <h4 className={styles.categoryTitle}>{category}</h4>
               <div className={styles.grid}>
-                {ANIMATION_PRESETS.filter((preset) => preset.category === category).map(
-                  (preset) => (
+                {availablePresets
+                  .filter((preset) => preset.category === category)
+                  .map((preset) => (
                     <button
                       className={styles.presetButton}
                       key={preset.id}
@@ -123,8 +171,7 @@ export function AnimationPresetsPanel({ nodeIds }: AnimationPresetsPanelProps) {
                     >
                       {preset.name}
                     </button>
-                  )
-                )}
+                  ))}
               </div>
             </div>
           ))}

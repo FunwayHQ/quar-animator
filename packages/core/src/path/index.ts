@@ -4,6 +4,7 @@
 
 export * from './bezier';
 export * from './pathUtils';
+export * from './pathReveal';
 export * from './pointUtils';
 export * from './shapeToPath';
 export * from './outlineStroke';
