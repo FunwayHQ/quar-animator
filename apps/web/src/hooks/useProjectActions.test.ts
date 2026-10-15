@@ -57,6 +57,7 @@ vi.mock('../services/projectSerializer', () => ({
   deserializeProjectFromBinary: (...args: unknown[]) => mockDeserializeFromBinary(...args),
   downloadProjectFile: (...args: unknown[]) => mockDownloadFile(...args),
   uploadProjectFile: (...args: unknown[]) => mockUploadFile(...args),
+  ProjectFileCancelledError: class ProjectFileCancelledError extends Error {},
 }));
 
 // Mock toast

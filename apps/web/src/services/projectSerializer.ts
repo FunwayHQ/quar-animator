@@ -465,26 +465,55 @@ export function downloadProjectFile(name: string, data: ProjectData): void {
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  // Browsers begin reading the blob asynchronously after the click. Revoking
+  // the URL in the same task can cancel the download, especially in Safari.
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+export class ProjectFileCancelledError extends Error {
+  constructor() {
+    super('Project file selection was cancelled');
+    this.name = 'ProjectFileCancelledError';
+  }
 }
 
 export function uploadProjectFile(): Promise<ProjectData> {
   return new Promise<ProjectData>((resolve, reject) => {
     const input = document.createElement('input');
     input.type = 'file';
-    input.accept = '.quar,application/json';
+    input.accept = '.quar,.json,application/json';
+    // Keep the picker attached to the document. Some browsers ignore clicks
+    // on detached file inputs.
+    input.style.position = 'fixed';
+    input.style.left = '-10000px';
+    input.style.width = '1px';
+    input.style.height = '1px';
+    input.style.opacity = '0';
+
+    let settled = false;
+    const cleanup = () => {
+      input.removeEventListener('cancel', handleCancel);
+      input.remove();
+    };
+    const finish = (callback: () => void) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      callback();
+    };
+    const handleCancel = () => finish(() => reject(new ProjectFileCancelledError()));
 
     input.onchange = () => {
       const file = input.files?.[0];
       if (!file) {
-        reject(new Error('No file selected'));
+        finish(() => reject(new ProjectFileCancelledError()));
         return;
       }
 
       // Reject files over 50MB to prevent memory exhaustion
       const MAX_FILE_SIZE = 50 * 1024 * 1024;
       if (file.size > MAX_FILE_SIZE) {
-        reject(new Error('File too large. Maximum size is 50MB.'));
+        finish(() => reject(new Error('File too large. Maximum size is 50MB.')));
         return;
       }
 
@@ -494,18 +523,24 @@ export function uploadProjectFile(): Promise<ProjectData> {
           const arrayBuffer = reader.result as ArrayBuffer;
           const parsed = parseQuarFile(arrayBuffer);
           if (!validateProjectData(parsed)) {
-            reject(new Error('Invalid .quar file format'));
+            finish(() => reject(new Error('Invalid .quar file format')));
             return;
           }
-          resolve(parsed as unknown as ProjectData);
-        } catch {
-          reject(new Error('Failed to parse .quar file'));
+          finish(() => resolve(parsed as unknown as ProjectData));
+        } catch (error) {
+          finish(() =>
+            reject(error instanceof Error ? error : new Error('Failed to parse .quar file'))
+          );
         }
       };
-      reader.onerror = () => reject(new Error('Failed to read file'));
+      reader.onerror = () => finish(() => reject(new Error('Failed to read file')));
+      reader.onabort = () =>
+        finish(() => reject(new Error('Reading the project file was aborted')));
       reader.readAsArrayBuffer(file);
     };
 
+    input.addEventListener('cancel', handleCancel, { once: true });
+    document.body.appendChild(input);
     input.click();
   });
 }

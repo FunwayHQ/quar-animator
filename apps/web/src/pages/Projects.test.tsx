@@ -7,6 +7,8 @@ import { render, screen, fireEvent, waitFor } from '../test/utils';
 import { Projects } from './Projects';
 import type { ProjectListItem } from '../services/projectStorage';
 import { parseQuarFile, writeQuarFile } from '@quar/core';
+import { uploadProjectFile } from '../services/projectSerializer';
+import type { ProjectData } from '../services/projectSerializer';
 import { setUiTheme } from '../hooks/useUiTheme';
 
 // ============================================================================
@@ -43,6 +45,7 @@ vi.mock('../services/projectStorage', () => ({
 
 vi.mock('../services/projectSerializer', () => ({
   uploadProjectFile: vi.fn(),
+  ProjectFileCancelledError: class ProjectFileCancelledError extends Error {},
 }));
 
 // ============================================================================
@@ -118,6 +121,39 @@ describe('Projects', () => {
     });
     fireEvent.click(screen.getByTestId('project-card-proj_1'));
     expect(mockNavigate).toHaveBeenCalledWith('/editor?project=proj_1');
+  });
+
+  it('imports a project into IndexedDB using the binary .quar format', async () => {
+    const importedProject = {
+      version: '3.0',
+      name: 'Imported Project',
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+      pages: [
+        {
+          id: 'page-imported',
+          name: 'Main',
+          sceneGraph: { nodes: [], rootNodeIds: [] },
+          timeline: { tracks: [], duration: 60, frameRate: 24 },
+        },
+      ],
+      activePageId: 'page-imported',
+      settings: { timelineDuration: 60, frameRate: 24, autoKeyframe: false, onionSkin: {} },
+    } as ProjectData;
+    vi.mocked(uploadProjectFile).mockResolvedValue(importedProject);
+
+    render(<Projects />);
+    fireEvent.click(await screen.findByTestId('import-button'));
+
+    await waitFor(() => expect(mockSaveProject).toHaveBeenCalledOnce());
+    const [id, name, saved] = mockSaveProject.mock.calls[0] as [string, string, ArrayBuffer];
+    expect(name).toBe('Imported Project');
+    expect(parseQuarFile(saved)).toMatchObject({
+      version: '3.0',
+      name: 'Imported Project',
+      pages: [{ id: 'page-imported' }],
+    });
+    expect(mockNavigate).toHaveBeenCalledWith(`/editor?project=${encodeURIComponent(id)}`);
   });
 
   it('should require double-click to delete a project', async () => {

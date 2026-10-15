@@ -22,6 +22,7 @@ import {
   deserializeProjectFromBinary,
   downloadProjectFile,
   uploadProjectFile,
+  ProjectFileCancelledError,
 } from '../services/projectSerializer';
 import { importSvg, createGroupNode } from '@quar/core';
 import type { ProjectListItem } from '../services/projectStorage';
@@ -232,8 +233,9 @@ export function useProjectActions(options: UseProjectActionsOptions = {}): Proje
       await setLastProjectId(newId);
       useEditorStore.getState().clearHistory();
       toast.success(`Imported "${name}"`);
-    } catch {
-      toast.error('Failed to import project file');
+    } catch (error) {
+      if (error instanceof ProjectFileCancelledError) return;
+      toast.error(error instanceof Error ? error.message : 'Failed to import project file');
     }
   }, [sceneGraph, applyEditorState, getEditorSnapshot]);
 

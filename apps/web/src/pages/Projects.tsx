@@ -13,7 +13,7 @@ import {
   saveProject as dbSave,
   loadProject as dbLoad,
 } from '../services/projectStorage';
-import { uploadProjectFile } from '../services/projectSerializer';
+import { ProjectFileCancelledError, uploadProjectFile } from '../services/projectSerializer';
 import { useEditorStore } from '../stores/editorStore';
 import { toast } from '../components/common/Toast';
 import { setUiTheme, useUiTheme } from '../hooks/useUiTheme';
@@ -158,13 +158,13 @@ export function Projects() {
       const data = await uploadProjectFile();
       // Store imported data temporarily and navigate to editor
       const id = `proj_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-      // Save to IndexedDB so editor can load it
-      const { saveProject } = await import('../services/projectStorage');
-      const json = JSON.stringify(data);
-      await saveProject(id, data.name, json);
+      // Persist the same binary format we use for regular saves. This keeps
+      // imported image assets compact and exercises the normal load path.
+      await dbSave(id, data.name, writeQuarFile(data as unknown as Record<string, unknown>));
       navigate(`/editor?project=${encodeURIComponent(id)}`);
-    } catch {
-      // User cancelled or invalid file — silently ignore
+    } catch (error) {
+      if (error instanceof ProjectFileCancelledError) return;
+      toast.error(error instanceof Error ? error.message : 'Failed to import project file');
     }
   }, [navigate]);
 
