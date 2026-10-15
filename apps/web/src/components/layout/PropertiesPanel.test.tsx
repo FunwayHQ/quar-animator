@@ -138,6 +138,58 @@ describe('PropertiesPanel', () => {
     expect(screen.getByText('Rotation')).toBeInTheDocument();
   });
 
+  it('applies an editable animation preset and undoes it as one action', () => {
+    const sg = renderWithSceneGraph();
+
+    act(() => {
+      sg.addNode(createTestRect('rect1', 'Rectangle 1'));
+      useEditorStore.getState().setSelection(['rect1']);
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Apply Fade entrance animation' }));
+
+    const opacityTrack = useEditorStore
+      .getState()
+      .timeline.tracks.find((track) => track.nodeId === 'rect1' && track.property === 'opacity');
+    expect(opacityTrack?.keyframes.map((keyframe) => [keyframe.time, keyframe.value])).toEqual([
+      [0, 0],
+      [24, 0.8],
+    ]);
+    expect(sg.getNode('rect1')?.opacity).toBe(0);
+    expect(useEditorStore.getState().canUndo).toBe(true);
+
+    act(() => useEditorStore.getState().undo(sg));
+    expect(useEditorStore.getState().timeline.tracks).toHaveLength(0);
+    expect(sg.getNode('rect1')?.opacity).toBe(0.8);
+  });
+
+  it('collapses and expands the animation preset controls', () => {
+    const sg = renderWithSceneGraph();
+
+    act(() => {
+      sg.addNode(createTestRect('rect1', 'Rectangle 1'));
+      useEditorStore.getState().setSelection(['rect1']);
+    });
+
+    const toggle = screen.getByTestId('animation-presets-toggle');
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    expect(
+      screen.getByRole('button', { name: 'Apply Fade entrance animation' })
+    ).toBeInTheDocument();
+
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(
+      screen.queryByRole('button', { name: 'Apply Fade entrance animation' })
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    expect(
+      screen.getByRole('button', { name: 'Apply Fade entrance animation' })
+    ).toBeInTheDocument();
+  });
+
   it('displays actual node position values', () => {
     const sg = renderWithSceneGraph();
 

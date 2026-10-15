@@ -31,6 +31,7 @@ import {
 import { useSceneGraph } from '../../contexts/SceneGraphContext';
 import { useEditorStore, DEFAULT_FILL, DEFAULT_STROKE } from '../../stores/editorStore';
 import { ScrubLabel } from '../common/ScrubLabel';
+import { AnimationPresetsPanel } from '../common/AnimationPresetsPanel';
 import { KeyframeIndicator } from '../common/KeyframeIndicator';
 import { SmartBonePanel } from '../common/SmartBonePanel';
 import { VitruvianPanel } from '../common/VitruvianPanel';
@@ -1379,6 +1380,7 @@ export function PropertiesPanel() {
         <span className={styles.nodeTypeLabel}>{nodeTypeLabel}</span>
       </div>
       <div className={styles.content}>
+        <AnimationPresetsPanel nodeIds={[...selectedNodeIds]} />
         {/* Symbol Instance Section */}
         {node.type === 'symbol-instance' &&
           (() => {

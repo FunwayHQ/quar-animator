@@ -1,0 +1,123 @@
+.panel {
+  margin-bottom: var(--space-lg);
+  padding-bottom: var(--space-md);
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  margin: 0 0 var(--space-sm);
+  padding: 2px 0;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  text-align: left;
+  cursor: pointer;
+}
+
+.header:hover .title {
+  color: var(--color-text-secondary);
+}
+
+.header:focus-visible {
+  outline: 2px solid var(--color-accent-primary);
+  outline-offset: 2px;
+}
+
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.chevron {
+  color: var(--color-text-tertiary);
+  transition: transform var(--duration-fast);
+}
+
+.chevronCollapsed {
+  transform: rotate(-90deg);
+}
+
+.title,
+.categoryTitle {
+  margin: 0;
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-2xs);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.selectionCount {
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-2xs);
+}
+
+.durationRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-md);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+}
+
+.durationRow select {
+  min-width: 74px;
+  padding: 3px 6px;
+  color: var(--color-text-primary);
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  font: inherit;
+}
+
+.category + .category {
+  margin-top: var(--space-sm);
+}
+
+.categoryTitle {
+  margin-bottom: 5px;
+  color: var(--color-text-tertiary);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 5px;
+}
+
+.presetButton {
+  min-height: 28px;
+  padding: 4px 8px;
+  color: var(--color-text-secondary);
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  font: inherit;
+  font-size: var(--font-size-xs);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    color var(--duration-fast),
+    border-color var(--duration-fast),
+    background var(--duration-fast);
+}
+
+.presetButton:hover {
+  color: var(--color-text-primary);
+  background: var(--color-bg-hover);
+  border-color: var(--color-border-strong);
+}
+
+.presetButton:focus-visible,
+.durationRow select:focus-visible {
+  outline: 2px solid var(--color-accent-primary);
+  outline-offset: 1px;
+}
