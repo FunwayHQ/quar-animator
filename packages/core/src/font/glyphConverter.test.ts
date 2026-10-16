@@ -381,4 +381,28 @@ describe('textToSubpaths', () => {
     expect(result.subpaths.length).toBe(0);
     expect(result.glyphs.length).toBe(0);
   });
+
+  it('places a revealed prefix at its final positions when aligned to the full text', () => {
+    const font = createMockFont();
+    const glyphXs = (r: ReturnType<typeof textToSubpaths>) =>
+      r.glyphs.map((g) => g.subpaths[0]?.[0]?.position.x);
+
+    for (const textAlign of ['left', 'center', 'right'] as const) {
+      const full = textToSubpaths('ABC\nAB', font as never, 24, { textAlign });
+      const prefix = textToSubpaths('ABC\nA', font as never, 24, {
+        textAlign,
+        alignmentText: 'ABC\nAB',
+      });
+      expect(glyphXs(prefix)).toEqual(glyphXs(full).slice(0, 4));
+    }
+  });
+
+  it('aligns a prefix on its own line widths without alignmentText', () => {
+    const font = createMockFont();
+    const full = textToSubpaths('ABC\nAB', font as never, 24, { textAlign: 'center' });
+    const prefix = textToSubpaths('ABC\nA', font as never, 24, { textAlign: 'center' });
+    // Second line: centred under 'ABC' as 'A' (offset 1000/2) vs as 'AB' (offset 500/2)
+    expect(prefix.glyphs[3]?.subpaths[0]?.[0]?.position.x).toBeCloseTo(12);
+    expect(full.glyphs[3]?.subpaths[0]?.[0]?.position.x).toBeCloseTo(6);
+  });
 });

@@ -2198,13 +2198,15 @@ export class ShapeRenderer {
 
     const gl = this.renderer.context;
 
-    // Apply anchor offset for non-zero anchors (centers text geometry)
+    // Apply anchor offset for non-zero anchors (centers text geometry). The
+    // full text sets the anchor so a typewriter reveal types in place instead
+    // of re-centering the visible prefix every frame.
     let adjustedMatrix = worldMatrix;
     const ax = node.transform.anchor.x;
     const ay = node.transform.anchor.y;
     if (ax !== 0 || ay !== 0) {
       const rawBounds = getTextBounds(
-        content,
+        node.content,
         node.fontFamily,
         node.fontSize,
         node.lineHeight,
@@ -2222,7 +2224,8 @@ export class ShapeRenderer {
     gl.uniformMatrix3fv(this.program.uniforms.u_model ?? null, false, modelArray);
 
     // Get cached tessellation for this text
-    const geoKey = buildGeometryKey({ ...node, content });
+    // Glyph positions depend on the full text (alignment) and the revealed length
+    const geoKey = `${buildGeometryKey(node)}:${content.length}`;
     const cached = this.geometryCache.get(node.id);
 
     if (cached && cached.geoKey === geoKey) {
@@ -2261,6 +2264,7 @@ export class ShapeRenderer {
       textAlign: node.textAlign,
       lineHeight: node.lineHeight,
       letterSpacing: node.letterSpacing,
+      alignmentText: node.content,
     });
 
     if (result.subpaths.length === 0) return;
@@ -4168,13 +4172,15 @@ export class ShapeRenderer {
     const font = fm.getFontOrFallback(node.fontFamily, node.fontWeight);
     if (!font) return;
 
-    // Apply anchor offset for non-zero anchors (centers text geometry)
+    // Apply anchor offset for non-zero anchors (centers text geometry). The
+    // full text sets the anchor so a typewriter reveal types in place instead
+    // of re-centering the visible prefix every frame.
     let adjustedMatrix = worldMatrix;
     const ax = node.transform.anchor.x;
     const ay = node.transform.anchor.y;
     if (ax !== 0 || ay !== 0) {
       const rawBounds = getTextBounds(
-        content,
+        node.content,
         node.fontFamily,
         node.fontSize,
         node.lineHeight,
@@ -4190,6 +4196,7 @@ export class ShapeRenderer {
       textAlign: node.textAlign,
       lineHeight: node.lineHeight,
       letterSpacing: node.letterSpacing,
+      alignmentText: node.content,
     });
 
     if (result.subpaths.length === 0) return;

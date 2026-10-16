@@ -162,6 +162,11 @@ export interface TextLayoutOptions {
   textAlign?: 'left' | 'center' | 'right';
   lineHeight?: number;
   letterSpacing?: number;
+  /**
+   * Full text whose line widths drive alignment when `text` is a prefix of it
+   * (a typewriter reveal), so revealed glyphs sit at their final positions.
+   */
+  alignmentText?: string;
 }
 
 /** Per-glyph grouping of contours for text-to-path group conversion. */
@@ -187,7 +192,12 @@ export function textToSubpaths(
   fontSize: number,
   options: TextLayoutOptions = {}
 ): TextToSubpathsResult {
-  const { textAlign = 'left', lineHeight: lineHeightMultiplier = 1.2, letterSpacing = 0 } = options;
+  const {
+    textAlign = 'left',
+    lineHeight: lineHeightMultiplier = 1.2,
+    letterSpacing = 0,
+    alignmentText = text,
+  } = options;
 
   const lines = text.split('\n');
   const scale = fontSize / font.unitsPerEm;
@@ -197,7 +207,7 @@ export function textToSubpaths(
 
   // Measure all line widths for alignment
   const lineWidths: number[] = [];
-  for (const line of lines) {
+  for (const line of alignmentText.split('\n')) {
     let width = 0;
     const glyphs = font.stringToGlyphs(line);
     for (let i = 0; i < glyphs.length; i++) {
