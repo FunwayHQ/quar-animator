@@ -5,6 +5,7 @@
 
 export * from './Timeline';
 export * from './AnimationPresets';
+export * from './AnimationSequence';
 export * from './Easing';
 export * from './PropertyBinding';
 export { KeyframeManager } from './KeyframeManager';

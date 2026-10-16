@@ -223,6 +223,26 @@ function directionVector(direction: Exclude<AnimationPresetDirection, 'auto'>) {
   }
 }
 
+/**
+ * The number of frames a preset actually spans for a requested duration.
+ * Multi-beat keyframes need a few frames to stay distinct, and each spin
+ * segment must stay within the rotation track's shortest-path range so full
+ * turns remain visible.
+ */
+export function getPresetDurationFrames(
+  presetId: AnimationPresetId,
+  durationFrames: number,
+  intensity?: number
+): number {
+  const spinSegments = Math.ceil((360 * normalizeIntensity(intensity)) / 120);
+  return Math.max(
+    4,
+    Math.round(durationFrames),
+    presetId === 'spin-in' || presetId === 'spin-out' ? spinSegments : 0,
+    presetId === 'orbit' ? 8 : 0
+  );
+}
+
 /** Create a preset's property keyframes relative to a selected node and frame. */
 export function createAnimationPresetKeyframes(
   node: Node,
@@ -235,19 +255,11 @@ export function createAnimationPresetKeyframes(
   const intensity = normalizeIntensity(options.intensity);
   const direction = resolveDirection(presetId, options.direction);
   const vector = directionVector(direction);
-  const spinSegments = Math.ceil((360 * intensity) / 120);
   const revealStops =
     node.type === 'text' && (presetId === 'word-reveal' || presetId === 'line-reveal')
       ? getTextRevealStops(node.content, presetId === 'word-reveal' ? 'word' : 'line')
       : [];
-  // Keep multi-beat keyframes distinct, and keep each spin segment within the
-  // rotation track's shortest-path range so full turns remain visible.
-  const duration = Math.max(
-    4,
-    Math.round(durationFrames),
-    presetId === 'spin-in' || presetId === 'spin-out' ? spinSegments : 0,
-    presetId === 'orbit' ? 8 : 0
-  );
+  const duration = getPresetDurationFrames(presetId, durationFrames, options.intensity);
   const end = start + duration;
   const middle = start + Math.round(duration / 2);
   const quarter = start + Math.round(duration / 4);
