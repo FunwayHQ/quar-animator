@@ -188,11 +188,10 @@ export function rectangleToLottieShapes(
   };
   items.push(rect);
 
-  // Fill(s)
-  items.push(...fillsToLottie(node.fills, node.id, timeline));
-
-  // Stroke(s)
+  // Stroke(s) before fill(s): Lottie draws the first style on top, and Quar
+  // draws strokes over fills
   items.push(...strokesToLottie(node.strokes, node.id, timeline));
+  items.push(...fillsToLottie(node.fills, node.id, timeline));
 
   // Shape transform (identity — actual transform is on the layer)
   items.push(createShapeTransform());
@@ -230,8 +229,8 @@ export function ellipseToLottieShapes(
   };
   items.push(ellipse);
 
+  items.push(...strokesToLottie(node.strokes, node.id, timeline)); // stroke on top
   items.push(...fillsToLottie(node.fills, node.id, timeline));
-  items.push(...strokesToLottie(node.strokes, node.id, timeline));
   items.push(createShapeTransform());
 
   return items;
@@ -270,8 +269,8 @@ export function pathToLottieShapes(
     }
   }
 
+  items.push(...strokesToLottie(node.strokes, node.id, timeline)); // stroke on top
   items.push(...fillsToLottie(node.fills, node.id, timeline, node.fillRule));
-  items.push(...strokesToLottie(node.strokes, node.id, timeline));
   items.push(createShapeTransform());
 
   return items;
@@ -298,8 +297,8 @@ export function polygonToLottieShapes(
   };
   items.push(shapePath);
 
+  items.push(...strokesToLottie(node.strokes, node.id, timeline)); // stroke on top
   items.push(...fillsToLottie(node.fills, node.id, timeline));
-  items.push(...strokesToLottie(node.strokes, node.id, timeline));
   items.push(createShapeTransform());
 
   return items;

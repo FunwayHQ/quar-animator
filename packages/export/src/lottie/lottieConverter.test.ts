@@ -392,6 +392,23 @@ describe('polygonToLottieShapes', () => {
 // pathPointsToLottieVertices
 // ============================================================================
 
+describe('stroke and fill stacking', () => {
+  it('lists strokes before fills so strokes draw on top, as in Quar', () => {
+    const withBoth = { fills: [solidFill], strokes: [solidStroke] };
+    const shapeLists = [
+      rectangleToLottieShapes(makeRect(withBoth), emptyTimeline),
+      ellipseToLottieShapes(makeEllipse(withBoth), emptyTimeline),
+      pathToLottieShapes(makePath({ ...withBoth, closed: true }), emptyTimeline),
+      polygonToLottieShapes(makePolygon(withBoth), emptyTimeline),
+    ];
+    for (const items of shapeLists) {
+      const types = items.map((item) => item.ty);
+      expect(types.indexOf('st')).toBeGreaterThanOrEqual(0);
+      expect(types.indexOf('st')).toBeLessThan(types.indexOf('fl'));
+    }
+  });
+});
+
 describe('pathPointsToLottieVertices', () => {
   it('converts simple corner points', () => {
     const points: PathPoint[] = [
