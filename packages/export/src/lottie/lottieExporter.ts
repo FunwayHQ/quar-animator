@@ -6,7 +6,12 @@
 
 import type { Node, Timeline } from '@quar/types';
 import type { LottieAnimation, LottieLayer } from './lottieTypes';
-import { maskGroupToLottieLayers, nodeToLottieLayer } from './lottieConverter';
+import {
+  maskGroupToLottieLayers,
+  nodeToLottieLayer,
+  type LottieConvertContext,
+} from './lottieConverter';
+import { editorTextOutlines, type TextOutlineProvider } from './lottieText';
 
 // ============================================================================
 // Types
@@ -20,6 +25,8 @@ export interface LottieExportOptions {
   endFrame?: number;
   frameRate?: number;
   name?: string;
+  /** Glyph outlines for text; defaults to the editor's loaded fonts. */
+  textOutlines?: TextOutlineProvider;
 }
 
 // ============================================================================
@@ -53,6 +60,9 @@ export function exportToLottieJson(
 
   // Build node resolver from provided nodes if not given
   const resolver = nodeResolver ?? buildNodeResolver(nodes);
+  const context: LottieConvertContext = {
+    textOutlines: options.textOutlines ?? editorTextOutlines,
+  };
 
   // Convert nodes to layers (reverse order for Lottie render order)
   const layers: LottieLayer[] = [];
@@ -70,7 +80,8 @@ export function exportToLottieJson(
       canvasH,
       duration,
       resolver,
-      startFrame
+      startFrame,
+      context
     );
     if (maskLayers) {
       layers.push(...maskLayers);
@@ -85,7 +96,8 @@ export function exportToLottieJson(
       canvasH,
       duration,
       resolver,
-      startFrame
+      startFrame,
+      context
     );
     if (layer) {
       layers.push(layer);
@@ -140,7 +152,7 @@ function buildNodeResolver(nodes: Node[]): (id: string) => Node | undefined {
 // ============================================================================
 
 /** Supported node types for Lottie export */
-const SUPPORTED_TYPES = new Set(['rectangle', 'ellipse', 'path', 'polygon', 'group']);
+const SUPPORTED_TYPES = new Set(['rectangle', 'ellipse', 'path', 'polygon', 'group', 'text']);
 
 /**
  * Count supported and unsupported nodes for an export summary.

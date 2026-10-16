@@ -145,6 +145,7 @@ export type LottieShapeItemType =
 
 export type LottieShapeItem =
   | LottieShapeGroup
+  | LottieShapeTrim
   | LottieShapePath
   | LottieShapeRect
   | LottieShapeEllipse
@@ -231,6 +232,16 @@ export interface LottieShapeStroke {
   lc?: 1 | 2 | 3; // Line cap (1=butt, 2=round, 3=square)
   lj?: 1 | 2 | 3; // Line join (1=miter, 2=round, 3=bevel)
   ml?: number; // Miter limit
+}
+
+/** Trim paths: shows the part of the paths above it between start and end (%). */
+export interface LottieShapeTrim {
+  ty: 'tm';
+  nm?: string;
+  s: LottieAnimatedValue; // Start (0-100)
+  e: LottieAnimatedValue; // End (0-100)
+  o: LottieAnimatedValue; // Offset (degrees)
+  m: 1 | 2; // 1 = trim each path simultaneously, 2 = one after another
 }
 
 export interface LottieShapeTransform {

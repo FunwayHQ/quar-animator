@@ -12,7 +12,7 @@
  */
 
 import type { EasingFunction, PropertyTrack, Keyframe, Color } from '@quar/types';
-import { easingToBezierPoints } from '@quar/animation';
+import { easingToBezierPoints, evaluateTrack } from '@quar/animation';
 import type {
   LottieAnimatedValue,
   LottieAnimatedMulti,
@@ -376,6 +376,38 @@ export function bakeTrackToLinearKeyframes(
   }
 
   return keyframes;
+}
+
+// ============================================================================
+// Stepped values
+// ============================================================================
+
+/**
+ * A value that switches at whole frames as `track` animates — e.g. whether a
+ * glyph is revealed. The track is evaluated (with its easing) at every frame
+ * between its first and last keyframe; each change becomes a hold keyframe.
+ * Static when the value never changes.
+ */
+export function steppedTrackToLottie(
+  track: PropertyTrack<number>,
+  toValue: (trackValue: number) => number
+): LottieAnimatedValue {
+  const kfs = track.keyframes;
+  if (kfs.length === 0) return { a: 0, k: 0 };
+  const first = Math.floor(kfs[0]!.time);
+  const last = Math.ceil(kfs[kfs.length - 1]!.time);
+  const keyframes: LottieKeyframe[] = [];
+  let previous: number | undefined;
+  for (let frame = first; frame <= last; frame++) {
+    const value = toValue(evaluateTrack(track, frame) as number);
+    if (value === previous) continue;
+    keyframes.push({ t: frame, s: [value], h: 1 });
+    previous = value;
+  }
+  if (keyframes.length === 1) return { a: 0, k: keyframes[0]!.s[0] };
+  // The last keyframe holds by itself
+  delete keyframes[keyframes.length - 1]!.h;
+  return { a: 1, k: keyframes };
 }
 
 // ============================================================================

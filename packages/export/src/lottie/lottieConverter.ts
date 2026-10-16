@@ -3,9 +3,10 @@
  *
  * Pure functions converting Quar scene graph nodes → Lottie layers/shapes.
  *
- * Foundation scope: Rectangle, Ellipse, Path, Polygon → shape layers.
- * Groups → shape groups. Solid fills/strokes. Transform animation.
- * NOT covered: Gradients, Text, Images, Effects, Blend modes, Rigging, Symbols, Boolean ops.
+ * Rectangle, Ellipse, Path, Polygon and Text (as glyph outlines) → shape
+ * layers; groups → shape groups. Solid fills/strokes, transform animation,
+ * text reveals and stroke draw-on.
+ * NOT covered: Gradients, Images, Effects, Blend modes, Rigging, Symbols, Boolean ops.
  */
 
 import type {
@@ -17,6 +18,7 @@ import type {
   PathPoint,
   Fill,
   Stroke,
+  TextNode,
   Timeline,
 } from '@quar/types';
 import { findTrack } from '@quar/animation';
@@ -29,15 +31,25 @@ import type {
   LottieShapeFill,
   LottieShapeStroke,
   LottieShapeTransform,
+  LottieShapeTrim,
   LottieTransform,
   LottieShapeVertices,
+  LottieAnimatedValue,
 } from './lottieTypes';
 import {
   trackToLottieAnimated,
   positionTracksToLottie,
   colorToLottieStatic,
+  steppedTrackToLottie,
   VALUE_TRANSFORMS,
 } from './lottieKeyframes';
+import { textToLottieShapes, type TextOutlineProvider } from './lottieText';
+
+/** Optional inputs that some node types need. */
+export interface LottieConvertContext {
+  /** Glyph outlines for text nodes; text is skipped without them. */
+  textOutlines?: TextOutlineProvider;
+}
 
 // ============================================================================
 // Line Cap / Join Conversion
@@ -61,9 +73,10 @@ export function nodeToLottieLayer(
   canvasH: number,
   duration: number,
   nodeResolver?: (id: string) => Node | undefined,
-  startFrame: number = 0
+  startFrame: number = 0,
+  context: LottieConvertContext = {}
 ): LottieLayer | null {
-  const shapes = nodeToLottieShapes(node, timeline, canvasH, nodeResolver);
+  const shapes = nodeToLottieShapes(node, timeline, canvasH, nodeResolver, context);
   if (!shapes || shapes.length === 0) return null;
 
   return {
@@ -94,7 +107,8 @@ export function maskGroupToLottieLayers(
   canvasH: number,
   duration: number,
   nodeResolver?: (id: string) => Node | undefined,
-  startFrame: number = 0
+  startFrame: number = 0,
+  context: LottieConvertContext = {}
 ): LottieLayer[] | null {
   if (node.type !== 'group' || !node.maskNodeId || !node.maskMode || !nodeResolver) return null;
   const maskNode = nodeResolver(node.maskNodeId);
@@ -107,9 +121,10 @@ export function maskGroupToLottieLayers(
     canvasH,
     duration,
     nodeResolver,
-    startFrame
+    startFrame,
+    context
   );
-  // Mask shapes Lottie can't express (text, images): keep the content unclipped.
+  // Mask shapes Lottie can't express (images): keep the content unclipped.
   if (!matte) return null;
 
   const content = nodeToLottieLayer(
@@ -119,7 +134,8 @@ export function maskGroupToLottieLayers(
     canvasH,
     duration,
     nodeResolver,
-    startFrame
+    startFrame,
+    context
   );
   if (!content) return [];
 
@@ -142,7 +158,8 @@ export function nodeToLottieShapes(
   node: Node,
   timeline: Timeline,
   canvasH: number,
-  nodeResolver?: (id: string) => Node | undefined
+  nodeResolver?: (id: string) => Node | undefined,
+  context: LottieConvertContext = {}
 ): LottieShapeItem[] | null {
   switch (node.type) {
     case 'rectangle':
@@ -154,9 +171,11 @@ export function nodeToLottieShapes(
     case 'polygon':
       return polygonToLottieShapes(node, timeline);
     case 'group':
-      return groupToLottieShapes(node, timeline, canvasH, nodeResolver);
+      return groupToLottieShapes(node, timeline, canvasH, nodeResolver, context);
+    case 'text':
+      return textNodeToLottieShapes(node, timeline, context);
     default:
-      return null; // Text, Image, Bone, etc. not supported in foundation
+      return null; // Image, Bone, etc. not supported
   }
 }
 
@@ -269,11 +288,83 @@ export function pathToLottieShapes(
     }
   }
 
-  items.push(...strokesToLottie(node.strokes, node.id, timeline)); // stroke on top
-  items.push(...fillsToLottie(node.fills, node.id, timeline, node.fillRule));
+  const strokes = strokesToLottie(node.strokes, node.id, timeline);
+  const fills = fillsToLottie(node.fills, node.id, timeline, node.fillRule);
+
+  // Draw On: the stroke is trimmed to strokeProgress and, as in the editor,
+  // the fill only shows once the stroke is complete
+  const progressTrack = findTrack<number>(timeline, node.id, 'strokeProgress');
+  const drawsOn =
+    (progressTrack !== undefined && progressTrack.keyframes.length > 0) ||
+    (node.strokeProgress !== undefined && node.strokeProgress < 1);
+  if (drawsOn) {
+    const toPercent = (v: number) => Math.max(0, Math.min(1, v)) * 100;
+    const trim: LottieShapeTrim = {
+      ty: 'tm',
+      nm: 'Draw On',
+      s: { a: 0, k: 0 },
+      e: trackToLottieAnimated(progressTrack, node.strokeProgress ?? 1, toPercent),
+      o: { a: 0, k: 0 },
+      m: 1, // every contour trimmed to the same progress
+    };
+    const complete = (v: number) => (v >= 1 ? 1 : 0);
+    const fillShown: LottieAnimatedValue = progressTrack?.keyframes.length
+      ? steppedTrackToLottie(progressTrack, complete)
+      : { a: 0, k: complete(node.strokeProgress ?? 1) };
+    const gatedFills = fills.map((fill) => ({
+      ...fill,
+      o: scaleOpacity(fillShown, fill.o.k as number),
+    }));
+    return [
+      { ty: 'gr', nm: 'Stroke', it: [...items, trim, ...strokes, createShapeTransform()] },
+      { ty: 'gr', nm: 'Fill', it: [...items, ...gatedFills, createShapeTransform()] },
+    ];
+  }
+
+  items.push(...strokes); // stroke on top
+  items.push(...fills);
   items.push(createShapeTransform());
 
   return items;
+}
+
+/** A 0/1 switch scaled to a fill's opacity (0-100). */
+function scaleOpacity(shown: LottieAnimatedValue, opacity: number): LottieAnimatedValue {
+  if (shown.a === 0) return { a: 0, k: (shown.k as number) * opacity };
+  return {
+    a: 1,
+    k: (shown.k as Exclude<LottieAnimatedValue['k'], number>).map((kf) => ({
+      ...kf,
+      s: [kf.s[0] * opacity] as [number],
+    })),
+  };
+}
+
+// ============================================================================
+// Text → Lottie (glyph outlines)
+// ============================================================================
+
+function textNodeToLottieShapes(
+  node: TextNode,
+  timeline: Timeline,
+  context: LottieConvertContext
+): LottieShapeItem[] | null {
+  return textToLottieShapes(node, timeline, {
+    outlines: context.textOutlines,
+    identityTransform: createShapeTransform,
+    contourShapes: (subpaths) => [
+      ...subpaths.map(
+        (points, index): LottieShapePath => ({
+          ty: 'sh',
+          nm: `Contour ${index + 1}`,
+          ks: { a: 0, k: pathPointsToLottieVertices(points, true, true) },
+        })
+      ),
+      ...strokesToLottie(node.strokes, node.id, timeline),
+      // The editor fills glyph contours even-odd
+      ...fillsToLottie(node.fills, node.id, timeline, 'evenodd'),
+    ],
+  });
 }
 
 // ============================================================================
@@ -312,7 +403,8 @@ export function groupToLottieShapes(
   node: Node,
   timeline: Timeline,
   canvasH: number,
-  nodeResolver?: (id: string) => Node | undefined
+  nodeResolver?: (id: string) => Node | undefined,
+  context: LottieConvertContext = {}
 ): LottieShapeItem[] {
   if (!nodeResolver || !node.children || node.children.length === 0) return [];
 
@@ -327,7 +419,7 @@ export function groupToLottieShapes(
     if (childId === maskNodeId) continue;
     const childNode = nodeResolver(childId);
     if (!childNode || !childNode.visible) continue;
-    const shapes = nodeToLottieShapes(childNode, timeline, canvasH, nodeResolver);
+    const shapes = nodeToLottieShapes(childNode, timeline, canvasH, nodeResolver, context);
     if (shapes && shapes.length > 0) {
       // Wrap each child's shapes in a group ('gr') item with its transform
       const grItem: LottieShapeItem = {

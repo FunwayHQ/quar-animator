@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { createEllipsePath } from '@quar/core';
+import { addKeyframe, createTimeline, getOrCreateTrack } from '@quar/animation';
 import type {
   RectangleNode,
   EllipseNode,
@@ -34,6 +35,8 @@ import type {
   LottieShapePath,
   LottieShapeFill,
   LottieShapeStroke,
+  LottieShapeGroup,
+  LottieShapeTrim,
 } from './lottieTypes';
 
 // ============================================================================
@@ -391,6 +394,56 @@ describe('polygonToLottieShapes', () => {
 // ============================================================================
 // pathPointsToLottieVertices
 // ============================================================================
+
+describe('stroke draw-on', () => {
+  const drawOnTimeline = (): Timeline => {
+    const timeline = createTimeline({ duration: 60, frameRate: 30 });
+    const track = getOrCreateTrack<number>(timeline, 'p1', 'strokeProgress');
+    addKeyframe(track, 0, 0);
+    addKeyframe(track, 30, 1);
+    return timeline;
+  };
+  const withBoth = { id: 'p1', closed: true, fills: [solidFill], strokes: [solidStroke] };
+
+  it('trims the stroke to the progress and shows the fill once it completes', () => {
+    const [strokeGroup, fillGroup] = pathToLottieShapes(
+      makePath(withBoth),
+      drawOnTimeline()
+    ) as LottieShapeGroup[];
+
+    expect(strokeGroup!.it.map((item) => item.ty)).toEqual(['sh', 'tm', 'st', 'tr']);
+    const trim = strokeGroup!.it[1] as LottieShapeTrim;
+    expect(trim).toMatchObject({ s: { a: 0, k: 0 }, o: { a: 0, k: 0 }, m: 1 });
+    const end = trim.e.k as Array<{ t: number; s: number[] }>;
+    expect(end.map((kf) => [kf.t, kf.s[0]])).toEqual([
+      [0, 0],
+      [30, 100],
+    ]);
+
+    expect(fillGroup!.it.map((item) => item.ty)).toEqual(['sh', 'fl', 'tr']);
+    expect((fillGroup!.it[1] as LottieShapeFill).o).toEqual({
+      a: 1,
+      k: [
+        { t: 0, s: [0], h: 1 },
+        { t: 30, s: [100] },
+      ],
+    });
+  });
+
+  it('handles a static partial reveal', () => {
+    const [strokeGroup, fillGroup] = pathToLottieShapes(
+      makePath({ ...withBoth, strokeProgress: 0.5 }),
+      emptyTimeline
+    ) as LottieShapeGroup[];
+    expect((strokeGroup!.it[1] as LottieShapeTrim).e).toEqual({ a: 0, k: 50 });
+    expect((fillGroup!.it[1] as LottieShapeFill).o).toEqual({ a: 0, k: 0 });
+  });
+
+  it('leaves paths without a draw-on unchanged', () => {
+    const items = pathToLottieShapes(makePath(withBoth), emptyTimeline);
+    expect(items.map((item) => item.ty)).toEqual(['sh', 'st', 'fl', 'tr']);
+  });
+});
 
 describe('stroke and fill stacking', () => {
   it('lists strokes before fills so strokes draw on top, as in Quar', () => {

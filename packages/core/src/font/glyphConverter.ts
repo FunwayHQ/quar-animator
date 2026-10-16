@@ -172,6 +172,8 @@ export interface TextLayoutOptions {
 /** Per-glyph grouping of contours for text-to-path group conversion. */
 export interface GlyphSubpathGroup {
   char: string;
+  /** Index of the character in the text (code points, newlines included). */
+  charIndex: number;
   subpaths: PathPoint[][];
 }
 
@@ -228,6 +230,7 @@ export function textToSubpaths(
   const maxWidth = Math.max(...lineWidths, 1);
 
   // Layout each line
+  let lineCharStart = 0;
   for (let lineIdx = 0; lineIdx < lines.length; lineIdx++) {
     const line = lines[lineIdx]!;
     const lineWidth = lineWidths[lineIdx]!;
@@ -253,7 +256,11 @@ export function textToSubpaths(
       const path = glyph.getPath(advanceX / scale, 0, font.unitsPerEm);
       const subpaths = glyphPathToSubpaths(path);
 
-      const glyphGroup: GlyphSubpathGroup = { char: chars[i] ?? '', subpaths: [] };
+      const glyphGroup: GlyphSubpathGroup = {
+        char: chars[i] ?? '',
+        charIndex: lineCharStart + i,
+        subpaths: [],
+      };
 
       // Scale subpath points
       for (const sp of subpaths) {
@@ -287,6 +294,7 @@ export function textToSubpaths(
         }
       }
     }
+    lineCharStart += chars.length + 1; // the newline
   }
 
   // Compute bounds

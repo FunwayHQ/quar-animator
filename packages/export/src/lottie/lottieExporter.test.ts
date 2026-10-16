@@ -188,6 +188,10 @@ describe('exportLottieBlob', () => {
 // analyzeLottieExport
 // ============================================================================
 
+function makeBone(id: string): Node {
+  return { ...makeRect(id, 'Bone'), type: 'bone' } as unknown as Node;
+}
+
 describe('analyzeLottieExport', () => {
   it('counts supported node types', () => {
     const nodes: Node[] = [makeRect(), makeEllipse()];
@@ -198,32 +202,20 @@ describe('analyzeLottieExport', () => {
   });
 
   it('identifies unsupported types', () => {
-    const textNode = {
-      id: 't1',
-      name: 'Text',
-      type: 'text' as const,
-      parent: null,
-      children: [],
-      transform: defaultTransform,
-      visible: true,
-      locked: false,
-      opacity: 1,
-      blendMode: 'normal' as const,
-      content: 'Hello',
-      fontFamily: 'Inter',
-      fontSize: 16,
-      fontWeight: 400,
-      fontStyle: 'normal' as const,
-      textAlign: 'left' as const,
-      lineHeight: 1.2,
-      letterSpacing: 0,
-      fills: [],
-      strokes: [],
-    };
-    const analysis = analyzeLottieExport([makeRect(), textNode]);
+    const analysis = analyzeLottieExport([makeRect(), makeBone('b1')]);
     expect(analysis.supportedCount).toBe(1);
     expect(analysis.unsupportedCount).toBe(1);
-    expect(analysis.unsupportedTypes).toContain('text');
+    expect(analysis.unsupportedTypes).toContain('bone');
+  });
+
+  it('counts text as supported (exported as glyph outlines)', () => {
+    const text = {
+      ...makeRect(),
+      id: 't1',
+      type: 'text',
+      content: 'Hello',
+    } as unknown as Node;
+    expect(analyzeLottieExport([text]).unsupportedCount).toBe(0);
   });
 
   it('returns empty counts for empty array', () => {
@@ -234,30 +226,7 @@ describe('analyzeLottieExport', () => {
   });
 
   it('deduplicates unsupported types', () => {
-    const textNode1 = {
-      id: 't1',
-      name: 'T1',
-      type: 'text' as const,
-      parent: null,
-      children: [],
-      transform: defaultTransform,
-      visible: true,
-      locked: false,
-      opacity: 1,
-      blendMode: 'normal' as const,
-      content: 'A',
-      fontFamily: 'Inter',
-      fontSize: 16,
-      fontWeight: 400,
-      fontStyle: 'normal' as const,
-      textAlign: 'left' as const,
-      lineHeight: 1.2,
-      letterSpacing: 0,
-      fills: [],
-      strokes: [],
-    };
-    const textNode2 = { ...textNode1, id: 't2', name: 'T2' };
-    const analysis = analyzeLottieExport([textNode1, textNode2]);
+    const analysis = analyzeLottieExport([makeBone('b1'), makeBone('b2')]);
     expect(analysis.unsupportedCount).toBe(2);
     expect(analysis.unsupportedTypes).toHaveLength(1); // deduplicated
   });
@@ -281,28 +250,7 @@ describe('analyzeLottieExport', () => {
   });
 
   it('reports unsupported descendants nested inside groups', () => {
-    const textNode: Node = {
-      id: 'nested-text',
-      name: 'Nested text',
-      type: 'text',
-      parent: 'nested-group',
-      children: [],
-      transform: defaultTransform,
-      visible: true,
-      locked: false,
-      opacity: 1,
-      blendMode: 'normal',
-      content: 'Hello',
-      fontFamily: 'Inter',
-      fontSize: 16,
-      fontWeight: 400,
-      fontStyle: 'normal',
-      textAlign: 'left',
-      lineHeight: 1.2,
-      letterSpacing: 0,
-      fills: [],
-      strokes: [],
-    };
+    const textNode: Node = { ...makeBone('nested-bone'), parent: 'nested-group' };
     const group: GroupNode = {
       id: 'nested-group',
       name: 'Group',
@@ -321,7 +269,7 @@ describe('analyzeLottieExport', () => {
     );
     expect(analysis.supportedCount).toBe(1);
     expect(analysis.unsupportedCount).toBe(1);
-    expect(analysis.unsupportedTypes).toEqual(['text']);
+    expect(analysis.unsupportedTypes).toEqual(['bone']);
   });
 });
 
