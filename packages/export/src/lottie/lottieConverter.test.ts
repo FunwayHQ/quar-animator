@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { createEllipsePath } from '@quar/core';
 import type {
   RectangleNode,
   EllipseNode,
@@ -417,19 +418,34 @@ describe('pathPointsToLottieVertices', () => {
     expect(result.c).toBe(true);
   });
 
-  it('converts handles as relative offsets', () => {
+  it('carries Quar handles over as-is — both are relative to their point', () => {
     const points: PathPoint[] = [
       { position: { x: 0, y: 0 }, handleIn: null, handleOut: { x: 20, y: 10 }, type: 'smooth' },
-      { position: { x: 50, y: 50 }, handleIn: { x: 30, y: 40 }, handleOut: null, type: 'smooth' },
+      { position: { x: 50, y: 50 }, handleIn: { x: -20, y: -10 }, handleOut: null, type: 'smooth' },
     ];
     const result = pathPointsToLottieVertices(points, false);
     expect(result.v).toEqual([
       [0, 0],
       [50, 50],
     ]);
-    expect(result.o[0]).toEqual([20, 10]); // handleOut - position
-    expect(result.i[1]).toEqual([-20, -10]); // handleIn - position
+    expect(result.o[0]).toEqual([20, 10]);
+    expect(result.i[1]).toEqual([-20, -10]);
     expect(result.c).toBe(false);
+  });
+
+  it('keeps a Quar ellipse path a circle', () => {
+    const r = 50;
+    const result = pathPointsToLottieVertices(createEllipsePath(0, 0, r, r), true, true);
+    // Each handle is the standard cubic circle approximation: ~0.5523 r, tangent
+    // to the circle (perpendicular to its vertex)
+    for (let k = 0; k < result.v.length; k++) {
+      const [vx, vy] = result.v[k]!;
+      expect(Math.hypot(vx!, vy!)).toBeCloseTo(r);
+      for (const [hx, hy] of [result.i[k]!, result.o[k]!]) {
+        expect(Math.hypot(hx!, hy!)).toBeCloseTo(r * 0.5523, 1);
+        expect(vx! * hx! + vy! * hy!).toBeCloseTo(0);
+      }
+    }
   });
 
   it('handles empty points array', () => {
@@ -794,15 +810,17 @@ describe('pathPointsToLottieVertices - additional', () => {
     const points: PathPoint[] = [
       {
         position: { x: 100, y: 100 },
-        handleIn: { x: 80, y: 90 },
-        handleOut: { x: 120, y: 110 },
+        handleIn: { x: -20, y: -10 },
+        handleOut: { x: 20, y: 10 },
         type: 'smooth',
       },
     ];
     const result = pathPointsToLottieVertices(points, true);
     expect(result.v[0]).toEqual([100, 100]);
-    expect(result.i[0]).toEqual([-20, -10]); // 80-100, 90-100
-    expect(result.o[0]).toEqual([20, 10]); // 120-100, 110-100
+    expect(result.i[0]).toEqual([-20, -10]);
+    expect(result.o[0]).toEqual([20, 10]);
+    // Y-up → Y-down negates the handle's y too
+    expect(pathPointsToLottieVertices(points, true, true).o[0]).toEqual([20, -10]);
   });
 });
 

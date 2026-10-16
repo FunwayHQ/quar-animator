@@ -372,9 +372,8 @@ export function groupToLottieShapes(
  * - o: out-tangent handles RELATIVE to vertex
  * - c: whether the path is closed
  *
- * Note: Quar handles are absolute positions, Lottie handles are relative to the vertex.
- * Quar is Y-up, but path points are in local space so we don't Y-flip here
- * (the layer transform handles the Y-flip).
+ * Quar handles are also relative to their point (control point = position +
+ * handle), so they carry over as-is.
  */
 export function pathPointsToLottieVertices(
   points: PathPoint[],
@@ -392,19 +391,8 @@ export function pathPointsToLottieVertices(
   for (const pt of points) {
     v.push([pt.position.x, sy * pt.position.y]);
 
-    // In-handle (relative to vertex)
-    if (pt.handleIn) {
-      i.push([pt.handleIn.x - pt.position.x, sy * (pt.handleIn.y - pt.position.y)]);
-    } else {
-      i.push([0, 0]);
-    }
-
-    // Out-handle (relative to vertex)
-    if (pt.handleOut) {
-      o.push([pt.handleOut.x - pt.position.x, sy * (pt.handleOut.y - pt.position.y)]);
-    } else {
-      o.push([0, 0]);
-    }
+    i.push(pt.handleIn ? [pt.handleIn.x, sy * pt.handleIn.y] : [0, 0]);
+    o.push(pt.handleOut ? [pt.handleOut.x, sy * pt.handleOut.y] : [0, 0]);
   }
 
   return { v, i, o, c: closed };
