@@ -25,6 +25,8 @@ const mocks = vi.hoisted(() => ({
 vi.mock('./frameRenderer', () => ({
   createFrameRenderer: () => mocks.renderer,
   getFrameCount: (start: number, end: number) => Math.max(0, end - start + 1),
+  getFrameRenderRoots: (ctx: { sceneGraph: { getRootNodes: () => unknown[] } }) =>
+    ctx.sceneGraph.getRootNodes(),
 }));
 
 vi.mock('mediabunny', () => ({
@@ -134,5 +136,53 @@ describe('exportMp4', () => {
       )
     ).rejects.toThrow(/even width and height/i);
     expect(mocks.canEncodeVideo).not.toHaveBeenCalled();
+  });
+
+  it('rejects reversed ranges and dimensions below one pixel', async () => {
+    const ctx = { sceneGraph: { getRootNodes: () => [] }, timeline: { tracks: [] } } as never;
+
+    await expect(
+      exportMp4(ctx, { width: 64, height: 48, frameRate: 24, startFrame: 3, endFrame: 2 })
+    ).rejects.toThrow('Choose a valid frame range');
+    await expect(
+      exportMp4(ctx, { width: 0, height: 48, frameRate: 24, startFrame: 0, endFrame: 1 })
+    ).rejects.toThrow('at least 1 pixel');
+
+    expect(mocks.canEncodeVideo).not.toHaveBeenCalled();
+    expect(mocks.renderer.dispose).not.toHaveBeenCalled();
+  });
+
+  it('cleans up when canceled after texture preload but before encoding starts', async () => {
+    mocks.canEncodeVideo.mockResolvedValue(true);
+    const isCancelled = vi.fn().mockReturnValue(true);
+
+    const result = await exportMp4(
+      { sceneGraph: { getRootNodes: () => [] } as never, timeline: { tracks: [] } as never },
+      { width: 64, height: 48, frameRate: 24, startFrame: 0, endFrame: 1 },
+      undefined,
+      isCancelled
+    );
+
+    expect(result).toBeNull();
+    expect(mocks.renderer.preloadTextures).toHaveBeenCalledOnce();
+    expect(mocks.renderer.renderFrame).not.toHaveBeenCalled();
+    expect(mocks.renderer.dispose).toHaveBeenCalledOnce();
+  });
+
+  it('closes the source and cancels the output when interrupted during encoding', async () => {
+    mocks.canEncodeVideo.mockResolvedValue(true);
+    const isCancelled = vi.fn().mockReturnValueOnce(false).mockReturnValueOnce(true);
+
+    const result = await exportMp4(
+      { sceneGraph: { getRootNodes: () => [] } as never, timeline: { tracks: [] } as never },
+      { width: 64, height: 48, frameRate: 24, startFrame: 0, endFrame: 1 },
+      undefined,
+      isCancelled
+    );
+
+    expect(result).toBeNull();
+    expect(mocks.source?.closed).toBe(true);
+    expect(mocks.output?.state).toBe('canceled');
+    expect(mocks.renderer.dispose).toHaveBeenCalledOnce();
   });
 });

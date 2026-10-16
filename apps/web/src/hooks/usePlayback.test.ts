@@ -7,7 +7,7 @@ import { renderHook, act } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { usePlayback } from './usePlayback';
 import { useEditorStore, DEFAULT_FILL, DEFAULT_STROKE } from '../stores/editorStore';
-import { SceneGraphProvider } from '../contexts/SceneGraphContext';
+import { SceneGraphProvider, useSceneGraph } from '../contexts/SceneGraphContext';
 
 // Mock PlaybackController to avoid rAF issues in tests
 vi.mock('@quar/animation', async () => {
@@ -96,6 +96,10 @@ vi.mock('@quar/animation', async () => {
 
 function wrapper({ children }: { children: ReactNode }) {
   return SceneGraphProvider({ children });
+}
+
+function usePlaybackWithSceneGraph() {
+  return { playback: usePlayback(), sceneGraph: useSceneGraph() };
 }
 
 describe('usePlayback', () => {
@@ -208,5 +212,52 @@ describe('usePlayback', () => {
     });
     // The mock controller's setDuration should have been called
     // via the store subscription
+  });
+
+  it('applies imported timeline values when the current frame does not change', () => {
+    const { result } = renderHook(() => usePlaybackWithSceneGraph(), { wrapper });
+    const nodeId = 'imported-animation-node';
+
+    act(() => {
+      result.current.sceneGraph.addNode({
+        id: nodeId,
+        name: 'Animated node',
+        type: 'rectangle',
+        parent: null,
+        children: [],
+        transform: {
+          position: { x: 0, y: 0 },
+          rotation: 0,
+          scale: { x: 1, y: 1 },
+          anchor: { x: 0.5, y: 0.5 },
+          skew: { x: 0, y: 0 },
+        },
+        visible: true,
+        locked: false,
+        opacity: 1,
+        blendMode: 'normal',
+        width: 100,
+        height: 100,
+        cornerRadius: [0, 0, 0, 0],
+        fills: [],
+        strokes: [],
+      });
+      useEditorStore.setState({
+        currentFrame: 0,
+        timeline: {
+          ...useEditorStore.getState().timeline,
+          tracks: [
+            {
+              id: 'imported-opacity-track',
+              nodeId,
+              property: 'opacity',
+              keyframes: [{ id: 'imported-opacity-keyframe', time: 0, value: 0, easing: 'linear' }],
+            },
+          ],
+        },
+      });
+    });
+
+    expect(result.current.sceneGraph.getNode(nodeId)?.opacity).toBe(0);
   });
 });

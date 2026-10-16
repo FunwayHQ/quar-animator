@@ -14,6 +14,9 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { X, AlertTriangle } from 'lucide-react';
+import { SelectionManager } from '@quar/core';
+import type { SceneGraph } from '@quar/core';
+import type { Node, Timeline } from '@quar/types';
 import { useSceneGraph } from '../../contexts/SceneGraphContext';
 import { useEditorStore } from '../../stores/editorStore';
 import { exportLottieBlob, analyzeLottieExport } from '@quar/export';
@@ -63,6 +66,79 @@ const TABS: { id: ExportTab; label: string }[] = [
   { id: 'lottie', label: 'Lottie JSON' },
 ];
 
+function getSelectedArtboardScope(sceneGraph: SceneGraph, selectedIds: Set<string>) {
+  if (selectedIds.size !== 1) return null;
+
+  const [selectedId] = selectedIds;
+  if (!selectedId) return null;
+
+  const node = sceneGraph.getNode(selectedId);
+  if (!node || node.type !== 'artboard') return null;
+
+  const bounds = new SelectionManager().getSelectionBounds(new Set([selectedId]), sceneGraph)?.rect;
+  return bounds ? { node, bounds } : null;
+}
+
+function getLottieExportScene(
+  sceneGraph: SceneGraph,
+  timeline: Timeline,
+  artboardScope: ReturnType<typeof getSelectedArtboardScope>,
+  outputWidth: number,
+  outputHeight: number
+): { nodes: Node[]; timeline: Timeline } {
+  if (!artboardScope) return { nodes: sceneGraph.getRootNodes(), timeline };
+
+  const scaleX = outputWidth / artboardScope.bounds.width;
+  const scaleY = outputHeight / artboardScope.bounds.height;
+  const rootIds = new Set(artboardScope.node.children);
+  const nodes = artboardScope.node.children.flatMap((id) => {
+    const node = sceneGraph.getNode(id);
+    if (!node) return [];
+
+    return [
+      {
+        ...node,
+        transform: {
+          ...node.transform,
+          position: {
+            x: (node.transform.position.x + artboardScope.bounds.width / 2) * scaleX,
+            y: (node.transform.position.y + artboardScope.bounds.height / 2) * scaleY,
+          },
+          scale: {
+            x: node.transform.scale.x * scaleX,
+            y: node.transform.scale.y * scaleY,
+          },
+        },
+      },
+    ];
+  });
+  const tracks = timeline.tracks.map((track) => {
+    if (!rootIds.has(track.nodeId)) return track;
+
+    const coordinate =
+      track.property === 'transform.position.x'
+        ? (value: number) => (value + artboardScope.bounds.width / 2) * scaleX
+        : track.property === 'transform.position.y'
+          ? (value: number) => (value + artboardScope.bounds.height / 2) * scaleY
+          : track.property === 'transform.scale.x'
+            ? (value: number) => value * scaleX
+            : track.property === 'transform.scale.y'
+              ? (value: number) => value * scaleY
+              : null;
+
+    if (!coordinate) return track;
+    return {
+      ...track,
+      keyframes: track.keyframes.map((keyframe) => ({
+        ...keyframe,
+        value: typeof keyframe.value === 'number' ? coordinate(keyframe.value) : keyframe.value,
+      })),
+    };
+  });
+
+  return { nodes, timeline: { ...timeline, tracks } };
+}
+
 // ============================================================================
 // Component
 // ============================================================================
@@ -71,12 +147,14 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
   const sceneGraph = useSceneGraph();
   const timeline = useEditorStore((s) => s.timeline);
   const timelineDuration = useEditorStore((s) => s.timelineDuration);
+  const selectedNodeIds = useEditorStore((s) => s.selectedNodeIds);
+  const selectedArtboard = getSelectedArtboardScope(sceneGraph, selectedNodeIds);
 
   const [exiting, setExiting] = useState(false);
   const [state, setState] = useState<ExportDialogState>(() => ({
     tab: initialTab,
-    width: 800,
-    height: 600,
+    width: selectedArtboard ? Math.ceil(selectedArtboard.bounds.width) : 800,
+    height: selectedArtboard ? Math.ceil(selectedArtboard.bounds.height) : 600,
     startFrame: 0,
     endFrame: Math.max(0, timelineDuration - 1),
     pngMultiplier: 1,
@@ -120,14 +198,34 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
     setState((s) => ({ ...s, [key]: value, error: null }));
   };
 
+  const lottieExportScene = getLottieExportScene(
+    sceneGraph,
+    timeline,
+    selectedArtboard,
+    state.width,
+    state.height
+  );
+
   // Lottie analysis
   const lottieAnalysis =
     state.tab === 'lottie' && sceneGraph
-      ? analyzeLottieExport(sceneGraph.getRootNodes(), (id) => sceneGraph.getNode(id))
+      ? analyzeLottieExport(lottieExportScene.nodes, (id) => sceneGraph.getNode(id))
       : null;
 
   const handleExport = useCallback(async () => {
     if (!sceneGraph || !timeline) return;
+
+    const frameRenderContext = {
+      sceneGraph,
+      timeline,
+      ...(selectedArtboard
+        ? {
+            exportRootIds: [selectedArtboard.node.id],
+            viewportBounds: selectedArtboard.bounds,
+          }
+        : {}),
+    };
+    const frameRenderRoots = selectedArtboard ? [selectedArtboard.node] : sceneGraph.getRootNodes();
 
     const lastFrame = Math.max(0, timelineDuration - 1);
     if (
@@ -162,8 +260,8 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
       if (state.tab === 'lottie') {
         // Lottie export is synchronous
         const blob = exportLottieBlob(
-          sceneGraph.getRootNodes(),
-          timeline,
+          lottieExportScene.nodes,
+          lottieExportScene.timeline,
           {
             width: state.width,
             height: state.height,
@@ -179,7 +277,7 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
       } else if (state.tab === 'gif') {
         const { exportGif } = await import('@quar/export');
         const blob = await exportGif(
-          { sceneGraph, timeline },
+          frameRenderContext,
           {
             width: state.width,
             height: state.height,
@@ -198,7 +296,7 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
       } else if (state.tab === 'mp4') {
         const { exportMp4 } = await import('@quar/export');
         const blob = await exportMp4(
-          { sceneGraph, timeline },
+          frameRenderContext,
           {
             width: state.width,
             height: state.height,
@@ -236,7 +334,7 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
         });
 
         // Pre-load image textures so they render correctly
-        await renderer.preloadTextures(sceneGraph.getRootNodes(), sceneGraph);
+        await renderer.preloadTextures(frameRenderRoots, sceneGraph);
 
         try {
           for (let i = 0; i < frameCount; i++) {
@@ -251,7 +349,7 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
             };
             setState((s) => ({ ...s, progress }));
 
-            const blob = await renderer.renderFrameAsBlob({ sceneGraph, timeline }, _frame);
+            const blob = await renderer.renderFrameAsBlob(frameRenderContext, _frame);
             if (blob) {
               zip.file(filenames[i]!, blob);
             }
@@ -323,7 +421,7 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
         });
 
         // Pre-load image textures so they render correctly
-        await renderer.preloadTextures(sceneGraph.getRootNodes(), sceneGraph);
+        await renderer.preloadTextures(frameRenderRoots, sceneGraph);
 
         try {
           for (let i = 0; i < frameCount; i++) {
@@ -343,7 +441,7 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
               },
             }));
 
-            const frameCanvas = renderer.renderFrame({ sceneGraph, timeline }, frame);
+            const frameCanvas = renderer.renderFrame(frameRenderContext, frame);
             atlasCtx.drawImage(frameCanvas, rect.x, rect.y);
 
             await new Promise((r) => setTimeout(r, 0));
@@ -406,7 +504,7 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
         error: err instanceof Error ? err.message : 'Export failed. Please try again.',
       }));
     }
-  }, [state, sceneGraph, timeline, timelineDuration, close]);
+  }, [state, sceneGraph, timeline, timelineDuration, selectedArtboard, lottieExportScene, close]);
 
   return createPortal(
     <div
@@ -501,6 +599,12 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
                 data-testid="export-height"
               />
             </div>
+
+            {selectedArtboard && (
+              <div className={styles.scopeNote} data-testid="export-artboard-scope">
+                Only “{selectedArtboard.node.name || 'Artboard'}” and its contents will be included.
+              </div>
+            )}
 
             <div className={styles.formRow}>
               <span className={styles.label}>Frame Range</span>

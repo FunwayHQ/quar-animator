@@ -98,6 +98,14 @@ export function usePlayback() {
         // Keep controller in sync with store (e.g. timeline ruler click sets
         // currentFrame directly, bypassing the PlaybackController)
         ctrl.syncFrame(curr.currentFrame);
+      }
+      // Loading a project or switching pages replaces the timeline without
+      // necessarily changing the current frame. Apply its values at the current
+      // playhead so animations are visible immediately, including at frame 0.
+      if (
+        curr.timeline !== prev.timeline ||
+        (curr.currentFrame !== prev.currentFrame && !ctrl.isPlaying)
+      ) {
         applyAnimations(curr.currentFrame);
       }
     });

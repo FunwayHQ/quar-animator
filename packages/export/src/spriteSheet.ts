@@ -7,7 +7,7 @@
 
 import type { Color } from '@quar/types';
 import type { FrameRenderContext } from './frameRenderer';
-import { createFrameRenderer } from './frameRenderer';
+import { createFrameRenderer, getFrameRenderRoots } from './frameRenderer';
 import { getFrameCount } from './exportUtils';
 import {
   packGrid,
@@ -112,7 +112,7 @@ export async function exportSpriteSheet(
   });
 
   // Pre-load image textures so they render correctly in the fresh WebGL context
-  await frameRenderer.preloadTextures(ctx.sceneGraph.getRootNodes(), ctx.sceneGraph);
+  await frameRenderer.preloadTextures(getFrameRenderRoots(ctx), ctx.sceneGraph);
 
   try {
     for (let i = 0; i < frameCount; i++) {

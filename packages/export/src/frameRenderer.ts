@@ -27,6 +27,10 @@ export interface FrameRenderOptions {
 export interface FrameRenderContext {
   sceneGraph: SceneGraph;
   timeline: Timeline;
+  /** Restrict frame rendering to these scene-graph roots and their descendants. */
+  exportRootIds?: string[];
+  /** World-space rectangle mapped to the full output canvas. */
+  viewportBounds?: { x: number; y: number; width: number; height: number };
 }
 
 export interface FrameRendererHandle {
@@ -67,17 +71,16 @@ export function createFrameRenderer(options: FrameRenderOptions): FrameRendererH
 
   const shapeRenderer = new ShapeRenderer(renderer);
 
-  // Build orthographic VP matrix
-  const halfW = width / 2;
-  const halfH = height / 2;
-  const projection = mat3.create(1 / halfW, 0, 0, 1 / halfH, 0, 0);
-  const view = mat3.create(1, 0, 0, 1, -width / 2, -height / 2);
-  const vpMatrix = mat3.multiply(projection, view);
-
   const gl = renderer.context;
 
   function renderFrame(ctx: FrameRenderContext, frame: number): HTMLCanvasElement {
     const { sceneGraph, timeline } = ctx;
+    const bounds = ctx.viewportBounds ?? { x: 0, y: 0, width, height };
+    const halfW = bounds.width / 2;
+    const halfH = bounds.height / 2;
+    const projection = mat3.create(1 / halfW, 0, 0, 1 / halfH, 0, 0);
+    const view = mat3.create(1, 0, 0, 1, -(bounds.x + halfW), -(bounds.y + halfH));
+    const vpMatrix = mat3.multiply(projection, view);
 
     // Snapshot animated nodes before mutation so we can restore them after rendering
     const snapshots = new Map<string, Record<string, unknown>>();
@@ -117,7 +120,7 @@ export function createFrameRenderer(options: FrameRenderOptions): FrameRendererH
       gl.clear(gl.COLOR_BUFFER_BIT);
 
       // Render scene
-      shapeRenderer.render(sceneGraph, vpMatrix);
+      shapeRenderer.render(sceneGraph, vpMatrix, new Set(), null, undefined, ctx.exportRootIds);
     } finally {
       // Restore original node state after rendering
       for (const [nodeId, snapshot] of snapshots) {
@@ -145,4 +148,12 @@ export function createFrameRenderer(options: FrameRenderOptions): FrameRendererH
   }
 
   return { preloadTextures, renderFrame, renderFrameAsBlob, dispose };
+}
+
+/** Return the roots whose image textures are needed for a frame export. */
+export function getFrameRenderRoots(ctx: FrameRenderContext): Node[] {
+  if (!ctx.exportRootIds) return ctx.sceneGraph.getRootNodes();
+  return ctx.exportRootIds
+    .map((id) => ctx.sceneGraph.getNode(id))
+    .filter((node): node is Node => node !== undefined && node !== null);
 }

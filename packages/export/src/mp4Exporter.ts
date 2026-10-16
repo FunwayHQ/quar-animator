@@ -2,7 +2,7 @@
 
 import type { Color } from '@quar/types';
 import type { FrameRenderContext } from './frameRenderer';
-import { createFrameRenderer, getFrameCount } from './frameRenderer';
+import { createFrameRenderer, getFrameCount, getFrameRenderRoots } from './frameRenderer';
 import type { ExportProgress } from './index';
 
 export interface Mp4ExportOptions {
@@ -45,7 +45,7 @@ export async function exportMp4(
   let finalized = false;
 
   try {
-    await renderer.preloadTextures(ctx.sceneGraph.getRootNodes(), ctx.sceneGraph);
+    await renderer.preloadTextures(getFrameRenderRoots(ctx), ctx.sceneGraph);
     if (isCancelled()) return null;
 
     const canvas = renderer.renderFrame(ctx, startFrame);

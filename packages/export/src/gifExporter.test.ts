@@ -10,6 +10,8 @@ const rendererMock = vi.hoisted(() => ({
 vi.mock('./frameRenderer', () => ({
   createFrameRenderer: () => rendererMock,
   getFrameCount: (start: number, end: number) => Math.max(0, end - start + 1),
+  getFrameRenderRoots: (ctx: { sceneGraph: { getRootNodes: () => unknown[] } }) =>
+    ctx.sceneGraph.getRootNodes(),
 }));
 
 describe('exportGif', () => {
@@ -72,6 +74,53 @@ describe('exportGif', () => {
     );
 
     expect(blob).toBeNull();
+    expect(rendererMock.dispose).toHaveBeenCalledOnce();
+  });
+
+  it('rejects invalid ranges and dimensions before allocating a renderer', async () => {
+    const ctx = { sceneGraph: { getRootNodes: () => [] }, timeline: { tracks: [] } } as never;
+
+    await expect(
+      exportGif(ctx, { width: 2, height: 1, frameRate: 24, startFrame: 3, endFrame: 2 })
+    ).rejects.toThrow('Choose a valid frame range');
+    await expect(
+      exportGif(ctx, { width: 0, height: 1, frameRate: 24, startFrame: 0, endFrame: 1 })
+    ).rejects.toThrow('at least 1 pixel');
+
+    expect(rendererMock.renderFrame).not.toHaveBeenCalled();
+    expect(rendererMock.dispose).not.toHaveBeenCalled();
+  });
+
+  it('releases the renderer if canceled before the encoding pass', async () => {
+    const isCancelled = vi
+      .fn()
+      .mockReturnValueOnce(false)
+      .mockReturnValueOnce(false)
+      .mockReturnValueOnce(true);
+    const blob = await exportGif(
+      { sceneGraph: { getRootNodes: () => [] } as never, timeline: { tracks: [] } as never },
+      { width: 2, height: 1, frameRate: 24, startFrame: 0, endFrame: 0 },
+      undefined,
+      isCancelled
+    );
+
+    expect(blob).toBeNull();
+    expect(rendererMock.renderFrame).toHaveBeenCalledOnce();
+    expect(rendererMock.dispose).toHaveBeenCalledOnce();
+  });
+
+  it('releases the renderer if the GIF color-conversion canvas is unavailable', async () => {
+    vi.stubGlobal('document', {
+      createElement: () => ({ width: 0, height: 0, getContext: () => null }),
+    });
+
+    await expect(
+      exportGif(
+        { sceneGraph: { getRootNodes: () => [] } as never, timeline: { tracks: [] } as never },
+        { width: 2, height: 1, frameRate: 24, startFrame: 0, endFrame: 0 }
+      )
+    ).rejects.toThrow('Could not create a canvas for GIF color conversion');
+
     expect(rendererMock.dispose).toHaveBeenCalledOnce();
   });
 });

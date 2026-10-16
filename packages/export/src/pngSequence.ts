@@ -6,7 +6,12 @@
 
 import type { Color } from '@quar/types';
 import type { FrameRenderContext } from './frameRenderer';
-import { createFrameRenderer, getFrameCount, generateFrameFilenames } from './frameRenderer';
+import {
+  createFrameRenderer,
+  getFrameCount,
+  generateFrameFilenames,
+  getFrameRenderRoots,
+} from './frameRenderer';
 import type { ExportProgress } from './index';
 
 // ============================================================================
@@ -59,10 +64,11 @@ export async function exportPngSequence(
 
   const renderer = createFrameRenderer({ width, height, multiplier, backgroundColor });
 
-  // Pre-load image textures so they render correctly in the fresh WebGL context
-  await renderer.preloadTextures(ctx.sceneGraph.getRootNodes(), ctx.sceneGraph);
-
   try {
+    // Pre-load image textures so they render correctly in the fresh WebGL context.
+    // Keep this inside the cleanup boundary because preloading allocates GPU resources too.
+    await renderer.preloadTextures(getFrameRenderRoots(ctx), ctx.sceneGraph);
+
     for (let i = 0; i < frameCount; i++) {
       const frame = startFrame + i;
 

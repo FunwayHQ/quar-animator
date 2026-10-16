@@ -1,9 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render as baseRender, screen, fireEvent, act, waitFor } from '@testing-library/react';
+import { useEffect } from 'react';
 import type { ReactElement } from 'react';
-import { analyzeLottieExport, exportGif, exportMp4 } from '@quar/export';
+import { createDefaultTransform } from '@quar/core';
+import type { ArtboardNode, Node } from '@quar/types';
+import { analyzeLottieExport, exportGif, exportLottieBlob, exportMp4 } from '@quar/export';
 import { downloadBlob } from '../../services/exportService';
-import { SceneGraphProvider } from '../../contexts/SceneGraphContext';
+import { SceneGraphProvider, useSceneGraph } from '../../contexts/SceneGraphContext';
 
 // Mock the editor store
 const mockStore = {
@@ -16,6 +19,7 @@ const mockStore = {
     markers: [],
   },
   timelineDuration: 60,
+  selectedNodeIds: new Set<string>(),
 };
 
 vi.mock('../../stores/editorStore', () => ({
@@ -56,9 +60,62 @@ function render(ui: ReactElement) {
   return baseRender(<SceneGraphProvider>{ui}</SceneGraphProvider>);
 }
 
+function ArtboardSeeder() {
+  const sceneGraph = useSceneGraph();
+  useEffect(() => {
+    const artboard: ArtboardNode = {
+      id: 'artboard-1',
+      name: 'Title Card',
+      type: 'artboard',
+      parent: null,
+      children: [],
+      transform: { ...createDefaultTransform(), position: { x: 350, y: 250 } },
+      visible: true,
+      locked: false,
+      opacity: 1,
+      blendMode: 'normal',
+      width: 640,
+      height: 360,
+      fills: [],
+      clipContent: true,
+    };
+    sceneGraph.addNode(artboard);
+    const child = {
+      id: 'shape-in-artboard',
+      name: 'Title',
+      type: 'rectangle',
+      parent: null,
+      children: [],
+      transform: { ...createDefaultTransform(), position: { x: 10, y: 20 } },
+      visible: true,
+      locked: false,
+      opacity: 1,
+      blendMode: 'normal',
+      width: 100,
+      height: 50,
+      cornerRadius: [0, 0, 0, 0],
+      fills: [],
+      strokes: [],
+    } as unknown as Node;
+    sceneGraph.addNode(child, artboard.id);
+  }, [sceneGraph]);
+  return null;
+}
+
+function renderWithArtboard(ui: ReactElement) {
+  return baseRender(
+    <SceneGraphProvider>
+      <ArtboardSeeder />
+      {ui}
+    </SceneGraphProvider>
+  );
+}
+
 describe('ExportDialog', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockStore.selectedNodeIds = new Set<string>();
+    mockStore.timeline.tracks = [];
   });
 
   it('does not render when not triggered', () => {
@@ -147,6 +204,55 @@ describe('ExportDialog', () => {
       expect.any(Function)
     );
     expect(downloadBlob).toHaveBeenCalledWith(expect.any(Blob), 'animation.gif');
+  });
+
+  it('limits frame exports to the selected artboard and starts at its dimensions', async () => {
+    mockStore.selectedNodeIds = new Set(['artboard-1']);
+    renderWithArtboard(<ExportDialogHost />);
+    act(() => showExportDialog('gif'));
+
+    expect(screen.getByTestId('export-width')).toHaveValue(640);
+    expect(screen.getByTestId('export-height')).toHaveValue(360);
+    expect(screen.getByTestId('export-artboard-scope')).toHaveTextContent(
+      /Title Card.*and its contents/i
+    );
+
+    fireEvent.click(screen.getByTestId('export-dialog-export'));
+    await waitFor(() => expect(exportGif).toHaveBeenCalledOnce());
+    expect(exportGif).toHaveBeenCalledWith(
+      expect.objectContaining({
+        exportRootIds: ['artboard-1'],
+        viewportBounds: { x: 30, y: 70, width: 640, height: 360 },
+      }),
+      expect.any(Object),
+      expect.any(Function),
+      expect.any(Function)
+    );
+  });
+
+  it('exports only artboard children from Lottie JSON with artboard-relative coordinates', async () => {
+    mockStore.selectedNodeIds = new Set(['artboard-1']);
+    mockStore.timeline.tracks = [
+      {
+        id: 'position-track',
+        nodeId: 'shape-in-artboard',
+        property: 'transform.position.x',
+        keyframes: [{ id: 'position-keyframe', time: 0, value: 30, easing: 'linear' }],
+      },
+    ];
+    renderWithArtboard(<ExportDialogHost />);
+    act(() => showExportDialog('lottie'));
+    fireEvent.click(screen.getByTestId('export-dialog-export'));
+
+    await waitFor(() => expect(exportLottieBlob).toHaveBeenCalledOnce());
+    const [nodes, timeline, options] = vi.mocked(exportLottieBlob).mock.calls[0]!;
+    expect(nodes).toHaveLength(1);
+    expect(nodes[0]).toMatchObject({
+      id: 'shape-in-artboard',
+      transform: { position: { x: 330, y: 200 } },
+    });
+    expect(timeline.tracks[0]?.keyframes[0]?.value).toBe(350);
+    expect(options).toMatchObject({ width: 640, height: 360 });
   });
 
   it('shows an MP4 capability error returned by the encoder', async () => {

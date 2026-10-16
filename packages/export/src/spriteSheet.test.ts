@@ -12,7 +12,11 @@ const mockFrameRenderer = vi.hoisted(() => ({
   dispose: vi.fn(),
 }));
 
-vi.mock('./frameRenderer', () => ({ createFrameRenderer: () => mockFrameRenderer }));
+vi.mock('./frameRenderer', () => ({
+  createFrameRenderer: () => mockFrameRenderer,
+  getFrameRenderRoots: (ctx: { sceneGraph: { getRootNodes: () => unknown[] } }) =>
+    ctx.sceneGraph.getRootNodes(),
+}));
 
 // ============================================================================
 // generateSpriteSheetMetadata
