@@ -33,6 +33,11 @@ import { useEditorStore, DEFAULT_FILL, DEFAULT_STROKE } from '../../stores/edito
 import { ScrubLabel } from '../common/ScrubLabel';
 import { AnimationPresetsPanel } from '../common/AnimationPresetsPanel';
 import { KeyframeIndicator } from '../common/KeyframeIndicator';
+import {
+  attachIntegerFirstEditing,
+  handleNumberSegmentKey,
+  keepSelectionThroughReformat,
+} from '../common/numericFieldEditing';
 import { SmartBonePanel } from '../common/SmartBonePanel';
 import { VitruvianPanel } from '../common/VitruvianPanel';
 import { DynamicChainPanel } from '../common/DynamicChainPanel';
@@ -216,7 +221,8 @@ function handleNumericInputKeyDown(
 
 /**
  * Returns props (onKeyDown + ref callback) for a numeric input that supports
- * ArrowUp/Down keys (±1, ±10 with Shift) and mouse wheel scrolling.
+ * ArrowUp/Down keys (±1, ±10 with Shift) and mouse wheel scrolling, and edits
+ * the integer part first (→ moves on to the decimals).
  * The ref callback attaches a non-passive wheel listener (React onWheel is passive).
  */
 /**
@@ -248,9 +254,15 @@ function numericInputProps(
   ref: (el: HTMLInputElement | null) => void;
 } {
   return {
-    onKeyDown: (e) => handleNumericInputKeyDown(e, getValue(), onChange),
+    onKeyDown: (e) => {
+      if (handleNumberSegmentKey(e, e.currentTarget)) return;
+      if (e.key === 'ArrowUp' || e.key === 'ArrowDown')
+        keepSelectionThroughReformat(e.currentTarget);
+      handleNumericInputKeyDown(e, getValue(), onChange);
+    },
     ref: (el) => {
       if (!el) return;
+      attachIntegerFirstEditing(el);
       // The one-time wheel listener must not close over this render's getValue/
       // onChange — numericInputProps returns a fresh closure every render, but
       // the listener is only attached once. Stash the live handlers on the
@@ -269,6 +281,7 @@ function numericInputProps(
             onChange: (v: string) => void;
           };
           we.preventDefault();
+          keepSelectionThroughReformat(el);
           const delta = (we.deltaY < 0 ? 1 : -1) * (we.shiftKey ? 10 : 1);
           h.onChange(String(h.getValue() + delta));
         },

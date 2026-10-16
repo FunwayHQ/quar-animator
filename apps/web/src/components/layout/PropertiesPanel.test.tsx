@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { render, screen, act, fireEvent } from '../../test/utils';
+import userEvent from '@testing-library/user-event';
 import { SceneGraphProvider, useSceneGraph } from '../../contexts/SceneGraphContext';
 import { createDefaultTransform } from '@quar/core';
 import { createTimeline } from '@quar/animation';
@@ -313,6 +314,30 @@ describe('PropertiesPanel', () => {
     const posXInput = document.getElementById('prop-pos-x') as HTMLInputElement;
     expect(posXInput.value).toBe('100.0');
     expect(screen.getByDisplayValue('225.0')).toBeInTheDocument();
+  });
+
+  it('types into the integer part of a numeric field, keeping the decimals', async () => {
+    const user = userEvent.setup();
+    const sg = renderWithSceneGraph();
+    act(() => {
+      sg.addNode(createTestRect('rect1', 'Rectangle 1'));
+      useEditorStore.getState().setSelection(['rect1']);
+      useEditorStore.setState({ snapToGrid: false });
+    });
+
+    const posXInput = document.getElementById('prop-pos-x') as HTMLInputElement;
+    await user.click(posXInput);
+    expect([posXInput.selectionStart, posXInput.selectionEnd]).toEqual([0, 3]);
+
+    // Each digit is committed and redisplayed as "N.0"; the caret must stay
+    // before the decimal point so "250" doesn't become "2.5"
+    await user.keyboard('250');
+    expect(posXInput.value).toBe('250.0');
+    expect(sg.getNode('rect1')!.transform.position.x).toBe(300); // 250 + width/2
+
+    // → moves on to the decimals
+    await user.keyboard('{ArrowRight}5');
+    expect(posXInput.value).toBe('250.5');
   });
 
   it('displays actual node size', () => {
