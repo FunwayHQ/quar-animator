@@ -2,7 +2,8 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { act, fireEvent, render, screen, within } from '../../test/utils';
 import { SceneGraphProvider, useSceneGraph } from '../../contexts/SceneGraphContext';
 import { useEditorStore } from '../../stores/editorStore';
-import { AnimationSequenceWindow } from './AnimationSequenceWindow';
+import { AnimationSequenceWindow, addStepHint } from './AnimationSequenceWindow';
+import { createGroupNode } from '@quar/core';
 import type { SceneGraph } from '@quar/core';
 import type { RectangleNode } from '@quar/types';
 
@@ -255,6 +256,45 @@ describe('AnimationSequenceWindow', () => {
     expect(sg.getNode('title')).toBeDefined();
   });
 
+  it('says why Own keyframes can’t add anything, and what it will add', () => {
+    const sg = renderWindow();
+    const hint = () => screen.getByTestId('sequence-add-hint');
+    const addButton = () => screen.getByRole('button', { name: 'Add step' });
+    fireEvent.change(screen.getByLabelText('Effect to add'), {
+      target: { value: 'own-keyframes' },
+    });
+    expect(hint()).toHaveTextContent(/Select an object you’ve animated/);
+
+    // A group whose layers are animated, like an imported SVG
+    act(() => {
+      sg.addNode({ ...createGroupNode('group', 'Logo Group') });
+      sg.moveNode('title', 'group');
+      store().addKeyframeAtFrame('title', 'opacity', 0, 0);
+      store().setSelection(['group']);
+    });
+    expect(addButton()).toBeDisabled();
+    expect(hint()).toHaveTextContent(
+      '“Logo Group” has no keyframes itself — they’re on the layers inside it.'
+    );
+    expect(addButton()).toHaveAttribute('aria-describedby', 'sequence-add-hint');
+
+    act(() => store().setSelection(['logo']));
+    expect(hint()).toHaveTextContent('“Logo” has no keyframes of its own yet.');
+
+    act(() => store().setSelection(['title']));
+    expect(addButton()).toBeEnabled();
+    expect(hint()).toHaveTextContent('Turns “Title”’s keyframes into a step.');
+  });
+
+  it('asks for a selection before adding a preset, and stays quiet once there is one', () => {
+    renderWindow();
+    expect(screen.getByTestId('sequence-add-hint')).toHaveTextContent(
+      'Select objects on the canvas to animate.'
+    );
+    act(() => store().setSelection(['logo']));
+    expect(screen.queryByTestId('sequence-add-hint')).not.toBeInTheDocument();
+  });
+
   it('closes with the close button or Escape', () => {
     renderWindow();
     fireEvent.click(screen.getByRole('button', { name: 'Close Animation Sequence' }));
@@ -305,5 +345,29 @@ describe('AnimationSequenceWindow', () => {
     act(() => useEditorStore.setState({ editingSymbolId: 'sym' }));
     expect(screen.getByText(/Exit symbol editing/)).toBeInTheDocument();
     expect(screen.getByLabelText('Effect to add')).toBeDisabled();
+  });
+});
+
+describe('addStepHint', () => {
+  const node = (id: string) => makeRect(id, id.toUpperCase());
+  const own = (ids: string[]) => (n: { id: string }) => ids.includes(n.id);
+  const none = () => false;
+
+  it('explains a partly animated selection', () => {
+    expect(addStepHint('own-keyframes', [node('a'), node('b')], own(['a']), none)).toBe(
+      'Only 1 of 2 selected objects have keyframes of their own; the others are skipped.'
+    );
+  });
+
+  it('describes adding several animated objects', () => {
+    expect(addStepHint('own-keyframes', [node('a'), node('b')], own(['a', 'b']), none)).toBe(
+      'Turns the keyframes of 2 objects into steps.'
+    );
+  });
+
+  it('covers several objects without keyframes', () => {
+    expect(addStepHint('own-keyframes', [node('a'), node('b')], none, none)).toMatch(
+      /^None of the selected objects/
+    );
   });
 });

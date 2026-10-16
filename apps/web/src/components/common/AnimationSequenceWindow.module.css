@@ -295,6 +295,21 @@
   border-top: 1px solid var(--color-border-default);
 }
 
+.addHint {
+  margin: 0;
+  padding: 6px var(--space-sm) 0;
+  color: var(--color-text-secondary);
+  background: var(--color-bg-tertiary);
+  border-top: 1px solid var(--color-border-default);
+  font-size: var(--font-size-xs);
+  line-height: 1.4;
+}
+
+/* The hint and the footer read as one block */
+.addHint + .footer {
+  border-top: none;
+}
+
 .effectPicker {
   min-width: 0;
   flex: 1;

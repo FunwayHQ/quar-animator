@@ -79,6 +79,40 @@ function storeRect(rect: WindowRect): void {
 const OWN_KEYFRAMES = 'own-keyframes';
 type EffectChoice = AnimationPresetId | typeof OWN_KEYFRAMES;
 
+/**
+ * What "Add step" will do with the current choice and selection, or why it
+ * can't add anything yet. Null when there's nothing worth saying.
+ */
+export function addStepHint(
+  choice: EffectChoice,
+  selected: Node[],
+  hasOwnKeyframes: (node: Node) => boolean,
+  hasAnimatedLayersInside: (node: Node) => boolean
+): string | null {
+  if (choice !== OWN_KEYFRAMES) {
+    return selected.length === 0 ? 'Select objects on the canvas to animate.' : null;
+  }
+  if (selected.length === 0) {
+    return 'Select an object you’ve animated on the timeline to add its keyframes as a step.';
+  }
+  const animated = selected.filter(hasOwnKeyframes);
+  if (animated.length === 0) {
+    const container = selected.find(hasAnimatedLayersInside);
+    if (container) {
+      return `“${container.name}” has no keyframes itself — they’re on the layers inside it. Select those layers instead.`;
+    }
+    return selected.length === 1
+      ? `“${selected[0]!.name}” has no keyframes of its own yet. Animate it on the timeline first (keyframe diamonds, or auto-key with K).`
+      : 'None of the selected objects has keyframes of its own yet. Animate them on the timeline first.';
+  }
+  if (animated.length < selected.length) {
+    return `Only ${animated.length} of ${selected.length} selected objects have keyframes of their own; the others are skipped.`;
+  }
+  return animated.length === 1
+    ? `Turns “${animated[0]!.name}”’s keyframes into a step.`
+    : `Turns the keyframes of ${animated.length} objects into steps.`;
+}
+
 function presetById(id: AnimationPresetId | undefined) {
   return ANIMATION_PRESETS.find((preset) => preset.id === id);
 }
@@ -416,18 +450,31 @@ export function AnimationSequenceWindow() {
   );
   // Selected objects with keyframes of their own (not the sequence's)
   const timeline = useEditorStore((s) => s.timeline);
-  const ownKeyframeNodes = selectedNodes.filter((node) =>
-    timeline.tracks.some(
-      (track) =>
-        track.nodeId === node.id && track.keyframes.some((kf) => kf.sequenceStepId === undefined)
-    )
+  const ownKeyframeIds = useMemo(
+    () =>
+      new Set(
+        timeline.tracks
+          .filter((track) => track.keyframes.some((kf) => kf.sequenceStepId === undefined))
+          .map((track) => track.nodeId)
+      ),
+    [timeline]
   );
+  const ownKeyframeNodes = selectedNodes.filter((node) => ownKeyframeIds.has(node.id));
   const effectivePreset: EffectChoice =
     presetToAdd === OWN_KEYFRAMES || addablePresets.some((preset) => preset.id === presetToAdd)
       ? presetToAdd
       : (addablePresets[0]?.id ?? 'fade-in');
   const addingOwnKeyframes = effectivePreset === OWN_KEYFRAMES;
   const addTargets = addingOwnKeyframes ? ownKeyframeNodes : selectedNodes;
+  const hint = editingSymbol
+    ? null
+    : addStepHint(
+        effectivePreset,
+        selectedNodes,
+        (node) => ownKeyframeIds.has(node.id),
+        (node) =>
+          sceneGraph.getDescendants(node.id).some((descendant) => ownKeyframeIds.has(descendant.id))
+      );
 
   const close = useCallback(() => useEditorStore.getState().setSequenceWindowOpen(false), []);
 
@@ -605,6 +652,11 @@ export function AnimationSequenceWindow() {
         )}
       </div>
 
+      {hint && (
+        <p id="sequence-add-hint" className={styles.addHint} data-testid="sequence-add-hint">
+          {hint}
+        </p>
+      )}
       <footer className={styles.footer}>
         <select
           className={styles.effectPicker}
@@ -633,13 +685,7 @@ export function AnimationSequenceWindow() {
           className={styles.addButton}
           onClick={addStep}
           disabled={editingSymbol || addTargets.length === 0}
-          title={
-            addTargets.length > 0
-              ? undefined
-              : addingOwnKeyframes
-                ? 'Select objects with keyframes of their own first'
-                : 'Select objects to animate first'
-          }
+          aria-describedby={hint ? 'sequence-add-hint' : undefined}
         >
           <Plus size={13} />
           {addTargets.length > 1 ? `Add for ${addTargets.length} objects` : 'Add step'}
