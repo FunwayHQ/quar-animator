@@ -168,6 +168,14 @@ describe('usePlayback', () => {
     expect(useEditorStore.getState().isPlaying).toBe(false);
   });
 
+  it('starts playback when isPlaying is set from elsewhere (Animation > Play)', () => {
+    const { result } = renderHook(() => usePlayback(), { wrapper });
+    act(() => useEditorStore.setState({ isPlaying: true }));
+    // The controller is running, so toggling now pauses rather than starting
+    act(() => result.current.togglePlay());
+    expect(useEditorStore.getState().isPlaying).toBe(false);
+  });
+
   it('stop should pause and go to frame 0', () => {
     const { result } = renderHook(() => usePlayback(), { wrapper });
     act(() => result.current.play());

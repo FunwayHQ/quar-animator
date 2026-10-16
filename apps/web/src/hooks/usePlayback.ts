@@ -111,6 +111,12 @@ export function usePlayback() {
       if (!curr.isPlaying && prev.isPlaying && ctrl.isPlaying) {
         ctrl.pause();
       }
+      // ...and start it when something other than this hook sets isPlaying
+      // (Animation > Play, the sequence window's Play from start)
+      if (curr.isPlaying && !prev.isPlaying && !ctrl.isPlaying) {
+        ctrl.syncFrame(curr.currentFrame);
+        ctrl.play();
+      }
       // Apply animations for manual frame changes (scrubbing, stepping)
       // Only when NOT playing — playback applies via onFrameChange above
       if (curr.currentFrame !== prev.currentFrame && !ctrl.isPlaying) {
