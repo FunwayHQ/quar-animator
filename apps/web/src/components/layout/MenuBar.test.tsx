@@ -170,6 +170,17 @@ describe('MenuBar', () => {
     expect(screen.getByTestId('export-tab-mp4').className).toContain('active');
   });
 
+  it('toggles the Animation Sequence window from the View menu', () => {
+    useEditorStore.setState({ sequenceWindowOpen: false });
+    render(<MenuBar />);
+    fireEvent.click(screen.getByTestId('menu-view'));
+    const item = screen.getByRole('menuitemcheckbox', { name: /^Animation Sequence/ });
+    expect(item).toHaveAttribute('aria-checked', 'false');
+    fireEvent.click(item);
+    expect(useEditorStore.getState().sequenceWindowOpen).toBe(true);
+    useEditorStore.setState({ sequenceWindowOpen: false });
+  });
+
   it('toggles light appearance from the View menu and persists the choice', () => {
     render(<MenuBar />);
     fireEvent.click(screen.getByTestId('menu-view'));

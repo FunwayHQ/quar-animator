@@ -116,6 +116,23 @@ describe('Animation Sequence actions', () => {
     expect(Object.keys(store().animationSequence.restPoses)).toEqual(['b']);
   });
 
+  it('keeps properties the sequence does not animate where the user moved them', () => {
+    store().addSequenceSteps(sg, ['a'], 'fade-in', { duration: 24 });
+    const node = sg.getNode('a')!;
+    sg.updateNode('a', { transform: { ...node.transform, position: { x: 75, y: 0 } } });
+
+    store().addSequenceSteps(sg, ['b'], 'fade-in', { duration: 24 });
+    expect(sg.getNode('a')!.transform.position.x).toBe(75);
+  });
+
+  it('opens and closes the sequence window', () => {
+    expect(store().sequenceWindowOpen).toBe(false);
+    store().toggleSequenceWindow();
+    expect(store().sequenceWindowOpen).toBe(true);
+    store().setSequenceWindowOpen(false);
+    expect(store().sequenceWindowOpen).toBe(false);
+  });
+
   it('reorders steps and re-renders their timing', () => {
     store().addSequenceSteps(sg, ['a'], 'fade-in', { duration: 24 });
     store().addSequenceSteps(sg, ['b'], 'fade-in', { duration: 10 });

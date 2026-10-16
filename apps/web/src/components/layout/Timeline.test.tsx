@@ -150,6 +150,17 @@ describe('Timeline', () => {
     expect(screen.getByTestId(`keyframe-${keyframe.id}`)).toBeInTheDocument();
   });
 
+  it('toggles the Animation Sequence window from the toolbar', () => {
+    useEditorStore.setState({ sequenceWindowOpen: false });
+    renderTimeline();
+    const toggle = screen.getByTestId('sequence-window-toggle');
+    expect(toggle).toHaveAttribute('aria-pressed', 'false');
+    fireEvent.click(toggle);
+    expect(useEditorStore.getState().sequenceWindowOpen).toBe(true);
+    expect(toggle).toHaveAttribute('aria-pressed', 'true');
+    useEditorStore.setState({ sequenceWindowOpen: false });
+  });
+
   it('draws a line through the keyframes of each animation, not across rests', () => {
     let graph: SceneGraph | undefined;
     function CaptureGraph() {

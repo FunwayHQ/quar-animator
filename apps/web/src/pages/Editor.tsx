@@ -10,6 +10,7 @@ import { PageTabs } from '../components/layout/PageTabs';
 import SymbolLibraryPanel from '../components/layout/SymbolLibraryPanel';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 import { ExportDialogHost } from '../components/common/ExportDialog';
+import { AnimationSequenceWindow } from '../components/common/AnimationSequenceWindow';
 import { SceneGraphProvider } from '../contexts/SceneGraphContext';
 import { usePlayback } from '../hooks/usePlayback';
 import { useTimelineShortcuts } from '../hooks/useTimelineShortcuts';
@@ -81,6 +82,7 @@ function EditorInner() {
   );
 
   useProjectShortcuts(shortcutCallbacks);
+  const sequenceWindowOpen = useEditorStore((state) => state.sequenceWindowOpen);
 
   return (
     <div className={styles.editor}>
@@ -103,6 +105,7 @@ function EditorInner() {
         </div>
         <Timeline playback={playback} />
       </div>
+      {sequenceWindowOpen && <AnimationSequenceWindow />}
     </div>
   );
 }

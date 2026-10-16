@@ -161,6 +161,33 @@ describe('PropertiesPanel', () => {
     expect(screen.getByText('Rotation')).toBeInTheDocument();
   });
 
+  it('adds presets as Animation Sequence steps while the sequence window is open', () => {
+    const sg = renderWithSceneGraph();
+    act(() => {
+      sg.addNode(createTestRect('rect1', 'Rectangle 1'));
+      useEditorStore.getState().setSelection(['rect1']);
+      useEditorStore.setState({ sequenceWindowOpen: true });
+    });
+    expect(screen.getByText('Adds to sequence')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Apply Fade entrance animation' }));
+
+    const { animationSequence, timeline } = useEditorStore.getState();
+    expect(animationSequence.steps.map(({ nodeId, presetId }) => [nodeId, presetId])).toEqual([
+      ['rect1', 'fade-in'],
+    ]);
+    const opacityTrack = timeline.tracks.find((track) => track.property === 'opacity');
+    expect(opacityTrack?.keyframes.every((keyframe) => keyframe.sequenceStepId)).toBe(true);
+    act(() =>
+      useEditorStore.setState({
+        sequenceWindowOpen: false,
+        animationSequence: { steps: [], restPoses: {} },
+        timeline: createTimeline({ duration: 300, frameRate: 30 }),
+        undoStack: [],
+      })
+    );
+  });
+
   it('applies an editable animation preset and undoes it as one action', () => {
     const sg = renderWithSceneGraph();
 

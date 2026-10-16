@@ -158,6 +158,8 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
   const clearGuidesAction = useEditorStore((state) => state.clearGuides);
   const toggleSnapToGridAction = useEditorStore((state) => state.toggleSnapToGrid);
   const toggleOnionSkinAction = useEditorStore((state) => state.toggleOnionSkin);
+  const sequenceWindowOpen = useEditorStore((state) => state.sequenceWindowOpen);
+  const toggleSequenceWindowAction = useEditorStore((state) => state.toggleSequenceWindow);
   const setIsPlayingAction = useEditorStore((state) => state.setIsPlaying);
   const setIsLoopingAction = useEditorStore((state) => state.setIsLooping);
   const setCurrentFrameAction = useEditorStore((state) => state.setCurrentFrame);
@@ -778,6 +780,15 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                       toggleOnionSkinAction();
                     }}
                   />
+                  <MenuItem
+                    label="Animation Sequence"
+                    shortcut="Shift+A"
+                    checked={sequenceWindowOpen}
+                    onClick={() => {
+                      closeMenu();
+                      toggleSequenceWindowAction();
+                    }}
+                  />
                   <Separator />
                   <MenuItem
                     label="Light Appearance"
@@ -1255,6 +1266,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                 <ShortcutRow keys="Ctrl+0" label="Fit to Window" />
                 <ShortcutRow keys="Shift+R" label="Toggle Rulers" />
                 <ShortcutRow keys="Shift+O" label="Onion Skinning" />
+                <ShortcutRow keys="Shift+A" label="Animation Sequence" />
               </div>
               <div className={styles.shortcutsColumn}>
                 <h4 className={styles.shortcutsCategoryTitle}>Edit</h4>

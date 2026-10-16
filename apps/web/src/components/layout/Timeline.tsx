@@ -97,6 +97,8 @@ export function Timeline({ playback }: TimelineProps = {}) {
   const toggleOnionSkin = useEditorStore((s) => s.toggleOnionSkin);
   const timelineViewMode = useEditorStore((s) => s.timelineViewMode);
   const toggleTimelineViewMode = useEditorStore((s) => s.toggleTimelineViewMode);
+  const sequenceWindowOpen = useEditorStore((s) => s.sequenceWindowOpen);
+  const toggleSequenceWindow = useEditorStore((s) => s.toggleSequenceWindow);
 
   const workAreaEnabled = useEditorStore((s) => s.workAreaEnabled);
   const workAreaStart = useEditorStore((s) => s.workAreaStart);
@@ -1254,6 +1256,32 @@ export function Timeline({ playback }: TimelineProps = {}) {
               strokeWidth="2"
             >
               <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+            </svg>
+          </button>
+          <button
+            className={`${styles.optionButton} ${sequenceWindowOpen ? styles.active : ''}`}
+            onClick={toggleSequenceWindow}
+            title="Animation Sequence (Shift+A)"
+            aria-label="Toggle Animation Sequence window"
+            aria-pressed={sequenceWindowOpen}
+            data-testid="sequence-window-toggle"
+          >
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M10 6h11" />
+              <path d="M10 12h11" />
+              <path d="M10 18h11" />
+              <path d="M4 6h1v4" />
+              <path d="M4 10h2" />
+              <path d="M6 18H4c0-1 2-2 2-3s-1-1.5-2-1" />
             </svg>
           </button>
           <div style={{ position: 'relative' }}>

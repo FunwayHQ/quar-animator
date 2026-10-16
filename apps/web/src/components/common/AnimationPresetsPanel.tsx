@@ -41,6 +41,8 @@ export function AnimationPresetsPanel({ nodeIds }: AnimationPresetsPanelProps) {
       (selectedNodes.length > 0 && selectedNodes.every((node) => node.type === preset.nodeType))
   );
 
+  const sequenceWindowOpen = useEditorStore((state) => state.sequenceWindowOpen);
+
   const applyPreset = useCallback(
     (presetId: AnimationPresetId) => {
       const state = useEditorStore.getState();
@@ -48,6 +50,22 @@ export function AnimationPresetsPanel({ nodeIds }: AnimationPresetsPanelProps) {
         .map((id) => sceneGraph.getNode(id))
         .filter((node): node is Node => node !== undefined);
       if (nodes.length === 0) return;
+
+      // With the Animation Sequence window open, effects become numbered steps
+      if (state.sequenceWindowOpen) {
+        state.addSequenceSteps(
+          sceneGraph,
+          nodes.map((node) => node.id),
+          presetId,
+          {
+            duration: Math.max(4, Math.round(durationSeconds * state.frameRate)),
+            staggerFrames: Math.round(staggerSeconds * state.frameRate),
+            direction,
+            intensity,
+          }
+        );
+        return;
+      }
 
       state.pushUndo(sceneGraph);
       let timeline = state.timeline;
@@ -100,7 +118,11 @@ export function AnimationPresetsPanel({ nodeIds }: AnimationPresetsPanelProps) {
         <span className={styles.title}>Animation</span>
         <span className={styles.headerActions}>
           <span className={styles.selectionCount}>
-            {nodeIds.length > 1 ? `${nodeIds.length} objects` : 'Presets'}
+            {sequenceWindowOpen
+              ? 'Adds to sequence'
+              : nodeIds.length > 1
+                ? `${nodeIds.length} objects`
+                : 'Presets'}
           </span>
           <ChevronDown
             size={14}

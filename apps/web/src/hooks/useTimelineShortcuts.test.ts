@@ -152,6 +152,17 @@ describe('useTimelineShortcuts', () => {
     expect(useEditorStore.getState().onionSkin.enabled).toBe(false);
   });
 
+  it('Shift+A should toggle the Animation Sequence window', () => {
+    const callbacks = createCallbacks();
+    renderHook(() => useTimelineShortcuts(callbacks));
+
+    useEditorStore.setState({ sequenceWindowOpen: false });
+    pressKey('A', { shiftKey: true });
+    expect(useEditorStore.getState().sequenceWindowOpen).toBe(true);
+    pressKey('A', { shiftKey: true });
+    expect(useEditorStore.getState().sequenceWindowOpen).toBe(false);
+  });
+
   it('Shift+. should jump 10 frames forward', () => {
     useEditorStore.setState({ currentFrame: 20 });
     const callbacks = createCallbacks();

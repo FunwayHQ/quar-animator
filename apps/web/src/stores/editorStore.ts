@@ -2278,17 +2278,21 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     if (removedTracks.length === 0) return;
     get().pushUndo(sceneGraph);
 
-    // The layers keep their current (evaluated) values; only the animation goes.
-    const mgr = new KeyframeManager(timeline);
+    // Their sequence steps go too, or the next recompile would bring them back.
+    // Pruned first, while the timeline still shows which properties the
+    // sequence animated, so those return to the rest pose.
+    const sequenceUpdate = pruneSequenceSteps(sceneGraph, get(), targets);
+    const remaining = sequenceUpdate?.timeline ?? timeline;
+
+    // Otherwise the layers keep their current (evaluated) values; only the animation goes.
+    const mgr = new KeyframeManager(remaining);
     for (const nodeId of targets) mgr.removeAllKeyframesForNode(nodeId);
     const removedKeyframeIds = new Set(
       removedTracks.flatMap((track) => track.keyframes.map((kf) => kf.id))
     );
-    // Their sequence steps go too, or the next recompile would bring them back
-    const sequenceUpdate = pruneSequenceSteps(sceneGraph, { ...get(), timeline }, targets);
     set({
-      timeline: { ...timeline },
       ...sequenceUpdate,
+      timeline: { ...remaining },
       selectedKeyframeIds: new Set(
         [...selectedKeyframeIds].filter((id) => !removedKeyframeIds.has(id))
       ),

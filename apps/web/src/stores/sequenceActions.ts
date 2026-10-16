@@ -22,7 +22,7 @@ import {
   type AnimationSequenceStep,
   type SequenceTrigger,
 } from '@quar/animation';
-import type { Node } from '@quar/types';
+import type { Node, Timeline } from '@quar/types';
 import type { EditorStore, SceneGraphLike } from './editorStore';
 
 export interface SequenceStepOptions {
@@ -45,6 +45,10 @@ export type SequenceStepPatch = Partial<Omit<AnimationSequenceStep, 'id'>>;
 export interface SequenceActions {
   /** The active page's Animation Sequence. */
   animationSequence: AnimationSequence;
+  /** Whether the floating Animation Sequence window is shown. */
+  sequenceWindowOpen: boolean;
+  setSequenceWindowOpen: (open: boolean) => void;
+  toggleSequenceWindow: () => void;
   /** Append one step per node (skipping nodes the preset can't animate); returns the new step ids. */
   addSequenceSteps: (
     sceneGraph: SceneGraphLike,
@@ -77,13 +81,24 @@ function generateStepId(): string {
   return `step-${Date.now().toString(36)}-${nextStepCounter++}`;
 }
 
-/** Properties outside the rest pose that presets animate. */
-const REVEAL_PROPERTIES = ['visibleCharacters', 'strokeProgress'] as const;
+/** Per node, the properties that carry sequence-generated keyframes. */
+function sequenceAnimatedProperties(timeline: Timeline): Map<string, Set<string>> {
+  const result = new Map<string, Set<string>>();
+  for (const track of timeline.tracks) {
+    if (!track.keyframes.some((keyframe) => keyframe.sequenceStepId !== undefined)) continue;
+    const properties = result.get(track.nodeId) ?? new Set<string>();
+    properties.add(track.property);
+    result.set(track.nodeId, properties);
+  }
+  return result;
+}
 
 /**
- * Compile `sequence` into the timeline and refresh every object it touches (or
- * touched): reset to the rest pose, then show the playhead frame — so an object
- * whose step was removed doesn't stay frozen mid-animation.
+ * Compile `sequence` into the timeline and refresh the objects it animates (or
+ * animated): their sequence-driven properties go back to the rest pose, then
+ * the playhead frame is shown — so an object whose step was removed doesn't
+ * stay frozen mid-animation. Properties the sequence never animated keep their
+ * live values, so moving an object between edits doesn't snap it back.
  */
 export function applySequence(
   sceneGraph: SceneGraphLike,
@@ -94,19 +109,15 @@ export function applySequence(
     sceneGraph.getNode(id)
   );
 
-  const nodeIds = new Set(
-    [...state.animationSequence.steps, ...sequence.steps].map((step) => step.nodeId)
-  );
-  for (const nodeId of nodeIds) {
+  const before = sequenceAnimatedProperties(state.timeline);
+  const after = sequenceAnimatedProperties(timeline);
+  for (const nodeId of new Set([...before.keys(), ...after.keys()])) {
     const node = sceneGraph.getNode(nodeId);
     if (!node) continue;
-    let next: Node = node;
     const pose = sequence.restPoses[nodeId] ?? state.animationSequence.restPoses[nodeId] ?? {};
-    for (const [property, value] of Object.entries(pose)) {
-      next = setProperty(next, property, value);
-    }
-    for (const property of REVEAL_PROPERTIES) {
-      const value = getPresetBaseValue(next, property);
+    let next: Node = node;
+    for (const property of new Set([...(before.get(nodeId) ?? []), ...(after.get(nodeId) ?? [])])) {
+      const value = pose[property] ?? getPresetBaseValue(node, property);
       if (value !== undefined) next = setProperty(next, property, value);
     }
     next = applyAnimatedValues(next, evaluateNodeAtFrame(timeline, nodeId, state.currentFrame));
@@ -161,6 +172,9 @@ export function createSequenceActions(
 
   return {
     animationSequence: createAnimationSequence(),
+    sequenceWindowOpen: false,
+    setSequenceWindowOpen: (open) => set({ sequenceWindowOpen: open }),
+    toggleSequenceWindow: () => set({ sequenceWindowOpen: !get().sequenceWindowOpen }),
 
     addSequenceSteps: (sceneGraph, nodeIds, presetId, options) => {
       const nodes = nodeIds
