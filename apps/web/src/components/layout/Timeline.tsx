@@ -3,6 +3,7 @@ import { useSceneGraph } from '../../contexts/SceneGraphContext';
 import { useEditorStore } from '../../stores/editorStore';
 import { formatTimecode, getAnimationSpans, getTracksByNode } from '@quar/animation';
 import type { AnimationSpan } from '@quar/animation';
+import { getRulerScale } from './timelineRuler';
 import type { Node, EasingFunction } from '@quar/types';
 import { ContextMenu } from '../common/ContextMenu';
 import type { ContextMenuEntry } from '../common/ContextMenu';
@@ -520,11 +521,21 @@ export function Timeline({ playback }: TimelineProps = {}) {
     setIsLooping(!isLooping);
   }, [isLooping, setIsLooping]);
 
-  // Ruler marks: 11 marks across the timeline
-  const rulerMarks = Array.from({ length: 11 }, (_, i) => {
-    const frame = Math.round((i / 10) * duration);
-    return { index: i, frame };
-  });
+  // Ruler labels and ticks: as many frames as fit at the current zoom
+  const [rulerWidth, setRulerWidth] = useState(0);
+  useLayoutEffect(() => {
+    const ruler = rulerRef.current;
+    if (!ruler) return;
+    const measure = () => setRulerWidth(ruler.getBoundingClientRect().width);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(ruler);
+    return () => observer.disconnect();
+  }, [expanded, timelineViewMode]);
+  const rulerScale = useMemo(
+    () => getRulerScale(duration, frameRate, rulerWidth),
+    [duration, frameRate, rulerWidth]
+  );
 
   // ------- Keyframe click handlers -------
 
@@ -1380,8 +1391,19 @@ export function Timeline({ playback }: TimelineProps = {}) {
                 tabIndex={0}
                 data-testid="timeline-ruler"
               >
-                {rulerMarks.map(({ index, frame }) => (
-                  <div key={index} className={styles.rulerMark} style={{ left: `${index * 10}%` }}>
+                {rulerScale.tickStep !== null && (
+                  <div
+                    className={styles.rulerTicks}
+                    style={{ backgroundSize: `${(rulerScale.tickStep / duration) * 100}% 100%` }}
+                    aria-hidden="true"
+                  />
+                )}
+                {rulerScale.labels.map((frame) => (
+                  <div
+                    key={frame}
+                    className={styles.rulerMark}
+                    style={{ left: `${(frame / duration) * 100}%` }}
+                  >
                     <span className={styles.rulerLabel}>{frame}</span>
                   </div>
                 ))}

@@ -196,6 +196,44 @@ describe('Timeline', () => {
     useEditorStore.setState({ sequenceWindowOpen: false, focusedSequenceStepId: null });
   });
 
+  it('labels more frames on the ruler as the timeline is zoomed in', () => {
+    // jsdom has no layout: report a ruler width, and capture the resize observer
+    let rulerWidth = 1400;
+    const observers: Array<() => void> = [];
+    const OriginalObserver = global.ResizeObserver;
+    global.ResizeObserver = class {
+      constructor(callback: () => void) {
+        observers.push(callback);
+      }
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    } as unknown as typeof ResizeObserver;
+    const originalRect = HTMLElement.prototype.getBoundingClientRect;
+    HTMLElement.prototype.getBoundingClientRect = function (this: HTMLElement) {
+      return { width: this.dataset.testid === 'timeline-ruler' ? rulerWidth : 0 } as DOMRect;
+    };
+
+    try {
+      renderTimeline();
+      const labels = () =>
+        Array.from(
+          screen.getByTestId('timeline-ruler').querySelectorAll('[class*="rulerLabel"]'),
+          (el) => el.textContent
+        );
+      // 300 frames over 1400px: every half second
+      expect(labels().slice(0, 4)).toEqual(['0', '15', '30', '45']);
+
+      // Zoomed to 800% the content is 8× wider: every other frame
+      rulerWidth = 1400 * 8;
+      act(() => observers.forEach((callback) => callback()));
+      expect(labels().slice(0, 4)).toEqual(['0', '2', '4', '6']);
+    } finally {
+      global.ResizeObserver = OriginalObserver;
+      HTMLElement.prototype.getBoundingClientRect = originalRect;
+    }
+  });
+
   it('toggles the Animation Sequence window from the toolbar', () => {
     useEditorStore.setState({ sequenceWindowOpen: false });
     renderTimeline();
