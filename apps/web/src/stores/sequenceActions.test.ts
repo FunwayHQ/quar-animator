@@ -7,7 +7,12 @@ import { SceneGraph } from '@quar/core';
 import type { RectangleNode } from '@quar/types';
 import { useEditorStore } from './editorStore';
 import { noteSequenceShown } from './sequenceActions';
-import { deserializeProject, serializeProject } from '../services/projectSerializer';
+import {
+  deserializeProject,
+  deserializeProjectFromBinary,
+  serializeProject,
+  serializeProjectToBinary,
+} from '../services/projectSerializer';
 
 function makeRect(id: string, x = 0, opacity = 1): RectangleNode {
   return {
@@ -301,6 +306,85 @@ describe('Animation Sequence actions', () => {
     });
   });
 
+  describe('clip steps from the user’s own keyframes', () => {
+    const ownKeyframes = (nodeId: string) =>
+      store()
+        .timeline.tracks.filter((track) => track.nodeId === nodeId)
+        .flatMap((track) =>
+          track.keyframes
+            .filter((kf) => kf.sequenceStepId === undefined)
+            .map((kf) => [track.property, kf.time, kf.value])
+        );
+    const stepKeyframes = (stepId: string) =>
+      store().timeline.tracks.flatMap((track) =>
+        track.keyframes
+          .filter((kf) => kf.sequenceStepId === stepId)
+          .map((kf) => [track.property, kf.time, kf.value])
+      );
+
+    beforeEach(() => {
+      // A hand-made move of "c" from x 400 to 600 over frames 40–70
+      store().addKeyframeAtFrame('c', 'transform.position.x', 40, 400);
+      store().addKeyframeAtFrame('c', 'transform.position.x', 70, 600);
+    });
+
+    it('turns them into a step that starts where they were', () => {
+      store().addSequenceSteps(sg, ['a'], 'fade-in', { duration: 24 });
+      const [clipId] = store().addClipSteps(sg, ['c']);
+
+      const step = store().animationSequence.steps[1]!;
+      expect(step).toMatchObject({
+        id: clipId,
+        nodeId: 'c',
+        trigger: 'afterPrevious',
+        delay: 16,
+        duration: 30,
+      });
+      expect(ownKeyframes('c')).toEqual([]);
+      expect(stepKeyframes(clipId!)).toEqual([
+        ['transform.position.x', 40, 400],
+        ['transform.position.x', 70, 600],
+      ]);
+      expect(store().animationSequence.restPoses.c!['transform.position.x']).toBe(400);
+    });
+
+    it('starts with an earlier step when the keyframes begin during it', () => {
+      store().addSequenceSteps(sg, ['a'], 'fade-in', { duration: 60 }); // frames 0–60
+      const [clipId] = store().addClipSteps(sg, ['c']);
+      expect(store().animationSequence.steps[1]).toMatchObject({
+        trigger: 'withPrevious',
+        delay: 40,
+      });
+      expect(stepKeyframes(clipId!).map(([, time]) => time)).toEqual([40, 70]);
+    });
+
+    it('can then be retimed like any step', () => {
+      const [clipId] = store().addClipSteps(sg, ['c']);
+      store().updateSequenceStep(sg, clipId!, { delay: 0, duration: 15 });
+      expect(stepKeyframes(clipId!).map(([, time]) => time)).toEqual([0, 15]);
+    });
+
+    it('skips objects without keyframes of their own', () => {
+      expect(store().addClipSteps(sg, ['a', 'b'])).toEqual([]);
+      expect(store().canUndo).toBe(false);
+    });
+
+    it('keeps the clip’s keyframes as the user’s own when the step is removed', () => {
+      const [clipId] = store().addClipSteps(sg, ['c']);
+      store().updateSequenceStep(sg, clipId!, { delay: 10 });
+      store().removeSequenceStep(sg, clipId!);
+      expect(store().animationSequence.steps).toEqual([]);
+      expect(ownKeyframes('c')).toEqual([
+        ['transform.position.x', 10, 400],
+        ['transform.position.x', 40, 600],
+      ]);
+
+      store().undo(sg);
+      expect(store().animationSequence.steps.map((step) => step.id)).toEqual([clipId]);
+      expect(ownKeyframes('c')).toEqual([]);
+    });
+  });
+
   it('opens and closes the sequence window', () => {
     expect(store().sequenceWindowOpen).toBe(false);
     store().toggleSequenceWindow();
@@ -382,6 +466,37 @@ describe('Animation Sequence actions', () => {
     deserializeProject(data, loaded, (state) => useEditorStore.setState(state));
     expect(store().animationSequence).toEqual(saved);
     expect(store().pages[0]!.animationSequence).toEqual(saved);
+  });
+
+  it('round-trips presets, clips and their keyframes through a binary .quar file', () => {
+    store().addSequenceSteps(sg, ['a'], 'fade-in', { duration: 24 });
+    store().addKeyframeAtFrame('c', 'transform.position.x', 40, 400);
+    store().addKeyframeAtFrame('c', 'transform.position.x', 70, 600);
+    store().addClipSteps(sg, ['c']);
+    store().addPage(sg); // a second page with its own (empty) sequence
+    const firstPage = store().pages[0]!.id;
+    store().switchPage(firstPage, sg);
+    const savedSequence = structuredClone(store().animationSequence);
+    const savedTimeline = structuredClone(store().timeline);
+
+    const binary = serializeProjectToBinary('Round trip', sg, {
+      ...store(),
+      pages: store().pages,
+      activePageId: store().activePageId,
+    });
+    store().resetProject();
+    const loaded = new SceneGraph();
+    deserializeProjectFromBinary(binary, loaded, (state) => useEditorStore.setState(state));
+
+    expect(store().animationSequence).toEqual(savedSequence);
+    expect(store().animationSequence.steps[1]!.clip).toBeDefined();
+    // Compiled, tagged keyframes come back too, so playback and export need no recompile
+    expect(store().timeline.tracks).toEqual(savedTimeline.tracks);
+    expect(store().pages.map((page) => page.animationSequence.steps.length)).toEqual([2, 0]);
+
+    // And the loaded sequence stays editable
+    store().updateSequenceStep(loaded, store().animationSequence.steps[1]!.id, { delay: 0 });
+    expect(store().animationSequence.steps[1]!.delay).toBe(0);
   });
 
   it('loads older projects without a sequence as an empty one', () => {

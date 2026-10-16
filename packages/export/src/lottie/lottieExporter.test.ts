@@ -9,6 +9,15 @@ import type {
   Fill,
 } from '@quar/types';
 import { exportToLottieJson, exportLottieBlob, analyzeLottieExport } from './lottieExporter';
+import {
+  compileAnimationSequence,
+  createClipFromTracks,
+  createTimeline,
+  addKeyframe,
+  getOrCreateTrack,
+  restPoseForKeyframes,
+  type AnimationSequence,
+} from '@quar/animation';
 
 // ============================================================================
 // Helpers
@@ -447,5 +456,49 @@ describe('exportToLottieJson - masks', () => {
     const json = JSON.stringify(result);
     expect(json).toContain('"Content"');
     expect(json).not.toContain('"Mask shape"');
+  });
+});
+
+describe('Animation Sequence export', () => {
+  it('exports sequence steps — presets and clips of own keyframes — as Lottie keyframes', () => {
+    const rect = makeRect('r1');
+    // Hand-made move: x 100 → 300 over 20 frames, captured as a clip
+    const own = createTimeline({ duration: 120, frameRate: 30 });
+    addKeyframe(getOrCreateTrack(own, 'r1', 'transform.position.x'), 0, 100);
+    addKeyframe(getOrCreateTrack(own, 'r1', 'transform.position.x'), 20, 300);
+    const pose = restPoseForKeyframes(rect, own.tracks);
+    const { clip } = createClipFromTracks(own.tracks, pose)!;
+    const sequence: AnimationSequence = {
+      steps: [
+        {
+          id: 'fade',
+          nodeId: 'r1',
+          presetId: 'fade-in',
+          trigger: 'afterPrevious',
+          delay: 0,
+          duration: 24,
+        },
+        { id: 'move', nodeId: 'r1', clip, trigger: 'afterPrevious', delay: 6, duration: 20 },
+      ],
+      restPoses: { r1: pose },
+    };
+    const timeline = compileAnimationSequence(
+      createTimeline({ duration: 120, frameRate: 30 }),
+      sequence,
+      (id) => (id === 'r1' ? rect : undefined)
+    );
+
+    const layer = exportToLottieJson([rect], timeline, { width: 800, height: 600 }).layers[0]!;
+    const opacity = layer.ks.o as { a: number; k: Array<{ t: number; s: number[] }> };
+    expect(opacity.a).toBe(1);
+    expect(opacity.k.map((kf) => [kf.t, kf.s[0]])).toEqual([
+      [0, 0],
+      [24, 100],
+    ]);
+    const position = JSON.stringify(layer.ks.p);
+    expect(position).toContain('"a":1');
+    // The clip plays after the fade plus its delay: frames 30–50
+    expect(position).toMatch(/"t":30\b/);
+    expect(position).toMatch(/"t":50\b/);
   });
 });
