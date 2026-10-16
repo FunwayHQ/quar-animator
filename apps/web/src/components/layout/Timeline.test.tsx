@@ -367,4 +367,154 @@ describe('Timeline', () => {
       expect(screen.getByTitle('Toggle loop (L)')).toBeInTheDocument();
     });
   });
+
+  describe('layer context menu', () => {
+    let graph: SceneGraph | undefined;
+    function CaptureGraph() {
+      graph = useSceneGraph();
+      return null;
+    }
+
+    function renderAnimatedLayers() {
+      const parentTrack = createTrack<number>('parent', 'opacity');
+      const parentKf = addKeyframe(parentTrack, 10, 0.5);
+      const childTrack = createTrack<number>('child', 'transform.rotation');
+      const childKf = addKeyframe(childTrack, 20, 45);
+      useEditorStore.setState({
+        timeline: createTimeline({ tracks: [parentTrack, childTrack] }),
+        selectedKeyframeIds: new Set<string>(),
+        keyframeClipboard: null,
+        undoStack: [],
+        redoStack: [],
+        canUndo: false,
+        canRedo: false,
+      });
+      render(
+        <SceneGraphProvider>
+          <CaptureGraph />
+          <Timeline />
+        </SceneGraphProvider>
+      );
+      act(() => {
+        graph!.addNode({
+          id: 'parent',
+          name: 'Parent',
+          parent: null,
+          children: [],
+        } as unknown as Node);
+        graph!.addNode({ id: 'child', name: 'Child', children: [] } as unknown as Node, 'parent');
+        graph!.addNode({
+          id: 'static',
+          name: 'Static',
+          parent: null,
+          children: [],
+        } as unknown as Node);
+      });
+      return { parentKf, childKf };
+    }
+
+    function stubWidth(element: HTMLElement, width: number) {
+      Object.defineProperty(element, 'getBoundingClientRect', {
+        configurable: true,
+        value: () =>
+          ({
+            x: 0,
+            y: 0,
+            left: 0,
+            top: 0,
+            right: width,
+            bottom: 26,
+            width,
+            height: 26,
+            toJSON: () => ({}),
+          }) as DOMRect,
+      });
+    }
+
+    const trackNodeIds = () => useEditorStore.getState().timeline.tracks.map((t) => t.nodeId);
+
+    it("deletes only the right-clicked layer's animation, keeping the layer", () => {
+      const { parentKf, childKf } = renderAnimatedLayers();
+
+      fireEvent.contextMenu(screen.getByTestId('timeline-layer-parent'));
+      expect([...useEditorStore.getState().selectedNodeIds]).toEqual(['parent']);
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Delete Animation' }));
+
+      expect(trackNodeIds()).toEqual(['child']);
+      expect(screen.queryByTestId(`keyframe-${parentKf.id}`)).not.toBeInTheDocument();
+      expect(screen.getByTestId(`keyframe-${childKf.id}`)).toBeInTheDocument();
+      expect(screen.getByTestId('timeline-layer-parent')).toBeInTheDocument();
+      expect(graph!.getNode('parent')).toBeDefined();
+      expect(useEditorStore.getState().canUndo).toBe(true);
+    });
+
+    it('disables Delete Animation for a layer without animation', () => {
+      renderAnimatedLayers();
+
+      fireEvent.contextMenu(screen.getByTestId('timeline-layer-static'));
+      const item = screen.getByRole('menuitem', { name: 'Delete Animation' });
+      expect(item).toHaveAttribute('aria-disabled', 'true');
+      fireEvent.click(item);
+
+      expect(trackNodeIds()).toEqual(['parent', 'child']);
+    });
+
+    it('applies to every selected layer when right-clicking inside a multi-selection', () => {
+      renderAnimatedLayers();
+      act(() => {
+        useEditorStore.setState({ selectedNodeIds: new Set(['parent', 'child']) });
+      });
+
+      fireEvent.contextMenu(screen.getByTestId('timeline-layer-child'));
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Delete Animation (2 Layers)' }));
+
+      expect(trackNodeIds()).toEqual([]);
+      expect(useEditorStore.getState().selectedNodeIds).toEqual(new Set(['parent', 'child']));
+    });
+
+    it("selects the layer's keyframes", () => {
+      const { parentKf } = renderAnimatedLayers();
+
+      fireEvent.contextMenu(screen.getByTestId('timeline-layer-parent'));
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Select Keyframes' }));
+
+      expect(useEditorStore.getState().selectedKeyframeIds).toEqual(new Set([parentKf.id]));
+    });
+
+    it('pastes copied keyframes onto the layer at the playhead', () => {
+      const { childKf } = renderAnimatedLayers();
+      act(() => {
+        useEditorStore.setState({ selectedKeyframeIds: new Set([childKf.id]), currentFrame: 30 });
+        useEditorStore
+          .getState()
+          .copySelectedKeyframes(
+            new Map([[childKf.id, { nodeId: 'child', property: 'transform.rotation' }]])
+          );
+      });
+
+      fireEvent.contextMenu(screen.getByTestId('timeline-layer-static'));
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Paste Keyframes at Frame 30' }));
+
+      const pasted = useEditorStore
+        .getState()
+        .timeline.tracks.find((t) => t.nodeId === 'static' && t.property === 'transform.rotation');
+      expect(pasted?.keyframes.map((kf) => kf.time)).toEqual([30]);
+    });
+
+    it("offers Delete Animation on a layer's keyframe lane without changing selection", () => {
+      renderAnimatedLayers();
+      act(() => {
+        useEditorStore.setState({ selectedNodeIds: new Set(['static']) });
+      });
+      const lane = screen.getByTestId('timeline-track-parent');
+      stubWidth(lane, 300);
+
+      fireEvent.contextMenu(lane, { clientX: 30, clientY: 10 });
+      expect(screen.getByRole('menuitem', { name: 'Go To Frame 30' })).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Delete Animation' }));
+
+      expect(trackNodeIds()).toEqual(['child']);
+      expect(useEditorStore.getState().selectedNodeIds).toEqual(new Set(['static']));
+    });
+  });
 });

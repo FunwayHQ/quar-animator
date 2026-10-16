@@ -73,6 +73,9 @@ export function Timeline({ playback }: TimelineProps = {}) {
   const addKeyframeToSelection = useEditorStore((s) => s.addKeyframeToSelection);
   const clearKeyframeSelection = useEditorStore((s) => s.clearKeyframeSelection);
   const removeSelectedKeyframes = useEditorStore((s) => s.removeSelectedKeyframes);
+  const deleteLayerAnimation = useEditorStore((s) => s.deleteLayerAnimation);
+  const setSelectedKeyframeIds = useEditorStore((s) => s.setSelectedKeyframeIds);
+  const setSelection = useEditorStore((s) => s.setSelection);
   const addKeyframeAtFrame = useEditorStore((s) => s.addKeyframeAtFrame);
   const setKeyframeEasing = useEditorStore((s) => s.setKeyframeEasing);
   const copySelectedKeyframes = useEditorStore((s) => s.copySelectedKeyframes);
@@ -116,6 +119,10 @@ export function Timeline({ playback }: TimelineProps = {}) {
     keyframeId?: string;
     nodeId?: string;
     property?: string;
+    /** Layer row the menu was opened on (label or keyframe lane). */
+    layerNodeId?: string;
+    /** Opened on the layer label, so show only the layer's own items. */
+    layerMenu?: boolean;
   } | null>(null);
 
   // Drag state for moving keyframes
@@ -563,19 +570,85 @@ export function Timeline({ playback }: TimelineProps = {}) {
   // ------- Context menu handlers -------
 
   const handleTimelineContextMenu = useCallback(
-    (e: React.MouseEvent<HTMLDivElement>) => {
+    (e: React.MouseEvent<HTMLDivElement>, layerNodeId?: string) => {
       e.preventDefault();
+      // A lane's menu replaces the surrounding tracks menu.
+      if (layerNodeId) e.stopPropagation();
       const rect = e.currentTarget.getBoundingClientRect();
       if (rect.width <= 0) return;
       const x = e.clientX - rect.left;
       const frame = Math.max(0, Math.min(duration - 1, Math.round((x / rect.width) * duration)));
-      setContextMenu({ x: e.clientX, y: e.clientY, frame });
+      setContextMenu({ x: e.clientX, y: e.clientY, frame, layerNodeId });
     },
     [duration]
   );
 
+  const handleLayerLabelContextMenu = useCallback(
+    (e: React.MouseEvent, nodeId: string) => {
+      e.preventDefault();
+      // Like the Layers panel, right-click targets the layer by selecting it,
+      // keeping an existing multi-selection that already includes it.
+      if (!selectedNodeIds.has(nodeId)) setSelection([nodeId]);
+      setContextMenu({
+        x: e.clientX,
+        y: e.clientY,
+        frame: currentFrame,
+        layerNodeId: nodeId,
+        layerMenu: true,
+      });
+    },
+    [selectedNodeIds, setSelection, currentFrame]
+  );
+
   const contextMenuItems = useCallback((): ContextMenuEntry[] => {
     if (!contextMenu) return [];
+
+    // Layer animation actions apply to the whole selection when the clicked
+    // layer is part of it, otherwise to that layer alone.
+    const layerTargets = (nodeId: string) => {
+      const ids = selectedNodeIds.has(nodeId) ? [...selectedNodeIds] : [nodeId];
+      const animatedIds = ids.filter((id) => nodeKeyframes.has(id));
+      return {
+        animatedIds,
+        keyframeIds: animatedIds.flatMap((id) => (nodeKeyframes.get(id) ?? []).map((kf) => kf.id)),
+      };
+    };
+    const deleteAnimationItem = (nodeId: string): ContextMenuEntry => {
+      const { animatedIds } = layerTargets(nodeId);
+      return {
+        id: 'delete-layer-animation',
+        label:
+          animatedIds.length > 1
+            ? `Delete Animation (${animatedIds.length} Layers)`
+            : 'Delete Animation',
+        danger: true,
+        disabled: animatedIds.length === 0,
+        onClick: () => deleteLayerAnimation(sceneGraph, animatedIds),
+      };
+    };
+
+    // Layer label context menu
+    if (contextMenu.layerMenu && contextMenu.layerNodeId) {
+      const nodeId = contextMenu.layerNodeId;
+      const { keyframeIds } = layerTargets(nodeId);
+      const items: ContextMenuEntry[] = [
+        {
+          id: 'select-layer-keyframes',
+          label: 'Select Keyframes',
+          disabled: keyframeIds.length === 0,
+          onClick: () => setSelectedKeyframeIds(keyframeIds),
+        },
+      ];
+      if (keyframeClipboard) {
+        items.push({
+          id: 'paste-layer-keyframes',
+          label: `Paste Keyframes at Frame ${contextMenu.frame}`,
+          onClick: () => pasteKeyframes(nodeId, contextMenu.frame),
+        });
+      }
+      items.push({ type: 'separator' }, deleteAnimationItem(nodeId));
+      return items;
+    }
 
     // Keyframe context menu
     if (contextMenu.keyframeId && contextMenu.nodeId && contextMenu.property) {
@@ -715,16 +788,20 @@ export function Timeline({ playback }: TimelineProps = {}) {
       });
     }
 
-    // Add paste option if clipboard has content
-    if (keyframeClipboard && selectedNodeIds.size > 0) {
-      const firstNodeId = [...selectedNodeIds][0]!;
+    // Add paste option if clipboard has content; a lane pastes onto its own layer
+    const pasteTargetId = contextMenu.layerNodeId ?? [...selectedNodeIds][0];
+    if (keyframeClipboard && pasteTargetId) {
       items.push({ type: 'separator' });
       items.push({
         id: 'paste-keyframes',
         label: 'Paste Keyframes',
         shortcut: 'Ctrl+V',
-        onClick: () => pasteKeyframes(firstNodeId, contextMenu.frame),
+        onClick: () => pasteKeyframes(pasteTargetId, contextMenu.frame),
       });
+    }
+
+    if (contextMenu.layerNodeId) {
+      items.push({ type: 'separator' }, deleteAnimationItem(contextMenu.layerNodeId));
     }
 
     return items;
@@ -734,6 +811,7 @@ export function Timeline({ playback }: TimelineProps = {}) {
     timeline,
     selectedKeyframeIds,
     keyframeMap,
+    nodeKeyframes,
     setCurrentFrame,
     setIsPlaying,
     addKeyframeAtFrame,
@@ -741,6 +819,8 @@ export function Timeline({ playback }: TimelineProps = {}) {
     setKeyframeEasing,
     copySelectedKeyframes,
     removeSelectedKeyframes,
+    deleteLayerAnimation,
+    setSelectedKeyframeIds,
     pasteKeyframes,
     keyframeClipboard,
     selectedNodeIds,
@@ -1099,7 +1179,12 @@ export function Timeline({ playback }: TimelineProps = {}) {
           <div className={styles.layerLabels}>
             {nodes.length > 0 ? (
               nodes.map((node) => (
-                <div key={node.id} className={styles.layerLabel}>
+                <div
+                  key={node.id}
+                  className={`${styles.layerLabel} ${selectedNodeIds.has(node.id) ? styles.selected : ''}`}
+                  onContextMenu={(e) => handleLayerLabelContextMenu(e, node.id)}
+                  data-testid={`timeline-layer-${node.id}`}
+                >
                   {node.name ?? node.id}
                 </div>
               ))
@@ -1206,7 +1291,12 @@ export function Timeline({ playback }: TimelineProps = {}) {
                 {nodes.map((node) => {
                   const kfs = nodeKeyframes.get(node.id);
                   return (
-                    <div key={node.id} className={styles.track}>
+                    <div
+                      key={node.id}
+                      className={styles.track}
+                      onContextMenu={(e) => handleTimelineContextMenu(e, node.id)}
+                      data-testid={`timeline-track-${node.id}`}
+                    >
                       {kfs &&
                         kfs.map((kf) => (
                           /* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- keyframe diamonds, keyboard handled at track level */

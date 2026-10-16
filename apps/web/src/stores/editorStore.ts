@@ -503,6 +503,8 @@ export interface EditorStore {
     easing?: EasingFunction
   ) => void;
   removeSelectedKeyframes: (keyframeMap: Map<string, { nodeId: string; property: string }>) => void;
+  /** Remove every animation track of these layers (not their children); undoable. */
+  deleteLayerAnimation: (sceneGraph: SceneGraphLike, nodeIds: string[]) => void;
   setKeyframeEasing: (
     nodeId: string,
     property: string,
@@ -2253,6 +2255,27 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     }
     mgr.removeKeyframes(toRemove);
     set({ timeline: { ...timeline }, selectedKeyframeIds: new Set<string>(), isDirty: true });
+  },
+  deleteLayerAnimation: (sceneGraph: SceneGraphLike, nodeIds: string[]) => {
+    const { timeline, selectedKeyframeIds } = get();
+    const targets = new Set(nodeIds);
+    const removedTracks = timeline.tracks.filter((track) => targets.has(track.nodeId));
+    if (removedTracks.length === 0) return;
+    get().pushUndo(sceneGraph);
+
+    // The layers keep their current (evaluated) values; only the animation goes.
+    const mgr = new KeyframeManager(timeline);
+    for (const nodeId of targets) mgr.removeAllKeyframesForNode(nodeId);
+    const removedKeyframeIds = new Set(
+      removedTracks.flatMap((track) => track.keyframes.map((kf) => kf.id))
+    );
+    set({
+      timeline: { ...timeline },
+      selectedKeyframeIds: new Set(
+        [...selectedKeyframeIds].filter((id) => !removedKeyframeIds.has(id))
+      ),
+      isDirty: true,
+    });
   },
   setKeyframeEasing: (
     nodeId: string,

@@ -4,7 +4,7 @@
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { useEditorStore, DEFAULT_FILL, DEFAULT_STROKE } from './editorStore';
-import { createTimeline } from '@quar/animation';
+import { createTimeline, createTrack, addKeyframe } from '@quar/animation';
 import { DEFAULT_ONION_SKIN_SETTINGS, SceneGraph, createDefaultTransform } from '@quar/core';
 import type { RectangleNode } from '@quar/types';
 
@@ -3534,6 +3534,68 @@ describe('EditorStore', () => {
       expect(duplicatedMaskId).not.toBe('mask');
       expect(duplicatedGroup.children).toContain(duplicatedMaskId);
       expect(sceneGraph.getNode(duplicatedMaskId ?? '')?.parent).toBe(duplicatedGroup.id);
+    });
+  });
+
+  describe('deleteLayerAnimation', () => {
+    function setupAnimatedLayers() {
+      const sceneGraph = new SceneGraph();
+      const parentTrack = createTrack<number>('parent', 'opacity');
+      const parentKf = addKeyframe(parentTrack, 0, 1);
+      addKeyframe(parentTrack, 10, 0);
+      const parentRotation = createTrack<number>('parent', 'transform.rotation');
+      addKeyframe(parentRotation, 5, 90);
+      const childTrack = createTrack<number>('child', 'opacity');
+      const childKf = addKeyframe(childTrack, 3, 0.5);
+      useEditorStore.setState({
+        timeline: createTimeline({ tracks: [parentTrack, parentRotation, childTrack] }),
+        selectedKeyframeIds: new Set([parentKf.id, childKf.id]),
+      });
+      return { sceneGraph, parentKf, childKf };
+    }
+
+    it("removes every track of the layer but not its children's animation", () => {
+      const { sceneGraph, parentKf, childKf } = setupAnimatedLayers();
+
+      useEditorStore.getState().deleteLayerAnimation(sceneGraph, ['parent']);
+
+      const state = useEditorStore.getState();
+      expect(state.timeline.tracks.map((t) => t.nodeId)).toEqual(['child']);
+      expect(state.selectedKeyframeIds.has(parentKf.id)).toBe(false);
+      expect(state.selectedKeyframeIds.has(childKf.id)).toBe(true);
+      expect(state.isDirty).toBe(true);
+    });
+
+    it('can remove several layers at once', () => {
+      const { sceneGraph } = setupAnimatedLayers();
+
+      useEditorStore.getState().deleteLayerAnimation(sceneGraph, ['parent', 'child']);
+
+      expect(useEditorStore.getState().timeline.tracks).toHaveLength(0);
+    });
+
+    it('is undoable', () => {
+      const { sceneGraph } = setupAnimatedLayers();
+
+      useEditorStore.getState().deleteLayerAnimation(sceneGraph, ['parent']);
+      expect(useEditorStore.getState().canUndo).toBe(true);
+      useEditorStore.getState().undo(sceneGraph);
+
+      expect(useEditorStore.getState().timeline.tracks.map((t) => t.nodeId)).toEqual([
+        'parent',
+        'parent',
+        'child',
+      ]);
+    });
+
+    it('does nothing (and records no undo step) for a layer without animation', () => {
+      const { sceneGraph } = setupAnimatedLayers();
+      const before = useEditorStore.getState().timeline;
+
+      useEditorStore.getState().deleteLayerAnimation(sceneGraph, ['static']);
+
+      expect(useEditorStore.getState().timeline).toBe(before);
+      expect(useEditorStore.getState().canUndo).toBe(false);
     });
   });
 });
