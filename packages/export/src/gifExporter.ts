@@ -3,19 +3,13 @@
 import type { Color } from '@quar/types';
 import type { FrameRenderContext } from './frameRenderer';
 import { createFrameRenderer, getFrameCount, getFrameRenderRoots } from './frameRenderer';
+import { sampleTimeline, type PlaybackTiming } from './exportUtils';
 import type { ExportProgress } from './index';
 
-export interface GifExportOptions {
+/** `fps` defaults to the timeline's, at most 50. */
+export interface GifExportOptions extends PlaybackTiming {
   width: number;
   height: number;
-  /** The timeline's frame rate. */
-  frameRate: number;
-  startFrame: number;
-  endFrame: number;
-  /** Frames per second in the GIF (default: the timeline's, at most 50). */
-  fps?: number;
-  /** Playback speed: 2 plays twice as fast, 0.5 at half speed. */
-  speed?: number;
   transparent?: boolean;
   /**
    * 0 (best quality) … 100 (smallest file). Fewer palette colors, and pixels
@@ -55,21 +49,10 @@ export interface GifTiming {
  * whole hundredths of a second, so they're spread to add up exactly (30 fps:
  * 3, 3, 4, 3, 3, 4…) instead of each being rounded (30 fps playing 11% fast).
  */
-export function gifTiming(
-  options: Pick<GifExportOptions, 'frameRate' | 'startFrame' | 'endFrame' | 'fps' | 'speed'>
-): GifTiming {
-  const { startFrame, endFrame } = options;
-  const rate = Math.max(1, options.frameRate);
-  const fps = Math.min(MAX_GIF_FPS, Math.max(1, options.fps ?? rate));
-  const speed = options.speed !== undefined && options.speed > 0 ? options.speed : 1;
-  const seconds = getFrameCount(startFrame, endFrame) / rate / speed;
-  const count = Math.max(1, Math.round(seconds * fps));
-  const step = (rate * speed) / fps;
+export function gifTiming(options: PlaybackTiming): GifTiming {
+  const { fps, frames } = sampleTimeline(options, MAX_GIF_FPS);
   const at = (k: number) => Math.round((k * 100) / fps);
-  return {
-    frames: Array.from({ length: count }, (_, k) => Math.min(endFrame, startFrame + k * step)),
-    delays: Array.from({ length: count }, (_, k) => at(k + 1) - at(k)),
-  };
+  return { frames, delays: frames.map((_, k) => at(k + 1) - at(k)) };
 }
 
 const MAX_PALETTE_SAMPLE_PIXELS = 250_000;

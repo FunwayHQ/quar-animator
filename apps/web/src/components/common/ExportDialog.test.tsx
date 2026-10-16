@@ -32,6 +32,14 @@ vi.mock('@quar/export', () => ({
   exportGif: vi.fn().mockResolvedValue(new Blob(['gif'], { type: 'image/gif' })),
   exportMp4: vi.fn().mockResolvedValue(new Blob(['mp4'], { type: 'video/mp4' })),
   MAX_GIF_FPS: 50,
+  sampleTimeline: (
+    o: { frameRate: number; startFrame: number; endFrame: number; fps?: number; speed?: number },
+    maxFps = Infinity
+  ) => {
+    const fps = Math.min(maxFps, o.fps ?? o.frameRate);
+    const seconds = (o.endFrame - o.startFrame + 1) / o.frameRate / (o.speed ?? 1);
+    return { fps, frames: new Array(Math.round(seconds * fps)).fill(0) };
+  },
   // Frame count and length for a range, at a frame rate and speed
   gifTiming: (o: {
     frameRate: number;
@@ -339,6 +347,23 @@ describe('ExportDialog', () => {
     });
     // The artboard's fill animation moves with it
     expect(timeline.tracks[0]?.nodeId).toBe('artboard-1:background');
+  });
+
+  it('passes the chosen MP4 frame rate and speed to the exporter', async () => {
+    render(<ExportDialogHost />);
+    act(() => showExportDialog('mp4'));
+    expect(screen.getByTestId('export-mp4-fps')).toHaveValue('30');
+    // Video can go above the GIF limit
+    expect(screen.getByRole('option', { name: '60 fps' })).toBeInTheDocument();
+    expect(screen.getByTestId('export-mp4-timing')).toHaveTextContent('60 frames · 2.0 s');
+
+    fireEvent.change(screen.getByTestId('export-mp4-fps'), { target: { value: '60' } });
+    fireEvent.change(screen.getByTestId('export-mp4-speed'), { target: { value: '0.5' } });
+    expect(screen.getByTestId('export-mp4-timing')).toHaveTextContent('240 frames · 4.0 s');
+
+    fireEvent.click(screen.getByTestId('export-dialog-export'));
+    await waitFor(() => expect(exportMp4).toHaveBeenCalledOnce());
+    expect(vi.mocked(exportMp4).mock.calls[0]![1]).toMatchObject({ fps: 60, speed: 0.5 });
   });
 
   it('shows an MP4 capability error returned by the encoder', async () => {

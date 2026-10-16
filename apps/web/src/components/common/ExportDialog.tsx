@@ -25,6 +25,7 @@ import {
   gifCompressionSettings,
   gifTiming,
   MAX_GIF_FPS,
+  sampleTimeline,
 } from '@quar/export';
 import type { ExportProgress } from '@quar/export';
 import { downloadBlob } from '../../services/exportService';
@@ -53,6 +54,9 @@ interface ExportDialogState {
   gifFps: number;
   /** Playback speed multiplier */
   gifSpeed: number;
+  // MP4
+  mp4Fps: number;
+  mp4Speed: number;
   /** 0 (best quality) … 100 (smallest file) */
   gifCompression: number;
   // Sprite Sheet
@@ -91,20 +95,93 @@ function getSelectedArtboardScope(sceneGraph: SceneGraph, selectedIds: Set<strin
   return bounds ? { node, bounds } : null;
 }
 
-const GIF_FRAME_RATES = [50, 30, 25, 24, 20, 15, 12, 10];
-const GIF_SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4];
+const COMMON_FRAME_RATES = [60, 50, 30, 25, 24, 20, 15, 12, 10];
+const PLAYBACK_SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4];
 
-/** Frame rates offered for GIFs: the project's (if a GIF can play it) and common ones. */
-function gifFrameRates(projectRate: number): number[] {
-  return [...new Set([Math.min(projectRate, MAX_GIF_FPS), ...GIF_FRAME_RATES])].sort(
-    (a, b) => b - a
-  );
+/** Frame rates offered: the project's (capped at what the format plays) and common ones. */
+function frameRateChoices(projectRate: number, maxFps = Infinity): number[] {
+  const common = COMMON_FRAME_RATES.filter((fps) => fps <= maxFps);
+  return [...new Set([Math.min(projectRate, maxFps), ...common])].sort((a, b) => b - a);
+}
+
+function describeTiming(frames: number, seconds: number): string {
+  return `${frames} frames · ${seconds.toFixed(1)} s`;
 }
 
 /** "45 frames · 1.5 s" for the GIF the current settings produce. */
 function describeGifTiming(timing: { frames: number[]; delays: number[] }): string {
   const seconds = timing.delays.reduce((sum, delay) => sum + delay, 0) / 100;
-  return `${timing.frames.length} frames · ${seconds.toFixed(1)} s`;
+  return describeTiming(timing.frames.length, seconds);
+}
+
+/** "330 frames · 11.0 s" for the video the current settings produce. */
+function describeVideoTiming(timing: { fps: number; frames: number[] }): string {
+  return describeTiming(timing.frames.length, timing.frames.length / timing.fps);
+}
+
+/** Frame rate and playback speed pickers, with what they produce under them. */
+function TimingFields({
+  format,
+  rates,
+  projectRate,
+  fps,
+  speed,
+  onFps,
+  onSpeed,
+  summary,
+}: {
+  format: 'gif' | 'mp4';
+  rates: number[];
+  projectRate: number;
+  fps: number;
+  speed: number;
+  onFps: (fps: number) => void;
+  onSpeed: (speed: number) => void;
+  summary: string;
+}) {
+  return (
+    <>
+      <div className={styles.formRow}>
+        <label className={styles.label} htmlFor={`export-${format}-fps`}>
+          Frame rate
+        </label>
+        <select
+          id={`export-${format}-fps`}
+          className={styles.select}
+          value={fps}
+          onChange={(e) => onFps(Number(e.target.value))}
+          data-testid={`export-${format}-fps`}
+        >
+          {rates.map((rate) => (
+            <option key={rate} value={rate}>
+              {rate === projectRate ? `${rate} fps (project)` : `${rate} fps`}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div className={styles.formRow}>
+        <label className={styles.label} htmlFor={`export-${format}-speed`}>
+          Speed
+        </label>
+        <select
+          id={`export-${format}-speed`}
+          className={styles.select}
+          value={speed}
+          onChange={(e) => onSpeed(Number(e.target.value))}
+          data-testid={`export-${format}-speed`}
+        >
+          {PLAYBACK_SPEEDS.map((choice) => (
+            <option key={choice} value={choice}>
+              {choice === 1 ? '1× (normal)' : `${choice}×`}
+            </option>
+          ))}
+        </select>
+      </div>
+      <p className={styles.scopeNote} data-testid={`export-${format}-timing`}>
+        {summary}
+      </p>
+    </>
+  );
 }
 
 /** What a GIF compression level trades away, in words. */
@@ -233,6 +310,8 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
     gifTransparent: false,
     gifFps: Math.min(timeline.frameRate, MAX_GIF_FPS),
     gifSpeed: 1,
+    mp4Fps: timeline.frameRate,
+    mp4Speed: 1,
     gifCompression: 0,
     spriteLayout: 'grid',
     spriteColumns: 0, // 0 = auto
@@ -379,6 +458,8 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
             frameRate: timeline.frameRate,
             startFrame: state.startFrame,
             endFrame: state.endFrame,
+            fps: state.mp4Fps,
+            speed: state.mp4Speed,
           },
           (progress) => setState((s) => ({ ...s, progress })),
           () => cancelledRef.current
@@ -768,44 +849,15 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
                     <span>Transparent</span>
                   </label>
                 </div>
-                <div className={styles.formRow}>
-                  <label className={styles.label} htmlFor="export-gif-fps">
-                    Frame rate
-                  </label>
-                  <select
-                    id="export-gif-fps"
-                    className={styles.select}
-                    value={state.gifFps}
-                    onChange={(e) => update('gifFps', Number(e.target.value))}
-                    data-testid="export-gif-fps"
-                  >
-                    {gifFrameRates(timeline.frameRate).map((fps) => (
-                      <option key={fps} value={fps}>
-                        {fps === timeline.frameRate ? `${fps} fps (project)` : `${fps} fps`}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className={styles.formRow}>
-                  <label className={styles.label} htmlFor="export-gif-speed">
-                    Speed
-                  </label>
-                  <select
-                    id="export-gif-speed"
-                    className={styles.select}
-                    value={state.gifSpeed}
-                    onChange={(e) => update('gifSpeed', Number(e.target.value))}
-                    data-testid="export-gif-speed"
-                  >
-                    {GIF_SPEEDS.map((speed) => (
-                      <option key={speed} value={speed}>
-                        {speed === 1 ? '1× (normal)' : `${speed}×`}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <p className={styles.scopeNote} data-testid="export-gif-timing">
-                  {describeGifTiming(
+                <TimingFields
+                  format="gif"
+                  rates={frameRateChoices(timeline.frameRate, MAX_GIF_FPS)}
+                  projectRate={timeline.frameRate}
+                  fps={state.gifFps}
+                  speed={state.gifSpeed}
+                  onFps={(fps) => update('gifFps', fps)}
+                  onSpeed={(speed) => update('gifSpeed', speed)}
+                  summary={describeGifTiming(
                     gifTiming({
                       frameRate: timeline.frameRate,
                       startFrame: state.startFrame,
@@ -814,7 +866,7 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
                       speed: state.gifSpeed,
                     })
                   )}
-                </p>
+                />
                 <div className={styles.formRow}>
                   <label className={styles.label} htmlFor="export-gif-compression">
                     Compression
@@ -841,12 +893,32 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
             )}
 
             {state.tab === 'mp4' && (
-              <div className={styles.warning} role="note">
-                <span className={styles.warningText}>
-                  MP4 uses H.264 encoding and a solid background. Availability depends on your
-                  browser and device.
-                </span>
-              </div>
+              <>
+                <TimingFields
+                  format="mp4"
+                  rates={frameRateChoices(timeline.frameRate)}
+                  projectRate={timeline.frameRate}
+                  fps={state.mp4Fps}
+                  speed={state.mp4Speed}
+                  onFps={(fps) => update('mp4Fps', fps)}
+                  onSpeed={(speed) => update('mp4Speed', speed)}
+                  summary={describeVideoTiming(
+                    sampleTimeline({
+                      frameRate: timeline.frameRate,
+                      startFrame: state.startFrame,
+                      endFrame: state.endFrame,
+                      fps: state.mp4Fps,
+                      speed: state.mp4Speed,
+                    })
+                  )}
+                />
+                <div className={styles.warning} role="note">
+                  <span className={styles.warningText}>
+                    MP4 uses H.264 encoding and a solid background. Availability depends on your
+                    browser and device.
+                  </span>
+                </div>
+              </>
             )}
 
             {state.tab === 'sprite-sheet' && (

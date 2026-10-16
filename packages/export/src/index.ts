@@ -52,7 +52,12 @@ export {
 // Export Utilities (Pure)
 // ============================================================================
 
-export { getFrameCount, generateFrameFilenames } from './exportUtils';
+export {
+  getFrameCount,
+  generateFrameFilenames,
+  sampleTimeline,
+  type PlaybackTiming,
+} from './exportUtils';
 
 // ============================================================================
 // Frame Renderer

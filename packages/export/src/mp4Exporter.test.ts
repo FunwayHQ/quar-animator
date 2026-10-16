@@ -116,6 +116,20 @@ describe('exportMp4', () => {
     expect(mocks.renderer.dispose).toHaveBeenCalledOnce();
   });
 
+  it('encodes at the chosen frame rate and playback speed', async () => {
+    mocks.canEncodeVideo.mockResolvedValue(true);
+    // 48 frames at 24 fps (2 s), at 12 fps and double speed: 1 s, 12 frames
+    await exportMp4(
+      { sceneGraph: { getRootNodes: () => [] } as never, timeline: { tracks: [] } as never },
+      { width: 64, height: 48, frameRate: 24, startFrame: 0, endFrame: 47, fps: 12, speed: 2 }
+    );
+    expect(mocks.output?.trackMetadata).toEqual({ frameRate: 12 });
+    const rendered = mocks.renderer.renderFrame.mock.calls.map(([, frame]) => frame);
+    expect(rendered).toEqual([0, 4, 8, 12, 16, 20, 24, 28, 32, 36, 40, 44]);
+    expect(mocks.source?.frames).toHaveLength(12);
+    expect(mocks.source?.frames.at(-1)).toEqual([11 / 12, 1 / 12]);
+  });
+
   it('explains when the browser cannot encode H.264', async () => {
     mocks.canEncodeVideo.mockResolvedValue(false);
 
