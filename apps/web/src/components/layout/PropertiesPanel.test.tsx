@@ -291,10 +291,11 @@ describe('PropertiesPanel', () => {
     const secondOpacityTrack = useEditorStore
       .getState()
       .timeline.tracks.find((track) => track.nodeId === 'rect2' && track.property === 'opacity');
+    // The staggered object stays hidden until its fade starts
     expect(
       secondOpacityTrack?.keyframes.map((keyframe) => [keyframe.time, keyframe.value])
     ).toEqual([
-      [0, 0.8],
+      [0, 0],
       [3, 0],
       [27, 0.8],
     ]);

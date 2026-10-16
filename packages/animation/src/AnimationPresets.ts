@@ -541,6 +541,10 @@ export function createAnimationPresetKeyframes(
 /**
  * Apply a preset to a timeline. Earlier keyframes on affected properties are
  * kept; keyframes at and after the start frame are replaced by the preset.
+ * Applied after frame 0 to an un-animated property, the preset's starting
+ * value is held from frame 0 — an entrance stays hidden until it begins
+ * (rather than fading out towards its start), other presets keep the
+ * object's current look until then.
  */
 export function applyAnimationPreset(
   timeline: Timeline,
@@ -568,8 +572,10 @@ export function applyAnimationPreset(
 
     track.keyframes = track.keyframes.filter((keyframe) => keyframe.time < start);
     if (start > 0 && track.keyframes.length === 0) {
-      const baseValue = preset.baseValues.get(property);
-      if (baseValue !== undefined) addKeyframe(track, 0, baseValue);
+      const startValue = preset.keyframes.find(
+        (keyframe) => keyframe.property === property && keyframe.time === start
+      )?.value;
+      if (startValue !== undefined) addKeyframe(track, 0, startValue);
     }
   }
 

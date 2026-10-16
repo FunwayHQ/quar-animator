@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { PathNode, RectangleNode, TextNode } from '@quar/types';
 import { addKeyframe, createTimeline, getOrCreateTrack } from './Timeline';
 import { applyAnimationPreset, createAnimationPresetKeyframes } from './AnimationPresets';
+import { evaluateTrack } from './PropertyBinding';
 
 function makeNode(): RectangleNode {
   return {
@@ -343,15 +344,40 @@ describe('animation presets', () => {
     expect(updated.duration).toBe(35);
   });
 
-  it('holds the original value until a preset applied after frame zero begins', () => {
+  it('keeps an entrance applied after frame zero hidden until it begins', () => {
     const node = makeNode();
     const updated = applyAnimationPreset(createTimeline({ duration: 30 }), node, 'fade-in', 12, 24);
     const opacityTrack = updated.tracks.find((track) => track.property === 'opacity')!;
 
+    // Held at the start value — no fade-out from the original 0.8 towards frame 12
     expect(opacityTrack.keyframes.map((keyframe) => [keyframe.time, keyframe.value])).toEqual([
-      [0, 0.8],
+      [0, 0],
       [12, 0],
       [36, 0.8],
     ]);
+    expect(evaluateTrack(opacityTrack, 6)).toBe(0);
+
+    const rise = applyAnimationPreset(createTimeline({ duration: 30 }), node, 'rise-in', 12, 24);
+    for (const track of rise.tracks) {
+      expect(evaluateTrack(track, 6)).toBe(evaluateTrack(track, 12));
+    }
+  });
+
+  it('keeps the original look until an emphasis or exit applied after frame zero begins', () => {
+    const node = makeNode();
+    for (const presetId of ['pulse', 'fade-out', 'shake'] as const) {
+      const updated = applyAnimationPreset(
+        createTimeline({ duration: 30 }),
+        node,
+        presetId,
+        12,
+        24
+      );
+      for (const track of updated.tracks) {
+        const [first, second] = track.keyframes;
+        expect(first!.time).toBe(0);
+        expect(first!.value).toBe(second!.value);
+      }
+    }
   });
 });
