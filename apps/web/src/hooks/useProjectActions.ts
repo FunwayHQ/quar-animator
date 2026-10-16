@@ -73,6 +73,8 @@ export function useProjectActions(options: UseProjectActionsOptions = {}): Proje
 
   // Snapshot editor state for serialization
   const getEditorSnapshot = useCallback(() => {
+    // Keep a just-made edit to a sequenced object (it moves the object's animation)
+    useEditorStore.getState().flushSequenceEdits(sceneGraph);
     const state = useEditorStore.getState();
     return {
       timeline: state.timeline,

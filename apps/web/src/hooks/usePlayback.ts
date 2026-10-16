@@ -12,6 +12,7 @@ import {
 } from '@quar/animation';
 import { evaluateIKChains } from '@quar/rigging';
 import { useEditorStore } from '../stores/editorStore';
+import { noteSequenceShown } from '../stores/sequenceActions';
 import { useSceneGraph } from '../contexts/SceneGraphContext';
 
 function getPlaybackDuration(
@@ -32,42 +33,83 @@ function getPlaybackDuration(
   return Math.max(1, Math.min(Math.max(1, timelineDuration), Math.ceil(lastKeyframe) + 1));
 }
 
+type EditorState = ReturnType<typeof useEditorStore.getState>;
+
+/** Apply animated values to ALL scene graph nodes (including children in groups). */
+function applyFrame(
+  sg: ReturnType<typeof useSceneGraph>,
+  timeline: EditorState['timeline'],
+  ikChains: EditorState['ikChains'],
+  frame: number
+) {
+  if (!timeline.tracks || timeline.tracks.length === 0) {
+    // Even without animation tracks, evaluate IK chains (for interactive posing)
+    if (ikChains.length > 0) {
+      evaluateIKChains(ikChains, sg);
+    }
+    return;
+  }
+  // Get all unique animated node IDs from timeline tracks
+  const animatedNodeIds = getAnimatedNodes(timeline);
+  for (const nodeId of animatedNodeIds) {
+    const node = sg.getNode(nodeId);
+    if (!node) continue;
+    const values = evaluateNodeAtFrame(timeline, nodeId, frame);
+    if (values.size > 0) {
+      const updated = applyAnimatedValues(node, values);
+      if (updated !== node) {
+        sg.updateNode(nodeId, updated);
+      }
+    }
+  }
+
+  // After FK animation, evaluate IK chains
+  if (ikChains.length > 0) {
+    evaluateIKChains(ikChains, sg);
+  }
+}
+
 export function usePlayback() {
   const controllerRef = useRef<PlaybackController | null>(null);
   const sceneGraph = useSceneGraph();
   const sceneGraphRef = useRef(sceneGraph);
   sceneGraphRef.current = sceneGraph;
+  // True while this hook writes animated values, so those aren't taken for user edits
+  const applyingRef = useRef(false);
 
-  // Apply animated values from timeline to ALL scene graph nodes (including children in groups)
+  // Apply the timeline at a frame
   const applyAnimations = useCallback((frame: number) => {
     const sg = sceneGraphRef.current;
-    const { timeline, ikChains } = useEditorStore.getState();
-    if (!timeline.tracks || timeline.tracks.length === 0) {
-      // Even without animation tracks, evaluate IK chains (for interactive posing)
-      if (ikChains.length > 0) {
-        evaluateIKChains(ikChains, sg);
-      }
-      return;
-    }
-    // Get all unique animated node IDs from timeline tracks
-    const animatedNodeIds = getAnimatedNodes(timeline);
-    for (const nodeId of animatedNodeIds) {
-      const node = sg.getNode(nodeId);
-      if (!node) continue;
-      const values = evaluateNodeAtFrame(timeline, nodeId, frame);
-      if (values.size > 0) {
-        const updated = applyAnimatedValues(node, values);
-        if (updated !== node) {
-          sg.updateNode(nodeId, updated);
-        }
-      }
-    }
-
-    // After FK animation, evaluate IK chains
-    if (ikChains.length > 0) {
-      evaluateIKChains(ikChains, sg);
+    // Before overwriting sequenced objects, keep what the user changed on them
+    // (moved, scaled, ...) by shifting their rest poses. Skipped when the
+    // sequence itself was replaced (undo, page switch, project load).
+    useEditorStore.getState().flushSequenceEdits(sg);
+    const { timeline, ikChains, animationSequence } = useEditorStore.getState();
+    noteSequenceShown(timeline, frame, animationSequence);
+    applyingRef.current = true;
+    try {
+      applyFrame(sg, timeline, ikChains, frame);
+    } finally {
+      applyingRef.current = false;
     }
   }, []);
+
+  // Absorb edits to sequenced objects shortly after they're made (a drag ends,
+  // a field is committed) so saving or switching pages can't lose them
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const unsub = sceneGraph.on('nodeChanged', (event) => {
+      if (applyingRef.current) return;
+      const { animationSequence } = useEditorStore.getState();
+      if (!animationSequence.restPoses[event.nodeId ?? '']) return;
+      clearTimeout(timer);
+      timer = setTimeout(() => useEditorStore.getState().flushSequenceEdits(sceneGraph), 150);
+    });
+    return () => {
+      unsub();
+      clearTimeout(timer);
+    };
+  }, [sceneGraph]);
 
   // Create controller + subscribe in one effect for StrictMode compatibility
   useEffect(() => {

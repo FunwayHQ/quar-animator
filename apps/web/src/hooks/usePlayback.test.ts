@@ -8,6 +8,7 @@ import type { ReactNode } from 'react';
 import { usePlayback } from './usePlayback';
 import { useEditorStore, DEFAULT_FILL, DEFAULT_STROKE } from '../stores/editorStore';
 import { SceneGraphProvider, useSceneGraph } from '../contexts/SceneGraphContext';
+import type { Node } from '@quar/types';
 import { PlaybackController, addKeyframe, createTimeline, getOrCreateTrack } from '@quar/animation';
 
 // Mock PlaybackController to avoid rAF issues in tests
@@ -174,6 +175,82 @@ describe('usePlayback', () => {
     // The controller is running, so toggling now pauses rather than starting
     act(() => result.current.togglePlay());
     expect(useEditorStore.getState().isPlaying).toBe(false);
+  });
+
+  describe('Animation Sequence objects', () => {
+    function addBox(sg: ReturnType<typeof useSceneGraph>) {
+      sg.addNode({
+        id: 'box',
+        name: 'Box',
+        type: 'rectangle',
+        parent: null,
+        children: [],
+        transform: {
+          position: { x: 0, y: 0 },
+          rotation: 0,
+          scale: { x: 1, y: 1 },
+          anchor: { x: 0.5, y: 0.5 },
+          skew: { x: 0, y: 0 },
+        },
+        visible: true,
+        locked: false,
+        opacity: 1,
+        blendMode: 'normal',
+        width: 50,
+        height: 50,
+        cornerRadius: [0, 0, 0, 0],
+        fills: [],
+        strokes: [],
+      } as Node);
+    }
+    const moveBoxTo = (sg: ReturnType<typeof useSceneGraph>, y: number) => {
+      const node = sg.getNode('box')!;
+      sg.updateNode('box', { transform: { ...node.transform, position: { x: 0, y } } });
+    };
+    const restY = () =>
+      useEditorStore.getState().animationSequence.restPoses.box?.['transform.position.y'];
+
+    it('carries a move into the animation when the playhead moves on', () => {
+      const { result } = renderHook(() => usePlaybackWithSceneGraph(), { wrapper });
+      const sg = result.current.sceneGraph;
+      act(() => {
+        useEditorStore.getState().resetProject();
+        addBox(sg);
+        useEditorStore.getState().addSequenceSteps(sg, ['box'], 'rise-in', { duration: 24 });
+        useEditorStore.getState().setCurrentFrame(24);
+      });
+      expect(sg.getNode('box')!.transform.position.y).toBeCloseTo(0);
+
+      act(() => moveBoxTo(sg, 30));
+      act(() => useEditorStore.getState().setCurrentFrame(0));
+      expect(restY()).toBeCloseTo(30);
+
+      // Back at the end of the rise the box is where it was moved, not snapped back
+      act(() => useEditorStore.getState().setCurrentFrame(24));
+      expect(sg.getNode('box')!.transform.position.y).toBeCloseTo(30);
+    });
+
+    it('absorbs an edit shortly after it is made, before the playhead moves', () => {
+      vi.useFakeTimers();
+      try {
+        const { result } = renderHook(() => usePlaybackWithSceneGraph(), { wrapper });
+        const sg = result.current.sceneGraph;
+        act(() => {
+          useEditorStore.getState().resetProject();
+          addBox(sg);
+          useEditorStore.getState().addSequenceSteps(sg, ['box'], 'rise-in', { duration: 24 });
+          useEditorStore.getState().setCurrentFrame(24);
+        });
+        act(() => moveBoxTo(sg, -20));
+        expect(restY()).toBeCloseTo(0);
+        act(() => {
+          vi.advanceTimersByTime(200);
+        });
+        expect(restY()).toBeCloseTo(-20);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
   });
 
   it('stop should pause and go to frame 0', () => {

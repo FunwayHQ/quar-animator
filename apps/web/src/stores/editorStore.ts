@@ -3295,6 +3295,7 @@ function createPageActions(
       // If a symbol is being edited, exit first so the live scene is the real
       // page content (not the symbol) before we snapshot the active page.
       if (get().editingSymbolId) get().exitSymbolEdit(sceneGraph);
+      get().flushSequenceEdits(sceneGraph);
       const state = get();
       // Save current page state first (immutable update)
       const updatedPages = state.pages.map((p) => {
@@ -3389,6 +3390,7 @@ function createPageActions(
       // Exit symbol-edit first so a duplicate of the active page captures the
       // real page scene, not the symbol being edited.
       if (get().editingSymbolId) get().exitSymbolEdit(sceneGraph);
+      get().flushSequenceEdits(sceneGraph);
       const state = get();
       let sourcePage = state.pages.find((p) => p.id === pageId);
       if (!sourcePage) return;
@@ -3441,6 +3443,7 @@ function createPageActions(
       if (initial.editingSymbolId) {
         get().exitSymbolEdit(sceneGraph);
       }
+      get().flushSequenceEdits(sceneGraph);
 
       const state = get();
       const targetPage = state.pages.find((p) => p.id === pageId);

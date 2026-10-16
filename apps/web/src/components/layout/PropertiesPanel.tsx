@@ -101,10 +101,12 @@ function fmt1(v: number): string {
 
 /** Returns true if auto-keyframe is on OR the property already has keyframes */
 function shouldKeyframe(autoKeyframe: boolean, nodeId: string, property: string): boolean {
-  if (autoKeyframe) return true;
   const { timeline } = useEditorStore.getState();
-  if (!timeline) return false;
-  const track = findTrack(timeline, nodeId, property);
+  const track = timeline ? findTrack(timeline, nodeId, property) : undefined;
+  // The Animation Sequence animates this property: an edit moves the object's
+  // whole animation (its rest pose) instead of adding a keyframe
+  if (track?.keyframes.some((kf) => kf.sequenceStepId !== undefined)) return false;
+  if (autoKeyframe) return true;
   return track != null && track.keyframes.length > 0;
 }
 

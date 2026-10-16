@@ -6,6 +6,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { SceneGraph } from '@quar/core';
 import type { RectangleNode } from '@quar/types';
 import { useEditorStore } from './editorStore';
+import { noteSequenceShown } from './sequenceActions';
 import { deserializeProject, serializeProject } from '../services/projectSerializer';
 
 function makeRect(id: string, x = 0, opacity = 1): RectangleNode {
@@ -202,6 +203,102 @@ describe('Animation Sequence actions', () => {
     expect(store().focusedSequenceStepId).toBe(second);
     expect([...store().selectedNodeIds]).toEqual(['b']);
     useEditorStore.setState({ sequenceWindowOpen: false, focusedSequenceStepId: null });
+  });
+
+  describe('editing a sequenced object moves its animation', () => {
+    const node = (id: string) => sg.getNode(id)!;
+    const move = (id: string, changes: { x?: number; y?: number }) => {
+      const t = node(id).transform;
+      sg.updateNode(id, {
+        transform: {
+          ...t,
+          position: { x: changes.x ?? t.position.x, y: changes.y ?? t.position.y },
+        },
+      });
+    };
+    const shown = () => {
+      const state = store();
+      return [state.timeline, state.currentFrame] as const;
+    };
+    const pose = (id: string) => store().animationSequence.restPoses[id]!;
+    const lastKeyframeValue = (id: string, property: string) =>
+      store()
+        .timeline.tracks.find((track) => track.nodeId === id && track.property === property)!
+        .keyframes.at(-1)!.value;
+
+    it('shifts the rest pose of an animated property by the edit', () => {
+      store().addSequenceSteps(sg, ['a'], 'rise-in', { duration: 24 });
+      useEditorStore.setState({ currentFrame: 24 }); // rise finished: y at rest (0)
+      const [timeline] = shown();
+      move('a', { y: 50 });
+
+      expect(store().absorbSequenceEdits(sg, timeline, 24)).toBe(true);
+      expect(pose('a')['transform.position.y']).toBe(50);
+      // The rise now ends where the object was moved to
+      expect(lastKeyframeValue('a', 'transform.position.y')).toBe(50);
+    });
+
+    it('applies a mid-animation edit as an offset', () => {
+      store().addSequenceSteps(sg, ['a'], 'rise-in', { duration: 24 });
+      const [timeline] = shown();
+      // At frame 0 the object is at the start of its rise (offset below rest)
+      const startY = node('a').transform.position.y;
+      move('a', { y: startY + 10 });
+      store().absorbSequenceEdits(sg, timeline, 0);
+      expect(pose('a')['transform.position.y']).toBeCloseTo(10);
+    });
+
+    it('scales the rest pose by the ratio of a scale edit', () => {
+      store().addSequenceSteps(sg, ['a'], 'pop-in', { duration: 20 });
+      useEditorStore.setState({ currentFrame: 20 });
+      const [timeline] = shown();
+      const t = node('a').transform;
+      sg.updateNode('a', { transform: { ...t, scale: { x: 2, y: 2 } } });
+      store().absorbSequenceEdits(sg, timeline, 20);
+      expect(pose('a')['transform.scale.x']).toBeCloseTo(2);
+    });
+
+    it('takes the live value for properties nothing animates', () => {
+      store().addSequenceSteps(sg, ['a'], 'fade-in', { duration: 24 });
+      const [timeline, frame] = shown();
+      move('a', { x: 120 });
+      store().absorbSequenceEdits(sg, timeline, frame);
+      expect(pose('a')['transform.position.x']).toBe(120);
+    });
+
+    it('leaves properties animated by the user’s own keyframes alone', () => {
+      store().addSequenceSteps(sg, ['a'], 'fade-in', { duration: 24 });
+      store().addKeyframeAtFrame('a', 'transform.rotation', 0, 0);
+      store().addKeyframeAtFrame('a', 'transform.rotation', 30, 90);
+      const [timeline, frame] = shown();
+      const t = node('a').transform;
+      sg.updateNode('a', { transform: { ...t, rotation: 45 } });
+      expect(store().absorbSequenceEdits(sg, timeline, frame)).toBe(false);
+      expect(pose('a')['transform.rotation']).toBe(0);
+    });
+
+    it('keeps a move made just before editing the sequence', () => {
+      store().addSequenceSteps(sg, ['a'], 'rise-in', { duration: 24 });
+      useEditorStore.setState({ currentFrame: 24 });
+      move('a', { y: 40 });
+      store().addSequenceSteps(sg, ['b'], 'fade-in', { duration: 24 });
+      expect(pose('a')['transform.position.y']).toBe(40);
+      expect(node('a').transform.position.y).toBe(40);
+    });
+
+    it('flushes against what was last shown, unless the sequence was replaced since', () => {
+      store().addSequenceSteps(sg, ['a'], 'fade-in', { duration: 24 });
+      const state = store();
+      noteSequenceShown(state.timeline, state.currentFrame, state.animationSequence);
+      move('a', { x: 77 });
+      expect(store().flushSequenceEdits(sg)).toBe(true);
+      expect(pose('a')['transform.position.x']).toBe(77);
+
+      // After undo the sequence object differs from what was shown: no flush
+      store().undo(sg);
+      move('a', { x: 5 });
+      expect(store().flushSequenceEdits(sg)).toBe(false);
+    });
   });
 
   it('opens and closes the sequence window', () => {

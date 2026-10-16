@@ -236,9 +236,10 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
 
     /** Returns true if auto-keyframe is on OR the property already has keyframes */
     const shouldKf = (nodeId: string, property: string): boolean => {
+      const track = timeline ? findTrack(timeline, nodeId, property) : undefined;
+      // Sequence-animated: the edit shifts the object's rest pose instead
+      if (track?.keyframes.some((kf) => kf.sequenceStepId !== undefined)) return false;
       if (autoKf) return true;
-      if (!timeline) return false;
-      const track = findTrack(timeline, nodeId, property);
       return track != null && track.keyframes.length > 0;
     };
 

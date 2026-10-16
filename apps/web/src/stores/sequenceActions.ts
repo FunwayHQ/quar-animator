@@ -11,11 +11,13 @@ import {
   createAnimationSequence,
   evaluateNodeAtFrame,
   getPresetBaseValue,
+  getProperty,
   isPresetApplicable,
   moveSequenceStep as moveStepInSequence,
   normalizeSequence,
   removeSequenceStep as removeStepFromSequence,
   setProperty,
+  SEQUENCE_REST_PROPERTIES,
   type AnimationPresetDirection,
   type AnimationPresetId,
   type AnimationSequence,
@@ -67,6 +69,35 @@ export interface SequenceActions {
   ) => void;
   removeSequenceStep: (sceneGraph: SceneGraphLike, stepId: string) => void;
   moveSequenceStep: (sceneGraph: SceneGraphLike, fromIndex: number, toIndex: number) => void;
+  /**
+   * Fold edits the user made to sequenced objects (moving, scaling, ...) into
+   * their rest poses, so the whole animation follows instead of snapping back.
+   * `shownTimeline` at `shownFrame` is what the objects showed before the edit.
+   * Returns true when the sequence changed.
+   */
+  absorbSequenceEdits: (
+    sceneGraph: SceneGraphLike,
+    shownTimeline: Timeline,
+    shownFrame: number
+  ) => boolean;
+  /**
+   * Absorb edits made since the playback hook last showed a frame (see
+   * noteSequenceShown). Call before anything that would discard them: saving,
+   * switching pages. No-op when the sequence was replaced since.
+   */
+  flushSequenceEdits: (sceneGraph: SceneGraphLike) => boolean;
+}
+
+/** What the canvas last showed, so later differences are known to be user edits. */
+let lastShown: { timeline: Timeline; frame: number; sequence: AnimationSequence } | null = null;
+
+/** Called by the playback hook whenever it applies a frame. */
+export function noteSequenceShown(
+  timeline: Timeline,
+  frame: number,
+  sequence: AnimationSequence
+): void {
+  lastShown = { timeline, frame, sequence };
 }
 
 type SequenceState = Pick<
@@ -157,6 +188,60 @@ export function pruneSequenceSteps(
   );
 }
 
+const EDIT_EPSILON = 1e-6;
+
+/**
+ * Rest poses updated with what the user changed since `shownTimeline` was shown
+ * at `shownFrame`, or null when nothing changed. A sequence-animated property
+ * shifts its rest value by the edit (scale by the ratio, opacity clamped); an
+ * un-animated property takes its live value. Properties animated only by the
+ * user's own keyframes are left alone — they change every frame in playback.
+ */
+export function absorbedRestPoses(
+  sceneGraph: SceneGraphLike,
+  sequence: AnimationSequence,
+  shownTimeline: Timeline,
+  shownFrame: number
+): AnimationSequence['restPoses'] | null {
+  const animated = sequenceAnimatedProperties(shownTimeline);
+  const tracked = new Set(
+    shownTimeline.tracks.map((track) => `${track.nodeId}\u0000${track.property}`)
+  );
+  let changed = false;
+  const restPoses: AnimationSequence['restPoses'] = {};
+  for (const [nodeId, pose] of Object.entries(sequence.restPoses)) {
+    const node = sceneGraph.getNode(nodeId);
+    const next = { ...pose };
+    restPoses[nodeId] = next;
+    if (!node) continue;
+    const shown = evaluateNodeAtFrame(shownTimeline, nodeId, shownFrame);
+    for (const property of SEQUENCE_REST_PROPERTIES) {
+      const live = getProperty(node, property);
+      const rest = pose[property];
+      if (typeof live !== 'number' || rest === undefined) continue;
+      let value = rest;
+      if (animated.get(nodeId)?.has(property)) {
+        const expected = shown.get(property);
+        if (typeof expected !== 'number' || Math.abs(live - expected) <= EDIT_EPSILON) continue;
+        if (property.startsWith('transform.scale.')) {
+          value = expected === 0 ? rest : rest * (live / expected);
+        } else if (property === 'opacity') {
+          value = Math.min(1, Math.max(0, rest + live - expected));
+        } else {
+          value = rest + live - expected;
+        }
+      } else if (!tracked.has(`${nodeId}\u0000${property}`)) {
+        value = live;
+      }
+      if (Math.abs(value - rest) > EDIT_EPSILON) {
+        next[property] = value;
+        changed = true;
+      }
+    }
+  }
+  return changed ? restPoses : null;
+}
+
 export function createSequenceActions(
   set: (partial: Partial<EditorStore> | ((state: EditorStore) => Partial<EditorStore>)) => void,
   get: () => EditorStore
@@ -166,8 +251,11 @@ export function createSequenceActions(
     sceneGraph: SceneGraphLike,
     edit: (sequence: AnimationSequence) => AnimationSequence
   ): boolean => {
+    if (get().editingSymbolId) return false;
+    // Keep edits made to sequenced objects since the playhead last moved
+    const before = get();
+    get().absorbSequenceEdits(sceneGraph, before.timeline, before.currentFrame);
     const state = get();
-    if (state.editingSymbolId) return false;
     const sequence = edit(structuredClone(state.animationSequence));
     get().pushUndo(sceneGraph);
     set(applySequence(sceneGraph, get(), normalizeSequence(sequence)));
@@ -188,6 +276,26 @@ export function createSequenceActions(
       });
     },
     setSequenceWindowOpen: (open) => set({ sequenceWindowOpen: open }),
+
+    absorbSequenceEdits: (sceneGraph, shownTimeline, shownFrame) => {
+      const state = get();
+      if (state.editingSymbolId || state.animationSequence.steps.length === 0) return false;
+      const restPoses = absorbedRestPoses(
+        sceneGraph,
+        state.animationSequence,
+        shownTimeline,
+        shownFrame
+      );
+      if (!restPoses) return false;
+      set(applySequence(sceneGraph, state, { ...state.animationSequence, restPoses }));
+      return true;
+    },
+
+    flushSequenceEdits: (sceneGraph) => {
+      const shown = lastShown;
+      if (!shown || shown.sequence !== get().animationSequence) return false;
+      return get().absorbSequenceEdits(sceneGraph, shown.timeline, shown.frame);
+    },
     toggleSequenceWindow: () => set({ sequenceWindowOpen: !get().sequenceWindowOpen }),
 
     addSequenceSteps: (sceneGraph, nodeIds, presetId, options) => {

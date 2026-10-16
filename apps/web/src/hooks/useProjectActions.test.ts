@@ -131,6 +131,7 @@ const mockEditorState: Record<string, unknown> = {
   frameRate: 30,
   clearHistory: vi.fn(),
   resetProject: vi.fn(),
+  flushSequenceEdits: vi.fn(),
 };
 
 vi.mock('../stores/editorStore', () => ({
