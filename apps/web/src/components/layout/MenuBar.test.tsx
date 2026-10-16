@@ -109,6 +109,21 @@ describe('MenuBar', () => {
     ).toBeTruthy();
   });
 
+  it('flanks the toolbar with one group per side so it can center in the window', () => {
+    render(<MenuBar toolbar={<div>Tools</div>} />);
+
+    // Exactly three header columns: [logo + menus] [toolbar] [project name].
+    // Equal flexible side columns are what keep the toolbar at the true center.
+    const slot = screen.getByTestId('menubar-toolbar');
+    const header = slot.closest('header')!;
+    expect(header.children).toHaveLength(3);
+    const [leading, center, trailing] = Array.from(header.children);
+    expect(center).toBe(slot);
+    expect(leading).toContainElement(screen.getByAltText('Quar Animator'));
+    expect(leading).toContainElement(screen.getByRole('button', { name: 'File' }));
+    expect(trailing).toContainElement(screen.getByTestId('project-name'));
+  });
+
   it('omits the toolbar slot when no toolbar is given', () => {
     render(<MenuBar />);
     expect(screen.queryByTestId('menubar-toolbar')).not.toBeInTheDocument();

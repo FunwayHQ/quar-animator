@@ -218,11 +218,21 @@
    Project Name Display
    ============================================================================ */
 
-/* Tool palette: centered in the space between the menus and the project name.
-   On windows too narrow for everything it scrolls sideways instead of
-   overlapping the menus. */
+/* Logo + menus and the project name flank the toolbar at equal flexible
+   widths (never narrower than their content), so the toolbar sits at the
+   window's exact center whenever it fits and only shifts to avoid overlap. */
+.leading {
+  flex: 1 0 0;
+  min-width: max-content;
+  display: flex;
+  align-items: center;
+  gap: var(--space-lg);
+}
+
+/* Tool palette. On windows too narrow for everything it shrinks and scrolls
+   sideways instead of overlapping the menus. */
 .toolbarSlot {
-  flex: 1;
+  flex: 0 1 auto;
   min-width: 0;
   height: 100%;
   display: flex;
@@ -236,8 +246,10 @@
 }
 
 .actions {
-  margin-left: auto;
+  flex: 1 0 0;
+  min-width: max-content;
   display: flex;
+  justify-content: flex-end;
   align-items: center;
   gap: var(--space-md);
 }

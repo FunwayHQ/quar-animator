@@ -419,703 +419,705 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
   return (
     <>
       <header className={styles.menuBar} ref={menuBarRef}>
-        <div className={styles.logo}>
-          <img
-            src={window.location.protocol === 'file:' ? './logo.svg' : '/logo.svg'}
-            alt="Quar Animator"
-            className={styles.logoImage}
-          />
+        <div className={styles.leading}>
+          <div className={styles.logo}>
+            <img
+              src={window.location.protocol === 'file:' ? './logo.svg' : '/logo.svg'}
+              alt="Quar Animator"
+              className={styles.logoImage}
+            />
+          </div>
+
+          <nav className={styles.menus}>
+            {/* ====== FILE MENU ====== */}
+            <div className={styles.menuContainer}>
+              {menuButton('file', 'File', 'menu-file')}
+              {openMenu === 'file' && (
+                <div className={styles.dropdown} role="menu" data-testid="file-menu-dropdown">
+                  <MenuItem label="New Project" shortcut="Ctrl+N" onClick={handleNew} />
+                  <MenuItem
+                    label="Open Project..."
+                    shortcut="Ctrl+O"
+                    onClick={() => void handleOpen()}
+                  />
+                  <Separator />
+                  <MenuItem label="Save" shortcut="Ctrl+S" onClick={handleSave} />
+                  <MenuItem label="Save As..." shortcut="Ctrl+Shift+S" onClick={handleSaveAs} />
+                  <Separator />
+                  <MenuItem label="Download as .quar" onClick={handleDownload} />
+                  <MenuItem label="Import .quar..." onClick={handleImport} />
+                  <MenuItem label="Import SVG..." shortcut="Ctrl+I" onClick={handleImportSvg} />
+                  <MenuItem label="Import Image..." onClick={handleImportImage} />
+                </div>
+              )}
+            </div>
+
+            {/* ====== EDIT MENU ====== */}
+            <div className={styles.menuContainer}>
+              {menuButton('edit', 'Edit', 'menu-edit')}
+              {openMenu === 'edit' && (
+                <div className={styles.dropdown} role="menu" data-testid="edit-menu-dropdown">
+                  <MenuItem
+                    label="Undo"
+                    shortcut="Ctrl+Z"
+                    disabled={!canUndo}
+                    onClick={() => {
+                      closeMenu();
+                      undoAction(sceneGraph);
+                    }}
+                  />
+                  <MenuItem
+                    label="Redo"
+                    shortcut="Ctrl+Shift+Z"
+                    disabled={!canRedo}
+                    onClick={() => {
+                      closeMenu();
+                      redoAction(sceneGraph);
+                    }}
+                  />
+                  <Separator />
+                  <MenuItem
+                    label="Cut"
+                    shortcut="Ctrl+X"
+                    disabled={!hasSelection}
+                    onClick={() => {
+                      closeMenu();
+                      cutSelectionAction(sceneGraph);
+                    }}
+                  />
+                  <MenuItem
+                    label="Copy"
+                    shortcut="Ctrl+C"
+                    disabled={!hasSelection}
+                    onClick={() => {
+                      closeMenu();
+                      copySelectionAction(sceneGraph);
+                    }}
+                  />
+                  <MenuItem
+                    label="Paste"
+                    shortcut="Ctrl+V"
+                    disabled={!clipboard}
+                    onClick={() => {
+                      closeMenu();
+                      pasteClipboardAction(sceneGraph);
+                    }}
+                  />
+                  <MenuItem
+                    label="Duplicate"
+                    shortcut="Ctrl+D"
+                    disabled={!hasSelection}
+                    onClick={() => {
+                      closeMenu();
+                      duplicateSelectionAction(sceneGraph);
+                    }}
+                  />
+                  <MenuItem
+                    label="Delete"
+                    shortcut="Del"
+                    disabled={!hasSelection}
+                    onClick={() => {
+                      closeMenu();
+                      deleteSelectionAction(sceneGraph);
+                    }}
+                  />
+                  <MenuItem
+                    label="Select All"
+                    shortcut="Ctrl+A"
+                    onClick={() => {
+                      closeMenu();
+                      selectAllAction(sceneGraph);
+                    }}
+                  />
+                  <Separator />
+                  <SectionHeader label="Arrange" />
+                  <MenuItem
+                    label="Group"
+                    shortcut="Ctrl+G"
+                    disabled={!hasMultipleSelected}
+                    onClick={() => {
+                      closeMenu();
+                      groupSelectionAction(sceneGraph);
+                    }}
+                  />
+                  <MenuItem
+                    label="Ungroup"
+                    shortcut="Ctrl+Shift+G"
+                    disabled={!hasGroupSelected}
+                    onClick={() => {
+                      closeMenu();
+                      ungroupSelectionAction(sceneGraph);
+                    }}
+                  />
+                  <Separator />
+                  <MenuItem
+                    label="Bring Forward"
+                    shortcut="Ctrl+]"
+                    disabled={!hasSelection}
+                    onClick={() => {
+                      closeMenu();
+                      bringForwardAction(sceneGraph);
+                    }}
+                  />
+                  <MenuItem
+                    label="Bring to Front"
+                    shortcut="Ctrl+Shift+]"
+                    disabled={!hasSelection}
+                    onClick={() => {
+                      closeMenu();
+                      bringToFrontAction(sceneGraph);
+                    }}
+                  />
+                  <MenuItem
+                    label="Send Backward"
+                    shortcut="Ctrl+["
+                    disabled={!hasSelection}
+                    onClick={() => {
+                      closeMenu();
+                      sendBackwardAction(sceneGraph);
+                    }}
+                  />
+                  <MenuItem
+                    label="Send to Back"
+                    shortcut="Ctrl+Shift+["
+                    disabled={!hasSelection}
+                    onClick={() => {
+                      closeMenu();
+                      sendToBackAction(sceneGraph);
+                    }}
+                  />
+                  <Separator />
+                  <SectionHeader label="Boolean" />
+                  <MenuItem
+                    label="Union"
+                    shortcut="Ctrl+Shift+U"
+                    disabled={!hasMultipleSelected}
+                    onClick={() => {
+                      closeMenu();
+                      booleanUnionAction(sceneGraph);
+                    }}
+                  />
+                  <MenuItem
+                    label="Subtract"
+                    shortcut="Ctrl+Shift+D"
+                    disabled={!hasMultipleSelected}
+                    onClick={() => {
+                      closeMenu();
+                      booleanSubtractAction(sceneGraph);
+                    }}
+                  />
+                  <MenuItem
+                    label="Intersect"
+                    shortcut="Ctrl+Shift+I"
+                    disabled={!hasMultipleSelected}
+                    onClick={() => {
+                      closeMenu();
+                      booleanIntersectAction(sceneGraph);
+                    }}
+                  />
+                  <MenuItem
+                    label="Exclude"
+                    shortcut="Ctrl+Shift+X"
+                    disabled={!hasMultipleSelected}
+                    onClick={() => {
+                      closeMenu();
+                      booleanExcludeAction(sceneGraph);
+                    }}
+                  />
+                  <MenuItem
+                    label="Flatten Boolean"
+                    disabled={!hasBooleanGroupSelected}
+                    onClick={() => {
+                      closeMenu();
+                      flattenBooleanGroupAction(sceneGraph);
+                    }}
+                  />
+                  <MenuItem
+                    label="Release Boolean"
+                    disabled={!hasBooleanGroupSelected}
+                    onClick={() => {
+                      closeMenu();
+                      releaseBooleanGroupAction(sceneGraph);
+                    }}
+                  />
+                  <Separator />
+                  <SectionHeader label="Convert" />
+                  <MenuItem
+                    label="Convert to Path"
+                    shortcut="Ctrl+Shift+P"
+                    disabled={!hasTextSelected}
+                    onClick={() => {
+                      closeMenu();
+                      convertTextToPathAction(sceneGraph);
+                    }}
+                  />
+                  <MenuItem
+                    label="Outline Stroke"
+                    shortcut="Ctrl+Shift+O"
+                    disabled={!hasStrokeSelected}
+                    onClick={() => {
+                      closeMenu();
+                      outlineStrokeAction(sceneGraph);
+                    }}
+                  />
+                  <Separator />
+                  <SectionHeader label="Symbols" />
+                  <MenuItem
+                    label="Create Symbol"
+                    shortcut="Ctrl+Shift+K"
+                    disabled={selectedNodeIds.size === 0}
+                    onClick={() => {
+                      closeMenu();
+                      useEditorStore.getState().createSymbol(sceneGraph);
+                    }}
+                  />
+                  <MenuItem
+                    label="Detach Instance"
+                    disabled={(() => {
+                      if (selectedNodeIds.size !== 1) return true;
+                      const selId = [...selectedNodeIds][0]!;
+                      const selNode = sceneGraph.getNode(selId);
+                      return !selNode || selNode.type !== 'symbol-instance';
+                    })()}
+                    onClick={() => {
+                      closeMenu();
+                      useEditorStore.getState().detachInstance(sceneGraph);
+                    }}
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* ====== VIEW MENU ====== */}
+            <div className={styles.menuContainer}>
+              {menuButton('view', 'View', 'menu-view')}
+              {openMenu === 'view' && (
+                <div className={styles.dropdown} role="menu" data-testid="view-menu-dropdown">
+                  <MenuItem
+                    label="Zoom In"
+                    shortcut="Ctrl+="
+                    onClick={() => {
+                      closeMenu();
+                      dispatchViewEvent(VIEW_EVENTS.ZOOM_IN);
+                    }}
+                  />
+                  <MenuItem
+                    label="Zoom Out"
+                    shortcut="Ctrl+-"
+                    onClick={() => {
+                      closeMenu();
+                      dispatchViewEvent(VIEW_EVENTS.ZOOM_OUT);
+                    }}
+                  />
+                  <MenuItem
+                    label="Zoom to 100%"
+                    shortcut="Ctrl+1"
+                    onClick={() => {
+                      closeMenu();
+                      dispatchViewEvent(VIEW_EVENTS.ZOOM_100);
+                    }}
+                  />
+                  <MenuItem
+                    label="Fit to Window"
+                    shortcut="Ctrl+0"
+                    onClick={() => {
+                      closeMenu();
+                      dispatchViewEvent(VIEW_EVENTS.FIT_TO_WINDOW);
+                    }}
+                  />
+                  <Separator />
+                  <MenuItem
+                    label="Show Rulers"
+                    shortcut="Shift+R"
+                    checked={showRulers}
+                    onClick={() => {
+                      closeMenu();
+                      toggleShowRulersAction();
+                    }}
+                  />
+                  <MenuItem
+                    label="Snap to Grid"
+                    checked={snapToGrid}
+                    onClick={() => {
+                      closeMenu();
+                      toggleSnapToGridAction();
+                    }}
+                  />
+                  <Separator />
+                  <MenuItem
+                    label="Show Guides"
+                    shortcut="Shift+G"
+                    checked={showGuides}
+                    onClick={() => {
+                      closeMenu();
+                      toggleShowGuidesAction();
+                    }}
+                  />
+                  <MenuItem
+                    label="Snap to Guides"
+                    checked={snapToGuides}
+                    onClick={() => {
+                      closeMenu();
+                      toggleSnapToGuidesAction();
+                    }}
+                  />
+                  <MenuItem
+                    label="Clear All Guides"
+                    onClick={() => {
+                      closeMenu();
+                      clearGuidesAction();
+                    }}
+                  />
+                  <Separator />
+                  <MenuItem
+                    label="Onion Skinning"
+                    shortcut="Shift+O"
+                    checked={onionSkinEnabled}
+                    onClick={() => {
+                      closeMenu();
+                      toggleOnionSkinAction();
+                    }}
+                  />
+                  <Separator />
+                  <MenuItem
+                    label="Light Appearance"
+                    checked={uiTheme === 'light'}
+                    onClick={() => {
+                      closeMenu();
+                      setUiTheme(uiTheme === 'light' ? 'dark' : 'light');
+                    }}
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* ====== ANIMATION MENU ====== */}
+            <div className={styles.menuContainer}>
+              {menuButton('animation', 'Animation', 'menu-animation')}
+              {openMenu === 'animation' && (
+                <div className={styles.dropdown} role="menu" data-testid="animation-menu-dropdown">
+                  <MenuItem
+                    label={isPlaying ? 'Pause' : 'Play'}
+                    shortcut="Space"
+                    onClick={() => {
+                      closeMenu();
+                      setIsPlayingAction(!isPlaying);
+                    }}
+                  />
+                  <Separator />
+                  <MenuItem
+                    label="Previous Frame"
+                    shortcut=","
+                    disabled={isPlaying}
+                    onClick={() => {
+                      closeMenu();
+                      if (currentFrame > 0) setCurrentFrameAction(currentFrame - 1);
+                    }}
+                  />
+                  <MenuItem
+                    label="Next Frame"
+                    shortcut="."
+                    disabled={isPlaying}
+                    onClick={() => {
+                      closeMenu();
+                      if (currentFrame < timelineDuration - 1)
+                        setCurrentFrameAction(currentFrame + 1);
+                    }}
+                  />
+                  <MenuItem
+                    label="Jump Backward 10"
+                    shortcut="Shift+,"
+                    disabled={isPlaying}
+                    onClick={() => {
+                      closeMenu();
+                      setCurrentFrameAction(Math.max(0, currentFrame - 10));
+                    }}
+                  />
+                  <MenuItem
+                    label="Jump Forward 10"
+                    shortcut="Shift+."
+                    disabled={isPlaying}
+                    onClick={() => {
+                      closeMenu();
+                      setCurrentFrameAction(Math.min(timelineDuration - 1, currentFrame + 10));
+                    }}
+                  />
+                  <Separator />
+                  <MenuItem
+                    label="Go to Start"
+                    shortcut="Home"
+                    onClick={() => {
+                      closeMenu();
+                      setCurrentFrameAction(0);
+                    }}
+                  />
+                  <MenuItem
+                    label="Go to End"
+                    shortcut="End"
+                    onClick={() => {
+                      closeMenu();
+                      setCurrentFrameAction(timelineDuration - 1);
+                    }}
+                  />
+                  <Separator />
+                  <MenuItem
+                    label="Loop Playback"
+                    shortcut="L"
+                    checked={isLooping}
+                    onClick={() => {
+                      closeMenu();
+                      setIsLoopingAction(!isLooping);
+                    }}
+                  />
+                  <MenuItem
+                    label="Auto-Keyframe"
+                    shortcut="K"
+                    checked={autoKeyframe}
+                    onClick={() => {
+                      closeMenu();
+                      toggleAutoKeyframeAction();
+                    }}
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* ====== RIGGING MENU ====== */}
+            <div className={styles.menuContainer}>
+              {menuButton('rigging', 'Rigging', 'menu-rigging')}
+              {openMenu === 'rigging' && (
+                <div className={styles.dropdown} role="menu" data-testid="rigging-menu-dropdown">
+                  <MenuItem
+                    label="Bone Tool"
+                    shortcut="J"
+                    checked={activeTool === 'bone'}
+                    onClick={() => {
+                      closeMenu();
+                      setActiveToolAction('bone');
+                    }}
+                  />
+                  <MenuItem
+                    label="Weight Paint Tool"
+                    shortcut="W"
+                    checked={activeTool === 'weight-paint'}
+                    onClick={() => {
+                      closeMenu();
+                      setActiveToolAction('weight-paint');
+                    }}
+                  />
+                  <Separator />
+                  <MenuItem
+                    label="Bind Selection to Bones"
+                    disabled={!hasShapeSelected || !hasBoneNodes}
+                    onClick={() => {
+                      closeMenu();
+                      window.dispatchEvent(new CustomEvent('menubar:bind-to-bones'));
+                    }}
+                  />
+                  <MenuItem
+                    label="Unbind Mesh"
+                    disabled={!hasSkinnedSelected}
+                    onClick={() => {
+                      closeMenu();
+                      window.dispatchEvent(new CustomEvent('menubar:unbind-mesh'));
+                    }}
+                  />
+                  <Separator />
+                  <MenuItem
+                    label="Create IK Chain"
+                    disabled={!hasBoneSelected}
+                    onClick={() => {
+                      closeMenu();
+                      window.dispatchEvent(new CustomEvent('menubar:create-ik-chain'));
+                    }}
+                  />
+                  <MenuItem
+                    label="Remove IK Chain"
+                    disabled={!hasBoneOrIKTargetSelected}
+                    onClick={() => {
+                      closeMenu();
+                      window.dispatchEvent(new CustomEvent('menubar:remove-ik-chain'));
+                    }}
+                  />
+                  <Separator />
+                  <MenuItem
+                    label="Create Smart Bone Action"
+                    disabled={!hasBoneSelected}
+                    onClick={() => {
+                      closeMenu();
+                      const boneId = Array.from(selectedNodeIds).find((id) => {
+                        const n = sceneGraph.getNode(id);
+                        return n && n.type === 'bone';
+                      });
+                      if (boneId) createSmartBoneActionStore(boneId);
+                    }}
+                    data-testid="create-smart-bone-action-menu"
+                  />
+                  <MenuItem
+                    label="Delete Smart Bone Action"
+                    disabled={!hasSmartBoneActionsForSelected}
+                    onClick={() => {
+                      closeMenu();
+                      const boneId = Array.from(selectedNodeIds).find((id) => {
+                        const n = sceneGraph.getNode(id);
+                        return n && n.type === 'bone';
+                      });
+                      if (boneId) {
+                        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument
+                        const action = smartBoneActions.find(
+                          (a: SmartBoneAction) => a.driver.boneId === boneId
+                        );
+                        // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-member-access
+                        if (action) removeSmartBoneActionStore(action.id);
+                      }
+                    }}
+                    data-testid="delete-smart-bone-action-menu"
+                  />
+                  <Separator />
+                  <MenuItem
+                    label="Create Vitruvian Controller"
+                    disabled={!hasBoneSelected}
+                    onClick={() => {
+                      closeMenu();
+                      createVitruvianController();
+                    }}
+                    data-testid="create-vitruvian-menu"
+                  />
+                  <MenuItem
+                    label="Remove Vitruvian Controller"
+                    disabled={vitruvianControllers.length === 0}
+                    onClick={() => {
+                      closeMenu();
+                      if (vitruvianControllers.length > 0) {
+                        // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-member-access
+                        removeVitruvianController(
+                          vitruvianControllers[vitruvianControllers.length - 1]!.id
+                        );
+                      }
+                    }}
+                    data-testid="remove-vitruvian-menu"
+                  />
+                  <Separator />
+                  <MenuItem
+                    label="Create Dynamic Chain"
+                    disabled={!hasBoneSelected}
+                    onClick={() => {
+                      closeMenu();
+                      const boneId = Array.from(selectedNodeIds).find((id) => {
+                        const n = sceneGraph.getNode(id);
+                        return n && n.type === 'bone';
+                      });
+                      if (boneId) createDynamicChain(sceneGraph, boneId);
+                    }}
+                    data-testid="create-dynamic-chain-menu"
+                  />
+                  <MenuItem
+                    label="Remove Dynamic Chain"
+                    disabled={!hasDynamicChainForSelected}
+                    onClick={() => {
+                      closeMenu();
+                      const boneId = Array.from(selectedNodeIds).find((id) => {
+                        const n = sceneGraph.getNode(id);
+                        return n && n.type === 'bone';
+                      });
+                      if (boneId) {
+                        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
+                        const chain = dynamicChains.find(
+                          (c: { rootBoneId: string }) => c.rootBoneId === boneId
+                        );
+                        // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-member-access
+                        if (chain) removeDynamicChain(chain.id);
+                      }
+                    }}
+                    data-testid="remove-dynamic-chain-menu"
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* ====== EXPORT MENU ====== */}
+            <div className={styles.menuContainer}>
+              {menuButton('export', 'Export', 'menu-export')}
+              {openMenu === 'export' && (
+                <div className={styles.dropdown} role="menu" data-testid="export-menu-dropdown">
+                  <MenuItem
+                    label="Export as PNG Sequence..."
+                    onClick={() => {
+                      closeMenu();
+                      showExportDialog('png-sequence');
+                    }}
+                  />
+                  <MenuItem
+                    label="Export as GIF..."
+                    onClick={() => {
+                      closeMenu();
+                      showExportDialog('gif');
+                    }}
+                  />
+                  <MenuItem
+                    label="Export as MP4..."
+                    onClick={() => {
+                      closeMenu();
+                      showExportDialog('mp4');
+                    }}
+                  />
+                  <MenuItem label="Export as WebM..." disabled onClick={closeMenu} />
+                  <Separator />
+                  <MenuItem
+                    label="Export as Lottie JSON..."
+                    onClick={() => {
+                      closeMenu();
+                      showExportDialog('lottie');
+                    }}
+                  />
+                  <MenuItem
+                    label="Export as Sprite Sheet..."
+                    onClick={() => {
+                      closeMenu();
+                      showExportDialog('sprite-sheet');
+                    }}
+                  />
+                  <MenuItem label="Export as SVG..." disabled onClick={closeMenu} />
+                </div>
+              )}
+            </div>
+
+            {/* ====== HELP MENU ====== */}
+            <div className={styles.menuContainer}>
+              {menuButton('help', 'Help', 'menu-help')}
+              {openMenu === 'help' && (
+                <div className={styles.dropdown} role="menu" data-testid="help-menu-dropdown">
+                  <MenuItem
+                    label="Keyboard Shortcuts"
+                    onClick={() => {
+                      closeMenu();
+                      setShowShortcutsDialog(true);
+                    }}
+                  />
+                  <Separator />
+                  <MenuItem
+                    label="About Quar Animator"
+                    onClick={() => {
+                      closeMenu();
+                      setShowAboutDialog(true);
+                    }}
+                  />
+                  <MenuItem
+                    label="Report Bug"
+                    onClick={() => {
+                      closeMenu();
+                      window.open(
+                        'https://github.com/niclas-AE/quar-animator/issues',
+                        '_blank',
+                        'noopener'
+                      );
+                    }}
+                  />
+                </div>
+              )}
+            </div>
+          </nav>
         </div>
-
-        <nav className={styles.menus}>
-          {/* ====== FILE MENU ====== */}
-          <div className={styles.menuContainer}>
-            {menuButton('file', 'File', 'menu-file')}
-            {openMenu === 'file' && (
-              <div className={styles.dropdown} role="menu" data-testid="file-menu-dropdown">
-                <MenuItem label="New Project" shortcut="Ctrl+N" onClick={handleNew} />
-                <MenuItem
-                  label="Open Project..."
-                  shortcut="Ctrl+O"
-                  onClick={() => void handleOpen()}
-                />
-                <Separator />
-                <MenuItem label="Save" shortcut="Ctrl+S" onClick={handleSave} />
-                <MenuItem label="Save As..." shortcut="Ctrl+Shift+S" onClick={handleSaveAs} />
-                <Separator />
-                <MenuItem label="Download as .quar" onClick={handleDownload} />
-                <MenuItem label="Import .quar..." onClick={handleImport} />
-                <MenuItem label="Import SVG..." shortcut="Ctrl+I" onClick={handleImportSvg} />
-                <MenuItem label="Import Image..." onClick={handleImportImage} />
-              </div>
-            )}
-          </div>
-
-          {/* ====== EDIT MENU ====== */}
-          <div className={styles.menuContainer}>
-            {menuButton('edit', 'Edit', 'menu-edit')}
-            {openMenu === 'edit' && (
-              <div className={styles.dropdown} role="menu" data-testid="edit-menu-dropdown">
-                <MenuItem
-                  label="Undo"
-                  shortcut="Ctrl+Z"
-                  disabled={!canUndo}
-                  onClick={() => {
-                    closeMenu();
-                    undoAction(sceneGraph);
-                  }}
-                />
-                <MenuItem
-                  label="Redo"
-                  shortcut="Ctrl+Shift+Z"
-                  disabled={!canRedo}
-                  onClick={() => {
-                    closeMenu();
-                    redoAction(sceneGraph);
-                  }}
-                />
-                <Separator />
-                <MenuItem
-                  label="Cut"
-                  shortcut="Ctrl+X"
-                  disabled={!hasSelection}
-                  onClick={() => {
-                    closeMenu();
-                    cutSelectionAction(sceneGraph);
-                  }}
-                />
-                <MenuItem
-                  label="Copy"
-                  shortcut="Ctrl+C"
-                  disabled={!hasSelection}
-                  onClick={() => {
-                    closeMenu();
-                    copySelectionAction(sceneGraph);
-                  }}
-                />
-                <MenuItem
-                  label="Paste"
-                  shortcut="Ctrl+V"
-                  disabled={!clipboard}
-                  onClick={() => {
-                    closeMenu();
-                    pasteClipboardAction(sceneGraph);
-                  }}
-                />
-                <MenuItem
-                  label="Duplicate"
-                  shortcut="Ctrl+D"
-                  disabled={!hasSelection}
-                  onClick={() => {
-                    closeMenu();
-                    duplicateSelectionAction(sceneGraph);
-                  }}
-                />
-                <MenuItem
-                  label="Delete"
-                  shortcut="Del"
-                  disabled={!hasSelection}
-                  onClick={() => {
-                    closeMenu();
-                    deleteSelectionAction(sceneGraph);
-                  }}
-                />
-                <MenuItem
-                  label="Select All"
-                  shortcut="Ctrl+A"
-                  onClick={() => {
-                    closeMenu();
-                    selectAllAction(sceneGraph);
-                  }}
-                />
-                <Separator />
-                <SectionHeader label="Arrange" />
-                <MenuItem
-                  label="Group"
-                  shortcut="Ctrl+G"
-                  disabled={!hasMultipleSelected}
-                  onClick={() => {
-                    closeMenu();
-                    groupSelectionAction(sceneGraph);
-                  }}
-                />
-                <MenuItem
-                  label="Ungroup"
-                  shortcut="Ctrl+Shift+G"
-                  disabled={!hasGroupSelected}
-                  onClick={() => {
-                    closeMenu();
-                    ungroupSelectionAction(sceneGraph);
-                  }}
-                />
-                <Separator />
-                <MenuItem
-                  label="Bring Forward"
-                  shortcut="Ctrl+]"
-                  disabled={!hasSelection}
-                  onClick={() => {
-                    closeMenu();
-                    bringForwardAction(sceneGraph);
-                  }}
-                />
-                <MenuItem
-                  label="Bring to Front"
-                  shortcut="Ctrl+Shift+]"
-                  disabled={!hasSelection}
-                  onClick={() => {
-                    closeMenu();
-                    bringToFrontAction(sceneGraph);
-                  }}
-                />
-                <MenuItem
-                  label="Send Backward"
-                  shortcut="Ctrl+["
-                  disabled={!hasSelection}
-                  onClick={() => {
-                    closeMenu();
-                    sendBackwardAction(sceneGraph);
-                  }}
-                />
-                <MenuItem
-                  label="Send to Back"
-                  shortcut="Ctrl+Shift+["
-                  disabled={!hasSelection}
-                  onClick={() => {
-                    closeMenu();
-                    sendToBackAction(sceneGraph);
-                  }}
-                />
-                <Separator />
-                <SectionHeader label="Boolean" />
-                <MenuItem
-                  label="Union"
-                  shortcut="Ctrl+Shift+U"
-                  disabled={!hasMultipleSelected}
-                  onClick={() => {
-                    closeMenu();
-                    booleanUnionAction(sceneGraph);
-                  }}
-                />
-                <MenuItem
-                  label="Subtract"
-                  shortcut="Ctrl+Shift+D"
-                  disabled={!hasMultipleSelected}
-                  onClick={() => {
-                    closeMenu();
-                    booleanSubtractAction(sceneGraph);
-                  }}
-                />
-                <MenuItem
-                  label="Intersect"
-                  shortcut="Ctrl+Shift+I"
-                  disabled={!hasMultipleSelected}
-                  onClick={() => {
-                    closeMenu();
-                    booleanIntersectAction(sceneGraph);
-                  }}
-                />
-                <MenuItem
-                  label="Exclude"
-                  shortcut="Ctrl+Shift+X"
-                  disabled={!hasMultipleSelected}
-                  onClick={() => {
-                    closeMenu();
-                    booleanExcludeAction(sceneGraph);
-                  }}
-                />
-                <MenuItem
-                  label="Flatten Boolean"
-                  disabled={!hasBooleanGroupSelected}
-                  onClick={() => {
-                    closeMenu();
-                    flattenBooleanGroupAction(sceneGraph);
-                  }}
-                />
-                <MenuItem
-                  label="Release Boolean"
-                  disabled={!hasBooleanGroupSelected}
-                  onClick={() => {
-                    closeMenu();
-                    releaseBooleanGroupAction(sceneGraph);
-                  }}
-                />
-                <Separator />
-                <SectionHeader label="Convert" />
-                <MenuItem
-                  label="Convert to Path"
-                  shortcut="Ctrl+Shift+P"
-                  disabled={!hasTextSelected}
-                  onClick={() => {
-                    closeMenu();
-                    convertTextToPathAction(sceneGraph);
-                  }}
-                />
-                <MenuItem
-                  label="Outline Stroke"
-                  shortcut="Ctrl+Shift+O"
-                  disabled={!hasStrokeSelected}
-                  onClick={() => {
-                    closeMenu();
-                    outlineStrokeAction(sceneGraph);
-                  }}
-                />
-                <Separator />
-                <SectionHeader label="Symbols" />
-                <MenuItem
-                  label="Create Symbol"
-                  shortcut="Ctrl+Shift+K"
-                  disabled={selectedNodeIds.size === 0}
-                  onClick={() => {
-                    closeMenu();
-                    useEditorStore.getState().createSymbol(sceneGraph);
-                  }}
-                />
-                <MenuItem
-                  label="Detach Instance"
-                  disabled={(() => {
-                    if (selectedNodeIds.size !== 1) return true;
-                    const selId = [...selectedNodeIds][0]!;
-                    const selNode = sceneGraph.getNode(selId);
-                    return !selNode || selNode.type !== 'symbol-instance';
-                  })()}
-                  onClick={() => {
-                    closeMenu();
-                    useEditorStore.getState().detachInstance(sceneGraph);
-                  }}
-                />
-              </div>
-            )}
-          </div>
-
-          {/* ====== VIEW MENU ====== */}
-          <div className={styles.menuContainer}>
-            {menuButton('view', 'View', 'menu-view')}
-            {openMenu === 'view' && (
-              <div className={styles.dropdown} role="menu" data-testid="view-menu-dropdown">
-                <MenuItem
-                  label="Zoom In"
-                  shortcut="Ctrl+="
-                  onClick={() => {
-                    closeMenu();
-                    dispatchViewEvent(VIEW_EVENTS.ZOOM_IN);
-                  }}
-                />
-                <MenuItem
-                  label="Zoom Out"
-                  shortcut="Ctrl+-"
-                  onClick={() => {
-                    closeMenu();
-                    dispatchViewEvent(VIEW_EVENTS.ZOOM_OUT);
-                  }}
-                />
-                <MenuItem
-                  label="Zoom to 100%"
-                  shortcut="Ctrl+1"
-                  onClick={() => {
-                    closeMenu();
-                    dispatchViewEvent(VIEW_EVENTS.ZOOM_100);
-                  }}
-                />
-                <MenuItem
-                  label="Fit to Window"
-                  shortcut="Ctrl+0"
-                  onClick={() => {
-                    closeMenu();
-                    dispatchViewEvent(VIEW_EVENTS.FIT_TO_WINDOW);
-                  }}
-                />
-                <Separator />
-                <MenuItem
-                  label="Show Rulers"
-                  shortcut="Shift+R"
-                  checked={showRulers}
-                  onClick={() => {
-                    closeMenu();
-                    toggleShowRulersAction();
-                  }}
-                />
-                <MenuItem
-                  label="Snap to Grid"
-                  checked={snapToGrid}
-                  onClick={() => {
-                    closeMenu();
-                    toggleSnapToGridAction();
-                  }}
-                />
-                <Separator />
-                <MenuItem
-                  label="Show Guides"
-                  shortcut="Shift+G"
-                  checked={showGuides}
-                  onClick={() => {
-                    closeMenu();
-                    toggleShowGuidesAction();
-                  }}
-                />
-                <MenuItem
-                  label="Snap to Guides"
-                  checked={snapToGuides}
-                  onClick={() => {
-                    closeMenu();
-                    toggleSnapToGuidesAction();
-                  }}
-                />
-                <MenuItem
-                  label="Clear All Guides"
-                  onClick={() => {
-                    closeMenu();
-                    clearGuidesAction();
-                  }}
-                />
-                <Separator />
-                <MenuItem
-                  label="Onion Skinning"
-                  shortcut="Shift+O"
-                  checked={onionSkinEnabled}
-                  onClick={() => {
-                    closeMenu();
-                    toggleOnionSkinAction();
-                  }}
-                />
-                <Separator />
-                <MenuItem
-                  label="Light Appearance"
-                  checked={uiTheme === 'light'}
-                  onClick={() => {
-                    closeMenu();
-                    setUiTheme(uiTheme === 'light' ? 'dark' : 'light');
-                  }}
-                />
-              </div>
-            )}
-          </div>
-
-          {/* ====== ANIMATION MENU ====== */}
-          <div className={styles.menuContainer}>
-            {menuButton('animation', 'Animation', 'menu-animation')}
-            {openMenu === 'animation' && (
-              <div className={styles.dropdown} role="menu" data-testid="animation-menu-dropdown">
-                <MenuItem
-                  label={isPlaying ? 'Pause' : 'Play'}
-                  shortcut="Space"
-                  onClick={() => {
-                    closeMenu();
-                    setIsPlayingAction(!isPlaying);
-                  }}
-                />
-                <Separator />
-                <MenuItem
-                  label="Previous Frame"
-                  shortcut=","
-                  disabled={isPlaying}
-                  onClick={() => {
-                    closeMenu();
-                    if (currentFrame > 0) setCurrentFrameAction(currentFrame - 1);
-                  }}
-                />
-                <MenuItem
-                  label="Next Frame"
-                  shortcut="."
-                  disabled={isPlaying}
-                  onClick={() => {
-                    closeMenu();
-                    if (currentFrame < timelineDuration - 1)
-                      setCurrentFrameAction(currentFrame + 1);
-                  }}
-                />
-                <MenuItem
-                  label="Jump Backward 10"
-                  shortcut="Shift+,"
-                  disabled={isPlaying}
-                  onClick={() => {
-                    closeMenu();
-                    setCurrentFrameAction(Math.max(0, currentFrame - 10));
-                  }}
-                />
-                <MenuItem
-                  label="Jump Forward 10"
-                  shortcut="Shift+."
-                  disabled={isPlaying}
-                  onClick={() => {
-                    closeMenu();
-                    setCurrentFrameAction(Math.min(timelineDuration - 1, currentFrame + 10));
-                  }}
-                />
-                <Separator />
-                <MenuItem
-                  label="Go to Start"
-                  shortcut="Home"
-                  onClick={() => {
-                    closeMenu();
-                    setCurrentFrameAction(0);
-                  }}
-                />
-                <MenuItem
-                  label="Go to End"
-                  shortcut="End"
-                  onClick={() => {
-                    closeMenu();
-                    setCurrentFrameAction(timelineDuration - 1);
-                  }}
-                />
-                <Separator />
-                <MenuItem
-                  label="Loop Playback"
-                  shortcut="L"
-                  checked={isLooping}
-                  onClick={() => {
-                    closeMenu();
-                    setIsLoopingAction(!isLooping);
-                  }}
-                />
-                <MenuItem
-                  label="Auto-Keyframe"
-                  shortcut="K"
-                  checked={autoKeyframe}
-                  onClick={() => {
-                    closeMenu();
-                    toggleAutoKeyframeAction();
-                  }}
-                />
-              </div>
-            )}
-          </div>
-
-          {/* ====== RIGGING MENU ====== */}
-          <div className={styles.menuContainer}>
-            {menuButton('rigging', 'Rigging', 'menu-rigging')}
-            {openMenu === 'rigging' && (
-              <div className={styles.dropdown} role="menu" data-testid="rigging-menu-dropdown">
-                <MenuItem
-                  label="Bone Tool"
-                  shortcut="J"
-                  checked={activeTool === 'bone'}
-                  onClick={() => {
-                    closeMenu();
-                    setActiveToolAction('bone');
-                  }}
-                />
-                <MenuItem
-                  label="Weight Paint Tool"
-                  shortcut="W"
-                  checked={activeTool === 'weight-paint'}
-                  onClick={() => {
-                    closeMenu();
-                    setActiveToolAction('weight-paint');
-                  }}
-                />
-                <Separator />
-                <MenuItem
-                  label="Bind Selection to Bones"
-                  disabled={!hasShapeSelected || !hasBoneNodes}
-                  onClick={() => {
-                    closeMenu();
-                    window.dispatchEvent(new CustomEvent('menubar:bind-to-bones'));
-                  }}
-                />
-                <MenuItem
-                  label="Unbind Mesh"
-                  disabled={!hasSkinnedSelected}
-                  onClick={() => {
-                    closeMenu();
-                    window.dispatchEvent(new CustomEvent('menubar:unbind-mesh'));
-                  }}
-                />
-                <Separator />
-                <MenuItem
-                  label="Create IK Chain"
-                  disabled={!hasBoneSelected}
-                  onClick={() => {
-                    closeMenu();
-                    window.dispatchEvent(new CustomEvent('menubar:create-ik-chain'));
-                  }}
-                />
-                <MenuItem
-                  label="Remove IK Chain"
-                  disabled={!hasBoneOrIKTargetSelected}
-                  onClick={() => {
-                    closeMenu();
-                    window.dispatchEvent(new CustomEvent('menubar:remove-ik-chain'));
-                  }}
-                />
-                <Separator />
-                <MenuItem
-                  label="Create Smart Bone Action"
-                  disabled={!hasBoneSelected}
-                  onClick={() => {
-                    closeMenu();
-                    const boneId = Array.from(selectedNodeIds).find((id) => {
-                      const n = sceneGraph.getNode(id);
-                      return n && n.type === 'bone';
-                    });
-                    if (boneId) createSmartBoneActionStore(boneId);
-                  }}
-                  data-testid="create-smart-bone-action-menu"
-                />
-                <MenuItem
-                  label="Delete Smart Bone Action"
-                  disabled={!hasSmartBoneActionsForSelected}
-                  onClick={() => {
-                    closeMenu();
-                    const boneId = Array.from(selectedNodeIds).find((id) => {
-                      const n = sceneGraph.getNode(id);
-                      return n && n.type === 'bone';
-                    });
-                    if (boneId) {
-                      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument
-                      const action = smartBoneActions.find(
-                        (a: SmartBoneAction) => a.driver.boneId === boneId
-                      );
-                      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-member-access
-                      if (action) removeSmartBoneActionStore(action.id);
-                    }
-                  }}
-                  data-testid="delete-smart-bone-action-menu"
-                />
-                <Separator />
-                <MenuItem
-                  label="Create Vitruvian Controller"
-                  disabled={!hasBoneSelected}
-                  onClick={() => {
-                    closeMenu();
-                    createVitruvianController();
-                  }}
-                  data-testid="create-vitruvian-menu"
-                />
-                <MenuItem
-                  label="Remove Vitruvian Controller"
-                  disabled={vitruvianControllers.length === 0}
-                  onClick={() => {
-                    closeMenu();
-                    if (vitruvianControllers.length > 0) {
-                      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-member-access
-                      removeVitruvianController(
-                        vitruvianControllers[vitruvianControllers.length - 1]!.id
-                      );
-                    }
-                  }}
-                  data-testid="remove-vitruvian-menu"
-                />
-                <Separator />
-                <MenuItem
-                  label="Create Dynamic Chain"
-                  disabled={!hasBoneSelected}
-                  onClick={() => {
-                    closeMenu();
-                    const boneId = Array.from(selectedNodeIds).find((id) => {
-                      const n = sceneGraph.getNode(id);
-                      return n && n.type === 'bone';
-                    });
-                    if (boneId) createDynamicChain(sceneGraph, boneId);
-                  }}
-                  data-testid="create-dynamic-chain-menu"
-                />
-                <MenuItem
-                  label="Remove Dynamic Chain"
-                  disabled={!hasDynamicChainForSelected}
-                  onClick={() => {
-                    closeMenu();
-                    const boneId = Array.from(selectedNodeIds).find((id) => {
-                      const n = sceneGraph.getNode(id);
-                      return n && n.type === 'bone';
-                    });
-                    if (boneId) {
-                      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
-                      const chain = dynamicChains.find(
-                        (c: { rootBoneId: string }) => c.rootBoneId === boneId
-                      );
-                      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-member-access
-                      if (chain) removeDynamicChain(chain.id);
-                    }
-                  }}
-                  data-testid="remove-dynamic-chain-menu"
-                />
-              </div>
-            )}
-          </div>
-
-          {/* ====== EXPORT MENU ====== */}
-          <div className={styles.menuContainer}>
-            {menuButton('export', 'Export', 'menu-export')}
-            {openMenu === 'export' && (
-              <div className={styles.dropdown} role="menu" data-testid="export-menu-dropdown">
-                <MenuItem
-                  label="Export as PNG Sequence..."
-                  onClick={() => {
-                    closeMenu();
-                    showExportDialog('png-sequence');
-                  }}
-                />
-                <MenuItem
-                  label="Export as GIF..."
-                  onClick={() => {
-                    closeMenu();
-                    showExportDialog('gif');
-                  }}
-                />
-                <MenuItem
-                  label="Export as MP4..."
-                  onClick={() => {
-                    closeMenu();
-                    showExportDialog('mp4');
-                  }}
-                />
-                <MenuItem label="Export as WebM..." disabled onClick={closeMenu} />
-                <Separator />
-                <MenuItem
-                  label="Export as Lottie JSON..."
-                  onClick={() => {
-                    closeMenu();
-                    showExportDialog('lottie');
-                  }}
-                />
-                <MenuItem
-                  label="Export as Sprite Sheet..."
-                  onClick={() => {
-                    closeMenu();
-                    showExportDialog('sprite-sheet');
-                  }}
-                />
-                <MenuItem label="Export as SVG..." disabled onClick={closeMenu} />
-              </div>
-            )}
-          </div>
-
-          {/* ====== HELP MENU ====== */}
-          <div className={styles.menuContainer}>
-            {menuButton('help', 'Help', 'menu-help')}
-            {openMenu === 'help' && (
-              <div className={styles.dropdown} role="menu" data-testid="help-menu-dropdown">
-                <MenuItem
-                  label="Keyboard Shortcuts"
-                  onClick={() => {
-                    closeMenu();
-                    setShowShortcutsDialog(true);
-                  }}
-                />
-                <Separator />
-                <MenuItem
-                  label="About Quar Animator"
-                  onClick={() => {
-                    closeMenu();
-                    setShowAboutDialog(true);
-                  }}
-                />
-                <MenuItem
-                  label="Report Bug"
-                  onClick={() => {
-                    closeMenu();
-                    window.open(
-                      'https://github.com/niclas-AE/quar-animator/issues',
-                      '_blank',
-                      'noopener'
-                    );
-                  }}
-                />
-              </div>
-            )}
-          </div>
-        </nav>
 
         {toolbar && (
           <div className={styles.toolbarSlot} data-testid="menubar-toolbar">
