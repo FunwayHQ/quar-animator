@@ -10,6 +10,7 @@
  */
 
 import type {
+  ArtboardNode,
   Node,
   RectangleNode,
   EllipseNode,
@@ -35,6 +36,7 @@ import type {
   LottieTransform,
   LottieShapeVertices,
   LottieAnimatedValue,
+  LottieMask,
 } from './lottieTypes';
 import {
   trackToLottieAnimated,
@@ -79,10 +81,14 @@ export function nodeToLottieLayer(
   const shapes = nodeToLottieShapes(node, timeline, canvasH, nodeResolver, context);
   if (!shapes || shapes.length === 0) return null;
 
+  // An artboard clipping its content: a layer mask over the artboard rectangle
+  const clip = node.type === 'artboard' && node.clipContent ? [artboardClipMask(node)] : null;
+
   return {
     ind: layerIndex,
     ty: 4, // Shape layer
     nm: node.name || `Layer ${layerIndex}`,
+    ...(clip ? { hasMask: true, masksProperties: clip } : {}),
     ks: buildLottieTransform(node, timeline, canvasH),
     // Match the composition window [startFrame, endFrameInclusive + 1). Keyframe times are
     // absolute so st stays 0; using a raw duration made startFrame>0 layers
@@ -174,6 +180,8 @@ export function nodeToLottieShapes(
       return groupToLottieShapes(node, timeline, canvasH, nodeResolver, context);
     case 'text':
       return textNodeToLottieShapes(node, timeline, context);
+    case 'artboard':
+      return artboardToLottieShapes(node, timeline, canvasH, nodeResolver, context);
     default:
       return null; // Image, Bone, etc. not supported
   }
@@ -413,9 +421,10 @@ export function groupToLottieShapes(
   // root-level masks become matte layers (see maskGroupToLottieLayers).
   const maskNodeId = node.type === 'group' ? node.maskNodeId : undefined;
 
-  // Recursively convert each child into Lottie shape items
+  // Recursively convert each child into Lottie shape items. Quar draws
+  // children in array order (last on top); Lottie draws the first item on top.
   const childItems: LottieShapeItem[] = [];
-  for (const childId of node.children) {
+  for (const childId of [...node.children].reverse()) {
     if (childId === maskNodeId) continue;
     const childNode = nodeResolver(childId);
     if (!childNode || !childNode.visible) continue;
@@ -425,29 +434,100 @@ export function groupToLottieShapes(
       const grItem: LottieShapeItem = {
         ty: 'gr',
         nm: childNode.name || 'Group Child',
-        it: [
-          ...shapes,
-          // Child transform
-          {
-            ty: 'tr',
-            p: {
-              a: 0,
-              // Child position is in the group LAYER's local space (the layer is
-              // already placed at flipY(group pos)); only negate Y here, don't
-              // add another canvasH (that pushed children a full canvas too low).
-              k: [childNode.transform.position.x, -childNode.transform.position.y],
-            },
-            r: { a: 0, k: -childNode.transform.rotation },
-            s: { a: 0, k: [childNode.transform.scale.x * 100, childNode.transform.scale.y * 100] },
-            o: { a: 0, k: (childNode.opacity ?? 1) * 100 },
-          } as LottieShapeTransform,
-        ],
+        it: [...shapes, childShapeTransform(childNode, timeline)],
       } as LottieShapeItem;
       childItems.push(grItem);
     }
   }
 
   return childItems;
+}
+
+/**
+ * A grouped child's transform, animated like a layer's. The child's position is
+ * in the parent's local space, so Y is only negated — no canvas flip.
+ */
+export function childShapeTransform(node: Node, timeline: Timeline): LottieShapeTransform {
+  const { transform } = node;
+  const track = (property: string) => findTrack<number>(timeline, node.id, property);
+  return {
+    ty: 'tr',
+    p: positionTracksToLottie(
+      track('transform.position.x'),
+      track('transform.position.y'),
+      transform.position.x,
+      transform.position.y,
+      VALUE_TRANSFORMS.identity,
+      (v) => -v
+    ),
+    r: trackToLottieAnimated(track('transform.rotation'), transform.rotation, (v) => -v),
+    s: positionTracksToLottie(
+      track('transform.scale.x'),
+      track('transform.scale.y'),
+      transform.scale.x,
+      transform.scale.y,
+      VALUE_TRANSFORMS.scaleTo100,
+      VALUE_TRANSFORMS.scaleTo100
+    ),
+    o: trackToLottieAnimated(
+      track('opacity'),
+      ((node as unknown as Record<string, unknown>).opacity as number) ?? 1,
+      VALUE_TRANSFORMS.opacityTo100
+    ),
+  };
+}
+
+// ============================================================================
+// Artboard → Lottie
+// ============================================================================
+
+/** The artboard rectangle in Lottie local space (Y-down), from its anchor. */
+function artboardRectVertices(node: ArtboardNode): LottieShapeVertices {
+  const anchor = node.transform.anchor ?? { x: 0.5, y: 0.5 };
+  const left = -node.width * anchor.x;
+  const top = -node.height * (1 - anchor.y);
+  const corners = [
+    [left, top],
+    [left + node.width, top],
+    [left + node.width, top + node.height],
+    [left, top + node.height],
+  ];
+  const zero = corners.map(() => [0, 0]);
+  return { v: corners, i: zero, o: zero, c: true };
+}
+
+function artboardClipMask(node: ArtboardNode): LottieMask {
+  return {
+    nm: 'Clip',
+    mode: 'a',
+    inv: false,
+    pt: { a: 0, k: artboardRectVertices(node) },
+    o: { a: 0, k: 100 },
+  };
+}
+
+/** An artboard: its children over its background fill. */
+export function artboardToLottieShapes(
+  node: ArtboardNode,
+  timeline: Timeline,
+  canvasH: number,
+  nodeResolver?: (id: string) => Node | undefined,
+  context: LottieConvertContext = {}
+): LottieShapeItem[] {
+  const items = groupToLottieShapes(node, timeline, canvasH, nodeResolver, context);
+  const fills = fillsToLottie(node.fills, node.id, timeline);
+  if (fills.length > 0) {
+    items.push({
+      ty: 'gr',
+      nm: 'Background',
+      it: [
+        { ty: 'sh', nm: 'Artboard', ks: { a: 0, k: artboardRectVertices(node) } },
+        ...fills,
+        createShapeTransform(),
+      ],
+    });
+  }
+  return items;
 }
 
 // ============================================================================

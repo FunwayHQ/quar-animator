@@ -152,7 +152,15 @@ function buildNodeResolver(nodes: Node[]): (id: string) => Node | undefined {
 // ============================================================================
 
 /** Supported node types for Lottie export */
-const SUPPORTED_TYPES = new Set(['rectangle', 'ellipse', 'path', 'polygon', 'group', 'text']);
+const SUPPORTED_TYPES = new Set([
+  'rectangle',
+  'ellipse',
+  'path',
+  'polygon',
+  'group',
+  'artboard',
+  'text',
+]);
 
 /**
  * Count supported and unsupported nodes for an export summary.
@@ -179,7 +187,7 @@ export function analyzeLottieExport(
       unsupportedTypeSet.add(node.type);
     }
 
-    if (node.type === 'group' && nodeResolver) {
+    if ((node.type === 'group' || node.type === 'artboard') && nodeResolver) {
       for (const childId of node.children) {
         const child = nodeResolver(childId);
         if (child) visit(child);

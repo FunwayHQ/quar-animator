@@ -37,6 +37,7 @@ import type {
   LottieShapeStroke,
   LottieShapeGroup,
   LottieShapeTrim,
+  LottieShapeTransform,
 } from './lottieTypes';
 
 // ============================================================================
@@ -394,6 +395,95 @@ describe('polygonToLottieShapes', () => {
 // ============================================================================
 // pathPointsToLottieVertices
 // ============================================================================
+
+describe('grouped children and artboards', () => {
+  const resolverOf =
+    (...nodes: Node[]) =>
+    (id: string) =>
+      nodes.find((node) => node.id === id);
+
+  it('animates a grouped child’s transform and opacity', () => {
+    const child = makeRect({ id: 'child', parent: 'g1' });
+    const group = {
+      ...makeRect({ id: 'g1' }),
+      type: 'group',
+      children: ['child'],
+    } as unknown as Node;
+    const timeline = createTimeline({ duration: 60, frameRate: 30 });
+    addKeyframe(getOrCreateTrack<number>(timeline, 'child', 'transform.position.y'), 0, 0);
+    addKeyframe(getOrCreateTrack<number>(timeline, 'child', 'transform.position.y'), 20, 50);
+    addKeyframe(getOrCreateTrack<number>(timeline, 'child', 'opacity'), 0, 0);
+    addKeyframe(getOrCreateTrack<number>(timeline, 'child', 'opacity'), 20, 1);
+
+    const [item] = groupToLottieShapes(
+      group,
+      timeline,
+      CANVAS_H,
+      resolverOf(group, child)
+    ) as LottieShapeGroup[];
+    const transform = item!.it.at(-1) as LottieShapeTransform;
+    const position = transform.p.k as Array<{ t: number; s: number[] }>;
+    expect(position.map((kf) => [kf.t, kf.s[1]])).toEqual([
+      [0, -0],
+      [20, -50], // Y-up → Y-down
+    ]);
+    const opacity = transform.o.k as Array<{ t: number; s: number[] }>;
+    expect(opacity.map((kf) => [kf.t, kf.s[0]])).toEqual([
+      [0, 0],
+      [20, 100],
+    ]);
+  });
+
+  it('keeps the stacking order: the last child is drawn on top', () => {
+    const bottom = makeRect({ id: 'bottom', name: 'Bottom' });
+    const top = makeRect({ id: 'top', name: 'Top' });
+    const group = {
+      ...makeRect({ id: 'g1' }),
+      type: 'group',
+      children: ['bottom', 'top'],
+    } as unknown as Node;
+    const items = groupToLottieShapes(
+      group,
+      emptyTimeline,
+      CANVAS_H,
+      resolverOf(group, bottom, top)
+    );
+    // Lottie draws the first item on top
+    expect(items.map((item) => item.nm)).toEqual(['Top', 'Bottom']);
+  });
+
+  it('exports an artboard as its children over its background, clipped', () => {
+    const child = makeRect({ id: 'child', name: 'Child' });
+    const artboard = {
+      ...makeRect({ id: 'ab', name: 'Artboard' }),
+      type: 'artboard',
+      width: 400,
+      height: 200,
+      fills: [solidFill],
+      clipContent: true,
+      children: ['child'],
+    } as unknown as Node;
+    const layer = nodeToLottieLayer(
+      artboard,
+      emptyTimeline,
+      0,
+      CANVAS_H,
+      60,
+      resolverOf(artboard, child)
+    )!;
+    expect(layer.shapes!.map((item) => item.nm)).toEqual(['Child', 'Background']);
+    expect(layer.hasMask).toBe(true);
+    expect(layer.masksProperties![0]!.pt.k).toMatchObject({
+      v: [
+        [-200, -100],
+        [200, -100],
+        [200, 100],
+        [-200, 100],
+      ],
+      c: true,
+    });
+  });
+});
 
 describe('stroke draw-on', () => {
   const drawOnTimeline = (): Timeline => {

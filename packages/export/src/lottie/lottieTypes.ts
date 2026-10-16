@@ -60,6 +60,17 @@ export interface LottieLayer {
   parent?: number; // Parent layer index
   td?: number; // 1 = this layer is the track matte for the layer after it
   tt?: number; // Track matte applied from the layer before it (1=alpha, 3=luma)
+  hasMask?: boolean;
+  masksProperties?: LottieMask[];
+}
+
+/** A layer mask (e.g. an artboard's clip). */
+export interface LottieMask {
+  nm?: string;
+  mode: 'a' | 's' | 'i' | 'n'; // add, subtract, intersect, none
+  inv: boolean;
+  pt: LottieAnimatedShape;
+  o: LottieAnimatedValue;
 }
 
 // ============================================================================
