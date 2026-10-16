@@ -149,6 +149,7 @@ export type LottieShapeItemType =
   | 'el' // Ellipse
   | 'sr' // Polystar
   | 'fl' // Fill
+  | 'gf' // Gradient fill
   | 'st' // Stroke
   | 'tr' // Transform
   | 'tm' // Trim paths
@@ -162,6 +163,7 @@ export type LottieShapeItem =
   | LottieShapeEllipse
   | LottieShapePolyStar
   | LottieShapeFill
+  | LottieShapeGradientFill
   | LottieShapeStroke
   | LottieShapeTransform;
 
@@ -232,6 +234,20 @@ export interface LottieShapeFill {
   c: LottieAnimatedColor; // Color [r, g, b, a] (0-1)
   o: LottieAnimatedValue; // Opacity (0-100)
   r?: 1 | 2; // Fill rule (1=nonzero, 2=evenodd)
+}
+
+export interface LottieShapeGradientFill {
+  ty: 'gf';
+  nm?: string;
+  o: LottieAnimatedValue; // Opacity (0-100)
+  r?: 1 | 2; // Fill rule
+  t: 1 | 2; // 1 = linear, 2 = radial
+  s: LottieAnimatedMulti; // Start point
+  e: LottieAnimatedMulti; // End point (radial: a point on the radius)
+  g: {
+    p: number; // Number of color stops
+    k: LottieAnimatedMulti; // [offset, r, g, b]… then optional [offset, alpha]…
+  };
 }
 
 export interface LottieShapeStroke {

@@ -23,6 +23,7 @@ import type {
   Timeline,
 } from '@quar/types';
 import { findTrack } from '@quar/animation';
+import { getNodeLocalBounds } from '@quar/core';
 import type {
   LottieLayer,
   LottieShapeItem,
@@ -30,6 +31,7 @@ import type {
   LottieShapeRect,
   LottieShapeEllipse,
   LottieShapeFill,
+  LottieShapeGradientFill,
   LottieShapeStroke,
   LottieShapeTransform,
   LottieShapeTrim,
@@ -41,11 +43,11 @@ import type {
 import {
   trackToLottieAnimated,
   positionTracksToLottie,
-  colorToLottieStatic,
   steppedTrackToLottie,
   VALUE_TRANSFORMS,
 } from './lottieKeyframes';
 import { textToLottieShapes, type TextOutlineProvider } from './lottieText';
+import { colorTrackToLottie, gradientFillToLottie, type LocalBounds } from './lottiePaint';
 
 /** Optional inputs that some node types need. */
 export interface LottieConvertContext {
@@ -218,7 +220,7 @@ export function rectangleToLottieShapes(
   // Stroke(s) before fill(s): Lottie draws the first style on top, and Quar
   // draws strokes over fills
   items.push(...strokesToLottie(node.strokes, node.id, timeline));
-  items.push(...fillsToLottie(node.fills, node.id, timeline));
+  items.push(...fillsToLottie(node.fills, node.id, timeline, undefined, getNodeLocalBounds(node)));
 
   // Shape transform (identity — actual transform is on the layer)
   items.push(createShapeTransform());
@@ -257,7 +259,7 @@ export function ellipseToLottieShapes(
   items.push(ellipse);
 
   items.push(...strokesToLottie(node.strokes, node.id, timeline)); // stroke on top
-  items.push(...fillsToLottie(node.fills, node.id, timeline));
+  items.push(...fillsToLottie(node.fills, node.id, timeline, undefined, getNodeLocalBounds(node)));
   items.push(createShapeTransform());
 
   return items;
@@ -297,7 +299,13 @@ export function pathToLottieShapes(
   }
 
   const strokes = strokesToLottie(node.strokes, node.id, timeline);
-  const fills = fillsToLottie(node.fills, node.id, timeline, node.fillRule);
+  const fills = fillsToLottie(
+    node.fills,
+    node.id,
+    timeline,
+    node.fillRule,
+    getNodeLocalBounds(node)
+  );
 
   // Draw On: the stroke is trimmed to strokeProgress and, as in the editor,
   // the fill only shows once the stroke is complete
@@ -321,7 +329,7 @@ export function pathToLottieShapes(
       : { a: 0, k: complete(node.strokeProgress ?? 1) };
     const gatedFills = fills.map((fill) => ({
       ...fill,
-      o: scaleOpacity(fillShown, fill.o.k as number),
+      o: scaleOpacity(fillShown, staticValue(fill.o)),
     }));
     return [
       { ty: 'gr', nm: 'Stroke', it: [...items, trim, ...strokes, createShapeTransform()] },
@@ -334,6 +342,11 @@ export function pathToLottieShapes(
   items.push(createShapeTransform());
 
   return items;
+}
+
+/** A value's static (or first keyframe) value. */
+function staticValue(value: LottieAnimatedValue): number {
+  return typeof value.k === 'number' ? value.k : (value.k[0]?.s[0] ?? 0);
 }
 
 /** A 0/1 switch scaled to a fill's opacity (0-100). */
@@ -351,6 +364,13 @@ function scaleOpacity(shown: LottieAnimatedValue, opacity: number): LottieAnimat
 // ============================================================================
 // Text → Lottie (glyph outlines)
 // ============================================================================
+
+function pointsBounds(points: PathPoint[]): LocalBounds {
+  if (points.length === 0) return [0, 0, 0, 0];
+  const xs = points.map((point) => point.position.x);
+  const ys = points.map((point) => point.position.y);
+  return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
+}
 
 function textNodeToLottieShapes(
   node: TextNode,
@@ -370,7 +390,7 @@ function textNodeToLottieShapes(
       ),
       ...strokesToLottie(node.strokes, node.id, timeline),
       // The editor fills glyph contours even-odd
-      ...fillsToLottie(node.fills, node.id, timeline, 'evenodd'),
+      ...fillsToLottie(node.fills, node.id, timeline, 'evenodd', pointsBounds(subpaths.flat())),
     ],
   });
 }
@@ -397,7 +417,7 @@ export function polygonToLottieShapes(
   items.push(shapePath);
 
   items.push(...strokesToLottie(node.strokes, node.id, timeline)); // stroke on top
-  items.push(...fillsToLottie(node.fills, node.id, timeline));
+  items.push(...fillsToLottie(node.fills, node.id, timeline, undefined, getNodeLocalBounds(node)));
   items.push(createShapeTransform());
 
   return items;
@@ -515,7 +535,15 @@ export function artboardToLottieShapes(
   context: LottieConvertContext = {}
 ): LottieShapeItem[] {
   const items = groupToLottieShapes(node, timeline, canvasH, nodeResolver, context);
-  const fills = fillsToLottie(node.fills, node.id, timeline);
+  const anchor = node.transform.anchor ?? { x: 0.5, y: 0.5 };
+  const left = -node.width * anchor.x;
+  const bottom = -node.height * anchor.y;
+  const fills = fillsToLottie(node.fills, node.id, timeline, undefined, [
+    left,
+    bottom,
+    left + node.width,
+    bottom + node.height,
+  ]);
   if (fills.length > 0) {
     items.push({
       ty: 'gr',
@@ -574,34 +602,53 @@ export function pathPointsToLottieVertices(
 // ============================================================================
 
 /**
- * Convert Quar fills to Lottie fill shape items.
- * Only solid fills are supported in the foundation.
+ * Convert Quar fills to Lottie fill items: solid fills (with animated color
+ * and opacity) and linear/radial gradients positioned within `bounds`.
  */
 export function fillsToLottie(
   fills: Fill[] | undefined,
-  _nodeId: string,
-  _timeline: Timeline,
-  fillRule?: 'nonzero' | 'evenodd'
-): LottieShapeFill[] {
+  nodeId: string,
+  timeline: Timeline,
+  fillRule?: 'nonzero' | 'evenodd',
+  bounds: LocalBounds = [0, 0, 0, 0]
+): Array<LottieShapeFill | LottieShapeGradientFill> {
   if (!fills) return [];
 
-  const result: LottieShapeFill[] = [];
+  const result: Array<LottieShapeFill | LottieShapeGradientFill> = [];
   for (let idx = 0; idx < fills.length; idx++) {
     const fill = fills[idx]!;
-    if (!fill.visible || fill.type !== 'solid' || !fill.color) continue;
+    if (!fill.visible) continue;
+    const opacity = trackToLottieAnimated(
+      findTrack<number>(timeline, nodeId, `fills.${idx}.opacity`),
+      fill.opacity,
+      VALUE_TRANSFORMS.opacityTo100
+    );
 
-    // Static color (animation support deferred for color tracks with multiple components)
+    if (fill.type === 'gradient' && fill.gradient) {
+      result.push(
+        gradientFillToLottie(
+          fill as Fill & { gradient: NonNullable<Fill['gradient']> },
+          idx,
+          nodeId,
+          timeline,
+          bounds,
+          opacity,
+          fillRule
+        )
+      );
+      continue;
+    }
+    if (fill.type !== 'solid' || !fill.color) continue;
+
     const lottieFill: LottieShapeFill = {
       ty: 'fl',
       nm: `Fill ${idx + 1}`,
-      c: colorToLottieStatic(fill.color),
-      o: { a: 0, k: fill.opacity * 100 },
+      c: colorTrackToLottie(findTrack(timeline, nodeId, `fills.${idx}.color`), fill.color),
+      o: opacity,
     };
-
     if (fillRule === 'evenodd') {
       lottieFill.r = 2;
     }
-
     result.push(lottieFill);
   }
 
@@ -632,8 +679,12 @@ export function strokesToLottie(
     const lottieStroke: LottieShapeStroke = {
       ty: 'st',
       nm: `Stroke ${idx + 1}`,
-      c: colorToLottieStatic(stroke.color),
-      o: { a: 0, k: stroke.opacity * 100 },
+      c: colorTrackToLottie(findTrack(timeline, nodeId, `strokes.${idx}.color`), stroke.color),
+      o: trackToLottieAnimated(
+        findTrack<number>(timeline, nodeId, `strokes.${idx}.opacity`),
+        stroke.opacity,
+        VALUE_TRANSFORMS.opacityTo100
+      ),
       w: trackToLottieAnimated(widthTrack, stroke.width),
       lc: CAP_MAP[stroke.cap] ?? 2,
       lj: JOIN_MAP[stroke.join] ?? 1,
