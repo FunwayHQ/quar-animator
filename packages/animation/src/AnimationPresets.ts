@@ -5,27 +5,38 @@
 import type { EasingFunction, Node, PropertyTrack, Timeline } from '@quar/types';
 import { addKeyframe, createTrack } from './Timeline';
 
-export type AnimationPresetCategory = 'Entrance' | 'Emphasis' | 'Exit';
+export type AnimationPresetCategory = 'Entrance' | 'Emphasis' | 'Loop' | 'Exit';
 
 export type AnimationPresetId =
   | 'fade-in'
   | 'typewriter'
+  | 'word-reveal'
+  | 'line-reveal'
   | 'rise-in'
   | 'drop-in'
   | 'slide-in'
   | 'spin-in'
   | 'spin-out'
   | 'pop-in'
+  | 'zoom-in'
+  | 'zoom-out'
   | 'pulse'
   | 'bounce'
   | 'shake'
   | 'wobble'
   | 'heartbeat'
+  | 'flash'
+  | 'rubber-band'
   | 'float'
+  | 'sway'
+  | 'breathing'
+  | 'orbit'
   | 'draw-on'
   | 'fade-out'
   | 'shrink-out'
-  | 'slide-out';
+  | 'slide-out'
+  | 'rise-out'
+  | 'drop-out';
 
 export interface AnimationPresetDefinition {
   id: AnimationPresetId;
@@ -53,6 +64,20 @@ export const ANIMATION_PRESETS: AnimationPresetDefinition[] = [
     description: 'Reveal text one character at a time',
     nodeType: 'text',
   },
+  {
+    id: 'word-reveal',
+    name: 'By Word',
+    category: 'Entrance',
+    description: 'Reveal text one word at a time',
+    nodeType: 'text',
+  },
+  {
+    id: 'line-reveal',
+    name: 'By Line',
+    category: 'Entrance',
+    description: 'Reveal text one line at a time',
+    nodeType: 'text',
+  },
   { id: 'rise-in', name: 'Rise', category: 'Entrance', description: 'Rise into place from below' },
   {
     id: 'drop-in',
@@ -70,6 +95,12 @@ export const ANIMATION_PRESETS: AnimationPresetDefinition[] = [
   },
   { id: 'spin-in', name: 'Spin', category: 'Entrance', description: 'Spin into view' },
   { id: 'pop-in', name: 'Pop', category: 'Entrance', description: 'Scale up into view' },
+  {
+    id: 'zoom-in',
+    name: 'Zoom In',
+    category: 'Entrance',
+    description: 'Grow from a small scale into place',
+  },
   { id: 'pulse', name: 'Pulse', category: 'Emphasis', description: 'Grow and settle' },
   { id: 'bounce', name: 'Bounce', category: 'Emphasis', description: 'Bounce in place' },
   { id: 'shake', name: 'Shake', category: 'Emphasis', description: 'Shake side to side' },
@@ -86,15 +117,53 @@ export const ANIMATION_PRESETS: AnimationPresetDefinition[] = [
     description: 'Pulse twice like a heartbeat',
   },
   {
+    id: 'flash',
+    name: 'Flash',
+    category: 'Emphasis',
+    description: 'Blink twice to draw attention',
+  },
+  {
+    id: 'rubber-band',
+    name: 'Rubber Band',
+    category: 'Emphasis',
+    description: 'Stretch and rebound with a playful snap',
+  },
+  {
     id: 'float',
     name: 'Float',
-    category: 'Emphasis',
+    category: 'Loop',
     description: 'Drift through a gentle loopable cycle',
+  },
+  {
+    id: 'sway',
+    name: 'Sway',
+    category: 'Loop',
+    description: 'Rock side to side in a smooth cycle',
+  },
+  {
+    id: 'breathing',
+    name: 'Breathing',
+    category: 'Loop',
+    description: 'Slowly expand and contract in a smooth cycle',
+  },
+  {
+    id: 'orbit',
+    name: 'Orbit',
+    category: 'Loop',
+    description: 'Travel around a small circular path',
   },
   { id: 'fade-out', name: 'Fade', category: 'Exit', description: 'Fade out of view' },
   { id: 'shrink-out', name: 'Shrink', category: 'Exit', description: 'Shrink out of view' },
+  {
+    id: 'zoom-out',
+    name: 'Zoom Out',
+    category: 'Exit',
+    description: 'Fade away while growing larger',
+  },
   { id: 'slide-out', name: 'Slide', category: 'Exit', description: 'Slide out to the right' },
   { id: 'spin-out', name: 'Spin', category: 'Exit', description: 'Spin out of view' },
+  { id: 'rise-out', name: 'Rise Out', category: 'Exit', description: 'Fade and move upward' },
+  { id: 'drop-out', name: 'Drop Out', category: 'Exit', description: 'Fade and move downward' },
 ];
 
 export interface PresetKeyframe {
@@ -130,6 +199,10 @@ function resolveDirection(
       return 'right';
     case 'rise-in':
       return 'bottom';
+    case 'rise-out':
+      return 'top';
+    case 'drop-out':
+      return 'bottom';
     case 'bounce':
       return 'top';
     default:
@@ -163,12 +236,17 @@ export function createAnimationPresetKeyframes(
   const direction = resolveDirection(presetId, options.direction);
   const vector = directionVector(direction);
   const spinSegments = Math.ceil((360 * intensity) / 120);
+  const revealStops =
+    node.type === 'text' && (presetId === 'word-reveal' || presetId === 'line-reveal')
+      ? getTextRevealStops(node.content, presetId === 'word-reveal' ? 'word' : 'line')
+      : [];
   // Keep multi-beat keyframes distinct, and keep each spin segment within the
   // rotation track's shortest-path range so full turns remain visible.
   const duration = Math.max(
     4,
     Math.round(durationFrames),
-    presetId === 'spin-in' || presetId === 'spin-out' ? spinSegments : 0
+    presetId === 'spin-in' || presetId === 'spin-out' ? spinSegments : 0,
+    presetId === 'orbit' ? 8 : 0
   );
   const end = start + duration;
   const middle = start + Math.round(duration / 2);
@@ -191,6 +269,10 @@ export function createAnimationPresetKeyframes(
         add('visibleCharacters', start, 0);
         add('visibleCharacters', end, Array.from(node.content).length, 'linear');
       }
+      break;
+    case 'word-reveal':
+    case 'line-reveal':
+      if (node.type === 'text') addSteppedTextReveal(add, start, end, revealStops);
       break;
     case 'draw-on':
       if (node.type === 'path') {
@@ -257,6 +339,26 @@ export function createAnimationPresetKeyframes(
       add('transform.scale.y', start, scaleY * Math.max(0.1, 1 - 0.28 * intensity));
       add('transform.scale.y', end, scaleY, easeOut);
       break;
+    case 'zoom-in': {
+      const initialScale = Math.max(0.1, 1 - 0.55 * intensity);
+      add('opacity', start, 0);
+      add('opacity', end, opacity, easeOut);
+      add('transform.scale.x', start, scaleX * initialScale);
+      add('transform.scale.x', end, scaleX, easeOut);
+      add('transform.scale.y', start, scaleY * initialScale);
+      add('transform.scale.y', end, scaleY, easeOut);
+      break;
+    }
+    case 'zoom-out': {
+      const finalScale = 1 + 0.28 * intensity;
+      add('opacity', start, opacity);
+      add('opacity', end, 0, easeInOut);
+      add('transform.scale.x', start, scaleX);
+      add('transform.scale.x', end, scaleX * finalScale, easeInOut);
+      add('transform.scale.y', start, scaleY);
+      add('transform.scale.y', end, scaleY * finalScale, easeInOut);
+      break;
+    }
     case 'pulse':
       add('transform.scale.x', start, scaleX);
       add('transform.scale.x', middle, scaleX * (1 + 0.12 * intensity), 'easeOutBack');
@@ -308,6 +410,31 @@ export function createAnimationPresetKeyframes(
         add(property, end, base, easeInOut);
       }
       break;
+    case 'flash': {
+      const dimmedOpacity = opacity * Math.max(0.05, 1 - 0.55 * intensity);
+      add('opacity', start, opacity);
+      add('opacity', quarter, dimmedOpacity, 'easeInOutCubic');
+      add('opacity', middle, opacity, 'easeInOutCubic');
+      add('opacity', threeQuarter, dimmedOpacity, 'easeInOutCubic');
+      add('opacity', end, opacity, 'easeInOutCubic');
+      break;
+    }
+    case 'rubber-band': {
+      const stretch = 0.24 * intensity;
+      const squash = 0.12 * intensity;
+      for (const [property, base, values] of [
+        ['transform.scale.x', scaleX, [1, 1 + stretch, 1 - squash, 1 + squash * 0.45, 1]],
+        ['transform.scale.y', scaleY, [1, 1 - squash, 1 + stretch * 0.7, 1 - squash * 0.4, 1]],
+      ] as const) {
+        const times = [start, quarter, middle, threeQuarter, end] as const;
+        values.forEach((factor, index) => {
+          const time = times[index];
+          if (time !== undefined)
+            add(property, time, base * Math.max(0.1, factor), 'easeInOutCubic');
+        });
+      }
+      break;
+    }
     case 'float': {
       const distance = 12 * intensity;
       add('transform.position.y', start, y);
@@ -315,6 +442,41 @@ export function createAnimationPresetKeyframes(
       add('transform.position.y', middle, y, 'easeInOutCubic');
       add('transform.position.y', threeQuarter, y - distance, 'easeInOutCubic');
       add('transform.position.y', end, y, 'easeInOutCubic');
+      break;
+    }
+    case 'sway': {
+      const angle = 8 * intensity;
+      add('transform.rotation', start, node.transform.rotation);
+      add('transform.rotation', quarter, node.transform.rotation - angle, 'easeInOutCubic');
+      add('transform.rotation', middle, node.transform.rotation + angle, 'easeInOutCubic');
+      add('transform.rotation', threeQuarter, node.transform.rotation - angle, 'easeInOutCubic');
+      add('transform.rotation', end, node.transform.rotation, 'easeInOutCubic');
+      break;
+    }
+    case 'breathing': {
+      const scales = [1, 1 + 0.06 * intensity, 1 + 0.12 * intensity, 1 + 0.06 * intensity, 1];
+      const times = [start, quarter, middle, threeQuarter, end] as const;
+      for (const [property, base] of [
+        ['transform.scale.x', scaleX],
+        ['transform.scale.y', scaleY],
+      ] as const) {
+        scales.forEach((factor, index) => {
+          const time = times[index];
+          if (time !== undefined) add(property, time, base * factor, 'easeInOutCubic');
+        });
+      }
+      break;
+    }
+    case 'orbit': {
+      const radius = 18 * intensity;
+      const segments = Math.max(8, Math.min(duration, 24));
+      for (let segment = 0; segment <= segments; segment++) {
+        const progress = segment / segments;
+        const angle = progress * Math.PI * 2;
+        const frame = start + Math.round(duration * progress);
+        add('transform.position.x', frame, x + radius * (Math.cos(angle) - 1), linear);
+        add('transform.position.y', frame, y + radius * Math.sin(angle), linear);
+      }
       break;
     }
     case 'fade-out':
@@ -340,6 +502,17 @@ export function createAnimationPresetKeyframes(
         add('transform.position.y', end, y + vector.y * 64 * intensity, easeInOut);
       }
       break;
+    case 'rise-out':
+    case 'drop-out': {
+      add('opacity', start, opacity);
+      add('opacity', end, 0, easeInOut);
+      const property = vector.x !== 0 ? 'transform.position.x' : 'transform.position.y';
+      const position = vector.x !== 0 ? x : y;
+      const offset = vector.x !== 0 ? vector.x : vector.y;
+      add(property, start, position);
+      add(property, end, position + offset * 64 * intensity, easeInOut);
+      break;
+    }
   }
 
   const baseValues = new Map<string, number>();
@@ -438,5 +611,69 @@ function addSpinKeyframes(
     const progress = segment / segments;
     const frame = start + Math.round((end - start) * progress);
     add('transform.rotation', frame, baseRotation + delta * progress, linear);
+  }
+}
+
+function getTextRevealStops(content: string, mode: 'word' | 'line'): number[] {
+  const characters = Array.from(content);
+  const stops: number[] = [];
+
+  if (mode === 'line') {
+    characters.forEach((character, index) => {
+      if (character === '\n') stops.push(index + 1);
+    });
+    if (stops.at(-1) !== characters.length) stops.push(characters.length);
+    return stops;
+  }
+
+  const isWhitespace = (character: string | undefined) =>
+    character !== undefined && /^\s$/u.test(character);
+  let index = 0;
+  while (index < characters.length) {
+    while (index < characters.length && isWhitespace(characters[index])) index++;
+    while (
+      index < characters.length &&
+      characters[index] !== undefined &&
+      !isWhitespace(characters[index])
+    ) {
+      index++;
+    }
+    while (index < characters.length && isWhitespace(characters[index])) index++;
+    stops.push(index);
+  }
+
+  if (stops.length === 0) stops.push(characters.length);
+  return stops;
+}
+
+function addSteppedTextReveal(
+  add: (property: string, time: number, value: number, easing?: EasingFunction) => number,
+  start: number,
+  end: number,
+  revealStops: number[]
+): void {
+  const property = 'visibleCharacters';
+  add(property, start, 0, linear);
+  if (revealStops.length === 0) {
+    add(property, end, 0, linear);
+    return;
+  }
+
+  // Keep words/lines visually together: hold the previous count until the
+  // frame before each beat, then reveal the next word or line at once.
+  const visibleCountsByFrame = new Map<number, number>();
+  revealStops.forEach((visibleCount, index) => {
+    const frame =
+      start + Math.max(1, Math.round(((end - start) * (index + 1)) / revealStops.length));
+    visibleCountsByFrame.set(frame, visibleCount);
+  });
+
+  let previousFrame = start;
+  let previousVisibleCount = 0;
+  for (const [frame, visibleCount] of [...visibleCountsByFrame].sort(([a], [b]) => a - b)) {
+    if (frame - previousFrame > 1) add(property, frame - 1, previousVisibleCount, linear);
+    add(property, frame, visibleCount, linear);
+    previousFrame = frame;
+    previousVisibleCount = visibleCount;
   }
 }

@@ -1,4 +1,4 @@
-import { useRef, useCallback, useState, useEffect, useMemo } from 'react';
+import { useRef, useCallback, useState, useEffect, useMemo, useLayoutEffect } from 'react';
 import { useSceneGraph } from '../../contexts/SceneGraphContext';
 import { useEditorStore } from '../../stores/editorStore';
 import { formatTimecode, getTracksByNode } from '@quar/animation';
@@ -66,6 +66,7 @@ export function Timeline({ playback }: TimelineProps = {}) {
   const setCurrentFrame = useEditorStore((s) => s.setCurrentFrame);
   const setIsPlaying = useEditorStore((s) => s.setIsPlaying);
   const setIsLooping = useEditorStore((s) => s.setIsLooping);
+  const setTimelineDuration = useEditorStore((s) => s.setTimelineDuration);
   const toggleTimelineExpanded = useEditorStore((s) => s.toggleTimelineExpanded);
   const toggleAutoKeyframe = useEditorStore((s) => s.toggleAutoKeyframe);
   const selectKeyframe = useEditorStore((s) => s.selectKeyframe);
@@ -96,6 +97,8 @@ export function Timeline({ playback }: TimelineProps = {}) {
   const clearWorkArea = useEditorStore((s) => s.clearWorkArea);
 
   const [showOnionSkinPanel, setShowOnionSkinPanel] = useState(false);
+  const [durationDraft, setDurationDraft] = useState(String(duration));
+  const [zoomPercent, setZoomPercent] = useState(100);
   const [easingEditor, setEasingEditor] = useState<{
     x: number;
     y: number;
@@ -103,7 +106,9 @@ export function Timeline({ playback }: TimelineProps = {}) {
   } | null>(null);
 
   const rulerRef = useRef<HTMLDivElement>(null);
+  const tracksAreaRef = useRef<HTMLDivElement>(null);
   const tracksRef = useRef<HTMLDivElement>(null);
+  const previousZoomPercentRef = useRef(zoomPercent);
   const [contextMenu, setContextMenu] = useState<{
     x: number;
     y: number;
@@ -134,6 +139,93 @@ export function Timeline({ playback }: TimelineProps = {}) {
     rulerWidth: number;
   } | null>(null);
   const suppressRulerClickRef = useRef(false);
+
+  useLayoutEffect(() => {
+    if (previousZoomPercentRef.current === zoomPercent) return;
+    previousZoomPercentRef.current = zoomPercent;
+
+    const viewport = tracksAreaRef.current;
+    if (!viewport) return;
+    const viewportWidth = viewport.clientWidth;
+    const contentWidth = viewportWidth * (zoomPercent / 100);
+    const playheadX = (currentFrame / duration) * contentWidth;
+    viewport.scrollLeft = Math.max(
+      0,
+      Math.min(contentWidth - viewportWidth, playheadX - viewportWidth / 2)
+    );
+  }, [zoomPercent, currentFrame, duration]);
+
+  useEffect(() => {
+    setDurationDraft(String(duration));
+  }, [duration]);
+
+  const commitDurationDraft = useCallback(() => {
+    const parsedDuration = Number.parseInt(durationDraft, 10);
+    if (Number.isFinite(parsedDuration) && parsedDuration >= 1) {
+      setTimelineDuration(parsedDuration);
+    } else {
+      setDurationDraft(String(duration));
+    }
+  }, [durationDraft, duration, setTimelineDuration]);
+
+  const durationControl = (
+    <label className={styles.durationControl}>
+      <span>Frames</span>
+      <input
+        className={styles.durationInput}
+        type="number"
+        min={1}
+        max={Number.MAX_SAFE_INTEGER}
+        step={1}
+        value={durationDraft}
+        onChange={(event) => setDurationDraft(event.target.value)}
+        onBlur={commitDurationDraft}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') {
+            event.currentTarget.blur();
+          } else if (event.key === 'Escape') {
+            setDurationDraft(String(duration));
+          }
+        }}
+        aria-label="Timeline duration in frames"
+        data-testid="timeline-duration-input"
+      />
+    </label>
+  );
+
+  const zoomControl =
+    timelineViewMode === 'graph' ? null : (
+      <div
+        className={styles.zoomControl}
+        role="group"
+        aria-label="Timeline zoom controls"
+        title="Hold Shift while scrolling to pan horizontally"
+      >
+        <button
+          className={styles.zoomButton}
+          type="button"
+          onClick={() => setZoomPercent((zoom) => Math.max(25, zoom - 25))}
+          disabled={zoomPercent <= 25}
+          title="Zoom out timeline"
+          aria-label="Zoom out timeline"
+        >
+          −
+        </button>
+        <span className={styles.zoomLevel} data-testid="timeline-zoom-level">
+          {zoomPercent}%
+        </span>
+        <button
+          className={styles.zoomButton}
+          type="button"
+          onClick={() => setZoomPercent((zoom) => Math.min(800, zoom + 25))}
+          disabled={zoomPercent >= 800}
+          title="Zoom in timeline"
+          aria-label="Zoom in timeline"
+        >
+          +
+        </button>
+      </div>
+    );
 
   // Track scene graph changes for layer labels
   const [nodes, setNodes] = useState<Node[]>([]);
@@ -439,6 +531,35 @@ export function Timeline({ playback }: TimelineProps = {}) {
     workAreaDragRef.current = null;
   }, []);
 
+  useEffect(() => {
+    const viewport = tracksAreaRef.current;
+    if (!viewport) return;
+
+    const handleWheel = (event: WheelEvent) => {
+      const maxScrollLeft = viewport.scrollWidth - viewport.clientWidth;
+      if (maxScrollLeft <= 0) return;
+
+      // Magic Mouse and trackpad side swipes arrive as horizontal wheel deltas.
+      // Shift+vertical wheel is also supported for mice without horizontal scrolling.
+      let delta = event.deltaX;
+      if (event.shiftKey && event.deltaY !== 0 && Math.abs(event.deltaY) > Math.abs(event.deltaX)) {
+        delta = event.deltaY;
+      }
+      if (delta === 0) return;
+
+      if (event.deltaMode === WheelEvent.DOM_DELTA_LINE) delta *= 40;
+      if (event.deltaMode === WheelEvent.DOM_DELTA_PAGE) delta *= viewport.clientWidth;
+
+      event.preventDefault();
+      viewport.scrollLeft = Math.max(0, Math.min(maxScrollLeft, viewport.scrollLeft + delta));
+    };
+
+    // React registers wheel handlers as passive in some browsers; a native
+    // non-passive listener lets us reliably prevent a second browser scroll.
+    viewport.addEventListener('wheel', handleWheel, { passive: false });
+    return () => viewport.removeEventListener('wheel', handleWheel);
+  }, [expanded, timelineViewMode]);
+
   // ------- Context menu handlers -------
 
   const handleTimelineContextMenu = useCallback(
@@ -693,6 +814,8 @@ export function Timeline({ playback }: TimelineProps = {}) {
             <span className={styles.totalTime}>{formatTimecode(duration, frameRate)}</span>
           </div>
 
+          {durationControl}
+
           <button
             className={`${styles.optionButton} ${isLooping ? styles.active : ''}`}
             onClick={toggleLoop}
@@ -854,7 +977,10 @@ export function Timeline({ playback }: TimelineProps = {}) {
           <span className={styles.totalTime}>{formatTimecode(duration, frameRate)}</span>
         </div>
 
+        {durationControl}
+
         <div className={styles.options}>
+          {zoomControl}
           <button
             className={`${styles.optionButton} ${autoKeyframe ? styles.active : ''}`}
             onClick={toggleAutoKeyframe}
@@ -983,142 +1109,148 @@ export function Timeline({ playback }: TimelineProps = {}) {
           </div>
 
           {/* Tracks Area */}
-          <div className={styles.tracksArea}>
-            {/* Ruler */}
-            {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events -- keyboard navigation handled by useTimelineShortcuts hook */}
+          <div className={styles.tracksArea} ref={tracksAreaRef} data-testid="timeline-scroll-area">
             <div
-              className={styles.ruler}
-              ref={rulerRef}
-              onClick={handleRulerClick}
-              onPointerDown={handleRulerPointerDown}
-              onPointerMove={handleRulerPointerMove}
-              onPointerUp={handleRulerPointerUp}
-              onPointerCancel={handleRulerPointerUp}
-              onContextMenu={handleTimelineContextMenu}
-              role="slider"
-              aria-valuenow={currentFrame}
-              aria-valuemin={0}
-              aria-valuemax={duration - 1}
-              aria-label="Timeline scrubber. Drag to select a looping range."
-              tabIndex={0}
-              data-testid="timeline-ruler"
+              className={styles.timelineContent}
+              style={{ width: `${zoomPercent}%` }}
+              data-testid="timeline-content"
             >
-              {rulerMarks.map(({ index, frame }) => (
-                <div key={index} className={styles.rulerMark} style={{ left: `${index * 10}%` }}>
-                  <span className={styles.rulerLabel}>{frame}</span>
-                </div>
-              ))}
-              {/* Work Area overlay in ruler */}
+              {/* Ruler */}
+              {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events -- keyboard navigation handled by useTimelineShortcuts hook */}
+              <div
+                className={styles.ruler}
+                ref={rulerRef}
+                onClick={handleRulerClick}
+                onPointerDown={handleRulerPointerDown}
+                onPointerMove={handleRulerPointerMove}
+                onPointerUp={handleRulerPointerUp}
+                onPointerCancel={handleRulerPointerUp}
+                onContextMenu={handleTimelineContextMenu}
+                role="slider"
+                aria-valuenow={currentFrame}
+                aria-valuemin={0}
+                aria-valuemax={duration - 1}
+                aria-label="Timeline scrubber. Drag to select a looping range."
+                tabIndex={0}
+                data-testid="timeline-ruler"
+              >
+                {rulerMarks.map(({ index, frame }) => (
+                  <div key={index} className={styles.rulerMark} style={{ left: `${index * 10}%` }}>
+                    <span className={styles.rulerLabel}>{frame}</span>
+                  </div>
+                ))}
+                {/* Work Area overlay in ruler */}
+                {workAreaEnabled && (
+                  <>
+                    {/* Left dimmed region */}
+                    <div
+                      className={styles.workAreaDimmed}
+                      style={{ left: 0, width: `${(workAreaStart / duration) * 100}%` }}
+                    />
+                    {/* Right dimmed region */}
+                    <div
+                      className={styles.workAreaDimmed}
+                      style={{ left: `${((workAreaEnd + 1) / duration) * 100}%`, right: 0 }}
+                    />
+                    {/* Active bar */}
+                    {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}
+                    <div
+                      className={styles.workAreaBar}
+                      style={{
+                        left: `${(workAreaStart / duration) * 100}%`,
+                        width: `${((workAreaEnd - workAreaStart + 1) / duration) * 100}%`,
+                      }}
+                      onPointerDown={(e) => handleWorkAreaPointerDown(e, 'body')}
+                      onPointerMove={handleWorkAreaPointerMove}
+                      onPointerUp={handleWorkAreaPointerUp}
+                    />
+                    {/* Start handle */}
+                    {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}
+                    <div
+                      className={styles.workAreaHandleStart}
+                      style={{
+                        left: `${(workAreaStart / duration) * 100}%`,
+                        transform: 'translateX(-100%)',
+                      }}
+                      onPointerDown={(e) => handleWorkAreaPointerDown(e, 'start')}
+                      onPointerMove={handleWorkAreaPointerMove}
+                      onPointerUp={handleWorkAreaPointerUp}
+                    />
+                    {/* End handle */}
+                    {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}
+                    <div
+                      className={styles.workAreaHandleEnd}
+                      style={{ left: `${((workAreaEnd + 1) / duration) * 100}%` }}
+                      onPointerDown={(e) => handleWorkAreaPointerDown(e, 'end')}
+                      onPointerMove={handleWorkAreaPointerMove}
+                      onPointerUp={handleWorkAreaPointerUp}
+                    />
+                  </>
+                )}
+                {/* Playhead */}
+                <div
+                  className={styles.playhead}
+                  style={{ left: `${(currentFrame / duration) * 100}%` }}
+                />
+              </div>
+
+              {/* Tracks */}
+              {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- click deselects keyframes, keyboard handled by useTimelineShortcuts */}
+              <div
+                className={styles.tracks}
+                ref={tracksRef}
+                onClick={handleTrackClick}
+                onContextMenu={handleTimelineContextMenu}
+                data-testid="timeline-tracks"
+              >
+                {nodes.map((node) => {
+                  const kfs = nodeKeyframes.get(node.id);
+                  return (
+                    <div key={node.id} className={styles.track}>
+                      {kfs &&
+                        kfs.map((kf) => (
+                          /* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- keyframe diamonds, keyboard handled at track level */
+                          <div
+                            key={kf.id}
+                            className={`${styles.keyframe} ${selectedKeyframeIds.has(kf.id) ? styles.selected : ''}`}
+                            style={{ left: `${(kf.time / duration) * 100}%` }}
+                            onClick={(e) => handleKeyframeClick(e, kf.id)}
+                            onContextMenu={(e) =>
+                              handleKeyframeContextMenu(e, kf.id, kf.nodeId, kf.property)
+                            }
+                            onPointerDown={(e) => handleKeyframePointerDown(e, kf.id)}
+                            onPointerMove={handleKeyframePointerMove}
+                            onPointerUp={handleKeyframePointerUp}
+                            data-testid={`keyframe-${kf.id}`}
+                            title={`${kf.property} @ frame ${kf.time}`}
+                          />
+                        ))}
+                    </div>
+                  );
+                })}
+                {nodes.length === 0 && <div className={styles.track} />}
+              </div>
+
+              {/* Work Area overlays follow the zoomed, scrollable timeline content. */}
               {workAreaEnabled && (
                 <>
-                  {/* Left dimmed region */}
                   <div
-                    className={styles.workAreaDimmed}
+                    className={styles.workAreaTrackDimmed}
                     style={{ left: 0, width: `${(workAreaStart / duration) * 100}%` }}
                   />
-                  {/* Right dimmed region */}
                   <div
-                    className={styles.workAreaDimmed}
+                    className={styles.workAreaTrackDimmed}
                     style={{ left: `${((workAreaEnd + 1) / duration) * 100}%`, right: 0 }}
-                  />
-                  {/* Active bar */}
-                  {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}
-                  <div
-                    className={styles.workAreaBar}
-                    style={{
-                      left: `${(workAreaStart / duration) * 100}%`,
-                      width: `${((workAreaEnd - workAreaStart + 1) / duration) * 100}%`,
-                    }}
-                    onPointerDown={(e) => handleWorkAreaPointerDown(e, 'body')}
-                    onPointerMove={handleWorkAreaPointerMove}
-                    onPointerUp={handleWorkAreaPointerUp}
-                  />
-                  {/* Start handle */}
-                  {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}
-                  <div
-                    className={styles.workAreaHandleStart}
-                    style={{
-                      left: `${(workAreaStart / duration) * 100}%`,
-                      transform: 'translateX(-100%)',
-                    }}
-                    onPointerDown={(e) => handleWorkAreaPointerDown(e, 'start')}
-                    onPointerMove={handleWorkAreaPointerMove}
-                    onPointerUp={handleWorkAreaPointerUp}
-                  />
-                  {/* End handle */}
-                  {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}
-                  <div
-                    className={styles.workAreaHandleEnd}
-                    style={{ left: `${((workAreaEnd + 1) / duration) * 100}%` }}
-                    onPointerDown={(e) => handleWorkAreaPointerDown(e, 'end')}
-                    onPointerMove={handleWorkAreaPointerMove}
-                    onPointerUp={handleWorkAreaPointerUp}
                   />
                 </>
               )}
-              {/* Playhead */}
+
+              {/* Playhead line shares the timeline content width with the ruler. */}
               <div
-                className={styles.playhead}
+                className={styles.playheadLine}
                 style={{ left: `${(currentFrame / duration) * 100}%` }}
               />
             </div>
-
-            {/* Tracks */}
-            {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- click deselects keyframes, keyboard handled by useTimelineShortcuts */}
-            <div
-              className={styles.tracks}
-              ref={tracksRef}
-              onClick={handleTrackClick}
-              onContextMenu={handleTimelineContextMenu}
-              data-testid="timeline-tracks"
-            >
-              {nodes.map((node) => {
-                const kfs = nodeKeyframes.get(node.id);
-                return (
-                  <div key={node.id} className={styles.track}>
-                    {kfs &&
-                      kfs.map((kf) => (
-                        /* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- keyframe diamonds, keyboard handled at track level */
-                        <div
-                          key={kf.id}
-                          className={`${styles.keyframe} ${selectedKeyframeIds.has(kf.id) ? styles.selected : ''}`}
-                          style={{ left: `${(kf.time / duration) * 100}%` }}
-                          onClick={(e) => handleKeyframeClick(e, kf.id)}
-                          onContextMenu={(e) =>
-                            handleKeyframeContextMenu(e, kf.id, kf.nodeId, kf.property)
-                          }
-                          onPointerDown={(e) => handleKeyframePointerDown(e, kf.id)}
-                          onPointerMove={handleKeyframePointerMove}
-                          onPointerUp={handleKeyframePointerUp}
-                          data-testid={`keyframe-${kf.id}`}
-                          title={`${kf.property} @ frame ${kf.time}`}
-                        />
-                      ))}
-                  </div>
-                );
-              })}
-              {nodes.length === 0 && <div className={styles.track} />}
-            </div>
-
-            {/* Work Area dimmed regions in tracks — positioned in tracksArea to match ruler width */}
-            {workAreaEnabled && (
-              <>
-                <div
-                  className={styles.workAreaTrackDimmed}
-                  style={{ left: 0, width: `${(workAreaStart / duration) * 100}%` }}
-                />
-                <div
-                  className={styles.workAreaTrackDimmed}
-                  style={{ left: `${((workAreaEnd + 1) / duration) * 100}%`, right: 0 }}
-                />
-              </>
-            )}
-
-            {/* Playhead line — positioned in tracksArea so its % width matches the ruler */}
-            <div
-              className={styles.playheadLine}
-              style={{ left: `${(currentFrame / duration) * 100}%` }}
-            />
           </div>
         </div>
       )}

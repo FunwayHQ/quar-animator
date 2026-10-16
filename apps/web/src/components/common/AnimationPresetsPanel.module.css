@@ -102,6 +102,10 @@
   font: inherit;
 }
 
+.staggerControl {
+  grid-column: 1 / -1;
+}
+
 .optionControl input[type='range'] {
   width: 100%;
   min-height: 22px;

@@ -16,8 +16,9 @@ import { useSceneGraph } from '../../contexts/SceneGraphContext';
 import { useEditorStore } from '../../stores/editorStore';
 import styles from './AnimationPresetsPanel.module.css';
 
-const CATEGORIES: AnimationPresetCategory[] = ['Entrance', 'Emphasis', 'Exit'];
+const CATEGORIES: AnimationPresetCategory[] = ['Entrance', 'Emphasis', 'Loop', 'Exit'];
 const DURATION_OPTIONS = [0.4, 0.8, 1.2, 1.6];
+const STAGGER_OPTIONS = [0, 0.05, 0.1, 0.15, 0.2];
 
 export interface AnimationPresetsPanelProps {
   nodeIds: string[];
@@ -28,6 +29,7 @@ export function AnimationPresetsPanel({ nodeIds }: AnimationPresetsPanelProps) {
   const sceneGraph = useSceneGraph();
   const [isExpanded, setIsExpanded] = useState(true);
   const [durationSeconds, setDurationSeconds] = useState(0.8);
+  const [staggerSeconds, setStaggerSeconds] = useState(0);
   const [direction, setDirection] = useState<AnimationPresetDirection>('auto');
   const [intensity, setIntensity] = useState(1);
   const selectedNodes = nodeIds
@@ -50,12 +52,13 @@ export function AnimationPresetsPanel({ nodeIds }: AnimationPresetsPanelProps) {
       state.pushUndo(sceneGraph);
       let timeline = state.timeline;
       const durationFrames = Math.max(4, Math.round(durationSeconds * state.frameRate));
-      for (const node of nodes) {
+      const staggerFrames = Math.round(staggerSeconds * state.frameRate);
+      for (const [index, node] of nodes.entries()) {
         timeline = applyAnimationPreset(
           timeline,
           node,
           presetId,
-          state.currentFrame,
+          state.currentFrame + index * staggerFrames,
           durationFrames,
           { direction, intensity }
         );
@@ -76,7 +79,7 @@ export function AnimationPresetsPanel({ nodeIds }: AnimationPresetsPanelProps) {
           sceneGraph.updateNode(node.id, applyAnimatedValues(currentNode, values));
       }
     },
-    [direction, durationSeconds, intensity, nodeIds, sceneGraph]
+    [direction, durationSeconds, intensity, nodeIds, sceneGraph, staggerSeconds]
   );
 
   return (
@@ -152,8 +155,26 @@ export function AnimationPresetsPanel({ nodeIds }: AnimationPresetsPanelProps) {
                 onChange={(event) => setIntensity(Number(event.target.value))}
               />
             </label>
+            {nodeIds.length > 1 && (
+              <label className={`${styles.optionControl} ${styles.staggerControl}`}>
+                <span>Stagger per object</span>
+                <select
+                  aria-label="Animation stagger delay per object"
+                  value={staggerSeconds}
+                  onChange={(event) => setStaggerSeconds(Number(event.target.value))}
+                >
+                  {STAGGER_OPTIONS.map((seconds) => (
+                    <option key={seconds} value={seconds}>
+                      {seconds === 0 ? 'Off' : `${seconds.toFixed(2)} s`}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
           </div>
-          <p className={styles.optionsHint}>Direction applies to rise, drop, slide, and bounce.</p>
+          <p className={styles.optionsHint}>
+            Direction affects directional presets. Stagger is available with multiple objects.
+          </p>
           {CATEGORIES.map((category) => (
             <div className={styles.category} key={category}>
               <h4 className={styles.categoryTitle}>{category}</h4>

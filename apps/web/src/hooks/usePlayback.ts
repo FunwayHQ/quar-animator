@@ -14,6 +14,24 @@ import { evaluateIKChains } from '@quar/rigging';
 import { useEditorStore } from '../stores/editorStore';
 import { useSceneGraph } from '../contexts/SceneGraphContext';
 
+function getPlaybackDuration(
+  timeline: ReturnType<typeof useEditorStore.getState>['timeline'],
+  timelineDuration: number
+) {
+  const lastKeyframe =
+    timeline.tracks?.reduce(
+      (lastFrame, track) =>
+        track.keyframes?.reduce(
+          (trackLastFrame, keyframe) => Math.max(trackLastFrame, keyframe.time),
+          lastFrame
+        ) ?? lastFrame,
+      -1
+    ) ?? -1;
+
+  if (lastKeyframe < 0) return Math.max(1, timelineDuration);
+  return Math.max(1, Math.min(Math.max(1, timelineDuration), Math.ceil(lastKeyframe) + 1));
+}
+
 export function usePlayback() {
   const controllerRef = useRef<PlaybackController | null>(null);
   const sceneGraph = useSceneGraph();
@@ -55,7 +73,7 @@ export function usePlayback() {
   useEffect(() => {
     const state = useEditorStore.getState();
     const ctrl = new PlaybackController({
-      duration: state.timelineDuration,
+      duration: getPlaybackDuration(state.timeline, state.timelineDuration),
       frameRate: state.frameRate,
       looping: state.isLooping,
       onFrameChange: (frame: number) => {
@@ -70,8 +88,9 @@ export function usePlayback() {
     controllerRef.current = ctrl;
 
     const unsub = useEditorStore.subscribe((curr, prev) => {
-      if (curr.timelineDuration !== prev.timelineDuration) {
-        ctrl.setDuration(curr.timelineDuration);
+      if (curr.timelineDuration !== prev.timelineDuration || curr.timeline !== prev.timeline) {
+        const duration = getPlaybackDuration(curr.timeline, curr.timelineDuration);
+        if (duration !== ctrl.duration) ctrl.setDuration(duration);
       }
       if (curr.frameRate !== prev.frameRate) {
         ctrl.setFrameRate(curr.frameRate);

@@ -190,6 +190,126 @@ describe('animation presets', () => {
     ).toEqual([80, 92, 80, 68, 80]);
   });
 
+  it('creates text reveal beats by word and by line, preserving Unicode character counts', () => {
+    const text = { ...makeTextNode(), content: 'Hi 🌟 there' };
+    const byWord = createAnimationPresetKeyframes(text, 'word-reveal', 0, 12);
+    expect(byWord.keyframes.map(({ time, value }) => [time, value])).toEqual([
+      [0, 0],
+      [3, 0],
+      [4, 3],
+      [7, 3],
+      [8, 5],
+      [11, 5],
+      [12, 10],
+    ]);
+
+    const byLine = createAnimationPresetKeyframes(
+      { ...text, content: 'One\nTwo' },
+      'line-reveal',
+      0,
+      12
+    );
+    expect(byLine.keyframes.map(({ time, value }) => [time, value])).toEqual([
+      [0, 0],
+      [5, 0],
+      [6, 4],
+      [11, 4],
+      [12, 7],
+    ]);
+    expect(byLine.baseValues.get('visibleCharacters')).toBe(7);
+  });
+
+  it('creates zoom, flash, rubber-band, and directional exit keyframes', () => {
+    const node = makeNode();
+    const zoomIn = createAnimationPresetKeyframes(node, 'zoom-in', 0, 12);
+    expect(
+      zoomIn.keyframes.find(
+        (keyframe) => keyframe.property === 'transform.scale.x' && keyframe.time === 0
+      )?.value
+    ).toBeCloseTo(0.45);
+    expect(
+      zoomIn.keyframes.find(
+        (keyframe) => keyframe.property === 'transform.scale.x' && keyframe.time === 12
+      )?.value
+    ).toBe(1);
+    expect(
+      zoomIn.keyframes.find((keyframe) => keyframe.property === 'opacity' && keyframe.time === 12)
+        ?.value
+    ).toBe(0.8);
+
+    const zoomOut = createAnimationPresetKeyframes(node, 'zoom-out', 0, 12);
+    expect(
+      zoomOut.keyframes
+        .filter((keyframe) => keyframe.property === 'transform.scale.x')
+        .map((keyframe) => keyframe.value)
+    ).toEqual([1, 1.28]);
+
+    const flash = createAnimationPresetKeyframes(node, 'flash', 0, 12);
+    expect(
+      flash.keyframes
+        .filter((keyframe) => keyframe.property === 'opacity')
+        .map((keyframe) => keyframe.value)
+    ).toEqual([0.8, 0.36, 0.8, 0.36, 0.8]);
+
+    const rubberBand = createAnimationPresetKeyframes(node, 'rubber-band', 0, 12);
+    expect(
+      rubberBand.keyframes
+        .filter((keyframe) => keyframe.property === 'transform.scale.x')
+        .map((keyframe) => keyframe.value)
+    ).toEqual([1, 1.24, 0.88, 1.054, 1]);
+
+    const riseOut = createAnimationPresetKeyframes(node, 'rise-out', 0, 12);
+    expect(
+      riseOut.keyframes.filter((keyframe) => keyframe.property === 'transform.position.y')
+    ).toEqual([
+      expect.objectContaining({ time: 0, value: 80 }),
+      expect.objectContaining({ time: 12, value: 144 }),
+    ]);
+    expect(
+      riseOut.keyframes.find((keyframe) => keyframe.property === 'opacity' && keyframe.time === 12)
+        ?.value
+    ).toBe(0);
+
+    const dropOut = createAnimationPresetKeyframes(node, 'drop-out', 0, 12);
+    expect(
+      dropOut.keyframes.filter((keyframe) => keyframe.property === 'transform.position.y')
+    ).toEqual([
+      expect.objectContaining({ time: 0, value: 80 }),
+      expect.objectContaining({ time: 12, value: 16 }),
+    ]);
+  });
+
+  it('creates seamless sway, breathing, and orbit cycles', () => {
+    const node = makeNode();
+    const sway = createAnimationPresetKeyframes(node, 'sway', 0, 24);
+    expect(
+      sway.keyframes
+        .filter((keyframe) => keyframe.property === 'transform.rotation')
+        .map((keyframe) => keyframe.value)
+    ).toEqual([0, -8, 8, -8, 0]);
+
+    const breathing = createAnimationPresetKeyframes(node, 'breathing', 0, 24);
+    expect(
+      breathing.keyframes
+        .filter((keyframe) => keyframe.property === 'transform.scale.x')
+        .map((keyframe) => keyframe.value)
+    ).toEqual([1, 1.06, 1.12, 1.06, 1]);
+
+    const orbit = createAnimationPresetKeyframes(node, 'orbit', 0, 24);
+    const orbitX = orbit.keyframes.filter(
+      (keyframe) => keyframe.property === 'transform.position.x'
+    );
+    const orbitY = orbit.keyframes.filter(
+      (keyframe) => keyframe.property === 'transform.position.y'
+    );
+    expect(orbitX).toHaveLength(25);
+    expect(orbitY).toHaveLength(25);
+    expect(orbitX[0]?.value).toBeCloseTo(100);
+    expect(orbitY[0]?.value).toBeCloseTo(80);
+    expect(orbitX.at(-1)?.value).toBeCloseTo(100);
+    expect(orbitY.at(-1)?.value).toBeCloseTo(80);
+  });
+
   it('keeps earlier keyframes, replaces future ones on affected properties, and leaves other tracks intact', () => {
     const node = makeNode();
     const timeline = createTimeline({ duration: 30 });

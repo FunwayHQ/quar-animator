@@ -534,6 +534,17 @@ describe('EditorStore', () => {
       expect(useEditorStore.getState().timelineDuration).toBe(1);
     });
 
+    it('should extend the full work area and clamp the current frame when duration changes', () => {
+      useEditorStore.getState().setCurrentFrame(299);
+      useEditorStore.getState().setTimelineDuration(600);
+      expect(useEditorStore.getState().workAreaEnd).toBe(599);
+      expect(useEditorStore.getState().currentFrame).toBe(299);
+
+      useEditorStore.getState().setTimelineDuration(120);
+      expect(useEditorStore.getState().workAreaEnd).toBe(119);
+      expect(useEditorStore.getState().currentFrame).toBe(119);
+    });
+
     it('should set frame rate with clamping', () => {
       const { setFrameRate } = useEditorStore.getState();
       setFrameRate(60);

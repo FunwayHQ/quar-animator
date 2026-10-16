@@ -233,6 +233,8 @@ describe('PropertiesPanel', () => {
     expect(
       screen.getByRole('button', { name: 'Apply Typewriter entrance animation' })
     ).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Apply By Word entrance animation' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Apply By Line entrance animation' })).toBeVisible();
     expect(screen.queryByRole('button', { name: 'Apply Draw On entrance animation' })).toBeNull();
 
     act(() => useEditorStore.getState().setSelection(['path1']));
@@ -241,6 +243,33 @@ describe('PropertiesPanel', () => {
     expect(
       screen.queryByRole('button', { name: 'Apply Typewriter entrance animation' })
     ).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Apply By Word entrance animation' })).toBeNull();
+  });
+
+  it('stagger-applies a preset to selected objects in selection order', () => {
+    const sg = renderWithSceneGraph();
+
+    act(() => {
+      sg.addNode(createTestRect('rect1', 'Rectangle 1'));
+      sg.addNode(createTestRect('rect2', 'Rectangle 2'));
+      useEditorStore.getState().setSelection(['rect1', 'rect2']);
+    });
+
+    fireEvent.change(screen.getByLabelText('Animation stagger delay per object'), {
+      target: { value: '0.1' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Apply Fade entrance animation' }));
+
+    const secondOpacityTrack = useEditorStore
+      .getState()
+      .timeline.tracks.find((track) => track.nodeId === 'rect2' && track.property === 'opacity');
+    expect(
+      secondOpacityTrack?.keyframes.map((keyframe) => [keyframe.time, keyframe.value])
+    ).toEqual([
+      [0, 0.8],
+      [3, 0],
+      [27, 0.8],
+    ]);
   });
 
   it('collapses and expands the animation preset controls', () => {

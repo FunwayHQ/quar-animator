@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '../../test/utils';
 import { SceneGraphProvider } from '../../contexts/SceneGraphContext';
+import { Camera } from '@quar/core';
 import { Canvas } from './Canvas';
 
 function renderCanvas(onProjectFileDrop?: (file: File) => void | Promise<void>) {
@@ -27,6 +28,18 @@ describe('Canvas', () => {
   it('displays zoom level', () => {
     renderCanvas();
     expect(screen.getByText('100%')).toBeInTheDocument();
+  });
+
+  it('pans the canvas on a horizontal Magic Mouse side swipe', () => {
+    const pan = vi.spyOn(Camera.prototype, 'pan');
+    renderCanvas();
+    const canvas = document.querySelector('canvas');
+
+    expect(canvas).toBeInTheDocument();
+    fireEvent.wheel(canvas!, { deltaX: 72, deltaY: 2 });
+
+    expect(pan).toHaveBeenCalledWith({ x: -72, y: 0 });
+    pan.mockRestore();
   });
 
   it('updates coordinates on mouse move', () => {

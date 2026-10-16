@@ -1898,13 +1898,22 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   setIsPlaying: (playing: boolean) => set({ isPlaying: playing }),
   setIsLooping: (looping: boolean) => set({ isLooping: looping }),
   setTimelineDuration: (duration: number) => {
-    const d = Math.max(1, Math.round(duration));
+    const d = Number.isFinite(duration)
+      ? Math.max(1, Math.min(Number.MAX_SAFE_INTEGER, Math.round(duration)))
+      : 1;
     set((state) => {
+      if (d === state.timelineDuration) return {};
       const updates: Partial<EditorStore> = {
         timelineDuration: d,
         timeline: { ...state.timeline, duration: d },
+        currentFrame: Math.min(state.currentFrame, d - 1),
+        isDirty: true,
       };
-      // Clamp work area bounds when duration shrinks
+      // Keep a full-duration work area full when the timeline grows, and clamp
+      // custom work areas when the timeline shrinks.
+      if (d > state.timelineDuration && state.workAreaEnd === state.timelineDuration - 1) {
+        updates.workAreaEnd = d - 1;
+      }
       if (state.workAreaEnd >= d) {
         updates.workAreaEnd = d - 1;
       }

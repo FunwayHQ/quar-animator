@@ -105,6 +105,7 @@ describe('Editor Page', () => {
 
   it('renders canvas with zoom display', () => {
     render(<Editor />);
-    expect(screen.getByText('100%')).toBeInTheDocument();
+    // The canvas and timeline each show their own zoom level.
+    expect(screen.getAllByText('100%')).toHaveLength(2);
   });
 });

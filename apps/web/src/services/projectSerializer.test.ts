@@ -412,6 +412,28 @@ describe('ProjectSerializer', () => {
   });
 
   describe('round-trip serialization', () => {
+    it('preserves durations longer than 300 frames when loading a project', () => {
+      const sceneGraph = new SceneGraph();
+      const editorState: EditorStateSnapshot = {
+        timeline: createTimeline({ duration: 600, frameRate: 30 }),
+        timelineDuration: 600,
+        frameRate: 30,
+        autoKeyframe: false,
+        onionSkin: { ...DEFAULT_ONION_SKIN_SETTINGS },
+      };
+      const serialized = serializeProject('Long Timeline', sceneGraph, editorState);
+      const loadedSceneGraph = new SceneGraph();
+      let loadedState: Record<string, unknown> = {};
+
+      deserializeProject(serialized, loadedSceneGraph, (state) => {
+        loadedState = state;
+      });
+
+      expect(serialized.settings.timelineDuration).toBe(600);
+      expect(loadedState.timelineDuration).toBe(600);
+      expect((loadedState.timeline as { duration: number }).duration).toBe(600);
+    });
+
     it('should preserve all data through serialize/deserialize cycle', () => {
       const sg = new SceneGraph();
       sg.addNode(makeTestNode('rect1', 10, 20));

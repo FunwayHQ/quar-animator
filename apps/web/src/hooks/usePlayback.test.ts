@@ -8,6 +8,7 @@ import type { ReactNode } from 'react';
 import { usePlayback } from './usePlayback';
 import { useEditorStore, DEFAULT_FILL, DEFAULT_STROKE } from '../stores/editorStore';
 import { SceneGraphProvider, useSceneGraph } from '../contexts/SceneGraphContext';
+import { PlaybackController, addKeyframe, createTimeline, getOrCreateTrack } from '@quar/animation';
 
 // Mock PlaybackController to avoid rAF issues in tests
 vi.mock('@quar/animation', async () => {
@@ -102,8 +103,16 @@ function usePlaybackWithSceneGraph() {
   return { playback: usePlayback(), sceneGraph: useSceneGraph() };
 }
 
+function timelineWithKeyframes(frames: number[]) {
+  const timeline = createTimeline({ duration: 300, frameRate: 30 });
+  const track = getOrCreateTrack<number>(timeline, 'animated-node', 'opacity');
+  frames.forEach((frame, index) => addKeyframe(track, frame, index));
+  return timeline;
+}
+
 describe('usePlayback', () => {
   beforeEach(() => {
+    vi.clearAllMocks();
     useEditorStore.setState({
       activeTool: 'selection',
       selectedNodeIds: new Set<string>(),
@@ -120,6 +129,7 @@ describe('usePlayback', () => {
       isLooping: false,
       timelineDuration: 300,
       frameRate: 30,
+      timeline: createTimeline({ duration: 300, frameRate: 30 }),
       timelineExpanded: true,
     });
   });
@@ -197,6 +207,28 @@ describe('usePlayback', () => {
     const { result } = renderHook(() => usePlayback(), { wrapper });
     act(() => result.current.goToEnd());
     expect(useEditorStore.getState().currentFrame).toBe(299);
+  });
+
+  it('limits playback to the inclusive last keyframe', () => {
+    useEditorStore.setState({ timeline: timelineWithKeyframes([12, 45]) });
+
+    renderHook(() => usePlayback(), { wrapper });
+
+    expect(PlaybackController).toHaveBeenLastCalledWith(expect.objectContaining({ duration: 46 }));
+  });
+
+  it('updates the playback limit when the last keyframe moves or is removed', () => {
+    useEditorStore.setState({ timeline: timelineWithKeyframes([12, 45]) });
+    renderHook(() => usePlayback(), { wrapper });
+
+    const instance = vi.mocked(PlaybackController).mock.results.at(-1)?.value;
+    expect(instance?.duration).toBe(46);
+
+    act(() => useEditorStore.setState({ timeline: timelineWithKeyframes([8, 20]) }));
+    expect(instance?.duration).toBe(21);
+
+    act(() => useEditorStore.setState({ timeline: timelineWithKeyframes([8]) }));
+    expect(instance?.duration).toBe(9);
   });
 
   it('should dispose controller on unmount', () => {

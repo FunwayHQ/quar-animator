@@ -70,6 +70,54 @@ describe('Timeline', () => {
     expect(screen.getByText('00:10:00')).toBeInTheDocument();
   });
 
+  it('allows extending the timeline beyond 300 frames', () => {
+    renderTimeline();
+
+    const durationInput = screen.getByRole('spinbutton', {
+      name: 'Timeline duration in frames',
+    });
+    fireEvent.change(durationInput, { target: { value: '600' } });
+    fireEvent.blur(durationInput);
+
+    const state = useEditorStore.getState();
+    expect(state.timelineDuration).toBe(600);
+    expect(state.timeline.duration).toBe(600);
+    expect(state.workAreaEnd).toBe(599);
+    expect(state.isDirty).toBe(true);
+    expect(screen.getByTestId('timeline-ruler')).toHaveAttribute('aria-valuemax', '599');
+    expect(screen.getByText('00:20:00')).toBeInTheDocument();
+  });
+
+  it('zooms the ruler and tracks together', () => {
+    renderTimeline();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Zoom in timeline' }));
+    expect(screen.getByTestId('timeline-zoom-level')).toHaveTextContent('125%');
+    expect(screen.getByTestId('timeline-content')).toHaveStyle({ width: '125%' });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Zoom out timeline' }));
+    expect(screen.getByTestId('timeline-zoom-level')).toHaveTextContent('100%');
+    expect(screen.getByTestId('timeline-content')).toHaveStyle({ width: '100%' });
+  });
+
+  it('pans with Magic Mouse side swipes and Shift+wheel, clamped to scroll bounds', () => {
+    renderTimeline();
+
+    const scrollArea = screen.getByTestId('timeline-scroll-area');
+    Object.defineProperty(scrollArea, 'clientWidth', { configurable: true, value: 300 });
+    Object.defineProperty(scrollArea, 'scrollWidth', { configurable: true, value: 600 });
+
+    fireEvent.wheel(scrollArea, { deltaY: 80, shiftKey: true });
+    expect(scrollArea.scrollLeft).toBe(80);
+
+    scrollArea.scrollLeft = 0;
+    fireEvent.wheel(scrollArea, { deltaX: 120 });
+    expect(scrollArea.scrollLeft).toBe(120);
+
+    fireEvent.wheel(scrollArea, { deltaX: 500 });
+    expect(scrollArea.scrollLeft).toBe(300);
+  });
+
   it('displays "No layers" when scene graph is empty', () => {
     renderTimeline();
 

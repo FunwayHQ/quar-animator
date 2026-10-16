@@ -1156,6 +1156,18 @@ export function Canvas({
     const canvas = canvasRef.current;
     if (!camera || !canvas) return;
 
+    const shouldPanHorizontally =
+      !e.ctrlKey && !e.metaKey && (e.shiftKey || Math.abs(e.deltaX) > Math.abs(e.deltaY));
+    if (shouldPanHorizontally) {
+      let panDelta = e.deltaX !== 0 ? e.deltaX : e.deltaY;
+      if (e.deltaMode === WheelEvent.DOM_DELTA_LINE) panDelta *= 40;
+      if (e.deltaMode === WheelEvent.DOM_DELTA_PAGE) panDelta *= canvas.clientWidth;
+
+      e.preventDefault();
+      camera.pan({ x: -panDelta, y: 0 });
+      return;
+    }
+
     e.preventDefault();
 
     const rect = canvas.getBoundingClientRect();

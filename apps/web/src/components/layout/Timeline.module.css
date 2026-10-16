@@ -125,10 +125,79 @@
   color: var(--color-text-tertiary);
 }
 
+.durationControl {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--color-text-disabled);
+  font-size: var(--font-size-xs);
+  white-space: nowrap;
+}
+
+.durationInput {
+  width: 88px;
+  height: 28px;
+  padding: 0 6px;
+  color: var(--color-text-secondary);
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-xs);
+  text-align: right;
+}
+
+.durationInput:focus {
+  border-color: var(--color-accent-primary);
+  outline: 1px solid var(--color-accent-primary);
+}
+
 .options {
   margin-left: auto;
   display: flex;
+  align-items: center;
   gap: 4px;
+}
+
+.zoomControl {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 28px;
+  padding: 0 3px;
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+}
+
+.zoomButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  color: var(--color-text-tertiary);
+  font-size: 16px;
+  line-height: 1;
+  border-radius: var(--radius-sm);
+}
+
+.zoomButton:hover:not(:disabled) {
+  background: var(--color-bg-hover);
+  color: var(--color-text-secondary);
+}
+
+.zoomButton:disabled {
+  color: var(--color-text-disabled);
+  cursor: default;
+}
+
+.zoomLevel {
+  width: 38px;
+  color: var(--color-text-secondary);
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-2xs);
+  text-align: center;
 }
 
 .optionButton {
@@ -201,11 +270,22 @@
   display: flex;
   flex-direction: column;
   overflow-x: auto;
+  overflow-y: hidden;
+  position: relative;
+}
+
+.timelineContent {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  height: 100%;
+  min-height: 100%;
   position: relative;
 }
 
 .ruler {
   height: 28px;
+  width: 100%;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.02) 0%, transparent 100%);
   border-bottom: 1px solid var(--color-border-subtle);
   position: relative;
@@ -266,6 +346,7 @@
 
 .tracks {
   flex: 1;
+  width: 100%;
   position: relative;
   overflow-y: auto;
 }
