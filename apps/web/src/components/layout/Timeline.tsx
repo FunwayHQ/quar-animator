@@ -8,6 +8,11 @@ import type { ContextMenuEntry } from '../common/ContextMenu';
 import { OnionSkinPanel } from '../common/OnionSkinPanel';
 import { EasingEditor } from '../common/EasingEditor';
 import { GraphEditor } from '../timeline/GraphEditor';
+import {
+  DEFAULT_TIMELINE_HEIGHT,
+  MIN_TIMELINE_HEIGHT,
+  useTimelineHeight,
+} from '../../hooks/useTimelineHeight';
 import styles from './Timeline.module.css';
 
 // ============================================================================
@@ -24,6 +29,9 @@ const EASING_PRESETS: Array<{ label: string; value: EasingFunction }> = [
   { label: 'Ease Out Bounce', value: 'easeOutBounce' },
   { label: 'Ease Out Elastic', value: 'easeOutElastic' },
 ];
+
+/** Space always left above the timeline so the canvas stays usable. */
+const MIN_WORKSPACE_HEIGHT = 150;
 
 function easingsMatch(a: EasingFunction, b: EasingFunction): boolean {
   if (typeof a === 'string' && typeof b === 'string') return a === b;
@@ -146,6 +154,80 @@ export function Timeline({ playback }: TimelineProps = {}) {
     rulerWidth: number;
   } | null>(null);
   const suppressRulerClickRef = useRef(false);
+
+  // ------- Panel resize (drag the top border) -------
+
+  const timelineRef = useRef<HTMLDivElement>(null);
+  const [timelineHeight, setTimelineHeight] = useTimelineHeight();
+  const [isResizing, setIsResizing] = useState(false);
+  const resizeDragRef = useRef<{ startY: number; startHeight: number; maxHeight: number } | null>(
+    null
+  );
+
+  const getMaxTimelineHeight = useCallback(() => {
+    const container = timelineRef.current?.parentElement;
+    if (!container || container.clientHeight === 0) return Infinity;
+    return Math.max(MIN_TIMELINE_HEIGHT, container.clientHeight - MIN_WORKSPACE_HEIGHT);
+  }, []);
+
+  const handleResizePointerDown = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      if (e.button !== 0 || !timelineRef.current) return;
+      e.preventDefault();
+      resizeDragRef.current = {
+        startY: e.clientY,
+        // Start from the rendered height: CSS may be capping the stored one.
+        startHeight: timelineRef.current.getBoundingClientRect().height,
+        maxHeight: getMaxTimelineHeight(),
+      };
+      if (typeof e.currentTarget.setPointerCapture === 'function') {
+        e.currentTarget.setPointerCapture(e.pointerId);
+      }
+      setIsResizing(true);
+    },
+    [getMaxTimelineHeight]
+  );
+
+  const handleResizePointerMove = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      const drag = resizeDragRef.current;
+      if (!drag) return;
+      // Dragging up (smaller clientY) makes the panel taller.
+      setTimelineHeight(Math.min(drag.maxHeight, drag.startHeight + drag.startY - e.clientY));
+    },
+    [setTimelineHeight]
+  );
+
+  const handleResizePointerUp = useCallback(() => {
+    resizeDragRef.current = null;
+    setIsResizing(false);
+  }, []);
+
+  const handleResizeKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLDivElement>) => {
+      const step = e.shiftKey ? 50 : 10;
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setTimelineHeight(Math.min(getMaxTimelineHeight(), timelineHeight + step));
+      } else if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setTimelineHeight(timelineHeight - step);
+      }
+    },
+    [getMaxTimelineHeight, setTimelineHeight, timelineHeight]
+  );
+
+  // Keep the resize cursor (and no text selection) while dragging over other UI.
+  useEffect(() => {
+    if (!isResizing) return;
+    const { cursor, userSelect } = document.body.style;
+    document.body.style.cursor = 'row-resize';
+    document.body.style.userSelect = 'none';
+    return () => {
+      document.body.style.cursor = cursor;
+      document.body.style.userSelect = userSelect;
+    };
+  }, [isResizing]);
 
   useLayoutEffect(() => {
     if (previousZoomPercentRef.current === zoomPercent) return;
@@ -926,7 +1008,29 @@ export function Timeline({ playback }: TimelineProps = {}) {
   // ============================================================
 
   return (
-    <div className={styles.timeline}>
+    <div className={styles.timeline} ref={timelineRef} style={{ height: timelineHeight }}>
+      {/* Resize handle on the top border: drag, arrow keys, or double-click to reset.
+          A focusable separator is the ARIA window-splitter pattern, which jsx-a11y
+          doesn't recognize as interactive. */}
+      {/* eslint-disable jsx-a11y/no-noninteractive-element-interactions, jsx-a11y/no-noninteractive-tabindex */}
+      <div
+        className={`${styles.resizeHandle} ${isResizing ? styles.resizing : ''}`}
+        role="separator"
+        aria-orientation="horizontal"
+        aria-label="Resize timeline"
+        aria-valuenow={timelineHeight}
+        aria-valuemin={MIN_TIMELINE_HEIGHT}
+        tabIndex={0}
+        title="Drag to resize the timeline (double-click to reset)"
+        onPointerDown={handleResizePointerDown}
+        onPointerMove={handleResizePointerMove}
+        onPointerUp={handleResizePointerUp}
+        onPointerCancel={handleResizePointerUp}
+        onDoubleClick={() => setTimelineHeight(DEFAULT_TIMELINE_HEIGHT)}
+        onKeyDown={handleResizeKeyDown}
+        data-testid="timeline-resize-handle"
+      />
+      {/* eslint-enable jsx-a11y/no-noninteractive-element-interactions, jsx-a11y/no-noninteractive-tabindex */}
       {/* Controls Bar */}
       <div className={styles.controls}>
         <button

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { act, fireEvent } from '@testing-library/react';
 import { render, screen } from '../../test/utils';
 import userEvent from '@testing-library/user-event';
@@ -515,6 +515,114 @@ describe('Timeline', () => {
 
       expect(trackNodeIds()).toEqual(['child']);
       expect(useEditorStore.getState().selectedNodeIds).toEqual(new Set(['static']));
+    });
+  });
+
+  describe('panel resizing', () => {
+    const STORAGE_KEY = 'quar-animator-timeline-height';
+    beforeEach(() => window.localStorage.removeItem(STORAGE_KEY));
+    afterEach(() => window.localStorage.removeItem(STORAGE_KEY));
+
+    // jsdom has no layout: report the panel's inline height as its rendered
+    // height, and optionally give the editor area a height.
+    function renderSized(containerHeight?: number) {
+      renderTimeline();
+      const handle = screen.getByTestId('timeline-resize-handle');
+      const panel = handle.parentElement!;
+      Object.defineProperty(panel, 'getBoundingClientRect', {
+        configurable: true,
+        value: () => ({ height: parseFloat(panel.style.height) }) as DOMRect,
+      });
+      if (containerHeight !== undefined) {
+        Object.defineProperty(panel.parentElement!, 'clientHeight', {
+          configurable: true,
+          value: containerHeight,
+        });
+      }
+      return { handle, panel };
+    }
+
+    it('exposes the top border as an accessible resize separator', () => {
+      const { handle, panel } = renderSized();
+
+      expect(handle).toHaveAttribute('role', 'separator');
+      expect(handle).toHaveAttribute('aria-orientation', 'horizontal');
+      expect(handle).toHaveAttribute('aria-label', 'Resize timeline');
+      expect(handle).toHaveAttribute('aria-valuenow', '200');
+      expect(panel).toHaveStyle({ height: '200px' });
+    });
+
+    it('grows when the top border is dragged up and shrinks when dragged down', () => {
+      const { handle, panel } = renderSized();
+
+      fireEvent.pointerDown(handle, { button: 0, clientY: 500, pointerId: 1 });
+      fireEvent.pointerMove(handle, { clientY: 380, pointerId: 1 });
+      expect(panel).toHaveStyle({ height: '320px' });
+      fireEvent.pointerMove(handle, { clientY: 560, pointerId: 1 });
+      expect(panel).toHaveStyle({ height: '140px' });
+      fireEvent.pointerUp(handle, { clientY: 560, pointerId: 1 });
+
+      // Moves after release no longer resize
+      fireEvent.pointerMove(handle, { clientY: 100, pointerId: 1 });
+      expect(panel).toHaveStyle({ height: '140px' });
+    });
+
+    it('ignores drags with buttons other than the primary one', () => {
+      const { handle, panel } = renderSized();
+
+      fireEvent.pointerDown(handle, { button: 2, clientY: 500, pointerId: 1 });
+      fireEvent.pointerMove(handle, { clientY: 300, pointerId: 1 });
+
+      expect(panel).toHaveStyle({ height: '200px' });
+    });
+
+    it('stops at the minimum height and leaves room for the canvas above', () => {
+      const { handle, panel } = renderSized(700);
+
+      fireEvent.pointerDown(handle, { button: 0, clientY: 500, pointerId: 1 });
+      fireEvent.pointerMove(handle, { clientY: -2000, pointerId: 1 });
+      expect(panel).toHaveStyle({ height: '550px' }); // 700 - 150 for the canvas
+      fireEvent.pointerMove(handle, { clientY: 3000, pointerId: 1 });
+      expect(panel).toHaveStyle({ height: '120px' });
+      fireEvent.pointerUp(handle, { pointerId: 1 });
+    });
+
+    it('shows the resize cursor everywhere while dragging', () => {
+      const { handle } = renderSized();
+
+      fireEvent.pointerDown(handle, { button: 0, clientY: 500, pointerId: 1 });
+      expect(document.body.style.cursor).toBe('row-resize');
+      fireEvent.pointerUp(handle, { pointerId: 1 });
+      expect(document.body.style.cursor).toBe('');
+    });
+
+    it('resizes with the arrow keys and resets on double-click', () => {
+      const { handle, panel } = renderSized(700);
+
+      fireEvent.keyDown(handle, { key: 'ArrowUp' });
+      expect(panel).toHaveStyle({ height: '210px' });
+      fireEvent.keyDown(handle, { key: 'ArrowUp', shiftKey: true });
+      expect(panel).toHaveStyle({ height: '260px' });
+      fireEvent.keyDown(handle, { key: 'ArrowDown' });
+      expect(panel).toHaveStyle({ height: '250px' });
+
+      fireEvent.doubleClick(handle);
+      expect(panel).toHaveStyle({ height: '200px' });
+    });
+
+    it('remembers the height for the next session', () => {
+      const { handle } = renderSized();
+
+      fireEvent.keyDown(handle, { key: 'ArrowUp', shiftKey: true });
+
+      expect(window.localStorage.getItem(STORAGE_KEY)).toBe('250');
+    });
+
+    it('has no resize handle while collapsed', () => {
+      useEditorStore.setState({ timelineExpanded: false });
+      renderTimeline();
+
+      expect(screen.queryByTestId('timeline-resize-handle')).not.toBeInTheDocument();
     });
   });
 });
