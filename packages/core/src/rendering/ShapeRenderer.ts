@@ -16,6 +16,7 @@ import type {
   ArtboardNode,
   SymbolDefinition,
   Node,
+  MaskMode,
   Fill,
   Stroke,
   Color,
@@ -26,6 +27,8 @@ import type {
 import { resolveSymbolInstance, getResolvedRootNodes } from '../symbols/symbolResolver';
 import { WebGLRenderer, type ShaderProgram } from './WebGLRenderer';
 import { EffectRenderer } from './EffectRenderer';
+import { FramebufferManager } from './FramebufferManager';
+import type { FramebufferEntry } from './FramebufferManager';
 import {
   computeBounds,
   normalizeGradientStops,
@@ -63,6 +66,30 @@ import type { AffineTransform2D } from '@quar/rigging';
 // Shaders
 // ============================================================================
 
+const MASK_FRAGMENT_FUNCTIONS = `
+uniform sampler2D u_maskTexture;
+uniform int u_maskMode; // 0=clip, 1=alpha, 2=luminance
+uniform int u_maskPass; // Writes a solid silhouette while creating a clip mask
+uniform int u_useMask;
+
+float sampleMaskCoverage() {
+  if (u_useMask == 0) return 1.0;
+  vec2 uv = gl_FragCoord.xy / vec2(textureSize(u_maskTexture, 0));
+  vec4 maskColor = texture(u_maskTexture, uv);
+  if (u_maskMode == 1) return maskColor.a;
+  if (u_maskMode == 2) return dot(maskColor.rgb, vec3(0.2126, 0.7152, 0.0722));
+  return smoothstep(0.2, 0.8, maskColor.a);
+}
+
+vec4 applyNodeMask(vec4 color) {
+  float parentCoverage = sampleMaskCoverage();
+  if (u_maskPass != 0) return vec4(1.0, 1.0, 1.0, parentCoverage);
+  color.a *= parentCoverage;
+  return color;
+}
+`;
+const MASK_UNIFORM_NAMES = ['u_maskTexture', 'u_maskMode', 'u_maskPass', 'u_useMask'];
+
 const SHAPE_VERTEX_SHADER = `#version 300 es
 precision highp float;
 
@@ -82,11 +109,12 @@ const SHAPE_FRAGMENT_SHADER = `#version 300 es
 precision highp float;
 
 uniform vec4 u_color;
+${MASK_FRAGMENT_FUNCTIONS}
 
 out vec4 outColor;
 
 void main() {
-  outColor = u_color;
+  outColor = applyNodeMask(u_color);
 }
 `;
 
@@ -127,6 +155,7 @@ uniform float u_radius;        // radial radius (normalized)
 uniform float u_opacity;       // fill/stroke opacity multiplier
 uniform vec2 u_gradStart;      // linear gradient start (normalized 0-1)
 uniform vec2 u_gradEnd;        // linear gradient end (normalized 0-1)
+${MASK_FRAGMENT_FUNCTIONS}
 
 out vec4 outColor;
 
@@ -164,7 +193,7 @@ void main() {
     if (i == u_stopCount - 1) color = u_stops[i];
   }
   color.a *= u_opacity;
-  outColor = color;
+  outColor = applyNodeMask(color);
 }
 `;
 
@@ -204,6 +233,7 @@ uniform float u_exposure;   // -1 to 1
 uniform float u_temperature; // -1 to 1
 uniform vec2 u_rectSize;       // (width, height) for SDF masking
 uniform vec4 u_cornerRadius;   // (TL, TR, BR, BL)
+${MASK_FRAGMENT_FUNCTIONS}
 
 out vec4 outColor;
 
@@ -273,7 +303,7 @@ void main() {
   float dist = roundedBoxSDF(pixelPos, u_rectSize * 0.5, u_cornerRadius);
   float aa = 1.0 - smoothstep(-0.5, 0.5, dist);
 
-  outColor = vec4(c, texColor.a * u_opacity * aa);
+  outColor = applyNodeMask(vec4(c, texColor.a * u_opacity * aa));
 }
 `;
 
@@ -303,9 +333,10 @@ precision highp float;
 in vec3 v_color;
 out vec4 fragColor;
 uniform float u_alpha;
+${MASK_FRAGMENT_FUNCTIONS}
 
 void main() {
-  fragColor = vec4(v_color, u_alpha);
+  fragColor = applyNodeMask(vec4(v_color, u_alpha));
 }
 `;
 
@@ -668,6 +699,16 @@ export class ShapeRenderer {
 
   // Effect renderer for drop shadows, blur, blend modes
   private effectRenderer: EffectRenderer;
+  private maskFramebufferManager: FramebufferManager;
+  private activeMask: { entry: FramebufferEntry; mode: MaskMode } | null = null;
+  private maskStack: Array<{
+    groupId: string;
+    maskNodeId: string;
+    entry: FramebufferEntry;
+    previous: { entry: FramebufferEntry; mode: MaskMode } | null;
+  }> = [];
+  private maskSourceNodeIds = new Set<string>();
+  private maskPassMode = 0;
 
   // Symbol definitions registry (set by Canvas component)
   private symbolDefinitions: Map<string, SymbolDefinition> = new Map();
@@ -682,12 +723,146 @@ export class ShapeRenderer {
     this.initializeSkinnedBuffers();
     this.initializeWeightBuffers();
     this.initializeTextureBuffers();
+    this.maskFramebufferManager = new FramebufferManager(renderer.context);
     this.effectRenderer = new EffectRenderer(renderer);
+    this.renderer.setProgramUseHook((program) => this.applyMaskUniforms(program));
   }
 
   /** Set the symbol definitions registry so instances can be resolved during rendering. */
   setSymbolDefinitions(defs: Map<string, SymbolDefinition>): void {
     this.symbolDefinitions = defs;
+  }
+
+  private applyMaskUniforms(program: ShaderProgram): void {
+    const gl = this.renderer.context;
+    const mask = this.activeMask;
+    gl.uniform1i(program.uniforms.u_useMask ?? null, mask ? 1 : 0);
+    gl.uniform1i(
+      program.uniforms.u_maskMode ?? null,
+      mask?.mode === 'alpha' ? 1 : mask?.mode === 'luminance' ? 2 : 0
+    );
+    gl.uniform1i(program.uniforms.u_maskPass ?? null, this.maskPassMode);
+
+    // Unit 3 is reserved for the current mask; image and post-process shaders
+    // continue using their existing texture units.
+    gl.activeTexture(gl.TEXTURE0 + 3);
+    gl.bindTexture(gl.TEXTURE_2D, mask?.entry.texture ?? null);
+    gl.uniform1i(program.uniforms.u_maskTexture ?? null, 3);
+    gl.activeTexture(gl.TEXTURE0);
+  }
+
+  private beginMask(
+    group: GroupNode,
+    sceneGraph: SceneGraph,
+    canvasWidth: number,
+    canvasHeight: number
+  ): void {
+    if (!group.maskNodeId || !group.maskMode) return;
+    const maskNode = sceneGraph.getNode(group.maskNodeId);
+    if (!maskNode || maskNode.parent !== group.id) return;
+
+    const gl = this.renderer.context;
+    const previous = this.activeMask;
+    const scissorWasEnabled = gl.isEnabled(gl.SCISSOR_TEST);
+    if (scissorWasEnabled) gl.disable(gl.SCISSOR_TEST);
+    const entry = this.maskFramebufferManager.acquire(canvasWidth, canvasHeight);
+
+    try {
+      gl.bindFramebuffer(gl.FRAMEBUFFER, entry.fbo);
+      gl.viewport(0, 0, canvasWidth, canvasHeight);
+      gl.clearColor(0, 0, 0, 0);
+      gl.clear(gl.COLOR_BUFFER_BIT);
+      if (scissorWasEnabled) gl.enable(gl.SCISSOR_TEST);
+
+      // Separate alpha blending keeps the mask texture's alpha channel correct.
+      gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+      this.maskPassMode = group.maskMode === 'clip' ? 1 : 0;
+      this.activeMask = previous;
+      this.currentEffectiveOpacity = sceneGraph.getEffectiveOpacity(maskNode.id);
+      if (maskNode.visible) {
+        this.renderNodeGeometry(maskNode, sceneGraph.getWorldTransform(maskNode.id), sceneGraph);
+      }
+    } finally {
+      this.maskPassMode = 0;
+      this.activeMask = previous;
+      gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      gl.viewport(0, 0, canvasWidth, canvasHeight);
+      if (scissorWasEnabled) gl.enable(gl.SCISSOR_TEST);
+    }
+
+    this.maskStack.push({
+      groupId: group.id,
+      maskNodeId: maskNode.id,
+      entry,
+      previous,
+    });
+    this.maskSourceNodeIds.add(maskNode.id);
+    this.activeMask = { entry, mode: group.maskMode };
+    if (this.program) {
+      this.renderer.useProgram(this.program);
+      this.renderer.bindVAO(this.vao);
+      if (this.currentVPArray) {
+        gl.uniformMatrix3fv(
+          this.program.uniforms.u_viewProjection ?? null,
+          false,
+          this.currentVPArray
+        );
+      }
+    }
+  }
+
+  private endMask(groupId: string): void {
+    const frame = this.maskStack[this.maskStack.length - 1];
+    if (!frame || frame.groupId !== groupId) return;
+    this.maskStack.pop();
+    this.maskSourceNodeIds.delete(frame.maskNodeId);
+
+    const gl = this.renderer.context;
+    gl.activeTexture(gl.TEXTURE0 + 3);
+    gl.bindTexture(gl.TEXTURE_2D, null);
+    this.maskFramebufferManager.release(frame.entry);
+    this.activeMask = frame.previous;
+    gl.activeTexture(gl.TEXTURE0);
+    if (this.program) this.renderer.useProgram(this.program);
+  }
+
+  private renderNodeGeometry(node: Node, worldTransform: Matrix3, sceneGraph: SceneGraph): void {
+    if (
+      node.type !== 'bone' &&
+      node.type !== 'group' &&
+      node.type !== 'text' &&
+      'skinData' in node &&
+      node.skinData
+    ) {
+      if (node.type === 'image') this.renderSkinnedImage(node, sceneGraph);
+      else this.renderSkinnedNode(node, sceneGraph);
+      return;
+    }
+
+    switch (node.type) {
+      case 'rectangle':
+        this.renderRectangle(node, worldTransform);
+        break;
+      case 'ellipse':
+        this.renderEllipse(node, worldTransform);
+        break;
+      case 'polygon':
+        this.renderPolygon(node, worldTransform);
+        break;
+      case 'path':
+        this.renderPath(node, worldTransform);
+        break;
+      case 'text':
+        this.renderText(node, worldTransform);
+        break;
+      case 'image':
+        this.renderImage(node, worldTransform);
+        break;
+      case 'bone':
+        this.renderBone(node, worldTransform);
+        break;
+    }
   }
 
   // --------------------------------------------------------------------------
@@ -700,7 +875,7 @@ export class ShapeRenderer {
       SHAPE_VERTEX_SHADER,
       SHAPE_FRAGMENT_SHADER,
       ['a_position'],
-      ['u_viewProjection', 'u_model', 'u_color']
+      ['u_viewProjection', 'u_model', 'u_color', ...MASK_UNIFORM_NAMES]
     );
 
     this.gradientProgram = this.renderer.createShaderProgram(
@@ -720,6 +895,7 @@ export class ShapeRenderer {
         'u_opacity',
         'u_gradStart',
         'u_gradEnd',
+        ...MASK_UNIFORM_NAMES,
         ...Array.from({ length: MAX_GRADIENT_STOPS }, (_, i) => `u_stops[${i}]`),
         ...Array.from({ length: MAX_GRADIENT_STOPS }, (_, i) => `u_offsets[${i}]`),
       ]
@@ -730,7 +906,7 @@ export class ShapeRenderer {
       WEIGHT_VERTEX_SHADER,
       WEIGHT_FRAGMENT_SHADER,
       ['a_position', 'a_color'],
-      ['u_viewProjection', 'u_model', 'u_alpha']
+      ['u_viewProjection', 'u_model', 'u_alpha', ...MASK_UNIFORM_NAMES]
     );
 
     this.textureProgram = this.renderer.createShaderProgram(
@@ -752,6 +928,7 @@ export class ShapeRenderer {
         'u_temperature',
         'u_rectSize',
         'u_cornerRadius',
+        ...MASK_UNIFORM_NAMES,
       ]
     );
 
@@ -766,7 +943,7 @@ export class ShapeRenderer {
       SKINNED_VERTEX_SHADER,
       SHAPE_FRAGMENT_SHADER,
       ['a_position', 'a_boneIndices', 'a_boneWeights'],
-      ['u_viewProjection', 'u_color', ...boneMatrixUniforms]
+      ['u_viewProjection', 'u_color', ...MASK_UNIFORM_NAMES, ...boneMatrixUniforms]
     );
 
     this.skinnedGradientProgram = this.renderer.createShaderProgram(
@@ -785,6 +962,7 @@ export class ShapeRenderer {
         'u_opacity',
         'u_gradStart',
         'u_gradEnd',
+        ...MASK_UNIFORM_NAMES,
         ...Array.from({ length: MAX_GRADIENT_STOPS }, (_, i) => `u_stops[${i}]`),
         ...Array.from({ length: MAX_GRADIENT_STOPS }, (_, i) => `u_offsets[${i}]`),
         ...boneMatrixUniforms,
@@ -1295,11 +1473,24 @@ export class ShapeRenderer {
       }
     };
 
+    this.activeMask = null;
+    this.maskStack = [];
+    this.maskSourceNodeIds.clear();
+    this.maskPassMode = 0;
+
     // Traverse and render visible shapes
     sceneGraph.traverseVisible(
       (node) => {
         // Skip node being edited (e.g. text node with active overlay)
         if (skipNodeId && node.id === skipNodeId) return;
+
+        if (node.type === 'group' && node.maskMode && node.maskNodeId) {
+          this.beginMask(node, sceneGraph, canvasWidth, canvasHeight);
+          return;
+        }
+
+        // The mask source defines coverage but is not itself part of the output.
+        if (this.maskSourceNodeIds.has(node.id)) return false;
 
         // Skip IK target and vitruvian nodes (no geometry to render)
         if (node.type === 'ik-target' || node.type === 'vitruvian') return;
@@ -1460,47 +1651,7 @@ export class ShapeRenderer {
           return false; // skip children — they are rendered as part of the boolean result
         }
 
-        const renderShape = () => {
-          // Check for skinned mesh — deform vertices via CPU skinning
-          if (
-            node.type !== 'bone' &&
-            node.type !== 'group' &&
-            node.type !== 'text' &&
-            'skinData' in node &&
-            (node as any).skinData
-          ) {
-            if (node.type === 'image') {
-              this.renderSkinnedImage(node, sceneGraph);
-            } else {
-              this.renderSkinnedNode(node, sceneGraph);
-            }
-            return;
-          }
-
-          switch (node.type) {
-            case 'rectangle':
-              this.renderRectangle(node, worldTransform);
-              break;
-            case 'ellipse':
-              this.renderEllipse(node, worldTransform);
-              break;
-            case 'polygon':
-              this.renderPolygon(node, worldTransform);
-              break;
-            case 'path':
-              this.renderPath(node, worldTransform);
-              break;
-            case 'text':
-              this.renderText(node, worldTransform);
-              break;
-            case 'image':
-              this.renderImage(node, worldTransform);
-              break;
-            case 'bone':
-              this.renderBone(node, worldTransform);
-              break;
-          }
-        };
+        const renderShape = () => this.renderNodeGeometry(node, worldTransform, sceneGraph);
 
         // Check if node needs multi-pass rendering (effects or blend mode)
         if (this.effectRenderer.needsMultiPass(node.effects, node.blendMode)) {
@@ -1552,9 +1703,19 @@ export class ShapeRenderer {
         if (node.type === 'artboard' && node.clipContent) {
           popScissor();
         }
+        if (node.type === 'group' && node.maskMode && node.maskNodeId) {
+          this.endMask(node.id);
+        }
       },
       exportNodeIds
     );
+
+    while (this.maskStack.length > 0) {
+      this.endMask(this.maskStack[this.maskStack.length - 1]!.groupId);
+    }
+    gl.activeTexture(gl.TEXTURE0 + 3);
+    gl.bindTexture(gl.TEXTURE_2D, null);
+    gl.activeTexture(gl.TEXTURE0);
 
     this.renderer.bindVAO(null);
   }
@@ -4489,6 +4650,11 @@ export class ShapeRenderer {
 
   dispose(): void {
     const gl = this.renderer.context;
+    this.renderer.setProgramUseHook(null);
+    this.maskFramebufferManager.dispose();
+    this.maskStack = [];
+    this.maskSourceNodeIds.clear();
+    this.activeMask = null;
 
     if (this.vertexBuffer) {
       gl.deleteBuffer(this.vertexBuffer);

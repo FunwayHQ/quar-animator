@@ -5,7 +5,8 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { useEditorStore, DEFAULT_FILL, DEFAULT_STROKE } from './editorStore';
 import { createTimeline } from '@quar/animation';
-import { DEFAULT_ONION_SKIN_SETTINGS, SceneGraph } from '@quar/core';
+import { DEFAULT_ONION_SKIN_SETTINGS, SceneGraph, createDefaultTransform } from '@quar/core';
+import type { RectangleNode } from '@quar/types';
 
 describe('EditorStore', () => {
   // Reset store before each test
@@ -3367,6 +3368,113 @@ describe('EditorStore', () => {
       expect(s.vitruvianControllers).toHaveLength(0);
       expect(s.dynamicChains).toHaveLength(0);
       expect(s.selectedNodeIds.size).toBe(0);
+    });
+  });
+
+  describe('mask groups', () => {
+    function makeMaskRect(id: string): RectangleNode {
+      return {
+        id,
+        name: id,
+        type: 'rectangle',
+        parent: null,
+        children: [],
+        transform: createDefaultTransform(),
+        visible: true,
+        locked: false,
+        opacity: 1,
+        blendMode: 'normal',
+        width: 100,
+        height: 80,
+        cornerRadius: [0, 0, 0, 0],
+        fills: [
+          { type: 'solid', color: { r: 255, g: 255, b: 255, a: 1 }, opacity: 1, visible: true },
+        ],
+        strokes: [],
+      };
+    }
+
+    it('groups selected layers and records the topmost shape as the mask source', () => {
+      const sceneGraph = new SceneGraph();
+      sceneGraph.addNode(makeMaskRect('content'));
+      sceneGraph.addNode(makeMaskRect('mask'));
+      useEditorStore.setState({ selectedNodeIds: new Set(['content', 'mask']) });
+
+      useEditorStore.getState().createMask(sceneGraph, 'luminance');
+
+      const groupId = [...useEditorStore.getState().selectedNodeIds][0]!;
+      const group = sceneGraph.getNode(groupId);
+      expect(group?.type).toBe('group');
+      if (group?.type !== 'group') throw new Error('Expected a mask group');
+      expect(group.maskNodeId).toBe('mask');
+      expect(group.maskMode).toBe('luminance');
+      expect(group.children).toEqual(['content', 'mask']);
+      expect(sceneGraph.getNode('content')?.parent).toBe(groupId);
+      expect(useEditorStore.getState().canUndo).toBe(true);
+    });
+
+    it('can change and remove a mask with undo support', () => {
+      const sceneGraph = new SceneGraph();
+      const group = {
+        id: 'masked',
+        name: 'Mask',
+        type: 'group' as const,
+        parent: null,
+        children: [],
+        transform: createDefaultTransform(),
+        visible: true,
+        locked: false,
+        opacity: 1,
+        blendMode: 'normal' as const,
+        maskNodeId: 'mask',
+        maskMode: 'clip' as const,
+      };
+      sceneGraph.addNode(group);
+      sceneGraph.addNode(makeMaskRect('mask'), 'masked');
+      sceneGraph.addNode(makeMaskRect('content'), 'masked');
+
+      useEditorStore.getState().setMaskMode(sceneGraph, 'masked', 'alpha');
+      const changedGroup = sceneGraph.getNode('masked');
+      if (changedGroup?.type !== 'group') throw new Error('Expected the mask group');
+      expect(changedGroup.maskMode).toBe('alpha');
+      useEditorStore.getState().removeMask(sceneGraph, 'masked');
+      expect(changedGroup.maskNodeId).toBeUndefined();
+      expect(useEditorStore.getState().canUndo).toBe(true);
+    });
+
+    it('remaps the mask source when duplicating a masked group', () => {
+      const sceneGraph = new SceneGraph();
+      const group = {
+        id: 'masked',
+        name: 'Mask',
+        type: 'group' as const,
+        parent: null,
+        children: [],
+        transform: createDefaultTransform(),
+        visible: true,
+        locked: false,
+        opacity: 1,
+        blendMode: 'normal' as const,
+        maskNodeId: 'mask',
+        maskMode: 'alpha' as const,
+      };
+      sceneGraph.addNode(group);
+      sceneGraph.addNode(makeMaskRect('content'), 'masked');
+      sceneGraph.addNode(makeMaskRect('mask'), 'masked');
+      useEditorStore.setState({ selectedNodeIds: new Set(['masked']) });
+
+      useEditorStore.getState().duplicateSelection(sceneGraph);
+
+      const duplicatedGroup = sceneGraph
+        .getRootNodes()
+        .map((node) => sceneGraph.getNode(node.id)!)
+        .find((node) => node.id !== 'masked')!;
+      if (duplicatedGroup.type !== 'group') throw new Error('Expected a duplicated mask group');
+      const duplicatedMaskId = duplicatedGroup.maskNodeId;
+      expect(duplicatedMaskId).toBeDefined();
+      expect(duplicatedMaskId).not.toBe('mask');
+      expect(duplicatedGroup.children).toContain(duplicatedMaskId);
+      expect(sceneGraph.getNode(duplicatedMaskId ?? '')?.parent).toBe(duplicatedGroup.id);
     });
   });
 });

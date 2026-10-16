@@ -133,6 +133,19 @@ describe('SceneGraph', () => {
       expect(parent.children).not.toContain('child');
     });
 
+    it('clears a group mask reference when its mask source is deleted', () => {
+      const group = createGroupNode('masked', 'Masked');
+      group.maskNodeId = 'mask';
+      group.maskMode = 'alpha';
+      sceneGraph.addNode(group);
+      sceneGraph.addNode(createGroupNode('mask', 'Mask source'), 'masked');
+
+      sceneGraph.removeNode('mask');
+
+      expect(group.maskNodeId).toBeUndefined();
+      expect(group.maskMode).toBeUndefined();
+    });
+
     it('recursively removes all descendants', () => {
       const grandparent = createGroupNode('grandparent', 'Grandparent');
       const parent = createGroupNode('parent', 'Parent');
@@ -292,6 +305,21 @@ describe('SceneGraph', () => {
       // Moving child to parent2 (not a descendant) should work fine
       expect(() => sceneGraph.moveNode('child', 'parent2')).not.toThrow();
       expect(child.parent).toBe('parent2');
+    });
+
+    it('clears a group mask reference when its source moves out', () => {
+      const masked = createGroupNode('masked', 'Masked');
+      masked.maskNodeId = 'mask';
+      masked.maskMode = 'clip';
+      const destination = createGroupNode('destination', 'Destination');
+      sceneGraph.addNode(masked);
+      sceneGraph.addNode(destination);
+      sceneGraph.addNode(createGroupNode('mask', 'Mask source'), 'masked');
+
+      sceneGraph.moveNode('mask', 'destination');
+
+      expect(masked.maskNodeId).toBeUndefined();
+      expect(masked.maskMode).toBeUndefined();
     });
   });
 

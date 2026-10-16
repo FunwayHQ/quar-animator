@@ -234,8 +234,9 @@ export class SelectionTool extends BaseTool {
       }
     }
 
-    // Hit test to find node under cursor
-    const rawHit = this.hitTest(worldPos);
+    // Artboards are selected from their top-left corner, like frame labels in
+    // Figma. Their interior remains available for selecting child objects.
+    const rawHit = this.hitTestArtboardCorner(screenPos) ?? this.hitTest(worldPos);
     const enteredGroupId = this.context.getEnteredGroupId?.() ?? null;
     const hitNode = rawHit ? this.resolveHitToScope(rawHit) : null;
 
@@ -669,13 +670,47 @@ export class SelectionTool extends BaseTool {
 
     // Traverse in reverse order (top to bottom in render order)
     this.context.sceneGraph.traverseVisible((node) => {
-      if (node.locked) return; // clicks pass through locked nodes (F053)
+      // Artboard backgrounds should not intercept clicks on their contents.
+      // The frame itself is hit-tested separately at its top-left corner.
+      if (node.locked || node.type === 'artboard') return; // clicks pass through locked nodes (F053)
       if (this.isPointInNode(worldPoint, node)) {
         hitNode = node;
       }
     });
 
     return hitNode;
+  }
+
+  /** Find an artboard whose top-left corner label was clicked. */
+  private hitTestArtboardCorner(screenPoint: Vector2): Node | null {
+    const candidates: Array<{ node: Node; distance: number }> = [];
+
+    this.context.sceneGraph.traverseVisible((node) => {
+      if (node.type !== 'artboard' || node.locked) return;
+
+      const worldTransform = this.context.sceneGraph.getWorldTransform(node.id);
+      const localTopLeft = {
+        x: -node.width * node.transform.anchor.x,
+        y: node.height * (1 - node.transform.anchor.y),
+      };
+      const worldTopLeft = mat3.transformPoint(worldTransform, localTopLeft);
+      const screenTopLeft = this.context.camera.worldToScreen(worldTopLeft);
+      const distance = Math.hypot(screenPoint.x - screenTopLeft.x, screenPoint.y - screenTopLeft.y);
+      const dimensionsLabel = `${Math.round(node.width)} x ${Math.round(node.height)}`;
+      // Match the visible artboard title above the frame, keeping its hit area
+      // screen-sized just like the overlay text at every canvas zoom level.
+      const labelWidth = Math.max(32, node.name.length * 6.5 + dimensionsLabel.length * 5.5 + 6);
+      const isInCornerLabel =
+        screenPoint.x >= screenTopLeft.x - 6 &&
+        screenPoint.x <= screenTopLeft.x + labelWidth &&
+        screenPoint.y >= screenTopLeft.y - 20 &&
+        screenPoint.y <= screenTopLeft.y + 4;
+
+      if (isInCornerLabel) candidates.push({ node, distance });
+    });
+
+    candidates.sort((a, b) => a.distance - b.distance);
+    return candidates[0]?.node ?? null;
   }
 
   /**
@@ -693,8 +728,9 @@ export class SelectionTool extends BaseTool {
       while (current.parent !== null) {
         const parent = this.context.sceneGraph.getNode(current.parent);
         if (!parent) break;
-        // Bones are NOT groups — don't walk through bone parents
-        if (parent.type === 'bone') break;
+        // Bones are NOT groups, and artboards form their own selection scope.
+        // A canvas click inside a frame should select its content, not the frame.
+        if (parent.type === 'bone' || parent.type === 'artboard') break;
         current = parent;
       }
       return current;
@@ -893,7 +929,7 @@ export class SelectionTool extends BaseTool {
     const scopedNodes: Node[] = [];
 
     this.context.sceneGraph.traverseVisible((node) => {
-      if (node.locked) return; // marquee ignores locked nodes (F053)
+      if (node.locked || node.type === 'artboard') return; // marquee ignores locked nodes and frames
       let bounds = this.getNodeBounds(node);
       if (!bounds) return;
 

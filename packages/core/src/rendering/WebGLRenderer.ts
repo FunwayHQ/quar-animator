@@ -42,6 +42,7 @@ export class WebGLRenderer {
   // State caching to avoid redundant GL calls
   private currentProgram: WebGLProgram | null = null;
   private currentVAO: WebGLVertexArrayObject | null = null;
+  private programUseHook: ((program: ShaderProgram) => void) | null = null;
 
   // Viewport info
   private _width: number = 0;
@@ -276,6 +277,11 @@ export class WebGLRenderer {
       this.gl.useProgram(program.program);
       this.currentProgram = program.program;
     }
+    this.programUseHook?.(program);
+  }
+
+  setProgramUseHook(hook: ((program: ShaderProgram) => void) | null): void {
+    this.programUseHook = hook;
   }
 
   // --------------------------------------------------------------------------

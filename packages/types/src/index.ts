@@ -226,7 +226,13 @@ export interface GroupNode extends BaseNode {
   booleanOp?: BooleanOp; // undefined = normal group, set = boolean group
   fills?: Fill[]; // appearance of boolean result
   strokes?: Stroke[]; // appearance of boolean result
+  /** Direct child used as a mask for the other children in this group. */
+  maskNodeId?: string;
+  /** Clip uses the mask silhouette, alpha uses mask opacity, luminance uses mask brightness. */
+  maskMode?: MaskMode;
 }
+
+export type MaskMode = 'clip' | 'alpha' | 'luminance';
 
 export interface RectangleNode extends BaseNode {
   type: 'rectangle';

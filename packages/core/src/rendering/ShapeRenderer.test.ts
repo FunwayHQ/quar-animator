@@ -5,7 +5,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { ShapeRenderer } from './ShapeRenderer';
 import { WebGLRenderer } from './WebGLRenderer';
-import { SceneGraph, createDefaultTransform } from '../SceneGraph';
+import { SceneGraph, createDefaultTransform, createGroupNode } from '../SceneGraph';
 import { mat3 } from '../math';
 import { createMockWebGL2Context } from '../test/setup';
 import type { RectangleNode, EllipseNode, PolygonNode, PathNode, Fill, Stroke } from '@quar/types';
@@ -237,6 +237,27 @@ describe('ShapeRenderer', () => {
       shapeRenderer.render(sceneGraph, vpMatrix);
       // Should bind null VAO at end
       expect(gl.bindVertexArray).toHaveBeenLastCalledWith(null);
+    });
+
+    it.each([
+      ['clip', 0],
+      ['alpha', 1],
+      ['luminance', 2],
+    ] as const)('renders a %s mask from an offscreen texture', (mode, expectedMode) => {
+      const group = createGroupNode('masked', 'Masked');
+      group.maskNodeId = 'mask';
+      group.maskMode = mode;
+      sceneGraph.addNode(group);
+      sceneGraph.addNode(createRectangleNode('content', 80, 60), group.id);
+      sceneGraph.addNode(createRectangleNode('mask', 50, 50), group.id);
+      vi.clearAllMocks();
+
+      shapeRenderer.render(sceneGraph, mat3.identity());
+
+      expect(gl.bindFramebuffer).toHaveBeenCalledWith(gl.FRAMEBUFFER, expect.anything());
+      expect(gl.activeTexture).toHaveBeenCalledWith(gl.TEXTURE0 + 3);
+      expect(gl.uniform1i.mock.calls.some(([, value]) => value === expectedMode)).toBe(true);
+      expect(gl.drawElements).toHaveBeenCalled();
     });
   });
 

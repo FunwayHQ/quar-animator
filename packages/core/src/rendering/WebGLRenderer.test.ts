@@ -364,6 +364,25 @@ describe('WebGLRenderer', () => {
       const programCalls = calls.filter((c: unknown[]) => c[0] === program.program);
       expect(programCalls).toHaveLength(1);
     });
+
+    it('runs program state hooks even when the program switch is cached', () => {
+      const renderer = new WebGLRenderer({ canvas });
+      const program = renderer.createShaderProgram(
+        'test',
+        'void main() {}',
+        'void main() {}',
+        [],
+        []
+      );
+      const hook = vi.fn();
+      renderer.setProgramUseHook(hook);
+
+      renderer.useProgram(program);
+      renderer.useProgram(program);
+
+      expect(hook).toHaveBeenCalledTimes(2);
+      expect(hook).toHaveBeenNthCalledWith(2, program);
+    });
   });
 
   // ==========================================================================

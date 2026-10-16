@@ -48,7 +48,9 @@ export function createMockWebGL2Context(): WebGL2RenderingContext {
     // State management
     enable: vi.fn(),
     disable: vi.fn(),
+    isEnabled: vi.fn().mockReturnValue(false),
     blendFunc: vi.fn(),
+    blendFuncSeparate: vi.fn(),
     depthFunc: vi.fn(),
     clearColor: vi.fn(),
     clear: vi.fn(),
@@ -106,6 +108,7 @@ export function createMockWebGL2Context(): WebGL2RenderingContext {
 
     // Texture / framebuffer constants
     TEXTURE_2D: 3553,
+    TEXTURE0: 33984,
     RGBA: 6408,
     RGBA8: 32856,
     UNSIGNED_BYTE: 5121,
@@ -122,6 +125,7 @@ export function createMockWebGL2Context(): WebGL2RenderingContext {
     // Texture operations (unique handle per createTexture call)
     createTexture: vi.fn(() => ({ __isTexture: true, id: ++textureId }) as unknown as WebGLTexture),
     bindTexture: vi.fn(),
+    activeTexture: vi.fn(),
     texImage2D: vi.fn(),
     texParameteri: vi.fn(),
     deleteTexture: vi.fn(),
@@ -137,6 +141,8 @@ export function createMockWebGL2Context(): WebGL2RenderingContext {
 
     // Canvas reference
     canvas: document.createElement('canvas'),
+    drawingBufferWidth: 100,
+    drawingBufferHeight: 100,
   } as unknown as WebGL2RenderingContext;
 }
 

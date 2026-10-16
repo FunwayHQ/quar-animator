@@ -113,6 +113,11 @@ export class SceneGraph {
     if (node.parent) {
       const parent = this.nodes.get(node.parent);
       if (parent) {
+        if (parent.type === 'group' && parent.maskNodeId === id) {
+          parent.maskNodeId = undefined;
+          parent.maskMode = undefined;
+          this.emit({ type: 'nodeChanged', nodeId: parent.id });
+        }
         const index = parent.children.indexOf(id);
         if (index !== -1) {
           parent.children.splice(index, 1);
@@ -153,6 +158,15 @@ export class SceneGraph {
     if (node.parent) {
       const oldParent = this.nodes.get(node.parent);
       if (oldParent) {
+        if (
+          newParentId !== oldParent.id &&
+          oldParent.type === 'group' &&
+          oldParent.maskNodeId === id
+        ) {
+          oldParent.maskNodeId = undefined;
+          oldParent.maskMode = undefined;
+          this.emit({ type: 'nodeChanged', nodeId: oldParent.id });
+        }
         const oldIndex = oldParent.children.indexOf(id);
         if (oldIndex !== -1) {
           oldParent.children.splice(oldIndex, 1);

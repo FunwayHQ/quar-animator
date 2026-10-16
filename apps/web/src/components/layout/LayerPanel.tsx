@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import type { Node, GroupNode } from '@quar/types';
+import type { Node, GroupNode, MaskMode } from '@quar/types';
 import { useSceneGraph } from '../../contexts/SceneGraphContext';
 import { useEditorStore } from '../../stores/editorStore';
 import { ContextMenu } from '../common/ContextMenu';
@@ -187,7 +187,10 @@ function LayerRow({
   onPointerDown,
 }: LayerRowProps) {
   const [expanded, setExpanded] = useState(true);
+  const sceneGraph = useSceneGraph();
   const hasChildren = node.children && node.children.length > 0;
+  const parent = node.parent ? sceneGraph.getNode(node.parent) : undefined;
+  const isMaskSource = parent?.type === 'group' && parent.maskNodeId === node.id;
 
   const dropClass =
     dropTarget && dropTarget.nodeId === node.id
@@ -246,6 +249,12 @@ function LayerRow({
           />
         ) : (
           <span className={styles.layerName}>{node.name}</span>
+        )}
+        {isMaskSource && <span className={styles.maskSourceBadge}>Mask source</span>}
+        {node.type === 'group' && node.maskNodeId && (
+          <span className={styles.maskBadge} data-testid={`mask-badge-${node.id}`}>
+            {node.maskMode === 'luminance' ? 'Luma' : node.maskMode === 'alpha' ? 'Alpha' : 'Clip'}
+          </span>
         )}
         <div className={styles.layerActions}>
           <button
@@ -384,6 +393,9 @@ export function LayerPanel() {
   const duplicateSelection = useEditorStore((state) => state.duplicateSelection);
   const deleteSelection = useEditorStore((state) => state.deleteSelection);
   const groupSelection = useEditorStore((state) => state.groupSelection);
+  const createMask = useEditorStore((state) => state.createMask);
+  const setMaskMode = useEditorStore((state) => state.setMaskMode);
+  const removeMask = useEditorStore((state) => state.removeMask);
   const ungroupSelection = useEditorStore((state) => state.ungroupSelection);
   const bringForward = useEditorStore((state) => state.bringForward);
   const sendBackward = useEditorStore((state) => state.sendBackward);
@@ -523,6 +535,22 @@ export function LayerPanel() {
       const allVisible = selectedNodes.every((n) => n.visible);
       const allLocked = selectedNodes.every((n) => n.locked);
       const hasGroup = selectedNodes.some((n) => n.type === 'group');
+      const topLevelSelected = selectedNodes.filter((selected) => {
+        let parentId = selected.parent;
+        while (parentId) {
+          if (selectedNodeIds.has(parentId)) return false;
+          parentId = sceneGraph.getNode(parentId)?.parent ?? null;
+        }
+        return true;
+      });
+      const firstSelectedParent = topLevelSelected[0]?.parent;
+      const sharesParent =
+        topLevelSelected.length >= 2 &&
+        topLevelSelected.every((selected) => selected.parent === firstSelectedParent);
+      const hasMaskShape = topLevelSelected.some((selected) =>
+        ['rectangle', 'ellipse', 'polygon', 'path', 'text', 'image'].includes(selected.type)
+      );
+      const canCreateMask = sharesParent && hasMaskShape;
 
       return [
         {
@@ -549,6 +577,24 @@ export function LayerPanel() {
           label: `Group ${count} Layers`,
           shortcut: 'Ctrl+G',
           onClick: () => groupSelection(sceneGraph),
+        },
+        {
+          id: 'create-clip-mask',
+          label: 'Create Clip Mask',
+          disabled: !canCreateMask,
+          onClick: () => createMask(sceneGraph, 'clip'),
+        },
+        {
+          id: 'create-alpha-mask',
+          label: 'Create Alpha Mask',
+          disabled: !canCreateMask,
+          onClick: () => createMask(sceneGraph, 'alpha'),
+        },
+        {
+          id: 'create-luminance-mask',
+          label: 'Create Luminance Mask',
+          disabled: !canCreateMask,
+          onClick: () => createMask(sceneGraph, 'luminance'),
         },
         {
           id: 'ungroup',
@@ -610,6 +656,8 @@ export function LayerPanel() {
 
     // Single-selection context menu
     const isGroup = node.type === 'group';
+    const maskGroup = node.type === 'group' ? node : null;
+    const isMaskGroup = !!maskGroup?.maskNodeId;
     return [
       {
         id: 'rename',
@@ -643,6 +691,27 @@ export function LayerPanel() {
         disabled: !isGroup,
         onClick: () => ungroupSelection(sceneGraph),
       },
+      ...(isMaskGroup
+        ? [
+            { type: 'separator' as const },
+            ...(
+              [
+                ['clip', 'Set Clip Mask'] as const,
+                ['alpha', 'Set Alpha Mask'] as const,
+                ['luminance', 'Set Luminance Mask'] as const,
+              ] satisfies Array<[MaskMode, string]>
+            ).map(([mode, label]) => ({
+              id: `mask-mode-${mode}`,
+              label: maskGroup?.maskMode === mode ? `${label} ✓` : label,
+              onClick: () => setMaskMode(sceneGraph, nodeId, mode),
+            })),
+            {
+              id: 'remove-mask',
+              label: 'Remove Mask',
+              onClick: () => removeMask(sceneGraph, nodeId),
+            },
+          ]
+        : []),
       { type: 'separator' },
       {
         id: 'bring-to-front',
@@ -687,6 +756,9 @@ export function LayerPanel() {
     duplicateSelection,
     deleteSelection,
     groupSelection,
+    createMask,
+    setMaskMode,
+    removeMask,
     ungroupSelection,
     bringForward,
     sendBackward,

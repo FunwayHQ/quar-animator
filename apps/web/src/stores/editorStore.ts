@@ -30,6 +30,7 @@ import type {
   SymbolDefinition,
   SymbolOverride,
   SymbolInstanceNode,
+  MaskMode,
 } from '@quar/types';
 import type { KeyframeClipboard, GraphViewTransform } from '@quar/animation';
 import { createTimeline, KeyframeManager, tangentsToEasing } from '@quar/animation';
@@ -419,6 +420,9 @@ export interface EditorStore {
   deleteSelection: (sceneGraph: SceneGraphLike) => void;
   selectAll: (sceneGraph: SceneGraphLike) => void;
   groupSelection: (sceneGraph: SceneGraphLike) => void;
+  createMask: (sceneGraph: SceneGraphLike, mode: MaskMode) => void;
+  setMaskMode: (sceneGraph: SceneGraphLike, groupId: string, mode: MaskMode) => void;
+  removeMask: (sceneGraph: SceneGraphLike, groupId: string) => void;
   ungroupSelection: (sceneGraph: SceneGraphLike) => void;
 
   // Timeline state
@@ -1697,6 +1701,10 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       } else {
         clone.parent = null;
       }
+      if (clone.type === 'group' && clone.maskNodeId) {
+        clone.maskNodeId = oldToNewId.get(clone.maskNodeId);
+        if (!clone.maskNodeId) clone.maskMode = undefined;
+      }
       newNodes.push(clone);
     }
 
@@ -1840,6 +1848,71 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     }
 
     set({ selectedNodeIds: new Set([groupId]), isDirty: true });
+  },
+  createMask: (sceneGraph: SceneGraphLike, mode: MaskMode) => {
+    const { selectedNodeIds } = get();
+    if (selectedNodeIds.size < 2) return;
+
+    const selectedInOrder: Node[] = [];
+    sceneGraph.traverse((node) => {
+      if (selectedNodeIds.has(node.id)) selectedInOrder.push(node);
+    });
+
+    // Ignore selected descendants when their ancestor is selected. Moving both
+    // would detach children from the selected group while creating the mask.
+    const orderedSelected = selectedInOrder.filter((node) => {
+      let parentId = node.parent;
+      while (parentId) {
+        if (selectedNodeIds.has(parentId)) return false;
+        parentId = sceneGraph.getNode(parentId)?.parent ?? null;
+      }
+      return true;
+    });
+    if (orderedSelected.length < 2) return;
+
+    const parentId = orderedSelected[0]!.parent;
+    if (!orderedSelected.every((node) => node.parent === parentId)) return;
+
+    const maskNode = [...orderedSelected]
+      .reverse()
+      .find((node) =>
+        ['rectangle', 'ellipse', 'polygon', 'path', 'text', 'image'].includes(node.type)
+      );
+    if (!maskNode) return;
+
+    get().pushUndo(sceneGraph);
+    const siblings = parentId
+      ? (sceneGraph.getNode(parentId)?.children ?? [])
+      : sceneGraph.getRootNodes().map((node) => node.id);
+    // Keep the masked group at the mask layer's former stacking position.
+    const maskIndex = siblings.indexOf(maskNode.id);
+    const insertIndex = maskIndex >= 0 ? maskIndex : siblings.length;
+    const groupId = `mask_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const group = createGroupNode(groupId, 'Mask');
+    group.maskNodeId = maskNode.id;
+    group.maskMode = mode;
+    sceneGraph.addNode(group, parentId ?? undefined);
+    sceneGraph.moveNode(groupId, parentId, insertIndex);
+
+    for (const node of orderedSelected) {
+      sceneGraph.moveNode(node.id, groupId);
+    }
+
+    set({ selectedNodeIds: new Set([groupId]), isDirty: true });
+  },
+  setMaskMode: (sceneGraph: SceneGraphLike, groupId: string, mode: MaskMode) => {
+    const group = sceneGraph.getNode(groupId);
+    if (!group || group.type !== 'group' || !group.maskNodeId) return;
+    get().pushUndo(sceneGraph);
+    sceneGraph.updateNode(groupId, { maskMode: mode });
+    set({ isDirty: true });
+  },
+  removeMask: (sceneGraph: SceneGraphLike, groupId: string) => {
+    const group = sceneGraph.getNode(groupId);
+    if (!group || group.type !== 'group' || !group.maskNodeId) return;
+    get().pushUndo(sceneGraph);
+    sceneGraph.updateNode(groupId, { maskNodeId: undefined, maskMode: undefined });
+    set({ isDirty: true });
   },
   ungroupSelection: (sceneGraph: SceneGraphLike) => {
     const { selectedNodeIds, enteredGroupId } = get();

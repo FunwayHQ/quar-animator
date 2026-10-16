@@ -1672,6 +1672,51 @@ describe('SelectionTool', () => {
       };
     }
 
+    it('selects an artboard from its top-left corner, not its empty interior', () => {
+      const artboard = createTestArtboard('art1', 200, 200, 400, 300);
+      context.sceneGraph.addNode(artboard);
+
+      const center = { x: 200, y: 200 };
+      tool.onPointerDown(
+        createMockPointerEvent({
+          worldPosition: center,
+          screenPosition: context.camera.worldToScreen(center),
+          button: 0,
+        })
+      );
+      expect(context.getSelectedIds().has('art1')).toBe(false);
+
+      const topLeft = { x: 0, y: 350 };
+      const topLeftScreen = context.camera.worldToScreen(topLeft);
+      tool.onPointerDown(
+        createMockPointerEvent({
+          worldPosition: topLeft,
+          // The visible name label is a usable click target around the corner.
+          screenPosition: { x: topLeftScreen.x + 30, y: topLeftScreen.y - 8 },
+          button: 0,
+        })
+      );
+      expect(context.getSelectedIds().has('art1')).toBe(true);
+    });
+
+    it('selects artboard children directly from the canvas', () => {
+      const artboard = createTestArtboard('art1', 200, 200, 400, 300);
+      const rect = createTestRectangle('rect1', 0, 0, 100, 100);
+      context.sceneGraph.addNode(artboard);
+      context.sceneGraph.addNode(rect, artboard.id);
+
+      tool.onPointerDown(
+        createMockPointerEvent({
+          worldPosition: { x: 200, y: 200 },
+          screenPosition: context.camera.worldToScreen({ x: 200, y: 200 }),
+          button: 0,
+        })
+      );
+
+      expect(context.getSelectedIds().has('rect1')).toBe(true);
+      expect(context.getSelectedIds().has('art1')).toBe(false);
+    });
+
     it('should resize artboard by adjusting width and height directly', () => {
       const artboard = createTestArtboard('art1', 200, 200, 400, 300);
       context.sceneGraph.addNode(artboard);
@@ -1714,8 +1759,8 @@ describe('SelectionTool', () => {
         enteredGroupId = id;
       };
 
-      // Click on artboard position
-      const clickPos = { x: 200, y: 200 };
+      // Artboards are selected and entered from their top-left corner label.
+      const clickPos = { x: 0, y: 350 };
       const screenPos = context.camera.worldToScreen(clickPos);
 
       // Double-click (clickCount: 2)

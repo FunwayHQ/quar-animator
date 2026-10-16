@@ -851,6 +851,37 @@ describe('LayerPanel', () => {
       expect(screen.getByText('Group')).toBeInTheDocument();
       expect(screen.getByText('Ungroup')).toBeInTheDocument();
     });
+
+    it('creates a clip mask group from a multi-selection', async () => {
+      const user = userEvent.setup();
+      let sg: SceneGraph | null = null;
+
+      render(
+        <SceneGraphProvider>
+          <SceneGraphCapture onCapture={(s) => (sg = s)} />
+          <LayerPanel />
+        </SceneGraphProvider>
+      );
+
+      act(() => {
+        sg!.addNode(createTestRect('content', 'Content'));
+        sg!.addNode(createTestEllipse('mask', 'Mask shape'));
+      });
+      await user.click(screen.getByTestId('layer-row-content'));
+      await user.keyboard('{Control>}');
+      await user.click(screen.getByTestId('layer-row-mask'));
+      await user.keyboard('{/Control}');
+      fireEvent.contextMenu(screen.getByTestId('layer-row-content'));
+      await user.click(screen.getByText('Create Clip Mask'));
+
+      const groupId = [...useEditorStore.getState().selectedNodeIds][0]!;
+      const group = sg!.getNode(groupId);
+      expect(group?.type).toBe('group');
+      if (group?.type !== 'group') throw new Error('Expected a mask group');
+      expect(group.maskNodeId).toBe('mask');
+      expect(group.maskMode).toBe('clip');
+      expect(screen.getByTestId(`mask-badge-${groupId}`)).toHaveTextContent('Clip');
+    });
   });
 
   // ========================================================================

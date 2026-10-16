@@ -164,6 +164,22 @@
   transition: color var(--duration-fast);
 }
 
+.maskBadge {
+  flex-shrink: 0;
+  padding: 1px 5px;
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-tertiary);
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.maskSourceBadge {
+  flex-shrink: 0;
+  color: var(--color-text-tertiary);
+  font-size: 10px;
+}
+
 .layerRow:hover .layerName {
   color: var(--color-text-primary);
 }

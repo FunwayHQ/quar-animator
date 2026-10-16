@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { SceneGraph } from '@quar/core';
+import { SceneGraph, createGroupNode } from '@quar/core';
 import { createTimeline } from '@quar/animation';
 import { DEFAULT_ONION_SKIN_SETTINGS } from '@quar/core';
 import {
@@ -412,6 +412,33 @@ describe('ProjectSerializer', () => {
   });
 
   describe('round-trip serialization', () => {
+    it('preserves mask group settings when saving and loading a project', () => {
+      const sceneGraph = new SceneGraph();
+      const group = createGroupNode('masked', 'Masked content');
+      group.maskNodeId = 'mask';
+      group.maskMode = 'luminance';
+      sceneGraph.addNode(group);
+      sceneGraph.addNode(makeTestNode('content'), group.id);
+      sceneGraph.addNode(makeTestNode('mask'), group.id);
+
+      const editorState: EditorStateSnapshot = {
+        timeline: createTimeline({ duration: 300, frameRate: 30 }),
+        timelineDuration: 300,
+        frameRate: 30,
+        autoKeyframe: false,
+        onionSkin: { ...DEFAULT_ONION_SKIN_SETTINGS },
+      };
+      const serialized = serializeProject('Masked project', sceneGraph, editorState);
+      const loadedSceneGraph = new SceneGraph();
+      deserializeProject(serialized, loadedSceneGraph, () => {});
+
+      const loadedGroup = loadedSceneGraph.getNode('masked');
+      expect(loadedGroup?.type).toBe('group');
+      if (loadedGroup?.type !== 'group') throw new Error('Expected a loaded mask group');
+      expect(loadedGroup.maskNodeId).toBe('mask');
+      expect(loadedGroup.maskMode).toBe('luminance');
+    });
+
     it('preserves durations longer than 300 frames when loading a project', () => {
       const sceneGraph = new SceneGraph();
       const editorState: EditorStateSnapshot = {
