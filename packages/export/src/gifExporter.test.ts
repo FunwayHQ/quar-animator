@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { exportGif, gifCompressionSettings } from './gifExporter';
+import { exportGif, gifCompressionSettings, gifTiming } from './gifExporter';
 
 const rendererMock = vi.hoisted(() => ({
   preloadTextures: vi.fn(async () => {}),
@@ -137,6 +137,8 @@ interface DecodedGif {
   indices: Uint8Array[];
   transparentIndex: number;
   disposals: number[];
+  /** Hundredths of a second. */
+  delays: number[];
 }
 
 function lzwDecode(data: Uint8Array, minCodeSize: number, pixelCount: number): Uint8Array {
@@ -199,10 +201,12 @@ function decodeGif(bytes: Uint8Array): DecodedGif {
     indices: [],
     transparentIndex: -1,
     disposals: [],
+    delays: [],
   };
   const screen = new Uint8ClampedArray(width * height * 4);
   let transparentIndex = -1;
   let dispose = 0;
+  let delay = 0;
   while (pos < bytes.length) {
     const block = bytes[pos++]!;
     if (block === 0x3b) break;
@@ -210,6 +214,7 @@ function decodeGif(bytes: Uint8Array): DecodedGif {
       if (bytes[pos++] === 0xf9) {
         const flags = bytes[pos + 1]!;
         dispose = (flags >> 2) & 7;
+        delay = bytes[pos + 2]! | (bytes[pos + 3]! << 8);
         transparentIndex = flags & 1 ? bytes[pos + 4]! : -1;
       }
       subBlocks();
@@ -226,6 +231,7 @@ function decodeGif(bytes: Uint8Array): DecodedGif {
     result.indices.push(indices);
     result.frames.push(screen.slice());
     result.disposals.push(dispose);
+    result.delays.push(delay);
     result.transparentIndex = transparentIndex;
     if (dispose === 2) screen.fill(0);
   }
@@ -258,7 +264,15 @@ describe('GIF compression', () => {
     vi.unstubAllGlobals();
   });
 
-  async function encode(options: { compression?: number; transparent?: boolean } = {}) {
+  async function encode(
+    options: {
+      compression?: number;
+      transparent?: boolean;
+      frameRate?: number;
+      fps?: number;
+      speed?: number;
+    } = {}
+  ) {
     const blob = await exportGif(
       { sceneGraph: { getRootNodes: () => [] } as never, timeline: { tracks: [] } as never },
       {
@@ -341,5 +355,61 @@ describe('GIF compression', () => {
     expect(gif.frames.map(rgba)).toEqual(framePixels);
     // Frame 1 is kept for frame 2 to draw over; frame 2 clears for frame 3
     expect(gif.disposals.slice(0, 2)).toEqual([1, 2]);
+  });
+
+  it('folds a frame that changes nothing into the previous one', async () => {
+    framePixels = [
+      [RED, BLUE],
+      [RED, BLUE],
+      [RED, BLUE],
+      [RED, GREEN],
+    ];
+    const gif = await encode({ frameRate: 20 });
+    expect(gif.frames.map(rgba)).toEqual([framePixels[0], framePixels[3]]);
+    expect(gif.delays).toEqual([15, 5]); // Three frames of 5/100 s, then one
+  });
+});
+
+describe('GIF timing', () => {
+  const range = { frameRate: 30, startFrame: 0, endFrame: 29 }; // one second
+
+  it('keeps every timeline frame by default, with delays adding up exactly', () => {
+    const { frames, delays } = gifTiming(range);
+    expect(frames).toEqual(Array.from({ length: 30 }, (_, i) => i));
+    expect(delays.slice(0, 6)).toEqual([3, 4, 3, 3, 4, 3]);
+    expect(delays.reduce((sum, delay) => sum + delay, 0)).toBe(100);
+  });
+
+  it('samples a lower frame rate over the same duration', () => {
+    const { frames, delays } = gifTiming({ ...range, fps: 15 });
+    expect(frames).toEqual(Array.from({ length: 15 }, (_, i) => i * 2));
+    expect(delays.every((delay) => delay === 7 || delay === 6)).toBe(true);
+    expect(delays.reduce((sum, delay) => sum + delay, 0)).toBe(100);
+  });
+
+  it('shows in-between moments when the rates don’t divide', () => {
+    expect(gifTiming({ ...range, fps: 24 }).frames.slice(0, 3)).toEqual([0, 1.25, 2.5]);
+  });
+
+  it('changes the playback speed', () => {
+    const fast = gifTiming({ ...range, speed: 2 });
+    expect(fast.frames).toHaveLength(15);
+    expect(fast.frames[1]).toBe(2);
+    expect(fast.delays.reduce((sum, delay) => sum + delay, 0)).toBe(50);
+    const slow = gifTiming({ ...range, speed: 0.5 });
+    expect(slow.frames).toHaveLength(60);
+    expect(slow.frames[1]).toBe(0.5);
+    expect(slow.delays.reduce((sum, delay) => sum + delay, 0)).toBe(200);
+  });
+
+  it('caps the frame rate at 50 fps, the fastest GIF players honor', () => {
+    const { delays } = gifTiming({ frameRate: 60, startFrame: 0, endFrame: 59 });
+    expect(delays).toHaveLength(50);
+    expect(Math.min(...delays)).toBe(2);
+  });
+
+  it('never samples past the end of the range', () => {
+    const { frames } = gifTiming({ frameRate: 30, startFrame: 10, endFrame: 12, fps: 24 });
+    expect(Math.max(...frames)).toBeLessThanOrEqual(12);
   });
 });

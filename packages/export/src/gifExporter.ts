@@ -8,9 +8,14 @@ import type { ExportProgress } from './index';
 export interface GifExportOptions {
   width: number;
   height: number;
+  /** The timeline's frame rate. */
   frameRate: number;
   startFrame: number;
   endFrame: number;
+  /** Frames per second in the GIF (default: the timeline's, at most 50). */
+  fps?: number;
+  /** Playback speed: 2 plays twice as fast, 0.5 at half speed. */
+  speed?: number;
   transparent?: boolean;
   /**
    * 0 (best quality) … 100 (smallest file). Fewer palette colors, and pixels
@@ -32,6 +37,38 @@ export function gifCompressionSettings(compression = 0): GifCompressionSettings 
   return {
     colors: Math.max(16, Math.min(256, Math.round(256 * 2 ** (-c / 25)))),
     tolerance: (c / 100) * 24,
+  };
+}
+
+/** Players slow frames shorter than 2/100 s right down, so 50 fps is the ceiling. */
+export const MAX_GIF_FPS = 50;
+
+export interface GifTiming {
+  /** The timeline frame (possibly between two) each GIF frame shows. */
+  frames: number[];
+  /** How long each GIF frame shows, in hundredths of a second. */
+  delays: number[];
+}
+
+/**
+ * Which moments of the timeline a GIF shows, and for how long. GIF delays are
+ * whole hundredths of a second, so they're spread to add up exactly (30 fps:
+ * 3, 3, 4, 3, 3, 4…) instead of each being rounded (30 fps playing 11% fast).
+ */
+export function gifTiming(
+  options: Pick<GifExportOptions, 'frameRate' | 'startFrame' | 'endFrame' | 'fps' | 'speed'>
+): GifTiming {
+  const { startFrame, endFrame } = options;
+  const rate = Math.max(1, options.frameRate);
+  const fps = Math.min(MAX_GIF_FPS, Math.max(1, options.fps ?? rate));
+  const speed = options.speed !== undefined && options.speed > 0 ? options.speed : 1;
+  const seconds = getFrameCount(startFrame, endFrame) / rate / speed;
+  const count = Math.max(1, Math.round(seconds * fps));
+  const step = (rate * speed) / fps;
+  const at = (k: number) => Math.round((k * 100) / fps);
+  return {
+    frames: Array.from({ length: count }, (_, k) => Math.min(endFrame, startFrame + k * step)),
+    delays: Array.from({ length: count }, (_, k) => at(k + 1) - at(k)),
   };
 }
 
@@ -78,6 +115,10 @@ export function diffGifFrame(
   return indexed;
 }
 
+function isUnchanged(indexed: Uint8Array, transparentIndex: number): boolean {
+  return indexed.every((index) => index === transparentIndex);
+}
+
 /** Whether a pixel on screen has to turn transparent (only a clear can do that). */
 function needsClear(indexed: Uint8Array, shown: Int16Array, transparentIndex: number): boolean {
   for (let p = 0; p < indexed.length; p++) {
@@ -90,7 +131,8 @@ function needsClear(indexed: Uint8Array, shown: Int16Array, transparentIndex: nu
  * Render frames twice to build one shared color palette for the whole GIF.
  * Sampling a bounded number of pixels keeps memory use predictable for long
  * animations while avoiding frame-to-frame palette flicker. Frames after the
- * first only draw what changed.
+ * first only draw what changed, and a frame that changes nothing just extends
+ * the previous one.
  */
 export async function exportGif(
   ctx: FrameRenderContext,
@@ -98,10 +140,13 @@ export async function exportGif(
   onProgress?: (progress: ExportProgress) => void,
   isCancelled: () => boolean = () => false
 ): Promise<Blob | null> {
-  const { width, height, frameRate, startFrame, endFrame, transparent = false } = options;
-  const frameCount = getFrameCount(startFrame, endFrame);
-  if (frameCount === 0) throw new Error('Choose a valid frame range to export.');
+  const { width, height, startFrame, endFrame, transparent = false } = options;
+  if (getFrameCount(startFrame, endFrame) === 0) {
+    throw new Error('Choose a valid frame range to export.');
+  }
   if (width < 1 || height < 1) throw new Error('Export width and height must be at least 1 pixel.');
+  const timing = gifTiming(options);
+  const frameCount = timing.frames.length;
   const { colors, tolerance } = gifCompressionSettings(options.compression);
 
   const { GIFEncoder, quantize, applyPalette } = await import('gifenc');
@@ -129,7 +174,7 @@ export async function exportGif(
 
     for (let i = 0; i < frameCount; i++) {
       if (isCancelled()) return null;
-      const canvas = renderer.renderFrame(ctx, startFrame + i);
+      const canvas = renderer.renderFrame(ctx, timing.frames[i]!);
       sampleContext.clearRect(0, 0, width, height);
       sampleContext.drawImage(canvas, 0, 0, width, height);
       const pixels = sampleContext.getImageData(0, 0, width, height).data;
@@ -179,16 +224,17 @@ export async function exportGif(
     const colorDepth = Math.max(2, Math.ceil(Math.log2(palette.length)));
 
     const gif = GIFEncoder();
-    const delay = Math.max(10, Math.round(1000 / Math.max(1, frameRate) / 10) * 10);
     const shown = new Int16Array(pixelCount).fill(NOTHING);
-    // A frame's disposal depends on the next one (whether it must clear the
-    // screen), so each frame is written once the next is known
+    // A frame's disposal (whether the next must clear the screen) and length
+    // (whether the next changes anything) depend on the next frame, so each
+    // frame is written once the next is known
     let pending: Uint8Array | null = null;
+    let pendingDelay = 0;
     let writtenFrames = 0;
-    const writePending = (frame: Uint8Array, dispose: number) => {
-      gif.writeFrame(frame, width, height, {
+    const writePending = (dispose: number) => {
+      gif.writeFrame(pending!, width, height, {
         ...(writtenFrames === 0 ? { palette, repeat: 0 } : {}),
-        delay,
+        delay: Math.min(65535, pendingDelay) * 10,
         transparent: true,
         transparentIndex,
         dispose,
@@ -201,19 +247,27 @@ export async function exportGif(
 
     for (let i = 0; i < frameCount; i++) {
       if (isCancelled()) return null;
-      const canvas = renderer.renderFrame(ctx, startFrame + i);
+      const canvas = renderer.renderFrame(ctx, timing.frames[i]!);
       sampleContext.clearRect(0, 0, width, height);
       sampleContext.drawImage(canvas, 0, 0, width, height);
       const pixels = sampleContext.getImageData(0, 0, width, height).data;
       const indexed = applyPalette(pixels, colorPalette, paletteFormat);
+      const delay = timing.delays[i]!;
 
-      if (pending) {
-        // 2 = restore to background (clear), 1 = keep for the next frame to draw on
-        const clear = transparent && needsClear(indexed, shown, transparentIndex);
-        writePending(pending, clear ? 2 : 1);
-        if (clear) shown.fill(NOTHING);
+      // 2 = restore to background (clear), 1 = keep for the next frame to draw on
+      if (pending && transparent && needsClear(indexed, shown, transparentIndex)) {
+        writePending(2);
+        shown.fill(NOTHING);
+        pending = null;
       }
-      pending = diffGifFrame(indexed, pixels, shown, palette, transparentIndex, tolerance);
+      const frame = diffGifFrame(indexed, pixels, shown, palette, transparentIndex, tolerance);
+      if (pending && isUnchanged(frame, transparentIndex)) {
+        pendingDelay += delay;
+      } else {
+        if (pending) writePending(1);
+        pending = frame;
+        pendingDelay = delay;
+      }
 
       onProgress?.({
         phase: 'encoding',
@@ -225,7 +279,7 @@ export async function exportGif(
     }
 
     if (isCancelled()) return null;
-    if (pending) writePending(pending, transparent ? 2 : 1);
+    if (pending) writePending(transparent ? 2 : 1);
     gif.finish();
     const bytes = gif.bytes();
     const buffer = bytes.buffer.slice(

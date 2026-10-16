@@ -31,6 +31,20 @@ vi.mock('@quar/export', () => ({
   exportLottieBlob: vi.fn().mockReturnValue(new Blob(['{}'], { type: 'application/json' })),
   exportGif: vi.fn().mockResolvedValue(new Blob(['gif'], { type: 'image/gif' })),
   exportMp4: vi.fn().mockResolvedValue(new Blob(['mp4'], { type: 'video/mp4' })),
+  MAX_GIF_FPS: 50,
+  // Frame count and length for a range, at a frame rate and speed
+  gifTiming: (o: {
+    frameRate: number;
+    startFrame: number;
+    endFrame: number;
+    fps?: number;
+    speed?: number;
+  }) => {
+    const fps = o.fps ?? o.frameRate;
+    const seconds = (o.endFrame - o.startFrame + 1) / o.frameRate / (o.speed ?? 1);
+    const count = Math.round(seconds * fps);
+    return { frames: new Array(count).fill(0), delays: [Math.round(seconds * 100)] };
+  },
   gifCompressionSettings: (compression: number) => ({
     colors: Math.max(16, Math.round(256 * 2 ** (-compression / 25))),
     tolerance: (compression / 100) * 24,
@@ -187,6 +201,27 @@ describe('ExportDialog', () => {
     render(<ExportDialogHost />);
     act(() => showExportDialog('gif'));
     expect(screen.getByTestId('export-gif-transparent')).toBeInTheDocument();
+  });
+
+  it('passes the chosen GIF frame rate and speed to the exporter', async () => {
+    render(<ExportDialogHost />);
+    act(() => showExportDialog('gif'));
+    // 60 frames at 30 fps
+    expect(screen.getByTestId('export-gif-fps')).toHaveValue('30');
+    expect(screen.getByRole('option', { name: '30 fps (project)' })).toBeInTheDocument();
+    expect(screen.getByTestId('export-gif-timing')).toHaveTextContent('60 frames · 2.0 s');
+
+    fireEvent.change(screen.getByTestId('export-gif-fps'), { target: { value: '15' } });
+    fireEvent.change(screen.getByTestId('export-gif-speed'), { target: { value: '2' } });
+    expect(screen.getByTestId('export-gif-timing')).toHaveTextContent('15 frames · 1.0 s');
+
+    fireEvent.click(screen.getByTestId('export-dialog-export'));
+    await waitFor(() => expect(exportGif).toHaveBeenCalledOnce());
+    expect(vi.mocked(exportGif).mock.calls[0]![1]).toMatchObject({
+      frameRate: 30,
+      fps: 15,
+      speed: 2,
+    });
   });
 
   it('passes the chosen GIF compression to the exporter', async () => {

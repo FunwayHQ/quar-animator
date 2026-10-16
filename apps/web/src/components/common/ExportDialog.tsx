@@ -19,7 +19,13 @@ import type { SceneGraph } from '@quar/core';
 import type { Node, RectangleNode, Timeline } from '@quar/types';
 import { useSceneGraph } from '../../contexts/SceneGraphContext';
 import { useEditorStore } from '../../stores/editorStore';
-import { exportLottieBlob, analyzeLottieExport, gifCompressionSettings } from '@quar/export';
+import {
+  exportLottieBlob,
+  analyzeLottieExport,
+  gifCompressionSettings,
+  gifTiming,
+  MAX_GIF_FPS,
+} from '@quar/export';
 import type { ExportProgress } from '@quar/export';
 import { downloadBlob } from '../../services/exportService';
 import styles from './ExportDialog.module.css';
@@ -43,6 +49,10 @@ interface ExportDialogState {
   pngPattern: string;
   // GIF
   gifTransparent: boolean;
+  /** Frames per second in the GIF */
+  gifFps: number;
+  /** Playback speed multiplier */
+  gifSpeed: number;
   /** 0 (best quality) … 100 (smallest file) */
   gifCompression: number;
   // Sprite Sheet
@@ -79,6 +89,22 @@ function getSelectedArtboardScope(sceneGraph: SceneGraph, selectedIds: Set<strin
 
   const bounds = new SelectionManager().getSelectionBounds(new Set([selectedId]), sceneGraph)?.rect;
   return bounds ? { node, bounds } : null;
+}
+
+const GIF_FRAME_RATES = [50, 30, 25, 24, 20, 15, 12, 10];
+const GIF_SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4];
+
+/** Frame rates offered for GIFs: the project's (if a GIF can play it) and common ones. */
+function gifFrameRates(projectRate: number): number[] {
+  return [...new Set([Math.min(projectRate, MAX_GIF_FPS), ...GIF_FRAME_RATES])].sort(
+    (a, b) => b - a
+  );
+}
+
+/** "45 frames · 1.5 s" for the GIF the current settings produce. */
+function describeGifTiming(timing: { frames: number[]; delays: number[] }): string {
+  const seconds = timing.delays.reduce((sum, delay) => sum + delay, 0) / 100;
+  return `${timing.frames.length} frames · ${seconds.toFixed(1)} s`;
 }
 
 /** What a GIF compression level trades away, in words. */
@@ -205,6 +231,8 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
     pngTransparent: false,
     pngPattern: 'frame_{N}',
     gifTransparent: false,
+    gifFps: Math.min(timeline.frameRate, MAX_GIF_FPS),
+    gifSpeed: 1,
     gifCompression: 0,
     spriteLayout: 'grid',
     spriteColumns: 0, // 0 = auto
@@ -329,6 +357,8 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
             frameRate: timeline.frameRate,
             startFrame: state.startFrame,
             endFrame: state.endFrame,
+            fps: state.gifFps,
+            speed: state.gifSpeed,
             transparent: state.gifTransparent,
             compression: state.gifCompression,
           },
@@ -738,6 +768,53 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
                     <span>Transparent</span>
                   </label>
                 </div>
+                <div className={styles.formRow}>
+                  <label className={styles.label} htmlFor="export-gif-fps">
+                    Frame rate
+                  </label>
+                  <select
+                    id="export-gif-fps"
+                    className={styles.select}
+                    value={state.gifFps}
+                    onChange={(e) => update('gifFps', Number(e.target.value))}
+                    data-testid="export-gif-fps"
+                  >
+                    {gifFrameRates(timeline.frameRate).map((fps) => (
+                      <option key={fps} value={fps}>
+                        {fps === timeline.frameRate ? `${fps} fps (project)` : `${fps} fps`}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className={styles.formRow}>
+                  <label className={styles.label} htmlFor="export-gif-speed">
+                    Speed
+                  </label>
+                  <select
+                    id="export-gif-speed"
+                    className={styles.select}
+                    value={state.gifSpeed}
+                    onChange={(e) => update('gifSpeed', Number(e.target.value))}
+                    data-testid="export-gif-speed"
+                  >
+                    {GIF_SPEEDS.map((speed) => (
+                      <option key={speed} value={speed}>
+                        {speed === 1 ? '1× (normal)' : `${speed}×`}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <p className={styles.scopeNote} data-testid="export-gif-timing">
+                  {describeGifTiming(
+                    gifTiming({
+                      frameRate: timeline.frameRate,
+                      startFrame: state.startFrame,
+                      endFrame: state.endFrame,
+                      fps: state.gifFps,
+                      speed: state.gifSpeed,
+                    })
+                  )}
+                </p>
                 <div className={styles.formRow}>
                   <label className={styles.label} htmlFor="export-gif-compression">
                     Compression
