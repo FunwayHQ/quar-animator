@@ -16,7 +16,7 @@ import { createPortal } from 'react-dom';
 import { X, AlertTriangle } from 'lucide-react';
 import { SelectionManager } from '@quar/core';
 import type { SceneGraph } from '@quar/core';
-import type { ArtboardNode, Node, RectangleNode, Timeline } from '@quar/types';
+import type { Node, RectangleNode, Timeline } from '@quar/types';
 import { useSceneGraph } from '../../contexts/SceneGraphContext';
 import { useEditorStore } from '../../stores/editorStore';
 import { exportLottieBlob, analyzeLottieExport, gifCompressionSettings } from '@quar/export';

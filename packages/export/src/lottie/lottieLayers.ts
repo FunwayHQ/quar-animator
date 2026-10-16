@@ -7,7 +7,7 @@
  * with the group's children as layers inside it.
  */
 
-import type { ArtboardNode, ImageNode, Node, Timeline } from '@quar/types';
+import type { ImageNode, Node, Timeline } from '@quar/types';
 import { createRectanglePath } from '@quar/core';
 import type { LottieAsset, LottieLayer, LottieShapeVertices } from './lottieTypes';
 import {
