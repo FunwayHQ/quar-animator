@@ -13,7 +13,9 @@
 
 _Filling the gap left by Adobe Animate's discontinuation_
 
-[Getting Started](#getting-started) | [Features](#features) | [Documentation](#documentation) | [Contributing](#contributing)
+**[▶ Try it live at animator.quar.pro](https://animator.quar.pro)**
+
+[Live App](https://animator.quar.pro) | [Getting Started](#getting-started) | [Features](#features) | [Documentation](#documentation) | [Contributing](#contributing)
 
 </div>
 
