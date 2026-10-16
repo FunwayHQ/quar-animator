@@ -4,6 +4,7 @@ import { GripVertical, Play, Plus, Trash2, X } from 'lucide-react';
 import {
   ANIMATION_PRESETS,
   isPresetApplicable,
+  isRepeatableStep,
   scheduleSequence,
   type AnimationPresetCategory,
   type AnimationPresetId,
@@ -74,8 +75,24 @@ function storeRect(rect: WindowRect): void {
   }
 }
 
-function presetById(id: AnimationPresetId) {
+/** Picker value for turning the selected objects' own keyframes into clip steps. */
+const OWN_KEYFRAMES = 'own-keyframes';
+type EffectChoice = AnimationPresetId | typeof OWN_KEYFRAMES;
+
+function presetById(id: AnimationPresetId | undefined) {
   return ANIMATION_PRESETS.find((preset) => preset.id === id);
+}
+
+function stepLabel(step: AnimationSequenceStep): { name: string; category: string } {
+  if (step.clip) {
+    const count = step.clip.tracks.length;
+    return {
+      name: `Own keyframes · ${count} ${count === 1 ? 'property' : 'properties'}`,
+      category: 'Clip',
+    };
+  }
+  const preset = presetById(step.presetId);
+  return { name: preset?.name ?? String(step.presetId), category: preset?.category ?? '' };
 }
 
 function formatSeconds(frames: number, frameRate: number): string {
@@ -190,8 +207,8 @@ function StepRow({
   onDrop,
   onDragEnd,
 }: StepRowProps) {
-  const preset = presetById(step.presetId);
-  const isLoop = preset?.category === 'Loop';
+  const label = stepLabel(step);
+  const isRepeatable = isRepeatableStep(step);
 
   const handleKeyDown = (e: ReactKeyboardEvent<HTMLLIElement>) => {
     if (!e.altKey || (e.key !== 'ArrowUp' && e.key !== 'ArrowDown')) return;
@@ -238,9 +255,9 @@ function StepRow({
           >
             {nodeName}
           </button>
-          <span className={styles.effect} data-category={preset?.category}>
-            {preset?.name ?? step.presetId}
-            <span className={styles.category}>{preset?.category}</span>
+          <span className={styles.effect} data-category={label.category}>
+            {label.name}
+            <span className={styles.category}>{label.category}</span>
           </span>
           <span className={styles.timing} title="Start – end">
             {formatSeconds(entry.start, frameRate)}–{formatSeconds(entry.end, frameRate)}
@@ -250,7 +267,7 @@ function StepRow({
             className={styles.iconButton}
             onClick={onRemove}
             aria-label={`Remove step ${index + 1}`}
-            title="Remove step"
+            title={step.clip ? 'Remove step (its keyframes stay on the timeline)' : 'Remove step'}
           >
             <Trash2 size={13} />
           </button>
@@ -289,7 +306,7 @@ function StepRow({
             minFrames={1}
             onCommit={(duration) => onUpdate({ duration })}
           />
-          {isLoop && (
+          {isRepeatable && (
             <select
               className={styles.repeat}
               aria-label={`Repeat step ${index + 1}`}
@@ -333,7 +350,7 @@ export function AnimationSequenceWindow() {
   rectRef.current = rect;
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [dropIndex, setDropIndex] = useState<number | null>(null);
-  const [presetToAdd, setPresetToAdd] = useState<AnimationPresetId>('fade-in');
+  const [presetToAdd, setPresetToAdd] = useState<EffectChoice>('fade-in');
 
   // Scroll to and flash a step revealed from elsewhere (e.g. its keyframe was clicked)
   const focusRequest = useEditorStore((s) => s.focusedSequenceStepId);
@@ -397,9 +414,20 @@ export function AnimationSequenceWindow() {
       selectedNodes.length === 0 ||
       selectedNodes.every((node) => isPresetApplicable(preset.id, node))
   );
-  const effectivePreset = addablePresets.some((preset) => preset.id === presetToAdd)
-    ? presetToAdd
-    : (addablePresets[0]?.id ?? 'fade-in');
+  // Selected objects with keyframes of their own (not the sequence's)
+  const timeline = useEditorStore((s) => s.timeline);
+  const ownKeyframeNodes = selectedNodes.filter((node) =>
+    timeline.tracks.some(
+      (track) =>
+        track.nodeId === node.id && track.keyframes.some((kf) => kf.sequenceStepId === undefined)
+    )
+  );
+  const effectivePreset: EffectChoice =
+    presetToAdd === OWN_KEYFRAMES || addablePresets.some((preset) => preset.id === presetToAdd)
+      ? presetToAdd
+      : (addablePresets[0]?.id ?? 'fade-in');
+  const addingOwnKeyframes = effectivePreset === OWN_KEYFRAMES;
+  const addTargets = addingOwnKeyframes ? ownKeyframeNodes : selectedNodes;
 
   const close = useCallback(() => useEditorStore.getState().setSequenceWindowOpen(false), []);
 
@@ -471,6 +499,13 @@ export function AnimationSequenceWindow() {
 
   const addStep = () => {
     const state = useEditorStore.getState();
+    if (effectivePreset === OWN_KEYFRAMES) {
+      state.addClipSteps(
+        sceneGraph,
+        addTargets.map((node) => node.id)
+      );
+      return;
+    }
     state.addSequenceSteps(sceneGraph, [...state.selectedNodeIds], effectivePreset, {
       duration: Math.max(1, Math.round(DEFAULT_DURATION_SECONDS * state.frameRate)),
     });
@@ -575,9 +610,12 @@ export function AnimationSequenceWindow() {
           className={styles.effectPicker}
           aria-label="Effect to add"
           value={effectivePreset}
-          onChange={(e) => setPresetToAdd(e.target.value as AnimationPresetId)}
+          onChange={(e) => setPresetToAdd(e.target.value as EffectChoice)}
           disabled={editingSymbol}
         >
+          <optgroup label="Hand-made">
+            <option value={OWN_KEYFRAMES}>Own keyframes</option>
+          </optgroup>
           {CATEGORIES.map((category) => (
             <optgroup key={category} label={category}>
               {addablePresets
@@ -594,11 +632,17 @@ export function AnimationSequenceWindow() {
           type="button"
           className={styles.addButton}
           onClick={addStep}
-          disabled={editingSymbol || selectedNodes.length === 0}
-          title={selectedNodes.length === 0 ? 'Select objects to animate first' : undefined}
+          disabled={editingSymbol || addTargets.length === 0}
+          title={
+            addTargets.length > 0
+              ? undefined
+              : addingOwnKeyframes
+                ? 'Select objects with keyframes of their own first'
+                : 'Select objects to animate first'
+          }
         >
           <Plus size={13} />
-          {selectedNodes.length > 1 ? `Add for ${selectedNodes.length} objects` : 'Add step'}
+          {addTargets.length > 1 ? `Add for ${addTargets.length} objects` : 'Add step'}
         </button>
         <button
           type="button"

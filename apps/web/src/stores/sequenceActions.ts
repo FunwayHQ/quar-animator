@@ -9,6 +9,8 @@ import {
   captureRestPose,
   compileAnimationSequence,
   createAnimationSequence,
+  createClipFromTracks,
+  createTrack,
   evaluateNodeAtFrame,
   getPresetBaseValue,
   getProperty,
@@ -16,6 +18,8 @@ import {
   moveSequenceStep as moveStepInSequence,
   normalizeSequence,
   removeSequenceStep as removeStepFromSequence,
+  restPoseForKeyframes,
+  scheduleSequence,
   setProperty,
   SEQUENCE_REST_PROPERTIES,
   type AnimationPresetDirection,
@@ -24,7 +28,7 @@ import {
   type AnimationSequenceStep,
   type SequenceTrigger,
 } from '@quar/animation';
-import type { Node, Timeline } from '@quar/types';
+import type { Keyframe, Node, PropertyTrack, Timeline } from '@quar/types';
 import type { EditorStore, SceneGraphLike } from './editorStore';
 
 export interface SequenceStepOptions {
@@ -62,11 +66,17 @@ export interface SequenceActions {
     presetId: AnimationPresetId,
     options: SequenceStepOptions
   ) => string[];
+  /**
+   * Turn each object's own (hand-made) keyframes into a clip step, timed to
+   * start where the keyframes were. Returns the new step ids.
+   */
+  addClipSteps: (sceneGraph: SceneGraphLike, nodeIds: string[]) => string[];
   updateSequenceStep: (
     sceneGraph: SceneGraphLike,
     stepId: string,
     patch: SequenceStepPatch
   ) => void;
+  /** Remove a step. A clip step's keyframes stay on the timeline as the user's own. */
   removeSequenceStep: (sceneGraph: SceneGraphLike, stepId: string) => void;
   moveSequenceStep: (sceneGraph: SceneGraphLike, fromIndex: number, toIndex: number) => void;
   /**
@@ -186,6 +196,17 @@ export function pruneSequenceSteps(
     state,
     normalizeSequence({ ...state.animationSequence, steps: kept })
   );
+}
+
+/** An object's own keyframes, per track (sequence keyframes left out). */
+export function ownTracksOf(timeline: Timeline, nodeId: string): PropertyTrack[] {
+  return timeline.tracks
+    .filter((track) => track.nodeId === nodeId)
+    .map((track) => ({
+      ...track,
+      keyframes: track.keyframes.filter((kf) => kf.sequenceStepId === undefined),
+    }))
+    .filter((track) => track.keyframes.length > 0);
 }
 
 const EDIT_EPSILON = 1e-6;
@@ -342,9 +363,127 @@ export function createSequenceActions(
       });
     },
 
+    addClipSteps: (sceneGraph, nodeIds) => {
+      if (get().editingSymbolId) return [];
+      const before = get();
+      before.absorbSequenceEdits(sceneGraph, before.timeline, before.currentFrame);
+      const state = get();
+      const sequence = structuredClone(state.animationSequence);
+
+      const clips: Array<{ nodeId: string; id: string; start: number; length: number }> = [];
+      const captured = new Set<string>();
+      for (const nodeId of nodeIds) {
+        const node = sceneGraph.getNode(nodeId);
+        const tracks = ownTracksOf(state.timeline, nodeId);
+        if (!node || tracks.length === 0) continue;
+        sequence.restPoses[nodeId] ??= restPoseForKeyframes(node, tracks);
+        const result = createClipFromTracks(tracks, sequence.restPoses[nodeId]);
+        if (!result) continue;
+        const id = generateStepId();
+        sequence.steps.push({
+          id,
+          nodeId,
+          clip: result.clip,
+          trigger: 'afterPrevious',
+          delay: 0,
+          duration: Math.max(1, result.clip.length),
+        });
+        clips.push({ nodeId, id, start: result.start, length: result.clip.length });
+        for (const track of tracks) for (const kf of track.keyframes) captured.add(kf.id);
+      }
+      if (clips.length === 0) return [];
+
+      // Keep the keyframes where they were. The earliest clip follows the
+      // sequence so far — or, if it starts during an earlier step, starts with
+      // that step plus a delay; the other clips start with it.
+      clips.sort((a, b) => a.start - b.start);
+      const first = clips[0]!;
+      const existing = sequence.steps.filter((step) => !clips.some((c) => c.id === step.id));
+      const schedule = scheduleSequence({ ...sequence, steps: existing }, state.timeline.duration);
+      const previous = schedule.at(-1);
+      const anchor = schedule
+        .filter((entry) => entry.start <= first.start)
+        .sort((a, b) => b.start - a.start)[0];
+      for (const clip of clips) {
+        const step = sequence.steps.find((candidate) => candidate.id === clip.id)!;
+        if (clip !== first) {
+          step.trigger = 'with';
+          step.targetStepId = first.id;
+          step.delay = clip.start - first.start;
+        } else if (!previous || previous.release <= clip.start || !anchor) {
+          step.delay = Math.max(0, clip.start - (previous?.release ?? 0));
+        } else if (anchor === previous) {
+          step.trigger = 'withPrevious';
+          step.delay = clip.start - anchor.start;
+        } else {
+          step.trigger = 'with';
+          step.targetStepId = anchor.stepId;
+          step.delay = clip.start - anchor.start;
+        }
+      }
+      // Clip steps go in time order after the existing steps
+      const clipIds = clips.map((clip) => clip.id);
+      sequence.steps = [
+        ...sequence.steps.filter((step) => !clipIds.includes(step.id)),
+        ...clipIds.map((id) => sequence.steps.find((step) => step.id === id)!),
+      ];
+
+      get().pushUndo(sceneGraph);
+      // The captured keyframes come back as the clip's (tagged) keyframes
+      const timeline: Timeline = {
+        ...state.timeline,
+        tracks: state.timeline.tracks.map((track) => ({
+          ...track,
+          keyframes: track.keyframes.filter((kf) => !captured.has(kf.id)),
+        })),
+      };
+      set(applySequence(sceneGraph, { ...get(), timeline }, normalizeSequence(sequence)));
+      return clipIds;
+    },
+
     removeSequenceStep: (sceneGraph, stepId) => {
-      if (!get().animationSequence.steps.some((step) => step.id === stepId)) return;
-      commit(sceneGraph, (sequence) => removeStepFromSequence(sequence, stepId));
+      const step = get().animationSequence.steps.find((candidate) => candidate.id === stepId);
+      if (!step) return;
+      // A clip is the user's own work: its keyframes stay where they are now
+      const baked = step.clip
+        ? get()
+            .timeline.tracks.filter((track) => track.nodeId === step.nodeId)
+            .flatMap((track) =>
+              track.keyframes
+                .filter((kf) => kf.sequenceStepId === stepId)
+                .map((kf) => ({ property: track.property, keyframe: kf }))
+            )
+        : [];
+      if (!commit(sceneGraph, (sequence) => removeStepFromSequence(sequence, stepId))) return;
+      if (baked.length === 0) return;
+
+      const state = get();
+      const tracks = state.timeline.tracks.map((track) => ({
+        ...track,
+        keyframes: [...track.keyframes],
+      }));
+      for (const { property, keyframe } of baked) {
+        let track = tracks.find((t) => t.nodeId === step.nodeId && t.property === property);
+        if (!track) {
+          track = createTrack(step.nodeId, property);
+          tracks.push(track);
+        }
+        // Never overwrite a remaining step's keyframe
+        if (track.keyframes.some((kf) => kf.time === keyframe.time)) continue;
+        const { sequenceStepId: _owner, ...own } = keyframe;
+        const restored: Keyframe = { ...own, id: `kf_${stepId}_${property}_${keyframe.time}` };
+        track.keyframes.push(restored);
+        track.keyframes.sort((a, b) => a.time - b.time);
+      }
+      const timeline = { ...state.timeline, tracks };
+      const node = sceneGraph.getNode(step.nodeId);
+      if (node) {
+        sceneGraph.updateNode(
+          step.nodeId,
+          applyAnimatedValues(node, evaluateNodeAtFrame(timeline, step.nodeId, state.currentFrame))
+        );
+      }
+      set({ timeline });
     },
 
     moveSequenceStep: (sceneGraph, fromIndex, toIndex) => {

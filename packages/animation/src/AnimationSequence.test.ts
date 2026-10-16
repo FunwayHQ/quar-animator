@@ -5,6 +5,8 @@ import { evaluateNodeAtFrame } from './PropertyBinding';
 import {
   captureRestPose,
   compileAnimationSequence,
+  createClipFromTracks,
+  restPoseForKeyframes,
   createAnimationSequence,
   moveSequenceStep,
   normalizeSequence,
@@ -338,5 +340,122 @@ describe('sequence editing helpers', () => {
       restPoses: { rect1: { opacity: 1 }, rect2: { opacity: 1 } },
     };
     expect(Object.keys(normalizeSequence(sequence).restPoses)).toEqual(['rect1']);
+  });
+});
+
+describe('clips of the user’s own keyframes', () => {
+  function ownTracks() {
+    const timeline = createTimeline({ duration: 120, frameRate: 30 });
+    const x = getOrCreateTrack(timeline, 'rect1', 'transform.position.x');
+    addKeyframe(x, 40, 100);
+    addKeyframe(x, 60, 300, 'easeOutCubic');
+    const scale = getOrCreateTrack(timeline, 'rect1', 'transform.scale.x');
+    addKeyframe(scale, 40, 1);
+    addKeyframe(scale, 50, 2);
+    const fill = getOrCreateTrack(timeline, 'rect1', 'fills.0.color');
+    addKeyframe(fill, 45, { r: 1, g: 0, b: 0, a: 1 });
+    return timeline.tracks;
+  }
+
+  it('captures keyframes relative to the clip start and the rest pose', () => {
+    const tracks = ownTracks();
+    const pose = restPoseForKeyframes(makeRect(), tracks);
+    expect(pose['transform.position.x']).toBe(100); // where the hand-made move starts
+
+    const { clip, start } = createClipFromTracks(tracks, pose)!;
+    expect(start).toBe(40);
+    expect(clip.length).toBe(20);
+    expect(
+      clip.tracks.map(({ property, mode, keyframes }) => [
+        property,
+        mode,
+        keyframes.map((kf) => [kf.time, kf.value]),
+      ])
+    ).toEqual([
+      [
+        'transform.position.x',
+        'offset',
+        [
+          [0, 0],
+          [20, 200],
+        ],
+      ],
+      [
+        'transform.scale.x',
+        'ratio',
+        [
+          [0, 1],
+          [10, 2],
+        ],
+      ],
+      ['fills.0.color', 'absolute', [[5, { r: 1, g: 0, b: 0, a: 1 }]]],
+    ]);
+    expect(clip.tracks[0]!.keyframes[1]!.easing).toBe('easeOutCubic');
+  });
+
+  function clipSequence(extra: AnimationSequenceStep[] = []): AnimationSequence {
+    const tracks = ownTracks();
+    const pose = restPoseForKeyframes(makeRect(), tracks);
+    const { clip } = createClipFromTracks(tracks, pose)!;
+    return {
+      steps: [step({ id: 'clip', presetId: undefined, clip, duration: clip.length }), ...extra],
+      restPoses: { rect1: pose },
+    };
+  }
+
+  it('renders a clip at its scheduled start, tagged with its step', () => {
+    const sequence = clipSequence();
+    sequence.steps[0]!.delay = 10;
+    const timeline = compileAnimationSequence(
+      createTimeline({ duration: 120 }),
+      sequence,
+      nodesById(makeRect())
+    );
+    const x = timeline.tracks.find((track) => track.property === 'transform.position.x')!;
+    expect(x.keyframes.map((kf) => [kf.time, kf.value, kf.sequenceStepId])).toEqual([
+      [10, 100, 'clip'],
+      [30, 300, 'clip'],
+    ]);
+    const fill = timeline.tracks.find((track) => track.property === 'fills.0.color')!;
+    expect(fill.keyframes[0]).toMatchObject({ time: 15, value: { r: 1, g: 0, b: 0, a: 1 } });
+  });
+
+  it('stretches a clip to the step duration and repeats it', () => {
+    const sequence = clipSequence();
+    sequence.steps[0]!.duration = 40;
+    sequence.steps[0]!.repeat = 2;
+    const timeline = compileAnimationSequence(
+      createTimeline({ duration: 120 }),
+      sequence,
+      nodesById(makeRect())
+    );
+    const x = timeline.tracks.find((track) => track.property === 'transform.position.x')!;
+    expect(x.keyframes.map((kf) => kf.time)).toEqual([0, 40, 80]);
+  });
+
+  it('moves with the object: values follow the rest pose', () => {
+    const sequence = clipSequence();
+    sequence.restPoses.rect1!['transform.position.x'] = 150;
+    sequence.restPoses.rect1!['transform.scale.x'] = 0.5;
+    const timeline = compileAnimationSequence(
+      createTimeline({ duration: 120 }),
+      sequence,
+      nodesById(makeRect())
+    );
+    expect(valueAt(timeline, 'rect1', 'transform.position.x', 20)).toBe(350);
+    expect(valueAt(timeline, 'rect1', 'transform.scale.x', 10)).toBe(1);
+  });
+
+  it('starts a later preset from where the clip left the object', () => {
+    const sequence = clipSequence([step({ id: 'out', presetId: 'slide-out', direction: 'right' })]);
+    const timeline = compileAnimationSequence(
+      createTimeline({ duration: 120 }),
+      sequence,
+      nodesById(makeRect())
+    );
+    const x = timeline.tracks.find((track) => track.property === 'transform.position.x')!;
+    const slide = x.keyframes.filter((kf) => kf.sequenceStepId === 'out');
+    expect(slide[0]).toMatchObject({ time: 20, value: 300 }); // no jump back to 100
+    expect(slide.at(-1)!.value).toBeGreaterThan(300);
   });
 });

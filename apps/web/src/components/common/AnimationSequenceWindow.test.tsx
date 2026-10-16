@@ -228,6 +228,33 @@ describe('AnimationSequenceWindow', () => {
     Element.prototype.scrollIntoView = original;
   });
 
+  it('turns the selection’s own keyframes into a clip step', () => {
+    const sg = renderWindow();
+    act(() => {
+      store().addKeyframeAtFrame('title', 'transform.position.x', 10, 0);
+      store().addKeyframeAtFrame('title', 'transform.position.x', 40, 200);
+      store().setSelection(['logo', 'title']);
+    });
+
+    fireEvent.change(screen.getByLabelText('Effect to add'), {
+      target: { value: 'own-keyframes' },
+    });
+    // Only "title" has keyframes of its own
+    fireEvent.click(screen.getByRole('button', { name: 'Add step' }));
+
+    const [step] = store().animationSequence.steps;
+    expect(step).toMatchObject({ nodeId: 'title', delay: 10, duration: 30 });
+    expect(within(stepRow(1)).getByText(/Own keyframes · 1 property/)).toBeInTheDocument();
+    expect(within(stepRow(1)).getByText('0.3s–1.3s')).toBeInTheDocument();
+    // Clips can repeat
+    expect(screen.getByLabelText('Repeat step 1')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Remove step 1' })).toHaveAttribute(
+      'title',
+      expect.stringContaining('keyframes stay')
+    );
+    expect(sg.getNode('title')).toBeDefined();
+  });
+
   it('closes with the close button or Escape', () => {
     renderWindow();
     fireEvent.click(screen.getByRole('button', { name: 'Close Animation Sequence' }));
