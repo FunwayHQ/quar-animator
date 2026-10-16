@@ -16,7 +16,7 @@ import { createPortal } from 'react-dom';
 import { X, AlertTriangle } from 'lucide-react';
 import { SelectionManager } from '@quar/core';
 import type { SceneGraph } from '@quar/core';
-import type { Node, Timeline } from '@quar/types';
+import type { ArtboardNode, Node, RectangleNode, Timeline } from '@quar/types';
 import { useSceneGraph } from '../../contexts/SceneGraphContext';
 import { useEditorStore } from '../../stores/editorStore';
 import { exportLottieBlob, analyzeLottieExport } from '@quar/export';
@@ -91,7 +91,7 @@ function getLottieExportScene(
   const scaleX = outputWidth / artboardScope.bounds.width;
   const scaleY = outputHeight / artboardScope.bounds.height;
   const rootIds = new Set(artboardScope.node.children);
-  const nodes = artboardScope.node.children.flatMap((id) => {
+  const nodes: Node[] = artboardScope.node.children.flatMap((id) => {
     const node = sceneGraph.getNode(id);
     if (!node) return [];
 
@@ -112,7 +112,40 @@ function getLottieExportScene(
       },
     ];
   });
+  // The artboard's own fill, as a full-frame background under its children
+  const artboard = artboardScope.node;
+  const backgroundId = `${artboard.id}:background`;
+  if (artboard.fills.some((fill) => fill.visible)) {
+    const background: RectangleNode = {
+      id: backgroundId,
+      type: 'rectangle',
+      name: 'Background',
+      parent: null,
+      children: [],
+      transform: {
+        position: { x: outputWidth / 2, y: outputHeight / 2 },
+        rotation: 0,
+        scale: { x: 1, y: 1 },
+        anchor: { x: 0.5, y: 0.5 },
+        skew: { x: 0, y: 0 },
+      },
+      visible: true,
+      locked: false,
+      opacity: 1,
+      blendMode: 'normal',
+      width: outputWidth,
+      height: outputHeight,
+      cornerRadius: [0, 0, 0, 0],
+      fills: artboard.fills,
+      strokes: [],
+    };
+    nodes.unshift(background);
+  }
+
   const tracks = timeline.tracks.map((track) => {
+    if (track.nodeId === artboard.id && track.property.startsWith('fills.')) {
+      return { ...track, nodeId: backgroundId };
+    }
     if (!rootIds.has(track.nodeId)) return track;
 
     const coordinate =

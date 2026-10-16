@@ -60,7 +60,7 @@ function render(ui: ReactElement) {
   return baseRender(<SceneGraphProvider>{ui}</SceneGraphProvider>);
 }
 
-function ArtboardSeeder() {
+function ArtboardSeeder({ fills = [] }: { fills?: ArtboardNode['fills'] }) {
   const sceneGraph = useSceneGraph();
   useEffect(() => {
     const artboard: ArtboardNode = {
@@ -76,7 +76,7 @@ function ArtboardSeeder() {
       blendMode: 'normal',
       width: 640,
       height: 360,
-      fills: [],
+      fills,
       clipContent: true,
     };
     sceneGraph.addNode(artboard);
@@ -98,14 +98,14 @@ function ArtboardSeeder() {
       strokes: [],
     } as unknown as Node;
     sceneGraph.addNode(child, artboard.id);
-  }, [sceneGraph]);
+  }, [sceneGraph, fills]);
   return null;
 }
 
-function renderWithArtboard(ui: ReactElement) {
+function renderWithArtboard(ui: ReactElement, fills?: ArtboardNode['fills']) {
   return baseRender(
     <SceneGraphProvider>
-      <ArtboardSeeder />
+      <ArtboardSeeder fills={fills} />
       {ui}
     </SceneGraphProvider>
   );
@@ -253,6 +253,35 @@ describe('ExportDialog', () => {
     });
     expect(timeline.tracks[0]?.keyframes[0]?.value).toBe(350);
     expect(options).toMatchObject({ width: 640, height: 360 });
+  });
+
+  it('exports the artboard background under its children in Lottie JSON', async () => {
+    mockStore.selectedNodeIds = new Set(['artboard-1']);
+    mockStore.timeline.tracks = [
+      {
+        id: 'fill-track',
+        nodeId: 'artboard-1',
+        property: 'fills.0.opacity',
+        keyframes: [{ id: 'fill-keyframe', time: 0, value: 0.5, easing: 'linear' }],
+      },
+    ];
+    const white = { type: 'solid' as const, color: { r: 255, g: 255, b: 255, a: 1 } };
+    renderWithArtboard(<ExportDialogHost />, [{ ...white, opacity: 1, visible: true }]);
+    act(() => showExportDialog('lottie'));
+    fireEvent.click(screen.getByTestId('export-dialog-export'));
+
+    await waitFor(() => expect(exportLottieBlob).toHaveBeenCalledOnce());
+    const [nodes, timeline] = vi.mocked(exportLottieBlob).mock.calls[0]!;
+    // Bottom of the stack, covering the whole frame
+    expect(nodes.map((node) => node.id)).toEqual(['artboard-1:background', 'shape-in-artboard']);
+    expect(nodes[0]).toMatchObject({
+      type: 'rectangle',
+      width: 640,
+      height: 360,
+      transform: { position: { x: 320, y: 180 } },
+    });
+    // The artboard's fill animation moves with it
+    expect(timeline.tracks[0]?.nodeId).toBe('artboard-1:background');
   });
 
   it('shows an MP4 capability error returned by the encoder', async () => {
