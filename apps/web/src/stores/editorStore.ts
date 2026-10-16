@@ -39,7 +39,20 @@ import {
   KeyframeManager,
   tangentsToEasing,
 } from '@quar/animation';
-import { createSequenceActions, pruneSequenceSteps, type SequenceActions } from './sequenceActions';
+import {
+  applySequence,
+  createSequenceActions,
+  pruneSequenceSteps,
+  type SequenceActions,
+} from './sequenceActions';
+import {
+  applyPlacement,
+  mapPlacement,
+  placementOf,
+  reparentMatrix,
+  reparentRestPose,
+  reparentTimeline,
+} from './reparent';
 import {
   DEFAULT_ONION_SKIN_SETTINGS,
   createGroupNode,
@@ -502,6 +515,17 @@ export interface EditorStore extends SequenceActions {
   setMaskMode: (sceneGraph: SceneGraphLike, groupId: string, mode: MaskMode) => void;
   removeMask: (sceneGraph: SceneGraphLike, groupId: string) => void;
   ungroupSelection: (sceneGraph: SceneGraphLike) => void;
+  /**
+   * Move a node to another parent (or the root) without it moving on screen:
+   * its transform, transform keyframes and sequence rest pose are re-expressed
+   * in the new parent's space. Callers record undo.
+   */
+  moveNodeKeepingPlacement: (
+    sceneGraph: SceneGraphLike,
+    id: string,
+    parentId: string | null,
+    index?: number
+  ) => void;
 
   // Timeline state
   currentFrame: number;
@@ -1889,6 +1913,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   groupSelection: (sceneGraph: SceneGraphLike) => {
     const { selectedNodeIds } = get();
     if (selectedNodeIds.size < 2) return;
+    get().flushSequenceEdits(sceneGraph);
     get().pushUndo(sceneGraph);
 
     // Flatten scene graph order, filter to selected IDs
@@ -1920,14 +1945,18 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     // Create and add the group node
     const groupId = `group_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     const group = createGroupNode(groupId, 'Group');
+    // An identity transform: children keep their numbers (a 0.5 anchor offsets
+    // the group's space by half a unit)
+    group.transform.anchor = { x: 0, y: 0 };
     sceneGraph.addNode(group, commonParent ?? undefined);
 
     // Move group to the correct insertion index
     sceneGraph.moveNode(groupId, commonParent, insertIndex);
 
-    // Move each selected node (in scene-graph order) into the group
+    // Move each selected node (in scene-graph order) into the group; nodes
+    // from other groups keep their place on screen
     for (const id of orderedSelected) {
-      sceneGraph.moveNode(id, groupId);
+      get().moveNodeKeepingPlacement(sceneGraph, id, groupId);
     }
 
     set({ selectedNodeIds: new Set([groupId]), isDirty: true });
@@ -1937,6 +1966,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     if (!selection) return;
     const { nodes: orderedSelected, parentId, maskNode } = selection;
 
+    get().flushSequenceEdits(sceneGraph);
     get().pushUndo(sceneGraph);
     const siblings = parentId
       ? (sceneGraph.getNode(parentId)?.children ?? [])
@@ -1946,13 +1976,14 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     const insertIndex = maskIndex >= 0 ? maskIndex : siblings.length;
     const groupId = `mask_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     const group = createGroupNode(groupId, 'Mask');
+    group.transform.anchor = { x: 0, y: 0 };
     group.maskNodeId = maskNode.id;
     group.maskMode = mode;
     sceneGraph.addNode(group, parentId ?? undefined);
     sceneGraph.moveNode(groupId, parentId, insertIndex);
 
     for (const node of orderedSelected) {
-      sceneGraph.moveNode(node.id, groupId);
+      get().moveNodeKeepingPlacement(sceneGraph, node.id, groupId);
     }
 
     set({ selectedNodeIds: new Set([groupId]), isDirty: true });
@@ -1974,6 +2005,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   ungroupSelection: (sceneGraph: SceneGraphLike) => {
     const { selectedNodeIds, enteredGroupId } = get();
     if (selectedNodeIds.size === 0) return;
+    get().flushSequenceEdits(sceneGraph);
     get().pushUndo(sceneGraph);
 
     const movedChildIds: string[] = [];
@@ -1994,10 +2026,11 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       const groupIndex = siblings.indexOf(id);
       const insertAt = groupIndex !== -1 ? groupIndex : siblings.length;
 
-      // Move children out to the group's parent, preserving order
+      // Move children out to the group's parent, preserving order and their
+      // place on screen (the group's transform is folded into theirs)
       const childIds = [...node.children];
       for (let i = 0; i < childIds.length; i++) {
-        sceneGraph.moveNode(childIds[i]!, parentId ?? null, insertAt + i);
+        get().moveNodeKeepingPlacement(sceneGraph, childIds[i]!, parentId ?? null, insertAt + i);
         movedChildIds.push(childIds[i]!);
       }
 
@@ -2011,6 +2044,29 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         isDirty: true,
         ...(clearGroup ? { enteredGroupId: null } : {}),
       });
+    }
+  },
+  moveNodeKeepingPlacement: (sceneGraph, id, parentId, index) => {
+    const node = sceneGraph.getNode(id);
+    if (!node) return;
+    const m = reparentMatrix(sceneGraph, id, parentId);
+    sceneGraph.moveNode(id, parentId, index);
+    if (!m) return;
+
+    const base = placementOf(node.transform);
+    sceneGraph.updateNode(id, { transform: applyPlacement(node.transform, mapPlacement(base, m)) });
+    const state = get();
+    const timeline = reparentTimeline(state.timeline, id, base, m);
+    const pose = state.animationSequence.restPoses[id];
+    if (pose) {
+      // Recompile so the sequence's own keyframes follow the moved rest pose
+      const sequence = {
+        ...state.animationSequence,
+        restPoses: { ...state.animationSequence.restPoses, [id]: reparentRestPose(pose, base, m) },
+      };
+      set(applySequence(sceneGraph, { ...state, timeline }, sequence));
+    } else {
+      set({ timeline, isDirty: true });
     }
   },
 
@@ -2755,6 +2811,7 @@ function createBooleanActions(
       toast.error('Select at least 2 shapes for boolean operations');
       return;
     }
+    get().flushSequenceEdits(sceneGraph);
     get().pushUndo(sceneGraph);
 
     // Collect selected nodes in scene graph z-order
@@ -2807,7 +2864,7 @@ function createBooleanActions(
 
     // Move all source nodes INTO the group (preserve them, don't delete!)
     for (const node of orderedNodes) {
-      sceneGraph.moveNode(node.id, groupId);
+      get().moveNodeKeepingPlacement(sceneGraph, node.id, groupId);
     }
 
     set({ selectedNodeIds: new Set([groupId]), isDirty: true });
@@ -2900,6 +2957,7 @@ function createBooleanActions(
     releaseBooleanGroup: (sceneGraph: SceneGraphLike) => {
       const { selectedNodeIds } = get();
       if (selectedNodeIds.size === 0) return;
+      get().flushSequenceEdits(sceneGraph);
       get().pushUndo(sceneGraph);
 
       const movedChildIds: string[] = [];
@@ -2914,10 +2972,10 @@ function createBooleanActions(
         const groupIndex = siblings.indexOf(id);
         const insertAt = groupIndex !== -1 ? groupIndex : siblings.length;
 
-        // Move children out
+        // Move children out, keeping their place on screen
         const childIds = [...node.children];
         for (let i = 0; i < childIds.length; i++) {
-          sceneGraph.moveNode(childIds[i]!, parentId ?? null, insertAt + i);
+          get().moveNodeKeepingPlacement(sceneGraph, childIds[i]!, parentId ?? null, insertAt + i);
           movedChildIds.push(childIds[i]!);
         }
 

@@ -466,6 +466,8 @@ export function LayerPanel() {
   }, []);
 
   const pushUndo = useEditorStore((state) => state.pushUndo);
+  const flushSequenceEdits = useEditorStore((state) => state.flushSequenceEdits);
+  const moveNodeKeepingPlacement = useEditorStore((state) => state.moveNodeKeepingPlacement);
 
   const handleToggleVisibility = useCallback(
     (id: string) => {
@@ -878,7 +880,8 @@ export function LayerPanel() {
         insertIndex = computeInsertIndex(dropTarget.position, targetIndex, parentId === null);
       }
 
-      // Push undo before reorder
+      // Keep pending edits to sequenced objects, then record undo
+      flushSequenceEdits(sceneGraph);
       pushUndo(sceneGraph);
 
       // Execute moves
@@ -895,7 +898,8 @@ export function LayerPanel() {
           // a lower index shifts the destination left by one (F012 defect 2).
           const target =
             currentParent === parentId && curIndex > -1 && curIndex < base ? base - 1 : base;
-          sceneGraph.moveNode(id, parentId, target);
+          // Into or out of a group, the layer stays where it is on screen
+          moveNodeKeepingPlacement(sceneGraph, id, parentId, target);
           // Next dragged node inserts just after the one we placed.
           base = target + 1;
         } catch {
@@ -906,7 +910,7 @@ export function LayerPanel() {
       setDragState(null);
       setDropTarget(null);
     },
-    [dragState, dropTarget, sceneGraph, pushUndo]
+    [dragState, dropTarget, sceneGraph, pushUndo, flushSequenceEdits, moveNodeKeepingPlacement]
   );
 
   const handlePointerLeave = useCallback(() => {
