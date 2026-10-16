@@ -398,6 +398,18 @@
   background: var(--color-bg-hover);
 }
 
+/* Line through the keyframes that make up one animation, drawn under the diamonds */
+.keyframeSpan {
+  position: absolute;
+  top: 50%;
+  height: 2px;
+  transform: translateY(-50%);
+  background: var(--color-timeline-keyframe);
+  opacity: 0.55;
+  border-radius: 1px;
+  pointer-events: none;
+}
+
 .keyframe {
   position: absolute;
   top: 50%;

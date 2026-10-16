@@ -150,6 +150,36 @@ describe('Timeline', () => {
     expect(screen.getByTestId(`keyframe-${keyframe.id}`)).toBeInTheDocument();
   });
 
+  it('draws a line through the keyframes of each animation, not across rests', () => {
+    let graph: SceneGraph | undefined;
+    function CaptureGraph() {
+      graph = useSceneGraph();
+      return null;
+    }
+    const opacity = createTrack<number>('box', 'opacity');
+    addKeyframe(opacity, 0, 0);
+    addKeyframe(opacity, 30, 1);
+    addKeyframe(opacity, 150, 1);
+    addKeyframe(opacity, 180, 0);
+    useEditorStore.setState({ timeline: createTimeline({ tracks: [opacity] }) });
+
+    render(
+      <SceneGraphProvider>
+        <CaptureGraph />
+        <Timeline />
+      </SceneGraphProvider>
+    );
+    act(() => {
+      graph!.addNode({ id: 'box', name: 'Box', children: [] } as unknown as Node);
+    });
+
+    const fadeIn = screen.getByTestId('keyframe-span-box-0-30');
+    expect(fadeIn.style.left).toBe('0%');
+    expect(fadeIn.style.width).toBe('10%');
+    expect(screen.getByTestId('keyframe-span-box-150-180').style.left).toBe('50%');
+    expect(screen.queryByTestId('keyframe-span-box-30-150')).not.toBeInTheDocument();
+  });
+
   it('adds an opacity keyframe from the empty timeline context menu', () => {
     let graph: SceneGraph | undefined;
     function CaptureGraph() {

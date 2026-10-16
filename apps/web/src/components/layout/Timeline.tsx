@@ -1,7 +1,8 @@
 import { useRef, useCallback, useState, useEffect, useMemo, useLayoutEffect } from 'react';
 import { useSceneGraph } from '../../contexts/SceneGraphContext';
 import { useEditorStore } from '../../stores/editorStore';
-import { formatTimecode, getTracksByNode } from '@quar/animation';
+import { formatTimecode, getAnimationSpans, getTracksByNode } from '@quar/animation';
+import type { AnimationSpan } from '@quar/animation';
 import type { Node, EasingFunction } from '@quar/types';
 import { ContextMenu } from '../common/ContextMenu';
 import type { ContextMenuEntry } from '../common/ContextMenu';
@@ -372,6 +373,17 @@ export function Timeline({ playback }: TimelineProps = {}) {
       if (kfs.length > 0) {
         result.set(node.id, kfs);
       }
+    }
+    return result;
+  }, [nodes, timeline]);
+
+  // Frame ranges where each node animates — drawn as a line through the
+  // keyframes that make up one animation
+  const nodeSpans = useMemo(() => {
+    const result = new Map<string, AnimationSpan[]>();
+    for (const node of nodes) {
+      const spans = getAnimationSpans(getTracksByNode(timeline, node.id));
+      if (spans.length > 0) result.set(node.id, spans);
     }
     return result;
   }, [nodes, timeline]);
@@ -1401,6 +1413,18 @@ export function Timeline({ playback }: TimelineProps = {}) {
                       onContextMenu={(e) => handleTimelineContextMenu(e, node.id)}
                       data-testid={`timeline-track-${node.id}`}
                     >
+                      {nodeSpans.get(node.id)?.map((span) => (
+                        <div
+                          key={`${span.start}-${span.end}`}
+                          className={styles.keyframeSpan}
+                          style={{
+                            left: `${(span.start / duration) * 100}%`,
+                            width: `${((span.end - span.start) / duration) * 100}%`,
+                          }}
+                          data-testid={`keyframe-span-${node.id}-${span.start}-${span.end}`}
+                          aria-hidden="true"
+                        />
+                      ))}
                       {kfs &&
                         kfs.map((kf) => (
                           /* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- keyframe diamonds, keyboard handled at track level */
