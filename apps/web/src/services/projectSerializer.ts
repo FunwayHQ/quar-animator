@@ -17,7 +17,8 @@ import type {
 } from '@quar/types';
 import type { OnionSkinSettings } from '@quar/core';
 import type { SceneGraph } from '@quar/core';
-import { createTimeline } from '@quar/animation';
+import { createAnimationSequence, createTimeline } from '@quar/animation';
+import type { AnimationSequence } from '@quar/animation';
 import { DEFAULT_ONION_SKIN_SETTINGS, writeQuarFile, parseQuarFile } from '@quar/core';
 import type { Guide, PageData } from '../stores/editorStore';
 
@@ -61,6 +62,8 @@ export interface SerializedPage {
     rootNodeIds: string[];
   };
   timeline: Timeline;
+  /** PowerPoint-style numbered steps (optional — older files have none). */
+  animationSequence?: AnimationSequence;
 }
 
 /** v2.0 multi-page format */
@@ -98,6 +101,7 @@ export type ProjectData = ProjectDataV1 | ProjectDataV2 | ProjectDataV3;
 
 export interface EditorStateSnapshot {
   timeline: Timeline;
+  animationSequence?: AnimationSequence;
   timelineDuration: number;
   frameRate: number;
   autoKeyframe: boolean;
@@ -139,6 +143,9 @@ export function serializeProject(
           name: page.name,
           sceneGraph: sceneGraph.toJSON(),
           timeline: structuredClone(editorState.timeline),
+          animationSequence: structuredClone(
+            editorState.animationSequence ?? createAnimationSequence()
+          ),
         };
       } else {
         // Inactive page — use stored snapshot
@@ -147,6 +154,7 @@ export function serializeProject(
           name: page.name,
           sceneGraph: structuredClone(page.sceneGraphJSON),
           timeline: structuredClone(page.timeline),
+          animationSequence: structuredClone(page.animationSequence ?? createAnimationSequence()),
         };
       }
     });
@@ -160,6 +168,9 @@ export function serializeProject(
         name: 'Page 1',
         sceneGraph: sceneGraph.toJSON(),
         timeline: structuredClone(editorState.timeline),
+        animationSequence: structuredClone(
+          editorState.animationSequence ?? createAnimationSequence()
+        ),
       },
     ];
     activePageId = pageId;
@@ -425,6 +436,7 @@ export function deserializeProject(
     name: p.name,
     sceneGraphJSON: structuredClone(p.sceneGraph),
     timeline: structuredClone(p.timeline),
+    animationSequence: structuredClone(p.animationSequence ?? createAnimationSequence()),
     selectedNodeIds: [],
     undoStack: [],
     redoStack: [],
@@ -433,6 +445,7 @@ export function deserializeProject(
   // Restore editor state
   applyEditorState({
     timeline: structuredClone(activePage.timeline),
+    animationSequence: structuredClone(activePage.animationSequence ?? createAnimationSequence()),
     timelineDuration: v2.settings.timelineDuration,
     frameRate: v2.settings.frameRate,
     autoKeyframe: v2.settings.autoKeyframe,

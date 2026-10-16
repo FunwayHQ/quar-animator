@@ -530,7 +530,7 @@ export function createAnimationPresetKeyframes(
   const baseValues = new Map<string, number>();
   for (const keyframe of keyframes) {
     if (!baseValues.has(keyframe.property)) {
-      const initialValue = getBaseValue(node, keyframe.property);
+      const initialValue = getPresetBaseValue(node, keyframe.property);
       if (initialValue !== undefined) baseValues.set(keyframe.property, initialValue);
     }
   }
@@ -588,7 +588,8 @@ export function applyAnimationPreset(
   };
 }
 
-function getBaseValue(node: Node, property: string): number | undefined {
+/** A node's resting value for a property presets animate (full text, fully drawn stroke, ...). */
+export function getPresetBaseValue(node: Node, property: string): number | undefined {
   switch (property) {
     case 'opacity':
       return node.opacity;

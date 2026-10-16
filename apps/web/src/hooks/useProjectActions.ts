@@ -76,6 +76,7 @@ export function useProjectActions(options: UseProjectActionsOptions = {}): Proje
     const state = useEditorStore.getState();
     return {
       timeline: state.timeline,
+      animationSequence: state.animationSequence,
       timelineDuration: state.timelineDuration,
       frameRate: state.frameRate,
       autoKeyframe: state.autoKeyframe,

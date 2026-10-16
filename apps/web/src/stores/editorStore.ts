@@ -32,8 +32,14 @@ import type {
   SymbolInstanceNode,
   MaskMode,
 } from '@quar/types';
-import type { KeyframeClipboard, GraphViewTransform } from '@quar/animation';
-import { createTimeline, KeyframeManager, tangentsToEasing } from '@quar/animation';
+import type { AnimationSequence, KeyframeClipboard, GraphViewTransform } from '@quar/animation';
+import {
+  createAnimationSequence,
+  createTimeline,
+  KeyframeManager,
+  tangentsToEasing,
+} from '@quar/animation';
+import { createSequenceActions, pruneSequenceSteps, type SequenceActions } from './sequenceActions';
 import {
   DEFAULT_ONION_SKIN_SETTINGS,
   createGroupNode,
@@ -82,6 +88,7 @@ interface HistorySnapshot {
   // chain filtering) but live outside the SceneGraph, so undo/redo must snapshot
   // and restore them too or they are lost permanently (F026).
   timeline: Timeline;
+  animationSequence: AnimationSequence;
   ikChains: IKChain[];
   smartBoneActions: SmartBoneAction[];
   dynamicChains: DynamicChain[];
@@ -91,6 +98,7 @@ interface HistorySnapshot {
 interface HistoryCapturable {
   selectedNodeIds: Set<string>;
   timeline: Timeline;
+  animationSequence: AnimationSequence;
   ikChains: IKChain[];
   smartBoneActions: SmartBoneAction[];
   dynamicChains: DynamicChain[];
@@ -105,6 +113,7 @@ function makeHistorySnapshot(
     sceneData: structuredClone(sceneGraph.toJSON()),
     selectedNodeIds: Array.from(state.selectedNodeIds),
     timeline: structuredClone(state.timeline),
+    animationSequence: structuredClone(state.animationSequence),
     ikChains: structuredClone(state.ikChains),
     smartBoneActions: structuredClone(state.smartBoneActions),
     dynamicChains: structuredClone(state.dynamicChains),
@@ -120,6 +129,7 @@ function restoredFieldsFrom(snapshot: HistorySnapshot) {
     timeline,
     timelineDuration: timeline.duration,
     frameRate: timeline.frameRate,
+    animationSequence: structuredClone(snapshot.animationSequence ?? createAnimationSequence()),
     ikChains: structuredClone(snapshot.ikChains),
     smartBoneActions: structuredClone(snapshot.smartBoneActions),
     dynamicChains: structuredClone(snapshot.dynamicChains),
@@ -246,6 +256,7 @@ export interface PageData {
   name: string;
   sceneGraphJSON: { nodes: Node[]; rootNodeIds: string[] };
   timeline: Timeline;
+  animationSequence: AnimationSequence;
   selectedNodeIds: string[];
   undoStack: HistorySnapshot[];
   redoStack: HistorySnapshot[];
@@ -263,6 +274,7 @@ function createDefaultPage(name: string = 'Page 1'): PageData {
     name,
     sceneGraphJSON: { nodes: [], rootNodeIds: [] },
     timeline: createTimeline({ duration: 300, frameRate: 30 }),
+    animationSequence: createAnimationSequence(),
     selectedNodeIds: [],
     undoStack: [],
     redoStack: [],
@@ -299,7 +311,7 @@ export const DEFAULT_STROKE: Stroke = {
 // Store Interface
 // ============================================================================
 
-export interface EditorStore {
+export interface EditorStore extends SequenceActions {
   // Project state
   projectId: string | null;
   projectName: string;
@@ -1827,10 +1839,13 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     const newDynamicChains = dynamicChains.filter((c) => !selectedNodeIds.has(c.rootBoneId));
     // Clear enteredGroupId if the entered group no longer exists
     const clearGroup = enteredGroupId && !sceneGraph.getNode(enteredGroupId);
+    // Drop sequence steps of deleted objects (incl. group descendants)
+    const sequenceUpdate = pruneSequenceSteps(sceneGraph, { ...get(), timeline });
     set({
       selectedNodeIds: new Set<string>(),
       editingGradient: null,
       timeline: { ...timeline },
+      ...sequenceUpdate,
       isDirty: true,
       ikChains: newIkChains,
       smartBoneActions: newSmartBoneActions,
@@ -2269,8 +2284,11 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     const removedKeyframeIds = new Set(
       removedTracks.flatMap((track) => track.keyframes.map((kf) => kf.id))
     );
+    // Their sequence steps go too, or the next recompile would bring them back
+    const sequenceUpdate = pruneSequenceSteps(sceneGraph, { ...get(), timeline }, targets);
     set({
       timeline: { ...timeline },
+      ...sequenceUpdate,
       selectedKeyframeIds: new Set(
         [...selectedKeyframeIds].filter((id) => !removedKeyframeIds.has(id))
       ),
@@ -2420,6 +2438,9 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
   // Symbols
   ...createSymbolActions(set, get),
+
+  // Animation Sequence (PowerPoint-style numbered steps)
+  ...createSequenceActions(set, get),
 }));
 
 // ============================================================================
@@ -3154,6 +3175,7 @@ function createHistoryActions(
         currentFrame: 0,
         isPlaying: false,
         timeline: createTimeline({ duration: 300, frameRate: 30 }),
+        animationSequence: createAnimationSequence(),
         timelineDuration: 300,
         frameRate: 30,
         autoKeyframe: false,
@@ -3197,10 +3219,12 @@ function createHistoryActions(
         mgr.removeAllKeyframesForNode(id);
         sceneGraph.removeNode(id);
       }
+      const sequenceUpdate = pruneSequenceSteps(sceneGraph, { ...get(), timeline });
       set({
         selectedNodeIds: new Set<string>(),
         editingGradient: null,
         timeline: { ...timeline },
+        ...sequenceUpdate,
         isDirty: true,
       });
     },
@@ -3232,6 +3256,7 @@ function createPageActions(
           ...p,
           sceneGraphJSON: structuredClone(sceneGraph.toJSON()),
           timeline: structuredClone(state.timeline),
+          animationSequence: structuredClone(state.animationSequence),
           selectedNodeIds: Array.from(state.selectedNodeIds),
           undoStack: state.undoStack,
           redoStack: state.redoStack,
@@ -3248,6 +3273,7 @@ function createPageActions(
         pages: [...updatedPages, newPage],
         activePageId: newPage.id,
         timeline: structuredClone(newPage.timeline),
+        animationSequence: structuredClone(newPage.animationSequence ?? createAnimationSequence()),
         selectedNodeIds: new Set<string>(),
         selectedKeyframeIds: new Set<string>(),
         undoStack: [],
@@ -3285,6 +3311,9 @@ function createPageActions(
           pages: newPages,
           activePageId: switchTo.id,
           timeline: structuredClone(switchTo.timeline),
+          animationSequence: structuredClone(
+            switchTo.animationSequence ?? createAnimationSequence()
+          ),
           selectedNodeIds: new Set(switchTo.selectedNodeIds),
           selectedKeyframeIds: new Set<string>(),
           undoStack: switchTo.undoStack,
@@ -3326,6 +3355,7 @@ function createPageActions(
             ...p,
             sceneGraphJSON: structuredClone(sceneGraph.toJSON()),
             timeline: structuredClone(state.timeline),
+            animationSequence: structuredClone(state.animationSequence),
             selectedNodeIds: Array.from(state.selectedNodeIds),
             undoStack: state.undoStack,
             redoStack: state.redoStack,
@@ -3339,6 +3369,9 @@ function createPageActions(
         name: `${sourcePage.name} Copy`,
         sceneGraphJSON: structuredClone(sourcePage.sceneGraphJSON),
         timeline: structuredClone(sourcePage.timeline),
+        animationSequence: structuredClone(
+          sourcePage.animationSequence ?? createAnimationSequence()
+        ),
         selectedNodeIds: [],
         undoStack: [],
         redoStack: [],
@@ -3384,6 +3417,7 @@ function createPageActions(
           ...p,
           sceneGraphJSON: structuredClone(sceneGraph.toJSON()),
           timeline: structuredClone(state.timeline),
+          animationSequence: structuredClone(state.animationSequence),
           selectedNodeIds: Array.from(state.selectedNodeIds),
           undoStack: state.undoStack,
           redoStack: state.redoStack,
@@ -3397,6 +3431,9 @@ function createPageActions(
         pages: updatedPages,
         activePageId: pageId,
         timeline: structuredClone(targetPage.timeline),
+        animationSequence: structuredClone(
+          targetPage.animationSequence ?? createAnimationSequence()
+        ),
         selectedNodeIds: new Set(targetPage.selectedNodeIds),
         selectedKeyframeIds: new Set<string>(),
         undoStack: targetPage.undoStack,
