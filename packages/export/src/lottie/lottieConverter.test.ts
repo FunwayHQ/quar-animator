@@ -396,6 +396,76 @@ describe('polygonToLottieShapes', () => {
 // pathPointsToLottieVertices
 // ============================================================================
 
+describe('animated geometry', () => {
+  const corner = (x: number, y: number): PathPoint => ({
+    position: { x, y },
+    handleIn: null,
+    handleOut: null,
+    type: 'corner',
+  });
+  const squarePoints = [corner(0, 0), corner(10, 0), corner(10, 10), corner(0, 10)];
+  const trianglePoints = [corner(0, 0), corner(10, 0), corner(5, 10)];
+
+  it('bakes a shape tween frame by frame', () => {
+    const timeline = createTimeline({ duration: 60, frameRate: 30 });
+    const track = getOrCreateTrack<PathPoint[]>(timeline, 'p1', 'points');
+    addKeyframe(track, 0, squarePoints);
+    addKeyframe(track, 4, trianglePoints);
+
+    const [path] = pathToLottieShapes(
+      makePath({ id: 'p1', points: squarePoints, closed: true }),
+      timeline
+    ) as LottieShapePath[];
+    expect(path!.ks.a).toBe(1);
+    const keyframes = path!.ks.k as Array<{ t: number; s: Array<{ v: number[][] }> }>;
+    expect(keyframes.map((kf) => kf.t)).toEqual([0, 1, 2, 3, 4]);
+    expect(keyframes[0]!.s[0]!.v).toHaveLength(4);
+  });
+
+  it('animates per-vertex edits', () => {
+    const timeline = createTimeline({ duration: 60, frameRate: 30 });
+    const x = getOrCreateTrack<number>(timeline, 'p1', 'points.2.position.x');
+    addKeyframe(x, 0, 10);
+    addKeyframe(x, 2, 30);
+    const [path] = pathToLottieShapes(
+      makePath({ id: 'p1', points: squarePoints, closed: true }),
+      timeline
+    ) as LottieShapePath[];
+    const keyframes = path!.ks.k as Array<{ s: Array<{ v: number[][] }> }>;
+    expect(keyframes.map((kf) => kf.s[0]!.v[2]![0])).toEqual([10, 20, 30]);
+  });
+
+  it('applies per-point corner radii as the editor draws them', () => {
+    const rounded = squarePoints.map((point) => ({ ...point, cornerRadius: 2 }));
+    const [path] = pathToLottieShapes(
+      makePath({ points: rounded, closed: true }),
+      emptyTimeline
+    ) as LottieShapePath[];
+    expect((path!.ks.k as { v: number[][] }).v.length).toBeGreaterThan(4);
+  });
+
+  it('bakes an animated polygon radius', () => {
+    const timeline = createTimeline({ duration: 60, frameRate: 30 });
+    const radius = getOrCreateTrack<number>(timeline, 'poly1', 'radius');
+    addKeyframe(radius, 0, 20);
+    addKeyframe(radius, 3, 50);
+    const [path] = polygonToLottieShapes(
+      makePolygon({ id: 'poly1' }),
+      timeline
+    ) as LottieShapePath[];
+    const keyframes = path!.ks.k as Array<{ s: Array<{ v: number[][] }> }>;
+    const top = keyframes.map((kf) => Math.hypot(...(kf.s[0]!.v[0] as [number, number])));
+    expect(top[0]).toBeCloseTo(20);
+    expect(top[3]).toBeCloseTo(50);
+  });
+
+  it('draws a rectangle with differing corner radii as a path', () => {
+    const items = rectangleToLottieShapes(makeRect({ cornerRadius: [10, 0, 0, 0] }), emptyTimeline);
+    expect(items[0]!.ty).toBe('sh');
+    expect(items.some((item) => item.ty === 'rc')).toBe(false);
+  });
+});
+
 describe('grouped children and artboards', () => {
   const resolverOf =
     (...nodes: Node[]) =>

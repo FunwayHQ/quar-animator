@@ -22,8 +22,14 @@ import type {
   TextNode,
   Timeline,
 } from '@quar/types';
-import { findTrack } from '@quar/animation';
-import { getNodeLocalBounds } from '@quar/core';
+import { applyAnimatedValues, evaluateNodeAtFrame, findTrack } from '@quar/animation';
+import {
+  applyCornerRadius,
+  createPolygonPath,
+  createRectanglePath,
+  createStarPath,
+  getNodeLocalBounds,
+} from '@quar/core';
 import type {
   LottieLayer,
   LottieShapeItem,
@@ -39,6 +45,7 @@ import type {
   LottieShapeVertices,
   LottieAnimatedValue,
   LottieMask,
+  LottieShapeKeyframe,
 } from './lottieTypes';
 import {
   trackToLottieAnimated,
@@ -200,6 +207,35 @@ export function rectangleToLottieShapes(
 ): LottieShapeItem[] {
   const items: LottieShapeItem[] = [];
 
+  // Lottie rectangles have one corner radius; differing corners become a path
+  const [tl, tr, br, bl] = node.cornerRadius;
+  const cornerTracks = [1, 2, 3].some((i) => findTrack(timeline, node.id, `cornerRadius.${i}`));
+  if (cornerTracks || tl !== tr || tl !== br || tl !== bl) {
+    items.push(
+      ...geometryPaths(node, timeline, ['width', 'height', 'cornerRadius.'], (n) => {
+        const rect = n as RectangleNode;
+        return [
+          {
+            points: createRectanglePath(
+              -rect.width * rect.transform.anchor.x,
+              -rect.height * rect.transform.anchor.y,
+              rect.width,
+              rect.height,
+              rect.cornerRadius
+            ),
+            closed: true,
+          },
+        ];
+      })
+    );
+    items.push(...strokesToLottie(node.strokes, node.id, timeline));
+    items.push(
+      ...fillsToLottie(node.fills, node.id, timeline, undefined, getNodeLocalBounds(node))
+    );
+    items.push(createShapeTransform());
+    return items;
+  }
+
   // Shape: rectangle
   const widthTrack = findTrack<number>(timeline, node.id, 'width');
   const heightTrack = findTrack<number>(timeline, node.id, 'height');
@@ -274,29 +310,23 @@ export function pathToLottieShapes(
   timeline: Timeline,
   _canvasH?: number
 ): LottieShapeItem[] {
-  const items: LottieShapeItem[] = [];
-
-  // Convert primary path (negate Y to map Quar Y-up geometry into Lottie space)
-  const vertices = pathPointsToLottieVertices(node.points, node.closed, true);
-  const shapePath: LottieShapePath = {
-    ty: 'sh',
-    nm: 'Path',
-    ks: { a: 0, k: vertices },
-  };
-  items.push(shapePath);
-
-  // Convert subpaths
-  if (node.subpaths) {
-    for (let i = 0; i < node.subpaths.length; i++) {
-      const subVertices = pathPointsToLottieVertices(node.subpaths[i]!, true, true);
-      const subPath: LottieShapePath = {
-        ty: 'sh',
-        nm: `Subpath ${i + 1}`,
-        ks: { a: 0, k: subVertices },
-      };
-      items.push(subPath);
+  // Every contour, rounded corners applied as the editor draws them; shape
+  // tweens and vertex edits animate them
+  const items: LottieShapeItem[] = geometryPaths(
+    node,
+    timeline,
+    ['points', 'points.', 'subpaths.'],
+    (n) => {
+      const path = n as PathNode;
+      return [
+        { points: applyCornerRadius(path.points, path.closed), closed: path.closed },
+        ...(path.subpaths ?? []).map((points) => ({
+          points: applyCornerRadius(points, true),
+          closed: true,
+        })),
+      ];
     }
-  }
+  );
 
   const strokes = strokesToLottie(node.strokes, node.id, timeline);
   const fills = fillsToLottie(
@@ -404,23 +434,112 @@ export function polygonToLottieShapes(
   timeline: Timeline,
   _canvasH?: number
 ): LottieShapeItem[] {
-  const items: LottieShapeItem[] = [];
-
-  // Generate polygon vertices
-  const points = generatePolygonPoints(node);
-  const vertices = pathPointsToLottieVertices(points, true);
-  const shapePath: LottieShapePath = {
-    ty: 'sh',
-    nm: 'Polygon',
-    ks: { a: 0, k: vertices },
-  };
-  items.push(shapePath);
+  // The editor's own polygon/star geometry (incl. rounded corners); animated
+  // radius, inner radius, sides and corner radius are baked
+  const items: LottieShapeItem[] = geometryPaths(
+    node,
+    timeline,
+    ['radius', 'innerRadius', 'sides', 'cornerRadius'],
+    (n) => {
+      const polygon = n as PolygonNode;
+      const sides = Math.max(3, Math.round(polygon.sides));
+      return [
+        {
+          points:
+            polygon.innerRadius !== undefined
+              ? createStarPath(
+                  0,
+                  0,
+                  polygon.radius,
+                  polygon.innerRadius,
+                  sides,
+                  undefined,
+                  polygon.cornerRadius
+                )
+              : createPolygonPath(0, 0, polygon.radius, sides, undefined, polygon.cornerRadius),
+          closed: true,
+        },
+      ];
+    },
+    'Polygon'
+  );
 
   items.push(...strokesToLottie(node.strokes, node.id, timeline)); // stroke on top
   items.push(...fillsToLottie(node.fills, node.id, timeline, undefined, getNodeLocalBounds(node)));
   items.push(createShapeTransform());
 
   return items;
+}
+
+// ============================================================================
+// Geometry (static or baked per frame)
+// ============================================================================
+
+interface Contour {
+  points: PathPoint[];
+  closed: boolean;
+}
+
+/**
+ * One Lottie path per contour of `contoursOf(node)`. When tracks matching
+ * `properties` (exact names, or prefixes ending in '.') animate the geometry,
+ * it is evaluated every frame between their first and last keyframe — exact
+ * for shape tweens whose vertex count changes, which Lottie can't interpolate:
+ * consecutive frames with the same vertex count interpolate linearly, others
+ * hold.
+ */
+function geometryPaths(
+  node: Node,
+  timeline: Timeline,
+  properties: string[],
+  contoursOf: (node: Node) => Contour[],
+  name = 'Path'
+): LottieShapePath[] {
+  const matches = (property: string) =>
+    properties.some((p) => (p.endsWith('.') ? property.startsWith(p) : property === p));
+  const tracks = timeline.tracks.filter(
+    (track) => track.nodeId === node.id && track.keyframes.length > 0 && matches(track.property)
+  );
+  const pathName = (index: number) => (index === 0 ? name : `Subpath ${index}`);
+
+  if (tracks.length === 0) {
+    return contoursOf(node).map((contour, index) => ({
+      ty: 'sh',
+      nm: pathName(index),
+      ks: { a: 0, k: pathPointsToLottieVertices(contour.points, contour.closed, true) },
+    }));
+  }
+
+  const first = Math.floor(Math.min(...tracks.map((track) => track.keyframes[0]!.time)));
+  const last = Math.ceil(
+    Math.max(...tracks.map((track) => track.keyframes[track.keyframes.length - 1]!.time))
+  );
+  const geometry = { ...timeline, tracks };
+  const frames: LottieShapeVertices[][] = [];
+  for (let frame = first; frame <= last; frame++) {
+    const posed = applyAnimatedValues(node, evaluateNodeAtFrame(geometry, node.id, frame));
+    frames.push(
+      contoursOf(posed).map((contour) =>
+        pathPointsToLottieVertices(contour.points, contour.closed, true)
+      )
+    );
+  }
+
+  const contourCount = Math.min(...frames.map((contours) => contours.length));
+  return Array.from({ length: contourCount }, (_, index): LottieShapePath => {
+    const series = frames.map((contours) => contours[index]!);
+    if (series.every((vertices) => JSON.stringify(vertices) === JSON.stringify(series[0]))) {
+      return { ty: 'sh', nm: pathName(index), ks: { a: 0, k: series[0]! } };
+    }
+    const keyframes = series.map((vertices, frameIndex): LottieShapeKeyframe => {
+      const t = first + frameIndex;
+      const next = series[frameIndex + 1];
+      if (!next) return { t, s: [vertices] };
+      if (next.v.length !== vertices.v.length) return { t, s: [vertices], h: 1 };
+      return { t, s: [vertices], e: [next], i: { x: [1], y: [1] }, o: { x: [0], y: [0] } };
+    });
+    return { ty: 'sh', nm: pathName(index), ks: { a: 1, k: keyframes } };
+  });
 }
 
 // ============================================================================
