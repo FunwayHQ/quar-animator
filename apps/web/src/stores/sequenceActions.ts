@@ -47,6 +47,10 @@ export interface SequenceActions {
   animationSequence: AnimationSequence;
   /** Whether the floating Animation Sequence window is shown. */
   sequenceWindowOpen: boolean;
+  /** Step the window should scroll to and highlight (e.g. after clicking its keyframe). */
+  focusedSequenceStepId: string | null;
+  /** Open the sequence window at a step. */
+  revealSequenceStep: (stepId: string) => void;
   setSequenceWindowOpen: (open: boolean) => void;
   toggleSequenceWindow: () => void;
   /** Append one step per node (skipping nodes the preset can't animate); returns the new step ids. */
@@ -173,6 +177,16 @@ export function createSequenceActions(
   return {
     animationSequence: createAnimationSequence(),
     sequenceWindowOpen: false,
+    focusedSequenceStepId: null,
+    revealSequenceStep: (stepId) => {
+      const step = get().animationSequence.steps.find((candidate) => candidate.id === stepId);
+      if (!step) return;
+      set({
+        sequenceWindowOpen: true,
+        focusedSequenceStepId: stepId,
+        selectedNodeIds: new Set([step.nodeId]),
+      });
+    },
     setSequenceWindowOpen: (open) => set({ sequenceWindowOpen: open }),
     toggleSequenceWindow: () => set({ sequenceWindowOpen: !get().sequenceWindowOpen }),
 

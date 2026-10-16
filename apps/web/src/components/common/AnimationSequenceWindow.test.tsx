@@ -210,6 +210,24 @@ describe('AnimationSequenceWindow', () => {
     ]);
   });
 
+  it('scrolls to and flashes a step revealed from its keyframe', () => {
+    const sg = renderWindow();
+    addSteps(sg);
+    const scrolled: Element[] = [];
+    const original = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = function (this: Element) {
+      scrolled.push(this);
+    };
+
+    const third = store().animationSequence.steps[2]!.id;
+    act(() => store().revealSequenceStep(third));
+    expect(stepRow(3).className).toMatch(/focused/);
+    expect(scrolled).toEqual([stepRow(3)]);
+    // The request is consumed so revealing the same step again works
+    expect(store().focusedSequenceStepId).toBeNull();
+    Element.prototype.scrollIntoView = original;
+  });
+
   it('closes with the close button or Escape', () => {
     renderWindow();
     fireEvent.click(screen.getByRole('button', { name: 'Close Animation Sequence' }));

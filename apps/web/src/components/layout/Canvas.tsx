@@ -35,6 +35,7 @@ import { CanvasRuler } from '../canvas/CanvasRuler';
 import { TextEditOverlay } from '../canvas/TextEditOverlay';
 import { BoneOverlay } from '../canvas/BoneOverlay';
 import { ArtboardOverlay } from '../canvas/ArtboardOverlay';
+import { SequenceBadgesOverlay } from '../canvas/SequenceBadgesOverlay';
 import { GuideOverlay } from '../canvas/GuideOverlay';
 import { SmartGuidesOverlay } from '../canvas/SmartGuidesOverlay';
 import { WeightPaintOverlay } from '../canvas/WeightPaintOverlay';
@@ -118,6 +119,10 @@ export function Canvas({
 
   // Get selection state from store
   const selectedNodeIds = useEditorStore((state) => state.selectedNodeIds);
+  const showSequenceBadges = useEditorStore(
+    (state) => state.sequenceWindowOpen && state.editingSymbolId === null
+  );
+  const sequenceSteps = useEditorStore((state) => state.animationSequence.steps);
   const clipboard = useEditorStore((state) => state.clipboard);
   const copySelection = useEditorStore((state) => state.copySelection);
   const pasteClipboard = useEditorStore((state) => state.pasteClipboard);
@@ -2469,6 +2474,17 @@ export function Canvas({
           camera={cameraRef.current}
           sceneGraph={sceneGraph}
           cameraVersion={cameraVersion}
+        />
+      )}
+      {showSequenceBadges && (
+        <SequenceBadgesOverlay
+          steps={sequenceSteps}
+          camera={cameraRef.current}
+          getNodeBounds={(nodeId) =>
+            selectionManagerRef.current.getSelectionBoundsForDisplay(new Set([nodeId]), sceneGraph)
+              ?.bounds.rect ?? null
+          }
+          onBadgeClick={(stepId) => useEditorStore.getState().revealSequenceStep(stepId)}
         />
       )}
       {(activeTool === 'bone' ||

@@ -81,6 +81,27 @@ export interface SceneGraphLike {
 
 const MAX_UNDO_STACK_SIZE = 50;
 
+// Keyframes an Animation Sequence step owns are regenerated on every sequence
+// edit, so direct edits to them are refused (they would silently revert).
+function trackKeyframes(timeline: Timeline, nodeId: string, property: string): Keyframe[] {
+  return (
+    timeline.tracks.find((track) => track.nodeId === nodeId && track.property === property)
+      ?.keyframes ?? []
+  );
+}
+
+function isManagedAt(timeline: Timeline, nodeId: string, property: string, time: number) {
+  return trackKeyframes(timeline, nodeId, property).some(
+    (kf) => kf.time === time && kf.sequenceStepId !== undefined
+  );
+}
+
+function isManagedId(timeline: Timeline, nodeId: string, property: string, keyframeId: string) {
+  return trackKeyframes(timeline, nodeId, property).some(
+    (kf) => kf.id === keyframeId && kf.sequenceStepId !== undefined
+  );
+}
+
 interface HistorySnapshot {
   sceneData: { nodes: Node[]; rootNodeIds: string[] };
   selectedNodeIds: string[];
@@ -2124,6 +2145,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     })),
   updateKeyframeValue: (nodeId: string, property: string, time: number, newValue: number) => {
     const { timeline } = get();
+    if (isManagedAt(timeline, nodeId, property, time)) return;
     const track = timeline.tracks.find((t) => t.nodeId === nodeId && t.property === property);
     if (!track) return;
     const kfIndex = track.keyframes.findIndex((kf) => kf.time === time);
@@ -2143,11 +2165,17 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     newValue: number
   ) => {
     const { timeline } = get();
+    const roundedTime = Math.max(0, Math.round(newTime));
+    if (
+      isManagedAt(timeline, nodeId, property, oldTime) ||
+      isManagedAt(timeline, nodeId, property, roundedTime)
+    ) {
+      return;
+    }
     const track = timeline.tracks.find((t) => t.nodeId === nodeId && t.property === property);
     if (!track) return;
     const kfIndex = track.keyframes.findIndex((kf) => kf.time === oldTime);
     if (kfIndex === -1) return;
-    const roundedTime = Math.max(0, Math.round(newTime));
     const newKeyframes = [...track.keyframes];
     newKeyframes[kfIndex] = { ...newKeyframes[kfIndex]!, time: roundedTime, value: newValue };
     // Sort by time after moving
@@ -2163,6 +2191,13 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     if (!track) return;
     if (!track.keyframes.some((kf) => kf.id === keyframeId)) return;
     const roundedTime = Math.max(0, Math.round(newTime));
+    // Neither move a sequence keyframe nor drop one sitting on the destination
+    if (
+      isManagedId(timeline, nodeId, property, keyframeId) ||
+      isManagedAt(timeline, nodeId, property, roundedTime)
+    ) {
+      return;
+    }
     // Drop any DIFFERENT keyframe already sitting on the destination frame so the
     // moved keyframe replaces it — keeps the sorted-unique invariant instead of
     // silently stacking two keyframes on one frame (F020).
@@ -2190,6 +2225,9 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     if (kfIndex === -1) return;
 
     const kf = track.keyframes[kfIndex]!;
+    // Tangents also set the next keyframe's easing
+    const nextKf = track.keyframes[kfIndex + 1];
+    if (kf.sequenceStepId !== undefined || nextKf?.sequenceStepId !== undefined) return;
     const newKeyframes = [...track.keyframes];
     const updated: Keyframe = {
       ...kf,
@@ -2245,6 +2283,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     easing: EasingFunction = 'linear'
   ) => {
     const { timeline } = get();
+    if (isManagedAt(timeline, nodeId, property, frame)) return;
     const mgr = new KeyframeManager(timeline);
     // Use setKeyframeAtFrame to preserve existing easing when updating a keyframe
     // (e.g., auto-keyframe mode adjusting a value at a frame that already has custom easing)
@@ -2264,7 +2303,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     const toRemove: Array<{ nodeId: string; property: string; keyframeId: string }> = [];
     for (const kfId of selectedKeyframeIds) {
       const info = keyframeMap.get(kfId);
-      if (info) {
+      if (info && !isManagedId(timeline, info.nodeId, info.property, kfId)) {
         toRemove.push({ nodeId: info.nodeId, property: info.property, keyframeId: kfId });
       }
     }
@@ -2306,6 +2345,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     easing: EasingFunction
   ) => {
     const { timeline } = get();
+    if (isManagedId(timeline, nodeId, property, keyframeId)) return;
     const mgr = new KeyframeManager(timeline);
     mgr.setKeyframeEasing(nodeId, property, keyframeId, easing);
     set({ timeline: { ...timeline }, isDirty: true });
@@ -2345,10 +2385,13 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     const entries: Array<{ nodeId: string; property: string; keyframeId: string }> = [];
     for (const kfId of selectedKeyframeIds) {
       const info = keyframeMap.get(kfId);
-      if (info) {
-        entries.push({ nodeId: info.nodeId, property: info.property, keyframeId: kfId });
-      }
+      if (!info || isManagedId(timeline, info.nodeId, info.property, kfId)) continue;
+      // A move must not land on (and replace) a sequence keyframe
+      const kf = trackKeyframes(timeline, info.nodeId, info.property).find((k) => k.id === kfId);
+      if (kf && isManagedAt(timeline, info.nodeId, info.property, kf.time + deltaFrames)) return;
+      entries.push({ nodeId: info.nodeId, property: info.property, keyframeId: kfId });
     }
+    if (entries.length === 0) return;
     mgr.moveKeyframes(entries, deltaFrames);
     set({ timeline: { ...timeline }, isDirty: true });
   },
@@ -2356,7 +2399,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     const { timeline } = get();
     const mgr = new KeyframeManager(timeline);
     const kf = mgr.getKeyframeAt(nodeId, property, frame);
-    if (!kf) return;
+    if (!kf || kf.sequenceStepId !== undefined) return;
     mgr.removeKeyframe(nodeId, property, kf.id);
     set({ timeline: { ...timeline }, isDirty: true });
   },

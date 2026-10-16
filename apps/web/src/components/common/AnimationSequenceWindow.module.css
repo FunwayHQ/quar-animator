@@ -108,6 +108,16 @@
   content: '';
 }
 
+.step.focused {
+  animation: step-flash 1.2s ease-out;
+}
+
+@keyframes step-flash {
+  from {
+    background: var(--color-accent-primary-glow);
+  }
+}
+
 .step.dropTarget {
   box-shadow: inset 0 2px 0 var(--color-accent-primary);
 }

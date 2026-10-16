@@ -67,6 +67,7 @@ export function GraphEditor() {
   const setGraphViewTransform = useEditorStore((s) => s.setGraphViewTransform);
   const toggleGraphTrackVisibility = useEditorStore((s) => s.toggleGraphTrackVisibility);
   const selectKeyframe = useEditorStore((s) => s.selectKeyframe);
+  const revealSequenceStep = useEditorStore((s) => s.revealSequenceStep);
   const addKeyframeToSelection = useEditorStore((s) => s.addKeyframeToSelection);
   const clearKeyframeSelection = useEditorStore((s) => s.clearKeyframeSelection);
   const setSelectedKeyframeIds = useEditorStore((s) => s.setSelectedKeyframeIds);
@@ -182,9 +183,11 @@ export function GraphEditor() {
 
         // Check for keyframe hit
         const allKeyframes: Array<{ id: string; time: number; value: number }> = [];
+        const managedSteps = new Map<string, string>();
         for (const { track } of visibleTrackData) {
           for (const kf of track.keyframes) {
             allKeyframes.push({ id: kf.id, time: kf.time, value: kf.value });
+            if (kf.sequenceStepId !== undefined) managedSteps.set(kf.id, kf.sequenceStepId);
           }
         }
 
@@ -193,6 +196,11 @@ export function GraphEditor() {
           allKeyframes,
           graphViewTransform
         );
+        const hitStep = hit ? managedSteps.get(hit.id) : undefined;
+        if (hitStep !== undefined) {
+          revealSequenceStep(hitStep);
+          return;
+        }
         if (hit) {
           if (e.shiftKey) {
             addKeyframeToSelection(hit.id);
@@ -230,6 +238,7 @@ export function GraphEditor() {
       addKeyframeToSelection,
       clearKeyframeSelection,
       setCurrentFrame,
+      revealSequenceStep,
     ]
   );
 
@@ -643,6 +652,7 @@ export function GraphEditor() {
               transform={graphViewTransform}
               selectedKeyframeIds={selectedKeyframeIds}
               onKeyframeMouseDown={handleKeyframeMouseDown}
+              onManagedKeyframeMouseDown={revealSequenceStep}
               onTangentMouseDown={handleTangentMouseDown}
             />
             {/* Marquee selection overlay */}

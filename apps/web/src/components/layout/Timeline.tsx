@@ -99,6 +99,12 @@ export function Timeline({ playback }: TimelineProps = {}) {
   const toggleTimelineViewMode = useEditorStore((s) => s.toggleTimelineViewMode);
   const sequenceWindowOpen = useEditorStore((s) => s.sequenceWindowOpen);
   const toggleSequenceWindow = useEditorStore((s) => s.toggleSequenceWindow);
+  const sequenceSteps = useEditorStore((s) => s.animationSequence.steps);
+  const revealSequenceStep = useEditorStore((s) => s.revealSequenceStep);
+  const stepNumbers = useMemo(
+    () => new Map(sequenceSteps.map((step, index) => [step.id, index + 1])),
+    [sequenceSteps]
+  );
 
   const workAreaEnabled = useEditorStore((s) => s.workAreaEnabled);
   const workAreaStart = useEditorStore((s) => s.workAreaStart);
@@ -360,16 +366,27 @@ export function Timeline({ playback }: TimelineProps = {}) {
 
   // Build per-node keyframe data for rendering
   const nodeKeyframes = useMemo(() => {
-    const result = new Map<
-      string,
-      Array<{ id: string; time: number; property: string; nodeId: string }>
-    >();
+    type RowKeyframe = {
+      id: string;
+      time: number;
+      property: string;
+      nodeId: string;
+      /** Set when an Animation Sequence step owns the keyframe. */
+      stepId?: string;
+    };
+    const result = new Map<string, RowKeyframe[]>();
     for (const node of nodes) {
       const tracks = getTracksByNode(timeline, node.id);
-      const kfs: Array<{ id: string; time: number; property: string; nodeId: string }> = [];
+      const kfs: RowKeyframe[] = [];
       for (const track of tracks) {
         for (const kf of track.keyframes) {
-          kfs.push({ id: kf.id, time: kf.time, property: track.property, nodeId: node.id });
+          kfs.push({
+            id: kf.id,
+            time: kf.time,
+            property: track.property,
+            nodeId: node.id,
+            stepId: kf.sequenceStepId,
+          });
         }
       }
       if (kfs.length > 0) {
@@ -1454,23 +1471,46 @@ export function Timeline({ playback }: TimelineProps = {}) {
                         />
                       ))}
                       {kfs &&
-                        kfs.map((kf) => (
-                          /* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- keyframe diamonds, keyboard handled at track level */
-                          <div
-                            key={kf.id}
-                            className={`${styles.keyframe} ${selectedKeyframeIds.has(kf.id) ? styles.selected : ''}`}
-                            style={{ left: `${(kf.time / duration) * 100}%` }}
-                            onClick={(e) => handleKeyframeClick(e, kf.id)}
-                            onContextMenu={(e) =>
-                              handleKeyframeContextMenu(e, kf.id, kf.nodeId, kf.property)
-                            }
-                            onPointerDown={(e) => handleKeyframePointerDown(e, kf.id)}
-                            onPointerMove={handleKeyframePointerMove}
-                            onPointerUp={handleKeyframePointerUp}
-                            data-testid={`keyframe-${kf.id}`}
-                            title={`${kf.property} @ frame ${kf.time}`}
-                          />
-                        ))}
+                        kfs.map((kf) =>
+                          kf.stepId !== undefined ? (
+                            // Owned by an Animation Sequence step: not editable here —
+                            // clicking opens the step in the sequence window
+                            <button
+                              type="button"
+                              key={kf.id}
+                              className={`${styles.keyframe} ${styles.managedKeyframe}`}
+                              style={{ left: `${(kf.time / duration) * 100}%` }}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                revealSequenceStep(kf.stepId!);
+                              }}
+                              onContextMenu={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                revealSequenceStep(kf.stepId!);
+                              }}
+                              data-testid={`keyframe-${kf.id}`}
+                              title={`${kf.property} @ frame ${kf.time} — Animation Sequence step #${stepNumbers.get(kf.stepId) ?? '?'} (click to edit)`}
+                              aria-label={`Sequence keyframe of step ${stepNumbers.get(kf.stepId) ?? '?'}, ${kf.property} at frame ${kf.time}`}
+                            />
+                          ) : (
+                            /* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- keyframe diamonds, keyboard handled at track level */
+                            <div
+                              key={kf.id}
+                              className={`${styles.keyframe} ${selectedKeyframeIds.has(kf.id) ? styles.selected : ''}`}
+                              style={{ left: `${(kf.time / duration) * 100}%` }}
+                              onClick={(e) => handleKeyframeClick(e, kf.id)}
+                              onContextMenu={(e) =>
+                                handleKeyframeContextMenu(e, kf.id, kf.nodeId, kf.property)
+                              }
+                              onPointerDown={(e) => handleKeyframePointerDown(e, kf.id)}
+                              onPointerMove={handleKeyframePointerMove}
+                              onPointerUp={handleKeyframePointerUp}
+                              data-testid={`keyframe-${kf.id}`}
+                              title={`${kf.property} @ frame ${kf.time}`}
+                            />
+                          )
+                        )}
                     </div>
                   );
                 })}

@@ -150,6 +150,52 @@ describe('Timeline', () => {
     expect(screen.getByTestId(`keyframe-${keyframe.id}`)).toBeInTheDocument();
   });
 
+  it('shows sequence keyframes as read-only and opens their step when clicked', () => {
+    let graph: SceneGraph | undefined;
+    function CaptureGraph() {
+      graph = useSceneGraph();
+      return null;
+    }
+    render(
+      <SceneGraphProvider>
+        <CaptureGraph />
+        <Timeline />
+      </SceneGraphProvider>
+    );
+    act(() => {
+      graph!.addNode({
+        id: 'box',
+        name: 'Box',
+        type: 'rectangle',
+        children: [],
+        transform: {
+          position: { x: 0, y: 0 },
+          rotation: 0,
+          scale: { x: 1, y: 1 },
+          anchor: { x: 0.5, y: 0.5 },
+          skew: { x: 0, y: 0 },
+        },
+        opacity: 1,
+        visible: true,
+      } as unknown as Node);
+      useEditorStore.getState().resetProject();
+      useEditorStore.getState().addSequenceSteps(graph!, ['box'], 'fade-in', { duration: 30 });
+      useEditorStore.setState({ sequenceWindowOpen: false });
+    });
+
+    const [stepId] = useEditorStore.getState().animationSequence.steps.map((step) => step.id);
+    const diamond = screen.getByTestId(`keyframe-seq_${stepId}_opacity_30`);
+    expect(diamond.tagName).toBe('BUTTON');
+    expect(diamond.className).toMatch(/managedKeyframe/);
+    expect(diamond).toHaveAttribute('title', expect.stringContaining('Animation Sequence step #1'));
+
+    fireEvent.click(diamond);
+    expect(useEditorStore.getState().sequenceWindowOpen).toBe(true);
+    expect(useEditorStore.getState().focusedSequenceStepId).toBe(stepId);
+    expect(useEditorStore.getState().selectedKeyframeIds.size).toBe(0);
+    useEditorStore.setState({ sequenceWindowOpen: false, focusedSequenceStepId: null });
+  });
+
   it('toggles the Animation Sequence window from the toolbar', () => {
     useEditorStore.setState({ sequenceWindowOpen: false });
     renderTimeline();

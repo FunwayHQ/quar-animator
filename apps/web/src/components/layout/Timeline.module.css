@@ -441,6 +441,19 @@
     inset 0 1px 0 rgba(255, 255, 255, 0.3);
 }
 
+/* Keyframes owned by an Animation Sequence step: outlined, edited in the sequence window */
+.keyframe.managedKeyframe {
+  padding: 0;
+  background: var(--color-bg-elevated);
+  border: 2px solid var(--color-timeline-keyframe);
+  box-shadow: none;
+}
+
+.keyframe.managedKeyframe:hover {
+  background: var(--color-timeline-keyframe-glow);
+  border-color: var(--color-timeline-keyframe-selected);
+}
+
 .keyframe.selected {
   background: var(--color-timeline-keyframe-selected);
   box-shadow:

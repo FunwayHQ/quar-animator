@@ -125,6 +125,85 @@ describe('Animation Sequence actions', () => {
     expect(sg.getNode('a')!.transform.position.x).toBe(75);
   });
 
+  describe('sequence keyframes are read-only outside the sequence', () => {
+    const opacityKeyframes = () =>
+      store()
+        .timeline.tracks.find((track) => track.nodeId === 'a' && track.property === 'opacity')!
+        .keyframes.map(({ time, value, easing, sequenceStepId }) => ({
+          time,
+          value,
+          easing,
+          managed: sequenceStepId !== undefined,
+        }));
+    const keyframeMap = () => {
+      const map = new Map<string, { nodeId: string; property: string }>();
+      for (const track of store().timeline.tracks) {
+        for (const kf of track.keyframes)
+          map.set(kf.id, { nodeId: track.nodeId, property: track.property });
+      }
+      return map;
+    };
+    const managedId = () =>
+      store().timeline.tracks.find((track) => track.property === 'opacity')!.keyframes[1]!.id;
+
+    beforeEach(() => {
+      store().addSequenceSteps(sg, ['a'], 'fade-in', { duration: 24 });
+    });
+
+    it('refuses value, easing, tangent and removal edits', () => {
+      const before = opacityKeyframes();
+      store().updateKeyframeValue('a', 'opacity', 24, 0.2);
+      store().addKeyframeAtFrame('a', 'opacity', 24, 0.3);
+      store().setKeyframeEasing('a', 'opacity', managedId(), 'easeInQuad');
+      store().setKeyframeTangents('a', 'opacity', 0, { x: 1, y: 0 }, { x: 1, y: 0 }, 'free');
+      store().removeKeyframeAtFrame('a', 'opacity', 0);
+      store().updateKeyframeTimeAndValueById('a', 'opacity', managedId(), 40, 0.5);
+      store().updateKeyframeTimeAndValue('a', 'opacity', 24, 40, 0.5);
+      expect(opacityKeyframes()).toEqual(before);
+    });
+
+    it('moves and deletes only the user’s own keyframes', () => {
+      store().addKeyframeAtFrame('a', 'opacity', 60, 0.5);
+      const ownId = store()
+        .timeline.tracks.find((track) => track.property === 'opacity')!
+        .keyframes.find((kf) => kf.time === 60)!.id;
+      store().setSelectedKeyframeIds([managedId(), ownId]);
+
+      store().moveSelectedKeyframes(keyframeMap(), 6);
+      expect(opacityKeyframes().map((kf) => kf.time)).toEqual([0, 24, 66]);
+
+      store().setSelectedKeyframeIds([managedId(), ownId]);
+      store().removeSelectedKeyframes(keyframeMap());
+      expect(opacityKeyframes().map((kf) => [kf.time, kf.managed])).toEqual([
+        [0, true],
+        [24, true],
+      ]);
+    });
+
+    it('won’t move a keyframe onto a sequence keyframe', () => {
+      store().addKeyframeAtFrame('a', 'opacity', 30, 0.5);
+      const ownId = store()
+        .timeline.tracks.find((track) => track.property === 'opacity')!
+        .keyframes.find((kf) => kf.time === 30)!.id;
+      store().setSelectedKeyframeIds([ownId]);
+      store().moveSelectedKeyframes(keyframeMap(), -6);
+      store().updateKeyframeTimeAndValueById('a', 'opacity', ownId, 0, 0.5);
+      expect(opacityKeyframes().map((kf) => kf.time)).toEqual([0, 24, 30]);
+    });
+  });
+
+  it('reveals a step: opens the window, focuses the step and selects its object', () => {
+    const [, second] = [
+      ...store().addSequenceSteps(sg, ['a'], 'fade-in', { duration: 24 }),
+      ...store().addSequenceSteps(sg, ['b'], 'fade-in', { duration: 24 }),
+    ];
+    store().revealSequenceStep(second!);
+    expect(store().sequenceWindowOpen).toBe(true);
+    expect(store().focusedSequenceStepId).toBe(second);
+    expect([...store().selectedNodeIds]).toEqual(['b']);
+    useEditorStore.setState({ sequenceWindowOpen: false, focusedSequenceStepId: null });
+  });
+
   it('opens and closes the sequence window', () => {
     expect(store().sequenceWindowOpen).toBe(false);
     store().toggleSequenceWindow();

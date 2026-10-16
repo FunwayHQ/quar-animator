@@ -158,6 +158,7 @@ interface StepRowProps {
   frameRate: number;
   isActive: boolean;
   isSelected: boolean;
+  isFocused: boolean;
   isDropTarget: boolean;
   onSelect: () => void;
   onUpdate: (patch: SequenceStepPatch) => void;
@@ -178,6 +179,7 @@ function StepRow({
   frameRate,
   isActive,
   isSelected,
+  isFocused,
   isDropTarget,
   onSelect,
   onUpdate,
@@ -204,8 +206,10 @@ function StepRow({
         styles.step,
         isActive ? styles.active : '',
         isSelected ? styles.selected : '',
+        isFocused ? styles.focused : '',
         isDropTarget ? styles.dropTarget : '',
       ].join(' ')}
+      data-step-id={step.id}
       onKeyDown={handleKeyDown}
       onDragOver={onDragOver}
       onDrop={onDrop}
@@ -330,6 +334,24 @@ export function AnimationSequenceWindow() {
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [dropIndex, setDropIndex] = useState<number | null>(null);
   const [presetToAdd, setPresetToAdd] = useState<AnimationPresetId>('fade-in');
+
+  // Scroll to and flash a step revealed from elsewhere (e.g. its keyframe was clicked)
+  const focusRequest = useEditorStore((s) => s.focusedSequenceStepId);
+  const [flashStepId, setFlashStepId] = useState<string | null>(null);
+  const listRef = useRef<HTMLOListElement>(null);
+  const flashTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  useEffect(() => {
+    if (!focusRequest) return;
+    useEditorStore.setState({ focusedSequenceStepId: null });
+    setFlashStepId(focusRequest);
+    const row = [...(listRef.current?.children ?? [])].find(
+      (el) => (el as HTMLElement).dataset.stepId === focusRequest
+    );
+    row?.scrollIntoView?.({ block: 'nearest' });
+    clearTimeout(flashTimerRef.current);
+    flashTimerRef.current = setTimeout(() => setFlashStepId(null), 1200);
+  }, [focusRequest]);
+  useEffect(() => () => clearTimeout(flashTimerRef.current), []);
 
   // Re-render when sequenced objects are renamed, added or removed — not on
   // every animated property change during playback.
@@ -498,7 +520,7 @@ export function AnimationSequenceWindow() {
             open, the effect buttons in Properties → Animation add steps too.
           </p>
         ) : (
-          <ol className={styles.steps} aria-label="Sequence steps">
+          <ol className={styles.steps} aria-label="Sequence steps" ref={listRef}>
             {sequence.steps.map((step, index) => {
               const entry = schedule[index]!;
               return (
@@ -512,6 +534,7 @@ export function AnimationSequenceWindow() {
                   frameRate={frameRate}
                   isActive={currentFrame >= entry.start && currentFrame < entry.end}
                   isSelected={selectedNodeIds.has(step.nodeId)}
+                  isFocused={flashStepId === step.id}
                   isDropTarget={dropIndex === index && dragIndex !== index}
                   onSelect={() => selectStep(step, entry)}
                   onUpdate={(patch) => updateStep(step.id, patch)}

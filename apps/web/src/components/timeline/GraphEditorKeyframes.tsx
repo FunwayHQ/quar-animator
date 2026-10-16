@@ -29,6 +29,8 @@ interface GraphEditorKeyframesProps {
     time: number,
     value: number
   ) => void;
+  /** Keyframes owned by an Animation Sequence step aren't draggable; this reveals the step. */
+  onManagedKeyframeMouseDown?: (stepId: string) => void;
 }
 
 export function GraphEditorKeyframes({
@@ -37,6 +39,7 @@ export function GraphEditorKeyframes({
   selectedKeyframeIds,
   onKeyframeMouseDown,
   onTangentMouseDown,
+  onManagedKeyframeMouseDown,
 }: GraphEditorKeyframesProps) {
   const elements: JSX.Element[] = [];
 
@@ -48,6 +51,29 @@ export function GraphEditorKeyframes({
       const kf = kfs[i] as Keyframe<number>;
       const pos = graphToScreen(kf.time, kf.value, transform);
       const isSelected = selectedKeyframeIds.has(kf.id);
+      const stepId = kf.sequenceStepId;
+
+      if (stepId !== undefined) {
+        // Sequence keyframe: hollow, no tangent handles, opens its step on click
+        elements.push(
+          <circle
+            key={`kf-${kf.id}`}
+            cx={pos.x}
+            cy={pos.y}
+            r={4}
+            stroke={color}
+            className={`${styles.keyframeDot} ${styles.keyframeDotManaged}`}
+            data-testid={`graph-managed-keyframe-${kf.id}`}
+            onMouseDown={(e) => {
+              e.stopPropagation();
+              onManagedKeyframeMouseDown?.(stepId);
+            }}
+          >
+            <title>Animation Sequence keyframe — click to edit its step</title>
+          </circle>
+        );
+        continue;
+      }
 
       // Tangent handles for selected keyframes with editable easing
       if (isSelected) {

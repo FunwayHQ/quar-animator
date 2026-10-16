@@ -89,4 +89,29 @@ describe('GraphEditorKeyframes', () => {
     expect(container.querySelectorAll('circle[class*="tangentHandle"]')).toHaveLength(0);
     expect(container.querySelectorAll('circle[class*="keyframeDot"]')).toHaveLength(2);
   });
+
+  it('draws sequence keyframes hollow, without tangents, and reveals their step on press', () => {
+    const track = makeTrack();
+    track.keyframes[1].sequenceStepId = 'step-7';
+    const onKeyframeMouseDown = vi.fn();
+    const onManagedKeyframeMouseDown = vi.fn();
+    const { container, getByTestId } = render(
+      <GraphEditorKeyframes
+        tracks={[{ track, globalIndex: 0 }]}
+        transform={transform}
+        selectedKeyframeIds={new Set(['kf-2'])}
+        onKeyframeMouseDown={onKeyframeMouseDown}
+        onTangentMouseDown={vi.fn()}
+        onManagedKeyframeMouseDown={onManagedKeyframeMouseDown}
+      />
+    );
+
+    const managed = getByTestId('graph-managed-keyframe-kf-2');
+    expect(managed.getAttribute('class')).toMatch(/keyframeDotManaged/);
+    expect(container.querySelectorAll('circle[class*="tangentHandle"]')).toHaveLength(0);
+
+    fireEvent.mouseDown(managed);
+    expect(onManagedKeyframeMouseDown).toHaveBeenCalledWith('step-7');
+    expect(onKeyframeMouseDown).not.toHaveBeenCalled();
+  });
 });

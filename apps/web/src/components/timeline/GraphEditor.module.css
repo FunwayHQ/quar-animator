@@ -156,6 +156,12 @@
   r: 6;
 }
 
+/* Owned by an Animation Sequence step: hollow, edited in the sequence window */
+.keyframeDotManaged {
+  fill: var(--color-bg-elevated);
+  stroke-width: 2;
+}
+
 .keyframeDotSelected {
   stroke: white;
   stroke-width: 2;
