@@ -13,6 +13,7 @@ declare module 'gifenc' {
         transparent?: boolean;
         transparentIndex?: number;
         dispose?: number;
+        colorDepth?: number;
       }
     ): void;
     finish(): void;

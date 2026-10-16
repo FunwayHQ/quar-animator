@@ -71,7 +71,12 @@ export {
 
 export { exportPngSequence, type PngSequenceOptions } from './pngSequence';
 
-export { exportGif, type GifExportOptions } from './gifExporter';
+export {
+  exportGif,
+  gifCompressionSettings,
+  type GifCompressionSettings,
+  type GifExportOptions,
+} from './gifExporter';
 
 export { exportMp4, type Mp4ExportOptions } from './mp4Exporter';
 

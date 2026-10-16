@@ -178,6 +178,23 @@
   background-position: right 8px center;
 }
 
+.range {
+  flex: 1;
+  min-width: 0;
+  min-height: 22px;
+  margin: 0;
+  accent-color: var(--color-accent-primary, #a855f7);
+  cursor: pointer;
+}
+
+.rangeValue {
+  flex: 0 0 36px;
+  text-align: right;
+  color: var(--color-text-secondary, #a1a1aa);
+  font-family: var(--font-family-mono, 'IBM Plex Mono', monospace);
+  font-size: var(--font-size-sm, 11px);
+}
+
 .dimSeparator {
   color: var(--color-text-disabled, #3f3f46);
   font-size: var(--font-size-sm, 11px);

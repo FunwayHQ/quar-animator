@@ -31,6 +31,10 @@ vi.mock('@quar/export', () => ({
   exportLottieBlob: vi.fn().mockReturnValue(new Blob(['{}'], { type: 'application/json' })),
   exportGif: vi.fn().mockResolvedValue(new Blob(['gif'], { type: 'image/gif' })),
   exportMp4: vi.fn().mockResolvedValue(new Blob(['mp4'], { type: 'video/mp4' })),
+  gifCompressionSettings: (compression: number) => ({
+    colors: Math.max(16, Math.round(256 * 2 ** (-compression / 25))),
+    tolerance: (compression / 100) * 24,
+  }),
   analyzeLottieExport: vi.fn().mockReturnValue({
     supportedCount: 2,
     unsupportedCount: 1,
@@ -183,6 +187,24 @@ describe('ExportDialog', () => {
     render(<ExportDialogHost />);
     act(() => showExportDialog('gif'));
     expect(screen.getByTestId('export-gif-transparent')).toBeInTheDocument();
+  });
+
+  it('passes the chosen GIF compression to the exporter', async () => {
+    render(<ExportDialogHost />);
+    act(() => showExportDialog('gif'));
+    expect(screen.getByTestId('export-gif-compression-note')).toHaveTextContent(
+      /256 colors, lossless/
+    );
+
+    fireEvent.change(screen.getByTestId('export-gif-compression'), { target: { value: '50' } });
+    expect(screen.getByText('50%')).toBeInTheDocument();
+    expect(screen.getByTestId('export-gif-compression-note')).toHaveTextContent(
+      /64 colors; subtle color changes/
+    );
+
+    fireEvent.click(screen.getByTestId('export-dialog-export'));
+    await waitFor(() => expect(exportGif).toHaveBeenCalledOnce());
+    expect(vi.mocked(exportGif).mock.calls[0]![1]).toMatchObject({ compression: 50 });
   });
 
   it('shows MP4 encoder requirements on MP4 tab', () => {

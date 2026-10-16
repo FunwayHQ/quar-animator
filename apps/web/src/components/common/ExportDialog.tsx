@@ -19,7 +19,7 @@ import type { SceneGraph } from '@quar/core';
 import type { ArtboardNode, Node, RectangleNode, Timeline } from '@quar/types';
 import { useSceneGraph } from '../../contexts/SceneGraphContext';
 import { useEditorStore } from '../../stores/editorStore';
-import { exportLottieBlob, analyzeLottieExport } from '@quar/export';
+import { exportLottieBlob, analyzeLottieExport, gifCompressionSettings } from '@quar/export';
 import type { ExportProgress } from '@quar/export';
 import { downloadBlob } from '../../services/exportService';
 import styles from './ExportDialog.module.css';
@@ -43,6 +43,8 @@ interface ExportDialogState {
   pngPattern: string;
   // GIF
   gifTransparent: boolean;
+  /** 0 (best quality) … 100 (smallest file) */
+  gifCompression: number;
   // Sprite Sheet
   spriteLayout: 'grid' | 'packed';
   spriteColumns: number;
@@ -79,6 +81,14 @@ function getSelectedArtboardScope(sceneGraph: SceneGraph, selectedIds: Set<strin
   return bounds ? { node, bounds } : null;
 }
 
+/** What a GIF compression level trades away, in words. */
+function describeGifCompression(compression: number): string {
+  const { colors } = gifCompressionSettings(compression);
+  return compression === 0
+    ? `${colors} colors, lossless between frames. Only changed pixels are stored.`
+    : `${colors} colors; subtle color changes between frames are skipped. Smaller file, lower quality.`;
+}
+
 function getLottieExportScene(
   sceneGraph: SceneGraph,
   timeline: Timeline,
@@ -112,6 +122,7 @@ function getLottieExportScene(
       },
     ];
   });
+
   // The artboard's own fill, as a full-frame background under its children
   const artboard = artboardScope.node;
   const backgroundId = `${artboard.id}:background`;
@@ -194,6 +205,7 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
     pngTransparent: false,
     pngPattern: 'frame_{N}',
     gifTransparent: false,
+    gifCompression: 0,
     spriteLayout: 'grid',
     spriteColumns: 0, // 0 = auto
     spritePadding: 0,
@@ -318,6 +330,7 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
             startFrame: state.startFrame,
             endFrame: state.endFrame,
             transparent: state.gifTransparent,
+            compression: state.gifCompression,
           },
           (progress) => setState((s) => ({ ...s, progress })),
           () => cancelledRef.current
@@ -712,18 +725,42 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
             )}
 
             {state.tab === 'gif' && (
-              <div className={styles.formRow}>
-                <span className={styles.label}>Background</span>
-                <label className={styles.checkbox}>
+              <>
+                <div className={styles.formRow}>
+                  <span className={styles.label}>Background</span>
+                  <label className={styles.checkbox}>
+                    <input
+                      type="checkbox"
+                      checked={state.gifTransparent}
+                      onChange={(e) => update('gifTransparent', e.target.checked)}
+                      data-testid="export-gif-transparent"
+                    />
+                    <span>Transparent</span>
+                  </label>
+                </div>
+                <div className={styles.formRow}>
+                  <label className={styles.label} htmlFor="export-gif-compression">
+                    Compression
+                  </label>
                   <input
-                    type="checkbox"
-                    checked={state.gifTransparent}
-                    onChange={(e) => update('gifTransparent', e.target.checked)}
-                    data-testid="export-gif-transparent"
+                    id="export-gif-compression"
+                    className={styles.range}
+                    type="range"
+                    min={0}
+                    max={100}
+                    step={5}
+                    value={state.gifCompression}
+                    onChange={(e) => update('gifCompression', Number(e.target.value))}
+                    data-testid="export-gif-compression"
                   />
-                  <span>Transparent</span>
-                </label>
-              </div>
+                  <output className={styles.rangeValue} htmlFor="export-gif-compression">
+                    {state.gifCompression}%
+                  </output>
+                </div>
+                <p className={styles.scopeNote} data-testid="export-gif-compression-note">
+                  {describeGifCompression(state.gifCompression)}
+                </p>
+              </>
             )}
 
             {state.tab === 'mp4' && (

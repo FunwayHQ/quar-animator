@@ -12,14 +12,85 @@ export interface GifExportOptions {
   startFrame: number;
   endFrame: number;
   transparent?: boolean;
+  /**
+   * 0 (best quality) … 100 (smallest file). Fewer palette colors, and pixels
+   * whose color barely changed from what's on screen are left as they are.
+   */
+  compression?: number;
+}
+
+export interface GifCompressionSettings {
+  /** Palette size, including the index reserved for unchanged/transparent pixels. */
+  colors: number;
+  /** Largest RGB distance at which a pixel counts as unchanged between frames. */
+  tolerance: number;
+}
+
+/** Palette size halves every 25% (256 → 16); the tolerance grows to 24. */
+export function gifCompressionSettings(compression = 0): GifCompressionSettings {
+  const c = Math.min(100, Math.max(0, Number.isFinite(compression) ? compression : 0));
+  return {
+    colors: Math.max(16, Math.min(256, Math.round(256 * 2 ** (-c / 25)))),
+    tolerance: (c / 100) * 24,
+  };
 }
 
 const MAX_PALETTE_SAMPLE_PIXELS = 250_000;
 
+/** Index meaning "nothing shown here yet" (or cleared to transparent). */
+const NOTHING = -1;
+
+/**
+ * Frame differencing: rewrite `indexed` so every pixel that already shows the
+ * right color (within `tolerance`) becomes the transparent index, which the GIF
+ * player leaves untouched and LZW compresses to almost nothing. `shown` tracks
+ * what the viewer sees and is updated in place.
+ */
+export function diffGifFrame(
+  indexed: Uint8Array,
+  pixels: Uint8Array | Uint8ClampedArray,
+  shown: Int16Array,
+  palette: number[][],
+  transparentIndex: number,
+  tolerance: number
+): Uint8Array {
+  const toleranceSq = tolerance * tolerance;
+  for (let p = 0; p < indexed.length; p++) {
+    const index = indexed[p]!;
+    const current = shown[p]!;
+    if (index === transparentIndex) continue; // Transparent here (only after a clear)
+    if (current !== NOTHING) {
+      let unchanged = current === index;
+      if (!unchanged && toleranceSq > 0) {
+        const color = palette[current]!;
+        const dr = pixels[p * 4]! - color[0]!;
+        const dg = pixels[p * 4 + 1]! - color[1]!;
+        const db = pixels[p * 4 + 2]! - color[2]!;
+        unchanged = dr * dr + dg * dg + db * db <= toleranceSq;
+      }
+      if (unchanged) {
+        indexed[p] = transparentIndex;
+        continue;
+      }
+    }
+    shown[p] = index;
+  }
+  return indexed;
+}
+
+/** Whether a pixel on screen has to turn transparent (only a clear can do that). */
+function needsClear(indexed: Uint8Array, shown: Int16Array, transparentIndex: number): boolean {
+  for (let p = 0; p < indexed.length; p++) {
+    if (indexed[p] === transparentIndex && shown[p] !== NOTHING) return true;
+  }
+  return false;
+}
+
 /**
  * Render frames twice to build one shared color palette for the whole GIF.
  * Sampling a bounded number of pixels keeps memory use predictable for long
- * animations while avoiding frame-to-frame palette flicker.
+ * animations while avoiding frame-to-frame palette flicker. Frames after the
+ * first only draw what changed.
  */
 export async function exportGif(
   ctx: FrameRenderContext,
@@ -31,6 +102,7 @@ export async function exportGif(
   const frameCount = getFrameCount(startFrame, endFrame);
   if (frameCount === 0) throw new Error('Choose a valid frame range to export.');
   if (width < 1 || height < 1) throw new Error('Export width and height must be at least 1 pixel.');
+  const { colors, tolerance } = gifCompressionSettings(options.compression);
 
   const { GIFEncoder, quantize, applyPalette } = await import('gifenc');
   const backgroundColor: Color | null = transparent ? null : { r: 26, g: 26, b: 26, a: 1 };
@@ -83,35 +155,66 @@ export async function exportGif(
 
     if (isCancelled()) return null;
     const paletteFormat = transparent ? 'rgba4444' : 'rgb565';
-    const palette = quantize(
-      colorSamples.subarray(0, sampleOffset),
-      256,
-      transparent ? { format: paletteFormat, oneBitAlpha: 127 } : { format: paletteFormat }
-    );
-    let transparentIndex = -1;
+    let palette: number[][];
+    let transparentIndex: number;
     if (transparent) {
+      palette = quantize(colorSamples.subarray(0, sampleOffset), colors, {
+        format: paletteFormat,
+        oneBitAlpha: 127,
+      });
       transparentIndex = palette.findIndex((color) => (color[3] ?? 255) < 128);
       if (transparentIndex < 0) {
         palette.unshift([0, 0, 0, 0]);
-        if (palette.length > 256) palette.pop();
+        if (palette.length > colors) palette.pop();
         transparentIndex = 0;
       }
+    } else {
+      // One index stays free to mean "unchanged"
+      palette = quantize(colorSamples.subarray(0, sampleOffset), colors - 1, {
+        format: paletteFormat,
+      });
+      transparentIndex = palette.length;
+      palette.push([0, 0, 0]);
     }
+    const colorDepth = Math.max(2, Math.ceil(Math.log2(palette.length)));
 
     const gif = GIFEncoder();
     const delay = Math.max(10, Math.round(1000 / Math.max(1, frameRate) / 10) * 10);
+    const shown = new Int16Array(pixelCount).fill(NOTHING);
+    // A frame's disposal depends on the next one (whether it must clear the
+    // screen), so each frame is written once the next is known
+    let pending: Uint8Array | null = null;
+    let writtenFrames = 0;
+    const writePending = (frame: Uint8Array, dispose: number) => {
+      gif.writeFrame(frame, width, height, {
+        ...(writtenFrames === 0 ? { palette, repeat: 0 } : {}),
+        delay,
+        transparent: true,
+        transparentIndex,
+        dispose,
+        colorDepth,
+      });
+      writtenFrames++;
+    };
+    // Real colors only: nothing may map to the reserved "unchanged" index
+    const colorPalette = transparent ? palette : palette.slice(0, -1);
+
     for (let i = 0; i < frameCount; i++) {
       if (isCancelled()) return null;
       const canvas = renderer.renderFrame(ctx, startFrame + i);
       sampleContext.clearRect(0, 0, width, height);
       sampleContext.drawImage(canvas, 0, 0, width, height);
       const pixels = sampleContext.getImageData(0, 0, width, height).data;
-      const indexed = applyPalette(pixels, palette, paletteFormat);
-      gif.writeFrame(indexed, width, height, {
-        ...(i === 0 ? { palette, repeat: 0 } : {}),
-        delay,
-        ...(transparent ? { transparent: true, transparentIndex, dispose: 2 } : {}),
-      });
+      const indexed = applyPalette(pixels, colorPalette, paletteFormat);
+
+      if (pending) {
+        // 2 = restore to background (clear), 1 = keep for the next frame to draw on
+        const clear = transparent && needsClear(indexed, shown, transparentIndex);
+        writePending(pending, clear ? 2 : 1);
+        if (clear) shown.fill(NOTHING);
+      }
+      pending = diffGifFrame(indexed, pixels, shown, palette, transparentIndex, tolerance);
+
       onProgress?.({
         phase: 'encoding',
         current: i + 1,
@@ -122,6 +225,7 @@ export async function exportGif(
     }
 
     if (isCancelled()) return null;
+    if (pending) writePending(pending, transparent ? 2 : 1);
     gif.finish();
     const bytes = gif.bytes();
     const buffer = bytes.buffer.slice(
