@@ -84,8 +84,7 @@ function EditorInner() {
 
   return (
     <div className={styles.editor}>
-      <MenuBar projectActions={projectActions} />
-      <Toolbar />
+      <MenuBar projectActions={projectActions} toolbar={<Toolbar />} />
       <PageTabs />
       <div className={styles.main}>
         <div className={styles.workspace}>

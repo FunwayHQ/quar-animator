@@ -95,6 +95,25 @@ describe('MenuBar', () => {
     expect(screen.getByTestId('project-name')).toHaveTextContent('My Animation');
   });
 
+  it('renders the toolbar inline between the menus and the project name', () => {
+    render(<MenuBar toolbar={<div data-testid="tools">Tools</div>} />);
+
+    const slot = screen.getByTestId('menubar-toolbar');
+    expect(slot).toContainElement(screen.getByTestId('tools'));
+    expect(slot.closest('header')).not.toBeNull();
+    const menus = screen.getByRole('button', { name: 'File' }).closest('nav')!;
+    const projectName = screen.getByTestId('project-name');
+    expect(menus.compareDocumentPosition(slot) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(
+      slot.compareDocumentPosition(projectName) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+  });
+
+  it('omits the toolbar slot when no toolbar is given', () => {
+    render(<MenuBar />);
+    expect(screen.queryByTestId('menubar-toolbar')).not.toBeInTheDocument();
+  });
+
   it('shows dirty indicator when project has unsaved changes', () => {
     useEditorStore.setState({ isDirty: true });
     render(<MenuBar />);

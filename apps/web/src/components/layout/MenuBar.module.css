@@ -218,6 +218,23 @@
    Project Name Display
    ============================================================================ */
 
+/* Tool palette: centered in the space between the menus and the project name.
+   On windows too narrow for everything it scrolls sideways instead of
+   overlapping the menus. */
+.toolbarSlot {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.toolbarSlot::-webkit-scrollbar {
+  display: none;
+}
+
 .actions {
   margin-left: auto;
   display: flex;

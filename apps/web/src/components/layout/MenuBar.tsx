@@ -3,7 +3,7 @@
  * Application menu bar with full dropdown menus and project name display
  */
 
-import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
+import { useState, useCallback, useEffect, useRef, useMemo, type ReactNode } from 'react';
 import {
   useEditorStore,
   useProjectName,
@@ -26,6 +26,8 @@ import styles from './MenuBar.module.css';
 
 export interface MenuBarProps {
   projectActions?: ProjectActions;
+  /** Tool palette shown inline between the menus and the project name. */
+  toolbar?: ReactNode;
 }
 
 type MenuId = 'file' | 'edit' | 'view' | 'animation' | 'rigging' | 'export' | 'help' | null;
@@ -92,7 +94,7 @@ function SectionHeader({ label }: { label: string }) {
 // Component
 // ============================================================================
 
-export function MenuBar({ projectActions }: MenuBarProps) {
+export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
   const uiTheme = useUiTheme();
   const projectName = useProjectName();
   const isDirty = useIsDirty();
@@ -1114,6 +1116,12 @@ export function MenuBar({ projectActions }: MenuBarProps) {
             )}
           </div>
         </nav>
+
+        {toolbar && (
+          <div className={styles.toolbarSlot} data-testid="menubar-toolbar">
+            {toolbar}
+          </div>
+        )}
 
         <div className={styles.actions}>
           <span className={styles.projectNameDisplay} data-testid="project-name">

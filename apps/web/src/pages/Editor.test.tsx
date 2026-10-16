@@ -55,6 +55,15 @@ describe('Editor Page', () => {
     });
   });
 
+  it('places the toolbar in the menu bar instead of its own row', () => {
+    render(<Editor />);
+
+    const slot = screen.getByTestId('menubar-toolbar');
+    expect(slot).toContainElement(screen.getByTitle('Selection (V)'));
+    expect(slot).toContainElement(screen.getByTitle('Bone (J)'));
+    expect(slot.closest('header')).toContainElement(screen.getByRole('button', { name: 'File' }));
+  });
+
   it('renders properties panel with empty state when nothing selected', () => {
     render(<Editor />);
 
