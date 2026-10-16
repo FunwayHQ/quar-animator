@@ -31,8 +31,9 @@ export interface LottieAsset {
   w?: number;
   h?: number;
   u?: string; // Path
-  p?: string; // Filename
+  p?: string; // Filename, or a data URI when embedded
   e?: 0 | 1; // Embedded
+  layers?: LottieLayer[]; // Precomposition
 }
 
 // ============================================================================
@@ -58,6 +59,9 @@ export interface LottieLayer {
   bm?: number; // Blend mode (0=normal, 1=multiply, etc.)
   shapes?: LottieShapeItem[]; // Shape layer content (ty=4)
   parent?: number; // Parent layer index
+  refId?: string; // Asset id (image and precomp layers)
+  w?: number; // Precomp width
+  h?: number; // Precomp height
   td?: number; // 1 = this layer is the track matte for the layer after it
   tt?: number; // Track matte applied from the layer before it (1=alpha, 3=luma)
   hasMask?: boolean;

@@ -60,6 +60,11 @@ import { colorTrackToLottie, gradientFillToLottie, type LocalBounds } from './lo
 export interface LottieConvertContext {
   /** Glyph outlines for text nodes; text is skipped without them. */
   textOutlines?: TextOutlineProvider;
+  /**
+   * Where Quar x = 0 lands in the layer's composition (0 at the root; a
+   * precomposition's center inside one). `canvasH` plays the same role for y.
+   */
+  originX?: number;
 }
 
 // ============================================================================
@@ -98,7 +103,7 @@ export function nodeToLottieLayer(
     ty: 4, // Shape layer
     nm: node.name || `Layer ${layerIndex}`,
     ...(clip ? { hasMask: true, masksProperties: clip } : {}),
-    ks: buildLottieTransform(node, timeline, canvasH),
+    ks: buildLottieTransform(node, timeline, canvasH, context.originX),
     // Match the composition window [startFrame, endFrameInclusive + 1). Keyframe times are
     // absolute so st stays 0; using a raw duration made startFrame>0 layers
     // disappear for the final `startFrame` frames.
@@ -624,7 +629,7 @@ export function childShapeTransform(node: Node, timeline: Timeline): LottieShape
 // ============================================================================
 
 /** The artboard rectangle in Lottie local space (Y-down), from its anchor. */
-function artboardRectVertices(node: ArtboardNode): LottieShapeVertices {
+export function artboardRectVertices(node: ArtboardNode): LottieShapeVertices {
   const anchor = node.transform.anchor ?? { x: 0.5, y: 0.5 };
   const left = -node.width * anchor.x;
   const top = -node.height * (1 - anchor.y);
@@ -839,7 +844,8 @@ export function strokesToLottie(
 export function buildLottieTransform(
   node: Node,
   timeline: Timeline,
-  canvasH: number
+  canvasH: number,
+  originX: number = 0
 ): LottieTransform {
   const { transform } = node;
   const nodeId = node.id;
@@ -866,7 +872,7 @@ export function buildLottieTransform(
       posYTrack,
       transform.position.x,
       transform.position.y,
-      VALUE_TRANSFORMS.identity,
+      originX === 0 ? VALUE_TRANSFORMS.identity : (v) => v + originX,
       flipY
     ),
     // Negate rotation for the Y-flip. Pass the negation as the value transform so

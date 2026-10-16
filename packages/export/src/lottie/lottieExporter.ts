@@ -5,12 +5,9 @@
  */
 
 import type { Node, Timeline } from '@quar/types';
-import type { LottieAnimation, LottieLayer } from './lottieTypes';
-import {
-  maskGroupToLottieLayers,
-  nodeToLottieLayer,
-  type LottieConvertContext,
-} from './lottieConverter';
+import type { LottieAnimation, LottieAsset, LottieLayer } from './lottieTypes';
+import type { LottieConvertContext } from './lottieConverter';
+import { buildLayers } from './lottieLayers';
 import { editorTextOutlines, type TextOutlineProvider } from './lottieText';
 
 // ============================================================================
@@ -64,46 +61,23 @@ export function exportToLottieJson(
     textOutlines: options.textOutlines ?? editorTextOutlines,
   };
 
-  // Convert nodes to layers (reverse order for Lottie render order)
-  const layers: LottieLayer[] = [];
-  let layerIdx = 0;
-
-  // Walk in reverse so bottom-most Quar node becomes first Lottie layer
-  for (let i = nodes.length - 1; i >= 0; i--) {
-    const node = nodes[i]!;
-    if (!node.visible) continue;
-
-    const maskLayers = maskGroupToLottieLayers(
-      node,
+  // Convert nodes to layers (Lottie lists the top layer first)
+  const assets: LottieAsset[] = [];
+  const layers: LottieLayer[] = buildLayers(
+    nodes,
+    { originX: 0, originY: canvasH },
+    {
       timeline,
-      layerIdx,
-      canvasH,
-      duration,
       resolver,
+      convert: context,
       startFrame,
-      context
-    );
-    if (maskLayers) {
-      layers.push(...maskLayers);
-      layerIdx += maskLayers.length;
-      continue;
-    }
-
-    const layer = nodeToLottieLayer(
-      node,
-      timeline,
-      layerIdx,
-      canvasH,
       duration,
-      resolver,
-      startFrame,
-      context
-    );
-    if (layer) {
-      layers.push(layer);
-      layerIdx++;
+      // Room for content well outside the visible canvas
+      precompSize: Math.max(width, height) * 4,
+      assets,
+      imageAssets: new Map(),
     }
-  }
+  );
 
   return {
     v: '5.7.4',
@@ -114,7 +88,7 @@ export function exportToLottieJson(
     h: height,
     nm: name,
     ddd: 0,
-    assets: [],
+    assets,
     layers,
   };
 }
@@ -160,6 +134,7 @@ const SUPPORTED_TYPES = new Set([
   'group',
   'artboard',
   'text',
+  'image',
 ]);
 
 /**

@@ -166,8 +166,9 @@ describe('exportToLottieJson', () => {
   it('assigns sequential layer indices', () => {
     const nodes: Node[] = [makeRect('r1'), makeEllipse('e1')];
     const result = exportToLottieJson(nodes, emptyTimeline, { width: 800, height: 600 });
-    expect(result.layers[0].ind).toBe(0);
-    expect(result.layers[1].ind).toBe(1);
+    // Numbered from 1, as After Effects exports do
+    expect(result.layers[0].ind).toBe(1);
+    expect(result.layers[1].ind).toBe(2);
   });
 });
 
