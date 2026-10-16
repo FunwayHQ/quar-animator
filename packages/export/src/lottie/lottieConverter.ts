@@ -569,11 +569,14 @@ export function groupToLottieShapes(
     if (!childNode || !childNode.visible) continue;
     const shapes = nodeToLottieShapes(childNode, timeline, canvasH, nodeResolver, context);
     if (shapes && shapes.length > 0) {
-      // Wrap each child's shapes in a group ('gr') item with its transform
+      // Wrap each child's shapes in a group ('gr') item with its transform. A
+      // group has exactly one transform: the child's own (always neutral) one
+      // is replaced, or players ignore the child's placement.
+      const own = shapes[shapes.length - 1]!.ty === 'tr' ? shapes.slice(0, -1) : shapes;
       const grItem: LottieShapeItem = {
         ty: 'gr',
         nm: childNode.name || 'Group Child',
-        it: [...shapes, childShapeTransform(childNode, timeline)],
+        it: [...own, childShapeTransform(childNode, timeline)],
       } as LottieShapeItem;
       childItems.push(grItem);
     }

@@ -915,8 +915,9 @@ describe('groupToLottieShapes', () => {
       id === 'c1' ? child : undefined
     );
     const gr = result[0] as unknown as { it: Array<{ ty: string; p?: { k: number[] } }> };
-    // The child's group transform is the LAST item (its shapes contain an
-    // identity shape-transform 'tr' too).
+    // Exactly one transform, last: players ignore the child's placement when
+    // its own identity transform is left in as well
+    expect(gr.it.filter((item) => item.ty === 'tr')).toHaveLength(1);
     const tr = gr.it[gr.it.length - 1]!;
     // Local space: only Y negated (not canvasH - y, which was a full canvas off).
     expect(tr.p!.k).toEqual([100, -200]);
