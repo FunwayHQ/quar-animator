@@ -49,6 +49,7 @@ import {
 } from '../path/pathUtils';
 import { trimPathToProgress } from '../path/pathReveal';
 import earcut from 'earcut';
+import { triangulateContours } from './contourTriangulation';
 import { getFontManager } from '../font/FontManager';
 import { textToSubpaths } from '../font/glyphConverter';
 import { getTextBounds } from '../font/textMetrics';
@@ -497,168 +498,6 @@ function buildGeometryKey(node: Node): string {
     default:
       return '';
   }
-}
-
-// ============================================================================
-// Multi-Contour Containment Grouping
-// ============================================================================
-
-interface ContourGroup {
-  outer: number; // index into contourArrays
-  holes: number[]; // indices into contourArrays
-}
-
-/** Compute AABB for a tessellated vertex array (flat x,y pairs). */
-function contourAABB(verts: Float32Array): {
-  minX: number;
-  minY: number;
-  maxX: number;
-  maxY: number;
-} {
-  let minX = Infinity,
-    minY = Infinity,
-    maxX = -Infinity,
-    maxY = -Infinity;
-  for (let i = 0; i < verts.length; i += 2) {
-    const x = verts[i]!;
-    const y = verts[i + 1]!;
-    if (x < minX) minX = x;
-    if (y < minY) minY = y;
-    if (x > maxX) maxX = x;
-    if (y > maxY) maxY = y;
-  }
-  return { minX, minY, maxX, maxY };
-}
-
-/** Point-in-polygon test (ray casting) for tessellated vertices. */
-function pointInContour(px: number, py: number, verts: Float32Array): boolean {
-  let inside = false;
-  const n = verts.length / 2;
-  for (let i = 0, j = n - 1; i < n; j = i++) {
-    const xi = verts[i * 2]!;
-    const yi = verts[i * 2 + 1]!;
-    const xj = verts[j * 2]!;
-    const yj = verts[j * 2 + 1]!;
-    if (yi > py !== yj > py && px < ((xj - xi) * (py - yi)) / (yj - yi) + xi) {
-      inside = !inside;
-    }
-  }
-  return inside;
-}
-
-/** Compute signed area of a contour (positive = CCW, negative = CW). */
-function contourSignedArea(verts: Float32Array): number {
-  let area = 0;
-  const n = verts.length / 2;
-  for (let i = 0, j = n - 1; i < n; j = i++) {
-    area += verts[j * 2]! * verts[i * 2 + 1]! - verts[i * 2]! * verts[j * 2 + 1]!;
-  }
-  return area / 2;
-}
-
-/**
- * Group contours by containment: each outer contour with its holes.
- * Disjoint contours become separate groups (each is its own outer).
- * Uses AABB pre-check + point-in-polygon for containment, then signed area
- * to disambiguate outer vs hole.
- */
-function groupContoursByContainment(
-  contourArrays: Float32Array[],
-  fillRule: 'nonzero' | 'evenodd' = 'evenodd'
-): ContourGroup[] {
-  const n = contourArrays.length;
-  if (n <= 1) {
-    return n === 1 ? [{ outer: 0, holes: [] }] : [];
-  }
-
-  // Precompute AABBs and areas
-  const aabbs = contourArrays.map(contourAABB);
-  const areas = contourArrays.map(contourSignedArea);
-
-  // For each contour, find which contours contain it (AABB + point-in-polygon)
-  const containedBy: number[][] = Array.from({ length: n }, () => []);
-
-  for (let i = 0; i < n; i++) {
-    for (let j = 0; j < n; j++) {
-      if (i === j) continue;
-      const ai = aabbs[i]!;
-      const aj = aabbs[j]!;
-      // Quick AABB check: is i's AABB inside j's AABB?
-      if (ai.minX >= aj.minX && ai.maxX <= aj.maxX && ai.minY >= aj.minY && ai.maxY <= aj.maxY) {
-        // Use first vertex of contour i as test point
-        const px = contourArrays[i]![0]!;
-        const py = contourArrays[i]![1]!;
-        if (pointInContour(px, py, contourArrays[j]!)) {
-          containedBy[i]!.push(j);
-        }
-      }
-    }
-  }
-
-  const depth = containedBy.map((parents) => parents.length);
-  const isHole: boolean[] = new Array(n).fill(false);
-
-  if (fillRule === 'evenodd') {
-    // Evenodd: a contour with odd nesting depth is a hole.
-    for (let i = 0; i < n; i++) {
-      isHole[i] = depth[i]! % 2 === 1;
-    }
-  } else {
-    // Nonzero: a contained contour is a hole only if its winding direction
-    // differs from its immediate parent. Same winding = filled, not a hole.
-    for (let i = 0; i < n; i++) {
-      if (depth[i] === 0) continue; // Top-level contour, not a hole
-      // Find immediate parent (tightest container)
-      let parentIdx = -1;
-      let parentArea = Infinity;
-      for (const p of containedBy[i]!) {
-        const absA = Math.abs(areas[p]!);
-        if (absA < parentArea) {
-          parentArea = absA;
-          parentIdx = p;
-        }
-      }
-      if (parentIdx >= 0) {
-        // Same sign = same winding direction = NOT a hole (for nonzero)
-        const sameWinding = areas[i]! > 0 === areas[parentIdx]! > 0;
-        isHole[i] = !sameWinding;
-      }
-    }
-  }
-
-  // Build groups: each non-hole contour is an outer
-  const groups: ContourGroup[] = [];
-  const outerIndices = contourArrays.map((_, i) => i).filter((i) => !isHole[i]!);
-  const holeIndices = contourArrays.map((_, i) => i).filter((i) => isHole[i]!);
-
-  for (const outerIdx of outerIndices) {
-    groups.push({ outer: outerIdx, holes: [] });
-  }
-
-  // Assign each hole to its immediate parent (the outer that directly contains it)
-  for (const holeIdx of holeIndices) {
-    // Find the tightest (smallest area) outer contour that contains this hole
-    let bestOuter = -1;
-    let bestArea = Infinity;
-    for (const parentIdx of containedBy[holeIdx]!) {
-      if (!isHole[parentIdx]!) {
-        const absArea = Math.abs(areas[parentIdx]!);
-        if (absArea < bestArea) {
-          bestArea = absArea;
-          bestOuter = parentIdx;
-        }
-      }
-    }
-    if (bestOuter >= 0) {
-      const group = groups.find((g) => g.outer === bestOuter);
-      if (group) group.holes.push(holeIdx);
-    } else {
-      // Orphan hole (no containing outer) — treat as its own outer
-      groups.push({ outer: holeIdx, holes: [] });
-    }
-  }
-
-  return groups;
 }
 
 export class ShapeRenderer {
@@ -2439,53 +2278,11 @@ export class ShapeRenderer {
 
     if (contourArrays.length === 0) return;
 
-    // Compute global vertex starts
-    const globalVertStarts: number[] = [];
-    let totalFloats = 0;
-    for (const arr of contourArrays) {
-      globalVertStarts.push(totalFloats / 2);
-      totalFloats += arr.length;
-    }
-
-    const combined = new Float32Array(totalFloats);
-    let writeOff = 0;
-    for (const arr of contourArrays) {
-      combined.set(arr, writeOff);
-      writeOff += arr.length;
-    }
-
-    // Group by containment (handle glyphs with holes like 'o', 'a', etc.)
-    const groups = groupContoursByContainment(contourArrays);
-    const fillIndices: number[] = [];
-
-    for (const group of groups) {
-      const contourIndices = [group.outer, ...group.holes];
-      let groupFloats = 0;
-      for (const ci of contourIndices) groupFloats += contourArrays[ci]!.length;
-      const groupVerts = new Float32Array(groupFloats);
-      const groupHoles: number[] = [];
-      const localStarts: number[] = [];
-      let lOff = 0;
-      for (let gi = 0; gi < contourIndices.length; gi++) {
-        const ci = contourIndices[gi]!;
-        localStarts.push(lOff / 2);
-        if (gi > 0) groupHoles.push(lOff / 2);
-        groupVerts.set(contourArrays[ci]!, lOff);
-        lOff += contourArrays[ci]!.length;
-      }
-      if (groupVerts.length / 2 < 3) continue;
-      const indices = earcut(groupVerts, groupHoles.length > 0 ? groupHoles : undefined);
-      for (const localIdx of indices) {
-        let slot = 0;
-        for (let gi = contourIndices.length - 1; gi >= 0; gi--) {
-          if (localIdx >= localStarts[gi]!) {
-            slot = gi;
-            break;
-          }
-        }
-        fillIndices.push(globalVertStarts[contourIndices[slot]!]! + localIdx - localStarts[slot]!);
-      }
-    }
+    // Glyph contours with holes ('o', 'a', ...) — text keeps the evenodd rule
+    const { vertices: combined, indices: fillIndices } = triangulateContours(
+      contourArrays,
+      'evenodd'
+    );
 
     // Cache tessellation with original contours for stroke rendering
     this.geometryCache.set(node.id, {
@@ -2824,69 +2621,10 @@ export class ShapeRenderer {
       contourArrays.push(tessellatePathToVertices(processed, true, DEFAULT_TESSELLATION_TOLERANCE));
     }
 
-    // Compute global vertex start index for each contour
-    const globalVertStarts: number[] = [];
-    let totalFloats = 0;
-    for (const arr of contourArrays) {
-      globalVertStarts.push(totalFloats / 2);
-      totalFloats += arr.length;
-    }
-
-    // Build combined vertex array
-    const combined = new Float32Array(totalFloats);
-    let writeOffset = 0;
-    for (const arr of contourArrays) {
-      combined.set(arr, writeOffset);
-      writeOffset += arr.length;
-    }
-
-    // Group contours by containment: outers with their holes
-    const groups = groupContoursByContainment(contourArrays, node.fillRule ?? 'nonzero');
-
-    // Tessellate each group independently with earcut, then remap indices
-    const allFillIndices: number[] = [];
-    for (const group of groups) {
-      const contourIndices = [group.outer, ...group.holes];
-
-      // Build per-group vertex array + hole indices
-      let groupFloats = 0;
-      for (const ci of contourIndices) groupFloats += contourArrays[ci]!.length;
-
-      const groupVerts = new Float32Array(groupFloats);
-      const groupHoles: number[] = [];
-      // Track where each contour starts within the group-local array (vertex index)
-      const localContourStarts: number[] = [];
-      let localOffset = 0;
-
-      for (let gi = 0; gi < contourIndices.length; gi++) {
-        const ci = contourIndices[gi]!;
-        localContourStarts.push(localOffset / 2);
-        if (gi > 0) {
-          groupHoles.push(localOffset / 2);
-        }
-        groupVerts.set(contourArrays[ci]!, localOffset);
-        localOffset += contourArrays[ci]!.length;
-      }
-
-      if (groupVerts.length / 2 < 3) continue;
-
-      const indices = earcut(groupVerts, groupHoles.length > 0 ? groupHoles : undefined);
-
-      // Remap each local index to global: find which contour it belongs to, offset
-      for (const localIdx of indices) {
-        // Find which contour this local vertex belongs to
-        let contourSlot = 0;
-        for (let gi = contourIndices.length - 1; gi >= 0; gi--) {
-          if (localIdx >= localContourStarts[gi]!) {
-            contourSlot = gi;
-            break;
-          }
-        }
-        const ci = contourIndices[contourSlot]!;
-        const withinContour = localIdx - localContourStarts[contourSlot]!;
-        allFillIndices.push(globalVertStarts[ci]! + withinContour);
-      }
-    }
+    const { vertices: combined, indices: allFillIndices } = triangulateContours(
+      contourArrays,
+      node.fillRule ?? 'nonzero'
+    );
 
     // Store per-contour vertex counts for skinned compound path stroke rendering
     const contourVertexCounts = contourArrays.map((arr) => arr.length / 2);
@@ -4365,54 +4103,10 @@ export class ShapeRenderer {
         );
       }
 
-      // Compute global vertex starts
-      const globalVertStarts: number[] = [];
-      let totalFloats = 0;
-      for (const arr of contourArrays) {
-        globalVertStarts.push(totalFloats / 2);
-        totalFloats += arr.length;
-      }
-
-      const combined = new Float32Array(totalFloats);
-      let writeOff = 0;
-      for (const arr of contourArrays) {
-        combined.set(arr, writeOff);
-        writeOff += arr.length;
-      }
-
-      // Group by containment and tessellate per group
-      const groups = groupContoursByContainment(contourArrays, node.fillRule ?? 'nonzero');
-      const ghostFillIndices: number[] = [];
-      for (const group of groups) {
-        const contourIndices = [group.outer, ...group.holes];
-        let groupFloats = 0;
-        for (const ci of contourIndices) groupFloats += contourArrays[ci]!.length;
-        const groupVerts = new Float32Array(groupFloats);
-        const groupHoles: number[] = [];
-        const localStarts: number[] = [];
-        let lOff = 0;
-        for (let gi = 0; gi < contourIndices.length; gi++) {
-          const ci = contourIndices[gi]!;
-          localStarts.push(lOff / 2);
-          if (gi > 0) groupHoles.push(lOff / 2);
-          groupVerts.set(contourArrays[ci]!, lOff);
-          lOff += contourArrays[ci]!.length;
-        }
-        if (groupVerts.length / 2 < 3) continue;
-        const indices = earcut(groupVerts, groupHoles.length > 0 ? groupHoles : undefined);
-        for (const localIdx of indices) {
-          let slot = 0;
-          for (let gi = contourIndices.length - 1; gi >= 0; gi--) {
-            if (localIdx >= localStarts[gi]!) {
-              slot = gi;
-              break;
-            }
-          }
-          ghostFillIndices.push(
-            globalVertStarts[contourIndices[slot]!]! + localIdx - localStarts[slot]!
-          );
-        }
-      }
+      const { vertices: combined, indices: ghostFillIndices } = triangulateContours(
+        contourArrays,
+        node.fillRule ?? 'nonzero'
+      );
 
       // Ghost fills
       if (!this.program) return;
