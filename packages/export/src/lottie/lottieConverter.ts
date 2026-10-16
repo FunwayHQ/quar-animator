@@ -82,6 +82,60 @@ export function nodeToLottieLayer(
 }
 
 /**
+ * Convert a mask group to a Lottie track-matte pair: the mask source as a
+ * matte layer (`td`) directly above a layer with the group's other children
+ * (`tt`). Clip masks use an alpha matte. Returns null when the group has no
+ * usable mask, so the caller exports it as a plain layer.
+ */
+export function maskGroupToLottieLayers(
+  node: Node,
+  timeline: Timeline,
+  layerIndex: number,
+  canvasH: number,
+  duration: number,
+  nodeResolver?: (id: string) => Node | undefined,
+  startFrame: number = 0
+): LottieLayer[] | null {
+  if (node.type !== 'group' || !node.maskNodeId || !node.maskMode || !nodeResolver) return null;
+  const maskNode = nodeResolver(node.maskNodeId);
+  if (!maskNode || maskNode.parent !== node.id || !maskNode.visible) return null;
+
+  const matte = nodeToLottieLayer(
+    { ...node, children: [maskNode.id], maskNodeId: undefined, maskMode: undefined },
+    timeline,
+    layerIndex,
+    canvasH,
+    duration,
+    nodeResolver,
+    startFrame
+  );
+  // Mask shapes Lottie can't express (text, images): keep the content unclipped.
+  if (!matte) return null;
+
+  const content = nodeToLottieLayer(
+    node,
+    timeline,
+    layerIndex + 1,
+    canvasH,
+    duration,
+    nodeResolver,
+    startFrame
+  );
+  if (!content) return [];
+
+  return [
+    {
+      ...matte,
+      nm: `${matte.nm} (mask)`,
+      // The group's opacity already applies to the content layer.
+      ks: { ...matte.ks, o: { a: 0, k: 100 } },
+      td: 1,
+    },
+    { ...content, tt: node.maskMode === 'luminance' ? 3 : 1 },
+  ];
+}
+
+/**
  * Route a node to the appropriate shape converter based on type.
  */
 export function nodeToLottieShapes(
@@ -263,9 +317,15 @@ export function groupToLottieShapes(
 ): LottieShapeItem[] {
   if (!nodeResolver || !node.children || node.children.length === 0) return [];
 
+  // A mask source only defines coverage and is never drawn itself. Shape groups
+  // can't carry track mattes, so nested masks export their content unclipped;
+  // root-level masks become matte layers (see maskGroupToLottieLayers).
+  const maskNodeId = node.type === 'group' ? node.maskNodeId : undefined;
+
   // Recursively convert each child into Lottie shape items
   const childItems: LottieShapeItem[] = [];
   for (const childId of node.children) {
+    if (childId === maskNodeId) continue;
     const childNode = nodeResolver(childId);
     if (!childNode || !childNode.visible) continue;
     const shapes = nodeToLottieShapes(childNode, timeline, canvasH, nodeResolver);

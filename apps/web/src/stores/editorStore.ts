@@ -160,6 +160,10 @@ function cloneResolvedSubtree(
     const clone = structuredClone(n);
     clone.id = oldToNewId.get(n.id)!;
     if (isRoot && rootTransform) clone.transform = { ...rootTransform };
+    if (clone.type === 'group' && clone.maskNodeId) {
+      clone.maskNodeId = oldToNewId.get(clone.maskNodeId);
+      if (!clone.maskNodeId) clone.maskMode = undefined;
+    }
     const parentForAdd = isRoot ? (newParentId ?? undefined) : oldToNewId.get(n.parent!);
     // Add with empty children — addNode repopulates the parent link as each
     // child is added below.
@@ -174,6 +178,47 @@ function cloneResolvedSubtree(
 
   for (const n of resolved) addRecursive(n);
   return newRootIds;
+}
+
+const MASK_SOURCE_TYPES = new Set<Node['type']>([
+  'rectangle',
+  'ellipse',
+  'polygon',
+  'path',
+  'text',
+  'image',
+]);
+
+/**
+ * Resolve the selection a mask would be created from, or null if it can't be:
+ * the outermost selected nodes (in stacking order) must number at least two,
+ * share a parent, and include a shape. The topmost shape becomes the mask.
+ */
+export function getMaskSelection(
+  sceneGraph: SceneGraphLike,
+  selectedNodeIds: ReadonlySet<string>
+): { nodes: Node[]; parentId: string | null; maskNode: Node } | null {
+  if (selectedNodeIds.size < 2) return null;
+
+  const nodes: Node[] = [];
+  sceneGraph.traverse((node) => {
+    if (!selectedNodeIds.has(node.id)) return;
+    // Ignore selected descendants when their ancestor is selected. Moving both
+    // would detach children from the selected group while creating the mask.
+    let parentId = node.parent;
+    while (parentId) {
+      if (selectedNodeIds.has(parentId)) return;
+      parentId = sceneGraph.getNode(parentId)?.parent ?? null;
+    }
+    nodes.push(node);
+  });
+  if (nodes.length < 2) return null;
+
+  const parentId = nodes[0]!.parent;
+  if (!nodes.every((node) => node.parent === parentId)) return null;
+
+  const maskNode = [...nodes].reverse().find((node) => MASK_SOURCE_TYPES.has(node.type));
+  return maskNode ? { nodes, parentId, maskNode } : null;
 }
 
 // ============================================================================
@@ -1850,35 +1895,9 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     set({ selectedNodeIds: new Set([groupId]), isDirty: true });
   },
   createMask: (sceneGraph: SceneGraphLike, mode: MaskMode) => {
-    const { selectedNodeIds } = get();
-    if (selectedNodeIds.size < 2) return;
-
-    const selectedInOrder: Node[] = [];
-    sceneGraph.traverse((node) => {
-      if (selectedNodeIds.has(node.id)) selectedInOrder.push(node);
-    });
-
-    // Ignore selected descendants when their ancestor is selected. Moving both
-    // would detach children from the selected group while creating the mask.
-    const orderedSelected = selectedInOrder.filter((node) => {
-      let parentId = node.parent;
-      while (parentId) {
-        if (selectedNodeIds.has(parentId)) return false;
-        parentId = sceneGraph.getNode(parentId)?.parent ?? null;
-      }
-      return true;
-    });
-    if (orderedSelected.length < 2) return;
-
-    const parentId = orderedSelected[0]!.parent;
-    if (!orderedSelected.every((node) => node.parent === parentId)) return;
-
-    const maskNode = [...orderedSelected]
-      .reverse()
-      .find((node) =>
-        ['rectangle', 'ellipse', 'polygon', 'path', 'text', 'image'].includes(node.type)
-      );
-    if (!maskNode) return;
+    const selection = getMaskSelection(sceneGraph, get().selectedNodeIds);
+    if (!selection) return;
+    const { nodes: orderedSelected, parentId, maskNode } = selection;
 
     get().pushUndo(sceneGraph);
     const siblings = parentId

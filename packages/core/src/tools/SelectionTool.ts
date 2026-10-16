@@ -266,17 +266,10 @@ export class SelectionTool extends BaseTool {
       return;
     }
 
-    // Click on a node outside the entered group: exit group and select root ancestor
+    // Click on a node outside the entered group: exit group and select at root scope
     if (rawHit && !hitNode && enteredGroupId) {
       this.context.setEnteredGroupId?.(null);
-      // Re-resolve at root scope and select
-      let rootNode = rawHit;
-      while (rootNode.parent) {
-        const p = this.context.sceneGraph.getNode(rootNode.parent);
-        if (!p) break;
-        rootNode = p;
-      }
-      this.context.setSelectedIds([rootNode.id]);
+      this.context.setSelectedIds([this.resolveToRootScope(rawHit).id]);
       return;
     }
 
@@ -713,6 +706,20 @@ export class SelectionTool extends BaseTool {
     return candidates[0]?.node ?? null;
   }
 
+  /** Walk a hit node up to its root-level selectable ancestor. */
+  private resolveToRootScope(hitNode: Node): Node {
+    let current = hitNode;
+    while (current.parent !== null) {
+      const parent = this.context.sceneGraph.getNode(current.parent);
+      if (!parent) break;
+      // Bones are NOT groups, and artboards form their own selection scope.
+      // A canvas click inside a frame should select its content, not the frame.
+      if (parent.type === 'bone' || parent.type === 'artboard') break;
+      current = parent;
+    }
+    return current;
+  }
+
   /**
    * Walk a hit node up to the appropriate scope level based on enteredGroupId.
    * - If enteredGroupId is null: walk up to root-level ancestor (parent === null)
@@ -722,19 +729,7 @@ export class SelectionTool extends BaseTool {
   private resolveHitToScope(hitNode: Node): Node | null {
     const enteredGroupId = this.context.getEnteredGroupId?.() ?? null;
 
-    if (enteredGroupId === null) {
-      // Walk up to root-level ancestor
-      let current = hitNode;
-      while (current.parent !== null) {
-        const parent = this.context.sceneGraph.getNode(current.parent);
-        if (!parent) break;
-        // Bones are NOT groups, and artboards form their own selection scope.
-        // A canvas click inside a frame should select its content, not the frame.
-        if (parent.type === 'bone' || parent.type === 'artboard') break;
-        current = parent;
-      }
-      return current;
-    }
+    if (enteredGroupId === null) return this.resolveToRootScope(hitNode);
 
     // Walk up to immediate child of the entered group
     // First verify the hit node is a descendant of the entered group

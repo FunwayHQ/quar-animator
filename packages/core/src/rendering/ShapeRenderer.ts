@@ -83,12 +83,18 @@ float sampleMaskCoverage() {
 
 vec4 applyNodeMask(vec4 color) {
   float parentCoverage = sampleMaskCoverage();
-  if (u_maskPass != 0) return vec4(1.0, 1.0, 1.0, parentCoverage);
+  // Clip silhouettes ignore fill opacity, but transparent pixels (e.g. in a
+  // PNG used as the mask) stay outside the clip.
+  if (u_maskPass != 0) return vec4(1.0, 1.0, 1.0, step(0.004, color.a) * parentCoverage);
   color.a *= parentCoverage;
   return color;
 }
 `;
 const MASK_UNIFORM_NAMES = ['u_maskTexture', 'u_maskMode', 'u_maskPass', 'u_useMask'];
+/** Texture unit reserved for the active mask (images and effects use 0-1). */
+const MASK_TEXTURE_UNIT = 3;
+
+type ActiveMask = { entry: FramebufferEntry; mode: MaskMode };
 
 const SHAPE_VERTEX_SHADER = `#version 300 es
 precision highp float;
@@ -700,15 +706,20 @@ export class ShapeRenderer {
   // Effect renderer for drop shadows, blur, blend modes
   private effectRenderer: EffectRenderer;
   private maskFramebufferManager: FramebufferManager;
-  private activeMask: { entry: FramebufferEntry; mode: MaskMode } | null = null;
+  private activeMask: ActiveMask | null = null;
   private maskStack: Array<{
     groupId: string;
     maskNodeId: string;
     entry: FramebufferEntry;
-    previous: { entry: FramebufferEntry; mode: MaskMode } | null;
+    previous: ActiveMask | null;
   }> = [];
   private maskSourceNodeIds = new Set<string>();
   private maskPassMode = 0;
+  // Bumped on every mask state change so each program only re-uploads its
+  // mask uniforms when they are stale, not on every useProgram call.
+  private maskStateVersion = 0;
+  private maskUniformVersions = new WeakMap<ShaderProgram, number>();
+  private readonly programUseHook = (program: ShaderProgram) => this.applyMaskUniforms(program);
 
   // Symbol definitions registry (set by Canvas component)
   private symbolDefinitions: Map<string, SymbolDefinition> = new Map();
@@ -725,7 +736,7 @@ export class ShapeRenderer {
     this.initializeTextureBuffers();
     this.maskFramebufferManager = new FramebufferManager(renderer.context);
     this.effectRenderer = new EffectRenderer(renderer);
-    this.renderer.setProgramUseHook((program) => this.applyMaskUniforms(program));
+    this.renderer.setProgramUseHook(this.programUseHook);
   }
 
   /** Set the symbol definitions registry so instances can be resolved during rendering. */
@@ -734,71 +745,92 @@ export class ShapeRenderer {
   }
 
   private applyMaskUniforms(program: ShaderProgram): void {
+    // Programs without mask support (effects, grid, overlays) carry no mask state.
+    if (!program.uniforms.u_useMask) return;
+    if (this.maskUniformVersions.get(program) === this.maskStateVersion) return;
+    this.maskUniformVersions.set(program, this.maskStateVersion);
+
     const gl = this.renderer.context;
     const mask = this.activeMask;
-    gl.uniform1i(program.uniforms.u_useMask ?? null, mask ? 1 : 0);
+    gl.uniform1i(program.uniforms.u_useMask, mask ? 1 : 0);
     gl.uniform1i(
       program.uniforms.u_maskMode ?? null,
       mask?.mode === 'alpha' ? 1 : mask?.mode === 'luminance' ? 2 : 0
     );
     gl.uniform1i(program.uniforms.u_maskPass ?? null, this.maskPassMode);
+    gl.uniform1i(program.uniforms.u_maskTexture ?? null, MASK_TEXTURE_UNIT);
+  }
 
-    // Unit 3 is reserved for the current mask; image and post-process shaders
-    // continue using their existing texture units.
-    gl.activeTexture(gl.TEXTURE0 + 3);
+  /** Switch the mask sampled by subsequent draws, and whether they write a clip silhouette. */
+  private setMaskState(mask: ActiveMask | null, passMode: number): void {
+    this.activeMask = mask;
+    this.maskPassMode = passMode;
+    this.maskStateVersion++;
+
+    // The mask unit is reserved for the current mask; image and post-process
+    // shaders continue using their existing texture units.
+    const gl = this.renderer.context;
+    gl.activeTexture(gl.TEXTURE0 + MASK_TEXTURE_UNIT);
     gl.bindTexture(gl.TEXTURE_2D, mask?.entry.texture ?? null);
-    gl.uniform1i(program.uniforms.u_maskTexture ?? null, 3);
     gl.activeTexture(gl.TEXTURE0);
   }
 
-  private beginMask(
-    group: GroupNode,
-    sceneGraph: SceneGraph,
-    canvasWidth: number,
-    canvasHeight: number
-  ): void {
-    if (!group.maskNodeId || !group.maskMode) return;
-    const maskNode = sceneGraph.getNode(group.maskNodeId);
-    if (!maskNode || maskNode.parent !== group.id) return;
+  /**
+   * The direct child a group masks with, or null when the group is unmasked.
+   * Hiding the mask source disables the mask (as in Figma) rather than hiding
+   * all of the group's content.
+   */
+  private getMaskSource(group: GroupNode, getNode: (id: string) => Node | undefined): Node | null {
+    if (!group.maskNodeId || !group.maskMode || group.booleanOp) return null;
+    const maskNode = getNode(group.maskNodeId);
+    if (!maskNode || maskNode.parent !== group.id || !maskNode.visible) return null;
+    return maskNode;
+  }
 
+  /**
+   * Render a mask source into an offscreen coverage texture and make it the
+   * active mask for subsequent draws until the matching popMask().
+   */
+  private pushMask(
+    groupId: string,
+    maskNodeId: string,
+    mode: MaskMode,
+    drawMaskSource: () => void
+  ): void {
     const gl = this.renderer.context;
+    const width = gl.drawingBufferWidth;
+    const height = gl.drawingBufferHeight;
     const previous = this.activeMask;
+    const savedOpacity = this.currentEffectiveOpacity;
+    // A mask can begin inside an effect pass (e.g. a symbol with a drop
+    // shadow), so restore that target instead of assuming the canvas.
+    const previousFramebuffer = gl.getParameter(gl.FRAMEBUFFER_BINDING) as WebGLFramebuffer | null;
     const scissorWasEnabled = gl.isEnabled(gl.SCISSOR_TEST);
     if (scissorWasEnabled) gl.disable(gl.SCISSOR_TEST);
-    const entry = this.maskFramebufferManager.acquire(canvasWidth, canvasHeight);
+    const entry = this.maskFramebufferManager.acquire(width, height);
 
     try {
       gl.bindFramebuffer(gl.FRAMEBUFFER, entry.fbo);
-      gl.viewport(0, 0, canvasWidth, canvasHeight);
+      gl.viewport(0, 0, width, height);
       gl.clearColor(0, 0, 0, 0);
       gl.clear(gl.COLOR_BUFFER_BIT);
       if (scissorWasEnabled) gl.enable(gl.SCISSOR_TEST);
 
       // Separate alpha blending keeps the mask texture's alpha channel correct.
       gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
-      this.maskPassMode = group.maskMode === 'clip' ? 1 : 0;
-      this.activeMask = previous;
-      this.currentEffectiveOpacity = sceneGraph.getEffectiveOpacity(maskNode.id);
-      if (maskNode.visible) {
-        this.renderNodeGeometry(maskNode, sceneGraph.getWorldTransform(maskNode.id), sceneGraph);
-      }
+      // A nested mask source is itself limited by the enclosing mask.
+      this.setMaskState(previous, mode === 'clip' ? 1 : 0);
+      drawMaskSource();
     } finally {
-      this.maskPassMode = 0;
-      this.activeMask = previous;
+      this.currentEffectiveOpacity = savedOpacity;
       gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
-      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-      gl.viewport(0, 0, canvasWidth, canvasHeight);
-      if (scissorWasEnabled) gl.enable(gl.SCISSOR_TEST);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, previousFramebuffer);
+      gl.viewport(0, 0, width, height);
     }
 
-    this.maskStack.push({
-      groupId: group.id,
-      maskNodeId: maskNode.id,
-      entry,
-      previous,
-    });
-    this.maskSourceNodeIds.add(maskNode.id);
-    this.activeMask = { entry, mode: group.maskMode };
+    this.maskStack.push({ groupId, maskNodeId, entry, previous });
+    this.maskSourceNodeIds.add(maskNodeId);
+    this.setMaskState({ entry, mode }, 0);
     if (this.program) {
       this.renderer.useProgram(this.program);
       this.renderer.bindVAO(this.vao);
@@ -812,19 +844,25 @@ export class ShapeRenderer {
     }
   }
 
-  private endMask(groupId: string): void {
+  private popMask(groupId: string): void {
     const frame = this.maskStack[this.maskStack.length - 1];
     if (!frame || frame.groupId !== groupId) return;
     this.maskStack.pop();
     this.maskSourceNodeIds.delete(frame.maskNodeId);
-
-    const gl = this.renderer.context;
-    gl.activeTexture(gl.TEXTURE0 + 3);
-    gl.bindTexture(gl.TEXTURE_2D, null);
+    this.setMaskState(frame.previous, 0);
     this.maskFramebufferManager.release(frame.entry);
-    this.activeMask = frame.previous;
-    gl.activeTexture(gl.TEXTURE0);
     if (this.program) this.renderer.useProgram(this.program);
+  }
+
+  private beginSceneMask(group: GroupNode, sceneGraph: SceneGraph): void {
+    const maskNode = this.getMaskSource(group, (id) => sceneGraph.getNode(id));
+    if (!maskNode || !group.maskMode) return;
+    this.pushMask(group.id, maskNode.id, group.maskMode, () => {
+      // Coverage comes from the mask's own opacity: the group's (and its
+      // ancestors') opacity already applies to the masked content itself.
+      this.currentEffectiveOpacity = maskNode.opacity;
+      this.renderNodeGeometry(maskNode, sceneGraph.getWorldTransform(maskNode.id), sceneGraph);
+    });
   }
 
   private renderNodeGeometry(node: Node, worldTransform: Matrix3, sceneGraph: SceneGraph): void {
@@ -1473,10 +1511,9 @@ export class ShapeRenderer {
       }
     };
 
-    this.activeMask = null;
     this.maskStack = [];
     this.maskSourceNodeIds.clear();
-    this.maskPassMode = 0;
+    this.setMaskState(null, 0);
 
     // Traverse and render visible shapes
     sceneGraph.traverseVisible(
@@ -1484,8 +1521,8 @@ export class ShapeRenderer {
         // Skip node being edited (e.g. text node with active overlay)
         if (skipNodeId && node.id === skipNodeId) return;
 
-        if (node.type === 'group' && node.maskMode && node.maskNodeId) {
-          this.beginMask(node, sceneGraph, canvasWidth, canvasHeight);
+        if (node.type === 'group' && node.maskMode && node.maskNodeId && !node.booleanOp) {
+          this.beginSceneMask(node, sceneGraph);
           return;
         }
 
@@ -1704,18 +1741,16 @@ export class ShapeRenderer {
           popScissor();
         }
         if (node.type === 'group' && node.maskMode && node.maskNodeId) {
-          this.endMask(node.id);
+          this.popMask(node.id);
         }
       },
       exportNodeIds
     );
 
     while (this.maskStack.length > 0) {
-      this.endMask(this.maskStack[this.maskStack.length - 1]!.groupId);
+      this.popMask(this.maskStack[this.maskStack.length - 1]!.groupId);
     }
-    gl.activeTexture(gl.TEXTURE0 + 3);
-    gl.bindTexture(gl.TEXTURE_2D, null);
-    gl.activeTexture(gl.TEXTURE0);
+    this.setMaskState(null, 0);
 
     this.renderer.bindVAO(null);
   }
@@ -1838,12 +1873,23 @@ export class ShapeRenderer {
 
     // Render children if this is a group
     if (node.children && node.children.length > 0) {
+      const maskSource =
+        node.type === 'group' ? this.getMaskSource(node, (id) => nodeMap.get(id)) : null;
+      if (maskSource && node.type === 'group' && node.maskMode) {
+        this.pushMask(node.id, maskSource.id, node.maskMode, () => {
+          // renderResolvedNode multiplies in the source's own opacity.
+          this.currentEffectiveOpacity = 1;
+          this.renderResolvedNode(maskSource, worldTransform, nodeMap);
+        });
+      }
       for (const childId of node.children) {
+        if (childId === maskSource?.id) continue;
         const child = nodeMap.get(childId);
         if (child) {
           this.renderResolvedNode(child, worldTransform, nodeMap);
         }
       }
+      if (maskSource) this.popMask(node.id);
     }
 
     this.currentEffectiveOpacity = savedOpacity;
@@ -4650,7 +4696,7 @@ export class ShapeRenderer {
 
   dispose(): void {
     const gl = this.renderer.context;
-    this.renderer.setProgramUseHook(null);
+    this.renderer.clearProgramUseHook(this.programUseHook);
     this.maskFramebufferManager.dispose();
     this.maskStack = [];
     this.maskSourceNodeIds.clear();

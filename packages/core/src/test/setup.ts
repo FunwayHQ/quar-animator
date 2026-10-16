@@ -49,6 +49,7 @@ export function createMockWebGL2Context(): WebGL2RenderingContext {
     enable: vi.fn(),
     disable: vi.fn(),
     isEnabled: vi.fn().mockReturnValue(false),
+    getParameter: vi.fn().mockReturnValue(null),
     blendFunc: vi.fn(),
     blendFuncSeparate: vi.fn(),
     depthFunc: vi.fn(),

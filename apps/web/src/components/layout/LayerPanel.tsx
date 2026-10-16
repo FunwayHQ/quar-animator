@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type { Node, GroupNode, MaskMode } from '@quar/types';
 import { useSceneGraph } from '../../contexts/SceneGraphContext';
-import { useEditorStore } from '../../stores/editorStore';
+import { useEditorStore, getMaskSelection } from '../../stores/editorStore';
 import { ContextMenu } from '../common/ContextMenu';
 import type { ContextMenuEntry } from '../common/ContextMenu';
 import styles from './LayerPanel.module.css';
@@ -535,22 +535,7 @@ export function LayerPanel() {
       const allVisible = selectedNodes.every((n) => n.visible);
       const allLocked = selectedNodes.every((n) => n.locked);
       const hasGroup = selectedNodes.some((n) => n.type === 'group');
-      const topLevelSelected = selectedNodes.filter((selected) => {
-        let parentId = selected.parent;
-        while (parentId) {
-          if (selectedNodeIds.has(parentId)) return false;
-          parentId = sceneGraph.getNode(parentId)?.parent ?? null;
-        }
-        return true;
-      });
-      const firstSelectedParent = topLevelSelected[0]?.parent;
-      const sharesParent =
-        topLevelSelected.length >= 2 &&
-        topLevelSelected.every((selected) => selected.parent === firstSelectedParent);
-      const hasMaskShape = topLevelSelected.some((selected) =>
-        ['rectangle', 'ellipse', 'polygon', 'path', 'text', 'image'].includes(selected.type)
-      );
-      const canCreateMask = sharesParent && hasMaskShape;
+      const canCreateMask = getMaskSelection(sceneGraph, selectedNodeIds) !== null;
 
       return [
         {

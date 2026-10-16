@@ -383,6 +383,29 @@ describe('WebGLRenderer', () => {
       expect(hook).toHaveBeenCalledTimes(2);
       expect(hook).toHaveBeenNthCalledWith(2, program);
     });
+
+    it('only clears the program hook its owner installed', () => {
+      const renderer = new WebGLRenderer({ canvas });
+      const program = renderer.createShaderProgram(
+        'test',
+        'void main() {}',
+        'void main() {}',
+        [],
+        []
+      );
+      const staleHook = vi.fn();
+      const currentHook = vi.fn();
+      renderer.setProgramUseHook(staleHook);
+      renderer.setProgramUseHook(currentHook);
+
+      renderer.clearProgramUseHook(staleHook);
+      renderer.useProgram(program);
+
+      expect(currentHook).toHaveBeenCalledWith(program);
+      renderer.clearProgramUseHook(currentHook);
+      renderer.useProgram(program);
+      expect(currentHook).toHaveBeenCalledTimes(1);
+    });
   });
 
   // ==========================================================================

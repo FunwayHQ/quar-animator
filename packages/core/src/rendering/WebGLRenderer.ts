@@ -284,6 +284,11 @@ export class WebGLRenderer {
     this.programUseHook = hook;
   }
 
+  /** Remove `hook` only if it is still installed, so a disposed owner can't clear a newer one. */
+  clearProgramUseHook(hook: (program: ShaderProgram) => void): void {
+    if (this.programUseHook === hook) this.programUseHook = null;
+  }
+
   // --------------------------------------------------------------------------
   // Buffer Management
   // --------------------------------------------------------------------------

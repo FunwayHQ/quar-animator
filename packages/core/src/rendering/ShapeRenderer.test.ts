@@ -259,6 +259,81 @@ describe('ShapeRenderer', () => {
       expect(gl.uniform1i.mock.calls.some(([, value]) => value === expectedMode)).toBe(true);
       expect(gl.drawElements).toHaveBeenCalled();
     });
+
+    it('disables the mask rather than hiding the content when the mask source is hidden', () => {
+      const group = createGroupNode('masked', 'Masked');
+      group.maskNodeId = 'mask';
+      group.maskMode = 'alpha';
+      sceneGraph.addNode(group);
+      sceneGraph.addNode(createRectangleNode('content', 80, 60), group.id);
+      const mask = createRectangleNode('mask', 50, 50);
+      mask.visible = false;
+      sceneGraph.addNode(mask, group.id);
+      vi.clearAllMocks();
+
+      shapeRenderer.render(sceneGraph, mat3.identity());
+
+      expect(gl.bindFramebuffer).not.toHaveBeenCalledWith(gl.FRAMEBUFFER, expect.anything());
+      expect(gl.drawElements).toHaveBeenCalled();
+    });
+
+    it('restores the previously bound framebuffer after drawing a mask source', () => {
+      const group = createGroupNode('masked', 'Masked');
+      group.maskNodeId = 'mask';
+      group.maskMode = 'clip';
+      sceneGraph.addNode(group);
+      sceneGraph.addNode(createRectangleNode('content', 80, 60), group.id);
+      sceneGraph.addNode(createRectangleNode('mask', 50, 50), group.id);
+      vi.clearAllMocks();
+      // e.g. an effect pass that is rendering this content offscreen
+      const effectTarget = { __fbo: 'effect' } as unknown as WebGLFramebuffer;
+      vi.mocked(gl.getParameter).mockReturnValue(effectTarget);
+
+      shapeRenderer.render(sceneGraph, mat3.identity());
+
+      expect(gl.bindFramebuffer).toHaveBeenLastCalledWith(gl.FRAMEBUFFER, effectTarget);
+    });
+
+    it('applies masks inside symbol instances', () => {
+      const group = createGroupNode('sym-masked', 'Masked');
+      group.maskNodeId = 'sym-mask';
+      group.maskMode = 'clip';
+      group.children = ['sym-content', 'sym-mask'];
+      const content = { ...createRectangleNode('sym-content', 80, 60), parent: group.id };
+      const mask = { ...createRectangleNode('sym-mask', 50, 50), parent: group.id };
+      shapeRenderer.setSymbolDefinitions(
+        new Map([
+          [
+            'mask-symbol',
+            {
+              id: 'mask-symbol',
+              name: 'Mask symbol',
+              sceneGraphJSON: { nodes: [group, content, mask], rootNodeIds: [group.id] },
+            },
+          ],
+        ])
+      );
+      sceneGraph.addNode({
+        id: 'inst',
+        name: 'Instance',
+        type: 'symbol-instance',
+        parent: null,
+        children: [],
+        transform: createDefaultTransform(),
+        visible: true,
+        locked: false,
+        opacity: 1,
+        blendMode: 'normal',
+        symbolId: 'mask-symbol',
+        overrides: [],
+      });
+      vi.clearAllMocks();
+
+      shapeRenderer.render(sceneGraph, mat3.identity());
+
+      expect(gl.bindFramebuffer).toHaveBeenCalledWith(gl.FRAMEBUFFER, expect.anything());
+      expect(gl.drawElements).toHaveBeenCalled();
+    });
   });
 
   // ==========================================================================

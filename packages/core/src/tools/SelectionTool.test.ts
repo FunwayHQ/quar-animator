@@ -1717,6 +1717,31 @@ describe('SelectionTool', () => {
       expect(context.getSelectedIds().has('art1')).toBe(false);
     });
 
+    it('selects artboard content, not the artboard, when clicking out of an entered group', () => {
+      const artboard = createTestArtboard('art1', 200, 200, 400, 300);
+      const rect = createTestRectangle('rect1', 0, 0, 100, 100);
+      context.sceneGraph.addNode(artboard);
+      context.sceneGraph.addNode(rect, artboard.id);
+      context.sceneGraph.addNode(createTestGroup('group1', -500, -500));
+
+      let enteredGroupId: string | null = 'group1';
+      context.getEnteredGroupId = () => enteredGroupId;
+      context.setEnteredGroupId = (id) => {
+        enteredGroupId = id;
+      };
+
+      tool.onPointerDown(
+        createMockPointerEvent({
+          worldPosition: { x: 200, y: 200 },
+          screenPosition: context.camera.worldToScreen({ x: 200, y: 200 }),
+          button: 0,
+        })
+      );
+
+      expect(enteredGroupId).toBeNull();
+      expect([...context.getSelectedIds()]).toEqual(['rect1']);
+    });
+
     it('should resize artboard by adjusting width and height directly', () => {
       const artboard = createTestArtboard('art1', 200, 200, 400, 300);
       context.sceneGraph.addNode(artboard);

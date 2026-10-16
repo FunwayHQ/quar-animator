@@ -6,7 +6,7 @@
 
 import type { Node, Timeline } from '@quar/types';
 import type { LottieAnimation, LottieLayer } from './lottieTypes';
-import { nodeToLottieLayer } from './lottieConverter';
+import { maskGroupToLottieLayers, nodeToLottieLayer } from './lottieConverter';
 
 // ============================================================================
 // Types
@@ -62,6 +62,21 @@ export function exportToLottieJson(
   for (let i = nodes.length - 1; i >= 0; i--) {
     const node = nodes[i]!;
     if (!node.visible) continue;
+
+    const maskLayers = maskGroupToLottieLayers(
+      node,
+      timeline,
+      layerIdx,
+      canvasH,
+      duration,
+      resolver,
+      startFrame
+    );
+    if (maskLayers) {
+      layers.push(...maskLayers);
+      layerIdx += maskLayers.length;
+      continue;
+    }
 
     const layer = nodeToLottieLayer(
       node,

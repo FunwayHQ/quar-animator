@@ -58,6 +58,8 @@ export interface LottieLayer {
   bm?: number; // Blend mode (0=normal, 1=multiply, etc.)
   shapes?: LottieShapeItem[]; // Shape layer content (ty=4)
   parent?: number; // Parent layer index
+  td?: number; // 1 = this layer is the track matte for the layer after it
+  tt?: number; // Track matte applied from the layer before it (1=alpha, 3=luma)
 }
 
 // ============================================================================

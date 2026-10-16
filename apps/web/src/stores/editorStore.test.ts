@@ -3109,6 +3109,65 @@ describe('EditorStore', () => {
       }
     });
 
+    it('detachInstance remaps the mask source of a masked group', () => {
+      const sg = new SceneGraph();
+      const base = { visible: true, locked: false, opacity: 1, blendMode: 'normal' };
+      const rect = (id: string) => ({
+        ...base,
+        id,
+        name: id,
+        type: 'rectangle',
+        parent: 'mdef',
+        children: [],
+        transform: createDefaultTransform(),
+        width: 10,
+        height: 10,
+        cornerRadius: [0, 0, 0, 0],
+        fills: [],
+        strokes: [],
+      });
+      const maskGroupDef = {
+        ...base,
+        id: 'mdef',
+        name: 'Mask',
+        type: 'group',
+        parent: null,
+        children: ['cdef', 'kdef'],
+        transform: createDefaultTransform(),
+        maskNodeId: 'kdef',
+        maskMode: 'alpha',
+      };
+      const def = {
+        id: 'mask-sym',
+        name: 'Masked',
+        sceneGraphJSON: {
+          nodes: [maskGroupDef, rect('cdef'), rect('kdef')],
+          rootNodeIds: ['mdef'],
+        },
+      };
+      sg.addNode({
+        ...base,
+        id: 'inst1',
+        name: 'Inst',
+        type: 'symbol-instance',
+        symbolId: 'mask-sym',
+        overrides: [],
+        parent: null,
+        children: [],
+        transform: createDefaultTransform(),
+      } as never);
+      useEditorStore.setState({ symbols: [def] as never, selectedNodeIds: new Set(['inst1']) });
+
+      useEditorStore.getState().detachInstance(sg);
+
+      const outerId = Array.from(useEditorStore.getState().selectedNodeIds)[0]!;
+      const maskGroup = sg.getNode(sg.getNode(outerId)!.children[0]!)!;
+      if (maskGroup.type !== 'group') throw new Error('Expected the detached mask group');
+      expect(maskGroup.maskMode).toBe('alpha');
+      expect(maskGroup.maskNodeId).not.toBe('kdef');
+      expect(maskGroup.children).toContain(maskGroup.maskNodeId);
+    });
+
     it('detachInstance is no-op if selected is not symbol-instance', () => {
       const sg = createMockSceneGraphForSymbols();
       const rect = makeTestRect('r1');

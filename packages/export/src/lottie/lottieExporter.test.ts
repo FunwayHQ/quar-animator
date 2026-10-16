@@ -356,3 +356,96 @@ describe('exportToLottieJson - additional', () => {
     expect(result.layers).toHaveLength(2);
   });
 });
+
+// ============================================================================
+// Mask groups
+// ============================================================================
+
+describe('exportToLottieJson - masks', () => {
+  function makeMaskGroup(mode: 'clip' | 'alpha' | 'luminance'): Node[] {
+    const group: GroupNode = {
+      id: 'masked',
+      name: 'Mask',
+      type: 'group',
+      parent: null,
+      children: ['content', 'mask'],
+      transform: defaultTransform,
+      visible: true,
+      locked: false,
+      opacity: 0.5,
+      blendMode: 'normal',
+      maskNodeId: 'mask',
+      maskMode: mode,
+    };
+    return [
+      group,
+      { ...makeRect('content', 'Content'), parent: group.id },
+      { ...makeEllipse('mask', 'Mask shape'), parent: group.id },
+    ];
+  }
+
+  function resolverFor(nodes: Node[]) {
+    const map = new Map(nodes.map((n) => [n.id, n]));
+    return (id: string) => map.get(id);
+  }
+
+  it('exports a root mask group as a matte layer above the masked content', () => {
+    const nodes = makeMaskGroup('clip');
+    const result = exportToLottieJson(
+      [nodes[0]!],
+      emptyTimeline,
+      { width: 800, height: 600 },
+      resolverFor(nodes)
+    );
+
+    expect(result.layers).toHaveLength(2);
+    const [matte, content] = result.layers;
+    expect(matte!.td).toBe(1);
+    expect(matte!.shapes).toHaveLength(1);
+    expect(matte!.shapes![0]!.nm).toBe('Mask shape');
+    // Group opacity applies once, on the content layer.
+    expect(matte!.ks.o).toEqual({ a: 0, k: 100 });
+    expect(content!.tt).toBe(1);
+    expect(content!.shapes).toHaveLength(1);
+    expect(content!.shapes![0]!.nm).toBe('Content');
+    expect(new Set(result.layers.map((l) => l.ind)).size).toBe(2);
+  });
+
+  it('uses a luma matte for luminance masks', () => {
+    const nodes = makeMaskGroup('luminance');
+    const result = exportToLottieJson(
+      [nodes[0]!],
+      emptyTimeline,
+      { width: 800, height: 600 },
+      resolverFor(nodes)
+    );
+    expect(result.layers[1]!.tt).toBe(3);
+  });
+
+  it('never draws the mask source of a nested mask group', () => {
+    const nodes = makeMaskGroup('alpha');
+    const outer: GroupNode = {
+      id: 'outer',
+      name: 'Outer',
+      type: 'group',
+      parent: null,
+      children: ['masked'],
+      transform: defaultTransform,
+      visible: true,
+      locked: false,
+      opacity: 1,
+      blendMode: 'normal',
+    };
+    nodes[0] = { ...nodes[0]!, parent: 'outer' };
+    const result = exportToLottieJson(
+      [outer],
+      emptyTimeline,
+      { width: 800, height: 600 },
+      resolverFor([outer, ...nodes])
+    );
+
+    const json = JSON.stringify(result);
+    expect(json).toContain('"Content"');
+    expect(json).not.toContain('"Mask shape"');
+  });
+});
