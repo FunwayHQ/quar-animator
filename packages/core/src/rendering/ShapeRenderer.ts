@@ -358,6 +358,8 @@ in vec4 a_boneWeights;
 
 const int MAX_BONES = ${MAX_BONES_GPU};
 uniform mat3 u_boneMatrices[MAX_BONES];
+// Where the mesh sits unbent: unweighted vertices stay there, as on the CPU
+uniform mat3 u_meshBind;
 uniform mat3 u_viewProjection;
 
 void main() {
@@ -372,7 +374,7 @@ void main() {
     skinned += w * (u_boneMatrices[idx] * pos);
     totalWeight += w;
   }
-  if (totalWeight <= 0.0) skinned = pos;
+  if (totalWeight <= 0.0) skinned = u_meshBind * pos;
   else if (abs(totalWeight - 1.0) > 0.001) skinned /= totalWeight;
   gl_Position = vec4((u_viewProjection * skinned).xy, 0.0, 1.0);
 }
@@ -388,6 +390,8 @@ in vec4 a_boneWeights;
 
 const int MAX_BONES = ${MAX_BONES_GPU};
 uniform mat3 u_boneMatrices[MAX_BONES];
+// Where the mesh sits unbent: unweighted vertices stay there, as on the CPU
+uniform mat3 u_meshBind;
 uniform mat3 u_viewProjection;
 
 out vec2 v_localPos;
@@ -405,7 +409,7 @@ void main() {
     skinned += w * (u_boneMatrices[idx] * pos);
     totalWeight += w;
   }
-  if (totalWeight <= 0.0) skinned = pos;
+  if (totalWeight <= 0.0) skinned = u_meshBind * pos;
   else if (abs(totalWeight - 1.0) > 0.001) skinned /= totalWeight;
   gl_Position = vec4((u_viewProjection * skinned).xy, 0.0, 1.0);
 }
@@ -3185,8 +3189,17 @@ export class ShapeRenderer {
   /**
    * Upload bone matrix uniforms to a skinned shader program.
    */
-  private uploadBoneMatrices(program: ShaderProgram, boneMatrixData: Float32Array): void {
+  private uploadBoneMatrices(
+    program: ShaderProgram,
+    boneMatrixData: Float32Array,
+    meshBind: number[]
+  ): void {
     const gl = this.renderer.context;
+    const [a = 1, b = 0, c = 0, d = 1, tx = 0, ty = 0] = meshBind;
+    const meshBindLoc = program.uniforms.u_meshBind;
+    if (meshBindLoc) {
+      gl.uniformMatrix3fv(meshBindLoc, false, new Float32Array([a, b, 0, c, d, 0, tx, ty, 1]));
+    }
     const maxBones = boneMatrixData.length / 9;
     for (let i = 0; i < maxBones; i++) {
       const uniformLoc = program.uniforms[`u_boneMatrices[${i}]`];
@@ -3228,7 +3241,11 @@ export class ShapeRenderer {
       if (fill.type === 'gradient' && fill.gradient && this.skinnedGradientProgram) {
         // Use skinned gradient program
         this.renderer.useProgram(this.skinnedGradientProgram);
-        this.uploadBoneMatrices(this.skinnedGradientProgram, boneMatrixData);
+        this.uploadBoneMatrices(
+          this.skinnedGradientProgram,
+          boneMatrixData,
+          skinData.meshBindMatrix
+        );
         // Set gradient uniforms on the skinned gradient program
         // (setGradientUniforms uses this.gradientProgram, so we temporarily swap)
         const savedGradProg = this.gradientProgram;
@@ -3250,7 +3267,7 @@ export class ShapeRenderer {
       } else {
         // Use skinned flat-color program
         this.renderer.useProgram(this.skinnedProgram);
-        this.uploadBoneMatrices(this.skinnedProgram, boneMatrixData);
+        this.uploadBoneMatrices(this.skinnedProgram, boneMatrixData, skinData.meshBindMatrix);
 
         const color = this.getFillColor(fill, nodeOpacity);
         gl.uniform4fv(this.skinnedProgram.uniforms.u_color ?? null, color);
