@@ -2302,6 +2302,7 @@ describe('EditorStore', () => {
           nodes.delete(id);
           rootNodeIds = rootNodeIds.filter((rid) => rid !== id);
         }),
+        getDescendants: () => [],
         traverse: vi.fn(),
         toJSON: vi.fn(() => ({ nodes: [] })),
         fromJSON: vi.fn(),

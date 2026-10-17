@@ -47,6 +47,13 @@ import {
   type SequenceActions,
 } from './sequenceActions';
 import {
+  captureClipboardExtras,
+  cleanupAfterRemoval,
+  pastedRigging,
+  remapSkinData,
+  type ClipboardExtras,
+} from './clipboardRig';
+import {
   applyPlacement,
   mapPlacement,
   multiply6,
@@ -154,6 +161,58 @@ function makeHistorySnapshot(
     smartBoneActions: structuredClone(state.smartBoneActions),
     dynamicChains: structuredClone(state.dynamicChains),
     vitruvianControllers: structuredClone(state.vitruvianControllers),
+  };
+}
+
+/**
+ * Remove layers (and their descendants) with everything that depended on
+ * them: keyframe tracks, sequence steps, and rigging — IK chains (and their
+ * now inert targets), dynamic chains and Smart Bone actions that lost a bone,
+ * Vitruvian group members, and bones in other meshes' bindings (a mesh left
+ * with no bones is unbound). Returns the store update; callers record undo.
+ */
+function removeLayers(
+  sceneGraph: SceneGraphLike,
+  ids: Set<string>,
+  state: EditorStore
+): Partial<EditorStore> {
+  const removed = new Set<string>();
+  for (const id of ids) {
+    if (!sceneGraph.getNode(id)) continue;
+    removed.add(id);
+    for (const descendant of sceneGraph.getDescendants(id)) removed.add(descendant.id);
+  }
+  const remaining: Node[] = [];
+  sceneGraph.traverse((node) => {
+    if (!removed.has(node.id)) remaining.push(node);
+  });
+  const cleanup = cleanupAfterRemoval(removed, state, remaining);
+  for (const target of cleanup.orphanedTargets) {
+    removed.add(target);
+    for (const descendant of sceneGraph.getDescendants(target)) removed.add(descendant.id);
+  }
+
+  const timeline = state.timeline;
+  const mgr = new KeyframeManager(timeline);
+  for (const id of removed) mgr.removeAllKeyframesForNode(id);
+  for (const id of [...ids, ...cleanup.orphanedTargets]) {
+    if (sceneGraph.getNode(id)) sceneGraph.removeNode(id);
+  }
+  for (const { nodeId, skinData } of cleanup.skinUpdates) {
+    sceneGraph.updateNode(nodeId, { skinData } as Partial<Node>);
+  }
+  // Drop sequence steps of deleted objects (incl. group descendants)
+  const sequenceUpdate = pruneSequenceSteps(sceneGraph, { ...state, timeline });
+  return {
+    selectedNodeIds: new Set<string>(),
+    editingGradient: null,
+    timeline: { ...timeline },
+    ...sequenceUpdate,
+    isDirty: true,
+    ikChains: cleanup.ikChains,
+    dynamicChains: cleanup.dynamicChains,
+    smartBoneActions: cleanup.smartBoneActions,
+    vitruvianControllers: cleanup.vitruvianControllers,
   };
 }
 
@@ -571,6 +630,8 @@ export interface EditorStore extends SequenceActions {
 
   // Clipboard & node operations
   clipboard: Node[] | null;
+  /** Where the copied roots sat, and the rigging among the copied layers. */
+  clipboardExtras: ClipboardExtras | null;
   copySelection: (sceneGraph: SceneGraphLike) => void;
   pasteClipboard: (sceneGraph: SceneGraphLike) => void;
   duplicateSelection: (sceneGraph: SceneGraphLike) => void;
@@ -1840,6 +1901,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
   // Clipboard & node operations
   clipboard: null,
+  clipboardExtras: null,
   copySelection: (sceneGraph: SceneGraphLike) => {
     const { selectedNodeIds } = get();
     if (selectedNodeIds.size === 0) return;
@@ -1859,10 +1921,15 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         }
       }
     }
-    if (clones.length > 0) set({ clipboard: clones });
+    if (clones.length > 0) {
+      set({
+        clipboard: clones,
+        clipboardExtras: captureClipboardExtras(sceneGraph, clones, clonedIds, get()),
+      });
+    }
   },
   pasteClipboard: (sceneGraph: SceneGraphLike) => {
-    const { clipboard } = get();
+    const { clipboard, clipboardExtras } = get();
     if (!clipboard || clipboard.length === 0) return;
     get().pushUndo(sceneGraph);
 
@@ -1875,70 +1942,96 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     // Generate new IDs for every cloned node
     const oldToNewId = new Map<string, string>();
     let idCounter = Date.now();
-    for (const oldId of oldIdToClone.keys()) {
-      oldToNewId.set(oldId, `node_${idCounter++}_${Math.random().toString(36).slice(2, 8)}`);
+    const nextId = (prefix: string) =>
+      `${prefix}_${idCounter++}_${Math.random().toString(36).slice(2, 8)}`;
+    for (const oldId of oldIdToClone.keys()) oldToNewId.set(oldId, nextId('node'));
+
+    // The copied rigging, for the pasted layers. An IK target copied without
+    // its chain's bones would drive nothing, so it isn't pasted.
+    const rig = clipboardExtras
+      ? pastedRigging(clipboardExtras, oldToNewId, nextId)
+      : { ikChains: [], dynamicChains: [], smartBoneActions: [], chainIdForTarget: new Map() };
+    const skipped = new Set<string>();
+    for (const [oldId, clone] of oldIdToClone) {
+      if (clone.type === 'ik-target' && !rig.chainIdForTarget.has(oldId)) skipped.add(oldId);
     }
 
-    // Remap IDs, parent refs, and children refs
+    // Remap IDs, parent refs, children refs and bindings
     const newNodes: Node[] = [];
+    const pastedRoots = new Set<string>();
     for (const [oldId, clone] of oldIdToClone) {
+      if (skipped.has(oldId)) continue;
       clone.id = oldToNewId.get(oldId)!;
-      // Remap children to new IDs (keep only those present in clipboard)
       clone.children = clone.children
-        .filter((childId: string) => oldToNewId.has(childId))
+        .filter((childId: string) => oldToNewId.has(childId) && !skipped.has(childId))
         .map((childId: string) => oldToNewId.get(childId)!);
-      // Remap parent
       if (clone.parent && oldToNewId.has(clone.parent)) {
         clone.parent = oldToNewId.get(clone.parent)!;
       } else {
-        clone.parent = null;
+        // A copied root goes back under its parent if that's still there
+        // (keeping its parent-relative placement); otherwise to the top level,
+        // placed where it was
+        pastedRoots.add(clone.id);
+        const root = clipboardExtras?.roots[oldId];
+        const parentId = root?.parentId ?? null;
+        if (parentId && sceneGraph.getNode(parentId)) {
+          clone.parent = parentId;
+        } else {
+          clone.parent = null;
+          if (root) clone.transform = structuredClone(root.rootTransform);
+        }
       }
       if (clone.type === 'group' && clone.maskNodeId) {
         clone.maskNodeId = oldToNewId.get(clone.maskNodeId);
         if (!clone.maskNodeId) clone.maskMode = undefined;
       }
+      if (clone.type === 'ik-target') {
+        clone.ikChainId = rig.chainIdForTarget.get(oldId)!;
+      }
+      const skin = (clone as { skinData?: SkinData }).skinData;
+      if (skin) (clone as { skinData?: SkinData }).skinData = remapSkinData(skin, oldToNewId);
       newNodes.push(clone);
     }
 
-    // Find root nodes (those with parent = null) and offset their positions
-    const rootIds: string[] = [];
+    // Offset the pasted roots — except a bound mesh pasted with its bones,
+    // which they carry
+    const pastedIds = new Set(newNodes.map((node) => node.id));
     for (const node of newNodes) {
-      if (node.parent === null) {
-        rootIds.push(node.id);
-        node.transform = {
-          ...node.transform,
-          position: {
-            x: node.transform.position.x + 20,
-            y: node.transform.position.y - 20,
-          },
-        };
-      }
+      if (!pastedRoots.has(node.id)) continue;
+      const skin = (node as { skinData?: SkinData }).skinData;
+      if (skin && Object.keys(skin.inverseBindMatrices).some((id) => pastedIds.has(id))) continue;
+      node.transform = {
+        ...node.transform,
+        position: {
+          x: node.transform.position.x + 20,
+          y: node.transform.position.y - 20,
+        },
+      };
     }
 
     // Add nodes in parent-first order (roots first, then children)
+    const byId = new Map(newNodes.map((node) => [node.id, node]));
     const added = new Set<string>();
     const addRecursive = (node: Node) => {
       if (added.has(node.id)) return;
-      // Ensure parent is added first
-      if (node.parent) {
-        const parent = newNodes.find((n) => n.id === node.parent);
-        if (parent && !added.has(parent.id)) {
-          addRecursive(parent);
-        }
-      }
       sceneGraph.addNode({ ...node, children: [] }, node.parent ?? undefined);
       added.add(node.id);
-      // Add children in order
       for (const childId of node.children) {
-        const child = newNodes.find((n) => n.id === childId);
+        const child = byId.get(childId);
         if (child) addRecursive(child);
       }
     };
     for (const node of newNodes) {
-      if (node.parent === null) addRecursive(node);
+      if (pastedRoots.has(node.id)) addRecursive(node);
     }
 
-    set({ selectedNodeIds: new Set(rootIds) });
+    set({
+      selectedNodeIds: new Set(pastedRoots),
+      ikChains: [...get().ikChains, ...rig.ikChains],
+      dynamicChains: [...get().dynamicChains, ...rig.dynamicChains],
+      smartBoneActions: [...get().smartBoneActions, ...rig.smartBoneActions],
+      isDirty: true,
+    });
   },
   duplicateSelection: (sceneGraph: SceneGraphLike) => {
     const { copySelection } = get();
@@ -1947,44 +2040,13 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     get().pasteClipboard(sceneGraph);
   },
   deleteSelection: (sceneGraph: SceneGraphLike) => {
-    const { selectedNodeIds, timeline, enteredGroupId, ikChains, smartBoneActions, dynamicChains } =
-      get();
+    const { selectedNodeIds, enteredGroupId } = get();
     if (selectedNodeIds.size === 0) return;
     get().pushUndo(sceneGraph);
-    // Clean up keyframe tracks for deleted nodes
-    const mgr = new KeyframeManager(timeline);
-    // Clean up IK chains if deleting IK target nodes
-    let newIkChains = ikChains;
-    for (const id of selectedNodeIds) {
-      const node = sceneGraph.getNode(id);
-      if (node && node.type === 'ik-target') {
-        const chainId = node.ikChainId;
-        newIkChains = newIkChains.filter((c) => c.id !== chainId);
-      }
-      mgr.removeAllKeyframesForNode(id);
-      sceneGraph.removeNode(id);
-    }
-    // Clean up Smart Bone actions referencing deleted bones
-    const newSmartBoneActions = smartBoneActions.filter(
-      (a) => !selectedNodeIds.has(a.driver.boneId)
-    );
-    // Clean up Dynamic Chains referencing deleted bones
-    const newDynamicChains = dynamicChains.filter((c) => !selectedNodeIds.has(c.rootBoneId));
+    const clearGroup = !!enteredGroupId;
+    set(removeLayers(sceneGraph, selectedNodeIds, get()));
     // Clear enteredGroupId if the entered group no longer exists
-    const clearGroup = enteredGroupId && !sceneGraph.getNode(enteredGroupId);
-    // Drop sequence steps of deleted objects (incl. group descendants)
-    const sequenceUpdate = pruneSequenceSteps(sceneGraph, { ...get(), timeline });
-    set({
-      selectedNodeIds: new Set<string>(),
-      editingGradient: null,
-      timeline: { ...timeline },
-      ...sequenceUpdate,
-      isDirty: true,
-      ikChains: newIkChains,
-      smartBoneActions: newSmartBoneActions,
-      dynamicChains: newDynamicChains,
-      ...(clearGroup ? { enteredGroupId: null } : {}),
-    });
+    if (clearGroup && !sceneGraph.getNode(enteredGroupId)) set({ enteredGroupId: null });
   },
   selectAll: (sceneGraph: SceneGraphLike) => {
     const allIds: string[] = [];
@@ -3387,6 +3449,7 @@ function createHistoryActions(
         selectedKeyframeIds: new Set<string>(),
         keyframeClipboard: null,
         clipboard: null,
+        clipboardExtras: null,
         enteredGroupId: null,
         editingSymbolId: null,
         editingSymbolPrevState: null,
@@ -3408,7 +3471,7 @@ function createHistoryActions(
     },
 
     cutSelection: (sceneGraph: SceneGraphLike) => {
-      const { selectedNodeIds, copySelection, timeline } = get();
+      const { selectedNodeIds, copySelection } = get();
       if (selectedNodeIds.size === 0) return;
 
       // Push undo snapshot before cut
@@ -3418,19 +3481,7 @@ function createHistoryActions(
       copySelection(sceneGraph);
 
       // Delete selection (inline to avoid double pushUndo)
-      const mgr = new KeyframeManager(timeline);
-      for (const id of selectedNodeIds) {
-        mgr.removeAllKeyframesForNode(id);
-        sceneGraph.removeNode(id);
-      }
-      const sequenceUpdate = pruneSequenceSteps(sceneGraph, { ...get(), timeline });
-      set({
-        selectedNodeIds: new Set<string>(),
-        editingGradient: null,
-        timeline: { ...timeline },
-        ...sequenceUpdate,
-        isDirty: true,
-      });
+      set(removeLayers(sceneGraph, selectedNodeIds, get()));
     },
   };
 }
@@ -3487,6 +3538,7 @@ function createPageActions(
         canRedo: false,
         enteredGroupId: null,
         clipboard: null,
+        clipboardExtras: null,
         currentFrame: 0,
         isPlaying: false,
         isDirty: true,
@@ -3527,6 +3579,7 @@ function createPageActions(
           canRedo: switchTo.redoStack.length > 0,
           enteredGroupId: null,
           clipboard: null,
+          clipboardExtras: null,
           currentFrame: 0,
           isPlaying: false,
           isDirty: true,
@@ -3649,6 +3702,7 @@ function createPageActions(
         canRedo: targetPage.redoStack.length > 0,
         enteredGroupId: null,
         clipboard: null,
+        clipboardExtras: null,
         currentFrame: 0,
         isPlaying: false,
         isDirty: true,
