@@ -900,8 +900,11 @@ describe('PropertiesPanel', () => {
         fireEvent.click(indicators[0]!);
       });
 
-      expect(useEditorStore.getState().timeline.tracks.length).toBe(1);
-      expect(useEditorStore.getState().timeline.tracks[0].property).toBe('transform.position.x');
+      // Position keys X and Y together
+      expect(useEditorStore.getState().timeline.tracks.map((t) => t.property)).toEqual([
+        'transform.position.x',
+        'transform.position.y',
+      ]);
 
       // Click again to remove keyframe
       act(() => {
@@ -910,6 +913,21 @@ describe('PropertiesPanel', () => {
 
       // Track should be cleaned up (auto-cleanup of empty tracks)
       expect(useEditorStore.getState().timeline.tracks.length).toBe(0);
+    });
+
+    it('keys width and height together from the Size indicator', () => {
+      const sg = renderWithSceneGraph();
+      act(() => {
+        sg.addNode(createTestRect('rect1', 'Rectangle 1'));
+        useEditorStore.getState().setSelection(['rect1']);
+      });
+      act(() => {
+        fireEvent.click(screen.getAllByTestId('keyframe-indicator')[1]!);
+      });
+      expect(useEditorStore.getState().timeline.tracks.map((t) => t.property)).toEqual([
+        'width',
+        'height',
+      ]);
     });
   });
 

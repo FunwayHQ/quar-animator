@@ -21,3 +21,22 @@ export function getKeyframeState(
   if (hasAtFrame) return 'active';
   return 'inactive';
 }
+
+/**
+ * State of a property keyed as a group (X and Y, width and height, the four
+ * corners): active when any of them is keyed at this frame, inactive when any
+ * is animated.
+ */
+export function getGroupKeyframeState(
+  timeline: Timeline | null,
+  nodeId: string,
+  properties: string[],
+  currentFrame: number
+): KeyframeState {
+  const states = properties.map((property) =>
+    getKeyframeState(timeline, nodeId, property, currentFrame)
+  );
+  if (states.includes('active')) return 'active';
+  if (states.includes('inactive')) return 'inactive';
+  return 'none';
+}

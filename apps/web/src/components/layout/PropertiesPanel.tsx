@@ -62,7 +62,7 @@ import {
 import { findTrack, getEasingDisplayName } from '@quar/animation';
 import type { SceneGraph } from '@quar/core';
 import { getSymbolBounds } from '@quar/core';
-import { getKeyframeState } from '../../hooks/useKeyframeState';
+import { getKeyframeState, getGroupKeyframeState } from '../../hooks/useKeyframeState';
 import { EasingCurvePreview } from '../common/EasingCurvePreview';
 import { EasingEditor } from '../common/EasingEditor';
 import { exportSelectionAsPng, exportSelectionAsSvg } from '../../services/exportService';
@@ -1386,6 +1386,23 @@ export function PropertiesPanel() {
     }
   };
 
+  /** Key (or unkey) properties that belong together, like X and Y, at once. */
+  const toggleKeyframes = (entries: Array<[property: string, value: unknown]>) => {
+    if (!selectedId) return;
+    const properties = entries.map(([property]) => property);
+    if (getGroupKeyframeState(timeline, selectedId, properties, currentFrame) === 'active') {
+      for (const property of properties) {
+        if (getKeyframeState(timeline, selectedId, property, currentFrame) === 'active') {
+          removeKeyframeAtFrame(selectedId, property, currentFrame);
+        }
+      }
+    } else {
+      for (const [property, value] of entries) {
+        addKeyframeAtFrame(selectedId, property, currentFrame, value);
+      }
+    }
+  };
+
   const nodeTypeLabel = node.type.charAt(0).toUpperCase() + node.type.slice(1);
 
   return (
@@ -1469,8 +1486,18 @@ export function PropertiesPanel() {
                   Position
                 </label>
                 <KeyframeIndicator
-                  state={getKeyframeState(timeline, nodeId, 'transform.position.x', currentFrame)}
-                  onToggle={() => toggleKeyframe('transform.position.x', node.transform.position.x)}
+                  state={getGroupKeyframeState(
+                    timeline,
+                    nodeId,
+                    ['transform.position.x', 'transform.position.y'],
+                    currentFrame
+                  )}
+                  onToggle={() =>
+                    toggleKeyframes([
+                      ['transform.position.x', node.transform.position.x],
+                      ['transform.position.y', node.transform.position.y],
+                    ])
+                  }
                 />
               </div>
               <div className={styles.propertyInputs}>
@@ -1519,8 +1546,18 @@ export function PropertiesPanel() {
                   Size
                 </label>
                 <KeyframeIndicator
-                  state={getKeyframeState(timeline, nodeId, sizePaths.w, currentFrame)}
-                  onToggle={() => toggleKeyframe(sizePaths.w, getSizePropertyValue(sizePaths.w))}
+                  state={getGroupKeyframeState(
+                    timeline,
+                    nodeId,
+                    [sizePaths.w, sizePaths.h],
+                    currentFrame
+                  )}
+                  onToggle={() =>
+                    toggleKeyframes([
+                      [sizePaths.w, getSizePropertyValue(sizePaths.w)],
+                      [sizePaths.h, getSizePropertyValue(sizePaths.h)],
+                    ])
+                  }
                 />
               </div>
               <div className={styles.propertyInputs}>
@@ -1589,8 +1626,15 @@ export function PropertiesPanel() {
                       <div className={styles.propertyHeader}>
                         <span className={styles.propertyLabel}>Corner Radius</span>
                         <KeyframeIndicator
-                          state={getKeyframeState(timeline, nodeId, 'cornerRadius.0', currentFrame)}
-                          onToggle={() => toggleKeyframe('cornerRadius.0', corners[0])}
+                          state={getGroupKeyframeState(
+                            timeline,
+                            nodeId,
+                            corners.map((_, i) => `cornerRadius.${i}`),
+                            currentFrame
+                          )}
+                          onToggle={() =>
+                            toggleKeyframes(corners.map((v, i) => [`cornerRadius.${i}`, v]))
+                          }
                         />
                       </div>
                       {cornerRadiusLocked ? (
