@@ -4,8 +4,8 @@ import userEvent from '@testing-library/user-event';
 import { SceneGraphProvider, useSceneGraph } from '../../contexts/SceneGraphContext';
 import { createDefaultTransform } from '@quar/core';
 import type { SceneGraph } from '@quar/core';
-import type { RectangleNode, EllipseNode, GroupNode, ArtboardNode } from '@quar/types';
-import { LayerPanel, computeInsertIndex } from './LayerPanel';
+import type { RectangleNode, EllipseNode, GroupNode, ArtboardNode, Node } from '@quar/types';
+import { LayerPanel, computeInsertIndex, nodeTypeIcon } from './LayerPanel';
 import { useEditorStore } from '../../stores/editorStore';
 import type { ReactNode } from 'react';
 
@@ -951,7 +951,7 @@ describe('LayerPanel', () => {
   // ==========================================================================
 
   describe('IK Target nodes', () => {
-    it('shows ⊕ icon for ik-target nodes', () => {
+    it('shows the crosshair icon for ik-target nodes', () => {
       let sg: SceneGraph | null = null;
       render(
         <SceneGraphProvider>
@@ -979,8 +979,7 @@ describe('LayerPanel', () => {
 
       // Check the IK target shows up with its name
       expect(screen.getByText('IK Target (Bone1)')).toBeInTheDocument();
-      // Check for ⊕ icon
-      expect(screen.getByText('\u2295')).toBeInTheDocument();
+      expect(document.querySelector('[data-icon="ik-target"] svg')).not.toBeNull();
     });
   });
 
@@ -1015,7 +1014,7 @@ describe('LayerPanel', () => {
       };
     }
 
-    it('shows artboard icon (⬜) for artboard nodes', () => {
+    it('shows the frame icon for artboard nodes', () => {
       let sg: SceneGraph | null = null;
       render(
         <SceneGraphProvider>
@@ -1029,7 +1028,7 @@ describe('LayerPanel', () => {
       });
 
       // ⬜ is U+2B1C
-      expect(screen.getByText('\u2B1C')).toBeInTheDocument();
+      expect(document.querySelector('[data-icon="artboard"] svg')).not.toBeNull();
       expect(screen.getByText('My Artboard')).toBeInTheDocument();
     });
 
@@ -1070,5 +1069,38 @@ describe('LayerPanel', () => {
       expect(computeInsertIndex('inside', 5, true)).toBe(0);
       expect(computeInsertIndex('inside', 5, false)).toBe(0);
     });
+  });
+});
+
+describe('nodeTypeIcon', () => {
+  const group = (extra: Partial<GroupNode> = {}) =>
+    ({ ...createTestGroup('g', 'G'), ...extra }) as GroupNode;
+
+  it('gives each kind of layer its own icon', () => {
+    const types = [
+      'rectangle',
+      'ellipse',
+      'path',
+      'text',
+      'image',
+      'bone',
+      'ik-target',
+      'vitruvian',
+      'artboard',
+      'symbol-instance',
+    ];
+    const keys = [
+      ...types.map((type) => nodeTypeIcon(type).key),
+      nodeTypeIcon('group', group()).key,
+    ];
+    expect(new Set(keys).size).toBe(keys.length);
+  });
+
+  it('tells masks, booleans and stars apart', () => {
+    expect(nodeTypeIcon('group', group({ maskNodeId: 'm', maskMode: 'alpha' })).key).toBe('mask');
+    expect(nodeTypeIcon('group', group({ booleanOp: 'subtract' })).key).toBe('subtract');
+    const polygon = { type: 'polygon', sides: 5, radius: 10 } as unknown as Node;
+    expect(nodeTypeIcon('polygon', polygon).key).toBe('polygon');
+    expect(nodeTypeIcon('polygon', { ...polygon, innerRadius: 0.5 } as Node).key).toBe('star');
   });
 });

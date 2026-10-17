@@ -1,4 +1,25 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import {
+  Bone,
+  Circle,
+  Component,
+  Contrast,
+  Crosshair,
+  Folder,
+  Frame,
+  Hexagon,
+  Image as ImageIcon,
+  PersonStanding,
+  Spline,
+  Square,
+  SquaresExclude,
+  SquaresIntersect,
+  SquaresSubtract,
+  SquaresUnite,
+  Star,
+  Type,
+  type LucideIcon,
+} from 'lucide-react';
 import type { Node, GroupNode, MaskMode } from '@quar/types';
 import { useSceneGraph } from '../../contexts/SceneGraphContext';
 import { useEditorStore, getMaskSelection } from '../../stores/editorStore';
@@ -43,43 +64,66 @@ interface DropTarget {
 // Helper: map node type to display icon
 // ============================================================================
 
-function nodeTypeIcon(type: string, node?: Node): string {
+interface LayerIcon {
+  /** Stable name for the icon (tests, styling). */
+  key: string;
+  Icon: LucideIcon;
+}
+
+/** The icon for a layer: its type, refined by booleans, masks and stars. */
+export function nodeTypeIcon(type: string, node?: Node): LayerIcon {
   switch (type) {
     case 'group': {
-      const booleanOp = node ? (node as GroupNode).booleanOp : undefined;
-      if (booleanOp) {
-        switch (booleanOp) {
-          case 'union':
-            return '\u222A'; // ∪
-          case 'subtract':
-            return '\u2216'; // ∖
-          case 'intersect':
-            return '\u2229'; // ∩
-          case 'exclude':
-            return '\u2295'; // ⊕
-        }
+      const group = node as GroupNode | undefined;
+      switch (group?.booleanOp) {
+        case 'union':
+          return { key: 'union', Icon: SquaresUnite };
+        case 'subtract':
+          return { key: 'subtract', Icon: SquaresSubtract };
+        case 'intersect':
+          return { key: 'intersect', Icon: SquaresIntersect };
+        case 'exclude':
+          return { key: 'exclude', Icon: SquaresExclude };
       }
-      return '\u{1F4C1}'; // folder
+      if (group?.maskNodeId) return { key: 'mask', Icon: Contrast };
+      return { key: 'group', Icon: Folder };
     }
     case 'rectangle':
+      return { key: 'rectangle', Icon: Square };
     case 'ellipse':
+      return { key: 'ellipse', Icon: Circle };
     case 'polygon':
-      return '\u25FC'; // filled square
+      return node && node.type === 'polygon' && node.innerRadius !== undefined
+        ? { key: 'star', Icon: Star }
+        : { key: 'polygon', Icon: Hexagon };
     case 'path':
-      return '\u2669'; // path-like symbol
+      return { key: 'path', Icon: Spline };
+    case 'text':
+      return { key: 'text', Icon: Type };
+    case 'image':
+      return { key: 'image', Icon: ImageIcon };
     case 'bone':
-      return '\u22A5'; // ⊥ perpendicular symbol
+      return { key: 'bone', Icon: Bone };
     case 'ik-target':
-      return '\u2295'; // ⊕ crosshair-like symbol
+      return { key: 'ik-target', Icon: Crosshair };
     case 'vitruvian':
-      return '\u2726'; // ✦ four-pointed star (Vitruvian switch)
+      return { key: 'vitruvian', Icon: PersonStanding };
     case 'artboard':
-      return '\u2B1C'; // ⬜ white large square (artboard frame)
+      return { key: 'artboard', Icon: Frame };
     case 'symbol-instance':
-      return '\u25C7'; // ◇ diamond (Figma convention for component instances)
+      return { key: 'symbol-instance', Icon: Component };
     default:
-      return '\u25FC';
+      return { key: 'shape', Icon: Square };
   }
+}
+
+function LayerTypeIcon({ node }: { node: Node }) {
+  const { key, Icon } = nodeTypeIcon(node.type, node);
+  return (
+    <span className={styles.layerIcon} data-icon={key} aria-hidden="true">
+      <Icon size={13} strokeWidth={1.75} />
+    </span>
+  );
 }
 
 // ============================================================================
@@ -241,7 +285,7 @@ function LayerRow({
         ) : depth > 0 ? (
           <span className={styles.expandSpacer} />
         ) : null}
-        <span className={styles.layerIcon}>{nodeTypeIcon(node.type, node)}</span>
+        <LayerTypeIcon node={node} />
         {isRenaming ? (
           <InlineRenameInput
             initialName={node.name}

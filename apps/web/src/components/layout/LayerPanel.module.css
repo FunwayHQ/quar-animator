@@ -142,11 +142,24 @@
 }
 
 .layerIcon {
-  font-size: 11px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   width: 18px;
-  text-align: center;
-  opacity: 0.7;
+  color: var(--color-text-secondary);
+  opacity: 0.8;
   flex-shrink: 0;
+}
+
+/* Containers and rig parts stand out from plain shapes */
+.layerIcon[data-icon='artboard'] {
+  color: var(--color-accent-primary);
+}
+
+.layerIcon[data-icon='bone'],
+.layerIcon[data-icon='ik-target'],
+.layerIcon[data-icon='vitruvian'] {
+  color: var(--color-accent-warning);
 }
 
 .layerRow.selected .layerIcon {
