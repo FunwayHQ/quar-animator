@@ -265,6 +265,33 @@ describe('ShapeRenderer - Image Rendering', () => {
     });
   });
 
+  describe('image meshes for bones', () => {
+    type WithGeometry = {
+      ensureBindPoseImageGeometry(node: ImageNode): { vertices: Float32Array };
+    };
+    const geometryOf = (node: ImageNode) =>
+      (shapeRenderer as unknown as WithGeometry).ensureBindPoseImageGeometry(node);
+
+    it('gives an image a mesh of small cells to bind and bend', () => {
+      const imageNode = createImageNode('img1', 'data:image/png;base64,abc', 200, 100);
+      // 10 × 5 cells → 11 × 6 vertices
+      expect(geometryOf(imageNode).vertices).toHaveLength(66 * 2);
+    });
+
+    it('keeps the plain quad for images bound before meshes', () => {
+      const imageNode = {
+        ...createImageNode('img2', 'data:image/png;base64,abc', 200, 100),
+        skinData: {
+          vertices: [],
+          inverseBindMatrices: {},
+          meshBindMatrix: [1, 0, 0, 1, 0, 0],
+          vertexCount: 4,
+        },
+      };
+      expect(geometryOf(imageNode).vertices).toHaveLength(8);
+    });
+  });
+
   // ==========================================================================
   // Ghost Rendering for Image Nodes
   // ==========================================================================

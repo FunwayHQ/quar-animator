@@ -50,6 +50,7 @@ import {
 import { trimPathToProgress } from '../path/pathReveal';
 import earcut from 'earcut';
 import { triangulateContours } from './contourTriangulation';
+import { createImageMesh, imageMeshCells } from './imageMesh';
 import { getFontManager } from '../font/FontManager';
 import { textToSubpaths } from '../font/glyphConverter';
 import { getTextBounds } from '../font/textMetrics';
@@ -440,6 +441,8 @@ interface TessellationCacheEntry {
   vertices: Float32Array;
   /** Cached earcut fill indices */
   fillIndices: number[];
+  /** Texture coordinates per vertex (image meshes) */
+  uvs?: Float32Array;
   /** Cached stroke outline vertices per stroke key (width+align) */
   strokeCache: Map<string, { outline: Float32Array; indices: number[] }>;
   /** Original per-contour vertex arrays (for text stroke rendering) */
@@ -527,6 +530,8 @@ export class ShapeRenderer {
   // Texture rendering
   private textureVAO: WebGLVertexArrayObject | null = null;
   private textureVertexBuffer: WebGLBuffer | null = null;
+  /** Triangle indices of the bound image being drawn */
+  private imageMeshIndexBuffer: WebGLBuffer | null = null;
   private textureCache: Map<string, WebGLTexture> = new Map();
   private pendingImages: Map<string, Promise<HTMLImageElement>> = new Map();
   private currentVPArray: Float32Array | null = null;
@@ -2023,19 +2028,8 @@ export class ShapeRenderer {
     const trX = x1 + (vo?.[3]?.x ?? 0),
       trY = y1 + (vo?.[3]?.y ?? 0);
 
-    // Cache image quad positions in geometry cache (for skinning/getTessellatedVertices)
-    const geoKey = buildGeometryKey(node);
-    const existingCache = this.geometryCache.get(node.id);
-    if (!existingCache || existingCache.geoKey !== geoKey) {
-      const quadPositions = new Float32Array([blX, blY, brX, brY, tlX, tlY, trX, trY]);
-      const fillIndices = [0, 1, 2, 2, 1, 3]; // Two triangles
-      this.geometryCache.set(node.id, {
-        geoKey,
-        vertices: quadPositions,
-        fillIndices,
-        strokeCache: new Map(),
-      });
-    }
+    // Cache the image's mesh (what binding weights and getTessellatedVertices return)
+    this.ensureBindPoseImageGeometry(node);
 
     // UV: Y inverted because texImage2D loads top-to-bottom but world is Y-up
     const quadData = new Float32Array([
@@ -3444,8 +3438,14 @@ export class ShapeRenderer {
    * Ensure a skinned image node's bind-pose quad is cached, mirroring the quad
    * that renderImage() would otherwise have seeded.
    */
+  /**
+   * An image's geometry as a mesh of small cells, so bones can bend it.
+   * Bindings made before image meshes (4 weighted vertices) keep the plain
+   * quad they were bound with — a 1 × 1 mesh.
+   */
   private ensureBindPoseImageGeometry(node: ImageNode): TessellationCacheEntry | null {
-    const geoKey = buildGeometryKey(node);
+    const legacyQuad = node.skinData?.vertexCount === 4;
+    const geoKey = `${buildGeometryKey(node)}|${legacyQuad ? 'quad' : 'mesh'}`;
     const existing = this.geometryCache.get(node.id);
     if (existing && existing.geoKey === geoKey) return existing;
 
@@ -3456,19 +3456,29 @@ export class ShapeRenderer {
     const x1 = x0 + node.width;
     const y1 = y0 + node.height;
     const vo = node.vertexOffsets;
-    const blX = x0 + (vo?.[0]?.x ?? 0),
-      blY = y0 + (vo?.[0]?.y ?? 0);
-    const brX = x1 + (vo?.[1]?.x ?? 0),
-      brY = y0 + (vo?.[1]?.y ?? 0);
-    const tlX = x0 + (vo?.[2]?.x ?? 0),
-      tlY = y1 + (vo?.[2]?.y ?? 0);
-    const trX = x1 + (vo?.[3]?.x ?? 0),
-      trY = y1 + (vo?.[3]?.y ?? 0);
+    const corner = (x: number, y: number, offset?: { x: number; y: number }) => ({
+      x: x + (offset?.x ?? 0),
+      y: y + (offset?.y ?? 0),
+    });
+    const { cols, rows } = legacyQuad
+      ? { cols: 1, rows: 1 }
+      : imageMeshCells(node.width, node.height);
+    const mesh = createImageMesh(
+      {
+        bl: corner(x0, y0, vo?.[0]),
+        br: corner(x1, y0, vo?.[1]),
+        tl: corner(x0, y1, vo?.[2]),
+        tr: corner(x1, y1, vo?.[3]),
+      },
+      cols,
+      rows
+    );
 
     const entry: TessellationCacheEntry = {
       geoKey,
-      vertices: new Float32Array([blX, blY, brX, brY, tlX, tlY, trX, trY]),
-      fillIndices: [0, 1, 2, 2, 1, 3],
+      vertices: mesh.vertices,
+      uvs: mesh.uvs,
+      fillIndices: mesh.indices,
       strokeCache: new Map(),
     };
     this.geometryCache.set(node.id, entry);
@@ -3605,27 +3615,16 @@ export class ShapeRenderer {
       nodeMorphOffsets
     );
 
-    // Build interleaved position+UV buffer from deformed quad
-    // Bind-pose vertex order: [BL, BR, TL, TR] (matches renderImage)
-    // UV order: BL=(0,1), BR=(1,1), TL=(0,0), TR=(1,0)
-    const quadData = new Float32Array([
-      deformed[0]!,
-      deformed[1]!,
-      0,
-      1, // bottom-left
-      deformed[2]!,
-      deformed[3]!,
-      1,
-      1, // bottom-right
-      deformed[4]!,
-      deformed[5]!,
-      0,
-      0, // top-left
-      deformed[6]!,
-      deformed[7]!,
-      1,
-      0, // top-right
-    ]);
+    // Interleave the deformed mesh with its texture coordinates
+    const uvs = cached.uvs ?? new Float32Array([0, 1, 1, 1, 0, 0, 1, 0]);
+    const vertexCount = cached.vertices.length / 2;
+    const meshData = new Float32Array(vertexCount * 4);
+    for (let i = 0; i < vertexCount; i++) {
+      meshData[i * 4] = deformed[i * 2]!;
+      meshData[i * 4 + 1] = deformed[i * 2 + 1]!;
+      meshData[i * 4 + 2] = uvs[i * 2]!;
+      meshData[i * 4 + 3] = uvs[i * 2 + 1]!;
+    }
 
     // Switch to texture program
     this.renderer.useProgram(this.textureProgram);
@@ -3644,7 +3643,11 @@ export class ShapeRenderer {
     gl.uniformMatrix3fv(this.textureProgram.uniforms.u_model ?? null, false, identityMatrix);
 
     gl.bindBuffer(gl.ARRAY_BUFFER, this.textureVertexBuffer);
-    gl.bufferSubData(gl.ARRAY_BUFFER, 0, quadData);
+    // Grows the buffer to fit the mesh (plain images upload 4 vertices into it)
+    gl.bufferData(gl.ARRAY_BUFFER, meshData, gl.DYNAMIC_DRAW);
+    if (!this.imageMeshIndexBuffer) this.imageMeshIndexBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.imageMeshIndexBuffer);
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint32Array(cached.fillIndices), gl.DYNAMIC_DRAW);
 
     // Bind texture
     gl.activeTexture(gl.TEXTURE0);
@@ -3663,14 +3666,14 @@ export class ShapeRenderer {
     gl.uniform1f(this.textureProgram.uniforms.u_exposure ?? null, (adj?.exposure ?? 0) / 100);
     gl.uniform1f(this.textureProgram.uniforms.u_temperature ?? null, (adj?.temperature ?? 0) / 100);
 
-    // Corner radius SDF — disable for skinned (deformed quad breaks SDF)
+    // Rounded corners: the mask works in texture space, so it bends with the mesh
     gl.uniform2f(this.textureProgram.uniforms.u_rectSize ?? null, node.width, node.height);
     gl.uniform4fv(
       this.textureProgram.uniforms.u_cornerRadius ?? null,
-      new Float32Array([0, 0, 0, 0])
+      new Float32Array(node.cornerRadius)
     );
 
-    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    gl.drawElements(gl.TRIANGLES, cached.fillIndices.length, gl.UNSIGNED_INT, 0);
     gl.bindTexture(gl.TEXTURE_2D, null);
 
     // Restore shape program + VAO
@@ -4458,6 +4461,10 @@ export class ShapeRenderer {
     }
 
     // Texture resources
+    if (this.imageMeshIndexBuffer) {
+      gl.deleteBuffer(this.imageMeshIndexBuffer);
+      this.imageMeshIndexBuffer = null;
+    }
     if (this.textureVertexBuffer) {
       gl.deleteBuffer(this.textureVertexBuffer);
       this.textureVertexBuffer = null;
