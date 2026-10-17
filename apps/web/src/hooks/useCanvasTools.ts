@@ -222,6 +222,9 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
 
   // Undo snapshot before canvas transform operations (move/resize/rotate/shape create)
   const onTransformStart = useCallback(() => {
+    // A Smart Bone recording is one undo step, taken when it started: strokes
+    // during it sculpt the brush's working set, which store undo can't revert
+    if (useEditorStore.getState().smartBoneRecordingActionId) return;
     useEditorStore.getState().pushUndo(sceneGraphRef.current);
   }, []);
 

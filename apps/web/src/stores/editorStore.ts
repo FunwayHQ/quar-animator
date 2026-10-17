@@ -155,19 +155,66 @@ function makeHistorySnapshot(
   };
 }
 
+/**
+ * Rigging is kept for the whole project, but each page has its own undo
+ * history: restore a snapshot's rigging only for this page's layers (those in
+ * the scene now or in the snapshot), and keep other pages' rigging as it is.
+ * Entries that reference no layers come from the snapshot.
+ */
+function pageScoped<T>(
+  restored: T[],
+  current: T[],
+  layersOf: (entry: T) => string[],
+  pageLayerIds: Set<string>
+): T[] {
+  const onPage = (entry: T) => {
+    const ids = layersOf(entry);
+    return ids.length === 0 || ids.some((id) => pageLayerIds.has(id));
+  };
+  return [...structuredClone(restored).filter(onPage), ...current.filter((e) => !onPage(e))];
+}
+
 /** Store fields to restore from a popped history snapshot (F026). */
-function restoredFieldsFrom(snapshot: HistorySnapshot) {
+function restoredFieldsFrom(
+  snapshot: HistorySnapshot,
+  current: HistoryCapturable,
+  currentScene: { nodes: Node[] }
+) {
   const timeline = structuredClone(snapshot.timeline);
+  const pageLayerIds = new Set([
+    ...currentScene.nodes.map((node) => node.id),
+    ...snapshot.sceneData.nodes.map((node) => node.id),
+  ]);
   return {
     selectedNodeIds: new Set(snapshot.selectedNodeIds),
     timeline,
     timelineDuration: timeline.duration,
     frameRate: timeline.frameRate,
     animationSequence: structuredClone(snapshot.animationSequence ?? createAnimationSequence()),
-    ikChains: structuredClone(snapshot.ikChains),
-    smartBoneActions: structuredClone(snapshot.smartBoneActions),
-    dynamicChains: structuredClone(snapshot.dynamicChains),
-    vitruvianControllers: structuredClone(snapshot.vitruvianControllers),
+    ikChains: pageScoped(
+      snapshot.ikChains,
+      current.ikChains,
+      (chain) => [chain.rootBoneId, chain.endEffectorBoneId, chain.targetNodeId],
+      pageLayerIds
+    ),
+    smartBoneActions: pageScoped(
+      snapshot.smartBoneActions,
+      current.smartBoneActions,
+      (action) => [action.driver.boneId],
+      pageLayerIds
+    ),
+    dynamicChains: pageScoped(
+      snapshot.dynamicChains,
+      current.dynamicChains,
+      (chain) => [chain.rootBoneId, ...chain.boneIds],
+      pageLayerIds
+    ),
+    vitruvianControllers: pageScoped(
+      snapshot.vitruvianControllers,
+      current.vitruvianControllers,
+      (controller) => controller.groups.flatMap((group) => group.boneIds),
+      pageLayerIds
+    ),
   };
 }
 
@@ -444,7 +491,7 @@ export interface EditorStore extends SequenceActions {
     chainDepth?: number
   ) => void;
   removeIKChain: (sceneGraph: SceneGraphLike, chainId: string) => void;
-  setIKChainEnabled: (chainId: string, enabled: boolean) => void;
+  setIKChainEnabled: (sceneGraph: SceneGraphLike, chainId: string, enabled: boolean) => void;
   setIKChainSettings: (
     chainId: string,
     settings: { maxIterations?: number; tolerance?: number }
@@ -456,15 +503,19 @@ export interface EditorStore extends SequenceActions {
   smartBoneRecordingTargetId: string | null;
   smartBoneRecordingPrevTool: ToolType | null;
   smartBoneRecordingPrevRotation: number | null;
-  createSmartBoneAction: (boneId: string) => void;
-  removeSmartBoneAction: (actionId: string) => void;
-  setSmartBoneActionEnabled: (actionId: string, enabled: boolean) => void;
+  createSmartBoneAction: (sceneGraph: SceneGraphLike, boneId: string) => void;
+  removeSmartBoneAction: (sceneGraph: SceneGraphLike, actionId: string) => void;
+  setSmartBoneActionEnabled: (
+    sceneGraph: SceneGraphLike,
+    actionId: string,
+    enabled: boolean
+  ) => void;
   updateSmartBoneDriver: (
     actionId: string,
     updates: { rangeMin?: number; rangeMax?: number }
   ) => void;
-  addMorphTarget: (actionId: string, driverValue: number) => void;
-  removeMorphTarget: (actionId: string, targetId: string) => void;
+  addMorphTarget: (sceneGraph: SceneGraphLike, actionId: string, driverValue: number) => void;
+  removeMorphTarget: (sceneGraph: SceneGraphLike, actionId: string, targetId: string) => void;
   startSmartBoneRecording: (actionId: string, targetId: string, sceneGraph: SceneGraphLike) => void;
   stopSmartBoneRecording: (sceneGraph: SceneGraphLike) => void;
   saveMorphTargetOffsets: (
@@ -475,12 +526,25 @@ export interface EditorStore extends SequenceActions {
 
   // Vitruvian Bones (bone group switching)
   vitruvianControllers: VitruvianController[];
-  createVitruvianController: (name?: string) => string;
-  removeVitruvianController: (controllerId: string) => void;
-  setVitruvianControllerEnabled: (controllerId: string, enabled: boolean) => void;
-  setVitruvianActiveGroup: (controllerId: string, groupId: string) => void;
-  addVitruvianGroup: (controllerId: string, name: string, boneIds: string[]) => string;
-  removeVitruvianGroup: (controllerId: string, groupId: string) => void;
+  createVitruvianController: (sceneGraph: SceneGraphLike, name?: string) => string;
+  removeVitruvianController: (sceneGraph: SceneGraphLike, controllerId: string) => void;
+  setVitruvianControllerEnabled: (
+    sceneGraph: SceneGraphLike,
+    controllerId: string,
+    enabled: boolean
+  ) => void;
+  setVitruvianActiveGroup: (
+    sceneGraph: SceneGraphLike,
+    controllerId: string,
+    groupId: string
+  ) => void;
+  addVitruvianGroup: (
+    sceneGraph: SceneGraphLike,
+    controllerId: string,
+    name: string,
+    boneIds: string[]
+  ) => string;
+  removeVitruvianGroup: (sceneGraph: SceneGraphLike, controllerId: string, groupId: string) => void;
   captureVitruvianSkinSnapshots: (
     controllerId: string,
     groupId: string,
@@ -491,8 +555,8 @@ export interface EditorStore extends SequenceActions {
   dynamicChains: DynamicChain[];
   globalWind: WindSettings;
   createDynamicChain: (sceneGraph: SceneGraphLike, rootBoneId: string) => void;
-  removeDynamicChain: (chainId: string) => void;
-  setDynamicChainEnabled: (chainId: string, enabled: boolean) => void;
+  removeDynamicChain: (sceneGraph: SceneGraphLike, chainId: string) => void;
+  setDynamicChainEnabled: (sceneGraph: SceneGraphLike, chainId: string, enabled: boolean) => void;
   updateDynamicChainSettings: (
     chainId: string,
     settings: Partial<Omit<DynamicChain, 'id' | 'name' | 'rootBoneId' | 'boneIds'>>
@@ -1347,10 +1411,12 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     toast.info('IK chain removed');
   },
 
-  setIKChainEnabled: (chainId: string, enabled: boolean) => {
+  setIKChainEnabled: (sceneGraph, chainId, enabled) => {
+    get().pushUndo(sceneGraph);
     const { ikChains } = get();
     set({
       ikChains: ikChains.map((c) => (c.id === chainId ? { ...c, enabled } : c)),
+      isDirty: true,
     });
   },
 
@@ -1369,6 +1435,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
             }
           : c
       ),
+      isDirty: true,
     });
   },
 
@@ -1379,7 +1446,8 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   smartBoneRecordingPrevTool: null as ToolType | null,
   smartBoneRecordingPrevRotation: null as number | null,
 
-  createSmartBoneAction: (boneId: string) => {
+  createSmartBoneAction: (sceneGraph, boneId) => {
+    get().pushUndo(sceneGraph);
     const id = `sba_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
     const action: SmartBoneAction = {
       id,
@@ -1391,7 +1459,8 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     set({ smartBoneActions: [...get().smartBoneActions, action], isDirty: true });
   },
 
-  removeSmartBoneAction: (actionId: string) => {
+  removeSmartBoneAction: (sceneGraph, actionId) => {
+    get().pushUndo(sceneGraph);
     set({
       smartBoneActions: get().smartBoneActions.filter((a) => a.id !== actionId),
       isDirty: true,
@@ -1407,11 +1476,13 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     });
   },
 
-  setSmartBoneActionEnabled: (actionId: string, enabled: boolean) => {
+  setSmartBoneActionEnabled: (sceneGraph, actionId, enabled) => {
+    get().pushUndo(sceneGraph);
     set({
       smartBoneActions: get().smartBoneActions.map((a) =>
         a.id === actionId ? { ...a, enabled } : a
       ),
+      isDirty: true,
     });
   },
 
@@ -1433,7 +1504,8 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     });
   },
 
-  addMorphTarget: (actionId: string, driverValue: number) => {
+  addMorphTarget: (sceneGraph, actionId, driverValue) => {
+    get().pushUndo(sceneGraph);
     const targetId = `mt_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
     set({
       smartBoneActions: get().smartBoneActions.map((a) =>
@@ -1451,7 +1523,8 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     });
   },
 
-  removeMorphTarget: (actionId: string, targetId: string) => {
+  removeMorphTarget: (sceneGraph, actionId, targetId) => {
+    get().pushUndo(sceneGraph);
     set({
       smartBoneActions: get().smartBoneActions.map((a) =>
         a.id === actionId ? { ...a, targets: a.targets.filter((t) => t.id !== targetId) } : a
@@ -1475,6 +1548,8 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     if (!action) return;
     const target = action.targets.find((t) => t.id === targetId);
     if (!target) return;
+    // The whole recording is one undo step, back to before it started
+    get().pushUndo(sceneGraph);
 
     // Find the driver bone and save its current rotation
     const boneId = action.driver.boneId;
@@ -1546,7 +1621,8 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   // Vitruvian Bones (bone group switching)
   vitruvianControllers: [] as VitruvianController[],
 
-  createVitruvianController: (name?: string) => {
+  createVitruvianController: (sceneGraph, name) => {
+    get().pushUndo(sceneGraph);
     const id = `vit_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
     const groupId = `vg_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
     const controller: VitruvianController = {
@@ -1571,7 +1647,8 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     return id;
   },
 
-  removeVitruvianController: (controllerId: string) => {
+  removeVitruvianController: (sceneGraph, controllerId) => {
+    get().pushUndo(sceneGraph);
     set({
       vitruvianControllers: get().vitruvianControllers.filter((c) => c.id !== controllerId),
       isDirty: true,
@@ -1579,15 +1656,18 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     toast.info('Vitruvian controller removed');
   },
 
-  setVitruvianControllerEnabled: (controllerId: string, enabled: boolean) => {
+  setVitruvianControllerEnabled: (sceneGraph, controllerId, enabled) => {
+    get().pushUndo(sceneGraph);
     set({
       vitruvianControllers: get().vitruvianControllers.map((c) =>
         c.id === controllerId ? { ...c, enabled } : c
       ),
+      isDirty: true,
     });
   },
 
-  setVitruvianActiveGroup: (controllerId: string, groupId: string) => {
+  setVitruvianActiveGroup: (sceneGraph, controllerId, groupId) => {
+    get().pushUndo(sceneGraph);
     set({
       vitruvianControllers: get().vitruvianControllers.map((c) =>
         c.id === controllerId ? { ...c, activeGroupId: groupId } : c
@@ -1596,7 +1676,8 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     });
   },
 
-  addVitruvianGroup: (controllerId: string, name: string, boneIds: string[]) => {
+  addVitruvianGroup: (sceneGraph, controllerId, name, boneIds) => {
+    get().pushUndo(sceneGraph);
     const groupId = `vg_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
     set({
       vitruvianControllers: get().vitruvianControllers.map((c) =>
@@ -1612,7 +1693,8 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     return groupId;
   },
 
-  removeVitruvianGroup: (controllerId: string, groupId: string) => {
+  removeVitruvianGroup: (sceneGraph, controllerId, groupId) => {
+    get().pushUndo(sceneGraph);
     set({
       vitruvianControllers: get().vitruvianControllers.map((c) => {
         if (c.id !== controllerId) return c;
@@ -1671,6 +1753,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   } as WindSettings,
 
   createDynamicChain: (sceneGraph: SceneGraphLike, rootBoneId: string) => {
+    get().pushUndo(sceneGraph);
     const rootBone = sceneGraph.getNode(rootBoneId);
     if (!rootBone || rootBone.type !== 'bone') {
       toast.error('Selected node is not a bone');
@@ -1715,7 +1798,8 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     toast.success('Dynamic chain created');
   },
 
-  removeDynamicChain: (chainId: string) => {
+  removeDynamicChain: (sceneGraph, chainId) => {
+    get().pushUndo(sceneGraph);
     set({
       dynamicChains: get().dynamicChains.filter((c) => c.id !== chainId),
       isDirty: true,
@@ -1723,9 +1807,11 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     toast.info('Dynamic chain removed');
   },
 
-  setDynamicChainEnabled: (chainId: string, enabled: boolean) => {
+  setDynamicChainEnabled: (sceneGraph, chainId, enabled) => {
+    get().pushUndo(sceneGraph);
     set({
       dynamicChains: get().dynamicChains.map((c) => (c.id === chainId ? { ...c, enabled } : c)),
+      isDirty: true,
     });
   },
 
@@ -3212,7 +3298,8 @@ function createHistoryActions(
       if (undoStack.length === 0) return;
 
       // Save current state to redo stack
-      const newRedoStack = [...redoStack, makeHistorySnapshot(sceneGraph, state)];
+      const now = makeHistorySnapshot(sceneGraph, state);
+      const newRedoStack = [...redoStack, now];
 
       // Pop and restore from undo stack
       const newUndoStack = [...undoStack];
@@ -3226,7 +3313,7 @@ function createHistoryActions(
         canRedo: true,
         enteredGroupId: null,
         isDirty: true,
-        ...restoredFieldsFrom(snapshot),
+        ...restoredFieldsFrom(snapshot, state, now.sceneData),
       });
     },
 
@@ -3236,7 +3323,8 @@ function createHistoryActions(
       if (redoStack.length === 0) return;
 
       // Save current state to undo stack
-      const newUndoStack = [...undoStack, makeHistorySnapshot(sceneGraph, state)];
+      const now = makeHistorySnapshot(sceneGraph, state);
+      const newUndoStack = [...undoStack, now];
 
       // Pop and restore from redo stack
       const newRedoStack = [...redoStack];
@@ -3250,7 +3338,7 @@ function createHistoryActions(
         canRedo: newRedoStack.length > 0,
         enteredGroupId: null,
         isDirty: true,
-        ...restoredFieldsFrom(snapshot),
+        ...restoredFieldsFrom(snapshot, state, now.sceneData),
       });
     },
 

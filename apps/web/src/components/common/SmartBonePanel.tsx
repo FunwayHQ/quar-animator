@@ -41,7 +41,7 @@ export function SmartBonePanel({ boneId }: SmartBonePanelProps) {
       <div className={styles.header}>
         <span className={styles.title}>Smart Bones</span>
         <button
-          onClick={() => createSmartBoneAction(boneId)}
+          onClick={() => createSmartBoneAction(sceneGraph, boneId)}
           disabled={isRecording}
           className={styles.addActionButton}
           data-testid="create-smart-bone-action"
@@ -62,13 +62,15 @@ export function SmartBonePanel({ boneId }: SmartBonePanelProps) {
           action={action}
           isRecording={recordingActionId === action.id}
           recordingTargetId={recordingTargetId}
-          onRemove={() => removeSmartBoneAction(action.id)}
-          onToggleEnabled={(enabled: boolean) => setSmartBoneActionEnabled(action.id, enabled)}
+          onRemove={() => removeSmartBoneAction(sceneGraph, action.id)}
+          onToggleEnabled={(enabled: boolean) =>
+            setSmartBoneActionEnabled(sceneGraph, action.id, enabled)
+          }
           onUpdateDriver={(updates: { rangeMin?: number; rangeMax?: number }) =>
             updateSmartBoneDriver(action.id, updates)
           }
-          onAddTarget={(driverValue: number) => addMorphTarget(action.id, driverValue)}
-          onRemoveTarget={(targetId: string) => removeMorphTarget(action.id, targetId)}
+          onAddTarget={(driverValue: number) => addMorphTarget(sceneGraph, action.id, driverValue)}
+          onRemoveTarget={(targetId: string) => removeMorphTarget(sceneGraph, action.id, targetId)}
           onStartRecording={(targetId: string) =>
             startSmartBoneRecording(action.id, targetId, sceneGraph)
           }

@@ -86,7 +86,7 @@ describe('DynamicChainPanel', () => {
     render(<DynamicChainPanel boneId="bone-1" />);
     const checkbox = screen.getByLabelText('Enable dynamic chain');
     fireEvent.click(checkbox);
-    expect(mockState.setDynamicChainEnabled).toHaveBeenCalledWith('dc-1', false);
+    expect(mockState.setDynamicChainEnabled).toHaveBeenCalledWith(expect.anything(), 'dc-1', false);
   });
 
   it('updates stiffness via slider', () => {
@@ -158,6 +158,6 @@ describe('DynamicChainPanel', () => {
     ];
     render(<DynamicChainPanel boneId="bone-1" />);
     fireEvent.click(screen.getByTestId('remove-dynamic-chain'));
-    expect(mockState.removeDynamicChain).toHaveBeenCalledWith('dc-1');
+    expect(mockState.removeDynamicChain).toHaveBeenCalledWith(expect.anything(), 'dc-1');
   });
 });

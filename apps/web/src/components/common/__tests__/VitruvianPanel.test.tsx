@@ -95,7 +95,11 @@ describe('VitruvianPanel', () => {
     render(<VitruvianPanel boneId="bone-1" />);
     const checkbox = screen.getByLabelText('Enable controller');
     fireEvent.click(checkbox);
-    expect(mockState.setVitruvianControllerEnabled).toHaveBeenCalledWith('vc-1', false);
+    expect(mockState.setVitruvianControllerEnabled).toHaveBeenCalledWith(
+      expect.anything(),
+      'vc-1',
+      false
+    );
   });
 
   it('calls addVitruvianGroup on + click', () => {
@@ -110,9 +114,12 @@ describe('VitruvianPanel', () => {
     ];
     render(<VitruvianPanel boneId="bone-1" />);
     fireEvent.click(screen.getByTestId('add-vitruvian-group'));
-    expect(mockState.addVitruvianGroup).toHaveBeenCalledWith('vc-1', expect.any(String), [
-      'bone-1',
-    ]);
+    expect(mockState.addVitruvianGroup).toHaveBeenCalledWith(
+      expect.anything(),
+      'vc-1',
+      expect.any(String),
+      ['bone-1']
+    );
   });
 
   it('calls captureVitruvianSkinSnapshots on Snap click', () => {

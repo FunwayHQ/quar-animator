@@ -2012,7 +2012,7 @@ export function PropertiesPanel() {
                             type="checkbox"
                             checked={chain.enabled}
                             onChange={(e) => {
-                              setIKChainEnabled(chain.id, e.target.checked);
+                              setIKChainEnabled(sceneGraph, chain.id, e.target.checked);
                             }}
                           />
                         </div>

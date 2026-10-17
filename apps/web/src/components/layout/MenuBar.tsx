@@ -960,7 +960,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                         const n = sceneGraph.getNode(id);
                         return n && n.type === 'bone';
                       });
-                      if (boneId) createSmartBoneActionStore(boneId);
+                      if (boneId) createSmartBoneActionStore(sceneGraph, boneId);
                     }}
                     data-testid="create-smart-bone-action-menu"
                   />
@@ -979,7 +979,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                           (a: SmartBoneAction) => a.driver.boneId === boneId
                         );
                         // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-member-access
-                        if (action) removeSmartBoneActionStore(action.id);
+                        if (action) removeSmartBoneActionStore(sceneGraph, action.id);
                       }
                     }}
                     data-testid="delete-smart-bone-action-menu"
@@ -990,7 +990,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                     disabled={!hasBoneSelected}
                     onClick={() => {
                       closeMenu();
-                      createVitruvianController();
+                      createVitruvianController(sceneGraph);
                     }}
                     data-testid="create-vitruvian-menu"
                   />
@@ -1002,6 +1002,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                       if (vitruvianControllers.length > 0) {
                         // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-member-access
                         removeVitruvianController(
+                          sceneGraph,
                           vitruvianControllers[vitruvianControllers.length - 1]!.id
                         );
                       }
@@ -1037,7 +1038,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                           (c: { rootBoneId: string }) => c.rootBoneId === boneId
                         );
                         // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-member-access
-                        if (chain) removeDynamicChain(chain.id);
+                        if (chain) removeDynamicChain(sceneGraph, chain.id);
                       }
                     }}
                     data-testid="remove-dynamic-chain-menu"

@@ -43,7 +43,7 @@ export function VitruvianPanel({ boneId }: VitruvianPanelProps) {
         <div className={styles.header}>
           <span className={styles.title}>Vitruvian Bones</span>
           <button
-            onClick={() => createVitruvianController()}
+            onClick={() => createVitruvianController(sceneGraph)}
             className={styles.addActionButton}
             data-testid="create-vitruvian-controller"
           >
@@ -65,7 +65,7 @@ export function VitruvianPanel({ boneId }: VitruvianPanelProps) {
       <div className={styles.header}>
         <span className={styles.title}>Vitruvian Bones</span>
         <button
-          onClick={() => createVitruvianController()}
+          onClick={() => createVitruvianController(sceneGraph)}
           className={styles.addActionButton}
           data-testid="create-vitruvian-controller"
         >
@@ -78,15 +78,21 @@ export function VitruvianPanel({ boneId }: VitruvianPanelProps) {
           key={controller.id}
           controller={controller}
           boneId={boneId}
-          onRemove={() => removeVitruvianController(controller.id)}
+          onRemove={() => removeVitruvianController(sceneGraph, controller.id)}
           onToggleEnabled={(enabled: boolean) =>
-            setVitruvianControllerEnabled(controller.id, enabled)
+            setVitruvianControllerEnabled(sceneGraph, controller.id, enabled)
           }
-          onSetActiveGroup={(groupId: string) => setVitruvianActiveGroup(controller.id, groupId)}
+          onSetActiveGroup={(groupId: string) =>
+            setVitruvianActiveGroup(sceneGraph, controller.id, groupId)
+          }
           onAddGroup={() =>
-            addVitruvianGroup(controller.id, `Group ${controller.groups.length + 1}`, [boneId])
+            addVitruvianGroup(sceneGraph, controller.id, `Group ${controller.groups.length + 1}`, [
+              boneId,
+            ])
           }
-          onRemoveGroup={(groupId: string) => removeVitruvianGroup(controller.id, groupId)}
+          onRemoveGroup={(groupId: string) =>
+            removeVitruvianGroup(sceneGraph, controller.id, groupId)
+          }
           onCaptureSkin={(groupId: string) =>
             captureVitruvianSkinSnapshots(controller.id, groupId, sceneGraph)
           }

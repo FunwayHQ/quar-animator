@@ -8,6 +8,9 @@ import { createTimeline, createTrack, addKeyframe } from '@quar/animation';
 import { DEFAULT_ONION_SKIN_SETTINGS, SceneGraph, createDefaultTransform } from '@quar/core';
 import type { RectangleNode } from '@quar/types';
 
+/** A scene for rigging actions, which record undo. */
+const rigSg = new SceneGraph();
+
 describe('EditorStore', () => {
   // Reset store before each test
   beforeEach(() => {
@@ -2032,10 +2035,10 @@ describe('EditorStore', () => {
       useEditorStore.getState().createIKChain(sg, 'bone1');
       const chainId = useEditorStore.getState().ikChains[0].id;
 
-      useEditorStore.getState().setIKChainEnabled(chainId, false);
+      useEditorStore.getState().setIKChainEnabled(sg, chainId, false);
       expect(useEditorStore.getState().ikChains[0].enabled).toBe(false);
 
-      useEditorStore.getState().setIKChainEnabled(chainId, true);
+      useEditorStore.getState().setIKChainEnabled(sg, chainId, true);
       expect(useEditorStore.getState().ikChains[0].enabled).toBe(true);
     });
 
@@ -2128,7 +2131,7 @@ describe('EditorStore', () => {
 
   describe('Smart Bones', () => {
     it('createSmartBoneAction creates an action for the given bone', () => {
-      useEditorStore.getState().createSmartBoneAction('bone-1');
+      useEditorStore.getState().createSmartBoneAction(rigSg, 'bone-1');
 
       const actions = useEditorStore.getState().smartBoneActions;
       expect(actions).toHaveLength(1);
@@ -2139,26 +2142,26 @@ describe('EditorStore', () => {
     });
 
     it('removeSmartBoneAction removes the action by id', () => {
-      useEditorStore.getState().createSmartBoneAction('bone-1');
+      useEditorStore.getState().createSmartBoneAction(rigSg, 'bone-1');
       const actionId = useEditorStore.getState().smartBoneActions[0].id;
 
-      useEditorStore.getState().removeSmartBoneAction(actionId);
+      useEditorStore.getState().removeSmartBoneAction(rigSg, actionId);
       expect(useEditorStore.getState().smartBoneActions).toHaveLength(0);
     });
 
     it('setSmartBoneActionEnabled toggles enabled flag', () => {
-      useEditorStore.getState().createSmartBoneAction('bone-1');
+      useEditorStore.getState().createSmartBoneAction(rigSg, 'bone-1');
       const actionId = useEditorStore.getState().smartBoneActions[0].id;
 
-      useEditorStore.getState().setSmartBoneActionEnabled(actionId, false);
+      useEditorStore.getState().setSmartBoneActionEnabled(rigSg, actionId, false);
       expect(useEditorStore.getState().smartBoneActions[0].enabled).toBe(false);
 
-      useEditorStore.getState().setSmartBoneActionEnabled(actionId, true);
+      useEditorStore.getState().setSmartBoneActionEnabled(rigSg, actionId, true);
       expect(useEditorStore.getState().smartBoneActions[0].enabled).toBe(true);
     });
 
     it('updateSmartBoneDriver updates driver range', () => {
-      useEditorStore.getState().createSmartBoneAction('bone-1');
+      useEditorStore.getState().createSmartBoneAction(rigSg, 'bone-1');
       const actionId = useEditorStore.getState().smartBoneActions[0].id;
 
       useEditorStore.getState().updateSmartBoneDriver(actionId, { rangeMin: -45, rangeMax: 135 });
@@ -2168,10 +2171,10 @@ describe('EditorStore', () => {
     });
 
     it('addMorphTarget adds a target with the given driver value', () => {
-      useEditorStore.getState().createSmartBoneAction('bone-1');
+      useEditorStore.getState().createSmartBoneAction(rigSg, 'bone-1');
       const actionId = useEditorStore.getState().smartBoneActions[0].id;
 
-      useEditorStore.getState().addMorphTarget(actionId, 45);
+      useEditorStore.getState().addMorphTarget(rigSg, actionId, 45);
 
       const targets = useEditorStore.getState().smartBoneActions[0].targets;
       expect(targets).toHaveLength(1);
@@ -2180,13 +2183,13 @@ describe('EditorStore', () => {
     });
 
     it('removeMorphTarget removes the target by id', () => {
-      useEditorStore.getState().createSmartBoneAction('bone-1');
+      useEditorStore.getState().createSmartBoneAction(rigSg, 'bone-1');
       const actionId = useEditorStore.getState().smartBoneActions[0].id;
 
-      useEditorStore.getState().addMorphTarget(actionId, 45);
+      useEditorStore.getState().addMorphTarget(rigSg, actionId, 45);
       const targetId = useEditorStore.getState().smartBoneActions[0].targets[0].id;
 
-      useEditorStore.getState().removeMorphTarget(actionId, targetId);
+      useEditorStore.getState().removeMorphTarget(rigSg, actionId, targetId);
       expect(useEditorStore.getState().smartBoneActions[0].targets).toHaveLength(0);
     });
 
@@ -2198,15 +2201,16 @@ describe('EditorStore', () => {
         transform: { position: { x: 0, y: 0 }, rotation: 0, scale: { x: 1, y: 1 } },
       };
       const mockSg = {
+        toJSON: () => ({ nodes: [], rootNodeIds: [] }),
         getNode: (id: string) => (id === 'bone-1' ? boneNode : undefined),
         updateNode: vi.fn((id: string, updates: any) => {
           if (id === 'bone-1') Object.assign(boneNode, updates);
         }),
       } as any;
 
-      useEditorStore.getState().createSmartBoneAction('bone-1');
+      useEditorStore.getState().createSmartBoneAction(rigSg, 'bone-1');
       const actionId = useEditorStore.getState().smartBoneActions[0].id;
-      useEditorStore.getState().addMorphTarget(actionId, 45);
+      useEditorStore.getState().addMorphTarget(rigSg, actionId, 45);
       const targetId = useEditorStore.getState().smartBoneActions[0].targets[0].id;
 
       useEditorStore.getState().startSmartBoneRecording(actionId, targetId, mockSg);
@@ -2232,6 +2236,7 @@ describe('EditorStore', () => {
         transform: { position: { x: 0, y: 0 }, rotation: 45, scale: { x: 1, y: 1 } },
       };
       const mockSg = {
+        toJSON: () => ({ nodes: [], rootNodeIds: [] }),
         getNode: (id: string) => (id === 'bone-1' ? boneNode : undefined),
         updateNode: vi.fn((id: string, updates: any) => {
           if (id === 'bone-1') Object.assign(boneNode, updates);
@@ -2239,7 +2244,7 @@ describe('EditorStore', () => {
       } as any;
 
       // Set up recording state as if startSmartBoneRecording was called
-      useEditorStore.getState().createSmartBoneAction('bone-1');
+      useEditorStore.getState().createSmartBoneAction(rigSg, 'bone-1');
       const actionId = useEditorStore.getState().smartBoneActions[0].id;
       useEditorStore.setState({
         smartBoneRecordingActionId: actionId,
@@ -2266,9 +2271,9 @@ describe('EditorStore', () => {
     });
 
     it('saveMorphTargetOffsets stores offsets on the target', () => {
-      useEditorStore.getState().createSmartBoneAction('bone-1');
+      useEditorStore.getState().createSmartBoneAction(rigSg, 'bone-1');
       const actionId = useEditorStore.getState().smartBoneActions[0].id;
-      useEditorStore.getState().addMorphTarget(actionId, 45);
+      useEditorStore.getState().addMorphTarget(rigSg, actionId, 45);
       const targetId = useEditorStore.getState().smartBoneActions[0].targets[0].id;
 
       const offsets = { 'mesh-1': [{ vertexIndex: 0, dx: 5, dy: 3 }] };
@@ -2279,8 +2284,8 @@ describe('EditorStore', () => {
     });
 
     it('deleteSelection removes smart bone actions for deleted bones', () => {
-      useEditorStore.getState().createSmartBoneAction('bone-1');
-      useEditorStore.getState().createSmartBoneAction('bone-2');
+      useEditorStore.getState().createSmartBoneAction(rigSg, 'bone-1');
+      useEditorStore.getState().createSmartBoneAction(rigSg, 'bone-2');
       expect(useEditorStore.getState().smartBoneActions).toHaveLength(2);
 
       // Create a minimal scene graph mock for deleteSelection
@@ -2321,7 +2326,7 @@ describe('EditorStore', () => {
 
   describe('Vitruvian Controllers', () => {
     it('createVitruvianController creates a controller with default group', () => {
-      useEditorStore.getState().createVitruvianController();
+      useEditorStore.getState().createVitruvianController(rigSg);
       const controllers = useEditorStore.getState().vitruvianControllers;
       expect(controllers).toHaveLength(1);
       expect(controllers[0].name).toMatch(/Vitruvian/);
@@ -2333,23 +2338,23 @@ describe('EditorStore', () => {
     });
 
     it('removeVitruvianController removes by id', () => {
-      useEditorStore.getState().createVitruvianController();
+      useEditorStore.getState().createVitruvianController(rigSg);
       const id = useEditorStore.getState().vitruvianControllers[0].id;
-      useEditorStore.getState().removeVitruvianController(id);
+      useEditorStore.getState().removeVitruvianController(rigSg, id);
       expect(useEditorStore.getState().vitruvianControllers).toHaveLength(0);
     });
 
     it('setVitruvianControllerEnabled toggles enabled', () => {
-      useEditorStore.getState().createVitruvianController();
+      useEditorStore.getState().createVitruvianController(rigSg);
       const id = useEditorStore.getState().vitruvianControllers[0].id;
-      useEditorStore.getState().setVitruvianControllerEnabled(id, false);
+      useEditorStore.getState().setVitruvianControllerEnabled(rigSg, id, false);
       expect(useEditorStore.getState().vitruvianControllers[0].enabled).toBe(false);
     });
 
     it('addVitruvianGroup adds a group with the bone', () => {
-      useEditorStore.getState().createVitruvianController();
+      useEditorStore.getState().createVitruvianController(rigSg);
       const id = useEditorStore.getState().vitruvianControllers[0].id;
-      useEditorStore.getState().addVitruvianGroup(id, 'Group B', ['bone-1']);
+      useEditorStore.getState().addVitruvianGroup(rigSg, id, 'Group B', ['bone-1']);
       const groups = useEditorStore.getState().vitruvianControllers[0].groups;
       // 1 default + 1 added
       expect(groups).toHaveLength(2);
@@ -2358,29 +2363,29 @@ describe('EditorStore', () => {
     });
 
     it('removeVitruvianGroup removes the group', () => {
-      useEditorStore.getState().createVitruvianController();
+      useEditorStore.getState().createVitruvianController(rigSg);
       const ctrlId = useEditorStore.getState().vitruvianControllers[0].id;
-      useEditorStore.getState().addVitruvianGroup(ctrlId, 'Group B', ['bone-1']);
+      useEditorStore.getState().addVitruvianGroup(rigSg, ctrlId, 'Group B', ['bone-1']);
       // groups[0] = Default, groups[1] = added
       const addedGroupId = useEditorStore.getState().vitruvianControllers[0].groups[1].id;
-      useEditorStore.getState().removeVitruvianGroup(ctrlId, addedGroupId);
+      useEditorStore.getState().removeVitruvianGroup(rigSg, ctrlId, addedGroupId);
       // Only the Default group remains
       expect(useEditorStore.getState().vitruvianControllers[0].groups).toHaveLength(1);
     });
 
     it('setVitruvianActiveGroup changes active group', () => {
-      useEditorStore.getState().createVitruvianController();
+      useEditorStore.getState().createVitruvianController(rigSg);
       const ctrlId = useEditorStore.getState().vitruvianControllers[0].id;
-      useEditorStore.getState().addVitruvianGroup(ctrlId, 'Group B', ['bone-1']);
+      useEditorStore.getState().addVitruvianGroup(rigSg, ctrlId, 'Group B', ['bone-1']);
       // groups: [Default, added]
       const groups = useEditorStore.getState().vitruvianControllers[0].groups;
       // Switch to the newly added group
-      useEditorStore.getState().setVitruvianActiveGroup(ctrlId, groups[1].id);
+      useEditorStore.getState().setVitruvianActiveGroup(rigSg, ctrlId, groups[1].id);
       expect(useEditorStore.getState().vitruvianControllers[0].activeGroupId).toBe(groups[1].id);
     });
 
     it('clearHistory preserves vitruvianControllers', () => {
-      useEditorStore.getState().createVitruvianController();
+      useEditorStore.getState().createVitruvianController(rigSg);
       expect(useEditorStore.getState().vitruvianControllers).toHaveLength(1);
       useEditorStore.getState().clearHistory();
       expect(useEditorStore.getState().vitruvianControllers).toHaveLength(1);
@@ -2390,6 +2395,7 @@ describe('EditorStore', () => {
   describe('Dynamic Chains', () => {
     it('createDynamicChain creates a chain', () => {
       const sg = {
+        toJSON: () => ({ nodes: [], rootNodeIds: [] }),
         getNode: (id: string) => {
           if (id === 'bone-root')
             return {
@@ -2418,28 +2424,31 @@ describe('EditorStore', () => {
 
     it('removeDynamicChain removes by id', () => {
       const sg = {
+        toJSON: () => ({ nodes: [], rootNodeIds: [] }),
         getNode: (id: string) =>
           id === 'bone-1' ? { id: 'bone-1', type: 'bone', children: [] } : undefined,
       } as any;
       useEditorStore.getState().createDynamicChain(sg, 'bone-1');
       const chainId = useEditorStore.getState().dynamicChains[0].id;
-      useEditorStore.getState().removeDynamicChain(chainId);
+      useEditorStore.getState().removeDynamicChain(sg, chainId);
       expect(useEditorStore.getState().dynamicChains).toHaveLength(0);
     });
 
     it('setDynamicChainEnabled toggles enabled', () => {
       const sg = {
+        toJSON: () => ({ nodes: [], rootNodeIds: [] }),
         getNode: (id: string) =>
           id === 'bone-1' ? { id: 'bone-1', type: 'bone', children: [] } : undefined,
       } as any;
       useEditorStore.getState().createDynamicChain(sg, 'bone-1');
       const chainId = useEditorStore.getState().dynamicChains[0].id;
-      useEditorStore.getState().setDynamicChainEnabled(chainId, false);
+      useEditorStore.getState().setDynamicChainEnabled(sg, chainId, false);
       expect(useEditorStore.getState().dynamicChains[0].enabled).toBe(false);
     });
 
     it('updateDynamicChainSettings updates properties', () => {
       const sg = {
+        toJSON: () => ({ nodes: [], rootNodeIds: [] }),
         getNode: (id: string) =>
           id === 'bone-1' ? { id: 'bone-1', type: 'bone', children: [] } : undefined,
       } as any;
@@ -2463,6 +2472,7 @@ describe('EditorStore', () => {
 
     it('clearHistory preserves dynamicChains', () => {
       const sg = {
+        toJSON: () => ({ nodes: [], rootNodeIds: [] }),
         getNode: (id: string) =>
           id === 'bone-1' ? { id: 'bone-1', type: 'bone', children: [] } : undefined,
       } as any;

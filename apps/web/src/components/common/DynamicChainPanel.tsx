@@ -53,7 +53,7 @@ export function DynamicChainPanel({ boneId }: DynamicChainPanelProps) {
       <div className={styles.header}>
         <span className={styles.title}>Dynamic Chain</span>
         <button
-          onClick={() => removeDynamicChain(chain.id)}
+          onClick={() => removeDynamicChain(sceneGraph, chain.id)}
           className={styles.deleteButton}
           style={{ opacity: 0.6 }}
           data-testid="remove-dynamic-chain"
@@ -70,7 +70,7 @@ export function DynamicChainPanel({ boneId }: DynamicChainPanelProps) {
             <input
               type="checkbox"
               checked={chain.enabled}
-              onChange={(e) => setDynamicChainEnabled(chain.id, e.target.checked)}
+              onChange={(e) => setDynamicChainEnabled(sceneGraph, chain.id, e.target.checked)}
               aria-label="Enable dynamic chain"
             />
             <span className={styles.toggleTrack} />
