@@ -584,6 +584,20 @@ describe('Timeline', () => {
       expect(trackNodeIds()).toEqual(['parent', 'child']);
     });
 
+    it('clears the animation inside a container whose own row has none', () => {
+      renderAnimatedLayers();
+      act(() => {
+        graph!.addNode({ ...graph!.getNode('static')!, id: 'board', name: 'Board' });
+        graph!.moveNode('parent', 'board');
+      });
+
+      fireEvent.contextMenu(screen.getByTestId('timeline-layer-board'));
+      const item = screen.getByRole('menuitem', { name: 'Delete Animation (2 Layers)' });
+      expect(item).not.toHaveAttribute('aria-disabled', 'true');
+      fireEvent.click(item);
+      expect(trackNodeIds()).toEqual([]);
+    });
+
     it('applies to every selected layer when right-clicking inside a multi-selection', () => {
       renderAnimatedLayers();
       act(() => {

@@ -728,9 +728,18 @@ export function Timeline({ playback }: TimelineProps = {}) {
     if (!contextMenu) return [];
 
     // Layer animation actions apply to the whole selection when the clicked
-    // layer is part of it, otherwise to that layer alone.
+    // layer is part of it, otherwise to that layer alone. A layer with no
+    // animation of its own — an artboard or group row — stands for the
+    // animated layers inside it.
     const layerTargets = (nodeId: string) => {
-      const ids = selectedNodeIds.has(nodeId) ? [...selectedNodeIds] : [nodeId];
+      const picked = selectedNodeIds.has(nodeId) ? [...selectedNodeIds] : [nodeId];
+      const ids = [
+        ...new Set(
+          picked.flatMap((id) =>
+            nodeKeyframes.has(id) ? [id] : sceneGraph.getDescendants(id).map((node) => node.id)
+          )
+        ),
+      ];
       const animatedIds = ids.filter((id) => nodeKeyframes.has(id));
       return {
         animatedIds,

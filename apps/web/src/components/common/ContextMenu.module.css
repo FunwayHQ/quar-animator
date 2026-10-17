@@ -67,6 +67,11 @@
   background: rgba(239, 68, 68, 0.1);
 }
 
+/* A disabled danger item must look disabled too */
+.menuItem.danger.disabled {
+  color: var(--color-text-disabled);
+}
+
 .menuItemIcon {
   display: flex;
   align-items: center;
