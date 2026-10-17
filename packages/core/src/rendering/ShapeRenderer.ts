@@ -562,6 +562,7 @@ export class ShapeRenderer {
 
   // Symbol definitions registry (set by Canvas component)
   private symbolDefinitions: Map<string, SymbolDefinition> = new Map();
+  private drawRigHelpers = true;
 
   constructor(renderer: WebGLRenderer) {
     this.renderer = renderer;
@@ -581,6 +582,11 @@ export class ShapeRenderer {
   /** Set the symbol definitions registry so instances can be resolved during rendering. */
   setSymbolDefinitions(defs: Map<string, SymbolDefinition>): void {
     this.symbolDefinitions = defs;
+  }
+
+  /** Whether bones are drawn. Exports leave rig helpers out of the artwork. */
+  setDrawRigHelpers(draw: boolean): void {
+    this.drawRigHelpers = draw;
   }
 
   private applyMaskUniforms(program: ShaderProgram): void {
@@ -3017,7 +3023,7 @@ export class ShapeRenderer {
    * Render a bone node.
    */
   private renderBone(node: BoneNode, worldTransform: Float32Array | Matrix3): void {
-    if (!this.program) return;
+    if (!this.program || !this.drawRigHelpers) return;
     const gl = this.renderer.context;
 
     const modelMatrix =

@@ -20,10 +20,17 @@ const mockStore = {
   },
   timelineDuration: 60,
   selectedNodeIds: new Set<string>(),
+  ikChains: [{ id: 'arm-ik' }],
+  dynamicChains: [],
+  smartBoneActions: [],
+  globalWind: { strength: 0, direction: 0, turbulence: 0, frequency: 1, enabled: false },
 };
 
 vi.mock('../../stores/editorStore', () => ({
-  useEditorStore: (selector: (s: typeof mockStore) => unknown) => selector(mockStore),
+  useEditorStore: Object.assign(
+    (selector: (s: typeof mockStore) => unknown) => selector(mockStore),
+    { getState: () => mockStore }
+  ),
 }));
 
 // Mock export functions
@@ -263,7 +270,12 @@ describe('ExportDialog', () => {
 
     await waitFor(() => expect(exportGif).toHaveBeenCalledOnce());
     expect(exportGif).toHaveBeenCalledWith(
-      expect.objectContaining({ sceneGraph: expect.any(Object), timeline: mockStore.timeline }),
+      expect.objectContaining({
+        sceneGraph: expect.any(Object),
+        timeline: mockStore.timeline,
+        // The rig is posed in every frame, as in the editor
+        rig: expect.objectContaining({ ikChains: [{ id: 'arm-ik' }], frameRate: 30 }),
+      }),
       expect.objectContaining({ startFrame: 0, endFrame: 59, transparent: false }),
       expect.any(Function),
       expect.any(Function)

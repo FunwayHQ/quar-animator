@@ -209,6 +209,9 @@ importers:
       '@quar/core':
         specifier: workspace:*
         version: link:../core
+      '@quar/rigging':
+        specifier: workspace:*
+        version: link:../rigging
       '@quar/types':
         specifier: workspace:*
         version: link:../types

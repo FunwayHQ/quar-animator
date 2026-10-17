@@ -5,10 +5,26 @@
  * Reuses the offscreen rendering pattern from exportService.ts.
  */
 
-import type { Node, Timeline, Color } from '@quar/types';
+import type {
+  Node,
+  Timeline,
+  Color,
+  DynamicChain,
+  DynamicChainState,
+  IKChain,
+  SmartBoneAction,
+  WindSettings,
+} from '@quar/types';
 import type { SceneGraph } from '@quar/core';
 import { WebGLRenderer, ShapeRenderer, mat3 } from '@quar/core';
 import { evaluateNodeAtFrame, applyAnimatedValues } from '@quar/animation';
+import {
+  evaluateDynamicChains,
+  evaluateIKChains,
+  evaluateSmartBones,
+  resetDynamicChainStates,
+  type DynamicChainSceneGraph,
+} from '@quar/rigging';
 
 // Re-export pure utilities from exportUtils for convenience
 export { getFrameCount, generateFrameFilenames } from './exportUtils';
@@ -24,9 +40,21 @@ export interface FrameRenderOptions {
   backgroundColor?: Color | null; // null = transparent
 }
 
+/** The rig evaluated on top of the keyframes, in the editor's order. */
+export interface FrameRig {
+  ikChains?: IKChain[];
+  dynamicChains?: DynamicChain[];
+  smartBoneActions?: SmartBoneAction[];
+  wind?: WindSettings;
+  /** Timeline frame rate — physics advances 1/frameRate seconds per frame. */
+  frameRate: number;
+}
+
 export interface FrameRenderContext {
   sceneGraph: SceneGraph;
   timeline: Timeline;
+  /** IK, physics and Smart Bones, so exports pose rigs like the editor does. */
+  rig?: FrameRig;
   /** Restrict frame rendering to these scene-graph roots and their descendants. */
   exportRootIds?: string[];
   /** World-space rectangle mapped to the full output canvas. */
@@ -70,6 +98,14 @@ export function createFrameRenderer(options: FrameRenderOptions): FrameRendererH
   });
 
   const shapeRenderer = new ShapeRenderer(renderer);
+  // Bones are rig helpers, not artwork
+  shapeRenderer.setDrawRigHelpers(false);
+
+  // Physics state carries from one frame to the next; it restarts whenever a
+  // pass goes back in time (GIF renders every frame twice), so every pass of
+  // an export simulates the same motion
+  const dynamicStates = new Map<string, DynamicChainState>();
+  let lastDynamicFrame: number | null = null;
 
   const gl = renderer.context;
 
@@ -82,13 +118,21 @@ export function createFrameRenderer(options: FrameRenderOptions): FrameRendererH
     const view = mat3.create(1, 0, 0, 1, -(bounds.x + halfW), -(bounds.y + halfH));
     const vpMatrix = mat3.multiply(projection, view);
 
-    // Snapshot animated nodes before mutation so we can restore them after rendering
+    // Snapshot animated nodes (and bones a rig poses) so they can be restored
+    const rig = ctx.rig;
+    const posesBones =
+      !!rig && ((rig.ikChains?.length ?? 0) > 0 || (rig.dynamicChains?.length ?? 0) > 0);
     const snapshots = new Map<string, Record<string, unknown>>();
-    for (const track of timeline.tracks) {
-      const node = sceneGraph.getNode(track.nodeId);
-      if (node && !snapshots.has(track.nodeId)) {
-        snapshots.set(track.nodeId, structuredClone(node) as unknown as Record<string, unknown>);
+    const snapshot = (node: Node | undefined) => {
+      if (node && !snapshots.has(node.id)) {
+        snapshots.set(node.id, structuredClone(node) as unknown as Record<string, unknown>);
       }
+    };
+    for (const track of timeline.tracks) snapshot(sceneGraph.getNode(track.nodeId));
+    if (posesBones) {
+      sceneGraph.traverse((node) => {
+        if (node.type === 'bone') snapshot(node);
+      });
     }
 
     try {
@@ -103,6 +147,8 @@ export function createFrameRenderer(options: FrameRenderOptions): FrameRendererH
           sceneGraph.updateNode(track.nodeId, updatedNode as Partial<Node>);
         }
       }
+
+      const morphOffsets = rig ? poseRig(sceneGraph, rig, frame) : undefined;
 
       // Set viewport and clear
       gl.viewport(0, 0, pixelW, pixelH);
@@ -120,7 +166,7 @@ export function createFrameRenderer(options: FrameRenderOptions): FrameRendererH
       gl.clear(gl.COLOR_BUFFER_BIT);
 
       // Render scene
-      shapeRenderer.render(sceneGraph, vpMatrix, new Set(), null, undefined, ctx.exportRootIds);
+      shapeRenderer.render(sceneGraph, vpMatrix, new Set(), null, morphOffsets, ctx.exportRootIds);
     } finally {
       // Restore original node state after rendering
       for (const [nodeId, snapshot] of snapshots) {
@@ -129,6 +175,48 @@ export function createFrameRenderer(options: FrameRenderOptions): FrameRendererH
     }
 
     return canvas;
+  }
+
+  /**
+   * IK, then physics, then Smart Bones — the editor's order. Returns the
+   * Smart Bone morphs to render with.
+   */
+  function poseRig(
+    sceneGraph: SceneGraph,
+    rig: FrameRig,
+    frame: number
+  ): Map<string, Float32Array> | undefined {
+    if (rig.ikChains && rig.ikChains.length > 0) evaluateIKChains(rig.ikChains, sceneGraph);
+
+    const chains = rig.dynamicChains ?? [];
+    if (chains.some((chain) => chain.enabled)) {
+      const frameRate = Math.max(1, rig.frameRate);
+      if (lastDynamicFrame === null || frame <= lastDynamicFrame) {
+        resetDynamicChainStates(dynamicStates);
+        lastDynamicFrame = null;
+      }
+      const dt = lastDynamicFrame === null ? 1 / frameRate : (frame - lastDynamicFrame) / frameRate;
+      evaluateDynamicChains(
+        chains,
+        dynamicStates,
+        // Bones are the only nodes the physics reads; the rest of the graph is untouched
+        sceneGraph as unknown as DynamicChainSceneGraph,
+        dt,
+        rig.wind ?? { strength: 0, direction: 0, turbulence: 0, frequency: 1, enabled: false },
+        frame / frameRate
+      );
+      lastDynamicFrame = frame;
+    }
+
+    const actions = rig.smartBoneActions ?? [];
+    if (actions.length === 0) return undefined;
+    const vertexCounts = new Map<string, number>();
+    sceneGraph.traverse((node) => {
+      const skin = (node as { skinData?: { vertexCount: number } }).skinData;
+      if (skin) vertexCounts.set(node.id, skin.vertexCount);
+    });
+    const morphs = evaluateSmartBones(actions, sceneGraph, vertexCounts);
+    return morphs.size > 0 ? morphs : undefined;
   }
 
   function renderFrameAsBlob(ctx: FrameRenderContext, frame: number): Promise<Blob | null> {

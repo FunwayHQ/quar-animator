@@ -14,6 +14,11 @@ const mocks = vi.hoisted(() => ({
   applyAnimatedValues: vi.fn(),
   mat3Create: vi.fn((...values: number[]) => values),
   mat3Multiply: vi.fn(() => new Float32Array([1, 0, 0, 1, 0, 0])),
+  setDrawRigHelpers: vi.fn(),
+  evaluateIKChains: vi.fn(),
+  evaluateDynamicChains: vi.fn(),
+  evaluateSmartBones: vi.fn(() => new Map()),
+  resetDynamicChainStates: vi.fn(),
 }));
 
 vi.mock('@quar/core', () => ({
@@ -28,6 +33,7 @@ vi.mock('@quar/core', () => ({
   ShapeRenderer: class {
     render = mocks.render;
     preloadTextures = mocks.preloadTextures;
+    setDrawRigHelpers = mocks.setDrawRigHelpers;
     dispose = mocks.shapeRendererDispose;
 
     constructor() {
@@ -40,6 +46,13 @@ vi.mock('@quar/core', () => ({
 vi.mock('@quar/animation', () => ({
   evaluateNodeAtFrame: mocks.evaluateNodeAtFrame,
   applyAnimatedValues: mocks.applyAnimatedValues,
+}));
+
+vi.mock('@quar/rigging', () => ({
+  evaluateIKChains: mocks.evaluateIKChains,
+  evaluateDynamicChains: mocks.evaluateDynamicChains,
+  evaluateSmartBones: mocks.evaluateSmartBones,
+  resetDynamicChainStates: mocks.resetDynamicChainStates,
 }));
 
 import { createFrameRenderer, getFrameRenderRoots } from './frameRenderer';
@@ -196,5 +209,90 @@ describe('getFrameRenderRoots', () => {
     expect(
       getFrameRenderRoots({ sceneGraph: sceneGraph as any, timeline: {} as Timeline })
     ).toEqual([artboard, outsideNode]);
+  });
+});
+
+describe('exports pose rigs like the editor', () => {
+  const bone = { id: 'bone', type: 'bone', transform: { rotation: 0 } };
+  const mesh = { id: 'mesh', type: 'path', skinData: { vertexCount: 4 } };
+  const nodes: Record<string, Record<string, unknown>> = { bone, mesh };
+  const sceneGraph = {
+    getNode: vi.fn((id: string) => nodes[id]),
+    updateNode: vi.fn((id: string, patch: Record<string, unknown>) =>
+      Object.assign(nodes[id]!, patch)
+    ),
+    getRootNodes: vi.fn(() => [bone, mesh]),
+    traverse: vi.fn((visit: (node: unknown) => void) => {
+      visit(bone);
+      visit(mesh);
+    }),
+  };
+  const timeline = { tracks: [] } as unknown as Timeline;
+  const rig = {
+    ikChains: [{ id: 'ik' }],
+    dynamicChains: [{ id: 'hair', enabled: true }],
+    smartBoneActions: [{ id: 'bulge' }],
+    frameRate: 30,
+  } as never;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.gl = { COLOR_BUFFER_BIT: 0x4000, viewport: vi.fn(), clearColor: vi.fn(), clear: vi.fn() };
+    bone.transform.rotation = 0;
+  });
+
+  it('leaves bones out of the artwork', () => {
+    createFrameRenderer({ width: 10, height: 10 });
+    expect(mocks.setDrawRigHelpers).toHaveBeenCalledWith(false);
+  });
+
+  it('solves IK, then physics, then Smart Bones, and renders the morphs', () => {
+    const morphs = new Map([['mesh', new Float32Array([1, 2])]]);
+    mocks.evaluateSmartBones.mockReturnValue(morphs);
+    mocks.evaluateIKChains.mockImplementation(() => {
+      bone.transform = { rotation: 45 };
+    });
+    let rotationWhileDrawing = 0;
+    mocks.render.mockImplementation(() => {
+      rotationWhileDrawing = bone.transform.rotation;
+    });
+
+    const handle = createFrameRenderer({ width: 10, height: 10 });
+    handle.renderFrame({ sceneGraph: sceneGraph as any, timeline, rig }, 3);
+
+    const order = [
+      mocks.evaluateIKChains,
+      mocks.evaluateDynamicChains,
+      mocks.evaluateSmartBones,
+      mocks.render,
+    ].map((fn) => fn.mock.invocationCallOrder[0]!);
+    expect(order).toEqual([...order].sort((a, b) => a - b));
+    expect(mocks.evaluateSmartBones).toHaveBeenCalledWith(
+      [{ id: 'bulge' }],
+      sceneGraph,
+      new Map([['mesh', 4]])
+    );
+    expect(mocks.render.mock.calls[0]![4]).toBe(morphs);
+    // Posed while drawing, back to the editor's pose afterwards
+    expect(rotationWhileDrawing).toBe(45);
+    expect(bone.transform.rotation).toBe(0);
+  });
+
+  it('steps physics a frame at a time and restarts it when a pass goes back', () => {
+    const handle = createFrameRenderer({ width: 10, height: 10 });
+    for (const frame of [0, 1, 2, 0, 1]) {
+      handle.renderFrame({ sceneGraph: sceneGraph as any, timeline, rig }, frame);
+    }
+    const steps = mocks.evaluateDynamicChains.mock.calls.map((call) => call[3]);
+    expect(steps.every((dt) => Math.abs((dt as number) - 1 / 30) < 1e-9)).toBe(true);
+    // Fresh state at the start of each pass
+    expect(mocks.resetDynamicChainStates).toHaveBeenCalledTimes(2);
+  });
+
+  it('renders as before without a rig', () => {
+    const handle = createFrameRenderer({ width: 10, height: 10 });
+    handle.renderFrame({ sceneGraph: sceneGraph as any, timeline }, 0);
+    expect(mocks.evaluateIKChains).not.toHaveBeenCalled();
+    expect(mocks.render.mock.calls[0]![4]).toBeUndefined();
   });
 });

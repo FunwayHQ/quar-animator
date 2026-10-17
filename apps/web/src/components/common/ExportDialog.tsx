@@ -367,9 +367,18 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
   const handleExport = useCallback(async () => {
     if (!sceneGraph || !timeline) return;
 
+    const rigState = useEditorStore.getState();
     const frameRenderContext = {
       sceneGraph,
       timeline,
+      // Pose rigs like the editor: IK, physics chains and Smart Bone morphs
+      rig: {
+        ikChains: rigState.ikChains,
+        dynamicChains: rigState.dynamicChains,
+        smartBoneActions: rigState.smartBoneActions,
+        wind: rigState.globalWind,
+        frameRate: timeline.frameRate,
+      },
       ...(selectedArtboard
         ? {
             exportRootIds: [selectedArtboard.node.id],
