@@ -46,6 +46,11 @@ export interface ToolContext {
   getSnapToGuides?: () => boolean;
   getSymbolDefinitions?: () => SymbolDefinition[];
   onSmartGuidesChange?: (guides: SmartGuide[]) => void;
+  /**
+   * Move a node to another parent without it moving on screen (its transform
+   * and keyframes are re-expressed in the new parent's space).
+   */
+  moveNodeKeepingPlacement?: (id: string, parentId: string | null, index?: number) => void;
 }
 
 export interface ToolState {

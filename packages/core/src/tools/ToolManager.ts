@@ -50,6 +50,7 @@ export interface ToolManagerOptions {
   getSnapToGuides?: () => boolean;
   getSymbolDefinitions?: () => SymbolDefinition[];
   onSmartGuidesChange?: (guides: SmartGuide[]) => void;
+  moveNodeKeepingPlacement?: (id: string, parentId: string | null, index?: number) => void;
 }
 
 // ============================================================================
@@ -256,6 +257,7 @@ export class ToolManager {
       getSnapToGuides: options.getSnapToGuides,
       getSymbolDefinitions: options.getSymbolDefinitions,
       onSmartGuidesChange: options.onSmartGuidesChange,
+      moveNodeKeepingPlacement: options.moveNodeKeepingPlacement,
     };
   }
 

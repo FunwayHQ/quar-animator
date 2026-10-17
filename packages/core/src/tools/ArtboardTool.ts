@@ -6,6 +6,7 @@
 import type { CanvasPointerEvent, ArtboardNode, Vector2 } from '@quar/types';
 import { BaseTool, type ToolContext } from './BaseTool';
 import { createDefaultTransform } from '../SceneGraph';
+import { SelectionManager } from '../selection/SelectionManager';
 
 // ============================================================================
 // ArtboardTool Class
@@ -81,6 +82,7 @@ export class ArtboardTool extends BaseTool {
 
       this.context.onTransformStart?.();
       this.context.sceneGraph.addNode(node);
+      this.adoptContainedLayers(node);
       this.context.setSelectedIds([node.id]);
       this.context.setActiveTool('selection');
     }
@@ -119,6 +121,40 @@ export class ArtboardTool extends BaseTool {
   // --------------------------------------------------------------------------
   // Private Methods
   // --------------------------------------------------------------------------
+
+  /**
+   * Layers the new artboard was drawn around go into it, like a Figma frame
+   * drawn around existing layers: every visible root layer whose bounds lie
+   * entirely inside the artboard, in their stacking order. Layers partly
+   * outside, layers inside groups, and other artboards stay where they are.
+   */
+  private adoptContainedLayers(artboard: ArtboardNode): void {
+    const move = this.context.moveNodeKeepingPlacement;
+    if (!move) return;
+    const sceneGraph = this.context.sceneGraph;
+    const bounds = new SelectionManager();
+    const boundsOf = (id: string) => bounds.getSelectionBounds(new Set([id]), sceneGraph)?.rect;
+    const frame = boundsOf(artboard.id);
+    if (!frame) return;
+
+    const EPSILON = 1e-6;
+    const inside = (x: number, y: number) =>
+      x >= frame.x - EPSILON &&
+      y >= frame.y - EPSILON &&
+      x <= frame.x + frame.width + EPSILON &&
+      y <= frame.y + frame.height + EPSILON;
+    const contained = sceneGraph.getRootNodes().filter((node) => {
+      if (node.id === artboard.id || node.type === 'artboard' || !node.visible) return false;
+      const rect = boundsOf(node.id);
+      if (!rect) {
+        // Point-like layers (IK targets) have no area: go by their position
+        const world = sceneGraph.getWorldTransform(node.id);
+        return inside(world.tx, world.ty);
+      }
+      return inside(rect.x, rect.y) && inside(rect.x + rect.width, rect.y + rect.height);
+    });
+    for (const node of contained) move(node.id, artboard.id);
+  }
 
   private createArtboardNode(cx: number, cy: number, width: number, height: number): ArtboardNode {
     const transform = createDefaultTransform();

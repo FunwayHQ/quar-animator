@@ -5,7 +5,8 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { ArtboardTool } from './ArtboardTool';
 import type { ToolContext } from './BaseTool';
-import type { ArtboardNode } from '@quar/types';
+import type { ArtboardNode, RectangleNode } from '@quar/types';
+import { createDefaultTransform, createGroupNode } from '../SceneGraph';
 import { createMockToolContext, createMockPointerEvent } from '../test/setup';
 
 describe('ArtboardTool', () => {
@@ -246,5 +247,108 @@ describe('ArtboardTool', () => {
 
       expect(context.sceneGraph.getNodeCount()).toBe(0);
     });
+  });
+});
+
+describe('ArtboardTool — drawing around existing layers', () => {
+  let context: ToolContext;
+  let tool: ArtboardTool;
+  const moves: Array<[string, string | null]> = [];
+
+  function rect(id: string, x: number, y: number, size = 20): RectangleNode {
+    return {
+      id,
+      name: id,
+      type: 'rectangle',
+      parent: null,
+      children: [],
+      transform: { ...createDefaultTransform(), position: { x, y } },
+      visible: true,
+      locked: false,
+      opacity: 1,
+      blendMode: 'normal',
+      width: size,
+      height: size,
+      cornerRadius: [0, 0, 0, 0],
+      fills: [],
+      strokes: [],
+    };
+  }
+
+  /** Draws an artboard from (0, 0) to (200, 150) and returns it. */
+  function drawArtboard(): ArtboardNode {
+    tool.onPointerDown(createMockPointerEvent({ worldPosition: { x: 0, y: 0 }, button: 0 }));
+    tool.onPointerUp(createMockPointerEvent({ worldPosition: { x: 200, y: 150 }, button: 0 }));
+    return Array.from(context.sceneGraph.getNodes()).find(
+      (node) => node.type === 'artboard' && !moves.some(([id]) => id === node.id)
+    ) as ArtboardNode;
+  }
+
+  beforeEach(() => {
+    moves.length = 0;
+    context = createMockToolContext();
+    context.moveNodeKeepingPlacement = (id, parentId) => {
+      moves.push([id, parentId]);
+      context.sceneGraph.moveNode(id, parentId);
+    };
+    tool = new ArtboardTool(context);
+  });
+
+  it('takes in the layers it was drawn around, keeping their stacking order', () => {
+    context.sceneGraph.addNode(rect('bottom', 50, 50));
+    context.sceneGraph.addNode(rect('top', 120, 90));
+    const artboard = drawArtboard();
+    expect(moves).toEqual([
+      ['bottom', artboard.id],
+      ['top', artboard.id],
+    ]);
+    expect(context.sceneGraph.getNode(artboard.id)!.children).toEqual(['bottom', 'top']);
+  });
+
+  it('leaves layers that are partly or wholly outside it', () => {
+    context.sceneGraph.addNode(rect('straddling', 195, 75));
+    context.sceneGraph.addNode(rect('outside', 400, 75));
+    drawArtboard();
+    expect(moves).toEqual([]);
+  });
+
+  it('leaves other artboards, layers inside groups and hidden layers alone', () => {
+    const group = createGroupNode('group', 'Group');
+    context.sceneGraph.addNode(group);
+    context.sceneGraph.addNode(rect('grouped', 60, 60), 'group');
+    context.sceneGraph.addNode({ ...rect('hidden', 80, 80), visible: false });
+    const inner: ArtboardNode = {
+      ...rect('inner', 150, 100, 30),
+      type: 'artboard',
+      fills: [],
+      clipContent: true,
+    } as unknown as ArtboardNode;
+    context.sceneGraph.addNode(inner);
+    drawArtboard();
+    // The group as a whole is inside, so it moves; its child goes with it
+    expect(moves.map(([id]) => id)).toEqual(['group']);
+    expect(context.sceneGraph.getNode('grouped')!.parent).toBe('group');
+  });
+
+  it('takes in point-like layers such as IK targets by their position', () => {
+    context.sceneGraph.addNode({
+      ...rect('target', 100, 75),
+      type: 'ik-target',
+      ikChainId: 'chain',
+    } as unknown as RectangleNode);
+    context.sceneGraph.addNode({
+      ...rect('far-target', 500, 75),
+      type: 'ik-target',
+      ikChainId: 'chain-2',
+    } as unknown as RectangleNode);
+    drawArtboard();
+    expect(moves.map(([id]) => id)).toEqual(['target']);
+  });
+
+  it('adds the artboard on its own when the editor can’t move layers', () => {
+    context.moveNodeKeepingPlacement = undefined;
+    context.sceneGraph.addNode(rect('inside', 50, 50));
+    drawArtboard();
+    expect(context.sceneGraph.getNode('inside')!.parent).toBeNull();
   });
 });

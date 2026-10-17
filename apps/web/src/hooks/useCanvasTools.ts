@@ -418,6 +418,11 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
       convertShapeToPath: (nodeId: string) => {
         return useEditorStore.getState().convertShapeToPath(sceneGraphRef.current, nodeId);
       },
+      moveNodeKeepingPlacement: (id: string, parentId: string | null, index?: number) => {
+        useEditorStore
+          .getState()
+          .moveNodeKeepingPlacement(sceneGraphRef.current, id, parentId, index);
+      },
       getGuides: () => useEditorStore.getState().guides,
       getSnapToGuides: () => useEditorStore.getState().snapToGuides,
       getSymbolDefinitions: () => useEditorStore.getState().symbols,
