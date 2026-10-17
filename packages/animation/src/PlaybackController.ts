@@ -29,6 +29,7 @@ export class PlaybackController {
 
   // Work area (loop region)
   private _workAreaEnabled: boolean = false;
+  private _playEnd: number | null = null;
   private _workAreaStart: number = 0;
   private _workAreaEnd: number = -1; // -1 = use duration - 1
 
@@ -84,6 +85,22 @@ export class PlaybackController {
     return Math.min(end, this._duration - 1);
   }
 
+  /**
+   * Where playing stops or loops: the effective end, or the play end when
+   * one is set inside the playing range. Stepping and seeking still reach
+   * the whole range, so frames past the last keyframe can be keyed.
+   */
+  private get _playbackEnd(): number {
+    const end = this._effectiveEnd;
+    if (this._playEnd === null || this._playEnd < this._effectiveStart) return end;
+    return Math.min(end, this._playEnd);
+  }
+
+  /** Stop/loop playback at this frame (e.g. the last keyframe); null plays to the end. */
+  setPlayEnd(frame: number | null): void {
+    this._playEnd = frame === null ? null : Math.max(0, Math.round(frame));
+  }
+
   setWorkArea(enabled: boolean, start?: number, end?: number): void {
     this._workAreaEnabled = enabled;
     if (start !== undefined) this._workAreaStart = Math.max(0, Math.round(start));
@@ -118,8 +135,8 @@ export class PlaybackController {
     // work-area playback useful whether looping is enabled or not.
     if (
       this._currentFrame < this._effectiveStart ||
-      this._currentFrame > this._effectiveEnd ||
-      (!this._looping && this._currentFrame >= this._effectiveEnd)
+      this._currentFrame > this._playbackEnd ||
+      (!this._looping && this._currentFrame >= this._playbackEnd)
     ) {
       this._setFrame(this._effectiveStart);
     }
@@ -177,7 +194,7 @@ export class PlaybackController {
   }
 
   goToEnd(): void {
-    this._setFrame(this._effectiveEnd);
+    this._setFrame(this._playbackEnd);
   }
 
   setDuration(duration: number): void {
@@ -231,7 +248,7 @@ export class PlaybackController {
     const MAX_CATCHUP_FRAMES = 10;
     let iterations = 0;
 
-    const effectiveEnd = this._effectiveEnd;
+    const effectiveEnd = this._playbackEnd;
     const effectiveStart = this._effectiveStart;
 
     while (this._accumulator >= msPerFrame && iterations < MAX_CATCHUP_FRAMES) {

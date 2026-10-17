@@ -15,10 +15,12 @@ import { useEditorStore } from '../stores/editorStore';
 import { noteSequenceShown } from '../stores/sequenceActions';
 import { useSceneGraph } from '../contexts/SceneGraphContext';
 
-function getPlaybackDuration(
-  timeline: ReturnType<typeof useEditorStore.getState>['timeline'],
-  timelineDuration: number
-) {
+/**
+ * Where playing stops or loops: the last keyframe, when the animation reaches
+ * past frame 0; otherwise the end of the timeline. Stepping and seeking aren't
+ * limited by it, so new keyframes can be set after the last one.
+ */
+export function getPlayEnd(timeline: ReturnType<typeof useEditorStore.getState>['timeline']) {
   const lastKeyframe =
     timeline.tracks?.reduce(
       (lastFrame, track) =>
@@ -28,9 +30,7 @@ function getPlaybackDuration(
         ) ?? lastFrame,
       -1
     ) ?? -1;
-
-  if (lastKeyframe < 0) return Math.max(1, timelineDuration);
-  return Math.max(1, Math.min(Math.max(1, timelineDuration), Math.ceil(lastKeyframe) + 1));
+  return lastKeyframe >= 1 ? Math.ceil(lastKeyframe) : null;
 }
 
 type EditorState = ReturnType<typeof useEditorStore.getState>;
@@ -115,7 +115,7 @@ export function usePlayback() {
   useEffect(() => {
     const state = useEditorStore.getState();
     const ctrl = new PlaybackController({
-      duration: getPlaybackDuration(state.timeline, state.timelineDuration),
+      duration: Math.max(1, state.timelineDuration),
       frameRate: state.frameRate,
       looping: state.isLooping,
       onFrameChange: (frame: number) => {
@@ -125,15 +125,16 @@ export function usePlayback() {
       },
       onPlaybackEnd: () => useEditorStore.getState().setIsPlaying(false),
     });
-    // Initialize work area from store
+    // Initialize work area and play end from store
     ctrl.setWorkArea(state.workAreaEnabled, state.workAreaStart, state.workAreaEnd);
+    ctrl.setPlayEnd(getPlayEnd(state.timeline));
     controllerRef.current = ctrl;
 
     const unsub = useEditorStore.subscribe((curr, prev) => {
-      if (curr.timelineDuration !== prev.timelineDuration || curr.timeline !== prev.timeline) {
-        const duration = getPlaybackDuration(curr.timeline, curr.timelineDuration);
-        if (duration !== ctrl.duration) ctrl.setDuration(duration);
+      if (curr.timelineDuration !== prev.timelineDuration) {
+        ctrl.setDuration(Math.max(1, curr.timelineDuration));
       }
+      if (curr.timeline !== prev.timeline) ctrl.setPlayEnd(getPlayEnd(curr.timeline));
       if (curr.frameRate !== prev.frameRate) {
         ctrl.setFrameRate(curr.frameRate);
       }

@@ -484,6 +484,67 @@ describe('work area', () => {
 // Dispose
 // ============================================================================
 
+describe('play end', () => {
+  it('stops playing at the play end', () => {
+    const onPlaybackEnd = vi.fn();
+    const { controller, timer } = createController({ looping: false, onPlaybackEnd });
+    controller.setPlayEnd(3);
+    controller.play();
+    timer.tick(0);
+    timer.tick(500);
+    expect(controller.currentFrame).toBe(3);
+    expect(onPlaybackEnd).toHaveBeenCalledOnce();
+  });
+
+  it('loops back from the play end', () => {
+    const { controller, timer } = createController({ looping: true });
+    controller.setPlayEnd(2);
+    controller.goToFrame(2);
+    controller.play();
+    timer.tick(0);
+    timer.tick(34);
+    expect(controller.currentFrame).toBe(0);
+  });
+
+  it('still steps, seeks and syncs past it, so later frames can be keyed', () => {
+    const { controller } = createController();
+    controller.setPlayEnd(0);
+    controller.nextFrame();
+    expect(controller.currentFrame).toBe(1);
+    controller.goToFrame(120);
+    expect(controller.currentFrame).toBe(120);
+    controller.syncFrame(200);
+    expect(controller.currentFrame).toBe(200);
+  });
+
+  it('goes to start from a frame set elsewhere (e.g. a ruler click)', () => {
+    const { controller, onFrameChange } = createController();
+    controller.setPlayEnd(0);
+    controller.syncFrame(32);
+    controller.goToStart();
+    expect(onFrameChange).toHaveBeenLastCalledWith(0);
+  });
+
+  it('goes to end at the play end', () => {
+    const { controller } = createController();
+    controller.setPlayEnd(45);
+    controller.goToEnd();
+    expect(controller.currentFrame).toBe(45);
+  });
+
+  it('ignores a play end before the work area', () => {
+    const onPlaybackEnd = vi.fn();
+    const { controller, timer } = createController({ looping: false, onPlaybackEnd });
+    controller.setWorkArea(true, 10, 12);
+    controller.setPlayEnd(5);
+    controller.goToFrame(10);
+    controller.play();
+    timer.tick(0);
+    timer.tick(500);
+    expect(controller.currentFrame).toBe(12);
+  });
+});
+
 describe('dispose', () => {
   it('should cancel pending frame on dispose', () => {
     const { controller, timer } = createController();

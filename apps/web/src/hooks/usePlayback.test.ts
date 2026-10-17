@@ -87,6 +87,10 @@ vi.mock('@quar/animation', async () => {
           currentFrame = f;
         }),
         setWorkArea: vi.fn(),
+        playEnd: null as number | null,
+        setPlayEnd: vi.fn(function (this: { playEnd: number | null }, end: number | null) {
+          this.playEnd = end;
+        }),
         setWorkAreaEnabled: vi.fn(),
         setWorkAreaStart: vi.fn(),
         setWorkAreaEnd: vi.fn(),
@@ -294,26 +298,37 @@ describe('usePlayback', () => {
     expect(useEditorStore.getState().currentFrame).toBe(299);
   });
 
-  it('limits playback to the inclusive last keyframe', () => {
-    useEditorStore.setState({ timeline: timelineWithKeyframes([12, 45]) });
+  it('stops playing at the last keyframe but keeps the whole timeline reachable', () => {
+    useEditorStore.setState({ timeline: timelineWithKeyframes([12, 45]), timelineDuration: 300 });
 
     renderHook(() => usePlayback(), { wrapper });
 
-    expect(PlaybackController).toHaveBeenLastCalledWith(expect.objectContaining({ duration: 46 }));
+    // Stepping and seeking cover the whole timeline…
+    expect(PlaybackController).toHaveBeenLastCalledWith(expect.objectContaining({ duration: 300 }));
+    // …while playing stops at the last keyframe
+    const instance = vi.mocked(PlaybackController).mock.results.at(-1)?.value;
+    expect(instance?.playEnd).toBe(45);
   });
 
-  it('updates the playback limit when the last keyframe moves or is removed', () => {
+  it('updates the play end when the last keyframe moves or is removed', () => {
     useEditorStore.setState({ timeline: timelineWithKeyframes([12, 45]) });
     renderHook(() => usePlayback(), { wrapper });
 
     const instance = vi.mocked(PlaybackController).mock.results.at(-1)?.value;
-    expect(instance?.duration).toBe(46);
+    expect(instance?.playEnd).toBe(45);
 
     act(() => useEditorStore.setState({ timeline: timelineWithKeyframes([8, 20]) }));
-    expect(instance?.duration).toBe(21);
+    expect(instance?.playEnd).toBe(20);
 
     act(() => useEditorStore.setState({ timeline: timelineWithKeyframes([8]) }));
-    expect(instance?.duration).toBe(9);
+    expect(instance?.playEnd).toBe(8);
+  });
+
+  it('plays the whole timeline when all keyframes are at frame 0', () => {
+    useEditorStore.setState({ timeline: timelineWithKeyframes([0]) });
+    renderHook(() => usePlayback(), { wrapper });
+    const instance = vi.mocked(PlaybackController).mock.results.at(-1)?.value;
+    expect(instance?.playEnd).toBeNull();
   });
 
   it('should dispose controller on unmount', () => {
