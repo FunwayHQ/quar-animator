@@ -16,6 +16,7 @@ import { usePlayback } from '../hooks/usePlayback';
 import { useTimelineShortcuts } from '../hooks/useTimelineShortcuts';
 import { useProjectActions } from '../hooks/useProjectActions';
 import { useProjectShortcuts } from '../hooks/useProjectShortcuts';
+import { useUndoShortcuts } from '../hooks/useUndoShortcuts';
 import { useEditorStore } from '../stores/editorStore';
 import { useSceneGraph } from '../contexts/SceneGraphContext';
 import styles from './Editor.module.css';
@@ -27,6 +28,7 @@ function EditorInner() {
   // Mark project dirty when scene graph changes
   /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return */
   const sceneGraph = useSceneGraph();
+  useUndoShortcuts(sceneGraph);
   useEffect(() => {
     const markDirty = () => useEditorStore.getState().markDirty();
     const unsubs = [

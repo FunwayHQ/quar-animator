@@ -144,8 +144,6 @@ export function Canvas({
   const changeBooleanOp = useEditorStore((state) => state.changeBooleanOp);
   const convertTextToPath = useEditorStore((state) => state.convertTextToPath);
   const outlineStroke = useEditorStore((state) => state.outlineStroke);
-  const undo = useEditorStore((state) => state.undo);
-  const redo = useEditorStore((state) => state.redo);
   const cutSelection = useEditorStore((state) => state.cutSelection);
   const editingGradient = useEditorStore((state) => state.editingGradient);
   const showRulers = useEditorStore((state) => state.showRulers);
@@ -1549,18 +1547,8 @@ export function Canvas({
         return;
       }
 
-      // Undo/Redo shortcuts
+      // Undo/redo are global (useUndoShortcuts), so they work wherever focus is
       if (!isInput && (e.ctrlKey || e.metaKey)) {
-        if (e.key === 'z' && !e.shiftKey) {
-          e.preventDefault();
-          undo(sceneGraph);
-          return;
-        }
-        if ((e.key === 'z' && e.shiftKey) || e.key === 'y') {
-          e.preventDefault();
-          redo(sceneGraph);
-          return;
-        }
         if (e.key === 'x' && !e.shiftKey) {
           e.preventDefault();
           cutSelection(sceneGraph);
@@ -1629,8 +1617,6 @@ export function Canvas({
       sendBackward,
       bringToFront,
       sendToBack,
-      undo,
-      redo,
       cutSelection,
       isDirectSelectionActive,
       directSelectionPoints,
