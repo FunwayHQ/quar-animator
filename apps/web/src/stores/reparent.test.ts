@@ -5,7 +5,8 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { SceneGraph, createGroupNode, mat3 } from '@quar/core';
 import { addKeyframe, createTimeline, getOrCreateTrack } from '@quar/animation';
-import type { Matrix3, RectangleNode, Transform } from '@quar/types';
+import type { Matrix3, RectangleNode, SkinData, Transform } from '@quar/types';
+import { placeSkinData } from '@quar/rigging';
 import {
   mapPlacement,
   placementOf,
@@ -248,6 +249,36 @@ describe('editor actions keep layers in place', () => {
     expectSameMatrix(sg.getWorldTransform('outside'), outside);
     // A new group adds no offset, so a root object keeps its exact position
     expect(sg.getNode('outside')!.transform.position).toEqual({ x: 50, y: 50 });
+  });
+
+  it('keeps a bound mesh where it is drawn when it changes parent', () => {
+    const local = (id: string) => {
+      const { position, rotation, scale, anchor } = sg.getNode(id)!.transform;
+      const m = mat3.compose(position, rotation, scale, anchor);
+      return [m.a, m.b, m.c, m.d, m.tx, m.ty];
+    };
+    sg.addNode(group('g', { position: { x: 300, y: 40 }, rotation: 20 }));
+    const mesh = rect('mesh', { position: { x: 10, y: 20 } });
+    const bindLocal = (() => {
+      const m = mat3.compose(mesh.transform.position, 0, { x: 1, y: 1 }, mesh.transform.anchor);
+      return [m.a, m.b, m.c, m.d, m.tx, m.ty];
+    })();
+    const skinData: SkinData = {
+      vertices: [],
+      inverseBindMatrices: { bone: [1, 0, 0, 1, 0, 0] },
+      meshBindMatrix: bindLocal,
+      meshBindLocal: bindLocal,
+      vertexCount: 0,
+    };
+    sg.addNode({ ...mesh, skinData } as unknown as RectangleNode);
+    // Moved a little since binding, then into the rotated group
+    sg.updateNode('mesh', { transform: { ...mesh.transform, position: { x: 30, y: 25 } } });
+    const before = placeSkinData(skinData, local('mesh')).meshBindMatrix;
+
+    store().moveNodeKeepingPlacement(sg, 'mesh', 'g');
+    const moved = (sg.getNode('mesh') as unknown as { skinData: SkinData }).skinData;
+    const after = placeSkinData(moved, local('mesh')).meshBindMatrix;
+    after.forEach((v, i) => expect(v).toBeCloseTo(before[i]!, 9));
   });
 
   it('moves an Animation Sequence step with its object', () => {

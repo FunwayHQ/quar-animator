@@ -59,6 +59,13 @@ export function reparentMatrix(
   return identity ? null : m;
 }
 
+/** m × a 6-element matrix [a, b, c, d, tx, ty] (e.g. a binding's meshBindLocal). */
+export function multiply6(m: Matrix3, matrix: number[]): number[] {
+  const [a = 1, b = 0, c = 0, d = 1, tx = 0, ty = 0] = matrix;
+  const r = mat3.multiply(m, { a, b, c, d, tx, ty });
+  return [r.a, r.b, r.c, r.d, r.tx, r.ty];
+}
+
 export function placementOf(transform: Transform): Placement {
   return {
     'transform.position.x': transform.position.x,

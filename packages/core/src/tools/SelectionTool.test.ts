@@ -8,6 +8,7 @@ import type { ToolContext } from './BaseTool';
 import { createMockToolContext, createMockPointerEvent } from '../test/setup';
 import { createDefaultTransform } from '../SceneGraph';
 import type {
+  Node,
   RectangleNode,
   EllipseNode,
   PolygonNode,
@@ -617,6 +618,58 @@ describe('SelectionTool', () => {
       tool.onKeyDown(event);
 
       expect(context.sceneGraph.getNode('rect1')?.transform.position.x).toBe(51);
+    });
+
+    describe('bound meshes', () => {
+      const skinData = (boneId: string) => ({
+        vertices: [],
+        inverseBindMatrices: { [boneId]: [1, 0, 0, 1, 0, 0] },
+        meshBindMatrix: [1, 0, 0, 1, 0, 0],
+        vertexCount: 0,
+      });
+      const bone = (id: string, x: number) =>
+        ({
+          id,
+          name: id,
+          type: 'bone',
+          parent: null,
+          children: [],
+          transform: { ...createDefaultTransform(), position: { x, y: 0 }, anchor: { x: 0, y: 0 } },
+          visible: true,
+          locked: false,
+          opacity: 1,
+          blendMode: 'normal',
+          length: 50,
+          boneStyle: 'octahedral',
+          boneColor: '#E0E0E0',
+        }) as unknown as Node;
+      const nudge = () =>
+        tool.onKeyDown({ key: 'ArrowRight', preventDefault: () => {} } as KeyboardEvent);
+
+      it('leave a bound mesh to its bones when they move together', () => {
+        context.sceneGraph.addNode(bone('root', 0));
+        context.sceneGraph.addNode(bone('child', 50), 'root');
+        context.sceneGraph.addNode({
+          ...createTestRectangle('mesh', 50, 50, 100, 100),
+          skinData: skinData('child'),
+        } as unknown as Node);
+        // The mesh is bound to the child bone, which moves with its root
+        context.setSelectedIds(['root', 'mesh']);
+        nudge();
+        expect(context.sceneGraph.getNode('root')!.transform.position.x).toBe(1);
+        expect(context.sceneGraph.getNode('mesh')!.transform.position.x).toBe(50);
+      });
+
+      it('move a bound mesh nudged on its own', () => {
+        context.sceneGraph.addNode(bone('root', 0));
+        context.sceneGraph.addNode({
+          ...createTestRectangle('mesh', 50, 50, 100, 100),
+          skinData: skinData('root'),
+        } as unknown as Node);
+        context.setSelectedIds(['mesh']);
+        nudge();
+        expect(context.sceneGraph.getNode('mesh')!.transform.position.x).toBe(51);
+      });
     });
 
     it('should nudge by 10 with Shift+arrow', () => {

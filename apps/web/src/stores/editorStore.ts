@@ -31,6 +31,7 @@ import type {
   SymbolOverride,
   SymbolInstanceNode,
   MaskMode,
+  SkinData,
 } from '@quar/types';
 import type { AnimationSequence, KeyframeClipboard, GraphViewTransform } from '@quar/animation';
 import {
@@ -48,6 +49,7 @@ import {
 import {
   applyPlacement,
   mapPlacement,
+  multiply6,
   placementOf,
   reparentMatrix,
   reparentRestPose,
@@ -2140,7 +2142,16 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     if (!m) return;
 
     const base = placementOf(node.transform);
-    sceneGraph.updateNode(id, { transform: applyPlacement(node.transform, mapPlacement(base, m)) });
+    // A bound mesh's binding remembers its local transform: re-express that too,
+    // or the change of parent would read as the mesh moving
+    const skin = (node as { skinData?: SkinData }).skinData;
+    const skinData = skin?.meshBindLocal
+      ? { ...skin, meshBindLocal: multiply6(m, skin.meshBindLocal) }
+      : undefined;
+    sceneGraph.updateNode(id, {
+      transform: applyPlacement(node.transform, mapPlacement(base, m)),
+      ...(skinData ? ({ skinData } as Partial<Node>) : {}),
+    });
     const state = get();
     const timeline = reparentTimeline(state.timeline, id, base, m);
     const pose = state.animationSequence.restPoses[id];

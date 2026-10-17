@@ -639,7 +639,20 @@ export class SelectionTool extends BaseTool {
       }
       if (!ancestorSelected) result.push(id);
     }
-    return result;
+    // A bound mesh follows its bones: when any of them moves too, moving the
+    // mesh as well would carry it twice as far
+    const moving = new Set(result);
+    const movesWithSelection = (boneId: string) => {
+      for (let id: string | null = boneId; id; id = sg.getNode(id)?.parent ?? null) {
+        if (moving.has(id)) return true;
+      }
+      return false;
+    };
+    return result.filter((id) => {
+      const skin = (sg.getNode(id) as { skinData?: { inverseBindMatrices: object } } | undefined)
+        ?.skinData;
+      return !skin || !Object.keys(skin.inverseBindMatrices).some(movesWithSelection);
+    });
   }
 
   /**
@@ -1698,9 +1711,32 @@ export class SelectionTool extends BaseTool {
         }
       }
 
+      // A bound mesh's binding remembers its local transform: re-express that in
+      // the new parent's space too, or the change of parent reads as movement
+      const skin = (node as { skinData?: { meshBindLocal?: number[] } }).skinData;
+      let skinData: object | undefined;
+      if (skin?.meshBindLocal) {
+        const from = currentParent ? sg.getWorldTransform(currentParent) : mat3.identity();
+        const to = targetParentId ? sg.getWorldTransform(targetParentId) : mat3.identity();
+        const toInverse = mat3.invert(to);
+        if (toInverse) {
+          const [a, b, c, d, tx, ty] = skin.meshBindLocal as [
+            number,
+            number,
+            number,
+            number,
+            number,
+            number,
+          ];
+          const m = mat3.multiply(mat3.multiply(toInverse, from), { a, b, c, d, tx, ty });
+          skinData = { ...skin, meshBindLocal: [m.a, m.b, m.c, m.d, m.tx, m.ty] };
+        }
+      }
+
       sg.moveNode(id, targetParentId);
       sg.updateNode(id, {
         transform: { ...node.transform, position: localPos },
+        ...(skinData ? ({ skinData } as Partial<Node>) : {}),
       });
     }
   }
