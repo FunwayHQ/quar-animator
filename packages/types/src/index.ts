@@ -422,6 +422,12 @@ export interface SkinData {
   meshBindMatrix: number[];
   /** Number of vertices at bind time (for validation) */
   vertexCount: number;
+  /**
+   * The mesh's own (parent-relative) transform at bind time, 6 elements.
+   * Moving, rotating, scaling or animating the mesh afterwards moves it
+   * relative to its skeleton. Absent on older bindings until migrated.
+   */
+  meshBindLocal?: number[];
 }
 
 export type Node =

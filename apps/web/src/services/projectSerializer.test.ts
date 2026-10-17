@@ -317,6 +317,52 @@ describe('ProjectSerializer', () => {
     });
   });
 
+  describe('skin bindings saved before meshBindLocal', () => {
+    it('take their current transform as the bind one, on every page', () => {
+      const skinData = {
+        vertices: [],
+        inverseBindMatrices: { bone: [1, 0, 0, 1, 0, 0] },
+        meshBindMatrix: [1, 0, 0, 1, 0, 0],
+        vertexCount: 0,
+      };
+      const page = (id: string, x: number) => ({
+        id,
+        name: id,
+        sceneGraph: {
+          nodes: [{ ...makeTestNode(`mesh-${id}`, x, 20), skinData: structuredClone(skinData) }],
+          rootNodeIds: [`mesh-${id}`],
+        },
+        timeline: createTimeline({ duration: 30, frameRate: 30 }),
+      });
+      const data: ProjectDataV2 = {
+        version: '2.0',
+        name: 'Rig',
+        createdAt: '2024-06-01',
+        updatedAt: '2024-06-01',
+        pages: [page('a', 10), page('b', 70)],
+        activePageId: 'a',
+        settings: {
+          timelineDuration: 30,
+          frameRate: 30,
+          autoKeyframe: false,
+          onionSkin: { ...DEFAULT_ONION_SKIN_SETTINGS },
+        },
+      };
+      const sg = new SceneGraph();
+      let applied: Record<string, unknown> = {};
+      deserializeProject(data, sg, (state) => {
+        applied = state;
+      });
+
+      // compose(position, 0°, 1, anchor 0.5) → translation minus the anchor
+      const active = sg.getNode('mesh-a') as unknown as { skinData: { meshBindLocal: number[] } };
+      expect(active.skinData.meshBindLocal).toEqual([1, 0, 0, 1, 9.5, 19.5]);
+      const other = (applied.pages as Array<{ sceneGraphJSON: { nodes: any[] } }>)[1]!
+        .sceneGraphJSON.nodes[0];
+      expect(other.skinData.meshBindLocal).toEqual([1, 0, 0, 1, 69.5, 19.5]);
+    });
+  });
+
   describe('deserializeProject (v2.0)', () => {
     it('should restore multi-page project', () => {
       const v2Data: ProjectDataV2 = {

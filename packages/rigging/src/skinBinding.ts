@@ -5,6 +5,7 @@
 
 import type { Node, SkinData, VertexSkinEntry, VertexBoneWeight } from '@quar/types';
 import type { FKBoneState } from './fk';
+import { mul6 } from './cpuSkinning';
 
 /** Minimal SceneGraph interface used by skin binding */
 interface SkinSceneGraph {
@@ -97,6 +98,21 @@ export function createSkinBinding(
 
   if (Object.keys(inverseBindMatrices).length === 0) return null;
 
+  // The mesh's own transform at bind time (world = parent × local), so later
+  // changes to it can move the mesh relative to its skeleton
+  const parentWorld = node.parent ? sceneGraph.getWorldTransform(node.parent) : null;
+  const parentInverse = parentWorld
+    ? invertMatrix6([
+        parentWorld.a,
+        parentWorld.b,
+        parentWorld.c,
+        parentWorld.d,
+        parentWorld.tx,
+        parentWorld.ty,
+      ])
+    : [1, 0, 0, 1, 0, 0];
+  const meshBindLocal = parentInverse ? mul6(parentInverse, meshBindMatrix) : undefined;
+
   // Initialize all vertices with empty influences
   const vertices: VertexSkinEntry[] = [];
   for (let i = 0; i < vertexCount; i++) {
@@ -108,7 +124,28 @@ export function createSkinBinding(
     inverseBindMatrices,
     meshBindMatrix,
     vertexCount,
+    ...(meshBindLocal ? { meshBindLocal } : {}),
   };
+}
+
+/**
+ * The skin data to deform a mesh with, given the mesh's current local
+ * transform (6 elements). Skinning starts from where the mesh was bound;
+ * whatever its own transform did since — a move, a rotation, a keyframed
+ * animation, a paste offset — is applied on top, in bind space, so the mesh
+ * moves relative to its skeleton. A shared parent moving both the skeleton
+ * and the mesh is already in the bones and isn't applied twice. Bindings
+ * without meshBindLocal deform from where they were bound, as before.
+ */
+export function placeSkinData(skinData: SkinData, currentLocal: number[]): SkinData {
+  const bindLocal = skinData.meshBindLocal;
+  if (!bindLocal) return skinData;
+  const inverseBindLocal = invertMatrix6(bindLocal);
+  if (!inverseBindLocal) return skinData;
+  const since = mul6(inverseBindLocal, currentLocal);
+  const unchanged = [1, 0, 0, 1, 0, 0].every((v, i) => Math.abs(since[i]! - v) < 1e-9);
+  if (unchanged) return skinData;
+  return { ...skinData, meshBindMatrix: mul6(skinData.meshBindMatrix, since) };
 }
 
 /**

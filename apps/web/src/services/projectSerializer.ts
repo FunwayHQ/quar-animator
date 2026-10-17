@@ -14,12 +14,13 @@ import type {
   SymbolDefinition,
   IKChain,
   SmartBoneAction,
+  SkinData,
 } from '@quar/types';
 import type { OnionSkinSettings } from '@quar/core';
 import type { SceneGraph } from '@quar/core';
 import { createAnimationSequence, createTimeline } from '@quar/animation';
 import type { AnimationSequence } from '@quar/animation';
-import { DEFAULT_ONION_SKIN_SETTINGS, writeQuarFile, parseQuarFile } from '@quar/core';
+import { DEFAULT_ONION_SKIN_SETTINGS, writeQuarFile, parseQuarFile, mat3 } from '@quar/core';
 import type { Guide, PageData } from '../stores/editorStore';
 
 // ============================================================================
@@ -351,6 +352,22 @@ function validateSettings(obj: Record<string, unknown>): boolean {
 // Migration: v1.0 → v2.0
 // ============================================================================
 
+/**
+ * Bindings saved before meshBindLocal existed ignored the mesh's own
+ * transform, so they were drawn where they were bound whatever it said.
+ * Taking the current transform as the bind one keeps them looking exactly
+ * the same, and moving them works from now on.
+ */
+function migrateSkinBindings(nodes: Node[]): void {
+  for (const node of nodes) {
+    const skin = (node as { skinData?: SkinData }).skinData;
+    if (!skin || skin.meshBindLocal) continue;
+    const { position, rotation, scale, anchor } = node.transform;
+    const local = mat3.compose(position, rotation, scale, anchor);
+    skin.meshBindLocal = [local.a, local.b, local.c, local.d, local.tx, local.ty];
+  }
+}
+
 function migrateV1ToV2(data: ProjectDataV1): ProjectDataV2 {
   const pageId = `page-migrated-${Date.now()}`;
   return {
@@ -418,6 +435,8 @@ export function deserializeProject(
     data.version === '2.0' || data.version === '3.0'
       ? (data as ProjectDataV2)
       : migrateV1ToV2(data);
+
+  for (const page of v2.pages) migrateSkinBindings(page.sceneGraph.nodes);
 
   // Find the active page (or first page as fallback)
   const activePage = v2.pages.find((p) => p.id === v2.activePageId) ?? v2.pages[0]!;

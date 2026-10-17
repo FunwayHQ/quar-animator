@@ -60,6 +60,7 @@ import {
   buildBoneIdToIndex,
   packSkinnedVertices,
   computeBoneMatrixUniforms,
+  placeSkinData,
 } from '@quar/rigging';
 import type { AffineTransform2D } from '@quar/rigging';
 
@@ -582,6 +583,13 @@ export class ShapeRenderer {
   /** Set the symbol definitions registry so instances can be resolved during rendering. */
   setSymbolDefinitions(defs: Map<string, SymbolDefinition>): void {
     this.symbolDefinitions = defs;
+  }
+
+  /** A node's skin data placed at its current transform (see placeSkinData). */
+  private placedSkin(node: Node, skinData: SkinData): SkinData {
+    const { position, rotation, scale, anchor } = node.transform;
+    const local = mat3.compose(position, rotation, scale, anchor);
+    return placeSkinData(skinData, [local.a, local.b, local.c, local.d, local.tx, local.ty]);
   }
 
   /** Whether bones are drawn. Exports leave rig helpers out of the artwork. */
@@ -3460,6 +3468,8 @@ export class ShapeRenderer {
 
     const skinData = (node as any).skinData as SkinData;
     if (!skinData) return;
+    // Deform from where the mesh is now (the GPU vertex cache keeps the binding)
+    const placed = this.placedSkin(node, skinData);
 
     // Get bind-pose tessellation, computing it on demand when the non-skinned
     // render path never seeded the cache (fresh project load, or paste/duplicate
@@ -3494,7 +3504,7 @@ export class ShapeRenderer {
         if (cached.skinnedVertexData && cached.boneIdToIndex) {
           this.renderSkinnedFillsGPU(
             cached,
-            skinData,
+            placed,
             fills,
             boneWorldTransforms,
             this.currentEffectiveOpacity
@@ -3504,7 +3514,7 @@ export class ShapeRenderer {
         // CPU fallback for fills
         const deformed = deformVertices(
           cached.vertices,
-          skinData,
+          placed,
           boneWorldTransforms,
           nodeMorphOffsets
         );
@@ -3525,7 +3535,7 @@ export class ShapeRenderer {
     if (strokes.length > 0) {
       const deformed = deformVertices(
         cached.vertices,
-        skinData,
+        placed,
         boneWorldTransforms,
         nodeMorphOffsets
       );
@@ -3573,7 +3583,7 @@ export class ShapeRenderer {
     // Deform quad vertices via CPU linear blend skinning — result is in world space
     const deformed = deformVertices(
       cached.vertices,
-      skinData,
+      this.placedSkin(node, skinData),
       boneWorldTransforms,
       nodeMorphOffsets
     );
@@ -3686,7 +3696,11 @@ export class ShapeRenderer {
       boneWorldTransforms[boneId] = { a: bw.a, b: bw.b, c: bw.c, d: bw.d, tx: bw.tx, ty: bw.ty };
     }
 
-    const deformed = deformVertices(cached.vertices, skinData, boneWorldTransforms);
+    const deformed = deformVertices(
+      cached.vertices,
+      this.placedSkin(node, skinData),
+      boneWorldTransforms
+    );
     if (deformed.length < 2) return null;
 
     let minX = deformed[0]!;
@@ -3771,7 +3785,11 @@ export class ShapeRenderer {
         const bw = sceneGraph.getWorldTransform(boneId);
         boneWorldTransforms[boneId] = { a: bw.a, b: bw.b, c: bw.c, d: bw.d, tx: bw.tx, ty: bw.ty };
       }
-      worldVertices = deformVertices(vertices, skinData, boneWorldTransforms);
+      worldVertices = deformVertices(
+        vertices,
+        this.placedSkin(node, skinData),
+        boneWorldTransforms
+      );
     } else {
       worldVertices = vertices;
     }
