@@ -148,6 +148,83 @@ export function placeSkinData(skinData: SkinData, currentLocal: number[]): SkinD
   return { ...skinData, meshBindMatrix: mul6(skinData.meshBindMatrix, since) };
 }
 
+/** Vertex positions as stored in a binding (rounded, so files stay small). */
+export function bindVertexPositions(vertices: ArrayLike<number>): number[] {
+  return Array.from(vertices, (v) => Math.round(v * 1000) / 1000);
+}
+
+/** How many of the nearest bound vertices a new vertex blends its weights from. */
+const FIT_NEIGHBOURS = 3;
+
+/**
+ * A binding fitted to the mesh's geometry as it is now. Weights are kept per
+ * tessellated vertex, so editing a shape after binding it (a new size, a
+ * corner radius, added points) renumbers its vertices. Each vertex of the new
+ * geometry takes its weights from the nearest vertices the binding recorded
+ * (blended by inverse distance; an unchanged vertex keeps its own), and the
+ * fitted binding records the new geometry. Bindings that already match, and
+ * older ones that recorded no vertices, are returned as they are.
+ */
+export function fitSkinToVertices(skinData: SkinData, vertices: ArrayLike<number>): SkinData {
+  const count = Math.floor(vertices.length / 2);
+  if (skinData.vertices.length === count) return skinData;
+  const bind = skinData.bindVertices;
+  const bindCount = bind ? Math.min(bind.length / 2, skinData.vertices.length) : 0;
+  if (!bind || bindCount === 0 || count === 0) return skinData;
+
+  const nearIndex = new Int32Array(FIT_NEIGHBOURS);
+  const nearDist = new Float64Array(FIT_NEIGHBOURS);
+  const fitted: VertexSkinEntry[] = [];
+  for (let i = 0; i < count; i++) {
+    const x = vertices[i * 2]!;
+    const y = vertices[i * 2 + 1]!;
+    nearIndex.fill(-1);
+    nearDist.fill(Infinity);
+    for (let j = 0; j < bindCount; j++) {
+      const dx = bind[j * 2]! - x;
+      const dy = bind[j * 2 + 1]! - y;
+      const d = dx * dx + dy * dy;
+      if (d >= nearDist[FIT_NEIGHBOURS - 1]!) continue;
+      let k = FIT_NEIGHBOURS - 1;
+      while (k > 0 && nearDist[k - 1]! > d) {
+        nearDist[k] = nearDist[k - 1]!;
+        nearIndex[k] = nearIndex[k - 1]!;
+        k--;
+      }
+      nearDist[k] = d;
+      nearIndex[k] = j;
+    }
+
+    const blended = new Map<string, number>();
+    if (nearDist[0]! < 1e-6) {
+      for (const inf of skinData.vertices[nearIndex[0]!]!.influences) {
+        blended.set(inf.boneId, inf.weight);
+      }
+    } else {
+      let total = 0;
+      for (let k = 0; k < FIT_NEIGHBOURS && nearIndex[k]! >= 0; k++) total += 1 / nearDist[k]!;
+      for (let k = 0; k < FIT_NEIGHBOURS && nearIndex[k]! >= 0; k++) {
+        const share = 1 / nearDist[k]! / total;
+        for (const inf of skinData.vertices[nearIndex[k]!]!.influences) {
+          blended.set(inf.boneId, (blended.get(inf.boneId) ?? 0) + inf.weight * share);
+        }
+      }
+    }
+    fitted.push(
+      normalizeWeights({
+        influences: [...blended].map(([boneId, weight]) => ({ boneId, weight })),
+      })
+    );
+  }
+
+  return {
+    ...skinData,
+    vertices: fitted,
+    vertexCount: count,
+    bindVertices: bindVertexPositions(vertices),
+  };
+}
+
 /**
  * Compute automatic weights based on nearest-bone distance.
  * For each vertex, finds the 2 nearest bone segments and assigns inverse-distance weights.

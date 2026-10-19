@@ -8,6 +8,7 @@ import {
   computeAutoWeights,
   normalizeWeights,
   paintWeight,
+  fitSkinToVertices,
 } from './skinBinding';
 
 describe('skinBinding', () => {
@@ -432,5 +433,46 @@ describe('skinBinding', () => {
       expect(b2).toBeDefined();
       expect(b2!.weight).toBeGreaterThan(0);
     });
+  });
+});
+
+describe('fitSkinToVertices', () => {
+  const left = { influences: [{ boneId: 'upper', weight: 1 }] };
+  const right = { influences: [{ boneId: 'lower', weight: 1 }] };
+  const skin = (): SkinData => ({
+    vertices: [left, right],
+    inverseBindMatrices: { upper: [1, 0, 0, 1, 0, 0], lower: [1, 0, 0, 1, 0, 0] },
+    meshBindMatrix: [1, 0, 0, 1, 0, 0],
+    vertexCount: 2,
+    bindVertices: [-100, 0, 100, 0],
+  });
+
+  it('leaves a binding that matches the geometry alone', () => {
+    const bound = skin();
+    expect(fitSkinToVertices(bound, new Float32Array([-90, 0, 90, 0]))).toBe(bound);
+  });
+
+  it('leaves older bindings without recorded vertices alone', () => {
+    const { bindVertices: _, ...older } = skin();
+    expect(fitSkinToVertices(older, new Float32Array([-100, 0, 0, 0, 100, 0]))).toBe(older);
+  });
+
+  it('gives new vertices the weights of the nearest bound ones', () => {
+    const fitted = fitSkinToVertices(skin(), new Float32Array([-100, 0, -80, 10, 0, 0, 100, 0]));
+    expect(fitted.vertexCount).toBe(4);
+    expect(fitted.bindVertices).toEqual([-100, 0, -80, 10, 0, 0, 100, 0]);
+    // Unchanged vertices keep their own weights
+    expect(fitted.vertices[0]).toEqual(left);
+    expect(fitted.vertices[3]).toEqual(right);
+    // Near the left end: mostly the upper bone
+    const nearLeft = fitted.vertices[1]!.influences;
+    expect(nearLeft[0]).toMatchObject({ boneId: 'upper' });
+    expect(nearLeft[0]!.weight).toBeGreaterThan(0.9);
+    // Halfway: an even blend
+    const middle = Object.fromEntries(
+      fitted.vertices[2]!.influences.map((inf) => [inf.boneId, inf.weight])
+    );
+    expect(middle.upper).toBeCloseTo(0.5);
+    expect(middle.lower).toBeCloseTo(0.5);
   });
 });

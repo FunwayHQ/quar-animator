@@ -428,6 +428,12 @@ export interface SkinData {
    * relative to its skeleton. Absent on older bindings until migrated.
    */
   meshBindLocal?: number[];
+  /**
+   * The mesh-local vertex positions (xy pairs) the weights belong to. When the
+   * shape's geometry is edited later, its new vertices take their weights from
+   * the nearest of these. Absent on bindings made before it was recorded.
+   */
+  bindVertices?: number[];
 }
 
 export type Node =

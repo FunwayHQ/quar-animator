@@ -227,6 +227,31 @@ describe('WeightPaintTool', () => {
       expect(b1Weight('rect1')).not.toBeCloseTo(before, 5);
     });
 
+    it('paints a shape edited since binding on its current vertices', () => {
+      const skinData = {
+        ...createTestSkinData(),
+        bindVertices: [-50, -50, 50, -50, -50, 50, 50, 50],
+      };
+      context.sceneGraph.addNode(createBoundRectangle('rect1', skinData));
+      context.setSelectedIds(['rect1']);
+      // A fifth vertex since: the middle of the bottom edge
+      context.getTessellatedVertices = () =>
+        new Float32Array([-50, -50, 0, -50, 50, -50, -50, 50, 50, 50]);
+
+      tool.onActivate!();
+      tool.setActiveBoneId('b1');
+      const m = context.sceneGraph.getWorldTransform('rect1');
+      tool.onPointerDown(
+        createMockPointerEvent({ worldPosition: { x: m.tx, y: m.ty + 5000 }, button: 0 })
+      );
+
+      const fitted = (context.sceneGraph.getNode('rect1') as RectangleNode).skinData!;
+      expect(fitted.vertexCount).toBe(5);
+      // The corners kept their weights under their new numbers
+      expect(fitted.vertices[2]).toEqual(skinData.vertices[1]);
+      expect(fitted.vertices[4]).toEqual(skinData.vertices[3]);
+    });
+
     it('does not paint when the cursor is far from every world vertex (F055)', () => {
       const skinData = createTestSkinData();
       const rect = createBoundRectangle('rect1', skinData);

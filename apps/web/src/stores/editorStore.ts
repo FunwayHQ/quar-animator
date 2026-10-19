@@ -79,6 +79,7 @@ import {
   createSkinBinding,
   computeAutoWeights,
   computeFKChain,
+  bindVertexPositions,
   DEFAULT_WIND_SETTINGS,
 } from '@quar/rigging';
 import type { FKBoneState } from '@quar/rigging';
@@ -1345,6 +1346,8 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     }
 
     const weighted = computeAutoWeights(skin, positions, allStates);
+    // The geometry the weights belong to, so they can follow later shape edits
+    if (tessellatedVertices) weighted.bindVertices = bindVertexPositions(tessellatedVertices);
 
     sceneGraph.updateNode(nodeId, { skinData: weighted } as any);
     set({ isDirty: true });

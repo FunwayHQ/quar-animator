@@ -5,7 +5,7 @@
 
 import type { CanvasPointerEvent, ToolType, Node, SkinData, SkinnableNode } from '@quar/types';
 import { BaseTool } from './BaseTool';
-import { paintWeight } from '@quar/rigging';
+import { fitSkinToVertices, paintWeight } from '@quar/rigging';
 
 /** Type guard for nodes that can have skinData */
 function isSkinnableNode(node: Node): node is SkinnableNode {
@@ -230,6 +230,13 @@ export class WeightPaintTool extends BaseTool {
     // node not at the origin.
     const localVertexPositions = this.context.getTessellatedVertices?.(this.boundNodeId);
     if (localVertexPositions && localVertexPositions.length >= 2) {
+      // Weights for the shape as it is now, if it was edited since it was bound
+      const fitted = fitSkinToVertices(skinData, localVertexPositions);
+      if (fitted !== skinData) {
+        this.context.sceneGraph.updateNode(this.boundNodeId, {
+          skinData: fitted,
+        } as Partial<Node>);
+      }
       const m = this.context.sceneGraph.getWorldTransform(this.boundNodeId);
       const worldVertexPositions = new Float32Array(localVertexPositions.length);
       for (let i = 0; i < localVertexPositions.length; i += 2) {

@@ -62,6 +62,7 @@ import {
   packSkinnedVertices,
   computeBoneMatrixUniforms,
   placeSkinData,
+  fitSkinToVertices,
 } from '@quar/rigging';
 import type { AffineTransform2D } from '@quar/rigging';
 
@@ -457,6 +458,8 @@ interface TessellationCacheEntry {
   lastMorphOffsets?: Float32Array;
   /** Last skinData reference used to pack skinnedVertexData (for weight paint invalidation) */
   lastSkinData?: unknown;
+  /** A binding made on other geometry, fitted to this geometry's vertices */
+  fittedSkin?: { source: SkinData; skin: SkinData };
 }
 
 /** Build a cache key string from node geometry properties */
@@ -592,6 +595,18 @@ export class ShapeRenderer {
   /** Set the symbol definitions registry so instances can be resolved during rendering. */
   setSymbolDefinitions(defs: Map<string, SymbolDefinition>): void {
     this.symbolDefinitions = defs;
+  }
+
+  /**
+   * A node's skin data with weights for the geometry being drawn, which the
+   * shape may have changed since it was bound (see fitSkinToVertices).
+   */
+  private fittedSkin(cached: TessellationCacheEntry, skinData: SkinData): SkinData {
+    if (skinData.vertices.length === cached.vertices.length / 2) return skinData;
+    if (cached.fittedSkin?.source !== skinData) {
+      cached.fittedSkin = { source: skinData, skin: fitSkinToVertices(skinData, cached.vertices) };
+    }
+    return cached.fittedSkin.skin;
   }
 
   /** A node's skin data placed at its current transform (see placeSkinData). */
@@ -3493,16 +3508,18 @@ export class ShapeRenderer {
   private renderSkinnedNode(node: Node, sceneGraph: SceneGraph): void {
     if (!this.program) return;
 
-    const skinData = (node as any).skinData as SkinData;
-    if (!skinData) return;
-    // Deform from where the mesh is now (the GPU vertex cache keeps the binding)
-    const placed = this.placedSkin(node, skinData);
+    const boundSkin = (node as any).skinData as SkinData;
+    if (!boundSkin) return;
 
     // Get bind-pose tessellation, computing it on demand when the non-skinned
     // render path never seeded the cache (fresh project load, or paste/duplicate
     // producing a new node id) — otherwise the skinned node is invisible.
     const cached = this.ensureBindPoseGeometry(node);
     if (!cached) return;
+
+    const skinData = this.fittedSkin(cached, boundSkin);
+    // Deform from where the mesh is now (the GPU vertex cache keeps the binding)
+    const placed = this.placedSkin(node, skinData);
 
     // Get fills/strokes from node
     const fills: Fill[] = 'fills' in node ? (node as any).fills : [];
@@ -3582,8 +3599,7 @@ export class ShapeRenderer {
   private renderSkinnedImage(node: ImageNode, sceneGraph: SceneGraph): void {
     if (!this.textureProgram || !this.textureVAO || !this.textureVertexBuffer) return;
 
-    const skinData = node.skinData as SkinData;
-    if (!skinData) return;
+    if (!node.skinData) return;
 
     const texture = this.getTexture(node.src);
     if (!texture) return;
@@ -3592,6 +3608,7 @@ export class ShapeRenderer {
     // never seeded the cache (fresh load / paste) — else the node is invisible.
     const cached = this.ensureBindPoseImageGeometry(node);
     if (!cached) return;
+    const skinData = this.fittedSkin(cached, node.skinData);
 
     const gl = this.renderer.context;
 
@@ -3701,11 +3718,12 @@ export class ShapeRenderer {
     node: Node,
     sceneGraph: SceneGraph
   ): { x: number; y: number; width: number; height: number } | null {
-    const skinData = (node as any).skinData as SkinData | undefined;
-    if (!skinData) return null;
+    const boundSkin = (node as any).skinData as SkinData | undefined;
+    if (!boundSkin) return null;
 
     const cached = this.geometryCache.get(node.id);
     if (!cached) return null;
+    const skinData = this.fittedSkin(cached, boundSkin);
 
     // Collect current bone world transforms
     const boneWorldTransforms: Record<string, AffineTransform2D> = {};
@@ -3757,14 +3775,15 @@ export class ShapeRenderer {
     )
       return;
 
-    const skinData = (node as any).skinData as SkinData;
-    if (!skinData) return;
+    const boundSkin = (node as any).skinData as SkinData;
+    if (!boundSkin) return;
 
     const gl = this.renderer.context;
 
     // Get tessellation
     const cached = this.geometryCache.get(node.id);
     if (!cached) return;
+    const skinData = this.fittedSkin(cached, boundSkin);
 
     const vertices = cached.vertices;
     const fillIndices = cached.fillIndices;

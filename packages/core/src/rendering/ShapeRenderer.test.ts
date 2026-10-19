@@ -1192,6 +1192,47 @@ describe('ShapeRenderer', () => {
         expect(gl.drawElements).toHaveBeenCalled();
       });
 
+      it('keeps a shape on its bones when its geometry is edited after binding', () => {
+        const rect = createRectangleNode('edited', 100, 50);
+        sceneGraph.addNode(rect);
+        sceneGraph.addNode({
+          ...createRectangleNode('bone', 0, 0),
+          type: 'bone',
+          length: 100,
+          boneColor: '#ff0000',
+        } as any);
+        const vpMatrix = mat3.identity();
+        shapeRenderer.render(sceneGraph, vpMatrix);
+        const corners = shapeRenderer.getTessellatedVertices('edited')!;
+        sceneGraph.updateNode('edited', {
+          skinData: {
+            vertices: Array.from({ length: corners.length / 2 }, () => ({
+              influences: [{ boneId: 'bone', weight: 1 }],
+            })),
+            inverseBindMatrices: { bone: [1, 0, 0, 1, 0, 0] },
+            meshBindMatrix: [1, 0, 0, 1, 0, 0],
+            vertexCount: corners.length / 2,
+            bindVertices: Array.from(corners),
+          },
+        } as any);
+
+        // Rounded corners: many more vertices than were bound
+        sceneGraph.updateNode('edited', { cornerRadius: [10, 10, 10, 10] } as any);
+        shapeRenderer.render(sceneGraph, vpMatrix);
+        expect(shapeRenderer.getTessellatedVertices('edited')!.length).toBeGreaterThan(
+          corners.length
+        );
+        const atRest = shapeRenderer.getDeformedBounds(sceneGraph.getNode('edited')!, sceneGraph)!;
+
+        sceneGraph.updateNode('bone', {
+          transform: { ...createDefaultTransform(), position: { x: 100, y: 0 } },
+        });
+        const moved = shapeRenderer.getDeformedBounds(sceneGraph.getNode('edited')!, sceneGraph)!;
+        // Every vertex followed the bone, the new ones too
+        expect(moved.x - atRest.x).toBeCloseTo(100);
+        expect(moved.width).toBeCloseTo(atRest.width);
+      });
+
       it('should fall back to CPU path when bone count exceeds MAX_BONES_GPU', () => {
         const rect = createRectangleNode('skinned_many', 100, 50);
         sceneGraph.addNode(rect);
