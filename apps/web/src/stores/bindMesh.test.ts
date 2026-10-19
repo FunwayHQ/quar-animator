@@ -42,7 +42,14 @@ describe('binding a shape to bones', () => {
 
     const skin = (sg.getNode('rect') as RectangleNode & { skinData: SkinData }).skinData;
     expect(skin.vertexCount).toBe(4);
+    expect(skin.bendMesh).toBeUndefined();
     // Rounded to a thousandth, so files stay small
     expect(skin.bindVertices).toEqual([-50, -10, 50, -10, -50, 10, 50, 10]);
+
+    // Bound with a bending mesh, it's marked so it's drawn with one
+    store().bindMeshToBones(sg, 'rect', ['bone'], corners, { bendMesh: true });
+    expect((sg.getNode('rect') as RectangleNode & { skinData: SkinData }).skinData.bendMesh).toBe(
+      true
+    );
   });
 });

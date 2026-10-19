@@ -231,6 +231,46 @@ describe('skinBinding', () => {
       expect(v1Primary.weight).toBeGreaterThan(0.5);
     });
 
+    it('bends the same across the width of a shape at a joint', () => {
+      sceneGraph.addNode(createBoneNode('upper', 'Upper', { x: 0, y: 0 }, 100));
+      sceneGraph.addNode(createBoneNode('lower', 'Lower', { x: 100, y: 0 }, 100), 'upper');
+      const skin = createSkinBinding('upper', ['upper', 'lower'], 1, sceneGraph)!;
+      const weightOf = (x: number, y: number, boneId: string) =>
+        computeAutoWeights(
+          skin,
+          new Float32Array([x, y]),
+          computeFKChain('upper', sceneGraph)
+        ).vertices[0]!.influences.find((inf) => inf.boneId === boneId)?.weight ?? 0;
+
+      // At the joint: half each, on the bone line and at the edges alike
+      for (const y of [0, 30, -30]) expect(weightOf(100, y, 'lower')).toBeCloseTo(0.5);
+      // A little past it: mostly the lower bone, the same across the width
+      const past = weightOf(115, 0, 'lower');
+      expect(past).toBeGreaterThan(0.5);
+      expect(weightOf(115, 30, 'lower')).toBeCloseTo(past);
+      expect(weightOf(115, -30, 'lower')).toBeCloseTo(past);
+      // Clear of the joint, each bone has its own
+      expect(weightOf(140, 30, 'lower')).toBe(1);
+      expect(weightOf(60, 30, 'upper')).toBe(1);
+    });
+
+    it('blends bones that aren’t connected where they are about as close', () => {
+      sceneGraph.addNode(createBoneNode('left', 'Left', { x: 0, y: 0 }, 100));
+      sceneGraph.addNode(createBoneNode('right', 'Right', { x: 0, y: 100 }, 100));
+      const skin = createSkinBinding('left', ['left', 'right'], 1, sceneGraph)!;
+      const states = [
+        ...computeFKChain('left', sceneGraph),
+        ...computeFKChain('right', sceneGraph),
+      ];
+      const [between, nearLeft] = computeAutoWeights(
+        skin,
+        new Float32Array([50, 50, 50, 5]),
+        states
+      ).vertices;
+      expect(between!.influences.map((inf) => inf.weight)).toEqual([0.5, 0.5]);
+      expect(nearLeft!.influences).toEqual([{ boneId: 'left', weight: 1 }]);
+    });
+
     it('respects max 2 bones per vertex', () => {
       const bone1 = createBoneNode('b1', 'B1', { x: 0, y: 0 }, 30);
       const bone2 = createBoneNode('b2', 'B2', { x: 50, y: 0 }, 30);

@@ -919,8 +919,8 @@ export function Canvas({
         const isGroup = node.type === 'group';
 
         if (isShape) {
-          const tessVerts = shapeRendererRef.current?.getTessellatedVertices(nodeId) ?? undefined;
-          bindMeshToBones(graph, nodeId, boneIds, tessVerts);
+          const mesh = shapeRendererRef.current?.getBindVertices(node);
+          bindMeshToBones(graph, nodeId, boneIds, mesh?.vertices, { bendMesh: mesh?.bendMesh });
         } else if (isGroup) {
           const children = graph
             .getChildren(nodeId)
@@ -933,9 +933,10 @@ export function Canvas({
                 c.type === 'image'
             );
           for (const child of children) {
-            const tessVerts =
-              shapeRendererRef.current?.getTessellatedVertices(child.id) ?? undefined;
-            bindMeshToBones(graph, child.id, boneIds, tessVerts);
+            const mesh = shapeRendererRef.current?.getBindVertices(child);
+            bindMeshToBones(graph, child.id, boneIds, mesh?.vertices, {
+              bendMesh: mesh?.bendMesh,
+            });
           }
         }
       }

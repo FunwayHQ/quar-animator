@@ -10,3 +10,4 @@ export * from './FramebufferManager';
 export * from './PostProcessShaders';
 export * from './EffectRenderer';
 export * from './imageMesh';
+export * from './bendMesh';

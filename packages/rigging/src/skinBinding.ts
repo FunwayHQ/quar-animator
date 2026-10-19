@@ -3,7 +3,7 @@
  * Creates and manipulates mesh-to-bone bindings for skeletal deformation
  */
 
-import type { Node, SkinData, VertexSkinEntry, VertexBoneWeight } from '@quar/types';
+import type { Node, SkinData, VertexSkinEntry } from '@quar/types';
 import type { FKBoneState } from './fk';
 import { mul6 } from './cpuSkinning';
 
@@ -226,63 +226,145 @@ export function fitSkinToVertices(skinData: SkinData, vertices: ArrayLike<number
 }
 
 /**
- * Compute automatic weights based on nearest-bone distance.
- * For each vertex, finds the 2 nearest bone segments and assigns inverse-distance weights.
+ * How far a bend spreads either side of a joint, as a share of the shorter
+ * bone there: about the thickness of a limb, so the joint bends like a sleeve.
+ */
+const JOINT_BLEND = 0.3;
+
+interface WeightBone {
+  id: string;
+  head: { x: number; y: number };
+  tip: { x: number; y: number };
+  dir: { x: number; y: number };
+  length: number;
+}
+
+function smoothstep(edge0: number, edge1: number, x: number): number {
+  if (edge1 <= edge0) return x < edge0 ? 0 : 1;
+  const t = Math.max(0, Math.min(1, (x - edge0) / (edge1 - edge0)));
+  return t * t * (3 - 2 * t);
+}
+
+/**
+ * How much of a vertex, at `v`, belongs past the joint where `from` meets
+ * `to` (0 = all `from`, 1 = all `to`). Measured along the bones from the
+ * joint — not by distance to each bone — so the bend is the same across the
+ * width of the shape, and the edges don't kink at the elbow.
+ */
+function jointShare(v: { x: number; y: number }, from: WeightBone, to: WeightBone): number {
+  let ax = from.dir.x + to.dir.x;
+  let ay = from.dir.y + to.dir.y;
+  const length = Math.hypot(ax, ay);
+  if (length < 1e-9) return 0.5; // folded straight back: no way across
+  ax /= length;
+  ay /= length;
+  const along = (v.x - to.head.x) * ax + (v.y - to.head.y) * ay;
+  const r = JOINT_BLEND * Math.min(from.length, to.length);
+  return smoothstep(-r, r, along);
+}
+
+/**
+ * Compute automatic weights from where each vertex sits along the bones.
+ * A vertex belongs to its nearest bone; near a joint it bends smoothly over
+ * to the bone on the other side (connected bones: one's tip at the other's
+ * head). Near a bone it isn't connected to, it blends where the two are
+ * about as close.
  */
 export function computeAutoWeights(
   skinData: SkinData,
   vertexPositions: Float32Array, // xy pairs in world space
   boneStates: FKBoneState[]
 ): SkinData {
+  const bones: WeightBone[] = [];
+  for (const state of boneStates) {
+    if (!skinData.inverseBindMatrices[state.boneId]) continue;
+    if (bones.some((bone) => bone.id === state.boneId)) continue;
+    const dx = state.worldTip.x - state.worldPos.x;
+    const dy = state.worldTip.y - state.worldPos.y;
+    const length = Math.hypot(dx, dy);
+    bones.push({
+      id: state.boneId,
+      head: state.worldPos,
+      tip: state.worldTip,
+      dir: length > 1e-9 ? { x: dx / length, y: dy / length } : { x: 1, y: 0 },
+      length,
+    });
+  }
+
+  // Joints: a bone whose head sits on another bone's tip
+  const parentAt = new Map<string, WeightBone>();
+  const childrenAt = new Map<string, WeightBone[]>();
+  for (const child of bones) {
+    for (const parent of bones) {
+      if (parent === child) continue;
+      const gap = Math.hypot(child.head.x - parent.tip.x, child.head.y - parent.tip.y);
+      if (gap > Math.max(1, 0.02 * Math.min(parent.length, child.length))) continue;
+      if (!parentAt.has(child.id)) parentAt.set(child.id, parent);
+      childrenAt.set(parent.id, [...(childrenAt.get(parent.id) ?? []), child]);
+    }
+  }
+
   const numVertices = vertexPositions.length / 2;
   const newVertices: VertexSkinEntry[] = [];
 
   for (let i = 0; i < numVertices; i++) {
-    const vx = vertexPositions[i * 2]!;
-    const vy = vertexPositions[i * 2 + 1]!;
-
-    // Compute distance to each bone segment
-    const distances: { boneId: string; dist: number }[] = [];
-    for (const state of boneStates) {
-      if (!skinData.inverseBindMatrices[state.boneId]) continue;
-      const dist = pointToSegmentDistance(
-        vx,
-        vy,
-        state.worldPos.x,
-        state.worldPos.y,
-        state.worldTip.x,
-        state.worldTip.y
-      );
-      distances.push({ boneId: state.boneId, dist });
-    }
-
-    // Sort by distance, take up to 2 nearest
-    distances.sort((a, b) => a.dist - b.dist);
-    const nearest = distances.slice(0, 2);
-
-    if (nearest.length === 0) {
+    const v = { x: vertexPositions[i * 2]!, y: vertexPositions[i * 2 + 1]! };
+    const distances = bones
+      .map((bone) => ({
+        bone,
+        dist: pointToSegmentDistance(v.x, v.y, bone.head.x, bone.head.y, bone.tip.x, bone.tip.y),
+      }))
+      .sort((a, b) => a.dist - b.dist);
+    const nearest = distances[0];
+    if (!nearest) {
       newVertices.push({ influences: [] });
       continue;
     }
 
-    if (nearest.length === 1 || nearest[1]!.dist === 0) {
-      newVertices.push({ influences: [{ boneId: nearest[0]!.boneId, weight: 1.0 }] });
-      continue;
+    const own = nearest.bone;
+    const weights = new Map<string, number>([[own.id, 1]]);
+    const related = new Set<string>([own.id]);
+
+    // Bending back toward the bone before the joint at its head...
+    const parent = parentAt.get(own.id);
+    if (parent) {
+      related.add(parent.id);
+      const back = 1 - jointShare(v, parent, own);
+      weights.set(parent.id, back);
+      weights.set(own.id, 1 - back);
+    }
+    // ...and on toward the bone after the joint at its tip
+    let next: { bone: WeightBone; share: number } | null = null;
+    for (const child of childrenAt.get(own.id) ?? []) {
+      related.add(child.id);
+      const share = jointShare(v, own, child);
+      if (!next || share > next.share) next = { bone: child, share };
+    }
+    if (next && next.share > 0) {
+      const ownWeight = weights.get(own.id)!;
+      const share = Math.min(next.share, ownWeight);
+      weights.set(own.id, ownWeight - share);
+      weights.set(next.bone.id, (weights.get(next.bone.id) ?? 0) + share);
     }
 
-    // Inverse-distance weighting
-    const invDist0 = nearest[0]!.dist === 0 ? 1e10 : 1 / nearest[0]!.dist;
-    const invDist1 = nearest[1]!.dist === 0 ? 1e10 : 1 / nearest[1]!.dist;
-    const totalInv = invDist0 + invDist1;
+    // Blend with a nearby bone it isn't connected to, where both are about as close
+    const other = distances.find((entry) => !related.has(entry.bone.id));
+    if (other) {
+      const r = JOINT_BLEND * Math.min(own.length, other.bone.length);
+      const share = 0.5 * (1 - smoothstep(0, Math.max(r, 1e-9), other.dist - nearest.dist));
+      if (share > 0) {
+        for (const [boneId, weight] of weights) weights.set(boneId, weight * (1 - share));
+        weights.set(other.bone.id, share);
+      }
+    }
 
-    const influences: VertexBoneWeight[] = [
-      { boneId: nearest[0]!.boneId, weight: invDist0 / totalInv },
-      { boneId: nearest[1]!.boneId, weight: invDist1 / totalInv },
-    ];
-
-    // Remove negligible weights
-    const filtered = influences.filter((inf) => inf.weight > 0.001);
-    newVertices.push(normalizeWeights({ influences: filtered }));
+    newVertices.push(
+      normalizeWeights({
+        influences: [...weights]
+          .filter(([, weight]) => weight > 0.001)
+          .map(([boneId, weight]) => ({ boneId, weight })),
+      })
+    );
   }
 
   return {

@@ -51,6 +51,7 @@ import { trimPathToProgress } from '../path/pathReveal';
 import earcut from 'earcut';
 import { triangulateContours } from './contourTriangulation';
 import { createImageMesh, imageMeshCells } from './imageMesh';
+import { BEND_MESH_CELL_SIZE, createBendMesh, subdivideOutline } from './bendMesh';
 import { getFontManager } from '../font/FontManager';
 import { textToSubpaths } from '../font/glyphConverter';
 import { getTextBounds } from '../font/textMetrics';
@@ -444,6 +445,8 @@ interface TessellationCacheEntry {
   fillIndices: number[];
   /** Texture coordinates per vertex (image meshes) */
   uvs?: Float32Array;
+  /** Bending meshes: the first this many vertices are the outline strokes follow */
+  outlineVertexCount?: number;
   /** Cached stroke outline vertices per stroke key (width+align) */
   strokeCache: Map<string, { outline: Float32Array; indices: number[] }>;
   /** Original per-contour vertex arrays (for text stroke rendering) */
@@ -3401,6 +3404,17 @@ export class ShapeRenderer {
    * this cannot tessellate here (leaving behaviour unchanged for that type).
    */
   private ensureBindPoseGeometry(node: Node): TessellationCacheEntry | null {
+    if ((node as { skinData?: SkinData }).skinData?.bendMesh) {
+      const geoKey = `${buildGeometryKey(node)}|bend`;
+      const existing = this.geometryCache.get(node.id);
+      if (existing && existing.geoKey === geoKey) return existing;
+      const entry = this.createBendGeometry(node);
+      if (entry) {
+        this.geometryCache.set(node.id, { ...entry, geoKey });
+        return this.geometryCache.get(node.id)!;
+      }
+    }
+
     const existing = this.geometryCache.get(node.id);
     if (existing && existing.geoKey === buildGeometryKey(node)) return existing;
 
@@ -3450,9 +3464,113 @@ export class ShapeRenderer {
   }
 
   /**
-   * Ensure a skinned image node's bind-pose quad is cached, mirroring the quad
-   * that renderImage() would otherwise have seeded.
+   * A single-contour shape's outline as its renderer tessellates it, or null
+   * for other layers (compound paths, text, groups…).
    */
+  private outlineOf(node: Node): { vertices: Float32Array; closed: boolean } | null {
+    switch (node.type) {
+      case 'rectangle':
+        return {
+          vertices: tessellatePathToVertices(
+            createRectanglePath(
+              -node.width * node.transform.anchor.x,
+              -node.height * node.transform.anchor.y,
+              node.width,
+              node.height,
+              node.cornerRadius
+            ),
+            true,
+            DEFAULT_TESSELLATION_TOLERANCE
+          ),
+          closed: true,
+        };
+      case 'ellipse':
+        return {
+          vertices: tessellatePathToVertices(
+            createEllipsePath(0, 0, node.radiusX, node.radiusY),
+            true,
+            ELLIPSE_TESSELLATION_TOLERANCE
+          ),
+          closed: true,
+        };
+      case 'polygon': {
+        const pathPoints =
+          node.innerRadius !== undefined
+            ? createStarPath(
+                0,
+                0,
+                node.radius,
+                node.innerRadius,
+                node.sides,
+                undefined,
+                node.cornerRadius
+              )
+            : createPolygonPath(0, 0, node.radius, node.sides, undefined, node.cornerRadius);
+        return {
+          vertices: tessellatePathToVertices(pathPoints, true, DEFAULT_TESSELLATION_TOLERANCE),
+          closed: true,
+        };
+      }
+      case 'path': {
+        if (node.points.length < 2) return null;
+        if (node.subpaths && node.subpaths.length > 0 && node.closed) return null;
+        return {
+          vertices: tessellatePathToVertices(
+            applyCornerRadius(node.points, node.closed),
+            node.closed,
+            DEFAULT_TESSELLATION_TOLERANCE
+          ),
+          closed: node.closed,
+        };
+      }
+      default:
+        return null;
+    }
+  }
+
+  /**
+   * A shape's bending mesh (see bendMesh.ts): its outline subdivided, with
+   * points inside for a closed shape. Null for layers without a single outline.
+   */
+  private createBendGeometry(node: Node): TessellationCacheEntry | null {
+    const outline = this.outlineOf(node);
+    if (!outline || outline.vertices.length < 4) return null;
+    if (outline.closed) {
+      const mesh = createBendMesh(outline.vertices);
+      return {
+        geoKey: '',
+        vertices: mesh.vertices,
+        fillIndices: mesh.indices,
+        outlineVertexCount: mesh.outlineVertexCount,
+        strokeCache: new Map(),
+      };
+    }
+    // An open path is all outline: subdivided, so it bends along its length
+    const vertices = subdivideOutline(outline.vertices, false, BEND_MESH_CELL_SIZE);
+    return {
+      geoKey: '',
+      vertices,
+      fillIndices: [],
+      outlineVertexCount: vertices.length / 2,
+      strokeCache: new Map(),
+    };
+  }
+
+  /**
+   * The vertices to bind a layer to bones with: a shape's bending mesh
+   * (`bendMesh`: true), an image's mesh, or else its tessellation.
+   */
+  getBindVertices(node: Node): { vertices: Float32Array; bendMesh: boolean } | null {
+    const bend = this.createBendGeometry(node);
+    if (bend) return { vertices: bend.vertices, bendMesh: true };
+    if (node.type === 'image' && !node.skinData) {
+      const mesh = this.ensureBindPoseImageGeometry(node);
+      return mesh ? { vertices: mesh.vertices, bendMesh: false } : null;
+    }
+    const vertices = this.getTessellatedVertices(node.id);
+    return vertices ? { vertices, bendMesh: false } : null;
+  }
+
   /**
    * An image's geometry as a mesh of small cells, so bones can bend it.
    * Bindings made before image meshes (4 weighted vertices) keep the plain
@@ -3584,7 +3702,8 @@ export class ShapeRenderer {
         nodeMorphOffsets
       );
       this.renderSkinnedStrokes(
-        deformed,
+        // A bending mesh's outline comes first; the rest is inside
+        cached.outlineVertexCount ? deformed.subarray(0, cached.outlineVertexCount * 2) : deformed,
         strokes,
         closed,
         cached.contourVertexCounts,

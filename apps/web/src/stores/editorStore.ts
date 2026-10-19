@@ -549,7 +549,8 @@ export interface EditorStore extends SequenceActions {
     sceneGraph: SceneGraphLike,
     nodeId: string,
     boneIds: string[],
-    tessellatedVertices?: Float32Array
+    tessellatedVertices?: Float32Array,
+    options?: { bendMesh?: boolean }
   ) => void;
   unbindMesh: (sceneGraph: SceneGraphLike, nodeId: string) => void;
 
@@ -1282,7 +1283,8 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     sceneGraph: SceneGraphLike,
     nodeId: string,
     boneIds: string[],
-    tessellatedVertices?: Float32Array
+    tessellatedVertices?: Float32Array,
+    options?: { bendMesh?: boolean }
   ) => {
     const node = sceneGraph.getNode(nodeId);
     if (!node) return;
@@ -1353,6 +1355,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     const weighted = computeAutoWeights(skin, positions, allStates);
     // The geometry the weights belong to, so they can follow later shape edits
     if (tessellatedVertices) weighted.bindVertices = bindVertexPositions(tessellatedVertices);
+    if (options?.bendMesh) weighted.bendMesh = true;
 
     sceneGraph.updateNode(nodeId, { skinData: weighted } as any);
     set({ isDirty: true });

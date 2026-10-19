@@ -1233,6 +1233,65 @@ describe('ShapeRenderer', () => {
         expect(moved.width).toBeCloseTo(atRest.width);
       });
 
+      it('binds and draws a shape as a bending mesh', () => {
+        const rect = createRectangleNode('sleeve', 200, 40);
+        sceneGraph.addNode(rect);
+        const vpMatrix = mat3.identity();
+        shapeRenderer.render(sceneGraph, vpMatrix);
+        expect(shapeRenderer.getTessellatedVertices('sleeve')!.length / 2).toBe(4);
+
+        const bind = shapeRenderer.getBindVertices(rect)!;
+        expect(bind.bendMesh).toBe(true);
+        // The outline in 20-unit pieces, plus points inside
+        expect(bind.vertices.length / 2).toBe(24 + 9);
+
+        sceneGraph.addNode({
+          ...createRectangleNode('bone', 0, 0),
+          type: 'bone',
+          length: 100,
+          boneColor: '#ff0000',
+        } as any);
+        sceneGraph.updateNode('sleeve', {
+          skinData: {
+            vertices: Array.from({ length: bind.vertices.length / 2 }, () => ({
+              influences: [{ boneId: 'bone', weight: 1 }],
+            })),
+            inverseBindMatrices: { bone: [1, 0, 0, 1, 0, 0] },
+            meshBindMatrix: [1, 0, 0, 1, 0, 0],
+            vertexCount: bind.vertices.length / 2,
+            bendMesh: true,
+          },
+        } as any);
+        shapeRenderer.render(sceneGraph, vpMatrix);
+        // Drawn (and weight painted) as the mesh it was bound with
+        expect(Array.from(shapeRenderer.getTessellatedVertices('sleeve')!)).toEqual(
+          Array.from(bind.vertices)
+        );
+      });
+
+      it('binds a compound path by its tessellation', () => {
+        const path = {
+          ...createRectangleNode('compound', 10, 10),
+          type: 'path',
+          closed: true,
+          points: [
+            { position: { x: 0, y: 0 }, handleIn: null, handleOut: null, type: 'corner' },
+            { position: { x: 50, y: 0 }, handleIn: null, handleOut: null, type: 'corner' },
+            { position: { x: 50, y: 50 }, handleIn: null, handleOut: null, type: 'corner' },
+          ],
+          subpaths: [
+            [
+              { position: { x: 10, y: 10 }, handleIn: null, handleOut: null, type: 'corner' },
+              { position: { x: 20, y: 10 }, handleIn: null, handleOut: null, type: 'corner' },
+              { position: { x: 20, y: 20 }, handleIn: null, handleOut: null, type: 'corner' },
+            ],
+          ],
+        } as any;
+        sceneGraph.addNode(path);
+        shapeRenderer.render(sceneGraph, mat3.identity());
+        expect(shapeRenderer.getBindVertices(path)?.bendMesh).toBe(false);
+      });
+
       it('should fall back to CPU path when bone count exceeds MAX_BONES_GPU', () => {
         const rect = createRectangleNode('skinned_many', 100, 50);
         sceneGraph.addNode(rect);

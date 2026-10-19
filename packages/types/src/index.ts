@@ -434,6 +434,12 @@ export interface SkinData {
    * the nearest of these. Absent on bindings made before it was recorded.
    */
   bindVertices?: number[];
+  /**
+   * Bound with a bending mesh: the shape's outline subdivided, with points
+   * inside, so it bends instead of shearing. Absent on bindings made on the
+   * outline alone (before bending meshes), which keep it.
+   */
+  bendMesh?: boolean;
 }
 
 export type Node =
