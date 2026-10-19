@@ -471,3 +471,9 @@ describe('applyChainToBones', () => {
     applyChainToBones(chain, state, sg);
   });
 });
+
+describe('wind without settings', () => {
+  it('is no wind', () => {
+    expect(computeWindForce(undefined, 1)).toEqual({ x: 0, y: 0 });
+  });
+});

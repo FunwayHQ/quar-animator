@@ -130,11 +130,20 @@ export function initializeChainState(
   };
 }
 
+/** No wind: what projects without wind settings get. */
+export const DEFAULT_WIND_SETTINGS: WindSettings = {
+  strength: 0,
+  direction: 0,
+  turbulence: 0,
+  frequency: 1,
+  enabled: false,
+};
+
 /**
  * Compute wind force at a given time, including turbulence.
  */
-export function computeWindForce(wind: WindSettings, time: number): Vector2 {
-  if (!wind.enabled || wind.strength <= 0) return { x: 0, y: 0 };
+export function computeWindForce(wind: WindSettings | undefined, time: number): Vector2 {
+  if (!wind?.enabled || wind.strength <= 0) return { x: 0, y: 0 };
 
   const baseAngle = wind.direction * DEG_TO_RAD;
 

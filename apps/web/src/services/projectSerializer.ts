@@ -19,6 +19,7 @@ import type {
 import type { OnionSkinSettings } from '@quar/core';
 import type { SceneGraph } from '@quar/core';
 import { createAnimationSequence, createTimeline } from '@quar/animation';
+import { DEFAULT_WIND_SETTINGS } from '@quar/rigging';
 import type { AnimationSequence } from '@quar/animation';
 import { DEFAULT_ONION_SKIN_SETTINGS, writeQuarFile, parseQuarFile, mat3 } from '@quar/core';
 import type { Guide, PageData } from '../stores/editorStore';
@@ -473,7 +474,8 @@ export function deserializeProject(
     currentFrame: 0,
     vitruvianControllers: v2.rigging?.vitruvianControllers ?? [],
     dynamicChains: v2.rigging?.dynamicChains ?? [],
-    globalWind: v2.rigging?.globalWind,
+    // Projects without rigging data (older saves, MCP-made files) get no wind
+    globalWind: { ...DEFAULT_WIND_SETTINGS, ...v2.rigging?.globalWind },
     ikChains: v2.rigging?.ikChains ?? [],
     smartBoneActions: v2.rigging?.smartBoneActions ?? [],
     pages,

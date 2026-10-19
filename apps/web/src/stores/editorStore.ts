@@ -75,7 +75,12 @@ import {
   resolveSymbolInstance,
 } from '@quar/core';
 import type { OnionSkinSettings, BooleanOp } from '@quar/core';
-import { createSkinBinding, computeAutoWeights, computeFKChain } from '@quar/rigging';
+import {
+  createSkinBinding,
+  computeAutoWeights,
+  computeFKChain,
+  DEFAULT_WIND_SETTINGS,
+} from '@quar/rigging';
 import type { FKBoneState } from '@quar/rigging';
 import { toast } from '../components/common/Toast';
 
@@ -1807,13 +1812,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
   // Dynamic Bone Chains (physics)
   dynamicChains: [] as DynamicChain[],
-  globalWind: {
-    strength: 0,
-    direction: 0,
-    turbulence: 0,
-    frequency: 1,
-    enabled: false,
-  } as WindSettings,
+  globalWind: { ...DEFAULT_WIND_SETTINGS } as WindSettings,
 
   createDynamicChain: (sceneGraph: SceneGraphLike, rootBoneId: string) => {
     get().pushUndo(sceneGraph);

@@ -317,6 +317,55 @@ describe('ProjectSerializer', () => {
     });
   });
 
+  describe('projects without rigging data', () => {
+    const project = (rigging?: object): ProjectDataV2 =>
+      ({
+        version: '2.0',
+        name: 'From MCP',
+        createdAt: '2024-06-01',
+        updatedAt: '2024-06-01',
+        pages: [
+          {
+            id: 'p',
+            name: 'Page',
+            sceneGraph: { nodes: [], rootNodeIds: [] },
+            timeline: createTimeline({ duration: 30, frameRate: 30 }),
+          },
+        ],
+        activePageId: 'p',
+        settings: {
+          timelineDuration: 30,
+          frameRate: 30,
+          autoKeyframe: false,
+          onionSkin: { ...DEFAULT_ONION_SKIN_SETTINGS },
+        },
+        ...(rigging ? { rigging } : {}),
+      }) as ProjectDataV2;
+    const load = (data: ProjectDataV2) => {
+      let applied: Record<string, unknown> = {};
+      deserializeProject(data, new SceneGraph(), (state) => {
+        applied = state;
+      });
+      return applied;
+    };
+
+    it('load with no wind instead of none at all', () => {
+      expect(load(project()).globalWind).toEqual({
+        strength: 0,
+        direction: 0,
+        turbulence: 0,
+        frequency: 1,
+        enabled: false,
+      });
+    });
+
+    it('fill in wind settings saved only in part', () => {
+      expect(
+        load(project({ globalWind: { strength: 40, enabled: true } })).globalWind
+      ).toMatchObject({ strength: 40, enabled: true, frequency: 1, turbulence: 0 });
+    });
+  });
+
   describe('skin bindings saved before meshBindLocal', () => {
     it('take their current transform as the bind one, on every page', () => {
       const skinData = {
