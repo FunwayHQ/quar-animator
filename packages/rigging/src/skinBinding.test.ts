@@ -409,6 +409,12 @@ describe('skinBinding', () => {
       expect(total).toBeCloseTo(1.0);
     });
 
+    it('add mode reaches full weight: the other bones let go', () => {
+      const skin = createTestSkinData();
+      for (let i = 0; i < 4; i++) paintWeight(skin, 1, 'b1', 0.3, 'add');
+      expect(skin.vertices[1]!.influences).toEqual([{ boneId: 'b1', weight: 1 }]);
+    });
+
     it('does nothing for out-of-range vertex index', () => {
       const skin = createTestSkinData();
       const before = JSON.stringify(skin);

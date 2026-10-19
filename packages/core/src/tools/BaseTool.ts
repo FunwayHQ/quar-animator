@@ -41,6 +41,8 @@ export interface ToolContext {
   setEnteredGroupId?: (id: string | null) => void;
   onEnterTextEdit?: (nodeId: string) => void;
   getTessellatedVertices?: (nodeId: string) => Float32Array | null;
+  /** A bound node's vertices as its bones pose them, in world space */
+  getDeformedVertices?: (nodeId: string) => Float32Array | null;
   convertShapeToPath?: (nodeId: string) => string | null;
   getGuides?: () => { id: string; axis: 'x' | 'y'; position: number }[];
   getSnapToGuides?: () => boolean;

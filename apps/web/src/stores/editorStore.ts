@@ -542,6 +542,9 @@ export interface EditorStore extends SequenceActions {
   setWeightPaintBrushSize: (size: number) => void;
   weightPaintBrushStrength: number;
   setWeightPaintBrushStrength: (strength: number) => void;
+  /** Add weight to the bone, or take it away */
+  weightPaintMode: 'add' | 'subtract';
+  setWeightPaintMode: (mode: 'add' | 'subtract') => void;
   bindMeshToBones: (
     sceneGraph: SceneGraphLike,
     nodeId: string,
@@ -1273,6 +1276,8 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   weightPaintBrushStrength: 0.3,
   setWeightPaintBrushStrength: (strength: number) =>
     set({ weightPaintBrushStrength: Math.max(0.01, Math.min(1.0, strength)) }),
+  weightPaintMode: 'add',
+  setWeightPaintMode: (mode: 'add' | 'subtract') => set({ weightPaintMode: mode }),
   bindMeshToBones: (
     sceneGraph: SceneGraphLike,
     nodeId: string,

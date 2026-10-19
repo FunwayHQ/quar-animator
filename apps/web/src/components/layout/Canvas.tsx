@@ -22,7 +22,7 @@ import {
   resetDynamicChainStates,
 } from '@quar/rigging';
 import type { DynamicChainState } from '@quar/types';
-import type { PointMagnetTool } from '@quar/core';
+import type { PointMagnetTool, WeightPaintTool } from '@quar/core';
 import { useCanvasTools } from '../../hooks/useCanvasTools';
 import { useToolShortcuts } from '../../hooks/useToolShortcuts';
 import { useEditorStore } from '../../stores/editorStore';
@@ -193,6 +193,12 @@ export function Canvas({
     sceneGraph,
     getTessellatedVertices: (nodeId: string) =>
       shapeRendererRef.current?.getTessellatedVertices(nodeId) ?? null,
+    getDeformedVertices: (nodeId: string) => {
+      const node = sceneGraph.getNode(nodeId);
+      return node
+        ? (shapeRendererRef.current?.getDeformedVertices(node, sceneGraph) ?? null)
+        : null;
+    },
   });
 
   // Subscribe to scene graph changes to update selection bounds
@@ -814,11 +820,12 @@ export function Canvas({
           sceneGraphRef.current &&
           shapeRenderer
         ) {
-          // Get bound node from WeightPaintTool, fallback to selection
+          // The layers being painted (groups' bound layers included)
           const wpTool = _toolManagerRef.current?.getActiveTool();
-          const boundNodeId =
-            wpTool?.type === 'weight-paint' ? (wpTool as any).getBoundNodeId?.() : null;
-          const nodeIds = boundNodeId ? [boundNodeId] : [...edState.selectedNodeIds];
+          const nodeIds: string[] =
+            wpTool?.type === 'weight-paint'
+              ? (wpTool as WeightPaintTool).getBoundNodeIds()
+              : [...edState.selectedNodeIds];
           for (const nodeId of nodeIds) {
             const node = sceneGraphRef.current.getNode(nodeId);
             if (node) {

@@ -354,4 +354,81 @@ describe('WeightPaintTool', () => {
       expect(node.skinData).toBeDefined();
     });
   });
+
+  describe('what it paints', () => {
+    const corners = () => new Float32Array([-50, -50, 50, -50, -50, 50, 50, 50]);
+
+    it('paints bound images', () => {
+      context.sceneGraph.addNode({
+        ...createBoundRectangle('img', createTestSkinData()),
+        type: 'image',
+        src: 'data:,',
+        naturalWidth: 100,
+        naturalHeight: 100,
+      } as unknown as RectangleNode);
+      context.setSelectedIds(['img']);
+      let switched = false;
+      context.setActiveTool = () => {
+        switched = true;
+      };
+      tool.onActivate!();
+      expect(switched).toBe(false);
+      expect(tool.getBoundNodeIds()).toEqual(['img']);
+    });
+
+    it('paints the bound layers inside a selected group', () => {
+      context.sceneGraph.addNode({
+        ...createBoundRectangle('g', createTestSkinData()),
+        type: 'group',
+        skinData: undefined,
+      } as unknown as RectangleNode);
+      context.sceneGraph.addNode(createBoundRectangle('a', createTestSkinData()), 'g');
+      context.sceneGraph.addNode(createBoundRectangle('b', createTestSkinData()), 'g');
+      context.setSelectedIds(['g']);
+      tool.onActivate!();
+      expect(tool.getBoundNodeIds().sort()).toEqual(['a', 'b']);
+      expect(tool.getPaintableBoneIds()).toEqual(['b1', 'b2']);
+    });
+
+    it('drops a bone left over from another layer', () => {
+      context.sceneGraph.addNode(createBoundRectangle('rect1', createTestSkinData()));
+      context.setSelectedIds(['rect1']);
+      tool.setActiveBoneId('someone-elses-bone');
+      tool.onActivate!();
+      expect(tool.getActiveBoneId()).toBe('b1');
+    });
+
+    it('meets the mesh where the bones posed it', () => {
+      context.sceneGraph.addNode(createBoundRectangle('rect1', createTestSkinData()));
+      context.setSelectedIds(['rect1']);
+      context.getTessellatedVertices = corners;
+      // Posed: vertex 3 swung over to (1000, 1000), the others far away
+      context.getDeformedVertices = () =>
+        new Float32Array([5000, 5000, 5000, 5000, 5000, 5000, 1000, 1000]);
+      tool.onActivate!();
+      tool.setActiveBoneId('b2');
+      tool.onPointerDown(
+        createMockPointerEvent({ worldPosition: { x: 1000, y: 1000 }, button: 0 })
+      );
+
+      const skin = (context.sceneGraph.getNode('rect1') as RectangleNode).skinData!;
+      expect(skin.vertices[3]!.influences.find((inf) => inf.boneId === 'b2')).toBeDefined();
+      expect(skin.vertices[0]).toEqual(createTestSkinData().vertices[0]);
+    });
+
+    it('leaves the binding it started from untouched, for undo', () => {
+      const original = createTestSkinData();
+      const snapshot = structuredClone(original);
+      context.sceneGraph.addNode(createBoundRectangle('rect1', original));
+      context.setSelectedIds(['rect1']);
+      context.getTessellatedVertices = corners;
+      tool.onActivate!();
+      const m = context.sceneGraph.getWorldTransform('rect1');
+      tool.onPointerDown(
+        createMockPointerEvent({ worldPosition: { x: m.tx - 50, y: m.ty - 50 }, button: 0 })
+      );
+      expect(original).toEqual(snapshot);
+      expect((context.sceneGraph.getNode('rect1') as RectangleNode).skinData).not.toEqual(snapshot);
+    });
+  });
 });

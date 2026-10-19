@@ -3711,13 +3711,11 @@ export class ShapeRenderer {
   }
 
   /**
-   * Get the axis-aligned bounding box of a skinned node's deformed vertices in world space.
-   * Returns {x, y, width, height} or null if the node has no skinData or no cached geometry.
+   * A skinned node's vertices where its bones have them now, in world space
+   * (indexed like getTessellatedVertices). Smart Bone morphs are included
+   * unless `withMorphs` is false. Null without skin data or cached geometry.
    */
-  getDeformedBounds(
-    node: Node,
-    sceneGraph: SceneGraph
-  ): { x: number; y: number; width: number; height: number } | null {
+  getDeformedVertices(node: Node, sceneGraph: SceneGraph, withMorphs = true): Float32Array | null {
     const boundSkin = (node as any).skinData as SkinData | undefined;
     if (!boundSkin) return null;
 
@@ -3734,12 +3732,24 @@ export class ShapeRenderer {
       boneWorldTransforms[boneId] = { a: bw.a, b: bw.b, c: bw.c, d: bw.d, tx: bw.tx, ty: bw.ty };
     }
 
-    const deformed = deformVertices(
+    return deformVertices(
       cached.vertices,
       this.placedSkin(node, skinData),
-      boneWorldTransforms
+      boneWorldTransforms,
+      withMorphs ? this.currentMorphOffsets?.get(node.id) : undefined
     );
-    if (deformed.length < 2) return null;
+  }
+
+  /**
+   * Get the axis-aligned bounding box of a skinned node's deformed vertices in world space.
+   * Returns {x, y, width, height} or null if the node has no skinData or no cached geometry.
+   */
+  getDeformedBounds(
+    node: Node,
+    sceneGraph: SceneGraph
+  ): { x: number; y: number; width: number; height: number } | null {
+    const deformed = this.getDeformedVertices(node, sceneGraph, false);
+    if (!deformed || deformed.length < 2) return null;
 
     let minX = deformed[0]!;
     let minY = deformed[1]!;

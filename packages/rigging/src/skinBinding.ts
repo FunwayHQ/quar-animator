@@ -404,7 +404,12 @@ export function paintWeight(
         inf.weight = (inf.weight / othersTotal) * remaining;
       }
     }
-  } else if (remaining > 0 && othersTotal === 0 && targetWeight < 1.0) {
+  } else if (remaining <= 0) {
+    // Painted to full weight: the other bones let go of the vertex
+    for (const inf of influences) {
+      if (inf.boneId !== boneId) inf.weight = 0;
+    }
+  } else if (othersTotal === 0 && targetWeight < 1.0) {
     // No other bones — target gets full weight
     if (targetInf) targetInf.weight = 1.0;
   }

@@ -418,6 +418,12 @@ export function PropertiesPanel() {
   const setKeyframeEasing = useEditorStore((state) => state.setKeyframeEasing);
   const weightPaintBoneId = useEditorStore((state) => state.weightPaintBoneId);
   const setWeightPaintBoneId = useEditorStore((state) => state.setWeightPaintBoneId);
+  const weightPaintBrushSize = useEditorStore((state) => state.weightPaintBrushSize);
+  const setWeightPaintBrushSize = useEditorStore((state) => state.setWeightPaintBrushSize);
+  const weightPaintBrushStrength = useEditorStore((state) => state.weightPaintBrushStrength);
+  const setWeightPaintBrushStrength = useEditorStore((state) => state.setWeightPaintBrushStrength);
+  const weightPaintMode = useEditorStore((state) => state.weightPaintMode);
+  const setWeightPaintMode = useEditorStore((state) => state.setWeightPaintMode);
   const dynamicChains = useEditorStore((state) => state.dynamicChains);
   const symbols = useEditorStore((state) => state.symbols);
 
@@ -2074,18 +2080,20 @@ export function PropertiesPanel() {
                     .getChildren(node.id)
                     .some((c) => 'skinData' in c && c.skinData != null))) &&
               (() => {
-                // For groups, use skinData from first skinned child
-                const skinData =
+                // A group's bones are those of all its bound layers
+                const boundLayers =
                   node.type === 'group'
-                    ? (
-                        sceneGraph
-                          .getChildren(node.id)
-                          .find((c) => 'skinData' in c && c.skinData) as any
-                      )?.skinData
-                    : (node as any).skinData;
-                if (!skinData) return null;
-                const boneCount = Object.keys(skinData.inverseBindMatrices || {}).length;
-                const boneIds = Object.keys(skinData.inverseBindMatrices || {});
+                    ? sceneGraph.getChildren(node.id).filter((c) => 'skinData' in c && c.skinData)
+                    : [node];
+                const boneIds = [
+                  ...new Set(
+                    boundLayers.flatMap((layer) =>
+                      Object.keys((layer as any).skinData?.inverseBindMatrices ?? {})
+                    )
+                  ),
+                ];
+                if (boneIds.length === 0) return null;
+                const boneCount = boneIds.length;
                 return (
                   <>
                     <div className={styles.sectionTitle}>Rigging</div>
@@ -2119,6 +2127,73 @@ export function PropertiesPanel() {
                         </select>
                       </div>
                     </div>
+                    {activeTool === 'weight-paint' && (
+                      <>
+                        <div className={styles.propertyRow}>
+                          <span className={styles.propertyLabel}>Brush</span>
+                          <div className={styles.propertyInputs}>
+                            <input
+                              type="range"
+                              className={styles.slider}
+                              aria-label="Brush size"
+                              min="5"
+                              max="200"
+                              value={weightPaintBrushSize}
+                              onChange={(e) => setWeightPaintBrushSize(Number(e.target.value))}
+                            />
+                            <span className={styles.inputSmall}>{weightPaintBrushSize}</span>
+                          </div>
+                        </div>
+                        <div className={styles.propertyRow}>
+                          <span className={styles.propertyLabel}>Strength</span>
+                          <div className={styles.propertyInputs}>
+                            <input
+                              type="range"
+                              className={styles.slider}
+                              aria-label="Brush strength"
+                              min="1"
+                              max="100"
+                              value={Math.round(weightPaintBrushStrength * 100)}
+                              onChange={(e) =>
+                                setWeightPaintBrushStrength(Number(e.target.value) / 100)
+                              }
+                            />
+                            <span className={styles.inputSmall}>
+                              {Math.round(weightPaintBrushStrength * 100)}%
+                            </span>
+                          </div>
+                        </div>
+                        <div className={styles.propertyRow}>
+                          <span className={styles.propertyLabel}>Paint</span>
+                          <div className={styles.propertyInputs} style={{ gap: '4px' }}>
+                            {(['add', 'subtract'] as const).map((mode) => (
+                              <button
+                                key={mode}
+                                type="button"
+                                aria-pressed={weightPaintMode === mode}
+                                title={mode === 'add' ? 'Add weight (X)' : 'Remove weight (X)'}
+                                onClick={() => setWeightPaintMode(mode)}
+                                style={{
+                                  fontSize: '11px',
+                                  padding: '3px 8px',
+                                  borderRadius: '3px',
+                                  cursor: 'pointer',
+                                  border: '1px solid var(--color-border-default)',
+                                  background:
+                                    weightPaintMode === mode
+                                      ? 'var(--color-accent-primary)'
+                                      : 'transparent',
+                                  color:
+                                    weightPaintMode === mode ? '#fff' : 'var(--color-text-primary)',
+                                }}
+                              >
+                                {mode === 'add' ? 'Add' : 'Subtract'}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      </>
+                    )}
                     <div className={styles.propertyRow}>
                       <div className={styles.propertyInputs} style={{ gap: '4px' }}>
                         <button

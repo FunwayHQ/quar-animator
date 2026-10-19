@@ -46,6 +46,8 @@ export interface ToolManagerOptions {
   onEnterTextEdit?: (nodeId: string) => void;
   convertShapeToPath?: (nodeId: string) => string | null;
   getTessellatedVertices?: (nodeId: string) => Float32Array | null;
+  /** A bound node's vertices as its bones pose them, in world space */
+  getDeformedVertices?: (nodeId: string) => Float32Array | null;
   getGuides?: () => { id: string; axis: 'x' | 'y'; position: number }[];
   getSnapToGuides?: () => boolean;
   getSymbolDefinitions?: () => SymbolDefinition[];
@@ -121,6 +123,9 @@ export class ToolManager {
     this.activeTool = tool;
     this.activeToolType = type;
     this.activeTool.onActivate?.();
+    // A tool with nothing to work on hands over to another as it activates;
+    // that switch already told the listener, and it's the tool now active
+    if (this.activeToolType !== type) return;
 
     // Notify listener (e.g., to sync EditorStore)
     this.options.onToolChange?.(type);
@@ -253,6 +258,7 @@ export class ToolManager {
       onEnterTextEdit: options.onEnterTextEdit,
       convertShapeToPath: options.convertShapeToPath,
       getTessellatedVertices: options.getTessellatedVertices,
+      getDeformedVertices: options.getDeformedVertices,
       getGuides: options.getGuides,
       getSnapToGuides: options.getSnapToGuides,
       getSymbolDefinitions: options.getSymbolDefinitions,

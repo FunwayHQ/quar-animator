@@ -4,6 +4,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { useEditorStore } from '../../stores/editorStore';
+import { useSceneGraph } from '../../contexts/SceneGraphContext';
 import type { Camera } from '@quar/core';
 
 interface WeightPaintOverlayProps {
@@ -20,6 +21,11 @@ export const WeightPaintOverlay: React.FC<WeightPaintOverlayProps> = ({
   const activeTool = useEditorStore((s) => s.activeTool);
   const weightPaintBoneId = useEditorStore((s) => s.weightPaintBoneId);
   const brushSize = useEditorStore((s) => s.weightPaintBrushSize);
+  const mode = useEditorStore((s) => s.weightPaintMode);
+  const sceneGraph = useSceneGraph();
+  const boneName = weightPaintBoneId
+    ? (sceneGraph.getNode(weightPaintBoneId)?.name ?? weightPaintBoneId)
+    : null;
   const svgRef = useRef<SVGSVGElement>(null);
 
   const [mousePos, setMousePos] = useState<{ x: number; y: number } | null>(null);
@@ -79,7 +85,8 @@ export const WeightPaintOverlay: React.FC<WeightPaintOverlayProps> = ({
           fontSize={11}
           fontFamily="var(--font-family-ui)"
         >
-          Weight Paint: {weightPaintBoneId}
+          Weight Paint: {boneName} · {mode === 'add' ? 'Add' : 'Subtract'} · [ ] size · X
+          add/subtract
         </text>
       )}
     </svg>

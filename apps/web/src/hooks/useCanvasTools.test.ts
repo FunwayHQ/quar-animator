@@ -7,6 +7,7 @@ import { renderHook, act } from '@testing-library/react';
 import { useCanvasTools } from './useCanvasTools';
 import { useEditorStore, DEFAULT_FILL, DEFAULT_STROKE } from '../stores/editorStore';
 import { Camera, SceneGraph } from '@quar/core';
+import { toast } from '../components/common/Toast';
 import type React from 'react';
 
 // ============================================================================
@@ -370,6 +371,84 @@ describe('useCanvasTools', () => {
 
       // Check that a node was added
       expect(result.current.sceneGraphRef.current.getNodeCount()).toBe(1);
+    });
+  });
+
+  describe('weight paint', () => {
+    function boundRect(id: string, boneIds: string[]) {
+      sceneGraph.addNode({
+        id,
+        name: id,
+        type: 'rectangle',
+        parent: null,
+        children: [],
+        transform: {
+          position: { x: 0, y: 0 },
+          rotation: 0,
+          scale: { x: 1, y: 1 },
+          anchor: { x: 0.5, y: 0.5 },
+          skew: { x: 0, y: 0 },
+        },
+        visible: true,
+        locked: false,
+        opacity: 1,
+        blendMode: 'normal',
+        width: 10,
+        height: 10,
+        cornerRadius: [0, 0, 0, 0],
+        fills: [],
+        strokes: [],
+        skinData: {
+          vertices: [],
+          inverseBindMatrices: Object.fromEntries(boneIds.map((b) => [b, [1, 0, 0, 1, 0, 0]])),
+          meshBindMatrix: [1, 0, 0, 1, 0, 0],
+          vertexCount: 0,
+        },
+      } as never);
+    }
+    const paintTool = (result: { current: ReturnType<typeof useCanvasTools> }) =>
+      result.current.toolManagerRef.current!.getActiveTool() as unknown as {
+        getActiveBoneId(): string | null;
+        getBrushRadius(): number;
+        getBrushStrength(): number;
+        getPaintMode(): string;
+      };
+
+    it('paints with the bone, brush and mode chosen in the panel', () => {
+      boundRect('arm', ['upper', 'lower']);
+      useEditorStore.setState({ selectedNodeIds: new Set(['arm']) });
+      const { result } = renderHook(() => useCanvasTools({ camera, sceneGraph }));
+
+      act(() => {
+        useEditorStore.getState().setWeightPaintBoneId('lower');
+        useEditorStore.getState().setActiveTool('weight-paint');
+      });
+      expect(paintTool(result).getActiveBoneId()).toBe('lower');
+
+      act(() => {
+        useEditorStore.getState().setWeightPaintBoneId('upper');
+        useEditorStore.getState().setWeightPaintBrushSize(80);
+        useEditorStore.getState().setWeightPaintBrushStrength(0.6);
+        useEditorStore.getState().setWeightPaintMode('subtract');
+      });
+      const tool = paintTool(result);
+      expect(tool.getActiveBoneId()).toBe('upper');
+      expect(tool.getBrushRadius()).toBe(80);
+      expect(tool.getBrushStrength()).toBeCloseTo(0.6);
+      expect(tool.getPaintMode()).toBe('subtract');
+
+      // The brush keys show in the panel
+      act(() => result.current.handleKeyDown(createMockKeyboardEvent(']')));
+      expect(useEditorStore.getState().weightPaintBrushSize).toBe(85);
+    });
+
+    it('goes back to selection, and says why, with nothing bound selected', () => {
+      const info = vi.spyOn(toast, 'info');
+      renderHook(() => useCanvasTools({ camera, sceneGraph }));
+      act(() => useEditorStore.getState().setActiveTool('weight-paint'));
+      expect(useEditorStore.getState().activeTool).toBe('selection');
+      expect(info).toHaveBeenCalledWith(expect.stringContaining('Select a layer bound to bones'));
+      info.mockRestore();
     });
   });
 });

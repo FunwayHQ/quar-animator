@@ -49,6 +49,18 @@ describe('ToolManager', () => {
   // Initialization
   // ==========================================================================
 
+  describe('a tool handing over as it activates', () => {
+    it('leaves the listener on the tool now active', () => {
+      const onToolChange = vi.fn();
+      const m = new ToolManager({ ...createToolManagerOptions(), onToolChange });
+      // Weight paint with nothing bound selected hands over to selection
+      m.setActiveTool('weight-paint');
+      expect(m.getActiveToolType()).toBe('selection');
+      expect(onToolChange).toHaveBeenLastCalledWith('selection');
+      expect(onToolChange).not.toHaveBeenCalledWith('weight-paint');
+    });
+  });
+
   describe('initialization', () => {
     it('should initialize with selection tool as default', () => {
       expect(manager.getActiveToolType()).toBe('selection');

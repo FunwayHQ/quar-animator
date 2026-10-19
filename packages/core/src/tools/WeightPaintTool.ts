@@ -3,26 +3,13 @@
  * Brush-based weight painting for mesh-to-bone binding
  */
 
-import type { CanvasPointerEvent, ToolType, Node, SkinData, SkinnableNode } from '@quar/types';
+import type { CanvasPointerEvent, ToolType, Node, SkinData } from '@quar/types';
 import { BaseTool } from './BaseTool';
 import { fitSkinToVertices, paintWeight } from '@quar/rigging';
 
-/** Type guard for nodes that can have skinData */
-function isSkinnableNode(node: Node): node is SkinnableNode {
-  return (
-    node.type === 'rectangle' ||
-    node.type === 'ellipse' ||
-    node.type === 'polygon' ||
-    node.type === 'path'
-  );
-}
-
-/** Get skinData from a node if present */
+/** A node's skin binding, if it has one (shapes and images can be bound) */
 function getSkinData(node: Node): SkinData | undefined {
-  if (isSkinnableNode(node)) {
-    return node.skinData;
-  }
-  return undefined;
+  return 'skinData' in node ? ((node as { skinData?: SkinData }).skinData ?? undefined) : undefined;
 }
 
 export class WeightPaintTool extends BaseTool {
@@ -47,8 +34,8 @@ export class WeightPaintTool extends BaseTool {
   /** Has undo been pushed for current stroke */
   private undoPushed = false;
 
-  /** The bound node being painted on */
-  private boundNodeId: string | null = null;
+  /** The bound layers being painted on: the selection's, groups included */
+  private boundNodeIds: string[] = [];
 
   // --------------------------------------------------------------------------
   // Public API
@@ -91,7 +78,22 @@ export class WeightPaintTool extends BaseTool {
   }
 
   getBoundNodeId(): string | null {
-    return this.boundNodeId;
+    return this.boundNodeIds[0] ?? null;
+  }
+
+  getBoundNodeIds(): string[] {
+    return [...this.boundNodeIds];
+  }
+
+  /** The bones the bound layers are bound to, in binding order. */
+  getPaintableBoneIds(): string[] {
+    const boneIds = new Set<string>();
+    for (const id of this.boundNodeIds) {
+      const node = this.context.sceneGraph.getNode(id);
+      const skin = node ? getSkinData(node) : undefined;
+      for (const boneId of Object.keys(skin?.inverseBindMatrices ?? {})) boneIds.add(boneId);
+    }
+    return [...boneIds];
   }
 
   // --------------------------------------------------------------------------
@@ -99,47 +101,27 @@ export class WeightPaintTool extends BaseTool {
   // --------------------------------------------------------------------------
 
   onActivate(): void {
-    // Find a bound node from selection
-    const selectedIds = this.context.getSelectedIds();
-    let foundBound = false;
-
-    for (const id of selectedIds) {
+    // The bound layers in the selection, and inside selected groups
+    const found = new Set<string>();
+    const collect = (id: string) => {
       const node = this.context.sceneGraph.getNode(id);
-      if (node) {
-        const skin = getSkinData(node);
-        if (skin) {
-          this.boundNodeId = id;
-          foundBound = true;
-          break;
-        }
-      }
+      if (!node || found.has(id)) return;
+      if (getSkinData(node)) found.add(id);
+      for (const childId of node.children) collect(childId);
+    };
+    for (const id of this.context.getSelectedIds()) collect(id);
+    this.boundNodeIds = [...found];
+
+    // Keep the bone being painted if these layers are bound to it
+    const boneIds = this.getPaintableBoneIds();
+    if (!this.activeBoneId || !boneIds.includes(this.activeBoneId)) {
+      this.activeBoneId = boneIds[0] ?? null;
     }
 
-    if (!foundBound) {
-      // No bound node in selection — switch back to selection tool
-      this.boundNodeId = null;
+    if (this.boundNodeIds.length === 0 || !this.activeBoneId) {
+      // Nothing bound to paint — back to the selection tool
+      this.boundNodeIds = [];
       this.context.setActiveTool('selection');
-      return;
-    }
-
-    // Find a bone to paint with
-    if (!this.activeBoneId && this.boundNodeId) {
-      const node = this.context.sceneGraph.getNode(this.boundNodeId);
-      if (node) {
-        const skin = getSkinData(node);
-        if (skin) {
-          const boneIds = Object.keys(skin.inverseBindMatrices);
-          if (boneIds.length > 0) {
-            this.activeBoneId = boneIds[0]!;
-          }
-        }
-      }
-    }
-
-    if (!this.activeBoneId) {
-      this.boundNodeId = null;
-      this.context.setActiveTool('selection');
-      return;
     }
   }
 
@@ -154,10 +136,7 @@ export class WeightPaintTool extends BaseTool {
 
   onPointerDown(event: CanvasPointerEvent): void {
     if (event.button !== 0) return;
-    if (!this.boundNodeId || !this.activeBoneId) return;
-
-    const node = this.context.sceneGraph.getNode(this.boundNodeId);
-    if (!node || !getSkinData(node)) return;
+    if (this.boundNodeIds.length === 0 || !this.activeBoneId) return;
 
     this.isPainting = true;
     this.state.isDragging = true;
@@ -174,7 +153,7 @@ export class WeightPaintTool extends BaseTool {
 
   onPointerMove(event: CanvasPointerEvent): void {
     if (!this.isPainting) return;
-    if (!this.boundNodeId || !this.activeBoneId) return;
+    if (!this.activeBoneId) return;
 
     this.paintAtWorldPosition(event.worldPosition.x, event.worldPosition.y);
   }
@@ -211,76 +190,67 @@ export class WeightPaintTool extends BaseTool {
   // --------------------------------------------------------------------------
 
   /**
-   * Paint weights on vertices within brush radius of the given world position.
-   * Uses the node's world transform to convert local tessellation vertices to world space.
+   * Paint weights on the vertices within the brush, on every bound layer.
+   * The brush meets the mesh where the bones have posed it.
    */
   private paintAtWorldPosition(worldX: number, worldY: number): void {
-    if (!this.boundNodeId || !this.activeBoneId) return;
+    if (!this.activeBoneId) return;
+    for (const nodeId of this.boundNodeIds) {
+      const node = this.context.sceneGraph.getNode(nodeId);
+      const skinData = node ? getSkinData(node) : undefined;
+      if (!skinData) continue;
+      // Bones this layer isn't bound to can't take its weight
+      if (!skinData.inverseBindMatrices[this.activeBoneId]) continue;
 
-    const node = this.context.sceneGraph.getNode(this.boundNodeId);
-    if (!node) return;
-
-    const skinData = getSkinData(node);
-    if (!skinData?.vertices) return;
-
-    // Get tessellated vertex positions from the geometry cache via the context.
-    // These are node-LOCAL coordinates, but paintAtPositionWithVertices compares
-    // them against the WORLD cursor position — so transform them to world first
-    // (matching editorStore.bindMeshToBones), else the brush mis-targets for any
-    // node not at the origin.
-    const localVertexPositions = this.context.getTessellatedVertices?.(this.boundNodeId);
-    if (localVertexPositions && localVertexPositions.length >= 2) {
+      const localVertices = this.context.getTessellatedVertices?.(nodeId);
+      if (!localVertices || localVertices.length < 2) continue;
       // Weights for the shape as it is now, if it was edited since it was bound
-      const fitted = fitSkinToVertices(skinData, localVertexPositions);
+      const fitted = fitSkinToVertices(skinData, localVertices);
       if (fitted !== skinData) {
-        this.context.sceneGraph.updateNode(this.boundNodeId, {
-          skinData: fitted,
-        } as Partial<Node>);
+        this.context.sceneGraph.updateNode(nodeId, { skinData: fitted } as Partial<Node>);
       }
-      const m = this.context.sceneGraph.getWorldTransform(this.boundNodeId);
-      const worldVertexPositions = new Float32Array(localVertexPositions.length);
-      for (let i = 0; i < localVertexPositions.length; i += 2) {
-        const lx = localVertexPositions[i]!;
-        const ly = localVertexPositions[i + 1]!;
-        worldVertexPositions[i] = m.a * lx + m.c * ly + m.tx;
-        worldVertexPositions[i + 1] = m.b * lx + m.d * ly + m.ty;
-      }
-      // Use spatial brush with falloff (brushRadius stays in world units)
-      this.paintAtPositionWithVertices(worldX, worldY, worldVertexPositions);
-    } else {
-      // Fallback: paint all vertices (no spatial filtering)
-      const vertexCount = skinData.vertexCount;
-      let modified = false;
-      for (let i = 0; i < vertexCount; i++) {
-        paintWeight(skinData, i, this.activeBoneId, this.brushStrength, this.paintMode);
-        modified = true;
-      }
-      if (modified) {
-        this.context.sceneGraph.updateNode(this.boundNodeId, {
-          skinData: { ...skinData },
-        } as Partial<Node>);
-      }
+
+      const posed = this.context.getDeformedVertices?.(nodeId);
+      const worldVertices =
+        posed && posed.length === localVertices.length
+          ? posed
+          : this.restWorldVertices(nodeId, localVertices);
+      this.paintAtPositionWithVertices(worldX, worldY, worldVertices, nodeId);
     }
   }
 
+  /** A layer's vertices where they'd be unposed, in world space. */
+  private restWorldVertices(nodeId: string, localVertices: Float32Array): Float32Array {
+    const m = this.context.sceneGraph.getWorldTransform(nodeId);
+    const world = new Float32Array(localVertices.length);
+    for (let i = 0; i < localVertices.length; i += 2) {
+      const lx = localVertices[i]!;
+      const ly = localVertices[i + 1]!;
+      world[i] = m.a * lx + m.c * ly + m.tx;
+      world[i + 1] = m.b * lx + m.d * ly + m.ty;
+    }
+    return world;
+  }
+
   /**
-   * Paint weights using provided vertex world positions.
-   * Called by the UI layer which has access to tessellation data.
+   * Paint weights using provided vertex world positions (of the first bound
+   * layer unless another is named).
    */
   paintAtPositionWithVertices(
     worldX: number,
     worldY: number,
-    vertexWorldPositions: Float32Array
+    vertexWorldPositions: Float32Array,
+    nodeId: string | null = this.getBoundNodeId()
   ): void {
-    if (!this.boundNodeId || !this.activeBoneId) return;
+    if (!nodeId || !this.activeBoneId) return;
 
-    const node = this.context.sceneGraph.getNode(this.boundNodeId);
-    if (!node) return;
-
-    const skinData = getSkinData(node);
-    if (!skinData) return;
+    const node = this.context.sceneGraph.getNode(nodeId);
+    const bound = node ? getSkinData(node) : undefined;
+    if (!bound) return;
 
     const radiusSq = this.brushRadius * this.brushRadius;
+    // Painted on a copy: the layer's binding (and undo's copy of it) stay as they were
+    const skinData: SkinData = { ...bound, vertices: [...bound.vertices] };
     let modified = false;
 
     const numVertices = Math.min(vertexWorldPositions.length / 2, skinData.vertices.length);
@@ -302,9 +272,7 @@ export class WeightPaintTool extends BaseTool {
     }
 
     if (modified) {
-      this.context.sceneGraph.updateNode(this.boundNodeId, {
-        skinData: { ...skinData },
-      } as Partial<Node>);
+      this.context.sceneGraph.updateNode(nodeId, { skinData } as Partial<Node>);
     }
   }
 }

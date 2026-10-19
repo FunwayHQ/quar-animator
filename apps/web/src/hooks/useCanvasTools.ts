@@ -31,6 +31,7 @@ import type {
   Vector2,
 } from '@quar/types';
 import { useEditorStore } from '../stores/editorStore';
+import { toast } from '../components/common/Toast';
 
 // ============================================================================
 // Types
@@ -40,6 +41,7 @@ export interface UseCanvasToolsOptions {
   camera: Camera | null;
   sceneGraph: SceneGraph;
   getTessellatedVertices?: (nodeId: string) => Float32Array | null;
+  getDeformedVertices?: (nodeId: string) => Float32Array | null;
 }
 
 export interface UseCanvasToolsReturn {
@@ -128,8 +130,33 @@ function createCanvasPointerEvent(
  * @param options Configuration options including camera reference
  * @returns Tool management handlers and state
  */
+/** The panel's weight paint bone (if the layers are bound to it), brush and mode, on the tool. */
+function applyWeightPaintSettings(tool: WeightPaintTool): void {
+  const state = useEditorStore.getState();
+  const boneId = state.weightPaintBoneId;
+  if (boneId && tool.getPaintableBoneIds().includes(boneId)) tool.setActiveBoneId(boneId);
+  tool.setBrushRadius(state.weightPaintBrushSize);
+  tool.setBrushStrength(state.weightPaintBrushStrength);
+  tool.setPaintMode(state.weightPaintMode);
+}
+
+/** The tool's bone, brush and mode, shown in the panel. */
+function reportWeightPaintSettings(tool: WeightPaintTool): void {
+  const state = useEditorStore.getState();
+  if (tool.getActiveBoneId() !== state.weightPaintBoneId) {
+    state.setWeightPaintBoneId(tool.getActiveBoneId());
+  }
+  if (tool.getBrushRadius() !== state.weightPaintBrushSize) {
+    state.setWeightPaintBrushSize(tool.getBrushRadius());
+  }
+  if (tool.getBrushStrength() !== state.weightPaintBrushStrength) {
+    state.setWeightPaintBrushStrength(tool.getBrushStrength());
+  }
+  if (tool.getPaintMode() !== state.weightPaintMode) state.setWeightPaintMode(tool.getPaintMode());
+}
+
 export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsReturn {
-  const { camera, sceneGraph, getTessellatedVertices } = options;
+  const { camera, sceneGraph, getTessellatedVertices, getDeformedVertices } = options;
 
   // Use the externally-provided SceneGraph
   const sceneGraphRef = useRef<SceneGraph>(sceneGraph);
@@ -418,6 +445,9 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
       getTessellatedVertices: (nodeId: string) => {
         return getTessellatedVertices?.(nodeId) ?? null;
       },
+      getDeformedVertices: (nodeId: string) => {
+        return getDeformedVertices?.(nodeId) ?? null;
+      },
       convertShapeToPath: (nodeId: string) => {
         return useEditorStore.getState().convertShapeToPath(sceneGraphRef.current, nodeId);
       },
@@ -521,14 +551,14 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
       setCursor(toolManagerRef.current.getCursor());
       syncDirectSelectionState();
 
-      // Sync weight paint tool state to store
+      // Weight paint starts with the panel's bone, brush and mode
       if (activeTool === 'weight-paint') {
         const wpTool = toolManagerRef.current.getActiveTool();
-        if (wpTool && wpTool.type === 'weight-paint') {
-          const boneId = (wpTool as WeightPaintTool).getActiveBoneId();
-          if (boneId) {
-            useEditorStore.getState().setWeightPaintBoneId(boneId);
-          }
+        if (useEditorStore.getState().activeTool !== 'weight-paint') {
+          toast.info('Select a layer bound to bones to weight paint it');
+        } else if (wpTool && wpTool.type === 'weight-paint') {
+          applyWeightPaintSettings(wpTool as WeightPaintTool);
+          reportWeightPaintSettings(wpTool as WeightPaintTool);
         }
       } else {
         // Clear weight paint bone when leaving weight paint mode
@@ -666,10 +696,38 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
     [setIsDrawing, syncPenToolState, syncDirectSelectionState, syncMarqueeState]
   );
 
+  // Weight paint follows the panel: its bone, brush, mode, and the layers selected
+  useEffect(
+    () =>
+      useEditorStore.subscribe((state, prev) => {
+        if (state.activeTool !== 'weight-paint') return;
+        const tool = toolManagerRef.current?.getActiveTool();
+        if (tool?.type !== 'weight-paint') return;
+        const wpTool = tool as WeightPaintTool;
+        if (state.selectedNodeIds !== prev.selectedNodeIds) {
+          wpTool.onActivate();
+          if (useEditorStore.getState().activeTool !== 'weight-paint') return;
+        } else if (
+          state.weightPaintBoneId === prev.weightPaintBoneId &&
+          state.weightPaintBrushSize === prev.weightPaintBrushSize &&
+          state.weightPaintBrushStrength === prev.weightPaintBrushStrength &&
+          state.weightPaintMode === prev.weightPaintMode
+        ) {
+          return;
+        }
+        applyWeightPaintSettings(wpTool);
+        reportWeightPaintSettings(wpTool);
+      }),
+    []
+  );
+
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent) => {
       if (!toolManagerRef.current) return;
       toolManagerRef.current.handleKeyDown(event.nativeEvent);
+      // Brush keys ([ ] X) change the tool's brush: show it in the panel
+      const tool = toolManagerRef.current.getActiveTool();
+      if (tool?.type === 'weight-paint') reportWeightPaintSettings(tool as WeightPaintTool);
       // Sync tool overlay state after key events
       syncPenToolState();
       syncDirectSelectionState();
