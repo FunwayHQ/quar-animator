@@ -256,4 +256,105 @@ describe('BoneTool', () => {
       expect(tool.getPreviewNode()).toBeNull();
     });
   });
+
+  describe('chaining', () => {
+    /** A press, drag and release, at screen positions the camera agrees with. */
+    function draw(from: [number, number], to: [number, number]) {
+      const at = (x: number, y: number) =>
+        createPointerEvent(x, y, { screenPosition: context.camera.worldToScreen({ x, y }) });
+      tool.onPointerDown(at(...from));
+      tool.onPointerMove(at(...to));
+      tool.onPointerUp(at(...to));
+    }
+    const bones = () => {
+      const found: BoneNode[] = [];
+      context.sceneGraph.traverse((node) => {
+        if (node.type === 'bone') found.push(node as BoneNode);
+      });
+      return found;
+    };
+
+    it('doesn’t keep a parent from a click on a tip', () => {
+      draw([0, 0], [100, 0]);
+      tool.onKeyDown!({ key: 'Escape' } as KeyboardEvent);
+      tool.onActivate!();
+      // A click on the tip, no drag: nothing drawn
+      draw([100, 0], [100, 0]);
+      // Then a bone elsewhere: on its own, where it was drawn
+      draw([0, 200], [100, 200]);
+      const last = bones().at(-1)!;
+      expect(last.parent).toBeNull();
+      expect(last.transform.position).toEqual({ x: 0, y: 200 });
+    });
+
+    it('snaps to the tip of a bone inside a group', () => {
+      context.sceneGraph.addNode({
+        id: 'g',
+        name: 'G',
+        type: 'group',
+        parent: null,
+        children: [],
+        transform: {
+          position: { x: 50, y: 50 },
+          rotation: 0,
+          scale: { x: 1, y: 1 },
+          anchor: { x: 0, y: 0 },
+          skew: { x: 0, y: 0 },
+        },
+        visible: true,
+        locked: false,
+        opacity: 1,
+        blendMode: 'normal',
+      } as never);
+      context.sceneGraph.addNode(
+        {
+          id: 'inner',
+          name: 'Inner',
+          type: 'bone',
+          parent: null,
+          children: [],
+          transform: {
+            position: { x: 0, y: 0 },
+            rotation: 0,
+            scale: { x: 1, y: 1 },
+            anchor: { x: 0, y: 0 },
+            skew: { x: 0, y: 0 },
+          },
+          visible: true,
+          locked: false,
+          opacity: 1,
+          blendMode: 'normal',
+          length: 100,
+          boneStyle: 'octahedral',
+          boneColor: '#E0E0E0',
+        } as BoneNode,
+        'g'
+      );
+      draw([150, 50], [150, 150]);
+      expect(bones().at(-1)!.parent).toBe('inner');
+    });
+
+    it('draws a chained bone as long as dragged under a scaled parent', () => {
+      draw([0, 0], [100, 0]);
+      const first = bones()[0]!;
+      context.sceneGraph.updateNode(first.id, {
+        transform: { ...first.transform, scale: { x: 2, y: 2 } },
+      });
+      // From the (now 200-unit) tip, 100 units up
+      draw([200, 0], [200, 100]);
+      const child = bones().at(-1)!;
+      expect(child.parent).toBe(first.id);
+      // 50 of the parent's units, 100 in the world
+      expect(child.length).toBeCloseTo(50);
+      expect(child.transform.rotation).toBeCloseTo(90);
+    });
+
+    it('names new bones after those already there', () => {
+      draw([0, 0], [100, 0]);
+      tool.onKeyDown!({ key: 'Escape' } as KeyboardEvent);
+      tool.onActivate!();
+      draw([0, 300], [100, 300]);
+      expect(bones().map((bone) => bone.name)).toEqual(['Bone 1', 'Bone 2']);
+    });
+  });
 });

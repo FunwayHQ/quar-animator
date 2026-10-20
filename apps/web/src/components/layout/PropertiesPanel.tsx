@@ -31,6 +31,7 @@ import {
 import { useSceneGraph } from '../../contexts/SceneGraphContext';
 import { useEditorStore, DEFAULT_FILL, DEFAULT_STROKE } from '../../stores/editorStore';
 import { ScrubLabel } from '../common/ScrubLabel';
+import { setBoneLength } from '../../stores/boneLength';
 import { AnimationPresetsPanel } from '../common/AnimationPresetsPanel';
 import { KeyframeIndicator } from '../common/KeyframeIndicator';
 import {
@@ -1925,9 +1926,9 @@ export function PropertiesPanel() {
                             label="L"
                             value={Math.round(bone.length)}
                             onChange={(v) => {
+                              // One undo step for the whole scrub (taken as it starts)
                               const val = Math.max(1, v);
-                              pushUndo(sceneGraph);
-                              sceneGraph.updateNode(nodeId, { length: val } as Partial<BoneNode>);
+                              setBoneLength(sceneGraph, nodeId, val);
                               if (shouldKeyframe(autoKeyframe, nodeId, 'length'))
                                 addKeyframeAtFrame(nodeId, 'length', currentFrame, val);
                             }}
@@ -1941,7 +1942,7 @@ export function PropertiesPanel() {
                               const val = parseFloat(e.target.value);
                               if (!isNaN(val) && val > 0) {
                                 pushUndo(sceneGraph);
-                                sceneGraph.updateNode(nodeId, { length: val } as Partial<BoneNode>);
+                                setBoneLength(sceneGraph, nodeId, val);
                                 if (shouldKeyframe(autoKeyframe, nodeId, 'length'))
                                   addKeyframeAtFrame(nodeId, 'length', currentFrame, val);
                               }
@@ -1952,9 +1953,7 @@ export function PropertiesPanel() {
                                 const val = Math.max(1, parseFloat(v));
                                 if (!isNaN(val)) {
                                   pushUndo(sceneGraph);
-                                  sceneGraph.updateNode(nodeId, {
-                                    length: val,
-                                  } as Partial<BoneNode>);
+                                  setBoneLength(sceneGraph, nodeId, val);
                                   if (shouldKeyframe(autoKeyframe, nodeId, 'length'))
                                     addKeyframeAtFrame(nodeId, 'length', currentFrame, val);
                                 }

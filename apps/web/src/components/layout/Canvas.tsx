@@ -459,9 +459,14 @@ export function Canvas({
 
   const transformHandles = useMemo(() => {
     if (!transformHandlesRef.current || !selectionBounds || !cameraRef.current) return [];
-    return transformHandlesRef.current.getHandles(selectionBounds, cameraRef.current);
+    const handles = transformHandlesRef.current.getHandles(selectionBounds, cameraRef.current);
+    // Bones have no size to resize: only the rotation handles
+    const onlyBones =
+      selectedNodeIds.size > 0 &&
+      [...selectedNodeIds].every((id) => sceneGraph.getNode(id)?.type === 'bone');
+    return onlyBones ? handles.filter((handle) => handle.position.startsWith('rotate')) : handles;
     // cameraVersion triggers recalculation when camera changes (pan + zoom)
-  }, [selectionBounds, cameraVersion]);
+  }, [selectionBounds, cameraVersion, selectedNodeIds, sceneGraph]);
 
   // Convert selection bounds to screen coordinates for overlay
   const screenBounds = useMemo(() => {

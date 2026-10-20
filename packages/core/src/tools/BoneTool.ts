@@ -5,6 +5,7 @@
 
 import type { CanvasPointerEvent, BoneNode, Vector2 } from '@quar/types';
 import { BaseTool, type ToolContext } from './BaseTool';
+import { mat3 } from '../math';
 
 // Minimum drag distance (pixels) to create a bone
 const MIN_BONE_LENGTH = 5;
@@ -19,7 +20,6 @@ export class BoneTool extends BaseTool {
   private startPoint: Vector2 | null = null;
   private previewNode: BoneNode | null = null;
   private lastCreatedBoneId: string | null = null;
-  private boneCounter = 0;
   private chainParentId: string | null = null;
 
   constructor(context: ToolContext) {
@@ -36,6 +36,8 @@ export class BoneTool extends BaseTool {
     this.state.isDragging = true;
     this.startPoint = { ...event.worldPosition };
     this.state.startWorldPos = { ...event.worldPosition };
+    // Each bone finds its own parent (a click on a tip used to leave it set)
+    this.chainParentId = null;
 
     // Check if clicking near an existing bone tip to start a chain from it
     const nearBone = this.findNearestBoneTip(event);
@@ -47,7 +49,7 @@ export class BoneTool extends BaseTool {
       this.chainParentId = this.lastCreatedBoneId;
       const lastBone = this.context.sceneGraph.getNode(this.lastCreatedBoneId);
       if (lastBone && lastBone.type === 'bone') {
-        const tipWorld = this.getBoneWorldTip(lastBone as BoneNode);
+        const tipWorld = this.getBoneWorldTip(lastBone);
         if (tipWorld) {
           this.startPoint = tipWorld;
         }
@@ -114,21 +116,22 @@ export class BoneTool extends BaseTool {
       if (this.chainParentId) {
         // Chaining to a parent bone
         const parentBone = this.context.sceneGraph.getNode(this.chainParentId);
-        if (parentBone && parentBone.type === 'bone') {
-          const parent = parentBone as BoneNode;
-          // Compute child rotation relative to parent's world rotation
-          const parentWorldRot = this.getWorldRotation(this.chainParentId);
-          const relativeRotation = rotation - parentWorldRot;
-
+        const inverse = parentBone
+          ? mat3.invert(this.context.sceneGraph.getWorldTransform(this.chainParentId))
+          : null;
+        if (parentBone && parentBone.type === 'bone' && inverse) {
+          // The drag in the parent bone's own space, so the new bone is as
+          // long and as angled as drawn under a scaled or mirrored parent too
+          const start = mat3.transformPoint(inverse, this.startPoint);
+          const end = mat3.transformPoint(inverse, event.worldPosition);
           const node = this.createBoneNode(
-            parent.length, // Position at parent's tip in local space
-            0,
-            relativeRotation,
-            length
+            start.x,
+            start.y,
+            Math.atan2(end.y - start.y, end.x - start.x) * (180 / Math.PI),
+            Math.hypot(end.x - start.x, end.y - start.y)
           );
 
-          this.context.sceneGraph.addNode(node);
-          this.context.sceneGraph.moveNode(node.id, this.chainParentId);
+          this.context.sceneGraph.addNode(node, this.chainParentId);
           this.context.setSelectedIds([node.id]);
           this.lastCreatedBoneId = node.id;
         } else {
@@ -186,7 +189,6 @@ export class BoneTool extends BaseTool {
   onActivate(): void {
     this.lastCreatedBoneId = null;
     this.chainParentId = null;
-    this.boneCounter = 0;
   }
 
   onDeactivate(): void {
@@ -208,11 +210,20 @@ export class BoneTool extends BaseTool {
     this.lastCreatedBoneId = node.id;
   }
 
+  /** "Bone N", numbered on from the bones already in the scene. */
+  private nextBoneName(): string {
+    let highest = 0;
+    this.context.sceneGraph.traverse((node) => {
+      const match = node.type === 'bone' ? /^Bone (\d+)$/.exec(node.name) : null;
+      if (match) highest = Math.max(highest, Number(match[1]));
+    });
+    return `Bone ${highest + 1}`;
+  }
+
   private createBoneNode(x: number, y: number, rotation: number, length: number): BoneNode {
-    this.boneCounter++;
     return {
       id: this.context.generateId(),
-      name: `Bone ${this.boneCounter}`,
+      name: this.nextBoneName(),
       type: 'bone',
       parent: null,
       children: [],
@@ -234,13 +245,12 @@ export class BoneTool extends BaseTool {
   }
 
   private findNearestBoneTip(event: CanvasPointerEvent): { id: string; tipWorld: Vector2 } | null {
-    const nodes = this.context.sceneGraph.getRootNodes();
     let nearest: { id: string; tipWorld: Vector2; dist: number } | null = null;
 
-    const checkBone = (node: import('@quar/types').Node) => {
-      if (node.type !== 'bone') return;
-      const bone = node as BoneNode;
-      const tipWorld = this.getBoneWorldTip(bone);
+    // Every bone shown, inside groups and artboards too
+    this.context.sceneGraph.traverseVisible((node) => {
+      if (node.type !== 'bone' || this.context.isHiddenOnCanvas?.(node.id)) return;
+      const tipWorld = this.getBoneWorldTip(node);
       if (!tipWorld) return;
 
       // Convert tip to screen space for distance check
@@ -250,19 +260,9 @@ export class BoneTool extends BaseTool {
       const dist = Math.sqrt(dx * dx + dy * dy);
 
       if (dist < SNAP_DISTANCE && (!nearest || dist < nearest.dist)) {
-        nearest = { id: bone.id, tipWorld, dist };
+        nearest = { id: node.id, tipWorld, dist };
       }
-
-      // Check children
-      for (const childId of bone.children) {
-        const child = this.context.sceneGraph.getNode(childId);
-        if (child) checkBone(child);
-      }
-    };
-
-    for (const node of nodes) {
-      checkBone(node);
-    }
+    });
 
     return nearest;
   }
@@ -273,10 +273,5 @@ export class BoneTool extends BaseTool {
     const wx = worldTransform.a * tipX + worldTransform.tx;
     const wy = worldTransform.b * tipX + worldTransform.ty;
     return { x: wx, y: wy };
-  }
-
-  private getWorldRotation(boneId: string): number {
-    const worldTransform = this.context.sceneGraph.getWorldTransform(boneId);
-    return Math.atan2(worldTransform.b, worldTransform.a) * (180 / Math.PI);
   }
 }

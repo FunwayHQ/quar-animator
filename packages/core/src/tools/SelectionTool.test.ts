@@ -1654,6 +1654,25 @@ describe('SelectionTool', () => {
       // because walking stops at bone-type parents
     });
 
+    it('takes clicks near a diagonal bone, not anywhere in its bounding box', () => {
+      // 200 long at 45°: its bounding box spans (0,0)–(141,141)
+      context.sceneGraph.addNode(createTestBone('diagonal', 0, 0, 200, 45));
+      expect(tool.hitTest({ x: 70, y: 72 })?.id).toBe('diagonal');
+      // Inside the box, far off the bone
+      expect(tool.hitTest({ x: 120, y: 30 })).toBeNull();
+
+      // Nor does a click there select it any other way
+      const at = (x: number, y: number) =>
+        createMockPointerEvent({
+          worldPosition: { x, y },
+          screenPosition: context.camera.worldToScreen({ x, y }),
+          button: 0,
+        });
+      tool.onPointerDown(at(120, 30));
+      tool.onPointerUp(at(120, 30));
+      expect(context.getSelectedIds().size).toBe(0);
+    });
+
     it('passes clicks through bones hidden on the canvas', () => {
       context.sceneGraph.addNode(createTestBone('hidden', 100, 100, 60));
       context.isHiddenOnCanvas = (id) => id === 'hidden';

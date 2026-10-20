@@ -215,8 +215,8 @@ export class SelectionTool extends BaseTool {
             initialRotations,
           };
           return;
-        } else if (hitHandle) {
-          // Start resize operation
+        } else if (hitHandle && !this.onlyBones(selectedIds)) {
+          // Start resize operation (bones have no size to resize)
           this.context.onTransformStart?.();
           this.mode = 'resizing';
           this.state.isDragging = true;
@@ -417,8 +417,13 @@ export class SelectionTool extends BaseTool {
       // Update marquee rect with final position
       this.marqueeRect = rect.fromPoints(this.startPoint, event.worldPosition);
 
-      // Select all nodes within marquee
-      const nodesInMarquee = this.getNodesInRect(this.marqueeRect);
+      // Select all nodes within marquee — a click on empty canvas is no marquee:
+      // it would pick up whatever's bounding box holds the point
+      const start = this.context.camera.worldToScreen(this.startPoint);
+      const dragged =
+        Math.abs(start.x - event.screenPosition.x) >= 3 ||
+        Math.abs(start.y - event.screenPosition.y) >= 3;
+      const nodesInMarquee = dragged ? this.getNodesInRect(this.marqueeRect) : [];
 
       if (this.isAdditive(event) || event.shiftKey) {
         // Add to existing selection
@@ -769,7 +774,22 @@ export class SelectionTool extends BaseTool {
   /**
    * Check if a point is inside a node's bounds
    */
+  /** Whether every selected layer is a bone. */
+  private onlyBones(ids: Set<string>): boolean {
+    return [...ids].every((id) => this.context.sceneGraph.getNode(id)?.type === 'bone');
+  }
+
   private isPointInNode(point: Vector2, node: Node): boolean {
+    if (node.type === 'bone') {
+      // Near the bone itself: a diagonal bone's bounding box takes clicks far from it
+      const inverse = mat3.invert(this.context.sceneGraph.getWorldTransform(node.id));
+      if (!inverse) return false;
+      const local = mat3.transformPoint(inverse, point);
+      const along = Math.max(0, Math.min(node.length, local.x));
+      const reach = Math.max(node.length * 0.15, 4) + 4 / this.context.camera.zoom;
+      return Math.hypot(local.x - along, local.y) <= reach;
+    }
+
     const bounds = this.getNodeBounds(node);
     if (!bounds) return false;
 
