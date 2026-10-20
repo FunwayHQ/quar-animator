@@ -6,3 +6,4 @@
 export * from './types';
 export * from './SelectionManager';
 export * from './TransformHandles';
+export * from './artworkBounds';

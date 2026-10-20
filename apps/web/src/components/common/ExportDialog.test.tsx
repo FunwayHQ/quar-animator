@@ -309,6 +309,24 @@ describe('ExportDialog', () => {
     expect(mockStore.setExporting).toHaveBeenCalledWith(true);
   });
 
+  it('frames the whole scene when no artboard is selected, sized to fit it', async () => {
+    renderWithArtboard(<ExportDialogHost />);
+    act(() => showExportDialog('gif'));
+
+    // The artboard (with its contents) is everything drawn: 640 × 360 at (30, 70)
+    expect(screen.getByTestId('export-width')).toHaveValue(640);
+    expect(screen.getByTestId('export-height')).toHaveValue(360);
+    expect(screen.getByTestId('export-scene-scope')).toBeInTheDocument();
+    fireEvent.change(screen.getByTestId('export-height'), { target: { value: '640' } });
+    fireEvent.click(screen.getByTestId('export-dialog-export'));
+
+    await waitFor(() => expect(exportGif).toHaveBeenCalledOnce());
+    const [ctx] = vi.mocked(exportGif).mock.calls[0]!;
+    expect(ctx.exportRootIds).toBeUndefined();
+    // A square output frames the scene square, about its center, without stretching it
+    expect(ctx.viewportBounds).toEqual({ x: 30, y: -70, width: 640, height: 640 });
+  });
+
   it('limits frame exports to the selected artboard and starts at its dimensions', async () => {
     mockStore.selectedNodeIds = new Set(['artboard-1']);
     renderWithArtboard(<ExportDialogHost />);

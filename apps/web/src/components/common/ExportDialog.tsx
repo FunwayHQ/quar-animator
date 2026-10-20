@@ -14,7 +14,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { X, AlertTriangle } from 'lucide-react';
-import { SelectionManager } from '@quar/core';
+import { SelectionManager, widenToAspect } from '@quar/core';
 import type { SceneGraph } from '@quar/core';
 import type { Node, RectangleNode, Timeline } from '@quar/types';
 import { useSceneGraph } from '../../contexts/SceneGraphContext';
@@ -29,6 +29,7 @@ import {
 } from '@quar/export';
 import type { ExportProgress } from '@quar/export';
 import { downloadBlob } from '../../services/exportService';
+import { getAnimatedArtworkBounds, sampleFrames } from '../../services/sceneExtent';
 import styles from './ExportDialog.module.css';
 
 // ============================================================================
@@ -93,6 +94,19 @@ function getSelectedArtboardScope(sceneGraph: SceneGraph, selectedIds: Set<strin
 
   const bounds = new SelectionManager().getSelectionBounds(new Set([selectedId]), sceneGraph)?.rect;
   return bounds ? { node, bounds } : null;
+}
+
+/** Exports are at most this many pixels a side. */
+const MAX_EXPORT_SIZE = 8192;
+
+/** The size an export starts at: the region's own, scaled down to fit if it's huge. */
+export function defaultExportSize(region: { width: number; height: number } | null) {
+  if (!region || !(region.width > 0) || !(region.height > 0)) return { width: 800, height: 600 };
+  const scale = Math.min(1, MAX_EXPORT_SIZE / Math.max(region.width, region.height));
+  return {
+    width: Math.max(1, Math.ceil(region.width * scale)),
+    height: Math.max(1, Math.ceil(region.height * scale)),
+  };
 }
 
 const COMMON_FRAME_RATES = [60, 50, 30, 25, 24, 20, 15, 12, 10];
@@ -298,12 +312,24 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
   // What shows behind the art in formats without transparency (or with it off)
   const documentBackground = useEditorStore((s) => s.documentBackground);
   const selectedArtboard = getSelectedArtboardScope(sceneGraph, selectedNodeIds);
+  // With no artboard chosen, the export frames all the artwork, wherever it moves
+  const [sceneScope] = useState(() =>
+    selectedArtboard
+      ? null
+      : getAnimatedArtworkBounds(
+          sceneGraph,
+          timeline,
+          useEditorStore.getState().symbols,
+          sampleFrames(0, Math.max(0, timelineDuration - 1))
+        )
+  );
+  const defaultSize = defaultExportSize(selectedArtboard?.bounds ?? sceneScope);
 
   const [exiting, setExiting] = useState(false);
   const [state, setState] = useState<ExportDialogState>(() => ({
     tab: initialTab,
-    width: selectedArtboard ? Math.ceil(selectedArtboard.bounds.width) : 800,
-    height: selectedArtboard ? Math.ceil(selectedArtboard.bounds.height) : 600,
+    width: defaultSize.width,
+    height: defaultSize.height,
     startFrame: 0,
     endFrame: Math.max(0, timelineDuration - 1),
     pngMultiplier: 1,
@@ -388,7 +414,10 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
             exportRootIds: [selectedArtboard.node.id],
             viewportBounds: selectedArtboard.bounds,
           }
-        : {}),
+        : sceneScope
+          ? // Widened to the output's shape, so nothing is stretched
+            { viewportBounds: widenToAspect(sceneScope, state.width / state.height) }
+          : {}),
     };
     const frameRenderRoots = selectedArtboard ? [selectedArtboard.node] : sceneGraph.getRootNodes();
 
@@ -690,6 +719,7 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
     selectedArtboard,
     lottieExportScene,
     documentBackground,
+    sceneScope,
     close,
   ]);
 
@@ -790,6 +820,12 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
             {selectedArtboard && (
               <div className={styles.scopeNote} data-testid="export-artboard-scope">
                 Only “{selectedArtboard.node.name || 'Artboard'}” and its contents will be included.
+              </div>
+            )}
+            {!selectedArtboard && sceneScope && (
+              <div className={styles.scopeNote} data-testid="export-scene-scope">
+                Everything on the page is included, framed to fit its whole animation. Select an
+                artboard to export just that.
               </div>
             )}
 

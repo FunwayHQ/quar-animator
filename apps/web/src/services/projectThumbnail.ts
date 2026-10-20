@@ -9,7 +9,10 @@ import {
   DEFAULT_DOCUMENT_BACKGROUND,
   SceneGraph,
   SelectionManager,
+  getArtworkBounds,
+  padRect,
   parseQuarFile,
+  widenToAspect,
 } from '@quar/core';
 import { createTimeline } from '@quar/animation';
 import { createFrameRenderer } from '@quar/export';
@@ -75,53 +78,15 @@ export function findThumbnailRegion(
     }
   }
 
-  // Leaves only: a group's bounds would take in the bones inside it
-  const artworkIds = new Set<string>();
-  let strokePadding = 0;
-  sceneGraph.traverseVisible((node) => {
-    // Faded out entirely, so nothing below it shows either
-    if (node.opacity <= 0) return false;
-    if (node.type === 'group' || node.type === 'bone') return true;
-    artworkIds.add(node.id);
-    if ('strokes' in node && Array.isArray(node.strokes)) {
-      for (const stroke of node.strokes) {
-        if (stroke.visible && stroke.width > 0) {
-          strokePadding = Math.max(strokePadding, stroke.width / 2);
-        }
-      }
-    }
-    return true;
-  });
-  const content = selection.getSelectionBounds(artworkIds, sceneGraph)?.rect;
-  if (!content || !isFiniteRect(content)) return null;
+  const artwork = getArtworkBounds(sceneGraph, symbols);
+  if (!artwork) return null;
 
+  const { rect: content, strokePadding } = artwork;
   const padding = Math.max(content.width, content.height, 1) * CONTENT_PADDING + strokePadding;
   return {
     kind: 'content',
-    bounds: widenToAspect(
-      {
-        x: content.x - padding,
-        y: content.y - padding,
-        width: content.width + padding * 2,
-        height: content.height + padding * 2,
-      },
-      THUMBNAIL_MAX_WIDTH / THUMBNAIL_MAX_HEIGHT
-    ),
+    bounds: widenToAspect(padRect(content, padding), THUMBNAIL_MAX_WIDTH / THUMBNAIL_MAX_HEIGHT),
   };
-}
-
-function isFiniteRect(r: Rect): boolean {
-  return [r.x, r.y, r.width, r.height].every(Number.isFinite) && r.width >= 0 && r.height >= 0;
-}
-
-/** Grow the shorter side of a rectangle, about its center, to the given width/height ratio. */
-function widenToAspect(r: Rect, aspect: number): Rect {
-  if (r.width / r.height < aspect) {
-    const width = r.height * aspect;
-    return { x: r.x - (width - r.width) / 2, y: r.y, width, height: r.height };
-  }
-  const height = r.width / aspect;
-  return { x: r.x, y: r.y - (height - r.height) / 2, width: r.width, height };
 }
 
 /** Pixel size of a thumbnail showing a region of this size, as large as fits. */
