@@ -1377,7 +1377,12 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       return;
     }
 
-    // Walk parent chain to find root
+    // Walk up the parent bones, up to where the skeleton branches: the hand of
+    // one arm shouldn't bend the spine both arms hang from
+    const boneChildren = (id: string) =>
+      (sceneGraph.getNode(id)?.children ?? []).filter(
+        (childId) => sceneGraph.getNode(childId)?.type === 'bone'
+      ).length;
     const chain: BoneNode[] = [];
     let currentId: string | null = endEffectorBoneId;
     while (currentId) {
@@ -1386,6 +1391,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       chain.unshift(node);
       currentId = node.parent;
       if (chainDepth != null && chain.length >= chainDepth) break;
+      if (currentId && boneChildren(currentId) > 1) break;
     }
 
     if (chain.length === 0) {

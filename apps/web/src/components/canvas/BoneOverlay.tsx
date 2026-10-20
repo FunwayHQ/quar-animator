@@ -128,7 +128,8 @@ export function BoneOverlay({
     }
 
     return lines;
-  }, [ikChains, camera, cameraVersion, sceneGraph]);
+    // The bones and targets move the line's ends
+  }, [ikChains, boneNodes, ikTargetNodes, camera, cameraVersion, sceneGraph]);
 
   if (!camera || (markers.length === 0 && ikMarkers.length === 0)) return null;
 

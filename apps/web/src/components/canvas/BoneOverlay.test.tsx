@@ -211,6 +211,40 @@ describe('BoneOverlay', () => {
     expect(dashedLines.length).toBeGreaterThanOrEqual(1);
   });
 
+  it('moves the dashed line with its target', () => {
+    const bone = createBone('bone1', 'Root', 0, 0, 50);
+    const target = createIKTarget('ikt1', 'IK Target', 'chain1', 100, 50, 'effector');
+    const chain: IKChain = {
+      id: 'chain1',
+      name: 'Test Chain',
+      rootBoneId: 'bone1',
+      endEffectorBoneId: 'bone1',
+      targetNodeId: 'ikt1',
+      maxIterations: 10,
+      tolerance: 0.5,
+      enabled: true,
+    };
+    const nodes = new Map<string, any>([
+      ['bone1', bone],
+      ['ikt1', target],
+    ]);
+    const sg = createMockSceneGraph(nodes);
+    const props = {
+      boneNodes: [bone],
+      ikChains: [chain],
+      selectedNodeIds: new Set<string>(),
+      camera: createMockCamera(),
+      sceneGraph: sg,
+    };
+    const { container, rerender } = render(<BoneOverlay {...props} ikTargetNodes={[target]} />);
+
+    const moved = { ...target, transform: { ...target.transform, position: { x: 300, y: 50 } } };
+    nodes.set('ikt1', moved);
+    rerender(<BoneOverlay {...props} ikTargetNodes={[moved]} />);
+    const line = container.querySelector('line[stroke-dasharray]')!;
+    expect(line.getAttribute('x2')).toBe('300');
+  });
+
   it('applies selection highlight to selected IK target', () => {
     const bone = createBone('bone1', 'Root', 0, 0, 50);
     const target = createIKTarget('ikt1', 'IK Target', 'chain1', 100, 50, 'effector');

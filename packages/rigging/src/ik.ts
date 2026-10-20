@@ -22,21 +22,31 @@ export interface IKSceneGraph {
 /** A joint in the IK chain with world-space data */
 export interface IKJoint {
   boneId: string;
+  /** Where the bone pivots, in world space */
   worldPos: Vector2;
+  /** World distance from this joint to the next one (the last: to the bone's tip) */
   boneLength: number;
   angleMin?: number;
   angleMax?: number;
   /** World rotation (degrees) of the chain root's parent, so the root's local
    * rotation is expressed correctly when the chain sits under a rotated parent. */
   rootParentWorldRotation?: number;
+  /** The bone's local rotation in the pose the solve starts from (degrees) */
+  localRotation?: number;
+  /** The bone's parent frame is mirrored: its world angle turns against its local rotation */
+  mirrored?: boolean;
+  /** Last joint only: the end effector's tip, in world space */
+  tipWorld?: Vector2;
 }
 
 /** Result of an IK solve */
 export interface IKSolveResult {
-  /** boneId → new local rotation (degrees) */
+  /** boneId → new local rotation (degrees), root first */
   rotations: Map<string, number>;
   converged: boolean;
   endEffectorError: number;
+  /** The solved joints, root first, then the tip (world space) */
+  positions?: Vector2[];
 }
 
 /** Configuration for the FABRIK solver */
@@ -138,6 +148,10 @@ export function solveFABRIK(config: FABRIKConfig): IKSolveResult {
       rotations: new Map([[bone.boneId, angle]]),
       converged: dist <= bone.boneLength + tolerance,
       endEffectorError: Math.max(0, dist - bone.boneLength),
+      positions: [
+        { ...bone.worldPos },
+        v2add(bone.worldPos, v2scale(v2normalize(toTarget), bone.boneLength)),
+      ],
     };
   }
 
@@ -146,8 +160,10 @@ export function solveFABRIK(config: FABRIKConfig): IKSolveResult {
   // Add end effector tip position (last bone's tip)
   const lastJoint = joints[joints.length - 1]!;
   const secondToLast = joints.length >= 2 ? joints[joints.length - 2] : null;
-  // Compute tip from last joint's world pos + its bone length in the direction of last bone
-  if (secondToLast) {
+  // The tip as extracted, else from the last joint along the direction of the last bone
+  if (lastJoint.tipWorld) {
+    positions.push({ ...lastJoint.tipWorld });
+  } else if (secondToLast) {
     const dir = v2normalize(v2sub(lastJoint.worldPos, secondToLast.worldPos));
     positions.push(v2add(lastJoint.worldPos, v2scale(dir, lastJoint.boneLength)));
   } else {
@@ -162,6 +178,8 @@ export function solveFABRIK(config: FABRIKConfig): IKSolveResult {
 
   const rootPos: Vector2 = { ...positions[0]! };
   const totalLength = boneLengths.reduce((sum, l) => sum + l, 0);
+  // The starting pose, for angle limits (which are local rotations)
+  const rest = restAngles(positions, joints);
   const distToTarget = v2dist(rootPos, target);
 
   // Unreachable target: extend fully toward target
@@ -178,7 +196,15 @@ export function solveFABRIK(config: FABRIKConfig): IKSolveResult {
     if (poleTarget && joints.length === 2) {
       positions[2] = { ...target };
       applyPoleTarget(positions, boneLengths, poleTarget);
-      applyConstraints(positions, boneLengths, joints, rootPos);
+      applyConstraints(positions, boneLengths, joints, rootPos, rest);
+    } else if (
+      !poleTarget &&
+      isStraight(positions) &&
+      v2dist(positions[positions.length - 1]!, target) > tolerance &&
+      distToTarget < totalLength - tolerance
+    ) {
+      // FABRIK can't bend a straight chain toward a target on its axis: start it bent
+      bendSlightly(positions, boneLengths, joints);
     }
 
     // FABRIK iterations
@@ -209,16 +235,13 @@ export function solveFABRIK(config: FABRIKConfig): IKSolveResult {
       }
 
       // === Constraint pass ===
-      applyConstraints(positions, boneLengths, joints, rootPos);
+      applyConstraints(positions, boneLengths, joints, rootPos, rest);
     }
   }
 
   // Convert positions to local rotations
-  const rotations = positionsToRotations(
-    positions,
-    joints,
-    joints[0]?.rootParentWorldRotation ?? 0
-  );
+  const rotations = new Map<string, number>();
+  joints.forEach((joint, i) => rotations.set(joint.boneId, localAngle(positions, i, joints, rest)));
 
   const endEffectorError = v2dist(positions[positions.length - 1]!, target);
 
@@ -226,7 +249,88 @@ export function solveFABRIK(config: FABRIKConfig): IKSolveResult {
     rotations,
     converged: endEffectorError <= tolerance,
     endEffectorError,
+    positions,
   };
+}
+
+/** The starting pose's segment angles and local rotations (degrees). */
+interface RestAngles {
+  /** World angle of each segment; [-1] is the chain root's parent */
+  segments: number[];
+  parent: number;
+  locals: number[];
+}
+
+function segmentAngle(positions: Vector2[], i: number): number {
+  const dir = v2sub(positions[i + 1]!, positions[i]!);
+  return Math.atan2(dir.y, dir.x) * (180 / Math.PI);
+}
+
+function restAngles(positions: Vector2[], joints: IKJoint[]): RestAngles {
+  const parent = joints[0]?.rootParentWorldRotation ?? 0;
+  const segments = joints.map((_, i) => segmentAngle(positions, i));
+  const locals = joints.map(
+    (joint, i) =>
+      joint.localRotation ?? normalizeAngle(segments[i]! - (i === 0 ? parent : segments[i - 1]!))
+  );
+  return { segments, parent, locals };
+}
+
+/**
+ * Bone i's local rotation for the joints where they are: its rotation at the
+ * start, turned by how much its segment turned relative to its parent's
+ * (against it under a mirrored parent).
+ */
+function localAngle(positions: Vector2[], i: number, joints: IKJoint[], rest: RestAngles): number {
+  const sign = joints[i]!.mirrored ? -1 : 1;
+  const parentNow = i === 0 ? rest.parent : segmentAngle(positions, i - 1);
+  const parentRest = i === 0 ? rest.parent : rest.segments[i - 1]!;
+  const turned = normalizeAngle(
+    segmentAngle(positions, i) - parentNow - (rest.segments[i]! - parentRest)
+  );
+  return rest.locals[i]! + sign * turned;
+}
+
+/** Whether every segment of the chain points the same way. */
+function isStraight(positions: Vector2[]): boolean {
+  if (positions.length < 3) return false;
+  const first = v2normalize(v2sub(positions[1]!, positions[0]!));
+  for (let i = 1; i < positions.length - 1; i++) {
+    const dir = v2normalize(v2sub(positions[i + 1]!, positions[i]!));
+    if (Math.abs(first.x * dir.y - first.y * dir.x) > 1e-3 || v2dot(first, dir) < 0) return false;
+  }
+  return true;
+}
+
+/**
+ * Bend a straight chain a few degrees at each joint: toward the side its
+ * angle limits allow, else counter-clockwise.
+ */
+function bendSlightly(positions: Vector2[], boneLengths: number[], joints: IKJoint[]): void {
+  let side = 1;
+  for (const joint of joints.slice(1)) {
+    const sign = joint.mirrored ? -1 : 1;
+    if (joint.angleMin != null && joint.angleMin >= 0) {
+      side = sign;
+      break;
+    }
+    if (joint.angleMax != null && joint.angleMax <= 0) {
+      side = -sign;
+      break;
+    }
+  }
+  // The joints off the root–tip line, so the first pass doesn't straighten them again:
+  // the first segment turned back, each joint after it turned the other way
+  const step = (side * 10 * Math.PI) / 180;
+  let angle =
+    Math.atan2(positions[1]!.y - positions[0]!.y, positions[1]!.x - positions[0]!.x) - step;
+  for (let i = 0; i < boneLengths.length; i++) {
+    positions[i + 1] = {
+      x: positions[i]!.x + Math.cos(angle) * boneLengths[i]!,
+      y: positions[i]!.y + Math.sin(angle) * boneLengths[i]!,
+    };
+    angle += (2 * step) / Math.max(1, boneLengths.length - 1);
+  }
 }
 
 /**
@@ -290,14 +394,15 @@ function applyPoleTarget(positions: Vector2[], boneLengths: number[], poleTarget
 }
 
 /**
- * Apply angle constraints to the chain joints.
+ * Apply angle limits (local rotations) to the chain joints.
  * Re-enforces bone lengths after constraint application.
  */
 function applyConstraints(
   positions: Vector2[],
   boneLengths: number[],
   joints: IKJoint[],
-  rootPos: Vector2
+  rootPos: Vector2,
+  rest: RestAngles
 ): void {
   positions[0] = { ...rootPos };
 
@@ -305,18 +410,15 @@ function applyConstraints(
     const joint = joints[i]!;
     if (joint.angleMin == null && joint.angleMax == null) continue;
 
-    // Compute current angle of bone i (from positions[i] to positions[i+1])
-    const dir = v2sub(positions[i + 1]!, positions[i]!);
-    const angle = Math.atan2(dir.y, dir.x) * (180 / Math.PI);
-
-    // Clamp to constraints
+    const local = localAngle(positions, i, joints, rest);
     const min = joint.angleMin ?? -Infinity;
     const max = joint.angleMax ?? Infinity;
-    const clamped = Math.max(min, Math.min(max, angle));
+    const clamped = Math.max(min, Math.min(max, local));
 
-    if (Math.abs(clamped - angle) > 0.001) {
-      // Reposition next joint at clamped angle
-      const rad = clamped * (Math.PI / 180);
+    if (Math.abs(clamped - local) > 0.001) {
+      // Turn the segment back by the excess, and the joint with it
+      const sign = joint.mirrored ? -1 : 1;
+      const rad = (segmentAngle(positions, i) + sign * (clamped - local)) * (Math.PI / 180);
       positions[i + 1] = {
         x: positions[i]!.x + Math.cos(rad) * boneLengths[i]!,
         y: positions[i]!.y + Math.sin(rad) * boneLengths[i]!,
@@ -331,44 +433,62 @@ function applyConstraints(
   }
 }
 
-/**
- * Convert solved world positions back to local rotations per bone.
- *
- * For bone i, the rotation is the angle from positions[i] to positions[i+1]
- * in world space. For the root bone, this is the absolute world rotation.
- * For child bones, we subtract the parent's world rotation to get local rotation.
- */
-function positionsToRotations(
-  positions: Vector2[],
-  joints: IKJoint[],
-  rootParentRot: number = 0
-): Map<string, number> {
-  const rotations = new Map<string, number>();
-  const worldRotations: number[] = [];
-
-  for (let i = 0; i < joints.length; i++) {
-    const dir = v2sub(positions[i + 1]!, positions[i]!);
-    const worldAngle = Math.atan2(dir.y, dir.x) * (180 / Math.PI);
-    worldRotations.push(worldAngle);
-
-    // Local rotation = world rotation - parent's world rotation
-    // Root bone: local = world (no parent)
-    let localAngle: number;
-    if (i === 0) {
-      localAngle = rootParentRot ? normalizeAngle(worldAngle - rootParentRot) : worldAngle;
-    } else {
-      localAngle = normalizeAngle(worldAngle - worldRotations[i - 1]!);
-    }
-
-    rotations.set(joints[i]!.boneId, localAngle);
-  }
-
-  return rotations;
-}
-
 // ============================================================================
 // Scene Graph Integration
 // ============================================================================
+
+type Affine = { a: number; b: number; c: number; d: number; tx: number; ty: number };
+
+const IDENTITY: Affine = { a: 1, b: 0, c: 0, d: 1, tx: 0, ty: 0 };
+
+function multiply(m: Affine, n: Affine): Affine {
+  return {
+    a: m.a * n.a + m.c * n.b,
+    b: m.b * n.a + m.d * n.b,
+    c: m.a * n.c + m.c * n.d,
+    d: m.b * n.c + m.d * n.d,
+    tx: m.a * n.tx + m.c * n.ty + m.tx,
+    ty: m.b * n.tx + m.d * n.ty + m.ty,
+  };
+}
+
+function apply(m: Affine, p: Vector2): Vector2 {
+  return { x: m.a * p.x + m.c * p.y + m.tx, y: m.b * p.x + m.d * p.y + m.ty };
+}
+
+/** A bone's local matrix with this rotation (as SceneGraph composes it: T·R·S·T(−anchor)). */
+function localMatrix(bone: BoneNode, rotation: number): Affine {
+  const { position, scale, anchor } = bone.transform;
+  const rad = rotation * (Math.PI / 180);
+  const cos = Math.cos(rad);
+  const sin = Math.sin(rad);
+  const a = cos * scale.x;
+  const b = sin * scale.x;
+  const c = -sin * scale.y;
+  const d = cos * scale.y;
+  return {
+    a,
+    b,
+    c,
+    d,
+    tx: position.x - (a * anchor.x + c * anchor.y),
+    ty: position.y - (b * anchor.x + d * anchor.y),
+  };
+}
+
+/** The chain's bones, root first, or [] when the end bone isn't under the root. */
+function chainBones(rootBoneId: string, endBoneId: string, sceneGraph: IKSceneGraph): BoneNode[] {
+  const chain: BoneNode[] = [];
+  let currentId: string | null = endBoneId;
+  while (currentId) {
+    const node = sceneGraph.getNode(currentId);
+    if (!node || node.type !== 'bone') break;
+    chain.unshift(node);
+    if (currentId === rootBoneId) break;
+    currentId = node.parent;
+  }
+  return chain.length > 0 && chain[0]!.id === rootBoneId ? chain : [];
+}
 
 /**
  * Extract IK joints from a bone chain in the scene graph.
@@ -377,66 +497,69 @@ function positionsToRotations(
  * @param rootBoneId - The root bone of the IK chain
  * @param endBoneId - The end effector bone
  * @param sceneGraph - Scene graph to read bone data from
+ * @param startRotations - Local rotations to pose the chain with first (the
+ *   pose before IK); bones not listed keep their current rotation
  */
 export function extractIKJoints(
   rootBoneId: string,
   endBoneId: string,
-  sceneGraph: IKSceneGraph
+  sceneGraph: IKSceneGraph,
+  startRotations?: Map<string, number>
 ): IKJoint[] {
-  // Walk from end effector to root, collecting bones
-  const chain: BoneNode[] = [];
-  let currentId: string | null = endBoneId;
+  const chain = chainBones(rootBoneId, endBoneId, sceneGraph);
+  if (chain.length === 0) return [];
 
-  while (currentId) {
-    const node = sceneGraph.getNode(currentId);
-    if (!node || node.type !== 'bone') break;
-    chain.unshift(node);
-    if (currentId === rootBoneId) break;
-    currentId = node.parent;
-  }
-
-  // Validate chain starts at root
-  if (chain.length === 0 || chain[0]!.id !== rootBoneId) {
-    return [];
-  }
-
-  // Build IKJoint array with world positions
-  const joints: IKJoint[] = chain.map((bone) => {
-    const wt = sceneGraph.getWorldTransform(bone.id);
-    return {
-      boneId: bone.id,
-      worldPos: { x: wt.tx, y: wt.ty },
-      boneLength: bone.length,
-      angleMin: bone.angleMin,
-      angleMax: bone.angleMax,
-    };
+  // The chain's world matrices in the starting pose: scale, mirroring and
+  // offset heads included
+  const rootParent = chain[0]!.parent;
+  let parentWorld: Affine = rootParent ? sceneGraph.getWorldTransform(rootParent) : IDENTITY;
+  const rootParentWorldRotation = Math.atan2(parentWorld.b, parentWorld.a) * (180 / Math.PI);
+  const posed = chain.map((bone) => {
+    const rotation = startRotations?.get(bone.id) ?? bone.transform.rotation;
+    const mirrored = parentWorld.a * parentWorld.d - parentWorld.b * parentWorld.c < 0;
+    const pivot = apply(parentWorld, bone.transform.position);
+    const world = multiply(parentWorld, localMatrix(bone, rotation));
+    parentWorld = world;
+    return { bone, rotation, mirrored, pivot, world };
   });
 
-  // World rotation of the chain root's parent (0 if none) so the root's local
-  // rotation is computed relative to it (the scene graph re-applies it on write).
-  const rootParent = chain[0]!.parent;
-  if (joints[0]) {
-    if (rootParent) {
-      const pwt = sceneGraph.getWorldTransform(rootParent);
-      joints[0].rootParentWorldRotation = Math.atan2(pwt.b, pwt.a) * (180 / Math.PI);
-    } else {
-      joints[0].rootParentWorldRotation = 0;
-    }
-  }
-
-  return joints;
+  return posed.map(({ bone, rotation, mirrored, pivot, world }, i) => {
+    const next = posed[i + 1]?.pivot ?? apply(world, { x: bone.length, y: 0 });
+    return {
+      boneId: bone.id,
+      worldPos: pivot,
+      boneLength: v2dist(pivot, next),
+      angleMin: bone.angleMin,
+      angleMax: bone.angleMax,
+      localRotation: rotation,
+      mirrored,
+      ...(i === 0 ? { rootParentWorldRotation } : {}),
+      ...(i === posed.length - 1 ? { tipWorld: next } : {}),
+    };
+  });
 }
 
 /**
- * Apply IK solve result to the scene graph.
- * Sets each bone's rotation (with FK constraint clamping via poseBone pattern).
+ * Apply IK solve result to the scene graph, root first. With solved
+ * positions, each bone is turned so that its next joint (or tip) lands on its
+ * solved position, through its parent's world matrix as it is then, so scale,
+ * mirroring and offset heads come out exact. Rotations are clamped to the
+ * bone's limits and kept to the turn nearest the bone's current rotation.
  */
 export function applyIKResult(result: IKSolveResult, sceneGraph: IKSceneGraph): void {
-  for (const [boneId, rotation] of result.rotations) {
+  const boneIds = [...result.rotations.keys()];
+  boneIds.forEach((boneId, i) => {
     const node = sceneGraph.getNode(boneId);
-    if (!node || node.type !== 'bone') continue;
-
+    if (!node || node.type !== 'bone') return;
     const bone = node;
+
+    let rotation = result.rotations.get(boneId)!;
+    const solvedNext = result.positions?.[i + 1];
+    if (solvedNext) {
+      const aimed = aimRotation(bone, boneIds[i + 1], solvedNext, sceneGraph);
+      if (aimed !== null) rotation = aimed;
+    }
+    rotation = bone.transform.rotation + normalizeAngle(rotation - bone.transform.rotation);
 
     // Apply constraint clamping
     let clamped = rotation;
@@ -449,7 +572,7 @@ export function applyIKResult(result: IKSolveResult, sceneGraph: IKSceneGraph): 
     // Skip the write when the pose is unchanged: evaluateIKChains runs every
     // frame in the render loop while any enabled chain exists, and updateNode
     // unconditionally invalidates the world transform and emits nodeChanged.
-    if (Math.abs(clamped - bone.transform.rotation) < 1e-4) continue;
+    if (Math.abs(clamped - bone.transform.rotation) < 1e-4) return;
 
     sceneGraph.updateNode(boneId, {
       transform: {
@@ -457,5 +580,36 @@ export function applyIKResult(result: IKSolveResult, sceneGraph: IKSceneGraph): 
         rotation: clamped,
       },
     });
-  }
+  });
+}
+
+/**
+ * The local rotation that puts a bone's next joint (the next bone's head, or
+ * its own tip) on `target`, given where its parent is now. Null if the parent
+ * frame is degenerate or the target is on the pivot.
+ */
+function aimRotation(
+  bone: BoneNode,
+  nextBoneId: string | undefined,
+  target: Vector2,
+  sceneGraph: IKSceneGraph
+): number | null {
+  const parent: Affine = bone.parent ? sceneGraph.getWorldTransform(bone.parent) : IDENTITY;
+  const det = parent.a * parent.d - parent.b * parent.c;
+  if (Math.abs(det) < 1e-12) return null;
+  const pivot = apply(parent, bone.transform.position);
+  const dx = target.x - pivot.x;
+  const dy = target.y - pivot.y;
+  if (dx * dx + dy * dy < 1e-12) return null;
+  // The direction in the parent's space
+  const px = (parent.d * dx - parent.c * dy) / det;
+  const py = (-parent.b * dx + parent.a * dy) / det;
+
+  const nextNode = nextBoneId ? sceneGraph.getNode(nextBoneId) : undefined;
+  const next = nextNode ? nextNode.transform.position : { x: bone.length, y: 0 };
+  const { scale, anchor } = bone.transform;
+  const wx = scale.x * (next.x - anchor.x);
+  const wy = scale.y * (next.y - anchor.y);
+  if (wx * wx + wy * wy < 1e-12) return null;
+  return (Math.atan2(py, px) - Math.atan2(wy, wx)) * (180 / Math.PI);
 }
