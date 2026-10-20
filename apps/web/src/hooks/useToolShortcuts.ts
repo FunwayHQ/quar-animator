@@ -11,14 +11,23 @@ import type { ToolType } from '@quar/types';
 // Shortcut Mapping
 // ============================================================================
 
+// Every key the toolbar and menus show, so each works wherever focus is
+// (not only on the canvas, whose tool manager knows them too)
 const TOOL_SHORTCUTS: Record<string, ToolType> = {
   v: 'selection',
+  a: 'direct-selection',
+  h: 'hand',
   r: 'rectangle',
   o: 'ellipse',
+  u: 'polygon',
+  s: 'star',
   p: 'pen',
+  b: 'brush',
+  e: 'eraser',
   t: 'text',
-  j: 'bone',
   f: 'artboard',
+  j: 'bone',
+  w: 'weight-paint',
 };
 
 // ============================================================================
@@ -28,11 +37,9 @@ const TOOL_SHORTCUTS: Record<string, ToolType> = {
 /**
  * Hook that listens for global keyboard shortcuts to switch tools
  *
- * Shortcuts:
- * - V: Selection tool
- * - R: Rectangle tool
- * - O: Ellipse tool
- * - P: Pen tool
+ * Shortcuts: V selection, A direct selection, H hand, R rectangle, O ellipse,
+ * U polygon, S star, P pen, B brush, E eraser, T text, F artboard, J bone,
+ * W weight paint
  *
  * Shortcuts are ignored when:
  * - Input or textarea is focused

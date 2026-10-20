@@ -266,6 +266,27 @@ describe('useToolShortcuts', () => {
   // Unrecognized Keys
   // ==========================================================================
 
+  describe('every tool key the toolbar shows', () => {
+    it.each([
+      ['a', 'direct-selection'],
+      ['h', 'hand'],
+      ['u', 'polygon'],
+      ['s', 'star'],
+      ['b', 'brush'],
+      ['e', 'eraser'],
+      ['t', 'text'],
+      ['j', 'bone'],
+      ['w', 'weight-paint'],
+    ] as const)('%s picks the %s tool, wherever focus is', (key, tool) => {
+      renderHook(() => useToolShortcuts());
+
+      // From the page, not the canvas (which has the tool manager's own keys)
+      dispatchKeyDown(key);
+
+      expect(useEditorStore.getState().activeTool).toBe(tool);
+    });
+  });
+
   describe('unrecognized keys', () => {
     it('should not change tool for unrecognized key', () => {
       renderHook(() => useToolShortcuts());
@@ -310,11 +331,12 @@ describe('getToolShortcut', () => {
     expect(getToolShortcut('artboard')).toBe('F');
   });
 
-  it('should return null for brush (no shortcut)', () => {
-    expect(getToolShortcut('brush')).toBeNull();
+  it('should return B for brush and E for eraser, as the toolbar shows', () => {
+    expect(getToolShortcut('brush')).toBe('B');
+    expect(getToolShortcut('eraser')).toBe('E');
   });
 
-  it('should return null for eraser (no shortcut)', () => {
-    expect(getToolShortcut('eraser')).toBeNull();
+  it('should return null for a tool without a key', () => {
+    expect(getToolShortcut('point-magnet')).toBeNull();
   });
 });

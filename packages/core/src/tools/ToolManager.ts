@@ -292,6 +292,7 @@ export class ToolManager {
       t: 'text',
       j: 'bone',
       f: 'artboard',
+      w: 'weight-paint',
     };
 
     return shortcuts[key.toLowerCase()] ?? null;
