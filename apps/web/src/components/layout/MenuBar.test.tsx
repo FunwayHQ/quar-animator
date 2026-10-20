@@ -363,6 +363,21 @@ describe('MenuBar', () => {
       expect(screen.queryByTestId('help-menu-dropdown')).toBeNull();
     });
 
+    it('lists several restored tutorials readably', async () => {
+      restoreMocks.restoreTutorials.mockResolvedValue([
+        { id: 'a', name: 'Tutorial 4 · Text' },
+        { id: 'b', name: 'Tutorial 5 · Rigging' },
+        { id: 'c', name: 'Tutorial 7 · Timing' },
+      ]);
+      render(<MenuBar />);
+
+      await restore();
+
+      expect(restoreMocks.success).toHaveBeenCalledWith(
+        'Restored “Tutorial 4 · Text”, “Tutorial 5 · Rigging” and “Tutorial 7 · Timing”. Open them from File > Open Project...'
+      );
+    });
+
     it('says so when every tutorial is still there', async () => {
       restoreMocks.restoreTutorials.mockResolvedValue([]);
       render(<MenuBar />);

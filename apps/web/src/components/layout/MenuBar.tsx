@@ -416,7 +416,10 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
       if (restored.length === 0) {
         toast.info('All the tutorials are already in your projects');
       } else {
-        const names = restored.map((tutorial) => `“${tutorial.name}”`).join(' and ');
+        const quoted = restored.map((tutorial) => `“${tutorial.name}”`);
+        // “A”, “A and B”, “A, B and C”
+        const names =
+          quoted.length > 1 ? `${quoted.slice(0, -1).join(', ')} and ${quoted.at(-1)}` : quoted[0];
         toast.success(
           `Restored ${names}. Open ${restored.length > 1 ? 'them' : 'it'} from File > Open Project...`
         );
