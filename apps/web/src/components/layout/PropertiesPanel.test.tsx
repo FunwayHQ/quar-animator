@@ -1652,4 +1652,50 @@ describe('PropertiesPanel', () => {
       });
     });
   });
+
+  describe('document background', () => {
+    it('is set from the panel when nothing is selected', () => {
+      const sg = renderWithSceneGraph();
+      act(() => useEditorStore.getState().resetProject());
+
+      const input = screen.getByTestId('document-background-input');
+      expect(input).toHaveValue('#1A1A1A');
+
+      act(() => {
+        fireEvent.change(input, { target: { value: '#F0ECE4' } });
+      });
+      const state = useEditorStore.getState();
+      expect(state.documentBackground).toEqual({ r: 240, g: 236, b: 228, a: 1 });
+      expect(state.isDirty).toBe(true);
+      expect(screen.getByTestId('document-background-swatch')).toHaveAttribute(
+        'aria-label',
+        'Background color: #F0ECE4'
+      );
+
+      // A selection shows its own properties instead
+      act(() => {
+        sg.addNode(createTestRect('rect1', 'Rectangle 1'));
+        useEditorStore.getState().setSelection(['rect1']);
+      });
+      expect(screen.queryByTestId('document-section')).toBeNull();
+    });
+
+    it('ignores a half-typed color', () => {
+      renderWithSceneGraph();
+      act(() => useEditorStore.getState().resetProject());
+
+      act(() => {
+        fireEvent.change(screen.getByTestId('document-background-input'), {
+          target: { value: '#F0E' },
+        });
+      });
+      expect(useEditorStore.getState().documentBackground).toEqual({ r: 26, g: 26, b: 26, a: 1 });
+    });
+
+    it('starts each new project on the default color', () => {
+      act(() => useEditorStore.getState().setDocumentBackground({ r: 1, g: 2, b: 3, a: 1 }));
+      act(() => useEditorStore.getState().resetProject());
+      expect(useEditorStore.getState().documentBackground).toEqual({ r: 26, g: 26, b: 26, a: 1 });
+    });
+  });
 });

@@ -4,8 +4,13 @@
  * artboard, or when it has none, the area its artwork covers.
  */
 
-import type { Rect, SymbolDefinition, IKChain, SmartBoneAction } from '@quar/types';
-import { SceneGraph, SelectionManager, parseQuarFile } from '@quar/core';
+import type { Color, Rect, SymbolDefinition, IKChain, SmartBoneAction } from '@quar/types';
+import {
+  DEFAULT_DOCUMENT_BACKGROUND,
+  SceneGraph,
+  SelectionManager,
+  parseQuarFile,
+} from '@quar/core';
 import { createTimeline } from '@quar/animation';
 import { createFrameRenderer } from '@quar/export';
 import { deserializeProject } from './projectSerializer';
@@ -29,7 +34,10 @@ export interface ThumbnailRegion {
 
 export interface ProjectThumbnail {
   kind: ThumbnailKind;
+  /** Transparent where nothing is drawn. */
   png: Blob;
+  /** The document background, which loose artwork is shown on. */
+  background: Color;
 }
 
 // ============================================================================
@@ -136,6 +144,7 @@ export interface ThumbnailScene {
   ikChains: IKChain[];
   smartBoneActions: SmartBoneAction[];
   frameRate: number;
+  background: Color;
 }
 
 /**
@@ -166,6 +175,7 @@ export function pickThumbnailScene(project: ProjectData): ThumbnailScene | null 
         ikChains: state.ikChains ?? [],
         smartBoneActions: state.smartBoneActions ?? [],
         frameRate: state.frameRate ?? 30,
+        background: state.documentBackground ?? DEFAULT_DOCUMENT_BACKGROUND,
       };
     }
   }
@@ -216,7 +226,7 @@ export async function renderProjectThumbnail(
       0
     );
     if (!png) throw new Error('Could not encode the thumbnail');
-    return { kind: region.kind, png };
+    return { kind: region.kind, png, background: scene.background };
   } finally {
     renderer.dispose();
   }

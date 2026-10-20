@@ -10,9 +10,11 @@ import {
   importSvg,
   createGroupNode,
   keepTextInPlace,
+  gridColorsFor,
+  toGlColor,
 } from '@quar/core';
 import type { SceneGraphEvent } from '@quar/core';
-import type { Node, Vector2 } from '@quar/types';
+import type { Color, Node, Vector2 } from '@quar/types';
 import {
   evaluateIKChains,
   evaluateSmartBones,
@@ -566,6 +568,8 @@ export function Canvas({
         minorDivisions: 5,
       });
       gridRef.current = grid;
+      // The background the grid's colors were last matched to
+      let gridBackground: Color | null = null;
 
       // Initialize shape renderer (let: rebuilt on WebGL context restore)
       let shapeRenderer = new ShapeRenderer(renderer);
@@ -607,7 +611,13 @@ export function Canvas({
           return;
         }
 
-        renderer.clear();
+        // The document background, with a grid that reads on it
+        const { documentBackground } = useEditorStore.getState();
+        if (documentBackground !== gridBackground) {
+          grid.setConfig(gridColorsFor(documentBackground));
+          gridBackground = documentBackground;
+        }
+        renderer.clear(toGlColor(documentBackground));
 
         const viewProjectionMatrix = camera.getViewProjectionMatrix();
         const visibleBounds = camera.getVisibleBounds();
@@ -883,6 +893,7 @@ export function Canvas({
       renderer.setContextRestoredHandler(() => {
         grid = new Grid(renderer, { majorSpacing: 100, minorDivisions: 5 });
         gridRef.current = grid;
+        gridBackground = null;
         shapeRenderer = new ShapeRenderer(renderer);
         shapeRendererRef.current = shapeRenderer;
         onionSkinRenderer = new OnionSkinRenderer(shapeRenderer);

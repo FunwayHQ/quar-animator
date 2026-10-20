@@ -65,6 +65,7 @@ import {
 } from './reparent';
 import {
   DEFAULT_ONION_SKIN_SETTINGS,
+  DEFAULT_DOCUMENT_BACKGROUND,
   createGroupNode,
   booleanOperation,
   convertTextToPathGroup as convertTextToPathGroupFn,
@@ -789,6 +790,10 @@ export interface EditorStore extends SequenceActions {
   showRulers: boolean;
   setShowRulers: (show: boolean) => void;
   toggleShowRulers: () => void;
+
+  // Document background: the canvas color behind everything
+  documentBackground: Color;
+  setDocumentBackground: (color: Color) => void;
 
   // Guides
   guides: Guide[];
@@ -2702,6 +2707,10 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   setShowRulers: (show: boolean) => set({ showRulers: show }),
   toggleShowRulers: () => set((state) => ({ showRulers: !state.showRulers })),
 
+  // Document background
+  documentBackground: { ...DEFAULT_DOCUMENT_BACKGROUND },
+  setDocumentBackground: (color: Color) => set({ documentBackground: { ...color }, isDirty: true }),
+
   // Guides
   guides: [],
   showGuides: true,
@@ -3533,6 +3542,7 @@ function createHistoryActions(
         editingSymbolPrevState: null,
         symbols: [],
         guides: [],
+        documentBackground: { ...DEFAULT_DOCUMENT_BACKGROUND },
         ikChains: [],
         smartBoneActions: [],
         smartBoneRecordingActionId: null,

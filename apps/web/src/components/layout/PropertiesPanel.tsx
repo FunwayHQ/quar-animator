@@ -438,6 +438,69 @@ function isBooleanGroup(node: Node): boolean {
 // PropertiesPanel Component
 // ============================================================================
 
+/** With nothing selected: the document's own settings, its background. */
+function DocumentProperties() {
+  const background = useEditorStore((s) => s.documentBackground);
+  const setBackground = useEditorStore((s) => s.setDocumentBackground);
+  const swatchRef = useRef<HTMLDivElement>(null);
+  const [pickerAt, setPickerAt] = useState<{ x: number; y: number } | null>(null);
+  const hex = colorToHex(background);
+
+  const openPicker = () => {
+    const rect = swatchRef.current?.getBoundingClientRect();
+    if (rect) setPickerAt({ x: rect.left, y: rect.bottom + 4 });
+  };
+
+  return (
+    <div className={styles.section} data-testid="document-section">
+      <div className={styles.sectionHeader}>
+        <span className={styles.sectionTitle}>Document</span>
+      </div>
+      <div className={styles.propertyRow}>
+        <span className={styles.propertyLabel}>Background</span>
+        <div className={styles.propertyInputs}>
+          <div
+            ref={swatchRef}
+            className={styles.colorSwatch}
+            style={{ '--swatch-color': hex } as React.CSSProperties}
+            role="button"
+            tabIndex={0}
+            aria-label={`Background color: ${hex}`}
+            onClick={openPicker}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                openPicker();
+              }
+            }}
+            data-testid="document-background-swatch"
+          />
+          <input
+            type="text"
+            className={styles.input}
+            value={hex}
+            aria-label="Background color"
+            data-testid="document-background-input"
+            onChange={(e) => {
+              const color = hexToColor(e.target.value);
+              if (color) setBackground(color);
+            }}
+          />
+          {pickerAt && (
+            <ColorPicker
+              color={background}
+              onChange={(color) => setBackground({ ...color, a: 1 })}
+              anchorX={pickerAt.x}
+              anchorY={pickerAt.y}
+              onClose={() => setPickerAt(null)}
+            />
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function PropertiesPanel() {
   const sceneGraph = useSceneGraph();
   const selectedNodeIds = useEditorStore((state) => state.selectedNodeIds);
@@ -1376,9 +1439,12 @@ export function PropertiesPanel() {
         <div className={styles.content}>
           {booleanOpsSection}
           {!multiShapeSelected && (
-            <div className={styles.emptyState} data-testid="properties-empty">
-              Select an object to view properties
-            </div>
+            <>
+              {selectedNodeIds.size === 0 && <DocumentProperties />}
+              <div className={styles.emptyState} data-testid="properties-empty">
+                Select an object to view properties
+              </div>
+            </>
           )}
         </div>
       </div>

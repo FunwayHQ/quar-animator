@@ -1,6 +1,7 @@
 /** Render an animation range and encode it as an animated GIF. */
 
 import type { Color } from '@quar/types';
+import { DEFAULT_DOCUMENT_BACKGROUND } from '@quar/core';
 import type { FrameRenderContext } from './frameRenderer';
 import { createFrameRenderer, getFrameCount, getFrameRenderRoots } from './frameRenderer';
 import { sampleTimeline, type PlaybackTiming } from './exportUtils';
@@ -11,6 +12,8 @@ export interface GifExportOptions extends PlaybackTiming {
   width: number;
   height: number;
   transparent?: boolean;
+  /** What shows where nothing is drawn, unless transparent: the document background. */
+  backgroundColor?: Color;
   /**
    * 0 (best quality) … 100 (smallest file). Fewer palette colors, and pixels
    * whose color barely changed from what's on screen are left as they are.
@@ -133,7 +136,9 @@ export async function exportGif(
   const { colors, tolerance } = gifCompressionSettings(options.compression);
 
   const { GIFEncoder, quantize, applyPalette } = await import('gifenc');
-  const backgroundColor: Color | null = transparent ? null : { r: 26, g: 26, b: 26, a: 1 };
+  const backgroundColor: Color | null = transparent
+    ? null
+    : { ...(options.backgroundColor ?? DEFAULT_DOCUMENT_BACKGROUND), a: 1 };
   const renderer = createFrameRenderer({ width, height, backgroundColor });
   const sampleCanvas = document.createElement('canvas');
   sampleCanvas.width = width;

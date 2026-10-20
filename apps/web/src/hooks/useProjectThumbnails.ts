@@ -5,6 +5,7 @@
  */
 
 import { useEffect, useRef, useState } from 'react';
+import type { Color } from '@quar/types';
 import { loadProject } from '../services/projectStorage';
 import type { ProjectListItem } from '../services/projectStorage';
 import { renderProjectThumbnail } from '../services/projectThumbnail';
@@ -19,6 +20,8 @@ export interface ThumbnailView {
   /** Object URL of the PNG. */
   url: string;
   kind: ThumbnailKind;
+  /** The document background loose artwork is shown on. */
+  background?: Color;
 }
 
 interface ShownThumbnail {
@@ -59,8 +62,14 @@ export function useProjectThumbnails(projects: ProjectListItem[]): Record<string
     }
     setViews(toViews(shown));
 
-    const show = (id: string, updatedAt: string, png: Blob | null, kind: ThumbnailKind | null) => {
-      const view = png && kind ? { url: URL.createObjectURL(png), kind } : null;
+    const show = (
+      id: string,
+      updatedAt: string,
+      png: Blob | null,
+      kind: ThumbnailKind | null,
+      background?: Color
+    ) => {
+      const view = png && kind ? { url: URL.createObjectURL(png), kind, background } : null;
       shown.set(id, { updatedAt, view });
       setViews(toViews(shown));
     };
@@ -76,7 +85,7 @@ export function useProjectThumbnails(projects: ProjectListItem[]): Record<string
         if (cancelled) return;
         if (cached?.updatedAt === project.updatedAt) {
           const png = cached.png ? new Blob([cached.png], { type: 'image/png' }) : null;
-          show(project.id, project.updatedAt, png, cached.kind);
+          show(project.id, project.updatedAt, png, cached.kind, cached.background);
         } else {
           stale.push(project);
         }
@@ -94,10 +103,17 @@ export function useProjectThumbnails(projects: ProjectListItem[]): Record<string
             updatedAt: stored.updatedAt,
             png: thumbnail ? await thumbnail.png.arrayBuffer() : null,
             kind: thumbnail?.kind ?? null,
+            ...(thumbnail && { background: thumbnail.background }),
           }).catch(() => undefined);
           if (cancelled) return;
           if (stored.updatedAt === project.updatedAt) {
-            show(project.id, project.updatedAt, thumbnail?.png ?? null, thumbnail?.kind ?? null);
+            show(
+              project.id,
+              project.updatedAt,
+              thumbnail?.png ?? null,
+              thumbnail?.kind ?? null,
+              thumbnail?.background
+            );
           }
         } catch {
           // Unreadable or undrawable: the card keeps its placeholder, and the

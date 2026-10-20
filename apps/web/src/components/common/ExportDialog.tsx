@@ -295,6 +295,8 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
   const timeline = useEditorStore((s) => s.timeline);
   const timelineDuration = useEditorStore((s) => s.timelineDuration);
   const selectedNodeIds = useEditorStore((s) => s.selectedNodeIds);
+  // What shows behind the art in formats without transparency (or with it off)
+  const documentBackground = useEditorStore((s) => s.documentBackground);
   const selectedArtboard = getSelectedArtboardScope(sceneGraph, selectedNodeIds);
 
   const [exiting, setExiting] = useState(false);
@@ -450,6 +452,7 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
             fps: state.gifFps,
             speed: state.gifSpeed,
             transparent: state.gifTransparent,
+            backgroundColor: documentBackground,
             compression: state.gifCompression,
           },
           (progress) => setState((s) => ({ ...s, progress })),
@@ -471,6 +474,7 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
             endFrame: state.endFrame,
             fps: state.mp4Fps,
             speed: state.mp4Speed,
+            backgroundColor: documentBackground,
           },
           (progress) => setState((s) => ({ ...s, progress })),
           () => cancelledRef.current
@@ -498,7 +502,7 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
           width: state.width,
           height: state.height,
           multiplier: state.pngMultiplier,
-          backgroundColor: state.pngTransparent ? null : { r: 26, g: 26, b: 26, a: 1 },
+          backgroundColor: state.pngTransparent ? null : documentBackground,
         });
 
         // Pre-load image textures so they render correctly
@@ -672,7 +676,16 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
         error: err instanceof Error ? err.message : 'Export failed. Please try again.',
       }));
     }
-  }, [state, sceneGraph, timeline, timelineDuration, selectedArtboard, lottieExportScene, close]);
+  }, [
+    state,
+    sceneGraph,
+    timeline,
+    timelineDuration,
+    selectedArtboard,
+    lottieExportScene,
+    documentBackground,
+    close,
+  ]);
 
   return createPortal(
     <div

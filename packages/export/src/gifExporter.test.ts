@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { exportGif, gifCompressionSettings, gifTiming } from './gifExporter';
 
+const createFrameRendererMock = vi.hoisted(() => vi.fn());
 const rendererMock = vi.hoisted(() => ({
   preloadTextures: vi.fn(async () => {}),
   renderFrame: vi.fn((_: unknown, frame: number) => ({ frame }) as unknown as HTMLCanvasElement),
@@ -8,7 +9,10 @@ const rendererMock = vi.hoisted(() => ({
 }));
 
 vi.mock('./frameRenderer', () => ({
-  createFrameRenderer: () => rendererMock,
+  createFrameRenderer: (options: unknown) => {
+    createFrameRendererMock(options);
+    return rendererMock;
+  },
   getFrameCount: (start: number, end: number) => Math.max(0, end - start + 1),
   getFrameRenderRoots: (ctx: { sceneGraph: { getRootNodes: () => unknown[] } }) =>
     ctx.sceneGraph.getRootNodes(),
@@ -62,6 +66,33 @@ describe('exportGif', () => {
     expect(progress.mock.calls.some(([item]) => item.phase === 'encoding')).toBe(true);
     expect(progress.mock.calls.at(-1)?.[0]).toMatchObject({ phase: 'finalizing', percentage: 100 });
     expect(rendererMock.dispose).toHaveBeenCalledOnce();
+  });
+
+  it('flattens frames onto the document background, unless transparent', async () => {
+    const ctx = {
+      sceneGraph: { getRootNodes: () => [] } as never,
+      timeline: { tracks: [] } as never,
+    };
+    const timing = { width: 2, height: 1, frameRate: 12, startFrame: 0, endFrame: 0 };
+
+    await exportGif(ctx, { ...timing, backgroundColor: { r: 250, g: 240, b: 230, a: 0.5 } });
+    expect(createFrameRendererMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({ backgroundColor: { r: 250, g: 240, b: 230, a: 1 } })
+    );
+
+    await exportGif(ctx, timing);
+    expect(createFrameRendererMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({ backgroundColor: { r: 26, g: 26, b: 26, a: 1 } })
+    );
+
+    await exportGif(ctx, {
+      ...timing,
+      transparent: true,
+      backgroundColor: { r: 1, g: 2, b: 3, a: 1 },
+    });
+    expect(createFrameRendererMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({ backgroundColor: null })
+    );
   });
 
   it('releases the renderer if the export is canceled during palette preparation', async () => {

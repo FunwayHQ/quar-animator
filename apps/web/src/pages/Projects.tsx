@@ -56,6 +56,14 @@ function CardThumbnail({
       className={`${styles.thumbnail} ${
         thumbnail.kind === 'artboard' ? styles.thumbnailArtboard : styles.thumbnailContent
       }`}
+      // Loose artwork sits on the document's background, as in the editor
+      style={
+        thumbnail.kind === 'content' && thumbnail.background
+          ? {
+              background: `rgb(${thumbnail.background.r}, ${thumbnail.background.g}, ${thumbnail.background.b})`,
+            }
+          : undefined
+      }
       data-testid={`thumbnail-${projectId}`}
     />
   );

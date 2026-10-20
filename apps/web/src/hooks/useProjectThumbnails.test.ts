@@ -33,6 +33,9 @@ function pngBlob(): Blob {
   });
 }
 
+const paper = { r: 240, g: 236, b: 228, a: 1 };
+const ink = { r: 10, g: 20, b: 40, a: 1 };
+
 const projects: ProjectListItem[] = [
   { id: 'cached', name: 'Cached', updatedAt: 't1' },
   { id: 'stale', name: 'Stale', updatedAt: 't2' },
@@ -54,22 +57,34 @@ describe('useProjectThumbnails', () => {
     mocks.getCachedThumbnail.mockImplementation((id: string) =>
       Promise.resolve(
         id === 'cached'
-          ? { id, updatedAt: 't1', png: new ArrayBuffer(4), kind: 'artboard' }
+          ? { id, updatedAt: 't1', png: new ArrayBuffer(4), kind: 'artboard', background: paper }
           : { id, updatedAt: 'older', png: new ArrayBuffer(4), kind: 'content' }
       )
     );
     mocks.loadProject.mockImplementation((id: string) =>
       Promise.resolve({ id, name: id, updatedAt: 't2', data: 'project-data' })
     );
-    mocks.renderProjectThumbnail.mockResolvedValue({ kind: 'content', png: pngBlob() });
+    mocks.renderProjectThumbnail.mockResolvedValue({
+      kind: 'content',
+      png: pngBlob(),
+      background: ink,
+    });
   });
 
   it('shows cached thumbnails and renders only the stale ones, caching the result', async () => {
     const { result } = renderHook(() => useProjectThumbnails(projects));
 
     await waitFor(() => expect(Object.keys(result.current)).toHaveLength(2));
-    expect(result.current.cached).toEqual({ url: expect.any(String), kind: 'artboard' });
-    expect(result.current.stale).toEqual({ url: expect.any(String), kind: 'content' });
+    expect(result.current.cached).toEqual({
+      url: expect.any(String),
+      kind: 'artboard',
+      background: paper,
+    });
+    expect(result.current.stale).toEqual({
+      url: expect.any(String),
+      kind: 'content',
+      background: ink,
+    });
     expect(mocks.loadProject).toHaveBeenCalledTimes(1);
     expect(mocks.loadProject).toHaveBeenCalledWith('stale');
     expect(mocks.renderProjectThumbnail).toHaveBeenCalledWith('project-data');
@@ -78,6 +93,7 @@ describe('useProjectThumbnails', () => {
       updatedAt: 't2',
       png: expect.any(ArrayBuffer),
       kind: 'content',
+      background: ink,
     });
     expect(mocks.pruneThumbnails).toHaveBeenCalled();
     expect([...mocks.pruneThumbnails.mock.calls[0]![0]]).toEqual(['cached', 'stale']);

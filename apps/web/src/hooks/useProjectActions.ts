@@ -84,6 +84,7 @@ export function useProjectActions(options: UseProjectActionsOptions = {}): Proje
       autoKeyframe: state.autoKeyframe,
       onionSkin: state.onionSkin,
       guides: state.guides,
+      documentBackground: state.documentBackground,
       vitruvianControllers: state.vitruvianControllers,
       dynamicChains: state.dynamicChains,
       globalWind: state.globalWind,

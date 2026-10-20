@@ -4,6 +4,7 @@
 
 export * from './WebGLRenderer';
 export * from './Grid';
+export * from './documentBackground';
 export * from './ShapeRenderer';
 export * from './OnionSkinRenderer';
 export * from './FramebufferManager';

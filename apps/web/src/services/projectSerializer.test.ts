@@ -1196,4 +1196,40 @@ describe('ProjectSerializer', () => {
       expect(newSg.getNode('r1')).toBeDefined();
     });
   });
+
+  describe('document background', () => {
+    const state = (documentBackground?: { r: number; g: number; b: number; a: number }) =>
+      ({
+        timeline: createTimeline({ duration: 60, frameRate: 30 }),
+        timelineDuration: 60,
+        frameRate: 30,
+        autoKeyframe: false,
+        onionSkin: { ...DEFAULT_ONION_SKIN_SETTINGS },
+        ...(documentBackground && { documentBackground }),
+      }) as EditorStateSnapshot;
+
+    it('saves the background and reads it back, through the binary format too', () => {
+      const color = { r: 240, g: 236, b: 228, a: 1 };
+      const binary = serializeProjectToBinary('Paper', new SceneGraph(), state(color));
+      let applied: Record<string, unknown> = {};
+      deserializeProjectFromBinary(binary, new SceneGraph(), (s) => {
+        applied = s;
+      });
+
+      expect(applied.documentBackground).toEqual(color);
+    });
+
+    it('gives files without one the default canvas color', () => {
+      const data = JSON.parse(
+        JSON.stringify(serializeProject('Old', new SceneGraph(), state()))
+      ) as ProjectData;
+      expect('backgroundColor' in data.settings).toBe(false);
+
+      let applied: Record<string, unknown> = {};
+      deserializeProject(data, new SceneGraph(), (s) => {
+        applied = s;
+      });
+      expect(applied.documentBackground).toEqual({ r: 26, g: 26, b: 26, a: 1 });
+    });
+  });
 });

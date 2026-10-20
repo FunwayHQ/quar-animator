@@ -15,13 +15,20 @@ import type {
   IKChain,
   SmartBoneAction,
   SkinData,
+  Color,
 } from '@quar/types';
 import type { OnionSkinSettings } from '@quar/core';
 import type { SceneGraph } from '@quar/core';
 import { createAnimationSequence, createTimeline } from '@quar/animation';
 import { DEFAULT_WIND_SETTINGS } from '@quar/rigging';
 import type { AnimationSequence } from '@quar/animation';
-import { DEFAULT_ONION_SKIN_SETTINGS, writeQuarFile, parseQuarFile, mat3 } from '@quar/core';
+import {
+  DEFAULT_DOCUMENT_BACKGROUND,
+  DEFAULT_ONION_SKIN_SETTINGS,
+  writeQuarFile,
+  parseQuarFile,
+  mat3,
+} from '@quar/core';
 import type { Guide, PageData } from '../stores/editorStore';
 
 // ============================================================================
@@ -45,6 +52,8 @@ export interface ProjectDataV1 {
     autoKeyframe: boolean;
     onionSkin: OnionSkinSettings;
     guides?: Guide[];
+    /** The document (canvas) background; absent in older files, which get the default. */
+    backgroundColor?: Color;
   };
   rigging?: {
     vitruvianControllers?: VitruvianController[];
@@ -82,6 +91,8 @@ export interface ProjectDataV2 {
     autoKeyframe: boolean;
     onionSkin: OnionSkinSettings;
     guides?: Guide[];
+    /** The document (canvas) background; absent in older files, which get the default. */
+    backgroundColor?: Color;
   };
   rigging?: {
     vitruvianControllers?: VitruvianController[];
@@ -109,6 +120,7 @@ export interface EditorStateSnapshot {
   autoKeyframe: boolean;
   onionSkin: OnionSkinSettings;
   guides?: Guide[];
+  documentBackground?: Color;
   vitruvianControllers?: VitruvianController[];
   dynamicChains?: DynamicChain[];
   globalWind?: WindSettings;
@@ -191,6 +203,9 @@ export function serializeProject(
       autoKeyframe: editorState.autoKeyframe,
       onionSkin: { ...editorState.onionSkin },
       guides: editorState.guides ? [...editorState.guides] : [],
+      ...(editorState.documentBackground && {
+        backgroundColor: { ...editorState.documentBackground },
+      }),
     },
     rigging: {
       vitruvianControllers: editorState.vitruvianControllers
@@ -472,6 +487,7 @@ export function deserializeProject(
     autoKeyframe: v2.settings.autoKeyframe,
     onionSkin: { ...DEFAULT_ONION_SKIN_SETTINGS, ...v2.settings.onionSkin },
     guides: v2.settings.guides ?? [],
+    documentBackground: { ...DEFAULT_DOCUMENT_BACKGROUND, ...v2.settings.backgroundColor },
     currentFrame: 0,
     vitruvianControllers: v2.rigging?.vitruvianControllers ?? [],
     dynamicChains: v2.rigging?.dynamicChains ?? [],

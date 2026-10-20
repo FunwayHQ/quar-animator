@@ -200,7 +200,7 @@
   animation: fadeIn 0.2s var(--easing-default) both;
 }
 
-/* Loose artwork on the editor's canvas color, which is dark in both themes */
+/* Loose artwork on the document background (the default canvas color unless set) */
 .thumbnailContent {
   position: absolute;
   inset: 0;

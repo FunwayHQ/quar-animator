@@ -22,8 +22,13 @@ const mocks = vi.hoisted(() => ({
   },
 }));
 
+const createFrameRendererMock = vi.hoisted(() => vi.fn());
+
 vi.mock('./frameRenderer', () => ({
-  createFrameRenderer: () => mocks.renderer,
+  createFrameRenderer: (options: unknown) => {
+    createFrameRendererMock(options);
+    return mocks.renderer;
+  },
   getFrameCount: (start: number, end: number) => Math.max(0, end - start + 1),
   getFrameRenderRoots: (ctx: { sceneGraph: { getRootNodes: () => unknown[] } }) =>
     ctx.sceneGraph.getRootNodes(),
@@ -114,6 +119,25 @@ describe('exportMp4', () => {
     expect(mocks.output?.state).toBe('finalized');
     expect(progress.mock.calls.at(-1)?.[0]).toMatchObject({ phase: 'finalizing', percentage: 100 });
     expect(mocks.renderer.dispose).toHaveBeenCalledOnce();
+  });
+
+  it('sets the video on the document background, opaque', async () => {
+    mocks.canEncodeVideo.mockResolvedValue(true);
+    const ctx = {
+      sceneGraph: { getRootNodes: () => [] } as never,
+      timeline: { tracks: [] } as never,
+    };
+    const timing = { width: 64, height: 48, frameRate: 24, startFrame: 0, endFrame: 0 };
+
+    await exportMp4(ctx, { ...timing, backgroundColor: { r: 255, g: 255, b: 255, a: 0.2 } });
+    expect(createFrameRendererMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({ backgroundColor: { r: 255, g: 255, b: 255, a: 1 } })
+    );
+
+    await exportMp4(ctx, timing);
+    expect(createFrameRendererMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({ backgroundColor: { r: 26, g: 26, b: 26, a: 1 } })
+    );
   });
 
   it('encodes at the chosen frame rate and playback speed', async () => {

@@ -1,6 +1,7 @@
 /** Render an animation range and encode it as an H.264 MP4 video. */
 
 import type { Color } from '@quar/types';
+import { DEFAULT_DOCUMENT_BACKGROUND } from '@quar/core';
 import type { FrameRenderContext } from './frameRenderer';
 import { createFrameRenderer, getFrameCount, getFrameRenderRoots } from './frameRenderer';
 import { sampleTimeline, type PlaybackTiming } from './exportUtils';
@@ -10,6 +11,8 @@ import type { ExportProgress } from './index';
 export interface Mp4ExportOptions extends PlaybackTiming {
   width: number;
   height: number;
+  /** What shows where nothing is drawn: the document background. */
+  backgroundColor?: Color;
 }
 
 export async function exportMp4(
@@ -39,7 +42,11 @@ export async function exportMp4(
     );
   }
 
-  const backgroundColor: Color = { r: 26, g: 26, b: 26, a: 1 };
+  // Video has no transparency: the frames sit on the document background
+  const backgroundColor: Color = {
+    ...(options.backgroundColor ?? DEFAULT_DOCUMENT_BACKGROUND),
+    a: 1,
+  };
   const renderer = createFrameRenderer({ width, height, backgroundColor });
   let output: InstanceType<typeof Output> | null = null;
   let source: InstanceType<typeof CanvasSource> | null = null;

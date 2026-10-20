@@ -4,6 +4,7 @@
  * the projects database needs no upgrade and the cache can be cleared freely.
  */
 
+import type { Color } from '@quar/types';
 import type { ThumbnailKind } from './projectThumbnail';
 
 const DB_NAME = 'quar-animator-thumbnails';
@@ -22,6 +23,8 @@ export interface CachedThumbnail {
   /** PNG bytes, or null for a project with nothing to show. */
   png: ArrayBuffer | null;
   kind: ThumbnailKind | null;
+  /** The document background (absent from thumbnails cached before it existed). */
+  background?: Color;
 }
 
 // ============================================================================

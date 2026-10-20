@@ -272,7 +272,7 @@ describe('renderProjectThumbnail', () => {
 
     const result = await renderProjectThumbnail(data);
 
-    expect(result).toEqual({ kind: 'artboard', png });
+    expect(result).toEqual({ kind: 'artboard', png, background: { r: 26, g: 26, b: 26, a: 1 } });
     expect(mocks.loadBundledFonts).toHaveBeenCalled();
     expect(mocks.createFrameRenderer).toHaveBeenCalledWith({
       width: 467,
@@ -287,6 +287,25 @@ describe('renderProjectThumbnail', () => {
     expect(ctx.rig).toMatchObject({ ikChains, smartBoneActions: [], frameRate: 24 });
     expect(mocks.preloadTextures.mock.calls[0]![0].map((n: Node) => n.id)).toEqual(['board']);
     expect(mocks.dispose).toHaveBeenCalledOnce();
+  });
+
+  it('carries the document background, for loose artwork to be shown on', async () => {
+    const data = JSON.stringify(
+      project([{ id: 'p1', nodes: [rect('a', 0, 0, 10, 10)] }], 'p1', {
+        settings: {
+          timelineDuration: 60,
+          frameRate: 24,
+          autoKeyframe: false,
+          onionSkin: undefined as never,
+          backgroundColor: { r: 240, g: 236, b: 228, a: 1 },
+        },
+      })
+    );
+
+    await expect(renderProjectThumbnail(data)).resolves.toMatchObject({
+      kind: 'content',
+      background: { r: 240, g: 236, b: 228, a: 1 },
+    });
   });
 
   it('resolves null without rendering when there is nothing to show', async () => {

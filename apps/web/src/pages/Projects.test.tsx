@@ -100,7 +100,7 @@ describe('Projects', () => {
   it('shows each project thumbnail, and the placeholder until it has one', async () => {
     mockThumbnails.mockReturnValue({
       proj_1: { url: 'blob:walk', kind: 'artboard' },
-      proj_2: { url: 'blob:ball', kind: 'content' },
+      proj_2: { url: 'blob:ball', kind: 'content', background: { r: 240, g: 236, b: 228, a: 1 } },
     });
     render(<Projects />);
 
@@ -110,6 +110,8 @@ describe('Projects', () => {
     const ball = screen.getByTestId('thumbnail-proj_2');
     expect(ball).toHaveAttribute('src', 'blob:ball');
     expect(ball.className).toMatch(/thumbnailContent/);
+    // Loose artwork shows on the project's document background
+    expect(ball.style.background).toBe('rgb(240, 236, 228)');
     expect(screen.queryByTestId('thumbnail-proj_3')).not.toBeInTheDocument();
     expect(screen.getByTestId('project-card-proj_3').querySelector('svg')).not.toBeNull();
     // The thumbnails are asked for the listed projects
