@@ -145,7 +145,7 @@ function textBoxesPage(ids: TutorialNodes): TutorialPage {
     ids,
     '1 · Text boxes',
     'Three kinds of text box',
-    'Press T and click to type a line that grows as you type: auto width. Drag a box instead and the text wraps inside it: fixed size. Enter finishes, Shift+Enter starts a new line, and double-clicking text edits it again.\n\n' +
+    'Press T and click to type a line that grows as you type: auto width. Drag a box instead and the text wraps inside it: fixed size. Enter starts a new line; Escape or clicking away finishes, and double-clicking text edits it again.\n\n' +
       'Drag a side handle to give a line a width to wrap at (auto height), or switch in Properties, under Resize: Auto width, Auto height, Fixed size. Resizing never stretches the letters.'
   );
   return {

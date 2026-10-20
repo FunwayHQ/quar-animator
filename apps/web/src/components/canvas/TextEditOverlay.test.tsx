@@ -3,8 +3,8 @@
  */
 
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '../../test/utils';
-import { Camera, createDefaultTransform, getTextLocalBounds } from '@quar/core';
+import { fireEvent, render, screen } from '../../test/utils';
+import { Camera, createDefaultTransform, getTextLocalBounds, mat3 } from '@quar/core';
 import type { TextNode } from '@quar/types';
 import { TextEditOverlay } from './TextEditOverlay';
 
@@ -34,13 +34,25 @@ function textNode(overrides: Partial<TextNode> = {}): TextNode {
   };
 }
 
-function renderOverlay(node: TextNode, zoom = 1) {
+function renderOverlay(
+  node: TextNode,
+  zoom = 1,
+  worldTransform?: Parameters<typeof TextEditOverlay>[0]['worldTransform']
+) {
   const camera = new Camera();
   camera.setViewport(800, 600);
   camera.zoom = zoom;
-  render(<TextEditOverlay node={node} camera={camera} onCommit={vi.fn()} onCancel={vi.fn()} />);
-  const textarea = screen.getByPlaceholderText('Type something...');
-  return { camera, textarea, overlay: textarea.parentElement! };
+  const onCommit = vi.fn();
+  render(
+    <TextEditOverlay
+      node={node}
+      camera={camera}
+      worldTransform={worldTransform}
+      onCommit={onCommit}
+    />
+  );
+  const textarea = screen.getByPlaceholderText('Type something...') as HTMLTextAreaElement;
+  return { camera, textarea, overlay: textarea.parentElement!, onCommit };
 }
 
 describe('TextEditOverlay', () => {
@@ -87,5 +99,60 @@ describe('TextEditOverlay', () => {
     );
 
     expect(textarea.style.color).toBe('rgba(91, 141, 239, 0.5)');
+  });
+
+  it('turns with rotated text, around its top-left corner', () => {
+    const node = textNode({
+      transform: { ...createDefaultTransform(), position: { x: 0, y: 0 }, rotation: 30 },
+    });
+    const { camera, overlay } = renderOverlay(node);
+
+    const box = getTextLocalBounds(node);
+    const corner = mat3.transformPoint(mat3.compose({ x: 0, y: 0 }, 30, { x: 1, y: 1 }), {
+      x: box.x,
+      y: box.y + box.height,
+    });
+    const expected = camera.worldToScreen(corner);
+    expect(parseFloat(overlay.style.left)).toBeCloseTo(expected.x);
+    expect(parseFloat(overlay.style.top)).toBeCloseTo(expected.y);
+    const turn = /rotate\((-?[\d.e-]+)deg\)/.exec(overlay.style.transform);
+    expect(Number(turn?.[1])).toBeCloseTo(-30);
+  });
+
+  it('sits where the text is drawn inside a moved parent', () => {
+    const node = textNode();
+    const parent = mat3.compose({ x: 300, y: -100 }, 0, { x: 2, y: 2 });
+    const world = mat3.multiply(parent, mat3.compose(node.transform.position, 0, { x: 1, y: 1 }));
+    const { camera, overlay } = renderOverlay(node, 1, world);
+
+    const box = getTextLocalBounds(node);
+    const expected = camera.worldToScreen(
+      mat3.transformPoint(world, { x: box.x, y: box.y + box.height })
+    );
+    expect(parseFloat(overlay.style.left)).toBeCloseTo(expected.x);
+    expect(parseFloat(overlay.style.top)).toBeCloseTo(expected.y);
+    expect(overlay.style.transform).toBe('rotate(0deg) scale(2, 2)');
+  });
+
+  it('starts a new line on Enter, as in Figma, and finishes on Escape', () => {
+    const { textarea, onCommit } = renderOverlay(textNode({ content: 'Hello' }));
+
+    const enter = fireEvent.keyDown(textarea, { key: 'Enter' });
+    expect(enter).toBe(true); // not prevented: the textarea adds the line
+    expect(onCommit).not.toHaveBeenCalled();
+
+    textarea.value = 'Hello\nthere';
+    fireEvent.keyDown(textarea, { key: 'Escape' });
+    expect(onCommit).toHaveBeenCalledWith('Hello\nthere');
+  });
+
+  it('finishes on Ctrl/Cmd+Enter, and only once', () => {
+    const { textarea, onCommit } = renderOverlay(textNode({ content: 'Hi' }));
+
+    fireEvent.keyDown(textarea, { key: 'Enter', metaKey: true });
+    fireEvent.keyDown(textarea, { key: 'Escape' });
+
+    expect(onCommit).toHaveBeenCalledOnce();
+    expect(onCommit).toHaveBeenCalledWith('Hi');
   });
 });

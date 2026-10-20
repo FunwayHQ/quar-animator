@@ -4,31 +4,38 @@
  */
 
 import { useEffect, useRef, useCallback } from 'react';
-import type { TextNode } from '@quar/types';
+import type { Matrix3, TextNode } from '@quar/types';
 import type { Camera } from '@quar/core';
-import { getTextBox, getTextLocalBounds } from '@quar/core';
+import { getTextBox, getTextLocalBounds, mat3 } from '@quar/core';
 import styles from './TextEditOverlay.module.css';
 
 export interface TextEditOverlayProps {
   node: TextNode;
   camera: Camera;
+  /**
+   * The text's full world transform (its parents' included). Without it the
+   * text's own transform is taken as the world one.
+   */
+  worldTransform?: Matrix3;
+  /** Editing ends, keeping what was typed (an empty new text is removed). */
   onCommit: (content: string) => void;
-  onCancel: () => void;
 }
 
-export function TextEditOverlay({ node, camera, onCommit, onCancel }: TextEditOverlayProps) {
+export function TextEditOverlay({ node, camera, worldTransform, onCommit }: TextEditOverlayProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const zoom = camera.zoom;
 
-  // The visual top-left of the text box in world coordinates (Y-up, so the
-  // top is the box's highest y), offset for the anchor as the canvas draws it
+  // The top-left of the text box (Y-up, so the top is its highest y, offset
+  // for the anchor as the canvas draws it) placed by the text's world
+  // transform, which turns and scales the box with the text
   const bounds = getTextLocalBounds(node);
-  const worldTopLeft = {
-    x: node.transform.position.x + bounds.x * node.transform.scale.x,
-    y: node.transform.position.y + (bounds.y + bounds.height) * node.transform.scale.y,
-  };
+  const { position, rotation, scale } = node.transform;
+  const world = worldTransform ?? mat3.compose(position, rotation, scale);
+  const worldTopLeft = mat3.transformPoint(world, { x: bounds.x, y: bounds.y + bounds.height });
   const screenPos = camera.worldToScreen(worldTopLeft);
+  const worldRotation = (Math.atan2(world.b, world.a) * 180) / Math.PI;
+  const worldScale = { x: Math.hypot(world.a, world.b), y: Math.hypot(world.c, world.d) };
 
   // Auto width text grows sideways and never wraps; text with a box wraps at
   // its width, as the canvas will set it
@@ -62,20 +69,26 @@ export function TextEditOverlay({ node, camera, onCommit, onCancel }: TextEditOv
     return () => clearTimeout(timer);
   }, [node.content]);
 
+  // Editing ends once, whichever way: Escape, Ctrl/Cmd+Enter or clicking away
+  const doneRef = useRef(false);
+  const finish = useCallback(() => {
+    if (doneRef.current) return;
+    doneRef.current = true;
+    onCommit(textareaRef.current?.value ?? node.content);
+  }, [onCommit, node.content]);
+
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
       // Stop propagation to prevent tool shortcuts while editing
       e.stopPropagation();
 
-      if (e.key === 'Enter' && !e.shiftKey) {
+      // As in Figma: Enter starts a new line; Escape finishes, keeping the text
+      if (e.key === 'Escape' || (e.key === 'Enter' && (e.metaKey || e.ctrlKey))) {
         e.preventDefault();
-        onCommit(textareaRef.current?.value ?? node.content);
-      } else if (e.key === 'Escape') {
-        e.preventDefault();
-        onCancel();
+        finish();
       }
     },
-    [onCommit, onCancel, node.content]
+    [finish]
   );
 
   const handleBlur = useCallback(() => {
@@ -87,9 +100,9 @@ export function TextEditOverlay({ node, camera, onCommit, onCancel }: TextEditOv
       if (textareaRef.current && document.activeElement === textareaRef.current) {
         return; // textarea regained focus — don't close
       }
-      onCommit(textareaRef.current?.value ?? node.content);
+      finish();
     }, 50);
-  }, [onCommit, node.content]);
+  }, [finish]);
 
   // Auto-resize textarea to fit content
   const boxWidthPx = box ? box.width * zoom : undefined;
@@ -116,7 +129,8 @@ export function TextEditOverlay({ node, camera, onCommit, onCancel }: TextEditOv
         // Screen Y: camera.worldToScreen gives screen coords. QUAR Y-up means
         // higher Y values are visually higher, but screen Y goes down.
         top: screenPos.y,
-        transform: `scale(${node.transform.scale.x}, ${node.transform.scale.y})`,
+        // Screen Y runs down, so the text's counterclockwise turn is a negative CSS one
+        transform: `rotate(${-worldRotation}deg) scale(${worldScale.x}, ${worldScale.y})`,
         transformOrigin: 'top left',
       }}
     >

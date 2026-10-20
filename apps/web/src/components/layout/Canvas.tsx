@@ -2570,8 +2570,11 @@ export function Canvas({
             <TextEditOverlay
               node={textNode}
               camera={cameraRef.current}
+              worldTransform={sceneGraph.getWorldTransform(editingTextNodeId)}
               onCommit={(content: string) => {
-                if (content.trim() === '') {
+                if (content === textNode.content && content.trim() !== '') {
+                  // Nothing typed: no edit, no undo step
+                } else if (content.trim() === '') {
                   // Empty text — remove the node instead of keeping an invisible node
                   useEditorStore.getState().pushUndo(sceneGraph);
                   sceneGraph.removeNode(editingTextNodeId);
@@ -2587,17 +2590,6 @@ export function Canvas({
                       position: keepTextInPlace(textNode, edited),
                     },
                   });
-                }
-                setEditingTextNodeId(null);
-                useEditorStore.getState().setActiveTool('selection');
-              }}
-              onCancel={() => {
-                // If the node has no content (new node that was never edited), remove it
-                const n = sceneGraph.getNode(editingTextNodeId);
-                if (n && n.type === 'text' && !n.content) {
-                  useEditorStore.getState().pushUndo(sceneGraph);
-                  sceneGraph.removeNode(editingTextNodeId);
-                  useEditorStore.getState().setSelection([]);
                 }
                 setEditingTextNodeId(null);
                 useEditorStore.getState().setActiveTool('selection');
