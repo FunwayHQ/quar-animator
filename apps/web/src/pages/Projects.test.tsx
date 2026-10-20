@@ -50,6 +50,12 @@ vi.mock('../hooks/useProjectThumbnails', () => ({
   useProjectThumbnails: (projects: ProjectListItem[]) => mockThumbnails(projects),
 }));
 
+const mockSeedTutorials = vi.fn<[], Promise<string[]>>();
+
+vi.mock('../tutorials/seedTutorials', () => ({
+  seedTutorials: () => mockSeedTutorials(),
+}));
+
 vi.mock('../services/projectSerializer', () => ({
   uploadProjectFile: vi.fn(),
   ProjectFileCancelledError: class ProjectFileCancelledError extends Error {},
@@ -67,6 +73,7 @@ describe('Projects', () => {
     mockDeleteProject.mockResolvedValue(undefined);
     mockSaveProject.mockResolvedValue(undefined);
     mockThumbnails.mockReturnValue({});
+    mockSeedTutorials.mockResolvedValue([]);
   });
 
   it('should render the page logo and import button', async () => {
@@ -116,6 +123,29 @@ describe('Projects', () => {
     expect(screen.getByTestId('project-card-proj_3').querySelector('svg')).not.toBeNull();
     // The thumbnails are asked for the listed projects
     expect(mockThumbnails).toHaveBeenLastCalledWith(mockProjects);
+  });
+
+  it('adds the tutorials before listing the projects', async () => {
+    const order: string[] = [];
+    mockSeedTutorials.mockImplementation(() => {
+      order.push('seed');
+      return Promise.resolve(['tutorial-draw-and-animate']);
+    });
+    mockListProjects.mockImplementation(() => {
+      order.push('list');
+      return Promise.resolve(mockProjects);
+    });
+
+    render(<Projects />);
+
+    await screen.findByText('Walk Cycle');
+    expect(order).toEqual(['seed', 'list']);
+  });
+
+  it('still lists the projects when the tutorials cannot be added', async () => {
+    mockSeedTutorials.mockRejectedValue(new Error('quota'));
+    render(<Projects />);
+    expect(await screen.findByText('Walk Cycle')).toBeInTheDocument();
   });
 
   it('should render the New Project card when projects exist', async () => {

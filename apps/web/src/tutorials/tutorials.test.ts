@@ -1,0 +1,129 @@
+/**
+ * Tests for the tutorial projects: valid, loadable, and laid out on their pages
+ */
+
+import { describe, it, expect } from 'vitest';
+import type { Node, TextNode } from '@quar/types';
+import {
+  SceneGraph,
+  getTextLocalBounds,
+  getTextNodeLines,
+  parseQuarFile,
+  writeQuarFile,
+} from '@quar/core';
+import { deserializeProject, validateProjectData } from '../services/projectSerializer';
+import type { ProjectData, ProjectDataV2 } from '../services/projectSerializer';
+import { TUTORIALS } from './tutorials';
+import { PAGE_HEIGHT, PAGE_WIDTH } from './tutorialBuilder';
+
+const built = TUTORIALS.map((tutorial) => ({
+  tutorial,
+  data: tutorial.build('2026-10-20T00:00:00.000Z'),
+}));
+
+describe.each(built)('$tutorial.name', ({ tutorial, data }) => {
+  it('is a valid project that loads like a saved one', () => {
+    expect(validateProjectData(data)).toBe(true);
+    expect(data.name).toBe(tutorial.name);
+
+    const reloaded = parseQuarFile(writeQuarFile(data as unknown as Record<string, unknown>));
+    const sg = new SceneGraph();
+    let pages: unknown[] = [];
+    deserializeProject(reloaded as unknown as ProjectData, sg, (state) => {
+      pages = state.pages ?? [];
+    });
+    expect(pages).toHaveLength(data.pages.length);
+    expect(sg.getRootNodes().map((n) => n.type)).toEqual(['artboard']);
+  });
+
+  it('has one artboard a page, holding everything else', () => {
+    for (const page of data.pages) {
+      const nodes = page.sceneGraph.nodes;
+      const [board, ...rest] = nodes;
+      expect(board!.type).toBe('artboard');
+      expect(page.sceneGraph.rootNodeIds).toEqual([board!.id]);
+      expect(rest.every((node) => node.parent === board!.id)).toBe(true);
+      expect(board!.children).toEqual(rest.map((node) => node.id));
+    }
+  });
+
+  it('writes only characters the bundled Inter (Latin) can draw', () => {
+    for (const page of data.pages) {
+      for (const node of page.sceneGraph.nodes) {
+        if (node.type !== 'text') continue;
+        // Basic Latin, Latin-1, and the curly quotes and dashes of General Punctuation
+        expect(node.content).toMatch(
+          /^[\n\u0020-\u00FF\u2013\u2014\u2018\u2019\u201C\u201D\u2026]*$/
+        );
+      }
+    }
+  });
+
+  it('gives every node an id of its own', () => {
+    const ids = data.pages.flatMap((page) => page.sceneGraph.nodes.map((node) => node.id));
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it('animates only nodes on the same page, within the timeline', () => {
+    for (const page of data.pages) {
+      const ids = new Set(page.sceneGraph.nodes.map((node) => node.id));
+      for (const track of page.timeline.tracks) {
+        expect(ids.has(track.nodeId)).toBe(true);
+        for (const keyframe of track.keyframes) {
+          expect(keyframe.time).toBeGreaterThanOrEqual(0);
+          expect(keyframe.time).toBeLessThan((data as ProjectDataV2).settings.timelineDuration);
+        }
+      }
+      for (const step of page.animationSequence?.steps ?? []) {
+        expect(ids.has(step.nodeId)).toBe(true);
+      }
+    }
+  });
+
+  it('keeps its text inside the page, in boxes the text fits', () => {
+    const halfW = PAGE_WIDTH / 2;
+    const halfH = PAGE_HEIGHT / 2;
+    for (const page of data.pages) {
+      for (const node of page.sceneGraph.nodes.filter(
+        (n): n is Node & TextNode => n.type === 'text'
+      )) {
+        const box = getTextLocalBounds(node);
+        const { x, y } = node.transform.position;
+        expect(x + box.x).toBeGreaterThanOrEqual(-halfW);
+        expect(x + box.x + box.width).toBeLessThanOrEqual(halfW);
+        expect(y + box.y).toBeGreaterThanOrEqual(-halfH);
+        expect(y + box.y + box.height).toBeLessThanOrEqual(halfH);
+        // Measured generously (no font here: 0.6 em a character), the lines fit
+        const lines = getTextNodeLines(node).length;
+        expect(lines * node.fontSize * node.lineHeight).toBeLessThanOrEqual(node.boxHeight! + 1);
+      }
+    }
+  });
+});
+
+describe('the tutorial catalog', () => {
+  it('has stable, distinct ids', () => {
+    const ids = TUTORIALS.map((tutorial) => tutorial.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(ids.every((id) => id.startsWith('tutorial-'))).toBe(true);
+  });
+
+  it('builds the same nodes every time', () => {
+    const [first] = TUTORIALS;
+    const ids = (data: ProjectDataV2) =>
+      data.pages.flatMap((page) => page.sceneGraph.nodes.map((node) => node.id));
+    expect(ids(first!.build('a'))).toEqual(ids(first!.build('b')));
+  });
+
+  it('builds the sequence page as Animation Sequence steps compiled into keyframes', () => {
+    const sequencePage = built[1]!.data.pages.find((page) => page.animationSequence?.steps.length);
+    expect(sequencePage).toBeDefined();
+    const steps = sequencePage!.animationSequence!.steps;
+    const tagged = sequencePage!.timeline.tracks.flatMap((track) =>
+      track.keyframes.filter((keyframe) => keyframe.sequenceStepId !== undefined)
+    );
+    expect(new Set(tagged.map((keyframe) => keyframe.sequenceStepId))).toEqual(
+      new Set(steps.map((step) => step.id))
+    );
+  });
+});

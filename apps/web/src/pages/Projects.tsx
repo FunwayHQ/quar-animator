@@ -18,6 +18,7 @@ import { useEditorStore } from '../stores/editorStore';
 import { toast } from '../components/common/Toast';
 import { setUiTheme, useUiTheme } from '../hooks/useUiTheme';
 import { useProjectThumbnails } from '../hooks/useProjectThumbnails';
+import { seedTutorials } from '../tutorials/seedTutorials';
 import type { ThumbnailView } from '../hooks/useProjectThumbnails';
 import type { ProjectListItem } from '../services/projectStorage';
 import styles from './Projects.module.css';
@@ -89,6 +90,8 @@ export function Projects() {
     let cancelled = false;
     async function load() {
       try {
+        // First visit (or new tutorials since): add them to the projects
+        await seedTutorials().catch(() => undefined);
         const list = await listProjects();
         if (!cancelled) {
           setProjects(list);
