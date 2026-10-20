@@ -15,6 +15,8 @@ const mocks = vi.hoisted(() => ({
   mat3Create: vi.fn((...values: number[]) => values),
   mat3Multiply: vi.fn(() => new Float32Array([1, 0, 0, 1, 0, 0])),
   setDrawRigHelpers: vi.fn(),
+  setSymbolDefinitions: vi.fn(),
+  loseContext: vi.fn(),
   evaluateIKChains: vi.fn(),
   evaluateDynamicChainsAtFrame: vi.fn(),
   evaluateSmartBones: vi.fn(() => new Map()),
@@ -34,6 +36,7 @@ vi.mock('@quar/core', () => ({
     render = mocks.render;
     preloadTextures = mocks.preloadTextures;
     setDrawRigHelpers = mocks.setDrawRigHelpers;
+    setSymbolDefinitions = mocks.setSymbolDefinitions;
     dispose = mocks.shapeRendererDispose;
 
     constructor() {
@@ -76,6 +79,7 @@ describe('createFrameRenderer', () => {
       viewport: vi.fn(),
       clearColor: vi.fn(),
       clear: vi.fn(),
+      getExtension: vi.fn(() => ({ loseContext: mocks.loseContext })),
     };
     mocks.evaluateNodeAtFrame.mockReturnValue(new Map([['opacity', 0.25]]));
     mocks.applyAnimatedValues.mockImplementation((node: Record<string, unknown>) => ({
@@ -159,6 +163,18 @@ describe('createFrameRenderer', () => {
     expect(canvas.toBlob).toHaveBeenCalledWith(expect.any(Function), 'image/png');
     expect(mocks.shapeRendererDispose).toHaveBeenCalledOnce();
     expect(mocks.rendererDispose).toHaveBeenCalledOnce();
+    expect(mocks.gl.getExtension).toHaveBeenCalledWith('WEBGL_lose_context');
+    expect(mocks.loseContext).toHaveBeenCalledOnce();
+  });
+
+  it('hands symbol definitions to the shape renderer so instances draw', () => {
+    const symbol = { id: 'sym-1', name: 'Star', sceneGraphJSON: { nodes: [], rootNodeIds: [] } };
+    createFrameRenderer({ width: 10, height: 10, symbols: [symbol as never] });
+    expect(mocks.setSymbolDefinitions).toHaveBeenCalledWith(new Map([['sym-1', symbol]]));
+
+    mocks.setSymbolDefinitions.mockClear();
+    createFrameRenderer({ width: 10, height: 10 });
+    expect(mocks.setSymbolDefinitions).not.toHaveBeenCalled();
   });
 
   it('maps the selected artboard bounds to the output and renders only that subtree', () => {

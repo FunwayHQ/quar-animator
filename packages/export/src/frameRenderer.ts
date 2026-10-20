@@ -13,6 +13,7 @@ import type {
   DynamicChainState,
   IKChain,
   SmartBoneAction,
+  SymbolDefinition,
   WindSettings,
 } from '@quar/types';
 import type { SceneGraph } from '@quar/core';
@@ -39,6 +40,8 @@ export interface FrameRenderOptions {
   height: number;
   multiplier?: number;
   backgroundColor?: Color | null; // null = transparent
+  /** Definitions symbol instances are drawn from. */
+  symbols?: SymbolDefinition[];
 }
 
 /** The rig evaluated on top of the keyframes, in the editor's order. */
@@ -83,7 +86,7 @@ export interface FrameRendererHandle {
  * Allocates an offscreen WebGL canvas once and reuses it for every frame.
  */
 export function createFrameRenderer(options: FrameRenderOptions): FrameRendererHandle {
-  const { width, height, multiplier = 1, backgroundColor = null } = options;
+  const { width, height, multiplier = 1, backgroundColor = null, symbols } = options;
 
   const pixelW = Math.ceil(width * multiplier);
   const pixelH = Math.ceil(height * multiplier);
@@ -101,6 +104,9 @@ export function createFrameRenderer(options: FrameRenderOptions): FrameRendererH
   const shapeRenderer = new ShapeRenderer(renderer);
   // Bones are rig helpers, not artwork
   shapeRenderer.setDrawRigHelpers(false);
+  if (symbols && symbols.length > 0) {
+    shapeRenderer.setSymbolDefinitions(new Map(symbols.map((s) => [s.id, s])));
+  }
 
   // Physics state carries from one frame to the next; it restarts whenever a
   // pass goes back in time (GIF renders every frame twice), so every pass of
@@ -229,6 +235,9 @@ export function createFrameRenderer(options: FrameRenderOptions): FrameRendererH
   function dispose(): void {
     shapeRenderer.dispose();
     renderer.dispose();
+    // The canvas is ours alone: hand its context back now rather than at
+    // garbage collection, since browsers keep only a few alive at once
+    gl.getExtension('WEBGL_lose_context')?.loseContext();
   }
 
   async function preloadTextures(nodes: Node[], sceneGraph: SceneGraph): Promise<void> {

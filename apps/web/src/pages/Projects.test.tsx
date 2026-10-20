@@ -10,6 +10,7 @@ import { parseQuarFile, writeQuarFile } from '@quar/core';
 import { uploadProjectFile } from '../services/projectSerializer';
 import type { ProjectData } from '../services/projectSerializer';
 import { setUiTheme } from '../hooks/useUiTheme';
+import type { ThumbnailView } from '../hooks/useProjectThumbnails';
 
 // ============================================================================
 // Mocks
@@ -43,6 +44,12 @@ vi.mock('../services/projectStorage', () => ({
   saveProject: (...args: unknown[]) => mockSaveProject(...args),
 }));
 
+const mockThumbnails = vi.fn<[ProjectListItem[]], Record<string, ThumbnailView>>();
+
+vi.mock('../hooks/useProjectThumbnails', () => ({
+  useProjectThumbnails: (projects: ProjectListItem[]) => mockThumbnails(projects),
+}));
+
 vi.mock('../services/projectSerializer', () => ({
   uploadProjectFile: vi.fn(),
   ProjectFileCancelledError: class ProjectFileCancelledError extends Error {},
@@ -59,6 +66,7 @@ describe('Projects', () => {
     mockListProjects.mockResolvedValue(mockProjects);
     mockDeleteProject.mockResolvedValue(undefined);
     mockSaveProject.mockResolvedValue(undefined);
+    mockThumbnails.mockReturnValue({});
   });
 
   it('should render the page logo and import button', async () => {
@@ -87,6 +95,25 @@ describe('Projects', () => {
     });
     expect(screen.getByText('Bouncing Ball')).toBeInTheDocument();
     expect(screen.getByText('Character Idle')).toBeInTheDocument();
+  });
+
+  it('shows each project thumbnail, and the placeholder until it has one', async () => {
+    mockThumbnails.mockReturnValue({
+      proj_1: { url: 'blob:walk', kind: 'artboard' },
+      proj_2: { url: 'blob:ball', kind: 'content' },
+    });
+    render(<Projects />);
+
+    const walk = await screen.findByTestId('thumbnail-proj_1');
+    expect(walk).toHaveAttribute('src', 'blob:walk');
+    expect(walk.className).toMatch(/thumbnailArtboard/);
+    const ball = screen.getByTestId('thumbnail-proj_2');
+    expect(ball).toHaveAttribute('src', 'blob:ball');
+    expect(ball.className).toMatch(/thumbnailContent/);
+    expect(screen.queryByTestId('thumbnail-proj_3')).not.toBeInTheDocument();
+    expect(screen.getByTestId('project-card-proj_3').querySelector('svg')).not.toBeNull();
+    // The thumbnails are asked for the listed projects
+    expect(mockThumbnails).toHaveBeenLastCalledWith(mockProjects);
   });
 
   it('should render the New Project card when projects exist', async () => {

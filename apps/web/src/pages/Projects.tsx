@@ -17,6 +17,8 @@ import { ProjectFileCancelledError, uploadProjectFile } from '../services/projec
 import { useEditorStore } from '../stores/editorStore';
 import { toast } from '../components/common/Toast';
 import { setUiTheme, useUiTheme } from '../hooks/useUiTheme';
+import { useProjectThumbnails } from '../hooks/useProjectThumbnails';
+import type { ThumbnailView } from '../hooks/useProjectThumbnails';
 import type { ProjectListItem } from '../services/projectStorage';
 import styles from './Projects.module.css';
 
@@ -37,6 +39,28 @@ function formatDate(dateStr: string): string {
   }
 }
 
+/** A project's picture, or the placeholder until it has one. */
+function CardThumbnail({
+  projectId,
+  thumbnail,
+}: {
+  projectId: string;
+  thumbnail: ThumbnailView | undefined;
+}) {
+  if (!thumbnail) return <Film size={32} />;
+  return (
+    <img
+      src={thumbnail.url}
+      alt=""
+      draggable={false}
+      className={`${styles.thumbnail} ${
+        thumbnail.kind === 'artboard' ? styles.thumbnailArtboard : styles.thumbnailContent
+      }`}
+      data-testid={`thumbnail-${projectId}`}
+    />
+  );
+}
+
 // ============================================================================
 // Component
 // ============================================================================
@@ -50,6 +74,7 @@ export function Projects() {
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
   const renameInputRef = useRef<HTMLInputElement>(null);
+  const thumbnails = useProjectThumbnails(projects);
 
   // Fetch project list on mount
   useEffect(() => {
@@ -257,7 +282,7 @@ export function Projects() {
                   data-testid={`project-card-${project.id}`}
                 >
                   <div className={styles.cardThumbnail}>
-                    <Film size={32} />
+                    <CardThumbnail projectId={project.id} thumbnail={thumbnails[project.id]} />
                   </div>
                   <div className={styles.cardInfo}>
                     <div className={styles.cardMeta}>
