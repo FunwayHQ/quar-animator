@@ -163,6 +163,7 @@ beforeEach(() => {
     projectId: null,
     projectName: 'Untitled Project',
     isDirty: false,
+    isExporting: false,
     projectCreatedAt: null,
   });
 });
@@ -464,6 +465,29 @@ describe('useProjectActions', () => {
       });
 
       expect(list).toEqual(projectList);
+    });
+  });
+
+  describe('auto-save', () => {
+    it('waits while an export runs, then saves', async () => {
+      vi.useFakeTimers();
+      try {
+        Object.assign(mockEditorState, { projectId: 'proj_1', isDirty: true, isExporting: true });
+        renderProjectActions();
+
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(30_000);
+        });
+        expect(mockSave).not.toHaveBeenCalled();
+
+        mockEditorState.isExporting = false;
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(30_000);
+        });
+        expect(mockSave).toHaveBeenCalledOnce();
+      } finally {
+        vi.useRealTimers();
+      }
     });
   });
 });

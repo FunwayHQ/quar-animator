@@ -420,6 +420,8 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
 
     cancelledRef.current = false;
     setState((s) => ({ ...s, exporting: true, progress: null, cancelled: false }));
+    // Auto-save pauses, and the frames the export poses aren't edits
+    useEditorStore.getState().setExporting(true);
 
     try {
       if (state.tab === 'lottie') {
@@ -677,6 +679,8 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
         progress: null,
         error: err instanceof Error ? err.message : 'Export failed. Please try again.',
       }));
+    } finally {
+      useEditorStore.getState().setExporting(false);
     }
   }, [
     state,

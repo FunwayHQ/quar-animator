@@ -473,6 +473,13 @@ export interface EditorStore extends SequenceActions {
   setIsDirty: (dirty: boolean) => void;
   setProjectCreatedAt: (date: string | null) => void;
   markDirty: () => void;
+  /**
+   * An export is running. It draws each frame by posing the scene and putting
+   * it back, which is no edit: the project isn't marked dirty meanwhile, and
+   * auto-save waits until it's done.
+   */
+  isExporting: boolean;
+  setExporting: (exporting: boolean) => void;
 
   // Tool state
   activeTool: ToolType;
@@ -925,6 +932,8 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   setIsDirty: (dirty: boolean) => set({ isDirty: dirty }),
   setProjectCreatedAt: (date: string | null) => set({ projectCreatedAt: date }),
   markDirty: () => set({ isDirty: true }),
+  isExporting: false,
+  setExporting: (exporting: boolean) => set({ isExporting: exporting }),
 
   // Tool state
   activeTool: 'selection',

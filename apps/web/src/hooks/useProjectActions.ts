@@ -434,8 +434,15 @@ export function useProjectActions(options: UseProjectActionsOptions = {}): Proje
   const manualSavingRef = useRef(false);
   useEffect(() => {
     autoSaveTimerRef.current = setInterval(() => {
-      const { isDirty, projectId } = useEditorStore.getState();
-      if (isDirty && projectId && !autoSavingRef.current && !manualSavingRef.current) {
+      const { isDirty, projectId, isExporting } = useEditorStore.getState();
+      // Waits while an export runs, so saving doesn't slow it (or interrupt it)
+      if (
+        isDirty &&
+        projectId &&
+        !isExporting &&
+        !autoSavingRef.current &&
+        !manualSavingRef.current
+      ) {
         autoSavingRef.current = true;
         saveProject()
           .catch(() => {

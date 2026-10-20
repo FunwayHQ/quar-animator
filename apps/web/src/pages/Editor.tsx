@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Toolbar } from '../components/layout/Toolbar';
 import { Canvas } from '../components/layout/Canvas';
@@ -19,27 +19,17 @@ import { useProjectShortcuts } from '../hooks/useProjectShortcuts';
 import { useUndoShortcuts } from '../hooks/useUndoShortcuts';
 import { useEditorStore } from '../stores/editorStore';
 import { useSceneGraph } from '../contexts/SceneGraphContext';
+import { useDirtyTracking } from '../hooks/useDirtyTracking';
 import styles from './Editor.module.css';
 
 function EditorInner() {
   const playback = usePlayback();
   useTimelineShortcuts(playback);
 
-  // Mark project dirty when scene graph changes
-  /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return */
   const sceneGraph = useSceneGraph();
   useUndoShortcuts(sceneGraph);
-  useEffect(() => {
-    const markDirty = () => useEditorStore.getState().markDirty();
-    const unsubs = [
-      sceneGraph.on('nodeAdded', markDirty),
-      sceneGraph.on('nodeChanged', markDirty),
-      sceneGraph.on('nodeRemoved', markDirty),
-      sceneGraph.on('nodeMoved', markDirty),
-    ];
-    return () => unsubs.forEach((u) => u());
-  }, [sceneGraph]);
-  /* eslint-enable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return */
+  // Unsaved changes: any scene edit, but not an export posing frames
+  useDirtyTracking(sceneGraph);
 
   const [searchParams] = useSearchParams();
   const projectId = searchParams.get('project');

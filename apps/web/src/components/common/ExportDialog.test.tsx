@@ -19,6 +19,7 @@ const mockStore = {
     markers: [],
   },
   timelineDuration: 60,
+  setExporting: vi.fn(),
   selectedNodeIds: new Set<string>(),
   ikChains: [{ id: 'arm-ik' }],
   dynamicChains: [],
@@ -281,6 +282,31 @@ describe('ExportDialog', () => {
       expect.any(Function)
     );
     expect(downloadBlob).toHaveBeenCalledWith(expect.any(Blob), 'animation.gif');
+  });
+
+  it('pauses auto-save for the export, and resumes it when done', async () => {
+    mockStore.setExporting.mockClear();
+    vi.mocked(exportGif).mockImplementationOnce(() => {
+      expect(mockStore.setExporting).toHaveBeenLastCalledWith(true);
+      return Promise.resolve(new Blob(['gif'], { type: 'image/gif' }));
+    });
+    render(<ExportDialogHost />);
+    act(() => showExportDialog('gif'));
+    fireEvent.click(screen.getByTestId('export-dialog-export'));
+
+    await waitFor(() => expect(mockStore.setExporting).toHaveBeenLastCalledWith(false));
+    expect(mockStore.setExporting).toHaveBeenCalledTimes(2);
+  });
+
+  it('resumes auto-save when an export fails', async () => {
+    mockStore.setExporting.mockClear();
+    vi.mocked(exportGif).mockRejectedValueOnce(new Error('encoder broke'));
+    render(<ExportDialogHost />);
+    act(() => showExportDialog('gif'));
+    fireEvent.click(screen.getByTestId('export-dialog-export'));
+
+    await waitFor(() => expect(mockStore.setExporting).toHaveBeenLastCalledWith(false));
+    expect(mockStore.setExporting).toHaveBeenCalledWith(true);
   });
 
   it('limits frame exports to the selected artboard and starts at its dimensions', async () => {
