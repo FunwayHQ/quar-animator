@@ -3705,9 +3705,10 @@ export class ShapeRenderer {
     const placed = this.placedSkin(node, skinData);
 
     // Get fills/strokes from node
-    const fills: Fill[] = 'fills' in node ? (node as any).fills : [];
-    const strokes: Stroke[] = 'strokes' in node ? (node as any).strokes : [];
     const closed = 'closed' in node ? (node as any).closed : true;
+    // An open path has no fill, bound or not
+    const fills: Fill[] = closed && 'fills' in node ? (node as any).fills : [];
+    const strokes: Stroke[] = 'strokes' in node ? (node as any).strokes : [];
 
     // Collect current bone world transforms
     const boneWorldTransforms = this.collectBoneTransforms(skinData, sceneGraph);

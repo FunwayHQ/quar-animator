@@ -1291,6 +1291,44 @@ describe('ShapeRenderer', () => {
         );
       });
 
+      it('draws no fill for a bound open path', () => {
+        const openPath = {
+          ...createRectangleNode('open', 10, 10),
+          type: 'path',
+          closed: false,
+          strokes: [],
+          points: [
+            { position: { x: 0, y: 0 }, handleIn: null, handleOut: null, type: 'corner' },
+            { position: { x: 100, y: 0 }, handleIn: null, handleOut: null, type: 'corner' },
+            { position: { x: 100, y: 100 }, handleIn: null, handleOut: null, type: 'corner' },
+          ],
+        } as any;
+        sceneGraph.addNode(openPath);
+        sceneGraph.addNode({
+          ...createRectangleNode('bone', 0, 0),
+          type: 'bone',
+          length: 100,
+          boneColor: '#ff0000',
+        } as any);
+        const vpMatrix = mat3.identity();
+        shapeRenderer.render(sceneGraph, vpMatrix);
+        const count = shapeRenderer.getTessellatedVertices('open')!.length / 2;
+        sceneGraph.updateNode('open', {
+          skinData: {
+            vertices: Array.from({ length: count }, () => ({
+              influences: [{ boneId: 'bone', weight: 1 }],
+            })),
+            inverseBindMatrices: { bone: [1, 0, 0, 1, 0, 0] },
+            meshBindMatrix: [1, 0, 0, 1, 0, 0],
+            vertexCount: count,
+          },
+        } as any);
+        shapeRenderer.setDrawRigHelpers(false);
+        vi.clearAllMocks();
+        shapeRenderer.render(sceneGraph, vpMatrix);
+        expect(gl.drawElements).not.toHaveBeenCalled();
+      });
+
       it('binds a compound path by its tessellation', () => {
         const path = {
           ...createRectangleNode('compound', 10, 10),
