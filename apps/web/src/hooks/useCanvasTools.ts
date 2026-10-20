@@ -18,7 +18,7 @@ import {
 } from '@quar/core';
 import type { TransformType } from '@quar/core';
 import { findTrack } from '@quar/animation';
-import { compactMorphOffsets } from '@quar/rigging';
+import { compactMorphOffsets, getBoneVisibility } from '@quar/rigging';
 import type { MorphVertexOffset } from '@quar/types';
 import type {
   CanvasPointerEvent,
@@ -449,6 +449,12 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
       },
       getDeformedVertices: (nodeId: string) => {
         return getDeformedVertices?.(nodeId) ?? null;
+      },
+      isHiddenOnCanvas: (nodeId: string) => {
+        const { vitruvianControllers } = useEditorStore.getState();
+        return (
+          vitruvianControllers.length > 0 && getBoneVisibility(vitruvianControllers).has(nodeId)
+        );
       },
       getVertexSkinMatrices: (nodeId: string) => {
         return getVertexSkinMatrices?.(nodeId) ?? null;

@@ -79,7 +79,8 @@ export function applySkinSnapshots(
   for (const snapshot of snapshots) {
     const node = sceneGraph.getNode(snapshot.nodeId);
     if (!node) continue;
-    sceneGraph.updateNode(snapshot.nodeId, { skinData: snapshot.skinData });
+    // A copy: edits to the layer's binding don't reach back into the snapshot
+    sceneGraph.updateNode(snapshot.nodeId, { skinData: structuredClone(snapshot.skinData) });
   }
 }
 

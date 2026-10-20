@@ -679,6 +679,8 @@ export class SelectionTool extends BaseTool {
       // Artboard backgrounds should not intercept clicks on their contents.
       // The frame itself is hit-tested separately at its top-left corner.
       if (node.locked || node.type === 'artboard') return; // clicks pass through locked nodes (F053)
+      // Nor can hidden bones be picked off the canvas
+      if (this.context.isHiddenOnCanvas?.(node.id)) return;
       if (this.isPointInNode(worldPoint, node)) {
         hitNode = node;
       }

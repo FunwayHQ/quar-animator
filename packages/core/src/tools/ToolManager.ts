@@ -48,6 +48,8 @@ export interface ToolManagerOptions {
   getTessellatedVertices?: (nodeId: string) => Float32Array | null;
   /** A bound node's vertices as its bones pose them, in world space */
   getDeformedVertices?: (nodeId: string) => Float32Array | null;
+  /** Layers not shown on the canvas for now (bones outside their Vitruvian group) */
+  isHiddenOnCanvas?: (nodeId: string) => boolean;
   /** A bound node's per-vertex skinning, bind-space offset → world ([a, b, c, d] each) */
   getVertexSkinMatrices?: (nodeId: string) => Float32Array | null;
   getGuides?: () => { id: string; axis: 'x' | 'y'; position: number }[];
@@ -261,6 +263,7 @@ export class ToolManager {
       convertShapeToPath: options.convertShapeToPath,
       getTessellatedVertices: options.getTessellatedVertices,
       getDeformedVertices: options.getDeformedVertices,
+      isHiddenOnCanvas: options.isHiddenOnCanvas,
       getVertexSkinMatrices: options.getVertexSkinMatrices,
       getGuides: options.getGuides,
       getSnapToGuides: options.getSnapToGuides,

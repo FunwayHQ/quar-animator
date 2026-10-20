@@ -12,6 +12,8 @@ const mockState: Record<string, unknown> = {
   addVitruvianGroup: vi.fn(),
   removeVitruvianGroup: vi.fn(),
   captureVitruvianSkinSnapshots: vi.fn(),
+  setVitruvianGroupBones: vi.fn(),
+  selectedNodeIds: new Set<string>(),
 };
 
 vi.mock('../../../stores/editorStore', () => ({
@@ -20,7 +22,7 @@ vi.mock('../../../stores/editorStore', () => ({
 
 vi.mock('../../../contexts/SceneGraphContext', () => ({
   useSceneGraph: () => ({
-    getNode: vi.fn(),
+    getNode: (id: string) => (id.startsWith('bone') ? { id, type: 'bone' } : undefined),
     getChildren: vi.fn(() => []),
   }),
 }));
@@ -80,6 +82,36 @@ describe('VitruvianPanel', () => {
     // "Group A" appears in both the active group selector and the group list
     expect(screen.getAllByText('Group A').length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText('1 bone')).toBeTruthy();
+  });
+
+  it('puts the selected bones in a group, or takes them out', () => {
+    mockState.vitruvianControllers = [
+      {
+        id: 'vc-1',
+        name: 'Ctrl',
+        enabled: true,
+        activeGroupId: 'g-1',
+        groups: [
+          { id: 'g-1', name: 'Front', boneIds: ['bone-1'], skinSnapshots: [] },
+          { id: 'g-2', name: 'Side', boneIds: [], skinSnapshots: [] },
+        ],
+      },
+    ];
+    mockState.selectedNodeIds = new Set(['bone-1', 'bone-2', 'mesh']);
+    render(<VitruvianPanel boneId="bone-1" />);
+    const [front, side] = screen.getAllByTestId('vitruvian-group-member') as HTMLInputElement[];
+    expect(front!.checked).toBe(true);
+    expect(side!.checked).toBe(false);
+
+    fireEvent.click(side!);
+    expect(mockState.setVitruvianGroupBones).toHaveBeenCalledWith(
+      expect.anything(),
+      'vc-1',
+      'g-2',
+      ['bone-1', 'bone-2'],
+      true
+    );
+    mockState.selectedNodeIds = new Set();
   });
 
   it('toggles controller enabled state', () => {

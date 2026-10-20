@@ -31,6 +31,13 @@ export function VitruvianPanel({ boneId }: VitruvianPanelProps) {
   const captureVitruvianSkinSnapshots = useEditorStore(
     (state) => state.captureVitruvianSkinSnapshots
   );
+  const setVitruvianGroupBones = useEditorStore((state) => state.setVitruvianGroupBones);
+  // The bones a group checkbox puts in or takes out: every bone selected
+  const selectedNodeIds = useEditorStore((state) => state.selectedNodeIds);
+  const selectedBoneIds = [...selectedNodeIds].filter(
+    (id) => sceneGraph.getNode(id)?.type === 'bone'
+  );
+  const boneIds = selectedBoneIds.includes(boneId) ? selectedBoneIds : [boneId];
 
   // Find controllers that reference this bone
   const relevantControllers = vitruvianControllers.filter((c: VitruvianController) =>
@@ -96,6 +103,9 @@ export function VitruvianPanel({ boneId }: VitruvianPanelProps) {
           onCaptureSkin={(groupId: string) =>
             captureVitruvianSkinSnapshots(controller.id, groupId, sceneGraph)
           }
+          onSetMembership={(groupId: string, member: boolean) =>
+            setVitruvianGroupBones(sceneGraph, controller.id, groupId, boneIds, member)
+          }
         />
       ))}
     </div>
@@ -115,10 +125,13 @@ interface VitruvianControllerItemProps {
   onAddGroup: () => void;
   onRemoveGroup: (groupId: string) => void;
   onCaptureSkin: (groupId: string) => void;
+  onSetMembership: (groupId: string, member: boolean) => void;
 }
 
 function VitruvianControllerItem({
   controller,
+  boneId,
+  onSetMembership,
   onRemove,
   onToggleEnabled,
   onSetActiveGroup,
@@ -205,6 +218,14 @@ function VitruvianControllerItem({
             style={isActive ? { background: 'rgba(168, 85, 247, 0.08)' } : undefined}
             data-testid="vitruvian-group"
           >
+            <input
+              type="checkbox"
+              checked={group.boneIds.includes(boneId)}
+              onChange={(e) => onSetMembership(group.id, e.target.checked)}
+              aria-label={`Selected bone in ${group.name}`}
+              title="The selected bone is in this group"
+              data-testid="vitruvian-group-member"
+            />
             <div className={styles.targetInfo}>
               <span className={styles.targetName}>{group.name}</span>
               <span className={styles.targetValue}>

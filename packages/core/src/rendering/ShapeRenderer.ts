@@ -580,6 +580,7 @@ export class ShapeRenderer {
   // Symbol definitions registry (set by Canvas component)
   private symbolDefinitions: Map<string, SymbolDefinition> = new Map();
   private drawRigHelpers = true;
+  private hiddenBones: Set<string> | null = null;
 
   constructor(renderer: WebGLRenderer) {
     this.renderer = renderer;
@@ -623,6 +624,11 @@ export class ShapeRenderer {
   /** Whether bones are drawn. Exports leave rig helpers out of the artwork. */
   setDrawRigHelpers(draw: boolean): void {
     this.drawRigHelpers = draw;
+  }
+
+  /** Bones not drawn: those outside their Vitruvian controller's active group. */
+  setHiddenBones(boneIds: Set<string> | null): void {
+    this.hiddenBones = boneIds;
   }
 
   private applyMaskUniforms(program: ShaderProgram): void {
@@ -3048,7 +3054,7 @@ export class ShapeRenderer {
    * Render a bone node.
    */
   private renderBone(node: BoneNode, worldTransform: Float32Array | Matrix3): void {
-    if (!this.program || !this.drawRigHelpers) return;
+    if (!this.program || !this.drawRigHelpers || this.hiddenBones?.has(node.id)) return;
     const gl = this.renderer.context;
 
     const modelMatrix =

@@ -1654,6 +1654,14 @@ describe('SelectionTool', () => {
       // because walking stops at bone-type parents
     });
 
+    it('passes clicks through bones hidden on the canvas', () => {
+      context.sceneGraph.addNode(createTestBone('hidden', 100, 100, 60));
+      context.isHiddenOnCanvas = (id) => id === 'hidden';
+      expect(tool.hitTest({ x: 120, y: 100 })).toBeNull();
+      context.isHiddenOnCanvas = () => false;
+      expect(tool.hitTest({ x: 120, y: 100 })?.id).toBe('hidden');
+    });
+
     it('should still select root bone when clicking root directly', () => {
       const rootBone = createTestBone('rootBone', 100, 100, 60);
       const childBone = createTestBone('childBone', 60, 0, 40);

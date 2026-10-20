@@ -32,6 +32,7 @@ import type {
   SymbolInstanceNode,
   MaskMode,
   SkinData,
+  BoneGroup,
 } from '@quar/types';
 import type { AnimationSequence, KeyframeClipboard, GraphViewTransform } from '@quar/animation';
 import {
@@ -80,6 +81,7 @@ import {
   computeAutoWeights,
   computeFKChain,
   bindVertexPositions,
+  applySkinSnapshots,
   DEFAULT_WIND_SETTINGS,
 } from '@quar/rigging';
 import type { FKBoneState } from '@quar/rigging';
@@ -625,6 +627,14 @@ export interface EditorStore extends SequenceActions {
     boneIds: string[]
   ) => string;
   removeVitruvianGroup: (sceneGraph: SceneGraphLike, controllerId: string, groupId: string) => void;
+  /** Put bones in a group (`member`), or take them out */
+  setVitruvianGroupBones: (
+    sceneGraph: SceneGraphLike,
+    controllerId: string,
+    groupId: string,
+    boneIds: string[],
+    member: boolean
+  ) => void;
   captureVitruvianSkinSnapshots: (
     controllerId: string,
     groupId: string,
@@ -1746,6 +1756,10 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
   setVitruvianControllerEnabled: (sceneGraph, controllerId, enabled) => {
     get().pushUndo(sceneGraph);
+    const controller = get().vitruvianControllers.find((c) => c.id === controllerId);
+    // Switched on: its active group's bindings take over
+    const active = controller?.groups.find((g) => g.id === controller.activeGroupId);
+    if (enabled && active) applySkinSnapshots(active.skinSnapshots, sceneGraph);
     set({
       vitruvianControllers: get().vitruvianControllers.map((c) =>
         c.id === controllerId ? { ...c, enabled } : c
@@ -1755,10 +1769,48 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   },
 
   setVitruvianActiveGroup: (sceneGraph, controllerId, groupId) => {
+    const controller = get().vitruvianControllers.find((c) => c.id === controllerId);
+    if (!controller || controller.activeGroupId === groupId) return;
+    get().pushUndo(sceneGraph);
+    // The group being left keeps the bindings it has now (weights painted
+    // while it was active), and the group switched to brings back its own
+    const keep = (group: BoneGroup): BoneGroup => ({
+      ...group,
+      skinSnapshots: group.skinSnapshots.map((snapshot) => {
+        const skinData = (sceneGraph.getNode(snapshot.nodeId) as { skinData?: SkinData })?.skinData;
+        return skinData ? { ...snapshot, skinData: structuredClone(skinData) } : snapshot;
+      }),
+    });
+    const groups = controller.groups.map((g) => (g.id === controller.activeGroupId ? keep(g) : g));
+    const incoming = groups.find((g) => g.id === groupId);
+    if (controller.enabled && incoming) applySkinSnapshots(incoming.skinSnapshots, sceneGraph);
+    set({
+      vitruvianControllers: get().vitruvianControllers.map((c) =>
+        c.id === controllerId ? { ...c, groups, activeGroupId: groupId } : c
+      ),
+      isDirty: true,
+    });
+  },
+
+  setVitruvianGroupBones: (sceneGraph, controllerId, groupId, boneIds, member) => {
     get().pushUndo(sceneGraph);
     set({
       vitruvianControllers: get().vitruvianControllers.map((c) =>
-        c.id === controllerId ? { ...c, activeGroupId: groupId } : c
+        c.id === controllerId
+          ? {
+              ...c,
+              groups: c.groups.map((g) =>
+                g.id === groupId
+                  ? {
+                      ...g,
+                      boneIds: member
+                        ? [...new Set([...g.boneIds, ...boneIds])]
+                        : g.boneIds.filter((id) => !boneIds.includes(id)),
+                    }
+                  : g
+              ),
+            }
+          : c
       ),
       isDirty: true,
     });

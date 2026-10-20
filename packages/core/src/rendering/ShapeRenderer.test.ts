@@ -1233,6 +1233,28 @@ describe('ShapeRenderer', () => {
         expect(moved.width).toBeCloseTo(atRest.width);
       });
 
+      it('leaves out bones hidden by their Vitruvian group', () => {
+        const bone = {
+          ...createRectangleNode('bone', 0, 0),
+          type: 'bone',
+          length: 100,
+          boneColor: '#ff0000',
+        } as any;
+        sceneGraph.addNode(bone);
+        const draws = () =>
+          (gl.drawArrays as any).mock.calls.length + (gl.drawElements as any).mock.calls.length;
+
+        vi.clearAllMocks();
+        shapeRenderer.render(sceneGraph, mat3.identity());
+        const shown = draws();
+        expect(shown).toBeGreaterThan(0);
+
+        shapeRenderer.setHiddenBones(new Set(['bone']));
+        vi.clearAllMocks();
+        shapeRenderer.render(sceneGraph, mat3.identity());
+        expect(draws()).toBeLessThan(shown);
+      });
+
       it('binds and draws a shape as a bending mesh', () => {
         const rect = createRectangleNode('sleeve', 200, 40);
         sceneGraph.addNode(rect);

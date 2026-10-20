@@ -735,6 +735,12 @@ export function Canvas({
             shapeRenderer.setSymbolDefinitions(symMap);
           }
 
+          // Bones outside their Vitruvian controller's active group aren't drawn
+          const { vitruvianControllers: vitControllers } = useEditorStore.getState();
+          shapeRenderer.setHiddenBones(
+            vitControllers.length > 0 ? evaluateVitruvianControllers(vitControllers) : null
+          );
+
           shapeRenderer.render(
             sceneGraphRef.current,
             viewProjectionMatrix,
