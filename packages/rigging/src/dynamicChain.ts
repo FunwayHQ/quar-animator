@@ -127,7 +127,20 @@ export function initializeChainState(
     chainId: chain.id,
     particles,
     initialized: true,
+    restRotations: Object.fromEntries(
+      chain.boneIds.map((id) => [id, sceneGraph.getNode(id)?.transform.rotation ?? 0])
+    ),
+    written: {},
+    restParentAngle: rootParentAngle(chain, sceneGraph),
   };
+}
+
+/** World rotation (radians) of the chain root's parent, 0 at the top level. */
+function rootParentAngle(chain: DynamicChain, sceneGraph: DynamicChainSceneGraph): number {
+  const parentId = sceneGraph.getNode(chain.boneIds[0]!)?.parent;
+  if (!parentId) return 0;
+  const wt = sceneGraph.getWorldTransform(parentId);
+  return Math.atan2(wt.b, wt.a);
 }
 
 /** No wind: what projects without wind settings get. */
@@ -190,6 +203,10 @@ export function stepDynamicChain(
     particles[0]!.prevPosition = { ...rootPos };
   }
 
+  // The rest pose turns with the chain's parent (a head turning takes its hair along)
+  const turn = rootParentAngle(chain, sceneGraph) - (state.restParentAngle ?? 0);
+  const restAngleOf = (p: DynamicParticle) => p.restAngle + turn;
+
   // Gravity direction
   const gravAngleRad = gravityAngle * DEG_TO_RAD;
   const gravX = Math.cos(gravAngleRad) * gravity;
@@ -250,7 +267,7 @@ export function stepDynamicChain(
     for (let i = 1; i < particles.length; i++) {
       const parent = particles[i - 1]!;
       const child = particles[i]!;
-      const restAngle = child.restAngle;
+      const restAngle = restAngleOf(child);
       const restLen = child.restLength;
       if (restLen <= 0) continue;
 
@@ -280,14 +297,14 @@ export function stepDynamicChain(
         // Freeze horizontal movement — keep x from rest chain
         let restX = particles[0]!.position.x;
         for (let j = 1; j <= i; j++) {
-          restX += Math.cos(particles[j]!.restAngle) * particles[j]!.restLength;
+          restX += Math.cos(restAngleOf(particles[j]!)) * particles[j]!.restLength;
         }
         particles[i]!.position.x = restX;
       } else if (freezeAxis === 'y') {
         // Freeze vertical movement — keep y from rest chain
         let restY = particles[0]!.position.y;
         for (let j = 1; j <= i; j++) {
-          restY += Math.sin(particles[j]!.restAngle) * particles[j]!.restLength;
+          restY += Math.sin(restAngleOf(particles[j]!)) * particles[j]!.restLength;
         }
         particles[i]!.position.y = restY;
       }
@@ -302,8 +319,8 @@ export function stepDynamicChain(
 
     for (let i = 1; i < particles.length; i++) {
       const p = particles[i]!;
-      restX += Math.cos(p.restAngle) * p.restLength;
-      restY += Math.sin(p.restAngle) * p.restLength;
+      restX += Math.cos(restAngleOf(p)) * p.restLength;
+      restY += Math.sin(restAngleOf(p)) * p.restLength;
 
       p.position.x += (restX - p.position.x) * elasticity;
       p.position.y += (restY - p.position.y) * elasticity;
@@ -369,5 +386,6 @@ export function applyChainToBones(
     sceneGraph.updateNode(boneId, {
       transform: { ...node.transform, rotation: localAngleDeg },
     });
+    if (state.written) state.written[boneId] = localAngleDeg;
   }
 }

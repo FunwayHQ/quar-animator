@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { evaluateDynamicChains, resetDynamicChainStates } from './dynamicChainEvaluator';
+import {
+  evaluateDynamicChains,
+  evaluateDynamicChainsAtFrame,
+  resetDynamicChainStates,
+} from './dynamicChainEvaluator';
 import type { DynamicChain, DynamicChainState, WindSettings, Vector2 } from '@quar/types';
 import type { DynamicChainSceneGraph } from './dynamicChain';
 
@@ -227,5 +231,85 @@ describe('resetDynamicChainStates', () => {
 
     resetDynamicChainStates(stateMap);
     expect(stateMap.size).toBe(0);
+  });
+});
+
+describe('simulating to a timeline frame', () => {
+  const tail = () => ({
+    'bone-1': makeBone(50, { x: 0, y: 0 }, 0),
+    'bone-2': makeBone(50, { x: 50, y: 0 }, 0, 'bone-1'),
+  });
+  const falling = makeChain({ gravity: 400 });
+  const rotations = (bones: Record<string, MockBone>) =>
+    Object.values(bones).map((bone) => bone.transform.rotation);
+
+  it('moves the same whether every frame is drawn or some are skipped', () => {
+    const everyFrame = tail();
+    const skipping = tail();
+    const run = (bones: Record<string, MockBone>, frames: number[]) => {
+      const states = new Map<string, DynamicChainState>();
+      const clock = { lastFrame: null as number | null };
+      for (const frame of frames) {
+        evaluateDynamicChainsAtFrame([falling], states, makeSG(bones), frame, 30, undefined, clock);
+      }
+    };
+    run(
+      everyFrame,
+      Array.from({ length: 21 }, (_, i) => i)
+    );
+    // A slow display: every third frame, some twice
+    run(skipping, [0, 0, 3, 6, 6, 9, 12, 15, 18, 20]);
+    rotations(skipping).forEach((rotation, i) =>
+      expect(rotation).toBeCloseTo(rotations(everyFrame)[i]!, 6)
+    );
+    expect(rotations(everyFrame)[0]).toBeLessThan(-1);
+  });
+
+  it('starts again from the bones’ own pose when time goes back', () => {
+    const bones = tail();
+    const states = new Map<string, DynamicChainState>();
+    const clock = { lastFrame: null as number | null };
+    const step = (frame: number) =>
+      evaluateDynamicChainsAtFrame([falling], states, makeSG(bones), frame, 30, undefined, clock);
+    for (let frame = 0; frame <= 10; frame++) step(frame);
+    const atTen = rotations(bones);
+    // Looping back to the start, then on to frame 10 again
+    for (let frame = 0; frame <= 10; frame++) step(frame);
+    rotations(bones).forEach((rotation, i) => expect(rotation).toBeCloseTo(atTen[i]!, 6));
+  });
+
+  it('gives the bones their own rotations back when stopped', () => {
+    const bones = tail();
+    bones['bone-1'].transform.rotation = 12;
+    const sg = makeSG(bones);
+    const states = new Map<string, DynamicChainState>();
+    const clock = { lastFrame: null as number | null };
+    for (let frame = 0; frame <= 10; frame++) {
+      evaluateDynamicChainsAtFrame([falling], states, sg, frame, 30, undefined, clock);
+    }
+    expect(bones['bone-1'].transform.rotation).not.toBeCloseTo(12);
+    resetDynamicChainStates(states, sg);
+    expect(rotations(bones)).toEqual([12, 0]);
+  });
+
+  it('turns its rest pose with its parent', () => {
+    const bones = {
+      head: makeBone(10, { x: 0, y: 0 }, 0),
+      'bone-1': makeBone(50, { x: 10, y: 0 }, 0, 'head'),
+      'bone-2': makeBone(50, { x: 50, y: 0 }, 0, 'bone-1'),
+    };
+    const sg = makeSG(bones);
+    // Stiff, no gravity: the chain holds its rest pose
+    const stiff = makeChain({ stiffness: 1, damping: 1 });
+    const states = new Map<string, DynamicChainState>();
+    const clock = { lastFrame: null as number | null };
+    evaluateDynamicChainsAtFrame([stiff], states, sg, 0, 30, undefined, clock);
+    bones.head.transform.rotation = 90;
+    for (let frame = 1; frame <= 5; frame++) {
+      evaluateDynamicChainsAtFrame([stiff], states, sg, frame, 30, undefined, clock);
+    }
+    // Held straight out from the turned head: no bend of its own
+    expect(bones['bone-1'].transform.rotation).toBeCloseTo(0, 3);
+    expect(bones['bone-2'].transform.rotation).toBeCloseTo(0, 3);
   });
 });

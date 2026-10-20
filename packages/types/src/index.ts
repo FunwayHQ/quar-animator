@@ -566,6 +566,12 @@ export interface DynamicChainState {
   chainId: string;
   particles: DynamicParticle[];
   initialized: boolean;
+  /** Each bone's own (hand-set or animated) local rotation when the simulation started */
+  restRotations?: Record<string, number>;
+  /** The local rotation the simulation last gave each bone */
+  written?: Record<string, number>;
+  /** World rotation (radians) of the chain root's parent when the simulation started */
+  restParentAngle?: number;
 }
 
 // ============================================================================

@@ -29,7 +29,7 @@ export function evaluateDynamicChains(
   stateMap: Map<string, DynamicChainState>,
   sceneGraph: DynamicChainSceneGraph,
   dt: number,
-  wind: WindSettings,
+  wind: WindSettings | undefined,
   time: number
 ): void {
   const windForce = computeWindForce(wind, time);
@@ -56,8 +56,62 @@ export function evaluateDynamicChains(
 }
 
 /**
- * Reset all dynamic chain states (e.g., on seek, stop, or chain configuration change).
+ * Reset all dynamic chain states (e.g., on seek, stop, or chain configuration
+ * change). With the scene graph, bones the simulation posed get their own
+ * rotation back — the one they had when it started — unless something else
+ * has set them since.
  */
-export function resetDynamicChainStates(stateMap: Map<string, DynamicChainState>): void {
+export function resetDynamicChainStates(
+  stateMap: Map<string, DynamicChainState>,
+  sceneGraph?: DynamicChainSceneGraph
+): void {
+  if (sceneGraph) {
+    for (const state of stateMap.values()) {
+      for (const [boneId, written] of Object.entries(state.written ?? {})) {
+        const node = sceneGraph.getNode(boneId);
+        const rest = state.restRotations?.[boneId];
+        if (!node || rest === undefined) continue;
+        if (Math.abs(node.transform.rotation - written) > 1e-6) continue;
+        sceneGraph.updateNode(boneId, { transform: { ...node.transform, rotation: rest } });
+      }
+    }
+  }
   stateMap.clear();
+}
+
+/** The timeline frame a simulation has reached (null: not started). */
+export interface DynamicChainClock {
+  lastFrame: number | null;
+}
+
+/** Further than this ahead (a seek, not playback) the simulation starts again. */
+const MAX_CATCH_UP_SECONDS = 2;
+
+/**
+ * Simulate dynamic chains up to a timeline frame, one fixed step of 1/fps
+ * per frame — the same motion at any display refresh rate, in the editor
+ * and in exports. Going back in time (a loop, a seek) starts again from the
+ * pose before the simulation; the same frame again does nothing.
+ */
+export function evaluateDynamicChainsAtFrame(
+  chains: DynamicChain[],
+  stateMap: Map<string, DynamicChainState>,
+  sceneGraph: DynamicChainSceneGraph,
+  frame: number,
+  frameRate: number,
+  wind: WindSettings | undefined,
+  clock: DynamicChainClock
+): void {
+  const fps = Math.max(1, frameRate);
+  const last = clock.lastFrame;
+  if (last !== null && (frame < last || frame - last > MAX_CATCH_UP_SECONDS * fps)) {
+    resetDynamicChainStates(stateMap, sceneGraph);
+    clock.lastFrame = null;
+  }
+  if (clock.lastFrame === frame) return;
+  const from = clock.lastFrame === null ? frame : clock.lastFrame + 1;
+  for (let f = from; f <= frame; f++) {
+    evaluateDynamicChains(chains, stateMap, sceneGraph, 1 / fps, wind, f / fps);
+  }
+  clock.lastFrame = frame;
 }

@@ -18,8 +18,9 @@ import {
   evaluateSmartBones,
   morphOffsetsToDense,
   evaluateVitruvianControllers,
-  evaluateDynamicChains,
+  evaluateDynamicChainsAtFrame,
   resetDynamicChainStates,
+  type DynamicChainClock,
 } from '@quar/rigging';
 import type { DynamicChainState } from '@quar/types';
 import type { PointMagnetTool, WeightPaintTool } from '@quar/core';
@@ -92,7 +93,7 @@ export function Canvas({
 
   // Dynamic chain physics state (transient, not persisted)
   const dynamicChainStatesRef = useRef<Map<string, DynamicChainState>>(new Map());
-  const lastFrameTimeRef = useRef<number>(0);
+  const dynamicChainClockRef = useRef<DynamicChainClock>({ lastFrame: null });
 
   // Deformed bounds cache — updated in RAF render loop after IK evaluation
   const deformedBoundsRef = useRef<
@@ -643,26 +644,22 @@ export function Canvas({
             frameRate: dcFrameRate,
           } = useEditorStore.getState();
           if (dynamicChains.length > 0 && dcPlaying) {
-            const now = performance.now() / 1000;
-            const dt =
-              lastFrameTimeRef.current > 0
-                ? Math.min(now - lastFrameTimeRef.current, 0.05)
-                : 1 / dcFrameRate;
-            lastFrameTimeRef.current = now;
-            evaluateDynamicChains(
+            // One fixed step per timeline frame, as exports simulate it
+            evaluateDynamicChainsAtFrame(
               dynamicChains,
               dynamicChainStatesRef.current,
               sceneGraphRef.current as any,
-              dt,
+              dcFrame,
+              dcFrameRate,
               globalWind,
-              dcFrame / dcFrameRate
+              dynamicChainClockRef.current
             );
           } else if (!dcPlaying) {
-            // Reset chain states when not playing so they re-init on next play
+            // Stopped: the bones get their own rotations back, and the next play starts afresh
             if (dynamicChainStatesRef.current.size > 0) {
-              resetDynamicChainStates(dynamicChainStatesRef.current);
-              lastFrameTimeRef.current = 0;
+              resetDynamicChainStates(dynamicChainStatesRef.current, sceneGraphRef.current as any);
             }
+            dynamicChainClockRef.current.lastFrame = null;
           }
         }
 

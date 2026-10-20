@@ -19,10 +19,11 @@ import type { SceneGraph } from '@quar/core';
 import { WebGLRenderer, ShapeRenderer, mat3 } from '@quar/core';
 import { evaluateNodeAtFrame, applyAnimatedValues } from '@quar/animation';
 import {
-  evaluateDynamicChains,
+  evaluateDynamicChainsAtFrame,
   evaluateIKChains,
   evaluateSmartBones,
   resetDynamicChainStates,
+  type DynamicChainClock,
   type DynamicChainSceneGraph,
 } from '@quar/rigging';
 
@@ -105,7 +106,7 @@ export function createFrameRenderer(options: FrameRenderOptions): FrameRendererH
   // pass goes back in time (GIF renders every frame twice), so every pass of
   // an export simulates the same motion
   const dynamicStates = new Map<string, DynamicChainState>();
-  let lastDynamicFrame: number | null = null;
+  const dynamicClock: DynamicChainClock = { lastFrame: null };
 
   const gl = renderer.context;
 
@@ -190,22 +191,21 @@ export function createFrameRenderer(options: FrameRenderOptions): FrameRendererH
 
     const chains = rig.dynamicChains ?? [];
     if (chains.some((chain) => chain.enabled)) {
-      const frameRate = Math.max(1, rig.frameRate);
-      if (lastDynamicFrame === null || frame <= lastDynamicFrame) {
+      // Each frame renders once per pass: the same frame again is a new pass
+      if (dynamicClock.lastFrame === frame) {
         resetDynamicChainStates(dynamicStates);
-        lastDynamicFrame = null;
+        dynamicClock.lastFrame = null;
       }
-      const dt = lastDynamicFrame === null ? 1 / frameRate : (frame - lastDynamicFrame) / frameRate;
-      evaluateDynamicChains(
+      evaluateDynamicChainsAtFrame(
         chains,
         dynamicStates,
         // Bones are the only nodes the physics reads; the rest of the graph is untouched
         sceneGraph as unknown as DynamicChainSceneGraph,
-        dt,
-        rig.wind ?? { strength: 0, direction: 0, turbulence: 0, frequency: 1, enabled: false },
-        frame / frameRate
+        frame,
+        rig.frameRate,
+        rig.wind,
+        dynamicClock
       );
-      lastDynamicFrame = frame;
     }
 
     const actions = rig.smartBoneActions ?? [];

@@ -16,7 +16,7 @@ const mocks = vi.hoisted(() => ({
   mat3Multiply: vi.fn(() => new Float32Array([1, 0, 0, 1, 0, 0])),
   setDrawRigHelpers: vi.fn(),
   evaluateIKChains: vi.fn(),
-  evaluateDynamicChains: vi.fn(),
+  evaluateDynamicChainsAtFrame: vi.fn(),
   evaluateSmartBones: vi.fn(() => new Map()),
   resetDynamicChainStates: vi.fn(),
 }));
@@ -50,7 +50,7 @@ vi.mock('@quar/animation', () => ({
 
 vi.mock('@quar/rigging', () => ({
   evaluateIKChains: mocks.evaluateIKChains,
-  evaluateDynamicChains: mocks.evaluateDynamicChains,
+  evaluateDynamicChainsAtFrame: mocks.evaluateDynamicChainsAtFrame,
   evaluateSmartBones: mocks.evaluateSmartBones,
   resetDynamicChainStates: mocks.resetDynamicChainStates,
 }));
@@ -262,7 +262,7 @@ describe('exports pose rigs like the editor', () => {
 
     const order = [
       mocks.evaluateIKChains,
-      mocks.evaluateDynamicChains,
+      mocks.evaluateDynamicChainsAtFrame,
       mocks.evaluateSmartBones,
       mocks.render,
     ].map((fn) => fn.mock.invocationCallOrder[0]!);
@@ -283,10 +283,12 @@ describe('exports pose rigs like the editor', () => {
     for (const frame of [0, 1, 2, 0, 1]) {
       handle.renderFrame({ sceneGraph: sceneGraph as any, timeline, rig }, frame);
     }
-    const steps = mocks.evaluateDynamicChains.mock.calls.map((call) => call[3]);
-    expect(steps.every((dt) => Math.abs((dt as number) - 1 / 30) < 1e-9)).toBe(true);
-    // Fresh state at the start of each pass
-    expect(mocks.resetDynamicChainStates).toHaveBeenCalledTimes(2);
+    const calls = mocks.evaluateDynamicChainsAtFrame.mock.calls;
+    // Simulated up to each frame at the timeline's rate, on one clock that
+    // restarts the simulation when a pass goes back
+    expect(calls.map((call) => call[3])).toEqual([0, 1, 2, 0, 1]);
+    expect(calls.every((call) => call[4] === 30)).toBe(true);
+    expect(new Set(calls.map((call) => call[6])).size).toBe(1);
   });
 
   it('renders as before without a rig', () => {
