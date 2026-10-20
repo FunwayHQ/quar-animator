@@ -603,6 +603,29 @@ export class ShapeRenderer {
     this.renderer.setProgramUseHook(this.programUseHook);
   }
 
+  /** Bytes each buffer can hold, so uploads know when to grow it. */
+  private bufferCapacity = new WeakMap<WebGLBuffer, number>();
+
+  /**
+   * Upload data to the start of a buffer, growing the buffer first when the
+   * data doesn't fit: a paragraph of text outlines runs past the vertices the
+   * shared buffers start with, and was silently not drawn. Growing keeps the
+   * buffer object, so vertex arrays bound to it still are.
+   */
+  private uploadToBuffer(target: number, buffer: WebGLBuffer | null, data: ArrayBufferView): void {
+    const gl = this.renderer.context;
+    gl.bindBuffer(target, buffer);
+    if (!buffer) return;
+    // Buffers made elsewhere size themselves on their first upload
+    const capacity = this.bufferCapacity.get(buffer) ?? 0;
+    if (data.byteLength > capacity) {
+      const grown = Math.max(data.byteLength, capacity * 2);
+      gl.bufferData(target, grown, gl.DYNAMIC_DRAW);
+      this.bufferCapacity.set(buffer, grown);
+    }
+    gl.bufferSubData(target, 0, data);
+  }
+
   /** Set the symbol definitions registry so instances can be resolved during rendering. */
   setSymbolDefinitions(defs: Map<string, SymbolDefinition>): void {
     this.symbolDefinitions = defs;
@@ -967,11 +990,13 @@ export class ShapeRenderer {
     this.vertexBuffer = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
     gl.bufferData(gl.ARRAY_BUFFER, this.vertices.byteLength, gl.DYNAMIC_DRAW);
+    if (this.vertexBuffer) this.bufferCapacity.set(this.vertexBuffer, this.vertices.byteLength);
 
     // Create index buffer
     this.indexBuffer = gl.createBuffer();
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indexBuffer);
     gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, this.indices.byteLength, gl.DYNAMIC_DRAW);
+    if (this.indexBuffer) this.bufferCapacity.set(this.indexBuffer, this.indices.byteLength);
 
     if (this.program) {
       gl.enableVertexAttribArray(this.program.attributes.a_position!);
@@ -2135,8 +2160,7 @@ export class ShapeRenderer {
       0, // top-right    → UV (1,0)
     ]);
 
-    gl.bindBuffer(gl.ARRAY_BUFFER, this.textureVertexBuffer);
-    gl.bufferSubData(gl.ARRAY_BUFFER, 0, quadData);
+    this.uploadToBuffer(gl.ARRAY_BUFFER, this.textureVertexBuffer, quadData);
 
     // Bind texture
     gl.activeTexture(gl.TEXTURE0);
@@ -2761,8 +2785,7 @@ export class ShapeRenderer {
     gl.uniform4fv(this.program.uniforms.u_color ?? null, color);
 
     // Upload vertices
-    gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
-    gl.bufferSubData(gl.ARRAY_BUFFER, 0, vertices);
+    this.uploadToBuffer(gl.ARRAY_BUFFER, this.vertexBuffer, vertices);
 
     const numVertices = vertices.length / 2;
     if (numVertices < 3) return;
@@ -2775,8 +2798,7 @@ export class ShapeRenderer {
 
     // Upload cached indices
     const indicesArray = new Uint32Array(fillIndices);
-    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indexBuffer);
-    gl.bufferSubData(gl.ELEMENT_ARRAY_BUFFER, 0, indicesArray);
+    this.uploadToBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indexBuffer, indicesArray);
 
     // Draw using indexed triangles
     gl.drawElements(gl.TRIANGLES, fillIndices.length, gl.UNSIGNED_INT, 0);
@@ -2870,8 +2892,7 @@ export class ShapeRenderer {
     const gl = this.renderer.context;
     this.renderer.useProgram(this.program);
     gl.uniform4fv(this.program.uniforms.u_color ?? null, color);
-    gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
-    gl.bufferSubData(gl.ARRAY_BUFFER, 0, strip);
+    this.uploadToBuffer(gl.ARRAY_BUFFER, this.vertexBuffer, strip);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, strip.length / 2);
   }
 
@@ -2900,8 +2921,7 @@ export class ShapeRenderer {
         );
       }
       this.setGradientUniforms(gradient, computeBounds(outline), opacity);
-      gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
-      gl.bufferSubData(gl.ARRAY_BUFFER, 0, strip);
+      this.uploadToBuffer(gl.ARRAY_BUFFER, this.vertexBuffer, strip);
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, strip.length / 2);
     } finally {
       if (this.program) {
@@ -2946,15 +2966,13 @@ export class ShapeRenderer {
       this.setGradientUniforms(gradient, computeBounds(vertices), opacity);
 
       // Upload vertices
-      gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
-      gl.bufferSubData(gl.ARRAY_BUFFER, 0, vertices);
+      this.uploadToBuffer(gl.ARRAY_BUFFER, this.vertexBuffer, vertices);
 
       if (cachedIndices.length === 0) {
         gl.drawArrays(gl.TRIANGLE_FAN, 0, numVertices);
       } else {
         const indicesArray = new Uint32Array(cachedIndices);
-        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indexBuffer);
-        gl.bufferSubData(gl.ELEMENT_ARRAY_BUFFER, 0, indicesArray);
+        this.uploadToBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indexBuffer, indicesArray);
         gl.drawElements(gl.TRIANGLES, cachedIndices.length, gl.UNSIGNED_INT, 0);
       }
     } finally {
@@ -3123,8 +3141,7 @@ export class ShapeRenderer {
     );
 
     const vertices = this.buildBoneVertices(node.length, node.boneStyle);
-    gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
-    gl.bufferSubData(gl.ARRAY_BUFFER, 0, vertices);
+    this.uploadToBuffer(gl.ARRAY_BUFFER, this.vertexBuffer, vertices);
     gl.drawArrays(gl.TRIANGLES, 0, vertices.length / 2);
 
     // Draw outline for visibility
@@ -3175,8 +3192,7 @@ export class ShapeRenderer {
       ]);
     }
 
-    gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
-    gl.bufferSubData(gl.ARRAY_BUFFER, 0, outlineVerts);
+    this.uploadToBuffer(gl.ARRAY_BUFFER, this.vertexBuffer, outlineVerts);
     gl.drawArrays(gl.LINES, 0, outlineVerts.length / 2);
   }
 
@@ -3208,8 +3224,7 @@ export class ShapeRenderer {
     );
 
     const vertices = this.buildBoneVertices(node.length, node.boneStyle);
-    gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
-    gl.bufferSubData(gl.ARRAY_BUFFER, 0, vertices);
+    this.uploadToBuffer(gl.ARRAY_BUFFER, this.vertexBuffer, vertices);
     gl.drawArrays(gl.TRIANGLES, 0, vertices.length / 2);
   }
 
@@ -3304,8 +3319,7 @@ export class ShapeRenderer {
 
     // Switch to skinned VAO and upload interleaved vertex data
     this.renderer.bindVAO(this.skinnedVAO);
-    gl.bindBuffer(gl.ARRAY_BUFFER, this.skinnedVertexBuffer);
-    gl.bufferSubData(gl.ARRAY_BUFFER, 0, skinnedVertexData);
+    this.uploadToBuffer(gl.ARRAY_BUFFER, this.skinnedVertexBuffer, skinnedVertexData);
 
     for (const fill of fills) {
       if (!fill.visible || fill.type === 'none') continue;
@@ -3332,8 +3346,7 @@ export class ShapeRenderer {
         // Upload fill indices and draw
         if (fillIndices.length > 0) {
           const indexArray = new Uint32Array(fillIndices);
-          gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indexBuffer);
-          gl.bufferSubData(gl.ELEMENT_ARRAY_BUFFER, 0, indexArray);
+          this.uploadToBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indexBuffer, indexArray);
           gl.drawElements(gl.TRIANGLES, fillIndices.length, gl.UNSIGNED_INT, 0);
         }
       } else {
@@ -3347,8 +3360,7 @@ export class ShapeRenderer {
         // Upload fill indices and draw
         if (fillIndices.length > 0) {
           const indexArray = new Uint32Array(fillIndices);
-          gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indexBuffer);
-          gl.bufferSubData(gl.ELEMENT_ARRAY_BUFFER, 0, indexArray);
+          this.uploadToBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indexBuffer, indexArray);
           gl.drawElements(gl.TRIANGLES, fillIndices.length, gl.UNSIGNED_INT, 0);
         }
       }
@@ -3993,18 +4005,15 @@ export class ShapeRenderer {
     gl.uniform1f(this.weightProgram.uniforms.u_alpha ?? null, 0.6);
 
     // Upload positions
-    gl.bindBuffer(gl.ARRAY_BUFFER, this.weightVertexBuffer);
-    gl.bufferSubData(gl.ARRAY_BUFFER, 0, worldVertices);
+    this.uploadToBuffer(gl.ARRAY_BUFFER, this.weightVertexBuffer, worldVertices);
 
     // Upload colors
-    gl.bindBuffer(gl.ARRAY_BUFFER, this.weightColorBuffer);
-    gl.bufferSubData(gl.ARRAY_BUFFER, 0, colors);
+    this.uploadToBuffer(gl.ARRAY_BUFFER, this.weightColorBuffer, colors);
 
     // Draw using fill indices
     if (fillIndices.length > 0) {
       const indexData = new Uint32Array(fillIndices);
-      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indexBuffer);
-      gl.bufferSubData(gl.ELEMENT_ARRAY_BUFFER, 0, indexData);
+      this.uploadToBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indexBuffer, indexData);
       gl.drawElements(gl.TRIANGLES, fillIndices.length, gl.UNSIGNED_INT, 0);
     }
 
@@ -4471,8 +4480,7 @@ export class ShapeRenderer {
 
     const quadData = new Float32Array([x0, y0, 0, 1, x1, y0, 1, 1, x0, y1, 0, 0, x1, y1, 1, 0]);
 
-    gl.bindBuffer(gl.ARRAY_BUFFER, this.textureVertexBuffer);
-    gl.bufferSubData(gl.ARRAY_BUFFER, 0, quadData);
+    this.uploadToBuffer(gl.ARRAY_BUFFER, this.textureVertexBuffer, quadData);
 
     // Bind texture
     gl.activeTexture(gl.TEXTURE0);
@@ -4527,8 +4535,7 @@ export class ShapeRenderer {
     if (!this.program) return;
     const gl = this.renderer.context;
     gl.uniform4fv(this.program.uniforms.u_color ?? null, color);
-    gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
-    gl.bufferSubData(gl.ARRAY_BUFFER, 0, vertices);
+    this.uploadToBuffer(gl.ARRAY_BUFFER, this.vertexBuffer, vertices);
     const numVertices = vertices.length / 2;
     if (numVertices < 3) return;
     if (cachedIndices.length === 0) {
@@ -4536,8 +4543,7 @@ export class ShapeRenderer {
       return;
     }
     const indicesArray = new Uint32Array(cachedIndices);
-    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indexBuffer);
-    gl.bufferSubData(gl.ELEMENT_ARRAY_BUFFER, 0, indicesArray);
+    this.uploadToBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indexBuffer, indicesArray);
     gl.drawElements(gl.TRIANGLES, cachedIndices.length, gl.UNSIGNED_INT, 0);
   }
 

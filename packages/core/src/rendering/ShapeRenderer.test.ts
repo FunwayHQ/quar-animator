@@ -414,6 +414,32 @@ describe('ShapeRenderer', () => {
       expect(gl.drawElements).toHaveBeenCalled();
     });
 
+    it('grows the shared buffers for a shape with more vertices than they hold', () => {
+      // 12 000 corners: more than the 10 000 vertices the buffers start with
+      const path = createPathNode('big');
+      path.closed = true;
+      path.points = Array.from({ length: 12000 }, (_, i) => {
+        const angle = (i / 12000) * Math.PI * 2;
+        return {
+          position: { x: Math.cos(angle) * 500, y: Math.sin(angle) * 500 },
+          handleIn: null,
+          handleOut: null,
+          type: 'corner' as const,
+        };
+      });
+      sceneGraph.addNode(path);
+      vi.mocked(gl.bufferData).mockClear();
+
+      shapeRenderer.render(sceneGraph, mat3.identity());
+
+      // Every upload fits the buffer it goes to: grown first where needed
+      const uploads = vi.mocked(gl.bufferSubData).mock.calls;
+      const grown = vi.mocked(gl.bufferData).mock.calls.map((call) => call[1] as number);
+      const largest = Math.max(...uploads.map((call) => (call[2] as ArrayBufferView).byteLength));
+      expect(largest).toBeGreaterThan(10000 * 2 * 4);
+      expect(Math.max(...grown)).toBeGreaterThanOrEqual(largest);
+    });
+
     it('should upload vertices to buffer', () => {
       const rect = createRectangleNode('rect1', 100, 50);
       sceneGraph.addNode(rect);
