@@ -7,7 +7,7 @@
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.3-blue)
 ![React](https://img.shields.io/badge/React-18-61dafb)
 ![WebGL](https://img.shields.io/badge/WebGL-2.0-red)
-![Tests](https://img.shields.io/badge/tests-891%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-3980%20passing-brightgreen)
 
 **Free, open-source, web-native 2D animation platform**
 
@@ -64,7 +64,7 @@ The app will be available at `http://localhost:3000`
 | ---------------- | ---------------------------------- |
 | `pnpm dev`       | Start development server           |
 | `pnpm build`     | Build all packages for production  |
-| `pnpm test`      | Run all tests                      |
+| `pnpm test`      | Run all tests in watch mode        |
 | `pnpm storybook` | Launch Storybook component library |
 | `pnpm lint`      | Run ESLint                         |
 | `pnpm typecheck` | TypeScript type checking           |
@@ -165,7 +165,7 @@ Vector Path (Bezier) → Earcut Tessellation → WebGL Vertex Buffers → GPU Re
 | 6      | Path Editing (Direct Selection)         | 36    |
 | 7      | Brush & Eraser Tools                    | 77    |
 
-**Total Test Coverage: 891 tests** (736 core + 155 web)
+**Total Test Coverage: 3980 tests** (1761 core, 1042 web, 512 animation, 305 export, 271 rigging, 89 UI)
 
 ### Roadmap
 
@@ -245,7 +245,7 @@ We welcome contributions! Please read our contributing guidelines before submitt
 1. Fork the repository
 2. Create a feature branch: `git checkout -b feature/amazing-feature`
 3. Make your changes
-4. Run tests: `pnpm test`
+4. Run tests once: `pnpm -r exec vitest run --passWithNoTests`
 5. Commit with conventional commits: `git commit -m "feat: add amazing feature"`
 6. Push and open a PR
 
