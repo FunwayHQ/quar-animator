@@ -3,8 +3,34 @@
  * Keyboard shortcuts for timeline playback control
  */
 
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useRef } from 'react';
 import { useEditorStore } from '../stores/editorStore';
+
+/** Input types Space doesn't type into: there it plays and pauses too. */
+const NON_TEXT_INPUTS = new Set([
+  'button',
+  'checkbox',
+  'radio',
+  'range',
+  'color',
+  'file',
+  'reset',
+  'submit',
+  'image',
+]);
+
+/** Whether Space typed into this element would be text (or open a select). */
+function takesSpace(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  if (target.isContentEditable) return true;
+  const tag = target.tagName.toLowerCase();
+  if (tag === 'textarea' || tag === 'select') return true;
+  return tag === 'input' && !NON_TEXT_INPUTS.has((target as HTMLInputElement).type);
+}
+
+function isCanvas(target: EventTarget | null): boolean {
+  return target instanceof HTMLCanvasElement;
+}
 
 interface TimelineShortcutCallbacks {
   togglePlay: () => void;
@@ -105,18 +131,6 @@ export function useTimelineShortcuts(callbacks: TimelineShortcutCallbacks) {
       }
 
       switch (event.key) {
-        case ' ':
-          // Space toggles play/pause — but on the drawing canvas Space is the
-          // pan modifier, so skip when the canvas is focused (its keydown bubbles
-          // to this window listener).
-          if (target && target.tagName?.toLowerCase() === 'canvas') break;
-          // Space: toggle play/pause (tap only, not hold)
-          if (!event.repeat) {
-            event.preventDefault();
-            callbacks.togglePlay();
-          }
-          break;
-
         case 'g':
         case 'G':
           // G: toggle graph editor
@@ -181,4 +195,70 @@ export function useTimelineShortcuts(callbacks: TimelineShortcutCallbacks) {
       window.removeEventListener('keydown', handleKeyDown);
     };
   }, [handleKeyDown]);
+
+  useSpaceToPlay(callbacks.togglePlay);
+}
+
+/**
+ * Space plays and pauses wherever focus is, except in a field it types into.
+ * Listening in the capture phase puts it ahead of a focused button or tab,
+ * which would otherwise take Space as a click. On the canvas Space is also
+ * the pan key (Space+drag), so there it plays on release, unless the pointer
+ * went down while it was held.
+ */
+function useSpaceToPlay(togglePlay: () => void) {
+  const togglePlayRef = useRef(togglePlay);
+  togglePlayRef.current = togglePlay;
+
+  useEffect(() => {
+    let canvasSpace: { pointerWentDown: boolean } | null = null;
+
+    const isPlayKey = (event: KeyboardEvent) =>
+      event.key === ' ' &&
+      !event.ctrlKey &&
+      !event.altKey &&
+      !event.metaKey &&
+      !event.shiftKey &&
+      !takesSpace(event.target);
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!isPlayKey(event)) return;
+      if (isCanvas(event.target)) {
+        // The canvas sees the key too, to get ready to pan
+        if (!event.repeat) canvasSpace = { pointerWentDown: false };
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      if (!event.repeat) togglePlayRef.current();
+    };
+
+    const onKeyUp = (event: KeyboardEvent) => {
+      if (event.key !== ' ') return;
+      if (canvasSpace) {
+        const panned = canvasSpace.pointerWentDown;
+        canvasSpace = null;
+        if (!panned) togglePlayRef.current();
+        return;
+      }
+      if (isPlayKey(event) && !isCanvas(event.target)) {
+        // A focused button would take the release as a click
+        event.preventDefault();
+        event.stopPropagation();
+      }
+    };
+
+    const onPointerDown = () => {
+      if (canvasSpace) canvasSpace.pointerWentDown = true;
+    };
+
+    window.addEventListener('keydown', onKeyDown, true);
+    window.addEventListener('keyup', onKeyUp, true);
+    window.addEventListener('pointerdown', onPointerDown, true);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown, true);
+      window.removeEventListener('keyup', onKeyUp, true);
+      window.removeEventListener('pointerdown', onPointerDown, true);
+    };
+  }, []);
 }

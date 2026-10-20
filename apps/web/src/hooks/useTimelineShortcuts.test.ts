@@ -66,18 +66,99 @@ describe('useTimelineShortcuts', () => {
     expect(callbacks.togglePlay).not.toHaveBeenCalled();
   });
 
-  it('Space does not toggle play when the drawing canvas is focused (F023)', () => {
-    const callbacks = createCallbacks();
-    renderHook(() => useTimelineShortcuts(callbacks));
+  describe('Space wherever focus is', () => {
+    /** Press (and release) Space on an element, as the browser delivers it. */
+    function spaceOn(target: EventTarget, type: 'keydown' | 'keyup', init: KeyboardEventInit = {}) {
+      const event = new KeyboardEvent(type, {
+        key: ' ',
+        code: 'Space',
+        bubbles: true,
+        cancelable: true,
+        ...init,
+      });
+      target.dispatchEvent(event);
+      return event;
+    }
 
-    // Dispatch from a <canvas> so the bubbled event's target is the canvas
-    // (where Space is the pan modifier).
-    const canvas = document.createElement('canvas');
-    document.body.appendChild(canvas);
-    canvas.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
-    document.body.removeChild(canvas);
+    function mount<T extends HTMLElement>(element: T): T {
+      document.body.appendChild(element);
+      return element;
+    }
 
-    expect(callbacks.togglePlay).not.toHaveBeenCalled();
+    it('plays from the canvas on release, leaving the press to the canvas for panning', () => {
+      const callbacks = createCallbacks();
+      renderHook(() => useTimelineShortcuts(callbacks));
+      const canvas = mount(document.createElement('canvas'));
+      const canvasKeys = vi.fn();
+      canvas.addEventListener('keydown', canvasKeys);
+
+      spaceOn(canvas, 'keydown');
+      expect(callbacks.togglePlay).not.toHaveBeenCalled();
+      expect(canvasKeys).toHaveBeenCalledTimes(1);
+      spaceOn(canvas, 'keydown', { repeat: true });
+      spaceOn(canvas, 'keyup');
+
+      expect(callbacks.togglePlay).toHaveBeenCalledTimes(1);
+      canvas.remove();
+    });
+
+    it('does not play after a Space+drag pan on the canvas', () => {
+      const callbacks = createCallbacks();
+      renderHook(() => useTimelineShortcuts(callbacks));
+      const canvas = mount(document.createElement('canvas'));
+
+      spaceOn(canvas, 'keydown');
+      canvas.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+      spaceOn(canvas, 'keyup');
+
+      expect(callbacks.togglePlay).not.toHaveBeenCalled();
+      canvas.remove();
+    });
+
+    it('plays from a focused button without clicking it', () => {
+      const callbacks = createCallbacks();
+      renderHook(() => useTimelineShortcuts(callbacks));
+      const button = mount(document.createElement('button'));
+      const buttonKeys = vi.fn();
+      button.addEventListener('keydown', buttonKeys);
+      button.addEventListener('keyup', buttonKeys);
+
+      const down = spaceOn(button, 'keydown');
+      const up = spaceOn(button, 'keyup');
+
+      expect(callbacks.togglePlay).toHaveBeenCalledTimes(1);
+      expect(down.defaultPrevented).toBe(true);
+      expect(up.defaultPrevented).toBe(true);
+      expect(buttonKeys).not.toHaveBeenCalled();
+      button.remove();
+    });
+
+    it('plays from checkboxes and sliders, but types into text fields', () => {
+      const callbacks = createCallbacks();
+      renderHook(() => useTimelineShortcuts(callbacks));
+      const checkbox = mount(Object.assign(document.createElement('input'), { type: 'checkbox' }));
+      const text = mount(document.createElement('input'));
+      const area = mount(document.createElement('textarea'));
+
+      spaceOn(checkbox, 'keydown');
+      expect(callbacks.togglePlay).toHaveBeenCalledTimes(1);
+
+      const typed = spaceOn(text, 'keydown');
+      spaceOn(area, 'keydown');
+      expect(callbacks.togglePlay).toHaveBeenCalledTimes(1);
+      expect(typed.defaultPrevented).toBe(false);
+      for (const element of [checkbox, text, area]) element.remove();
+    });
+
+    it('leaves Space with a modifier alone', () => {
+      const callbacks = createCallbacks();
+      renderHook(() => useTimelineShortcuts(callbacks));
+
+      pressKey(' ', { shiftKey: true });
+      pressKey(' ', { metaKey: true });
+
+      expect(callbacks.togglePlay).not.toHaveBeenCalled();
+    });
   });
 
   it('Home should call goToStart', () => {
