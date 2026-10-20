@@ -622,8 +622,9 @@ export class ShapeRenderer {
 
   /** A node's skin data placed at its current transform (see placeSkinData). */
   private placedSkin(node: Node, skinData: SkinData): SkinData {
-    const { position, rotation, scale, anchor } = node.transform;
-    const local = mat3.compose(position, rotation, scale, anchor);
+    // The local matrix as the scene graph builds it (geometry applies the anchor)
+    const { position, rotation, scale } = node.transform;
+    const local = mat3.compose(position, rotation, scale);
     return placeSkinData(skinData, [local.a, local.b, local.c, local.d, local.tx, local.ty]);
   }
 
@@ -1729,12 +1730,11 @@ export class ShapeRenderer {
     // Cache VP array for texture program
     this.currentVPArray = vpArray;
 
-    // Create world matrix from node transform
+    // Create world matrix from node transform (geometry applies the anchor)
     const worldMatrix = mat3.compose(
       node.transform.position,
       node.transform.rotation,
-      node.transform.scale,
-      node.transform.anchor
+      node.transform.scale
     );
 
     switch (node.type) {
@@ -1779,12 +1779,11 @@ export class ShapeRenderer {
     if (!node.visible) return;
     if (node.type === 'ik-target' || node.type === 'vitruvian') return;
 
-    // Compute the node's world transform relative to parent
+    // Compute the node's world transform relative to parent (geometry applies the anchor)
     const localMatrix = mat3.compose(
       node.transform.position,
       node.transform.rotation,
-      node.transform.scale,
-      node.transform.anchor
+      node.transform.scale
     );
     const worldTransform = mat3.multiply(parentTransform, localMatrix);
 

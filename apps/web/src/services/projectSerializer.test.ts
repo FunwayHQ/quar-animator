@@ -403,12 +403,12 @@ describe('ProjectSerializer', () => {
         applied = state;
       });
 
-      // compose(position, 0°, 1, anchor 0.5) → translation minus the anchor
+      // The mesh's local matrix: its position, 0°, scale 1
       const active = sg.getNode('mesh-a') as unknown as { skinData: { meshBindLocal: number[] } };
-      expect(active.skinData.meshBindLocal).toEqual([1, 0, 0, 1, 9.5, 19.5]);
+      expect(active.skinData.meshBindLocal).toEqual([1, 0, 0, 1, 10, 20]);
       const other = (applied.pages as Array<{ sceneGraphJSON: { nodes: any[] } }>)[1]!
         .sceneGraphJSON.nodes[0];
-      expect(other.skinData.meshBindLocal).toEqual([1, 0, 0, 1, 69.5, 19.5]);
+      expect(other.skinData.meshBindLocal).toEqual([1, 0, 0, 1, 70, 20]);
     });
   });
 

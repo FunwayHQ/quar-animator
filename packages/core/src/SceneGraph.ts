@@ -364,7 +364,11 @@ export class SceneGraph {
   }
 
   private computeLocalMatrix(transform: Transform): Matrix3 {
-    return mat3.compose(transform.position, transform.rotation, transform.scale, transform.anchor);
+    // No anchor: it's a fraction of the node's size, which each node's own
+    // geometry is already laid out around. Passed to compose (which offsets by
+    // it in units) it shifted everything half a unit down-left of its bounds,
+    // and an export cropped to an artboard showed the gap as an edge line.
+    return mat3.compose(transform.position, transform.rotation, transform.scale);
   }
 
   private invalidateWorldTransform(id: string): void {

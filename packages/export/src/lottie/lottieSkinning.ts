@@ -122,8 +122,9 @@ export function bakeSkinnedOutlines(
         : fitSkinToVertices((node as { skinData: SkinData }).skinData, outline.vertices);
       if (!sameOutline) fitted.set(nodeId, { outline: outline.vertices, skin });
 
-      const { position, rotation, scale, anchor } = node.transform;
-      const local = mat3.compose(position, rotation, scale, anchor);
+      // The local matrix as the scene graph builds it (geometry applies the anchor)
+      const { position, rotation, scale } = node.transform;
+      const local = mat3.compose(position, rotation, scale);
       const placed = placeSkinData(skin, [local.a, local.b, local.c, local.d, local.tx, local.ty]);
       const bones: Record<string, AffineTransform2D> = {};
       for (const boneId of Object.keys(placed.inverseBindMatrices)) {

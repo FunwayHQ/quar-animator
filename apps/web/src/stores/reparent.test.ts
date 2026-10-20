@@ -92,7 +92,7 @@ describe('placement maths', () => {
     sg.addNode(group('g', { position: { x: 300, y: -40 } }));
     sg.addNode(rect('r', { position: { x: 10, y: 20 } }), 'g');
     const moved = moveAndCheck(sg, 'r', null);
-    expect(moved.position.x).toBeCloseTo(309.5);
+    expect(moved.position.x).toBeCloseTo(310);
     expect(moved.rotation).toBe(0);
   });
 
@@ -128,9 +128,7 @@ describe('placement maths', () => {
     const before = sg.getWorldTransform('r');
     const m = reparentMatrix(sg, 'r', null)!;
     const placement = mapPlacement(placementOf(sg.getNode('r')!.transform), m);
-    expect(placement['transform.position.x']).toBeCloseTo(
-      before.tx + 0.5 * before.a + 0.5 * before.c
-    );
+    expect(placement['transform.position.x']).toBeCloseTo(before.tx);
     expect(Number.isFinite(placement['transform.rotation'])).toBe(true);
   });
 
@@ -217,7 +215,7 @@ describe('editor actions keep layers in place', () => {
 
     expectSameMatrix(sg.getWorldTransform('logo-bg'), before);
     const keyframes = store().timeline.tracks.find((t) => t.nodeId === 'logo-bg')!.keyframes;
-    expect(keyframes.map((kf) => kf.value)).toEqual([-995.5, -974.5]);
+    expect(keyframes.map((kf) => kf.value)).toEqual([-995, -974]);
 
     // One undo step restores the group, the position and the keyframes
     store().undo(sg);
@@ -253,14 +251,14 @@ describe('editor actions keep layers in place', () => {
 
   it('keeps a bound mesh where it is drawn when it changes parent', () => {
     const local = (id: string) => {
-      const { position, rotation, scale, anchor } = sg.getNode(id)!.transform;
-      const m = mat3.compose(position, rotation, scale, anchor);
+      const { position, rotation, scale } = sg.getNode(id)!.transform;
+      const m = mat3.compose(position, rotation, scale);
       return [m.a, m.b, m.c, m.d, m.tx, m.ty];
     };
     sg.addNode(group('g', { position: { x: 300, y: 40 }, rotation: 20 }));
     const mesh = rect('mesh', { position: { x: 10, y: 20 } });
     const bindLocal = (() => {
-      const m = mat3.compose(mesh.transform.position, 0, { x: 1, y: 1 }, mesh.transform.anchor);
+      const m = mat3.compose(mesh.transform.position, 0, { x: 1, y: 1 });
       return [m.a, m.b, m.c, m.d, m.tx, m.ty];
     })();
     const skinData: SkinData = {
@@ -296,8 +294,8 @@ describe('editor actions keep layers in place', () => {
     expect(endX()).toBe(10);
 
     store().moveNodeKeepingPlacement(sg, 'r', null);
-    expect(restX()).toBeCloseTo(209.5);
+    expect(restX()).toBeCloseTo(210);
     // The slide's keyframes were regenerated from the moved rest pose
-    expect(endX()).toBeCloseTo(209.5);
+    expect(endX()).toBeCloseTo(210);
   });
 });

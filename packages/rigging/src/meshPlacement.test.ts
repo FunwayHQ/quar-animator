@@ -38,8 +38,8 @@ function rect(x: number, y: number): RectangleNode {
 
 /** Local matrix of a node, as the scene graph composes it. */
 function localOf(sg: SceneGraph, id: string): number[] {
-  const { position, rotation, scale, anchor } = sg.getNode(id)!.transform;
-  const m = mat3.compose(position, rotation, scale, anchor);
+  const { position, rotation, scale } = sg.getNode(id)!.transform;
+  const m = mat3.compose(position, rotation, scale);
   return [m.a, m.b, m.c, m.d, m.tx, m.ty];
 }
 
@@ -95,10 +95,10 @@ describe('bound meshes follow their own transform', () => {
     // A vertex at the mesh's right end swings a quarter turn about the bone
     const [x, y] = deform(sg, skin).slice(2, 4);
     const world = sg.getWorldTransform('bone');
-    const atRest = mat3.transformPoint(
-      mat3.compose({ x: 50, y: 100 }, 0, { x: 1, y: 1 }, { x: 0.5, y: 0.5 }),
-      { x: 50, y: -20 }
-    );
+    const atRest = mat3.transformPoint(mat3.compose({ x: 50, y: 100 }, 0, { x: 1, y: 1 }), {
+      x: 50,
+      y: -20,
+    });
     const expected = mat3.transformPoint(world, atRest);
     expect(x).toBeCloseTo(expected.x, 6);
     expect(y).toBeCloseTo(expected.y, 6);

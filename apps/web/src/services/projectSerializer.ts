@@ -363,8 +363,9 @@ function migrateSkinBindings(nodes: Node[]): void {
   for (const node of nodes) {
     const skin = (node as { skinData?: SkinData }).skinData;
     if (!skin || skin.meshBindLocal) continue;
-    const { position, rotation, scale, anchor } = node.transform;
-    const local = mat3.compose(position, rotation, scale, anchor);
+    // The local matrix as the scene graph builds it (geometry applies the anchor)
+    const { position, rotation, scale } = node.transform;
+    const local = mat3.compose(position, rotation, scale);
     skin.meshBindLocal = [local.a, local.b, local.c, local.d, local.tx, local.ty];
   }
 }

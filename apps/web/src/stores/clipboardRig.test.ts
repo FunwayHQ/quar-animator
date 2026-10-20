@@ -90,8 +90,8 @@ describe('copying, pasting and deleting rigs', () => {
     store().pasteClipboard(sg);
     const [copy] = [...store().selectedNodeIds];
     expect(sg.getNode(copy!)!.parent).toBeNull();
-    // (300, 0) minus the group's half-unit anchor offset, plus (10, 20), plus the paste offset
-    expect(sg.getNode(copy!)!.transform.position).toEqual({ x: 329.5, y: -0.5 });
+    // (300, 0), plus (10, 20), plus the paste offset
+    expect(sg.getNode(copy!)!.transform.position).toEqual({ x: 330, y: 0 });
   });
 
   it('gives a duplicated rig its own bones, chain and binding', () => {

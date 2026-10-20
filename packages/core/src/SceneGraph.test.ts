@@ -563,6 +563,33 @@ describe('SceneGraph', () => {
       expect(worldMatrix.tx).toBeDefined();
     });
 
+    it('places an anchored node at its position, the anchor being left to its geometry', () => {
+      // A centered 2410 × 484 artboard: its geometry spans ±1205 × ±242 about
+      // the position, so the world transform must not shift it as well (it
+      // used to, by half a unit, and exports cropped to it showed an edge line)
+      const node = createGroupNode('node-1', 'Node 1');
+      node.transform.position = { x: 23.5, y: 8.25 };
+      sceneGraph.addNode(node);
+
+      const worldMatrix = sceneGraph.getWorldTransform('node-1');
+      expect(worldMatrix.tx).toBe(23.5);
+      expect(worldMatrix.ty).toBe(8.25);
+    });
+
+    it('places a child of a centered, scaled group exactly', () => {
+      const parent = createGroupNode('parent', 'Parent');
+      parent.transform.position = { x: 100, y: 100 };
+      parent.transform.scale = { x: 2, y: 2 };
+      const child = createGroupNode('child', 'Child');
+      child.transform.position = { x: 10, y: -5 };
+      sceneGraph.addNode(parent);
+      sceneGraph.addNode(child, 'parent');
+
+      const worldMatrix = sceneGraph.getWorldTransform('child');
+      expect(worldMatrix.tx).toBe(120);
+      expect(worldMatrix.ty).toBe(90);
+    });
+
     it('caches world transform', () => {
       const node = createGroupNode('node-1', 'Node 1');
       sceneGraph.addNode(node);
