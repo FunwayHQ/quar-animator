@@ -14,6 +14,7 @@ import { evaluateIKChains } from '@quar/rigging';
 import { useEditorStore } from '../stores/editorStore';
 import { noteSequenceShown } from '../stores/sequenceActions';
 import { useSceneGraph } from '../contexts/SceneGraphContext';
+import { poseScene } from '../stores/scenePosing';
 
 /**
  * Where playing stops or loops: the last keyframe, when the animation reaches
@@ -88,7 +89,8 @@ export function usePlayback() {
     noteSequenceShown(timeline, frame, animationSequence);
     applyingRef.current = true;
     try {
-      applyFrame(sg, timeline, ikChains, frame);
+      // Showing a frame isn't an edit: the project stays saved
+      poseScene(() => applyFrame(sg, timeline, ikChains, frame));
     } finally {
       applyingRef.current = false;
     }

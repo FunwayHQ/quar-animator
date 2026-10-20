@@ -38,6 +38,7 @@ import { CanvasRuler } from '../canvas/CanvasRuler';
 import { TextEditOverlay } from '../canvas/TextEditOverlay';
 import { BoneOverlay } from '../canvas/BoneOverlay';
 import { GhostSceneCache, poseSceneAtFrame } from '../canvas/onionSkinScenes';
+import { poseScene } from '../../stores/scenePosing';
 import { bindLayersToBones } from '../canvas/bindToBones';
 import { ArtboardOverlay } from '../canvas/ArtboardOverlay';
 import { SequenceBadgesOverlay } from '../canvas/SequenceBadgesOverlay';
@@ -665,7 +666,9 @@ export function Canvas({
         if (sceneGraphRef.current) {
           const { ikChains, isPlaying: ikPlaying } = useEditorStore.getState();
           if (ikChains.length > 0 && !ikPlaying) {
-            evaluateIKChains(ikChains, sceneGraphRef.current);
+            const sg = sceneGraphRef.current;
+            // The bones IK poses aren't edits (moving the target is)
+            poseScene(() => evaluateIKChains(ikChains, sg));
           }
         }
 
@@ -678,21 +681,24 @@ export function Canvas({
             currentFrame: dcFrame,
             frameRate: dcFrameRate,
           } = useEditorStore.getState();
+          const sg = sceneGraphRef.current;
           if (dynamicChains.length > 0 && dcPlaying) {
-            // One fixed step per timeline frame, as exports simulate it
-            evaluateDynamicChainsAtFrame(
-              dynamicChains,
-              dynamicChainStatesRef.current,
-              sceneGraphRef.current as any,
-              dcFrame,
-              dcFrameRate,
-              globalWind,
-              dynamicChainClockRef.current
+            // One fixed step per timeline frame, as exports simulate it; physics isn't an edit
+            poseScene(() =>
+              evaluateDynamicChainsAtFrame(
+                dynamicChains,
+                dynamicChainStatesRef.current,
+                sg as any,
+                dcFrame,
+                dcFrameRate,
+                globalWind,
+                dynamicChainClockRef.current
+              )
             );
           } else if (!dcPlaying) {
             // Stopped: the bones get their own rotations back, and the next play starts afresh
             if (dynamicChainStatesRef.current.size > 0) {
-              resetDynamicChainStates(dynamicChainStatesRef.current, sceneGraphRef.current as any);
+              poseScene(() => resetDynamicChainStates(dynamicChainStatesRef.current, sg as any));
             }
             dynamicChainClockRef.current.lastFrame = null;
           }

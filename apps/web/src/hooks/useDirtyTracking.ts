@@ -6,16 +6,18 @@
 import { useEffect } from 'react';
 import type { SceneGraph } from '@quar/core';
 import { useEditorStore } from '../stores/editorStore';
+import { isPosingScene } from '../stores/scenePosing';
 
 /**
- * Mark the project dirty on any scene change — except while an export runs:
- * it poses the scene frame by frame and puts it back, which is no edit.
+ * Mark the project dirty on any scene change — except ones that only show
+ * the animation: an export posing frames, playback and scrubbing applying
+ * keyframes, IK and physics posing bones.
  */
 export function useDirtyTracking(sceneGraph: SceneGraph): void {
   useEffect(() => {
     const markDirty = () => {
       const store = useEditorStore.getState();
-      if (!store.isExporting) store.markDirty();
+      if (!store.isExporting && !isPosingScene()) store.markDirty();
     };
     const unsubs = [
       sceneGraph.on('nodeAdded', markDirty),
