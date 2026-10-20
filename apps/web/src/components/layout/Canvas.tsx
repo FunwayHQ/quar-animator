@@ -35,6 +35,7 @@ import { CanvasRuler } from '../canvas/CanvasRuler';
 import { TextEditOverlay } from '../canvas/TextEditOverlay';
 import { BoneOverlay } from '../canvas/BoneOverlay';
 import { GhostSceneCache, poseSceneAtFrame } from '../canvas/onionSkinScenes';
+import { bindLayersToBones } from '../canvas/bindToBones';
 import { ArtboardOverlay } from '../canvas/ArtboardOverlay';
 import { SequenceBadgesOverlay } from '../canvas/SequenceBadgesOverlay';
 import { GuideOverlay } from '../canvas/GuideOverlay';
@@ -933,42 +934,12 @@ export function Canvas({
     const handleBindToBones = () => {
       const graph = sceneGraphRef.current;
       if (!graph) return;
-      const state = useEditorStore.getState();
-      const selectedArr = Array.from(state.selectedNodeIds);
-      const boneIds: string[] = [];
-      graph.traverse((n) => {
-        if (n.type === 'bone') boneIds.push(n.id);
-      });
-      if (boneIds.length === 0) return;
-
-      for (const nodeId of selectedArr) {
-        const node = graph.getNode(nodeId);
-        if (!node) continue;
-        const isShape = ['rectangle', 'ellipse', 'polygon', 'path', 'image'].includes(node.type);
-        const isGroup = node.type === 'group';
-
-        if (isShape) {
-          const mesh = shapeRendererRef.current?.getBindVertices(node);
-          bindMeshToBones(graph, nodeId, boneIds, mesh?.vertices, { bendMesh: mesh?.bendMesh });
-        } else if (isGroup) {
-          const children = graph
-            .getChildren(nodeId)
-            .filter(
-              (c: Node) =>
-                c.type === 'rectangle' ||
-                c.type === 'ellipse' ||
-                c.type === 'polygon' ||
-                c.type === 'path' ||
-                c.type === 'image'
-            );
-          for (const child of children) {
-            const mesh = shapeRendererRef.current?.getBindVertices(child);
-            bindMeshToBones(graph, child.id, boneIds, mesh?.vertices, {
-              bendMesh: mesh?.bendMesh,
-            });
-          }
-        }
-      }
+      bindLayersToBones(
+        graph,
+        useEditorStore.getState().selectedNodeIds,
+        (node) => shapeRendererRef.current?.getBindVertices(node),
+        bindMeshToBones
+      );
     };
 
     const handleUnbindMesh = () => {
@@ -1974,21 +1945,13 @@ export function Canvas({
             items.push({
               id: 'bind-to-bones',
               label: 'Bind to Bones',
-              onClick: () => {
-                if (isGroup) {
-                  // Bind each shape/image child individually
-                  const children = getBindableChildren();
-                  for (const child of children) {
-                    const tessVerts =
-                      shapeRendererRef.current?.getTessellatedVertices(child.id) ?? undefined;
-                    bindMeshToBones(sceneGraph, child.id, boneIds, tessVerts);
-                  }
-                } else {
-                  const tessVerts =
-                    shapeRendererRef.current?.getTessellatedVertices(selNode.id) ?? undefined;
-                  bindMeshToBones(sceneGraph, selNode.id, boneIds, tessVerts);
-                }
-              },
+              onClick: () =>
+                bindLayersToBones(
+                  sceneGraph,
+                  [selNode.id],
+                  (node) => shapeRendererRef.current?.getBindVertices(node),
+                  bindMeshToBones
+                ),
             });
           }
 
