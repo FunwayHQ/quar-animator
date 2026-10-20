@@ -1916,6 +1916,27 @@ describe('SelectionTool', () => {
       expect(enteredGroupId).toBe('art1');
     });
 
+    it('hands the move into an artboard to the editor, keeping the whole placement', () => {
+      context.sceneGraph.addNode(createTestArtboard('art1', 200, 200, 400, 300));
+      context.sceneGraph.addNode(createTestRectangle('rect1', -500, -500, 50, 50));
+      context.setSelectedIds(['rect1']);
+      const moves: Array<[string, string | null]> = [];
+      context.moveNodeKeepingPlacement = (id, parentId) => {
+        moves.push([id, parentId]);
+        context.sceneGraph.moveNode(id, parentId);
+      };
+      const at = (x: number, y: number, extra = {}) =>
+        createMockPointerEvent({
+          worldPosition: { x, y },
+          screenPosition: context.camera.worldToScreen({ x, y }),
+          ...extra,
+        });
+      tool.onPointerDown(at(-500, -500, { button: 0 }));
+      tool.onPointerMove(at(200, 200));
+      tool.onPointerUp(at(200, 200, { button: 0 }));
+      expect(moves).toEqual([['rect1', 'art1']]);
+    });
+
     it('should auto-reparent node dropped onto artboard', () => {
       // Create an artboard at center 200,200 with size 400x300
       const artboard = createTestArtboard('art1', 200, 200, 400, 300);

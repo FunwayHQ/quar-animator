@@ -401,10 +401,11 @@ export class SelectionTool extends BaseTool {
     if (this.mode === 'moving' && this.moveUndoPushed) {
       // Only reached when the pointer actually moved (moveUndoPushed is set on the
       // first real move), so a zero-movement click never reparents or keyframes.
+      // Move completed - notify for auto-keyframe; keyed where it was moved,
+      // before a change of parent re-expresses the keys in the new parent's space
+      this.context.onTransformComplete?.(selectedIds, 'move');
       // Auto-reparent: check if moved nodes should be placed in/out of artboards
       this.autoReparentAfterMove(selectedIds);
-      // Move completed - notify for auto-keyframe
-      this.context.onTransformComplete?.(selectedIds, 'move');
     } else if (this.mode === 'resizing') {
       // Resize completed - only fire completion if an actual drag occurred
       if (this.dragMoved) this.context.onTransformComplete?.(selectedIds, 'resize');
@@ -1709,6 +1710,13 @@ export class SelectionTool extends BaseTool {
 
       // Don't reparent into a node that's also being moved
       if (targetParentId && selectedIds.has(targetParentId)) continue;
+
+      // The editor re-expresses the whole placement in the new parent's space —
+      // rotation, scale, keyframes and binding with it, not just the position
+      if (this.context.moveNodeKeepingPlacement) {
+        this.context.moveNodeKeepingPlacement(id, targetParentId);
+        continue;
+      }
 
       // Convert world position to new parent's local coords
       const worldPos = node.transform.position;

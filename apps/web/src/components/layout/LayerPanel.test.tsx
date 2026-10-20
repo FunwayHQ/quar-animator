@@ -5,7 +5,7 @@ import { SceneGraphProvider, useSceneGraph } from '../../contexts/SceneGraphCont
 import { createDefaultTransform } from '@quar/core';
 import type { SceneGraph } from '@quar/core';
 import type { RectangleNode, EllipseNode, GroupNode, ArtboardNode, Node } from '@quar/types';
-import { LayerPanel, computeInsertIndex, nodeTypeIcon } from './LayerPanel';
+import { LayerPanel, computeInsertIndex, dropPositionAt, nodeTypeIcon } from './LayerPanel';
 import { useEditorStore } from '../../stores/editorStore';
 import type { ReactNode } from 'react';
 
@@ -1063,6 +1063,18 @@ describe('LayerPanel', () => {
     it('maps before/after directly for array-order group children', () => {
       expect(computeInsertIndex('before', 2, false)).toBe(2);
       expect(computeInsertIndex('after', 2, false)).toBe(3);
+    });
+
+    it('drops into groups and artboards, but keeps artboards at the top level', () => {
+      const artboard = { type: 'artboard' } as Node;
+      const group = { type: 'group' } as Node;
+      const shape = { type: 'rectangle' } as Node;
+      expect(dropPositionAt(artboard, 0.5, false)).toBe('inside');
+      expect(dropPositionAt(group, 0.5, false)).toBe('inside');
+      expect(dropPositionAt(shape, 0.5, false)).toBe('after');
+      expect(dropPositionAt(artboard, 0.1, false)).toBe('before');
+      // An artboard dragged onto another goes beside it
+      expect(dropPositionAt(artboard, 0.5, true)).toBe('after');
     });
 
     it('drops inside at index 0', () => {

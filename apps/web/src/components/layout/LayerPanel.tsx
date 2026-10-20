@@ -55,6 +55,22 @@ const DRAG_THRESHOLD_PX = 5;
 
 type DropPosition = 'before' | 'after' | 'inside';
 
+/**
+ * Where a drop lands on a row (`fraction` of the way down it): before or
+ * after it, or inside a group or an artboard. Artboards themselves stay at
+ * the top level.
+ */
+export function dropPositionAt(
+  target: Node | undefined,
+  fraction: number,
+  draggingArtboard: boolean
+): DropPosition {
+  if (fraction < 0.25) return 'before';
+  if (fraction > 0.75) return 'after';
+  const holdsLayers = target?.type === 'group' || target?.type === 'artboard';
+  return holdsLayers && !draggingArtboard ? 'inside' : 'after';
+}
+
 interface DropTarget {
   nodeId: string;
   position: DropPosition;
@@ -844,22 +860,17 @@ export function LayerPanel() {
         const relY = clientY - rect.top;
         const fraction = relY / rect.height;
 
-        const node = sceneGraph.getNode(nodeId);
-        const isGroup = node?.type === 'group';
-
-        if (fraction < 0.25) {
-          return { nodeId, position: 'before' };
-        } else if (fraction > 0.75) {
-          return { nodeId, position: 'after' };
-        } else if (isGroup) {
-          return { nodeId, position: 'inside' };
-        } else {
-          return { nodeId, position: 'after' };
-        }
+        const draggingArtboard = [...(dragState?.draggedIds ?? [])].some(
+          (id) => sceneGraph.getNode(id)?.type === 'artboard'
+        );
+        return {
+          nodeId,
+          position: dropPositionAt(sceneGraph.getNode(nodeId), fraction, draggingArtboard),
+        };
       }
       return null;
     },
-    [sceneGraph]
+    [sceneGraph, dragState]
   );
 
   const handlePointerMove = useCallback(
