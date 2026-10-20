@@ -53,7 +53,7 @@ import { GradientEditor } from '../common/GradientEditor';
 import type { FillType } from '../common/GradientEditor';
 import { ImageAdjustments, DEFAULT_ADJUSTMENTS } from '../common/ImageAdjustments';
 import type { ImageAdjustments as ImageAdjustmentsType } from '@quar/types';
-import { hasGoogleFontsConsent } from '../common/ConsentBanner';
+import { ensureGoogleFontsConsent } from '../common/ConsentBanner';
 import { toast } from '../common/Toast';
 import {
   createDefaultGradient,
@@ -2382,7 +2382,6 @@ export function PropertiesPanel() {
                 const textNode = node;
                 const fm = getFontManager();
                 const loadedFonts = fm.getLoadedFamilies();
-                const googleConsent = hasGoogleFontsConsent();
                 // Always show Google Fonts in dropdown; consent checked on select
                 const googleFamilies = GOOGLE_FONTS_CATALOG.map((e) => e.family);
                 const allFonts = [...new Set([...loadedFonts, ...googleFamilies])].sort();
@@ -2404,22 +2403,25 @@ export function PropertiesPanel() {
                             const family = e.target.value;
                             // If font isn't loaded yet, load from Google Fonts
                             if (!fm.hasFont(family)) {
-                              if (!googleConsent) {
-                                toast.info(
-                                  'Enable Google Fonts in the consent banner to use this font'
-                                );
-                                return;
-                              }
-                              fm.loadGoogleFont(family, textNode.fontWeight)
-                                .then(() => {
-                                  pushUndo(sceneGraph);
-                                  setText({ fontFamily: family });
-                                  if (shouldKeyframe(autoKeyframe, nodeId, 'fontFamily'))
-                                    addKeyframeAtFrame(nodeId, 'fontFamily', currentFrame, family);
-                                })
-                                .catch(() => {
-                                  toast.error(`Failed to load font: ${family}`);
-                                });
+                              // Asks to allow Google Fonts the first time
+                              void ensureGoogleFontsConsent().then((allowed) => {
+                                if (!allowed) return;
+                                fm.loadGoogleFont(family, textNode.fontWeight)
+                                  .then(() => {
+                                    pushUndo(sceneGraph);
+                                    setText({ fontFamily: family });
+                                    if (shouldKeyframe(autoKeyframe, nodeId, 'fontFamily'))
+                                      addKeyframeAtFrame(
+                                        nodeId,
+                                        'fontFamily',
+                                        currentFrame,
+                                        family
+                                      );
+                                  })
+                                  .catch(() => {
+                                    toast.error(`Failed to load font: ${family}`);
+                                  });
+                              });
                               return;
                             }
                             pushUndo(sceneGraph);
@@ -2499,22 +2501,20 @@ export function PropertiesPanel() {
                             const family = textNode.fontFamily;
                             // Check if the weight is loaded; if not, try loading it
                             if (!fm.hasFontWeight(family, w)) {
-                              if (!hasGoogleFontsConsent()) {
-                                toast.info(
-                                  'Enable Google Fonts in the consent banner to load this weight'
-                                );
-                                return;
-                              }
-                              fm.loadGoogleFont(family, w)
-                                .then(() => {
-                                  pushUndo(sceneGraph);
-                                  setText({ fontWeight: w });
-                                  if (shouldKeyframe(autoKeyframe, nodeId, 'fontWeight'))
-                                    addKeyframeAtFrame(nodeId, 'fontWeight', currentFrame, w);
-                                })
-                                .catch(() => {
-                                  toast.error(`Failed to load ${family} weight ${w}`);
-                                });
+                              // Asks to allow Google Fonts the first time
+                              void ensureGoogleFontsConsent().then((allowed) => {
+                                if (!allowed) return;
+                                fm.loadGoogleFont(family, w)
+                                  .then(() => {
+                                    pushUndo(sceneGraph);
+                                    setText({ fontWeight: w });
+                                    if (shouldKeyframe(autoKeyframe, nodeId, 'fontWeight'))
+                                      addKeyframeAtFrame(nodeId, 'fontWeight', currentFrame, w);
+                                  })
+                                  .catch(() => {
+                                    toast.error(`Failed to load ${family} weight ${w}`);
+                                  });
+                              });
                               return;
                             }
                             pushUndo(sceneGraph);

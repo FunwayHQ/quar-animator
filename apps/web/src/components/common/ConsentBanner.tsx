@@ -10,6 +10,7 @@
 
 import { useState, useCallback } from 'react';
 import { createPortal } from 'react-dom';
+import { confirmDialog } from './PromptDialog';
 import styles from './ConsentBanner.module.css';
 
 const STORAGE_KEY = 'quar-consent-accepted';
@@ -36,6 +37,23 @@ export function setGoogleFontsConsent(enabled: boolean): void {
   } catch {
     // localStorage not available
   }
+}
+
+/**
+ * Make sure Google Fonts may be used, asking the first time a font from them
+ * is picked — the consent banner, the other place to allow it, is gone once
+ * dismissed. Resolves true when they may be used.
+ */
+export async function ensureGoogleFontsConsent(): Promise<boolean> {
+  if (hasGoogleFontsConsent()) return true;
+  const allowed = await confirmDialog({
+    title: 'Use Google Fonts?',
+    message:
+      'This font comes from Google Fonts. Loading it sends a request to Google’s servers, which can see your IP address. Inter, the font that comes with the app, needs nothing.',
+    confirmLabel: 'Allow Google Fonts',
+  });
+  if (allowed) setGoogleFontsConsent(true);
+  return allowed;
 }
 
 export function ConsentBanner() {

@@ -185,3 +185,10 @@
     transform: translate(-50%, -50%) scale(0.95);
   }
 }
+
+.message {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+}

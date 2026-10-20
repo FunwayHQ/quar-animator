@@ -1,6 +1,6 @@
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { PromptDialog, PromptDialogHost, promptDialog } from './PromptDialog';
+import { PromptDialog, PromptDialogHost, confirmDialog, promptDialog } from './PromptDialog';
 
 afterEach(() => {
   cleanup();
@@ -106,5 +106,38 @@ describe('PromptDialogHost imperative API', () => {
 
     await expect(result).resolves.toBeNull();
     expect(screen.queryByRole('dialog')).toBeNull();
+  });
+});
+
+describe('confirmDialog', () => {
+  it('asks a question with no input, and resolves true when confirmed', async () => {
+    vi.useFakeTimers();
+    render(<PromptDialogHost />);
+
+    let result!: Promise<boolean>;
+    act(() => {
+      result = confirmDialog({ title: 'Use it?', message: 'It calls out.', confirmLabel: 'Allow' });
+    });
+    expect(screen.getByText('It calls out.')).toBeInTheDocument();
+    expect(screen.queryByTestId('prompt-dialog-input')).toBeNull();
+    expect(screen.getByTestId('prompt-dialog-confirm')).toBeEnabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Allow' }));
+    act(() => vi.advanceTimersByTime(120));
+
+    await expect(result).resolves.toBe(true);
+  });
+
+  it('resolves false on Escape', async () => {
+    vi.useFakeTimers();
+    render(<PromptDialogHost />);
+
+    let result!: Promise<boolean>;
+    act(() => {
+      result = confirmDialog({ title: 'Use it?' });
+    });
+    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
+    act(() => vi.advanceTimersByTime(120));
+
+    await expect(result).resolves.toBe(false);
   });
 });

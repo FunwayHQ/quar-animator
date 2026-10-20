@@ -186,7 +186,7 @@ function textStylePage(ids: TutorialNodes): TutorialPage {
     ids,
     '2 · Style & reveal',
     'Style it, then reveal it',
-    'Select text to change its Font, Size, Weight, Align, Line Height and Letter Spacing in Properties. Inter comes with the app; the other fonts in the list come from Google Fonts, if you allowed that in the consent banner.\n\n' +
+    'Select text to change its Font, Size, Weight, Align, Line Height and Letter Spacing in Properties. Inter comes with the app; the other fonts in the list come from Google Fonts, and the first time you pick one the app asks before loading it.\n\n' +
       'Under Animation in Properties, text has three entrances of its own: Typewriter, By Word and By Line. Each example on the right uses one. Press Space to play them.'
   );
   const typed = text(ids, board.id, 'Typewriter: letter by letter.', 60, 160, 320, 30, {
