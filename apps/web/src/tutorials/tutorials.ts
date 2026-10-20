@@ -4,7 +4,7 @@
  * left of each artboard, a working example on the right to play with.
  */
 
-import type { EasingFunction, Node, Timeline } from '@quar/types';
+import type { Node } from '@quar/types';
 import {
   addKeyframe,
   applyAnimationPreset,
@@ -23,59 +23,23 @@ import {
   TEAL,
   VIOLET,
   TutorialNodes,
-  artboard,
   ellipse,
   emptyTimeline,
+  key,
+  lesson,
   rectangle,
   star,
   text,
   tutorialProject,
 } from './tutorialBuilder';
 import type { TutorialPage } from './tutorialBuilder';
+import { MORE_TUTORIALS } from './moreTutorials';
 
 export interface Tutorial {
   /** Stable id: the project's id, and how its seeding is remembered. */
   id: string;
   name: string;
   build: (createdAt: string) => ProjectDataV2;
-}
-
-// Text column on the left of each page, example on the right (Y up)
-const LEFT = -370;
-const TITLE_TOP = 190;
-const BODY_TOP = 130;
-const BODY_WIDTH = 390;
-const BODY_HEIGHT = 340;
-
-function lesson(
-  ids: TutorialNodes,
-  name: string,
-  title: string,
-  body: string
-): { board: Node; nodes: Node[] } {
-  const board = artboard(ids, name);
-  return {
-    board,
-    nodes: [
-      board,
-      text(ids, board.id, title, LEFT, TITLE_TOP, 740, 44, {
-        size: 28,
-        weight: 700,
-        name: 'Title',
-      }),
-      text(ids, board.id, body, LEFT, BODY_TOP, BODY_WIDTH, BODY_HEIGHT, { name: 'Lesson' }),
-    ],
-  };
-}
-
-function key(
-  timeline: Timeline,
-  nodeId: string,
-  property: string,
-  frames: Array<[frame: number, value: number, easing?: EasingFunction]>
-): void {
-  const track = getOrCreateTrack<number>(timeline, nodeId, property);
-  for (const [frame, value, easing] of frames) addKeyframe(track, frame, value, easing);
 }
 
 // ============================================================================
@@ -331,6 +295,7 @@ export const TUTORIALS: Tutorial[] = [
       );
     },
   },
+  ...MORE_TUTORIALS,
 ];
 
 /** Whether a project is one of the tutorials (they're given ids of this form). */

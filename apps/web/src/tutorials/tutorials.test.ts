@@ -39,11 +39,39 @@ describe.each(built)('$tutorial.name', ({ tutorial, data }) => {
   it('has one artboard a page, holding everything else', () => {
     for (const page of data.pages) {
       const nodes = page.sceneGraph.nodes;
-      const [board, ...rest] = nodes;
+      const byId = new Map(nodes.map((node) => [node.id, node]));
+      const [board] = nodes;
       expect(board!.type).toBe('artboard');
       expect(page.sceneGraph.rootNodeIds).toEqual([board!.id]);
-      expect(rest.every((node) => node.parent === board!.id)).toBe(true);
-      expect(board!.children).toEqual(rest.map((node) => node.id));
+      for (const node of nodes.slice(1)) {
+        // Every parent exists and lists the node as its child, up to the artboard
+        let current: Node | undefined = node;
+        while (current?.parent) {
+          const parent = byId.get(current.parent);
+          expect(parent?.children).toContain(current.id);
+          current = parent;
+        }
+        expect(current).toBe(board);
+      }
+    }
+  });
+
+  it('draws every symbol instance from a symbol the project has', () => {
+    const symbolIds = new Set((data.symbols ?? []).map((symbol) => symbol.id));
+    for (const page of data.pages) {
+      for (const node of page.sceneGraph.nodes) {
+        if (node.type === 'symbol-instance') expect(symbolIds.has(node.symbolId)).toBe(true);
+      }
+    }
+  });
+
+  it('masks groups with one of their own children', () => {
+    for (const page of data.pages) {
+      for (const node of page.sceneGraph.nodes) {
+        if (node.type === 'group' && node.maskNodeId) {
+          expect(node.children.at(-1)).toBe(node.maskNodeId);
+        }
+      }
     }
   });
 
@@ -95,7 +123,12 @@ describe.each(built)('$tutorial.name', ({ tutorial, data }) => {
         expect(y + box.y + box.height).toBeLessThanOrEqual(halfH);
         // Measured generously (no font here: 0.6 em a character), the lines fit
         const lines = getTextNodeLines(node).length;
-        expect(lines * node.fontSize * node.lineHeight).toBeLessThanOrEqual(node.boxHeight! + 1);
+        const height = lines * node.fontSize * node.lineHeight;
+        if (node.textResize === 'fixed') {
+          expect(height).toBeLessThanOrEqual(node.boxHeight! + 1);
+        } else {
+          expect(y + box.y + box.height - height).toBeGreaterThanOrEqual(-halfH);
+        }
       }
     }
   });
