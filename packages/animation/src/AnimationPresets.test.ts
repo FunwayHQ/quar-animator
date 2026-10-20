@@ -220,6 +220,21 @@ describe('animation presets', () => {
     expect(byLine.baseValues.get('visibleCharacters')).toBe(7);
   });
 
+  it('reveals text wrapped in a box line by line, as it is set', () => {
+    // No font here: 24px text is estimated at 14.4 a character, so a box 80
+    // wide holds one five-letter word a line
+    const wrapped = {
+      ...makeTextNode(),
+      content: 'Hello there world',
+      textResize: 'auto-height' as const,
+      boxWidth: 80,
+    };
+    const byLine = createAnimationPresetKeyframes(wrapped, 'line-reveal', 0, 12);
+
+    const stops = [...new Set(byLine.keyframes.map(({ value }) => value))];
+    expect(stops).toEqual([0, 6, 12, 17]);
+  });
+
   it('creates zoom, flash, rubber-band, and directional exit keyframes', () => {
     const node = makeNode();
     const zoomIn = createAnimationPresetKeyframes(node, 'zoom-in', 0, 12);

@@ -27,7 +27,7 @@ import {
   setAllPoints,
   getContourRange,
 } from '../path/pathUtils';
-import { getTextBounds } from '../font/textMetrics';
+import { getTextLocalBounds } from '../font/textPlacement';
 
 // ============================================================================
 // Image Vertex Helpers
@@ -973,26 +973,8 @@ export class DirectSelectionTool extends BaseTool {
           ? primaryBounds
           : allBounds.reduce((a, b) => rect.union(a, b));
       }
-      case 'text': {
-        const rawBounds = getTextBounds(
-          node.content,
-          node.fontFamily,
-          node.fontSize,
-          node.lineHeight,
-          node.letterSpacing,
-          node.textAlign
-        );
-        const anchor = node.transform.anchor;
-        if (anchor.x !== 0 || anchor.y !== 0) {
-          return {
-            x: -rawBounds.width * anchor.x,
-            y: -rawBounds.height * anchor.y,
-            width: rawBounds.width,
-            height: rawBounds.height,
-          };
-        }
-        return rawBounds;
-      }
+      case 'text':
+        return getTextLocalBounds(node);
       case 'image': {
         const imgNode = node;
         const anchor = node.transform.anchor;

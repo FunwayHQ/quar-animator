@@ -8,7 +8,7 @@
 
 import type { PathPoint, TextNode, Timeline } from '@quar/types';
 import { findTrack } from '@quar/animation';
-import { getFontManager, getTextBounds, textToSubpaths } from '@quar/core';
+import { getFontManager, getTextBox, getTextNodeBounds, textToSubpaths } from '@quar/core';
 import type { LottieShapeGroup, LottieShapeItem } from './lottieTypes';
 import { steppedTrackToLottie } from './lottieKeyframes';
 
@@ -36,6 +36,7 @@ export const editorTextOutlines: TextOutlineProvider = (node) => {
     textAlign: node.textAlign,
     lineHeight: node.lineHeight,
     letterSpacing: node.letterSpacing,
+    width: getTextBox(node)?.width,
   });
 
   // Same anchor offset as the renderer
@@ -43,14 +44,7 @@ export const editorTextOutlines: TextOutlineProvider = (node) => {
   let dy = 0;
   const { x: ax, y: ay } = node.transform.anchor;
   if (ax !== 0 || ay !== 0) {
-    const bounds = getTextBounds(
-      node.content,
-      node.fontFamily,
-      node.fontSize,
-      node.lineHeight,
-      node.letterSpacing,
-      node.textAlign
-    );
+    const bounds = getTextNodeBounds(node);
     dx = -(bounds.x + bounds.width * ax);
     dy = -(bounds.y + bounds.height * ay);
   }

@@ -166,6 +166,17 @@ describe('TransformHandles', () => {
       expect(result).toBe('top-left');
     });
 
+    it('picks the nearest handle on a box too short to keep them apart', () => {
+      // One line of text: the corners are 10px from the side handles
+      const bounds = createTestBounds(0, 0, 200, 20);
+      const handleList = handles.getHandles(bounds, camera);
+      const right = handleList.find((h) => h.position === 'right')!;
+
+      expect(handles.hitTest(right.screenPosition, bounds, camera)).toBe('right');
+      const nearCorner = { x: right.screenPosition.x, y: right.screenPosition.y - 8 };
+      expect(['top-right', 'bottom-right']).toContain(handles.hitTest(nearCorner, bounds, camera));
+    });
+
     it('should detect hit on edge handles', () => {
       const bounds = createTestBounds(0, 0, 100, 100);
       const handleList = handles.getHandles(bounds, camera);

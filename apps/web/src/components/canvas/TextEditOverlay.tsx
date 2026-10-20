@@ -6,7 +6,7 @@
 import { useEffect, useRef, useCallback } from 'react';
 import type { TextNode } from '@quar/types';
 import type { Camera } from '@quar/core';
-import { getTextBounds } from '@quar/core';
+import { getTextBox, getTextLocalBounds } from '@quar/core';
 import styles from './TextEditOverlay.module.css';
 
 export interface TextEditOverlayProps {
@@ -21,23 +21,24 @@ export function TextEditOverlay({ node, camera, onCommit, onCancel }: TextEditOv
 
   const zoom = camera.zoom;
 
-  // Compute the visual top-left of the text in world coordinates.
-  // Text origin (anchor 0,0) is at the baseline. The ascender goes into
-  // positive Y (up in world). getTextBounds returns the local-space AABB
-  // where bounds.y + bounds.height = ascender (visual top in Y-up).
-  const bounds = getTextBounds(
-    node.content || 'X', // use placeholder for empty text to get correct ascender
-    node.fontFamily,
-    node.fontSize,
-    node.lineHeight,
-    node.letterSpacing,
-    node.textAlign
-  );
+  // The visual top-left of the text box in world coordinates (Y-up, so the
+  // top is the box's highest y), offset for the anchor as the canvas draws it
+  const bounds = getTextLocalBounds(node);
   const worldTopLeft = {
     x: node.transform.position.x + bounds.x * node.transform.scale.x,
     y: node.transform.position.y + (bounds.y + bounds.height) * node.transform.scale.y,
   };
   const screenPos = camera.worldToScreen(worldTopLeft);
+
+  // Auto width text grows sideways and never wraps; text with a box wraps at
+  // its width, as the canvas will set it
+  const box = getTextBox(node);
+
+  // Typed in the text's own color, as it will be drawn
+  const fill = node.fills.find((f) => f.visible && f.type === 'solid' && f.color);
+  const color = fill?.color
+    ? `rgba(${fill.color.r}, ${fill.color.g}, ${fill.color.b}, ${fill.color.a * fill.opacity})`
+    : undefined;
 
   useEffect(() => {
     const el = textareaRef.current;
@@ -91,14 +92,21 @@ export function TextEditOverlay({ node, camera, onCommit, onCancel }: TextEditOv
   }, [onCommit, node.content]);
 
   // Auto-resize textarea to fit content
-  const handleInput = useCallback(() => {
+  const boxWidthPx = box ? box.width * zoom : undefined;
+  const boxHeightPx = box?.height !== undefined ? box.height * zoom : undefined;
+  const fitToContent = useCallback(() => {
     const el = textareaRef.current;
     if (!el) return;
     el.style.height = 'auto';
-    el.style.height = `${el.scrollHeight}px`;
-    el.style.width = 'auto';
-    el.style.width = `${Math.max(el.scrollWidth, 20)}px`;
-  }, []);
+    // A fixed box shows its full height, and the text past it while typing
+    el.style.height = `${Math.max(el.scrollHeight, boxHeightPx ?? 0)}px`;
+    if (boxWidthPx === undefined) {
+      el.style.width = 'auto';
+      el.style.width = `${Math.max(el.scrollWidth, 20)}px`;
+    }
+  }, [boxWidthPx, boxHeightPx]);
+  const handleInput = fitToContent;
+  useEffect(fitToContent, [fitToContent, node.content]);
 
   return (
     <div
@@ -123,6 +131,12 @@ export function TextEditOverlay({ node, camera, onCommit, onCancel }: TextEditOv
           textAlign: node.textAlign,
           lineHeight: node.lineHeight,
           letterSpacing: `${node.letterSpacing * zoom}px`,
+          whiteSpace: box ? 'pre-wrap' : 'pre',
+          ...(color && { color }),
+          ...(boxWidthPx !== undefined && {
+            width: `${boxWidthPx}px`,
+            minWidth: `${boxWidthPx}px`,
+          }),
         }}
         defaultValue={node.content}
         placeholder="Type something..."

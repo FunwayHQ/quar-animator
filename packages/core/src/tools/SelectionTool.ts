@@ -3,14 +3,23 @@
  * Selects, moves, and resizes shapes
  */
 
-import type { CanvasPointerEvent, Node, Vector2, Rect, Matrix3 } from '@quar/types';
+import type {
+  CanvasPointerEvent,
+  Node,
+  Vector2,
+  Rect,
+  Matrix3,
+  TextNode,
+  TextResize,
+} from '@quar/types';
 import { BaseTool, type ToolContext } from './BaseTool';
 import { vec2, rect, mat3 } from '../math';
 import { SelectionManager } from '../selection/SelectionManager';
 import { TransformHandles } from '../selection/TransformHandles';
 import type { HandlePosition, SelectionBounds } from '../selection/types';
 import { getPolygonBounds, getPathBounds } from '../path/pathUtils';
-import { getTextBounds } from '../font/textMetrics';
+import { getTextLocalBounds } from '../font/textPlacement';
+import { getTextNodeBounds } from '../font/textMetrics';
 import { getSymbolBounds } from '../symbols/symbolResolver';
 import { calculateSmartGuideSnap, type SmartGuide, type SmartGuideTarget } from './smartGuides';
 
@@ -102,6 +111,22 @@ interface NodeResizeState {
   radiusY?: number;
   radius?: number; // For polygon nodes
   scale?: Vector2; // For polygon non-uniform scaling
+  textBox?: { width: number; height: number }; // Text box size, in the text's own units
+}
+
+/**
+ * How text sizes after a handle drag, as in Figma: a side handle gives auto
+ * width text a width to wrap at (auto height); any handle that changes the
+ * height makes it a fixed size box.
+ */
+export function textResizeAfterHandle(
+  current: TextResize | undefined,
+  handle: HandlePosition
+): TextResize {
+  if (handle === 'left' || handle === 'right') {
+    return current === 'fixed' ? 'fixed' : 'auto-height';
+  }
+  return 'fixed';
 }
 
 // ============================================================================
@@ -865,15 +890,7 @@ export class SelectionTool extends BaseTool {
         break;
       }
       case 'text': {
-        const textNode = node;
-        localBounds = getTextBounds(
-          textNode.content,
-          textNode.fontFamily,
-          textNode.fontSize,
-          textNode.lineHeight,
-          textNode.letterSpacing,
-          textNode.textAlign
-        );
+        localBounds = getTextLocalBounds(node);
         break;
       }
       case 'image': {
@@ -1266,7 +1283,8 @@ export class SelectionTool extends BaseTool {
       } else if (node.type === 'path') {
         state.scale = { ...node.transform.scale };
       } else if (node.type === 'text') {
-        state.scale = { ...node.transform.scale };
+        const box = getTextNodeBounds(node);
+        state.textBox = { width: box.width, height: box.height };
       } else if (node.type === 'image') {
         state.width = node.width;
         state.height = node.height;
@@ -1434,11 +1452,14 @@ export class SelectionTool extends BaseTool {
             scale: { x: newScaleX, y: newScaleY },
           },
         });
-      } else if (
-        (node.type === 'path' || node.type === 'text') &&
-        initialState.scale !== undefined
-      ) {
-        // For paths and text, apply non-uniform scaling via transform scale
+      } else if (node.type === 'text' && initialState.textBox !== undefined) {
+        // Live text resizes its box and rewraps; its glyphs never stretch
+        this.context.sceneGraph.updateNode(
+          id,
+          resizeTextBox(node, initialState.textBox, scaleX, scaleY, handle, newPosition)
+        );
+      } else if (node.type === 'path' && initialState.scale !== undefined) {
+        // For paths, apply non-uniform scaling via transform scale
         const newScaleX = Math.max(0.01, initialState.scale.x * scaleX);
         const newScaleY = Math.max(0.01, initialState.scale.y * scaleY);
 
@@ -1789,4 +1810,44 @@ export class SelectionTool extends BaseTool {
     // Exit group when switching away from selection tool
     this.context.setEnteredGroupId?.(null);
   }
+}
+
+/**
+ * The update that gives a text node a box resized by a handle drag, placed at
+ * `position` (the proportionally mapped box center). Auto height text is as
+ * tall as its lines, so it's moved to keep the top of its box where it was.
+ */
+function resizeTextBox(
+  node: TextNode,
+  initialBox: { width: number; height: number },
+  scaleX: number,
+  scaleY: number,
+  handle: HandlePosition,
+  position: Vector2
+): Partial<TextNode> {
+  const textResize = textResizeAfterHandle(node.textResize, handle);
+  const boxWidth = Math.max(1, initialBox.width * scaleX);
+  const boxHeight = Math.max(1, initialBox.height * scaleY);
+  const update: Partial<TextNode> = {
+    textResize,
+    boxWidth,
+    boxHeight: textResize === 'fixed' ? boxHeight : undefined,
+    transform: { ...node.transform, position },
+  };
+  if (textResize === 'auto-height') {
+    const height = getTextNodeBounds({ ...node, ...update } as TextNode).height;
+    const { rotation, scale, anchor } = node.transform;
+    // Y-up: an anchored box's top is (1 - anchor.y) of its height above the
+    // position; unanchored text hangs from its first line, whatever its height
+    const anchored = anchor.x !== 0 || anchor.y !== 0;
+    const shift = mat3.transformPoint(mat3.compose({ x: 0, y: 0 }, rotation, scale), {
+      x: 0,
+      y: anchored ? (boxHeight - height) * (1 - anchor.y) : 0,
+    });
+    update.transform = {
+      ...node.transform,
+      position: { x: position.x + shift.x, y: position.y + shift.y },
+    };
+  }
+  return update;
 }

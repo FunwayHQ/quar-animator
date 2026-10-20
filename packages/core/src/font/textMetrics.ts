@@ -6,12 +6,16 @@
 
 /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument */
 import type opentype from 'opentype.js';
-import type { Rect } from '@quar/types';
+import type { Rect, TextNode } from '@quar/types';
 import { getFontManager } from './FontManager';
+import { breakTextLines, fontMeasure, getTextBox } from './textLayout';
+import type { MeasureText, TextBox, TextLine } from './textLayout';
 
 /**
  * Get text bounds using opentype.js font metrics.
- * Returns bounds in local space (before transform).
+ * Returns bounds in local space (before transform): from the left of the
+ * text, and from the ascender above the first baseline down. Text set in a
+ * box is as wide as the box, and as tall when the box has a height.
  */
 export function getTextBounds(
   content: string,
@@ -19,65 +23,71 @@ export function getTextBounds(
   fontSize: number,
   lineHeight: number = 1.2,
   letterSpacing: number = 0,
-  textAlign: 'left' | 'center' | 'right' = 'left'
+  // Lines align within the bounds, so alignment doesn't change them
+  _textAlign: 'left' | 'center' | 'right' = 'left',
+  box?: TextBox
 ): Rect {
   const fm = getFontManager();
   const font = fm.getFont(fontFamily);
 
   if (font) {
-    return getTextBoundsFromFont(content, font, fontSize, lineHeight, letterSpacing, textAlign);
+    const ascender = font.ascender * (fontSize / font.unitsPerEm);
+    return boundsFromLines(
+      content,
+      fontMeasure(font, fontSize, letterSpacing),
+      ascender,
+      fontSize,
+      lineHeight,
+      box
+    );
   }
 
   // Canvas 2D fallback for system fonts
-  return getTextBoundsFromCanvas(content, fontFamily, fontSize, lineHeight, letterSpacing);
+  return getTextBoundsFromCanvas(content, fontFamily, fontSize, lineHeight, letterSpacing, box);
+}
+
+/** Local bounds of a text node, in its box when it has one (before its anchor offset). */
+export function getTextNodeBounds(node: TextNode): Rect {
+  return getTextBounds(
+    node.content,
+    node.fontFamily,
+    node.fontSize,
+    node.lineHeight,
+    node.letterSpacing,
+    node.textAlign,
+    getTextBox(node)
+  );
 }
 
 /**
- * Get text bounds using an opentype.js font instance.
+ * The lines a text node is set in, wrapped in its box when it has one —
+ * measured in its font, or estimated when the font isn't loaded.
  */
-// TODO: textAlign is not yet reflected in bounds calculation — center/right
-// alignment would shift the X origin, but this currently only affects rendering
-// position, not stored bounds.
-function getTextBoundsFromFont(
+export function getTextNodeLines(node: TextNode): TextLine[] {
+  const font = getFontManager().getFontOrFallback(node.fontFamily, node.fontWeight);
+  const measure: MeasureText = font
+    ? fontMeasure(font, node.fontSize, node.letterSpacing)
+    : (text) => Array.from(text).length * (node.fontSize * 0.6 + node.letterSpacing);
+  return breakTextLines(node.content, measure, getTextBox(node)?.width);
+}
+
+function boundsFromLines(
   content: string,
-  font: opentype.Font,
+  measure: MeasureText,
+  ascender: number,
   fontSize: number,
   lineHeight: number,
-  letterSpacing: number,
-  _textAlign: 'left' | 'center' | 'right'
+  box: TextBox | undefined
 ): Rect {
-  const lines = content.split('\n');
-  const scale = fontSize / font.unitsPerEm;
-  const lineHeightPx = fontSize * lineHeight;
-  const ascender = font.ascender * scale;
-
-  // Measure line widths
-  const lineWidths: number[] = [];
-  for (const line of lines) {
-    let width = 0;
-    const glyphs = font.stringToGlyphs(line);
-    for (let i = 0; i < glyphs.length; i++) {
-      const glyph = glyphs[i]!;
-      width += (glyph.advanceWidth ?? 0) * scale;
-      if (i < glyphs.length - 1) {
-        width += letterSpacing;
-        const nextGlyph = glyphs[i + 1];
-        if (nextGlyph) {
-          width += font.getKerningValue(glyph, nextGlyph) * scale;
-        }
-      }
-    }
-    lineWidths.push(width);
-  }
-
-  const maxWidth = Math.max(...lineWidths, 1);
-  const totalHeight = Math.max(lines.length * lineHeightPx, fontSize);
+  const lines = breakTextLines(content, measure, box?.width);
+  const width = box ? box.width : Math.max(...lines.map((line) => line.width), 1);
+  const height = box?.height ?? Math.max(lines.length * fontSize * lineHeight, fontSize);
 
   return {
     x: 0,
-    y: -(totalHeight - ascender), // Y-up: bottom of text is below origin
-    width: maxWidth,
-    height: totalHeight,
+    y: -(height - ascender), // Y-up: bottom of text is below origin
+    width,
+    height,
   };
 }
 
@@ -103,41 +113,21 @@ function getTextBoundsFromCanvas(
   fontFamily: string,
   fontSize: number,
   lineHeight: number,
-  letterSpacing: number
+  letterSpacing: number,
+  box: TextBox | undefined
 ): Rect {
   const ctx = getMeasureContext();
   if (!ctx) {
     // SSR/test fallback: estimate bounds
-    const lines = content.split('\n');
     const charWidth = fontSize * 0.6;
-    const maxChars = Math.max(...lines.map((l) => l.length), 1);
-    return {
-      x: 0,
-      y: -fontSize * lineHeight * lines.length + fontSize * 0.8,
-      width: maxChars * (charWidth + letterSpacing),
-      height: fontSize * lineHeight * lines.length,
-    };
+    const estimate: MeasureText = (text) => Array.from(text).length * (charWidth + letterSpacing);
+    return boundsFromLines(content, estimate, fontSize * 0.8, fontSize, lineHeight, box);
   }
 
   ctx.font = `${fontSize}px "${fontFamily}", sans-serif`;
-  const lines = content.split('\n');
-  const lineHeightPx = fontSize * lineHeight;
-
-  let maxWidth = 0;
-  for (const line of lines) {
-    const metrics = ctx.measureText(line);
-    const lineWidth = metrics.width + (line.length - 1) * letterSpacing;
-    if (lineWidth > maxWidth) maxWidth = lineWidth;
-  }
-
-  const totalHeight = Math.max(lines.length * lineHeightPx, fontSize);
-
-  return {
-    x: 0,
-    y: -totalHeight + fontSize * 0.8, // approximate ascender
-    width: Math.max(maxWidth, 1),
-    height: totalHeight,
-  };
+  const measure: MeasureText = (text) =>
+    ctx.measureText(text).width + (Array.from(text).length - 1) * letterSpacing;
+  return boundsFromLines(content, measure, fontSize * 0.8, fontSize, lineHeight, box); // approximate ascender
 }
 
 /**

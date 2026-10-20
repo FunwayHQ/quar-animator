@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { render, screen, act, fireEvent } from '../../test/utils';
 import userEvent from '@testing-library/user-event';
 import { SceneGraphProvider, useSceneGraph } from '../../contexts/SceneGraphContext';
-import { createDefaultTransform } from '@quar/core';
+import { createDefaultTransform, getTextLocalBounds, getTextNodeBounds } from '@quar/core';
 import { createTimeline } from '@quar/animation';
 import type { SceneGraph } from '@quar/core';
 import type {
@@ -13,7 +13,7 @@ import type {
   TextNode,
   ArtboardNode,
 } from '@quar/types';
-import { PropertiesPanel } from './PropertiesPanel';
+import { PropertiesPanel, textSizeUpdate } from './PropertiesPanel';
 import { useEditorStore } from '../../stores/editorStore';
 import type { ReactNode } from 'react';
 
@@ -1537,6 +1537,119 @@ describe('PropertiesPanel', () => {
 
       const node = sg.getNode('art1') as ArtboardNode;
       expect(node.clipContent).toBe(false);
+    });
+  });
+
+  // ============================================================================
+  // Live text boxes (Figma-style resizing)
+  // ============================================================================
+
+  describe('text box', () => {
+    function addText(sg: SceneGraph, overrides: Partial<TextNode> = {}): TextNode {
+      const node: TextNode = {
+        ...createTestText('text1', 'Text 1'),
+        transform: { ...createDefaultTransform(), position: { x: 150, y: 200 } },
+        content: 'Hello there world',
+        ...overrides,
+      };
+      act(() => {
+        sg.addNode(node);
+        useEditorStore.getState().setSelection(['text1']);
+      });
+      return structuredClone(node);
+    }
+
+    /** World top-left of a text box (rotation 0). */
+    function topLeft(node: TextNode) {
+      const box = getTextLocalBounds(node);
+      return {
+        x: node.transform.position.x + box.x * node.transform.scale.x,
+        y: node.transform.position.y + (box.y + box.height) * node.transform.scale.y,
+      };
+    }
+
+    it('switches between auto width, auto height and fixed size, staying in place', () => {
+      const sg = renderWithSceneGraph();
+      const initial = addText(sg);
+      const size = getTextNodeBounds(initial);
+      expect(screen.getByTestId('text-resize-auto-width')).toHaveAttribute('aria-pressed', 'true');
+
+      fireEvent.click(screen.getByRole('button', { name: 'Fixed size' }));
+      let node = sg.getNode('text1') as TextNode;
+      expect(node.textResize).toBe('fixed');
+      expect(node.boxWidth).toBeCloseTo(size.width);
+      expect(node.boxHeight).toBeCloseTo(size.height);
+      expect(topLeft(node).x).toBeCloseTo(topLeft(initial).x);
+      expect(topLeft(node).y).toBeCloseTo(topLeft(initial).y);
+
+      fireEvent.click(screen.getByRole('button', { name: 'Auto height' }));
+      node = sg.getNode('text1') as TextNode;
+      expect(node.textResize).toBe('auto-height');
+      expect(node.boxHeight).toBeUndefined();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Auto width' }));
+      node = sg.getNode('text1') as TextNode;
+      expect(node.textResize).toBe('auto-width');
+      expect(node.boxWidth).toBeUndefined();
+      expect(topLeft(node).x).toBeCloseTo(topLeft(initial).x);
+    });
+
+    it('makes W the width text wraps at, and H a fixed height, without scaling it', () => {
+      const sg = renderWithSceneGraph();
+      const initial = addText(sg);
+
+      act(() => {
+        fireEvent.change(document.getElementById('prop-size-w')!, { target: { value: '90' } });
+      });
+      let node = sg.getNode('text1') as TextNode;
+      expect(node.textResize).toBe('auto-height');
+      expect(node.boxWidth).toBe(90);
+      expect(node.transform.scale).toEqual({ x: 1, y: 1 });
+      // Staying where it was (wrapping itself is measured in @quar/core's tests)
+      expect(topLeft(node).x).toBeCloseTo(topLeft(initial).x);
+      expect(topLeft(node).y).toBeCloseTo(topLeft(initial).y);
+
+      act(() => {
+        fireEvent.change(document.getElementById('prop-size-h')!, { target: { value: '120' } });
+      });
+      node = sg.getNode('text1') as TextNode;
+      expect(node.textResize).toBe('fixed');
+      expect(node.boxWidth).toBe(90);
+      expect(node.boxHeight).toBe(120);
+      expect(node.transform.scale).toEqual({ x: 1, y: 1 });
+    });
+
+    it('keeps the top-left of the text when its font size changes', () => {
+      const sg = renderWithSceneGraph();
+      const initial = addText(sg);
+
+      act(() => {
+        fireEvent.change(screen.getByDisplayValue('24'), { target: { value: '48' } });
+      });
+
+      const node = sg.getNode('text1') as TextNode;
+      expect(node.fontSize).toBe(48);
+      expect(topLeft(node).x).toBeCloseTo(topLeft(initial).x);
+      expect(topLeft(node).y).toBeCloseTo(topLeft(initial).y);
+    });
+  });
+
+  describe('textSizeUpdate', () => {
+    it('takes the text scale out of the size typed in', () => {
+      const node: TextNode = {
+        ...createTestText('t', 'T'),
+        transform: { ...createDefaultTransform(), scale: { x: 2, y: 2 } },
+      };
+      expect(textSizeUpdate(node, 200, 100, true)).toMatchObject({
+        textResize: 'fixed',
+        boxWidth: 100,
+        boxHeight: 50,
+      });
+      expect(textSizeUpdate(node, 200, 100, false)).toMatchObject({
+        textResize: 'auto-height',
+        boxWidth: 100,
+        boxHeight: undefined,
+      });
     });
   });
 });

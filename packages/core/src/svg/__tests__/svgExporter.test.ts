@@ -512,6 +512,37 @@ describe('nodeToSvgElement', () => {
     expect(svg).toContain('Hello World');
   });
 
+  it('sets each line of text as a tspan, wrapped in its box', () => {
+    const node: TextNode = {
+      ...makeBaseNodeFields('tw', 'text'),
+      type: 'text',
+      content: 'Hello world\nBye',
+      fontFamily: 'Arial',
+      fontSize: 20,
+      fontWeight: 400,
+      fontStyle: 'normal',
+      textAlign: 'left',
+      lineHeight: 1.2,
+      letterSpacing: 0,
+      // Wide enough for one word a line (no font here: 12 per character)
+      textResize: 'fixed',
+      boxWidth: 70,
+      boxHeight: 100,
+      fills: [makeSolidFill()],
+      strokes: [],
+    };
+    sceneGraph.addNode(node);
+    const svg = nodeToSvgElement(node, sceneGraph, []);
+
+    const lines = [...svg.matchAll(/<tspan x="([^"]+)" y="([^"]+)">([^<]*)<\/tspan>/g)];
+    expect(lines.map((m) => m[3])).toEqual(['Hello', 'world', 'Bye']);
+    // A line height apart, starting from the same x
+    const ys = lines.map((m) => Number(m[2]));
+    expect(ys[1]! - ys[0]!).toBeCloseTo(24);
+    expect(ys[2]! - ys[1]!).toBeCloseTo(24);
+    expect(new Set(lines.map((m) => m[1])).size).toBe(1);
+  });
+
   it('escapes XML special characters in text', () => {
     const node: TextNode = {
       ...makeBaseNodeFields('t2', 'text'),

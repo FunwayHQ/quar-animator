@@ -32,6 +32,9 @@ import {
 } from '../path/pathUtils';
 import { resolveSymbolInstance, getResolvedRootNodes } from '../symbols/symbolResolver';
 import { SceneGraph } from '../SceneGraph';
+import { getTextBox } from '../font/textLayout';
+import { getTextNodeBounds, getTextNodeLines } from '../font/textMetrics';
+import { getTextLocalBounds } from '../font/textPlacement';
 
 // ============================================================================
 // Color Helpers
@@ -418,7 +421,7 @@ function textToSvg(node: TextNode, defs: string[]): string {
     fontAttrs.push(`text-anchor="${textAlignToAnchor(node.textAlign)}"`);
   if (node.letterSpacing !== 0) fontAttrs.push(`letter-spacing="${fmt(node.letterSpacing)}"`);
 
-  const content = escapeXml(node.content);
+  const content = textLinesToSvg(node);
   return paintedShape(
     'text',
     ` ${fontAttrs.join(' ')}`,
@@ -429,6 +432,33 @@ function textToSvg(node: TextNode, defs: string[]): string {
     defs,
     content
   );
+}
+
+/**
+ * A text node's lines as tspans, broken, aligned and offset for the anchor as
+ * the canvas sets them. Y runs down here: the <text> cancels the root flip.
+ */
+function textLinesToSvg(node: TextNode): string {
+  const lines = getTextNodeLines(node);
+  const width = getTextBox(node)?.width ?? Math.max(...lines.map((line) => line.width), 1);
+
+  let offsetX = 0;
+  let offsetY = 0;
+  const { x: ax, y: ay } = node.transform.anchor;
+  if (ax !== 0 || ay !== 0) {
+    const bounds = getTextNodeBounds(node);
+    offsetX = -(bounds.x + bounds.width * ax);
+    offsetY = -(bounds.y + bounds.height * ay);
+  }
+  const alignX = node.textAlign === 'center' ? width / 2 : node.textAlign === 'right' ? width : 0;
+  const lineHeight = node.fontSize * node.lineHeight;
+
+  return lines
+    .map(
+      (line, i) =>
+        `<tspan x="${fmt(alignX + offsetX)}" y="${fmt(i * lineHeight - offsetY)}">${escapeXml(line.text)}</tspan>`
+    )
+    .join('');
 }
 
 /** Apply every fill and stroke in the same order as the canvas renderer. */
@@ -779,10 +809,8 @@ function getLocalExtent(
       break;
     }
     case 'text': {
-      // Approximate text bounds from font size
-      const approxWidth = node.content.length * node.fontSize * 0.6;
-      const approxHeight = node.fontSize * node.lineHeight;
-      bounds = { minX: 0, minY: -approxHeight, maxX: approxWidth, maxY: 0 };
+      const box = getTextLocalBounds(node);
+      bounds = { minX: box.x, minY: box.y, maxX: box.x + box.width, maxY: box.y + box.height };
       break;
     }
     case 'image': {

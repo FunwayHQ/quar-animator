@@ -24,6 +24,15 @@ vi.mock('./glyphConverter', () => ({
 const mockGetTextBounds = vi.fn();
 vi.mock('./textMetrics', () => ({
   getTextBounds: (...args: unknown[]) => mockGetTextBounds(...args),
+  getTextNodeBounds: (node: TextNode) =>
+    mockGetTextBounds(
+      node.content,
+      node.fontFamily,
+      node.fontSize,
+      node.lineHeight,
+      node.letterSpacing,
+      node.textAlign
+    ),
 }));
 
 // Import after mock setup

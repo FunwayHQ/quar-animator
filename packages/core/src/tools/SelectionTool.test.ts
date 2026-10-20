@@ -3,7 +3,8 @@
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { SelectionTool } from './SelectionTool';
+import { SelectionTool, textResizeAfterHandle } from './SelectionTool';
+import { getTextLocalBounds } from '../font/textPlacement';
 import type { ToolContext } from './BaseTool';
 import { createMockToolContext, createMockPointerEvent } from '../test/setup';
 import { createDefaultTransform } from '../SceneGraph';
@@ -15,6 +16,7 @@ import type {
   BoneNode,
   ArtboardNode,
   GroupNode,
+  TextNode,
 } from '@quar/types';
 
 function createTestGroup(id: string, x: number, y: number): GroupNode {
@@ -825,6 +827,101 @@ describe('SelectionTool', () => {
       );
 
       expect(tool.getMode()).toBe('resizing');
+    });
+
+    describe('live text', () => {
+      function createTestText(overrides: Partial<TextNode> = {}): TextNode {
+        return {
+          id: 'text1',
+          name: 'Text',
+          type: 'text',
+          parent: null,
+          children: [],
+          transform: { ...createDefaultTransform(), position: { x: 100, y: 100 } },
+          visible: true,
+          locked: false,
+          opacity: 1,
+          blendMode: 'normal',
+          content: 'Hello world',
+          fontFamily: 'Inter',
+          fontSize: 20,
+          fontWeight: 400,
+          fontStyle: 'normal',
+          textAlign: 'left',
+          lineHeight: 1.2,
+          letterSpacing: 0,
+          fills: [],
+          strokes: [],
+          ...overrides,
+        };
+      }
+
+      function drag(from: { x: number; y: number }, to: { x: number; y: number }) {
+        tool.onPointerDown(
+          createMockPointerEvent({
+            worldPosition: from,
+            screenPosition: context.camera.worldToScreen(from),
+            button: 0,
+          })
+        );
+        for (const event of ['onPointerMove', 'onPointerUp'] as const) {
+          tool[event](
+            createMockPointerEvent({
+              worldPosition: to,
+              screenPosition: context.camera.worldToScreen(to),
+              button: 0,
+            })
+          );
+        }
+      }
+
+      it('resizes a fixed size box instead of scaling its glyphs', () => {
+        context.sceneGraph.addNode(
+          createTestText({ textResize: 'fixed', boxWidth: 100, boxHeight: 100 })
+        );
+        context.setSelectedIds(['text1']);
+
+        drag({ x: 150, y: 150 }, { x: 200, y: 200 });
+
+        const resized = context.sceneGraph.getNode('text1') as TextNode;
+        expect(resized.textResize).toBe('fixed');
+        expect(resized.boxWidth).toBe(150);
+        expect(resized.boxHeight).toBe(150);
+        expect(resized.transform.scale).toEqual({ x: 1, y: 1 });
+      });
+
+      it('gives auto width text a width to wrap at from a side handle, keeping its top', () => {
+        const node = createTestText();
+        context.sceneGraph.addNode(node);
+        context.setSelectedIds(['text1']);
+        const before = getTextLocalBounds(node);
+        const left = node.transform.position.x + before.x;
+        const right = left + before.width;
+        const top = node.transform.position.y + before.y + before.height;
+
+        // Narrow it to about half: 'world' no longer fits after 'Hello'
+        const narrowed = right - before.width / 2;
+        drag({ x: right, y: 100 }, { x: narrowed, y: 100 });
+
+        const resized = context.sceneGraph.getNode('text1') as TextNode;
+        expect(resized.textResize).toBe('auto-height');
+        expect(resized.boxWidth).toBeCloseTo(before.width / 2);
+        expect(resized.boxHeight).toBeUndefined();
+        expect(resized.transform.scale).toEqual({ x: 1, y: 1 });
+        const after = getTextLocalBounds(resized);
+        expect(after.height).toBeCloseTo(before.height * 2); // wrapped onto two lines
+        expect(resized.transform.position.y + after.y + after.height).toBeCloseTo(top);
+        expect(resized.transform.position.x + after.x).toBeCloseTo(left);
+      });
+    });
+
+    it('decides text resize modes from the handle, as Figma does', () => {
+      expect(textResizeAfterHandle(undefined, 'right')).toBe('auto-height');
+      expect(textResizeAfterHandle('auto-width', 'left')).toBe('auto-height');
+      expect(textResizeAfterHandle('auto-height', 'right')).toBe('auto-height');
+      expect(textResizeAfterHandle('fixed', 'left')).toBe('fixed');
+      expect(textResizeAfterHandle('auto-width', 'bottom')).toBe('fixed');
+      expect(textResizeAfterHandle('auto-height', 'top-right')).toBe('fixed');
     });
 
     it('should resize rectangle from bottom-right handle', () => {

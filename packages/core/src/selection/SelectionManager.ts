@@ -8,7 +8,7 @@ import type { SceneGraph } from '../SceneGraph';
 import type { SelectionBounds } from './types';
 import { rect, mat3 } from '../math';
 import { getPolygonBounds, getPathBounds } from '../path/pathUtils';
-import { getTextBounds } from '../font/textMetrics';
+import { getTextLocalBounds } from '../font/textPlacement';
 import { getSymbolBounds } from '../symbols/symbolResolver';
 
 // ============================================================================
@@ -301,28 +301,8 @@ export class SelectionManager {
         }
         return allBounds.length === 1 ? primaryBounds : this.unionBounds(allBounds);
       }
-      case 'text': {
-        const textNode = node;
-        const rawBounds = getTextBounds(
-          textNode.content,
-          textNode.fontFamily,
-          textNode.fontSize,
-          textNode.lineHeight,
-          textNode.letterSpacing,
-          textNode.textAlign
-        );
-        const anchor = node.transform.anchor;
-        // For non-zero anchors, center geometry like rectangles
-        if (anchor.x !== 0 || anchor.y !== 0) {
-          return {
-            x: -rawBounds.width * anchor.x,
-            y: -rawBounds.height * anchor.y,
-            width: rawBounds.width,
-            height: rawBounds.height,
-          };
-        }
-        return rawBounds;
-      }
+      case 'text':
+        return getTextLocalBounds(node);
       case 'image': {
         const imgNode = node;
         const anchor = node.transform.anchor;

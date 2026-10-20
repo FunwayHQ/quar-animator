@@ -9,6 +9,7 @@ import {
   TransformHandles,
   importSvg,
   createGroupNode,
+  keepTextInPlace,
 } from '@quar/core';
 import type { SceneGraphEvent } from '@quar/core';
 import type { Node, Vector2 } from '@quar/types';
@@ -2558,7 +2559,15 @@ export function Canvas({
                   useEditorStore.getState().setSelection([]);
                 } else {
                   useEditorStore.getState().pushUndo(sceneGraph);
-                  sceneGraph.updateNode(editingTextNodeId, { content });
+                  // The box grows from where it is, as in Figma, rather than about its center
+                  const edited = { ...textNode, content };
+                  sceneGraph.updateNode(editingTextNodeId, {
+                    content,
+                    transform: {
+                      ...textNode.transform,
+                      position: keepTextInPlace(textNode, edited),
+                    },
+                  });
                 }
                 setEditingTextNodeId(null);
                 useEditorStore.getState().setActiveTool('selection');

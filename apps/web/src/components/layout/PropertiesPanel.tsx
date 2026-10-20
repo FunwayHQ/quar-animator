@@ -13,6 +13,8 @@ import type {
   BlendMode,
   BooleanOp,
   SymbolDefinition,
+  TextNode,
+  TextResize,
 } from '@quar/types';
 import {
   Lock,
@@ -27,6 +29,9 @@ import {
   Combine,
   Diff,
   Download,
+  MoveHorizontal,
+  MoveVertical,
+  Square,
 } from 'lucide-react';
 import { useSceneGraph } from '../../contexts/SceneGraphContext';
 import { useEditorStore, DEFAULT_FILL, DEFAULT_STROKE } from '../../stores/editorStore';
@@ -54,7 +59,8 @@ import {
   createDefaultGradient,
   SelectionManager,
   getPathBounds,
-  getTextBounds,
+  getTextNodeBounds,
+  keepTextInPlace,
   getFontManager,
   GOOGLE_FONTS_CATALOG,
   getAllPoints,
@@ -160,14 +166,7 @@ function getNodeSize(
     }
     case 'text': {
       const textNode = node;
-      const textBounds = getTextBounds(
-        textNode.content,
-        textNode.fontFamily,
-        textNode.fontSize,
-        textNode.lineHeight,
-        textNode.letterSpacing,
-        textNode.textAlign
-      );
+      const textBounds = getTextNodeBounds(textNode);
       const tsx = textNode.transform.scale?.x ?? 1;
       const tsy = textNode.transform.scale?.y ?? 1;
       return { width: textBounds.width * tsx, height: textBounds.height * tsy };
@@ -314,8 +313,61 @@ function isSizeEditable(node: Node): boolean {
     node.type === 'path' ||
     node.type === 'image' ||
     node.type === 'group' ||
-    node.type === 'artboard'
+    node.type === 'artboard' ||
+    node.type === 'text'
   );
+}
+
+/** The text resize modes, as Figma offers them. */
+const TEXT_RESIZE_MODES: Array<{ mode: TextResize; label: string; icon: typeof Square }> = [
+  { mode: 'auto-width', label: 'Auto width', icon: MoveHorizontal },
+  { mode: 'auto-height', label: 'Auto height', icon: MoveVertical },
+  { mode: 'fixed', label: 'Fixed size', icon: Square },
+];
+
+/**
+ * The update that gives text another resize mode and keeps it where it is:
+ * auto width drops the box; auto height and fixed size take the size it has.
+ */
+export function textResizeUpdate(node: TextNode, mode: TextResize): Partial<TextNode> {
+  const box = getTextNodeBounds(node);
+  const patch: Partial<TextNode> =
+    mode === 'auto-width'
+      ? { textResize: mode, boxWidth: undefined, boxHeight: undefined }
+      : mode === 'auto-height'
+        ? { textResize: mode, boxWidth: box.width, boxHeight: undefined }
+        : { textResize: mode, boxWidth: box.width, boxHeight: box.height };
+  return withTextKeptInPlace(node, patch);
+}
+
+/**
+ * The update that sets text's size from the Size fields, as Figma does: a new
+ * width makes it wrap there (auto height, unless it's a fixed size); a new
+ * height makes it a fixed size. Sizes are on screen, so the text's scale is
+ * taken out.
+ */
+export function textSizeUpdate(
+  node: TextNode,
+  width: number,
+  height: number,
+  heightChanged: boolean
+): Partial<TextNode> {
+  const sx = Math.abs(node.transform.scale.x) || 1;
+  const sy = Math.abs(node.transform.scale.y) || 1;
+  const textResize: TextResize =
+    heightChanged || node.textResize === 'fixed' ? 'fixed' : 'auto-height';
+  const boxHeight = heightChanged ? height / sy : getTextNodeBounds(node).height;
+  return withTextKeptInPlace(node, {
+    textResize,
+    boxWidth: width / sx,
+    boxHeight: textResize === 'fixed' ? boxHeight : undefined,
+  });
+}
+
+/** A text update plus the position that keeps the text where it is. */
+function withTextKeptInPlace(node: TextNode, patch: Partial<TextNode>): Partial<TextNode> {
+  const position = keepTextInPlace(node, { ...node, ...patch });
+  return { ...patch, transform: { ...node.transform, position } };
 }
 
 function getSizePropertyPaths(node: Node): { w: string; h: string } {
@@ -668,6 +720,13 @@ export function PropertiesPanel() {
         if (aspectRatioLocked && currentSize.height > 0) {
           newW = num * (currentSize.width / currentSize.height);
         }
+      }
+
+      if (currentNode.type === 'text') {
+        // Text sizes its box, not its glyphs
+        const heightChanged = dimension === 'height' || aspectRatioLocked;
+        sceneGraph.updateNode(selectedId, textSizeUpdate(currentNode, newW, newH, heightChanged));
+        return;
       }
 
       applySize(currentNode, newW, newH);
@@ -1552,20 +1611,23 @@ export function PropertiesPanel() {
                 <label className={styles.propertyLabel} htmlFor="prop-size-w">
                   Size
                 </label>
-                <KeyframeIndicator
-                  state={getGroupKeyframeState(
-                    timeline,
-                    nodeId,
-                    [sizePaths.w, sizePaths.h],
-                    currentFrame
-                  )}
-                  onToggle={() =>
-                    toggleKeyframes([
-                      [sizePaths.w, getSizePropertyValue(sizePaths.w)],
-                      [sizePaths.h, getSizePropertyValue(sizePaths.h)],
-                    ])
-                  }
-                />
+                {/* Text's size is its box: keyframing it as scale would stretch the glyphs */}
+                {node.type !== 'text' && (
+                  <KeyframeIndicator
+                    state={getGroupKeyframeState(
+                      timeline,
+                      nodeId,
+                      [sizePaths.w, sizePaths.h],
+                      currentFrame
+                    )}
+                    onToggle={() =>
+                      toggleKeyframes([
+                        [sizePaths.w, getSizePropertyValue(sizePaths.w)],
+                        [sizePaths.h, getSizePropertyValue(sizePaths.h)],
+                      ])
+                    }
+                  />
+                )}
               </div>
               <div className={styles.propertyInputs}>
                 <div className={styles.inputGroup}>
@@ -1607,6 +1669,7 @@ export function PropertiesPanel() {
                     min={1}
                   />
                   <input
+                    id="prop-size-h"
                     type="text"
                     className={styles.input}
                     value={fmt1(size.height)}
@@ -2257,6 +2320,12 @@ export function PropertiesPanel() {
                 // Always show Google Fonts in dropdown; consent checked on select
                 const googleFamilies = GOOGLE_FONTS_CATALOG.map((e) => e.family);
                 const allFonts = [...new Set([...loadedFonts, ...googleFamilies])].sort();
+                // Text changes keep the box where it is, as in Figma
+                const setText = (patch: Partial<TextNode>) => {
+                  const current = sceneGraph.getNode(nodeId);
+                  if (current?.type !== 'text') return;
+                  sceneGraph.updateNode(nodeId, withTextKeptInPlace(current, patch));
+                };
                 return (
                   <>
                     <div className={styles.propertyRow}>
@@ -2278,7 +2347,7 @@ export function PropertiesPanel() {
                               fm.loadGoogleFont(family, textNode.fontWeight)
                                 .then(() => {
                                   pushUndo(sceneGraph);
-                                  sceneGraph.updateNode(nodeId, { fontFamily: family });
+                                  setText({ fontFamily: family });
                                   if (shouldKeyframe(autoKeyframe, nodeId, 'fontFamily'))
                                     addKeyframeAtFrame(nodeId, 'fontFamily', currentFrame, family);
                                 })
@@ -2288,7 +2357,7 @@ export function PropertiesPanel() {
                               return;
                             }
                             pushUndo(sceneGraph);
-                            sceneGraph.updateNode(nodeId, { fontFamily: family });
+                            setText({ fontFamily: family });
                             if (shouldKeyframe(autoKeyframe, nodeId, 'fontFamily'))
                               addKeyframeAtFrame(nodeId, 'fontFamily', currentFrame, family);
                           }}
@@ -2318,7 +2387,7 @@ export function PropertiesPanel() {
                             value={textNode.fontSize}
                             onChange={(v) => {
                               const val = Math.max(1, Math.round(v));
-                              sceneGraph.updateNode(nodeId, { fontSize: val });
+                              setText({ fontSize: val });
                               if (shouldKeyframe(autoKeyframe, nodeId, 'fontSize'))
                                 addKeyframeAtFrame(nodeId, 'fontSize', currentFrame, val);
                             }}
@@ -2333,7 +2402,7 @@ export function PropertiesPanel() {
                               const val = parseInt(e.target.value);
                               if (!isNaN(val) && val > 0) {
                                 pushUndo(sceneGraph);
-                                sceneGraph.updateNode(nodeId, { fontSize: val });
+                                setText({ fontSize: val });
                                 if (shouldKeyframe(autoKeyframe, nodeId, 'fontSize'))
                                   addKeyframeAtFrame(nodeId, 'fontSize', currentFrame, val);
                               }
@@ -2343,7 +2412,7 @@ export function PropertiesPanel() {
                               (v) => {
                                 const val = parseInt(v);
                                 if (!isNaN(val) && val > 0) {
-                                  sceneGraph.updateNode(nodeId, { fontSize: val });
+                                  setText({ fontSize: val });
                                   if (shouldKeyframe(autoKeyframe, nodeId, 'fontSize'))
                                     addKeyframeAtFrame(nodeId, 'fontSize', currentFrame, val);
                                 }
@@ -2373,7 +2442,7 @@ export function PropertiesPanel() {
                               fm.loadGoogleFont(family, w)
                                 .then(() => {
                                   pushUndo(sceneGraph);
-                                  sceneGraph.updateNode(nodeId, { fontWeight: w });
+                                  setText({ fontWeight: w });
                                   if (shouldKeyframe(autoKeyframe, nodeId, 'fontWeight'))
                                     addKeyframeAtFrame(nodeId, 'fontWeight', currentFrame, w);
                                 })
@@ -2383,7 +2452,7 @@ export function PropertiesPanel() {
                               return;
                             }
                             pushUndo(sceneGraph);
-                            sceneGraph.updateNode(nodeId, { fontWeight: w });
+                            setText({ fontWeight: w });
                             if (shouldKeyframe(autoKeyframe, nodeId, 'fontWeight'))
                               addKeyframeAtFrame(nodeId, 'fontWeight', currentFrame, w);
                           }}
@@ -2421,12 +2490,41 @@ export function PropertiesPanel() {
                             }}
                             onClick={() => {
                               pushUndo(sceneGraph);
-                              sceneGraph.updateNode(nodeId, { textAlign: align });
+                              setText({ textAlign: align });
                             }}
                           >
                             {align === 'left' ? '⫷' : align === 'center' ? '☰' : '⫸'}
                           </button>
                         ))}
+                      </div>
+                    </div>
+                    <div className={styles.propertyRow}>
+                      <span className={styles.propertyLabel}>Resize</span>
+                      <div className={styles.propertyInputs} style={{ display: 'flex', gap: 4 }}>
+                        {TEXT_RESIZE_MODES.map(({ mode, label, icon: Icon }) => {
+                          const active = (textNode.textResize ?? 'auto-width') === mode;
+                          return (
+                            <button
+                              key={mode}
+                              className={styles.iconButton}
+                              style={{
+                                opacity: active ? 1 : 0.5,
+                                background: active ? 'var(--color-surface-hover)' : 'transparent',
+                              }}
+                              title={label}
+                              aria-label={label}
+                              aria-pressed={active}
+                              data-testid={`text-resize-${mode}`}
+                              onClick={() => {
+                                if (active) return;
+                                pushUndo(sceneGraph);
+                                sceneGraph.updateNode(nodeId, textResizeUpdate(textNode, mode));
+                              }}
+                            >
+                              <Icon size={14} />
+                            </button>
+                          );
+                        })}
                       </div>
                     </div>
                     <div className={styles.propertyRow}>
@@ -2445,7 +2543,7 @@ export function PropertiesPanel() {
                             value={+textNode.lineHeight.toFixed(2)}
                             onChange={(v) => {
                               const val = Math.max(0.5, +v.toFixed(2));
-                              sceneGraph.updateNode(nodeId, { lineHeight: val });
+                              setText({ lineHeight: val });
                               if (shouldKeyframe(autoKeyframe, nodeId, 'lineHeight'))
                                 addKeyframeAtFrame(nodeId, 'lineHeight', currentFrame, val);
                             }}
@@ -2461,7 +2559,7 @@ export function PropertiesPanel() {
                               const val = parseFloat(e.target.value);
                               if (!isNaN(val) && val > 0) {
                                 pushUndo(sceneGraph);
-                                sceneGraph.updateNode(nodeId, { lineHeight: val });
+                                setText({ lineHeight: val });
                                 if (shouldKeyframe(autoKeyframe, nodeId, 'lineHeight'))
                                   addKeyframeAtFrame(nodeId, 'lineHeight', currentFrame, val);
                               }
@@ -2485,7 +2583,7 @@ export function PropertiesPanel() {
                             label="LS"
                             value={textNode.letterSpacing}
                             onChange={(v) => {
-                              sceneGraph.updateNode(nodeId, { letterSpacing: +v.toFixed(1) });
+                              setText({ letterSpacing: +v.toFixed(1) });
                               if (shouldKeyframe(autoKeyframe, nodeId, 'letterSpacing'))
                                 addKeyframeAtFrame(
                                   nodeId,
@@ -2506,7 +2604,7 @@ export function PropertiesPanel() {
                               const val = parseFloat(e.target.value);
                               if (!isNaN(val)) {
                                 pushUndo(sceneGraph);
-                                sceneGraph.updateNode(nodeId, { letterSpacing: val });
+                                setText({ letterSpacing: val });
                                 if (shouldKeyframe(autoKeyframe, nodeId, 'letterSpacing'))
                                   addKeyframeAtFrame(nodeId, 'letterSpacing', currentFrame, val);
                               }

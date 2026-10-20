@@ -36,15 +36,27 @@ vi.mock('../font/FontManager', () => ({
   getFontManager: () => ({ getFontOrFallback: () => mockFont }),
 }));
 
-vi.mock('../font/textMetrics', () => ({
+vi.mock('../font/textMetrics', () => {
   // Width grows with the text so a re-centred prefix would shift the anchor
-  getTextBounds: vi.fn((content: string, _family: string, fontSize: number) => ({
+  const getTextBounds = vi.fn((content: string, _family: string, fontSize: number) => ({
     x: 0,
     y: -fontSize,
     width: Array.from(content).length * fontSize * 0.5,
     height: fontSize,
-  })),
-}));
+  }));
+  return {
+    getTextBounds,
+    getTextNodeBounds: (node: TextNode) =>
+      getTextBounds(
+        node.content,
+        node.fontFamily,
+        node.fontSize,
+        node.lineHeight,
+        node.letterSpacing,
+        node.textAlign
+      ),
+  };
+});
 
 function createTextNode(content: string, visibleCharacters?: number): TextNode {
   return {

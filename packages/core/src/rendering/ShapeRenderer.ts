@@ -56,7 +56,8 @@ import { BEND_MESH_CELL_SIZE, createBendMesh, subdivideOutline } from './bendMes
 import { shapeOutline } from './shapeOutline';
 import { getFontManager } from '../font/FontManager';
 import { textToSubpaths } from '../font/glyphConverter';
-import { getTextBounds } from '../font/textMetrics';
+import { getTextNodeBounds } from '../font/textMetrics';
+import { getTextBox } from '../font/textLayout';
 import { getVisibleTextContent } from '../font/textReveal';
 import {
   deformVertices,
@@ -498,7 +499,7 @@ function buildGeometryKey(node: Node): string {
       return parts.join(',');
     }
     case 'text':
-      return `T:${node.content}:${node.fontFamily}:${node.fontSize}:${node.fontWeight}:${node.fontStyle}:${node.textAlign}:${node.lineHeight}:${node.letterSpacing}`;
+      return `T:${node.content}:${node.fontFamily}:${node.fontSize}:${node.fontWeight}:${node.fontStyle}:${node.textAlign}:${node.lineHeight}:${node.letterSpacing}:${getTextBox(node)?.width ?? ''}`;
     case 'image': {
       const vo = node.vertexOffsets;
       const voStr = vo
@@ -2301,14 +2302,7 @@ export class ShapeRenderer {
     const ax = node.transform.anchor.x;
     const ay = node.transform.anchor.y;
     if (ax !== 0 || ay !== 0) {
-      const rawBounds = getTextBounds(
-        node.content,
-        node.fontFamily,
-        node.fontSize,
-        node.lineHeight,
-        node.letterSpacing,
-        node.textAlign
-      );
+      const rawBounds = getTextNodeBounds(node);
       const offsetX = -(rawBounds.x + rawBounds.width * ax);
       const offsetY = -(rawBounds.y + rawBounds.height * ay);
       adjustedMatrix = mat3.translate(worldMatrix, offsetX, offsetY);
@@ -2360,6 +2354,7 @@ export class ShapeRenderer {
       textAlign: node.textAlign,
       lineHeight: node.lineHeight,
       letterSpacing: node.letterSpacing,
+      width: getTextBox(node)?.width,
       alignmentText: node.content,
     });
 
@@ -4396,14 +4391,7 @@ export class ShapeRenderer {
     const ax = node.transform.anchor.x;
     const ay = node.transform.anchor.y;
     if (ax !== 0 || ay !== 0) {
-      const rawBounds = getTextBounds(
-        node.content,
-        node.fontFamily,
-        node.fontSize,
-        node.lineHeight,
-        node.letterSpacing,
-        node.textAlign
-      );
+      const rawBounds = getTextNodeBounds(node);
       const offsetX = -(rawBounds.x + rawBounds.width * ax);
       const offsetY = -(rawBounds.y + rawBounds.height * ay);
       adjustedMatrix = mat3.translate(worldMatrix, offsetX, offsetY);
@@ -4413,6 +4401,7 @@ export class ShapeRenderer {
       textAlign: node.textAlign,
       lineHeight: node.lineHeight,
       letterSpacing: node.letterSpacing,
+      width: getTextBox(node)?.width,
       alignmentText: node.content,
     });
 

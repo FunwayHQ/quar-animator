@@ -219,13 +219,17 @@ export class TransformHandles {
       };
     }
 
-    // 1. Check resize handles first — resize takes priority over rotation
+    // 1. Check resize handles first — resize takes priority over rotation.
+    // The nearest one wins: on a short box (a line of text) the corners are
+    // within reach of a side handle
+    let nearest: { position: HandlePosition; distance: number } | null = null;
     for (const handle of handles) {
       const distance = vec2.distance(testPoint, handle.screenPosition);
-      if (distance <= hitRadius) {
-        return handle.position;
+      if (distance <= hitRadius && (!nearest || distance < nearest.distance)) {
+        nearest = { position: handle.position, distance };
       }
     }
+    if (nearest) return nearest.position;
 
     // 2. Check rotation zones — near a corner but outside the bounds rect
     const rotationRadius = this.config.rotationZoneRadius;

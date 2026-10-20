@@ -6,7 +6,8 @@
 import type { TextNode, PathNode, PathPoint, GroupNode } from '@quar/types';
 import { textToSubpaths, computeSubpathsBounds } from './glyphConverter';
 import { getFontManager } from './FontManager';
-import { getTextBounds } from './textMetrics';
+import { getTextNodeBounds } from './textMetrics';
+import { getTextBox } from './textLayout';
 
 /**
  * Offset the converted node's world center so it lands where the renderer draws
@@ -20,14 +21,7 @@ function textWorldCenter(
   geometryCenterX: number,
   geometryCenterY: number
 ): { x: number; y: number } {
-  const mb = getTextBounds(
-    textNode.content,
-    textNode.fontFamily,
-    textNode.fontSize,
-    textNode.lineHeight,
-    textNode.letterSpacing,
-    textNode.textAlign
-  );
+  const mb = getTextNodeBounds(textNode);
   const anchor = textNode.transform.anchor;
   const offsetX = geometryCenterX - (mb.x + mb.width * anchor.x);
   const offsetY = geometryCenterY - (mb.y + mb.height * anchor.y);
@@ -60,6 +54,7 @@ export function convertTextToPath(textNode: TextNode, generateId: () => string):
     textAlign: textNode.textAlign,
     lineHeight: textNode.lineHeight,
     letterSpacing: textNode.letterSpacing,
+    width: getTextBox(textNode)?.width,
   });
 
   if (result.subpaths.length === 0) return null;
@@ -164,6 +159,7 @@ export function convertTextToPathGroup(
     textAlign: textNode.textAlign,
     lineHeight: textNode.lineHeight,
     letterSpacing: textNode.letterSpacing,
+    width: getTextBox(textNode)?.width,
   });
 
   if (result.glyphs.length === 0) return null;

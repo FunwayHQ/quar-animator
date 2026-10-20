@@ -298,9 +298,22 @@ export interface TextNode extends BaseNode {
   textAlign: 'left' | 'center' | 'right';
   lineHeight: number;
   letterSpacing: number;
+  /**
+   * How the text box is sized, as in Figma. 'auto-width' (the default, and a
+   * click with the Text tool) fits the text and never wraps; 'auto-height'
+   * wraps at boxWidth and grows down; 'fixed' (dragging a box) wraps at
+   * boxWidth within boxWidth × boxHeight, and text past the bottom still shows.
+   */
+  textResize?: TextResize;
+  /** Width the text wraps at (auto height and fixed size). */
+  boxWidth?: number;
+  /** Height of the box (fixed size). */
+  boxHeight?: number;
   fills: Fill[];
   strokes: Stroke[];
 }
+
+export type TextResize = 'auto-width' | 'auto-height' | 'fixed';
 
 export interface ImageAdjustments {
   brightness: number; // -100 to 100, default 0

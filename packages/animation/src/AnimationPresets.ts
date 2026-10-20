@@ -2,7 +2,8 @@
  * Reusable, editable animation presets built from ordinary timeline keyframes.
  */
 
-import type { EasingFunction, Node, PropertyTrack, Timeline } from '@quar/types';
+import type { EasingFunction, Node, PropertyTrack, TextNode, Timeline } from '@quar/types';
+import { getTextNodeLines } from '@quar/core';
 import { addKeyframe, createTrack } from './Timeline';
 
 export type AnimationPresetCategory = 'Entrance' | 'Emphasis' | 'Loop' | 'Exit';
@@ -257,7 +258,7 @@ export function createAnimationPresetKeyframes(
   const vector = directionVector(direction);
   const revealStops =
     node.type === 'text' && (presetId === 'word-reveal' || presetId === 'line-reveal')
-      ? getTextRevealStops(node.content, presetId === 'word-reveal' ? 'word' : 'line')
+      ? getTextRevealStops(node, presetId === 'word-reveal' ? 'word' : 'line')
       : [];
   const duration = getPresetDurationFrames(presetId, durationFrames, options.intensity);
   const end = start + duration;
@@ -633,14 +634,14 @@ function addSpinKeyframes(
   }
 }
 
-function getTextRevealStops(content: string, mode: 'word' | 'line'): number[] {
-  const characters = Array.from(content);
+function getTextRevealStops(node: TextNode, mode: 'word' | 'line'): number[] {
+  const characters = Array.from(node.content);
   const stops: number[] = [];
 
   if (mode === 'line') {
-    characters.forEach((character, index) => {
-      if (character === '\n') stops.push(index + 1);
-    });
+    // Lines as they're set, so text wrapped in a box reveals line by line too:
+    // each line is done where the next one starts
+    for (const line of getTextNodeLines(node).slice(1)) stops.push(line.start);
     if (stops.at(-1) !== characters.length) stops.push(characters.length);
     return stops;
   }

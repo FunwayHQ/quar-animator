@@ -6,6 +6,7 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument */
 import type opentype from 'opentype.js';
 import type { PathPoint, Vector2, Rect } from '@quar/types';
+import { breakTextLines, fontMeasure } from './textLayout';
 
 /**
  * Convert opentype.js path commands to QUAR PathPoint subpaths.
@@ -163,10 +164,12 @@ export interface TextLayoutOptions {
   lineHeight?: number;
   letterSpacing?: number;
   /**
-   * Full text whose line widths drive alignment when `text` is a prefix of it
-   * (a typewriter reveal), so revealed glyphs sit at their final positions.
+   * Full text, of which `text` is a prefix (a typewriter reveal): lines are
+   * broken and aligned for it, so revealed glyphs sit at their final positions.
    */
   alignmentText?: string;
+  /** Width to wrap lines at and align them within; none sets each paragraph on one line. */
+  width?: number;
 }
 
 /** Per-glyph grouping of contours for text-to-path group conversion. */
@@ -186,7 +189,8 @@ export interface TextToSubpathsResult {
 
 /**
  * Convert a text string to PathPoint subpaths using an opentype.js font.
- * Handles multi-line text with alignment and spacing.
+ * Handles multi-line text with alignment and spacing, wrapped at a width
+ * when one is given.
  */
 export function textToSubpaths(
   text: string,
@@ -199,41 +203,22 @@ export function textToSubpaths(
     lineHeight: lineHeightMultiplier = 1.2,
     letterSpacing = 0,
     alignmentText = text,
+    width,
   } = options;
 
-  const lines = text.split('\n');
   const scale = fontSize / font.unitsPerEm;
   const lineHeightPx = fontSize * lineHeightMultiplier;
   const allSubpaths: PathPoint[][] = [];
   const allGlyphs: GlyphSubpathGroup[] = [];
 
-  // Measure all line widths for alignment
-  const lineWidths: number[] = [];
-  for (const line of alignmentText.split('\n')) {
-    let width = 0;
-    const glyphs = font.stringToGlyphs(line);
-    for (let i = 0; i < glyphs.length; i++) {
-      const glyph = glyphs[i]!;
-      width += (glyph.advanceWidth ?? 0) * scale;
-      if (i < glyphs.length - 1) {
-        width += letterSpacing;
-        // Add kerning if available
-        const nextGlyph = glyphs[i + 1];
-        if (nextGlyph) {
-          width += font.getKerningValue(glyph, nextGlyph) * scale;
-        }
-      }
-    }
-    lineWidths.push(width);
-  }
-
-  const maxWidth = Math.max(...lineWidths, 1);
+  const lines = breakTextLines(alignmentText, fontMeasure(font, fontSize, letterSpacing), width);
+  const boxWidth = width ?? Math.max(...lines.map((line) => line.width), 1);
+  const visibleLength = Array.from(text).length;
 
   // Layout each line
-  let lineCharStart = 0;
   for (let lineIdx = 0; lineIdx < lines.length; lineIdx++) {
     const line = lines[lineIdx]!;
-    const lineWidth = lineWidths[lineIdx]!;
+    if (line.start >= visibleLength) break;
 
     // Y offset: font Y is down, but we've flipped in glyphPathToSubpaths.
     // Position each line top-down from 0.
@@ -242,23 +227,23 @@ export function textToSubpaths(
     // X offset for alignment
     let xOffset = 0;
     if (textAlign === 'center') {
-      xOffset = (maxWidth - lineWidth) / 2;
+      xOffset = (boxWidth - line.width) / 2;
     } else if (textAlign === 'right') {
-      xOffset = maxWidth - lineWidth;
+      xOffset = boxWidth - line.width;
     }
 
-    const glyphs = font.stringToGlyphs(line);
-    const chars = [...line];
+    const glyphs = font.stringToGlyphs(line.text);
+    const chars = [...line.text];
     let advanceX = xOffset;
 
-    for (let i = 0; i < glyphs.length; i++) {
+    for (let i = 0; i < glyphs.length && line.start + i < visibleLength; i++) {
       const glyph = glyphs[i]!;
       const path = glyph.getPath(advanceX / scale, 0, font.unitsPerEm);
       const subpaths = glyphPathToSubpaths(path);
 
       const glyphGroup: GlyphSubpathGroup = {
         char: chars[i] ?? '',
-        charIndex: lineCharStart + i,
+        charIndex: line.start + i,
         subpaths: [],
       };
 
@@ -294,7 +279,6 @@ export function textToSubpaths(
         }
       }
     }
-    lineCharStart += chars.length + 1; // the newline
   }
 
   // Compute bounds
