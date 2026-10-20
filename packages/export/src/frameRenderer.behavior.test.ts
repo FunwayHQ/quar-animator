@@ -167,14 +167,18 @@ describe('createFrameRenderer', () => {
     expect(mocks.loseContext).toHaveBeenCalledOnce();
   });
 
-  it('hands symbol definitions to the shape renderer so instances draw', () => {
+  it('hands the scene’s symbol definitions to the shape renderer, so instances draw', () => {
+    const node = { id: 'shape-1', opacity: 1 };
+    const sceneGraph = createSceneGraph(node);
+    const timeline = { tracks: [] } as unknown as Timeline;
     const symbol = { id: 'sym-1', name: 'Star', sceneGraphJSON: { nodes: [], rootNodeIds: [] } };
-    createFrameRenderer({ width: 10, height: 10, symbols: [symbol as never] });
-    expect(mocks.setSymbolDefinitions).toHaveBeenCalledWith(new Map([['sym-1', symbol]]));
+    const symbols = [symbol as never];
+    const handle = createFrameRenderer({ width: 10, height: 10 });
 
-    mocks.setSymbolDefinitions.mockClear();
-    createFrameRenderer({ width: 10, height: 10 });
-    expect(mocks.setSymbolDefinitions).not.toHaveBeenCalled();
+    handle.renderFrame({ sceneGraph: sceneGraph as any, timeline, symbols }, 0);
+    handle.renderFrame({ sceneGraph: sceneGraph as any, timeline, symbols }, 1);
+    expect(mocks.setSymbolDefinitions).toHaveBeenCalledOnce();
+    expect(mocks.setSymbolDefinitions).toHaveBeenCalledWith(new Map([['sym-1', symbol]]));
   });
 
   it('maps the selected artboard bounds to the output and renders only that subtree', () => {

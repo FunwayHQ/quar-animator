@@ -381,6 +381,8 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
         wind: rigState.globalWind,
         frameRate: timeline.frameRate,
       },
+      // Symbol instances are drawn from their definitions
+      symbols: rigState.symbols,
       ...(selectedArtboard
         ? {
             exportRootIds: [selectedArtboard.node.id],

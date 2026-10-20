@@ -40,8 +40,6 @@ export interface FrameRenderOptions {
   height: number;
   multiplier?: number;
   backgroundColor?: Color | null; // null = transparent
-  /** Definitions symbol instances are drawn from. */
-  symbols?: SymbolDefinition[];
 }
 
 /** The rig evaluated on top of the keyframes, in the editor's order. */
@@ -63,6 +61,8 @@ export interface FrameRenderContext {
   exportRootIds?: string[];
   /** World-space rectangle mapped to the full output canvas. */
   viewportBounds?: { x: number; y: number; width: number; height: number };
+  /** Definitions symbol instances are drawn from (without them, instances draw nothing). */
+  symbols?: SymbolDefinition[];
 }
 
 export interface FrameRendererHandle {
@@ -86,7 +86,7 @@ export interface FrameRendererHandle {
  * Allocates an offscreen WebGL canvas once and reuses it for every frame.
  */
 export function createFrameRenderer(options: FrameRenderOptions): FrameRendererHandle {
-  const { width, height, multiplier = 1, backgroundColor = null, symbols } = options;
+  const { width, height, multiplier = 1, backgroundColor = null } = options;
 
   const pixelW = Math.ceil(width * multiplier);
   const pixelH = Math.ceil(height * multiplier);
@@ -104,9 +104,8 @@ export function createFrameRenderer(options: FrameRenderOptions): FrameRendererH
   const shapeRenderer = new ShapeRenderer(renderer);
   // Bones are rig helpers, not artwork
   shapeRenderer.setDrawRigHelpers(false);
-  if (symbols && symbols.length > 0) {
-    shapeRenderer.setSymbolDefinitions(new Map(symbols.map((s) => [s.id, s])));
-  }
+  // The definitions last handed to the shape renderer
+  let symbols: SymbolDefinition[] | undefined;
 
   // Physics state carries from one frame to the next; it restarts whenever a
   // pass goes back in time (GIF renders every frame twice), so every pass of
@@ -118,6 +117,10 @@ export function createFrameRenderer(options: FrameRenderOptions): FrameRendererH
 
   function renderFrame(ctx: FrameRenderContext, frame: number): HTMLCanvasElement {
     const { sceneGraph, timeline } = ctx;
+    if (ctx.symbols !== symbols) {
+      symbols = ctx.symbols;
+      shapeRenderer.setSymbolDefinitions(new Map((symbols ?? []).map((s) => [s.id, s])));
+    }
     const bounds = ctx.viewportBounds ?? { x: 0, y: 0, width, height };
     const halfW = bounds.width / 2;
     const halfH = bounds.height / 2;

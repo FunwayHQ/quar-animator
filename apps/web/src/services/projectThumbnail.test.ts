@@ -274,17 +274,14 @@ describe('renderProjectThumbnail', () => {
 
     expect(result).toEqual({ kind: 'artboard', png, background: { r: 26, g: 26, b: 26, a: 1 } });
     expect(mocks.loadBundledFonts).toHaveBeenCalled();
-    expect(mocks.createFrameRenderer).toHaveBeenCalledWith({
-      width: 467,
-      height: 350,
-      symbols,
-    });
+    expect(mocks.createFrameRenderer).toHaveBeenCalledWith({ width: 467, height: 350 });
     const [ctx, frame] = mocks.renderFrameAsBlob.mock.calls[0]!;
     expect(frame).toBe(0);
     expect(ctx.timeline.tracks).toEqual([]);
     expect(ctx.exportRootIds).toEqual(['board']);
     expect(ctx.viewportBounds).toEqual({ x: 0, y: 0, width: 800, height: 600 });
     expect(ctx.rig).toMatchObject({ ikChains, smartBoneActions: [], frameRate: 24 });
+    expect(ctx.symbols).toEqual(symbols);
     expect(mocks.preloadTextures.mock.calls[0]![0].map((n: Node) => n.id)).toEqual(['board']);
     expect(mocks.dispose).toHaveBeenCalledOnce();
   });

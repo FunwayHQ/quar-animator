@@ -204,7 +204,7 @@ export async function renderProjectThumbnail(
 
   const { sceneGraph, region } = scene;
   const size = thumbnailPixelSize(region.bounds);
-  const renderer = createFrameRenderer({ ...size, symbols: scene.symbols });
+  const renderer = createFrameRenderer(size);
   try {
     const roots = region.rootIds
       ? region.rootIds.flatMap((id) => sceneGraph.getNode(id) ?? [])
@@ -222,6 +222,7 @@ export async function renderProjectThumbnail(
         },
         exportRootIds: region.rootIds,
         viewportBounds: region.bounds,
+        symbols: scene.symbols,
       },
       0
     );
