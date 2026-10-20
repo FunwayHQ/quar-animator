@@ -28,6 +28,7 @@ import { resolveSymbolInstance, getResolvedRootNodes } from '../symbols/symbolRe
 import { WebGLRenderer, type ShaderProgram } from './WebGLRenderer';
 import { EffectRenderer } from './EffectRenderer';
 import { FramebufferManager } from './FramebufferManager';
+import { createGhostComposite, type GhostComposite } from './PostProcessShaders';
 import type { FramebufferEntry } from './FramebufferManager';
 import {
   computeBounds,
@@ -581,6 +582,9 @@ export class ShapeRenderer {
   private symbolDefinitions: Map<string, SymbolDefinition> = new Map();
   private drawRigHelpers = true;
   private hiddenBones: Set<string> | null = null;
+  /** Onion-skin ghost passes (made on first use) */
+  private ghostFramebuffers: FramebufferManager | null = null;
+  private ghostComposite: GhostComposite | null = null;
 
   constructor(renderer: WebGLRenderer) {
     this.renderer = renderer;
@@ -624,6 +628,60 @@ export class ShapeRenderer {
   /** Whether bones are drawn. Exports leave rig helpers out of the artwork. */
   setDrawRigHelpers(draw: boolean): void {
     this.drawRigHelpers = draw;
+  }
+
+  /**
+   * Draw a whole scene as an onion-skin ghost: rendered as it looks —
+   * groups, child bones, masks, bound meshes — into an off-screen buffer,
+   * then laid over what's drawn so far, tinted and faded.
+   */
+  renderGhostScene(
+    sceneGraph: SceneGraph,
+    viewProjectionMatrix: Matrix3,
+    alpha: number,
+    tintColor: [number, number, number]
+  ): void {
+    if (!this.program || !this.vao) return;
+    const gl = this.renderer.context;
+    const width = gl.drawingBufferWidth;
+    const height = gl.drawingBufferHeight;
+    this.ghostFramebuffers ??= new FramebufferManager(gl);
+    this.ghostComposite ??= createGhostComposite(this.renderer);
+
+    const previous = gl.getParameter(gl.FRAMEBUFFER_BINDING) as WebGLFramebuffer | null;
+    const entry = this.ghostFramebuffers.acquire(width, height);
+    try {
+      gl.bindFramebuffer(gl.FRAMEBUFFER, entry.fbo);
+      gl.viewport(0, 0, width, height);
+      gl.clearColor(0, 0, 0, 0);
+      gl.clear(gl.COLOR_BUFFER_BIT);
+      // Alpha builds up as coverage, so the pass can be laid over cleanly
+      gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+      this.render(sceneGraph, viewProjectionMatrix);
+    } finally {
+      gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, previous);
+      gl.viewport(0, 0, width, height);
+    }
+
+    const { program, quadVAO } = this.ghostComposite;
+    const depthWasEnabled = gl.isEnabled(gl.DEPTH_TEST);
+    if (depthWasEnabled) gl.disable(gl.DEPTH_TEST);
+    this.renderer.useProgram(program);
+    this.renderer.bindVAO(quadVAO);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, entry.texture);
+    gl.uniform1i(program.uniforms.u_texture ?? null, 0);
+    gl.uniform3f(program.uniforms.u_tint ?? null, tintColor[0], tintColor[1], tintColor[2]);
+    gl.uniform1f(program.uniforms.u_alpha ?? null, alpha);
+    gl.drawArrays(gl.TRIANGLES, 0, 6);
+    gl.bindTexture(gl.TEXTURE_2D, null);
+    if (depthWasEnabled) gl.enable(gl.DEPTH_TEST);
+    this.ghostFramebuffers.release(entry);
+
+    // Back to the shape program for what's drawn next
+    this.renderer.useProgram(this.program);
+    this.renderer.bindVAO(this.vao);
   }
 
   /** Bones not drawn: those outside their Vitruvian controller's active group. */
@@ -4621,6 +4679,14 @@ export class ShapeRenderer {
     const gl = this.renderer.context;
     this.renderer.clearProgramUseHook(this.programUseHook);
     this.maskFramebufferManager.dispose();
+    this.ghostFramebuffers?.dispose();
+    this.ghostFramebuffers = null;
+    if (this.ghostComposite) {
+      gl.deleteProgram(this.ghostComposite.program.program);
+      gl.deleteVertexArray(this.ghostComposite.quadVAO);
+      gl.deleteBuffer(this.ghostComposite.quadVBO);
+      this.ghostComposite = null;
+    }
     this.maskStack = [];
     this.maskSourceNodeIds.clear();
     this.activeMask = null;

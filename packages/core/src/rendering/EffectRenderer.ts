@@ -31,6 +31,11 @@ export class EffectRenderer {
   // Used by compositeWithBlendMode to avoid blitFramebuffer from a
   // multisampled default FB (which fails on Chrome/ANGLE).
   private resolvePixelBuffer: Uint8Array | null = null;
+  /**
+   * Where the current pass composites: the framebuffer bound as it began —
+   * the canvas, or an off-screen pass such as an onion-skin ghost.
+   */
+  private target: WebGLFramebuffer | null = null;
 
   constructor(renderer: WebGLRenderer) {
     this.renderer = renderer;
@@ -66,6 +71,8 @@ export class EffectRenderer {
   ): void {
     const gl = this.gl;
     const visibleEffects = (effects ?? []).filter((e) => e.visible);
+    const target = gl.getParameter(gl.FRAMEBUFFER_BINDING) as WebGLFramebuffer | null;
+    this.target = target;
 
     // Save and disable scissor test so FBO clears affect the entire texture
     // (artboard clipContent enables scissor which would leave stale content in FBOs)
@@ -83,11 +90,13 @@ export class EffectRenderer {
     // RGB: standard src-over premultiplied; Alpha: additive src-over
     gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
     renderNodeFn();
+    // A node's own effect pass inside renderNodeFn had a target of its own
+    this.target = target;
     // Restore standard blend func
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 
     // Restore default framebuffer for compositing
-    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, this.target);
     gl.viewport(0, 0, canvasWidth, canvasHeight);
 
     // Re-enable scissor for compositing (clips to artboard bounds)
@@ -149,6 +158,8 @@ export class EffectRenderer {
     canvasHeight: number
   ): void {
     const gl = this.gl;
+    // Composites onto what's bound now (the canvas, or an off-screen pass)
+    this.target = gl.getParameter(gl.FRAMEBUFFER_BINDING) as WebGLFramebuffer | null;
 
     // Capture the current canvas content into a destination FBO texture.
     // We use readPixels + texSubImage2D instead of blitFramebuffer because
@@ -160,7 +171,7 @@ export class EffectRenderer {
     if (!this.resolvePixelBuffer || this.resolvePixelBuffer.length < bufferSize) {
       this.resolvePixelBuffer = new Uint8Array(bufferSize);
     }
-    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, this.target);
     gl.readPixels(
       0,
       0,
@@ -184,7 +195,7 @@ export class EffectRenderer {
     );
 
     // Now composite src over dst using blend mode shader
-    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, this.target);
     gl.viewport(0, 0, canvasWidth, canvasHeight);
 
     const { blend, quadVAO } = this.programs;
@@ -235,7 +246,7 @@ export class EffectRenderer {
     if (scissorWasEnabled) gl.enable(gl.SCISSOR_TEST);
 
     // Composite the blurred shadow with offset + color
-    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, this.target);
     gl.viewport(0, 0, canvasWidth, canvasHeight);
 
     const { shadow, quadVAO } = this.programs;
@@ -309,9 +320,7 @@ export class EffectRenderer {
       gl.COLOR_BUFFER_BIT,
       gl.NEAREST
     );
-    gl.bindFramebuffer(gl.READ_FRAMEBUFFER, null);
-    gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, null);
-    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, this.target);
 
     this.fbManager.release(blurredFBO);
   }
@@ -362,7 +371,7 @@ export class EffectRenderer {
     gl.enable(gl.BLEND);
 
     this.renderer.bindVAO(null);
-    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, this.target);
 
     this.fbManager.release(tempFBO);
 

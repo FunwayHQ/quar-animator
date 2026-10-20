@@ -270,6 +270,49 @@ void main() {
 `;
 
 // ============================================================================
+// Onion-skin Ghost Composite
+// ============================================================================
+
+/** A ghost pass laid over the canvas: its colours half-way to the tint, faded. */
+const GHOST_FRAGMENT = `#version 300 es
+precision highp float;
+
+in vec2 v_texCoord;
+
+uniform sampler2D u_texture;
+uniform vec3 u_tint;
+uniform float u_alpha;
+
+out vec4 outColor;
+
+void main() {
+  vec4 c = texture(u_texture, v_texCoord);
+  if (c.a <= 0.0) discard;
+  // The pass is drawn premultiplied
+  vec3 color = clamp(c.rgb / c.a, 0.0, 1.0);
+  outColor = vec4(mix(color, u_tint, 0.5), c.a * u_alpha);
+}
+`;
+
+export interface GhostComposite {
+  program: ShaderProgram;
+  quadVAO: WebGLVertexArrayObject;
+  quadVBO: WebGLBuffer;
+}
+
+export function createGhostComposite(renderer: WebGLRenderer): GhostComposite {
+  const program = renderer.createShaderProgram(
+    'postprocess_ghost',
+    COMPOSITE_VERTEX,
+    GHOST_FRAGMENT,
+    ['a_position', 'a_texCoord'],
+    ['u_texture', 'u_tint', 'u_alpha']
+  );
+  const { vao: quadVAO, vbo: quadVBO } = createFullscreenQuad(renderer.context);
+  return { program, quadVAO, quadVBO };
+}
+
+// ============================================================================
 // Blend Mode Index Mapping
 // ============================================================================
 

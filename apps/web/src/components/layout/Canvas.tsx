@@ -12,7 +12,6 @@ import {
 } from '@quar/core';
 import type { SceneGraphEvent } from '@quar/core';
 import type { Node, Vector2 } from '@quar/types';
-import { evaluateNodeAtFrame, applyAnimatedValues, getAnimatedNodes } from '@quar/animation';
 import {
   evaluateIKChains,
   evaluateSmartBones,
@@ -35,6 +34,7 @@ import { GradientHandleOverlay } from '../canvas/GradientHandleOverlay';
 import { CanvasRuler } from '../canvas/CanvasRuler';
 import { TextEditOverlay } from '../canvas/TextEditOverlay';
 import { BoneOverlay } from '../canvas/BoneOverlay';
+import { GhostSceneCache, poseSceneAtFrame } from '../canvas/onionSkinScenes';
 import { ArtboardOverlay } from '../canvas/ArtboardOverlay';
 import { SequenceBadgesOverlay } from '../canvas/SequenceBadgesOverlay';
 import { GuideOverlay } from '../canvas/GuideOverlay';
@@ -74,6 +74,9 @@ export function Canvas({
   const cameraRef = useRef<Camera | null>(null);
   const shapeRendererRef = useRef<ShapeRenderer | null>(null);
   const onionSkinRendererRef = useRef<OnionSkinRenderer | null>(null);
+  // Onion-skin ghosts: posed copies of the scene, kept while it doesn't change
+  const ghostScenesRef = useRef(new GhostSceneCache());
+  const sceneVersionRef = useRef(0);
   const animationFrameRef = useRef<number>(0);
 
   // Selection infrastructure (initialized immediately, doesn't depend on WebGL)
@@ -166,6 +169,15 @@ export function Canvas({
 
   // Get shared SceneGraph from context
   const sceneGraph = useSceneGraph();
+  useEffect(() => {
+    const changed = () => {
+      sceneVersionRef.current++;
+    };
+    const off = (
+      ['nodeAdded', 'nodeRemoved', 'nodeChanged', 'nodeMoved', 'graphReplaced'] as const
+    ).map((type) => sceneGraph.on(type, changed));
+    return () => off.forEach((unsubscribe) => unsubscribe());
+  }, [sceneGraph]);
 
   // Initialize tools hook
   const {
@@ -612,28 +624,28 @@ export function Canvas({
           } = useEditorStore.getState();
           if (onionSkin.enabled && (!playing || onionSkin.showDuringPlayback)) {
             const sg = sceneGraphRef.current;
-            const getNodesAtFrame = (f: number) => {
-              // Evaluate all animated nodes (including children in groups), then
-              // return all root-level nodes with animated values applied
-              const animatedIds = getAnimatedNodes(tl);
-              const overrides = new Map<string, Node>();
-              for (const nodeId of animatedIds) {
-                const node = sg.getNode(nodeId);
-                if (!node) continue;
-                const values = evaluateNodeAtFrame(tl, nodeId, f);
-                if (values.size > 0) {
-                  overrides.set(nodeId, applyAnimatedValues(node, values));
-                }
-              }
-              return sg.getRootNodes().map((node: Node) => overrides.get(node.id) ?? node);
-            };
+            const { ikChains: ghostIK, vitruvianControllers: ghostVit } = useEditorStore.getState();
+            // Ghosts show bones as the canvas does
+            shapeRenderer.setHiddenBones(
+              ghostVit.length > 0 ? evaluateVitruvianControllers(ghostVit) : null
+            );
+            const inputs = [sceneVersionRef.current, tl, ghostIK];
+            const shown = new Set<number>();
             onionSkinRenderer.render(
               onionSkin,
               frame,
-              getNodesAtFrame,
+              (f) => {
+                // Only frames with something animated: else the ghost is the scene itself
+                if (tl.tracks.length === 0) return null;
+                shown.add(f);
+                return ghostScenesRef.current.get(inputs, f, () =>
+                  poseSceneAtFrame(sg, tl, f, ghostIK)
+                );
+              },
               viewProjectionMatrix,
               tlDuration
             );
+            ghostScenesRef.current.keepOnly(shown);
           }
         }
 

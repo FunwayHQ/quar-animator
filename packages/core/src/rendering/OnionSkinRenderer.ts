@@ -5,7 +5,8 @@
  * to help animators see motion before/after the current frame.
  */
 
-import type { Matrix3, Node } from '@quar/types';
+import type { Matrix3 } from '@quar/types';
+import type { SceneGraph } from '../SceneGraph';
 import type { ShapeRenderer } from './ShapeRenderer';
 
 // ============================================================================
@@ -61,18 +62,19 @@ export class OnionSkinRenderer {
   }
 
   /**
-   * Render onion skin ghost frames.
+   * Render onion skin ghost frames: the scene as posed at each frame either
+   * side of the current one, tinted, fading with distance.
    *
    * @param settings - Onion skin configuration
    * @param currentFrame - The current frame number
-   * @param getNodesAtFrame - Callback that evaluates timeline at a frame and returns node states
+   * @param getSceneAtFrame - The scene posed at a frame (null: nothing to show)
    * @param viewProjectionMatrix - Camera view-projection matrix
    * @param timelineDuration - Total duration in frames (optional, used to clamp after frames)
    */
   render(
     settings: OnionSkinSettings,
     currentFrame: number,
-    getNodesAtFrame: (frame: number) => Node[],
+    getSceneAtFrame: (frame: number) => SceneGraph | null,
     viewProjectionMatrix: Matrix3,
     timelineDuration?: number
   ): void {
@@ -80,34 +82,27 @@ export class OnionSkinRenderer {
 
     const beforeColorRgb = hexToRgbNormalized(settings.beforeColor);
     const afterColorRgb = hexToRgbNormalized(settings.afterColor);
+    const ghost = (frame: number, distance: number, tint: [number, number, number]) => {
+      const scene = getSceneAtFrame(frame);
+      if (!scene) return;
+      // The closest ghost (distance 1) gets the full base opacity; falloff
+      // only fades the ones further away
+      const frameOpacity = settings.opacity * Math.pow(1 - settings.opacityFalloff, distance - 1);
+      this.shapeRenderer.renderGhostScene(scene, viewProjectionMatrix, frameOpacity, tint);
+    };
 
-    // Render before frames (furthest first, so closest overlaps on top)
+    // Before frames (furthest first, so closest overlaps on top)
     for (let i = settings.beforeCount; i >= 1; i--) {
       const frame = currentFrame - i;
       if (frame < 0) continue;
-      // Use (i-1) so closest ghost (i=1) gets full base opacity,
-      // and falloff only reduces more distant ghosts
-      const frameOpacity = settings.opacity * Math.pow(1 - settings.opacityFalloff, i - 1);
-      const nodes = getNodesAtFrame(frame);
-      for (const node of nodes) {
-        this.shapeRenderer.renderGhostNode(
-          node,
-          viewProjectionMatrix,
-          frameOpacity,
-          beforeColorRgb
-        );
-      }
+      ghost(frame, i, beforeColorRgb);
     }
 
-    // Render after frames (furthest first, so closest overlaps on top)
+    // After frames (furthest first, so closest overlaps on top)
     for (let i = settings.afterCount; i >= 1; i--) {
       const frame = currentFrame + i;
       if (timelineDuration !== undefined && frame >= timelineDuration) continue;
-      const frameOpacity = settings.opacity * Math.pow(1 - settings.opacityFalloff, i - 1);
-      const nodes = getNodesAtFrame(frame);
-      for (const node of nodes) {
-        this.shapeRenderer.renderGhostNode(node, viewProjectionMatrix, frameOpacity, afterColorRgb);
-      }
+      ghost(frame, i, afterColorRgb);
     }
   }
 }
