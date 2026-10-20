@@ -174,7 +174,7 @@ export async function renderProjectThumbnail(
     const roots = region.rootIds
       ? region.rootIds.flatMap((id) => sceneGraph.getNode(id) ?? [])
       : sceneGraph.getRootNodes();
-    await renderer.preloadTextures(roots, sceneGraph);
+    await renderer.preloadTextures(roots, sceneGraph, scene.symbols);
     const png = await renderer.renderFrameAsBlob(
       {
         sceneGraph,

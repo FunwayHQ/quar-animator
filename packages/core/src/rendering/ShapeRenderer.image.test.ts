@@ -265,6 +265,57 @@ describe('ShapeRenderer - Image Rendering', () => {
     });
   });
 
+  describe('preloading textures', () => {
+    it('loads the images inside symbols an instance draws, nested ones too', async () => {
+      const inner = createImageNode('inner-photo', 'data:image/png;base64,INNER', 10, 10);
+      const outer = createImageNode('outer-photo', 'data:image/png;base64,OUTER', 10, 10);
+      const nestedInstance = {
+        ...createImageNode('nested', '', 1, 1),
+        type: 'symbol-instance',
+        symbolId: 'inner-symbol',
+        overrides: [],
+      } as unknown as ImageNode;
+      shapeRenderer.setSymbolDefinitions(
+        new Map([
+          [
+            'inner-symbol',
+            {
+              id: 'inner-symbol',
+              name: 'Inner',
+              sceneGraphJSON: { nodes: [inner], rootNodeIds: ['inner-photo'] },
+            },
+          ],
+          [
+            'outer-symbol',
+            {
+              id: 'outer-symbol',
+              name: 'Outer',
+              sceneGraphJSON: {
+                nodes: [outer, nestedInstance],
+                rootNodeIds: ['outer-photo', 'nested'],
+              },
+            },
+          ],
+        ])
+      );
+      const instance = {
+        ...createImageNode('instance', '', 1, 1),
+        type: 'symbol-instance',
+        symbolId: 'outer-symbol',
+        overrides: [],
+      } as unknown as ImageNode;
+      sceneGraph.addNode(instance);
+      const loaded = vi.spyOn(shapeRenderer, 'loadTextureSync').mockReturnValue({} as WebGLTexture);
+
+      await shapeRenderer.preloadTextures([instance], sceneGraph);
+
+      expect(loaded.mock.calls.map(([src]) => src).sort()).toEqual([
+        'data:image/png;base64,INNER',
+        'data:image/png;base64,OUTER',
+      ]);
+    });
+  });
+
   describe('image meshes for bones', () => {
     type WithGeometry = {
       ensureBindPoseImageGeometry(node: ImageNode): { vertices: Float32Array };

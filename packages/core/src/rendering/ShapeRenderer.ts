@@ -1217,17 +1217,21 @@ export class ShapeRenderer {
     sceneGraph: SceneGraph
   ): Promise<void> {
     const imageSrcs = new Set<string>();
-    for (const node of nodes) {
-      if (node.type === 'image' && node.src) {
-        imageSrcs.add(node.src);
-      }
-      // Also collect from descendants
-      const descendants = sceneGraph.getDescendants(node.id);
-      for (const desc of descendants) {
-        if (desc.type === 'image' && 'src' in desc) {
-          imageSrcs.add(desc.src);
+    // Symbol instances draw their definition's nodes, images among them
+    const seenSymbols = new Set<string>();
+    const collect = (node: import('@quar/types').Node) => {
+      if (node.type === 'image' && node.src) imageSrcs.add(node.src);
+      if (node.type === 'symbol-instance' && !seenSymbols.has(node.symbolId)) {
+        seenSymbols.add(node.symbolId);
+        for (const inner of this.symbolDefinitions.get(node.symbolId)?.sceneGraphJSON.nodes ?? []) {
+          collect(inner);
         }
       }
+    };
+    for (const node of nodes) {
+      collect(node);
+      // Also collect from descendants
+      for (const desc of sceneGraph.getDescendants(node.id)) collect(desc);
     }
 
     const gl = this.renderer.context;

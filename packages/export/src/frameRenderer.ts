@@ -66,8 +66,15 @@ export interface FrameRenderContext {
 }
 
 export interface FrameRendererHandle {
-  /** Pre-load image textures so they render correctly. Must be awaited before renderFrame. */
-  preloadTextures(nodes: Node[], sceneGraph: SceneGraph): Promise<void>;
+  /**
+   * Pre-load image textures so they render correctly, those inside the
+   * symbols' definitions too. Must be awaited before renderFrame.
+   */
+  preloadTextures(
+    nodes: Node[],
+    sceneGraph: SceneGraph,
+    symbols?: SymbolDefinition[]
+  ): Promise<void>;
   /** Render a single frame and return the canvas */
   renderFrame(ctx: FrameRenderContext, frame: number): HTMLCanvasElement;
   /** Render a frame and return a PNG blob */
@@ -117,10 +124,7 @@ export function createFrameRenderer(options: FrameRenderOptions): FrameRendererH
 
   function renderFrame(ctx: FrameRenderContext, frame: number): HTMLCanvasElement {
     const { sceneGraph, timeline } = ctx;
-    if (ctx.symbols !== symbols) {
-      symbols = ctx.symbols;
-      shapeRenderer.setSymbolDefinitions(new Map((symbols ?? []).map((s) => [s.id, s])));
-    }
+    applySymbols(ctx.symbols);
     const bounds = ctx.viewportBounds ?? { x: 0, y: 0, width, height };
     const halfW = bounds.width / 2;
     const halfH = bounds.height / 2;
@@ -243,7 +247,19 @@ export function createFrameRenderer(options: FrameRenderOptions): FrameRendererH
     gl.getExtension('WEBGL_lose_context')?.loseContext();
   }
 
-  async function preloadTextures(nodes: Node[], sceneGraph: SceneGraph): Promise<void> {
+  /** Hand the shape renderer these symbol definitions, if they're new. */
+  function applySymbols(next: SymbolDefinition[] | undefined): void {
+    if (next === symbols) return;
+    symbols = next;
+    shapeRenderer.setSymbolDefinitions(new Map((symbols ?? []).map((s) => [s.id, s])));
+  }
+
+  async function preloadTextures(
+    nodes: Node[],
+    sceneGraph: SceneGraph,
+    preloadSymbols?: SymbolDefinition[]
+  ): Promise<void> {
+    if (preloadSymbols) applySymbols(preloadSymbols);
     await shapeRenderer.preloadTextures(nodes, sceneGraph);
   }
 

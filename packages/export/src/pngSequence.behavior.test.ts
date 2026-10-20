@@ -76,7 +76,11 @@ describe('exportPngSequence', () => {
       multiplier: 2,
       backgroundColor: { r: 12, g: 34, b: 56, a: 1 },
     });
-    expect(renderer.preloadTextures).toHaveBeenCalledWith([{ id: 'root' }], context.sceneGraph);
+    expect(renderer.preloadTextures).toHaveBeenCalledWith(
+      [{ id: 'root' }],
+      context.sceneGraph,
+      context.symbols
+    );
     expect(renderer.renderFrameAsBlob.mock.calls).toEqual([
       [context, 2],
       [context, 3],

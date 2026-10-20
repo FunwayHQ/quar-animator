@@ -167,6 +167,22 @@ describe('createFrameRenderer', () => {
     expect(mocks.loseContext).toHaveBeenCalledOnce();
   });
 
+  it('hands the symbols over before preloading, so images inside them load', async () => {
+    const node = { id: 'shape-1', opacity: 1 };
+    const sceneGraph = createSceneGraph(node);
+    const symbol = { id: 'sym-1', name: 'Photo', sceneGraphJSON: { nodes: [], rootNodeIds: [] } };
+    const order: string[] = [];
+    mocks.setSymbolDefinitions.mockImplementation(() => order.push('symbols'));
+    mocks.preloadTextures.mockImplementation(() => order.push('preload'));
+    const handle = createFrameRenderer({ width: 10, height: 10 });
+
+    await handle.preloadTextures([node as unknown as Node], sceneGraph as any, [symbol as never]);
+
+    expect(order).toEqual(['symbols', 'preload']);
+    mocks.setSymbolDefinitions.mockReset();
+    mocks.preloadTextures.mockReset();
+  });
+
   it('hands the scene’s symbol definitions to the shape renderer, so instances draw', () => {
     const node = { id: 'shape-1', opacity: 1 };
     const sceneGraph = createSceneGraph(node);

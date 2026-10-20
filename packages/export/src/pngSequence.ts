@@ -67,7 +67,7 @@ export async function exportPngSequence(
   try {
     // Pre-load image textures so they render correctly in the fresh WebGL context.
     // Keep this inside the cleanup boundary because preloading allocates GPU resources too.
-    await renderer.preloadTextures(getFrameRenderRoots(ctx), ctx.sceneGraph);
+    await renderer.preloadTextures(getFrameRenderRoots(ctx), ctx.sceneGraph, ctx.symbols);
 
     for (let i = 0; i < frameCount; i++) {
       const frame = startFrame + i;

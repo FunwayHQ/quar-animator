@@ -150,7 +150,7 @@ export async function exportGif(
   }
 
   try {
-    await renderer.preloadTextures(getFrameRenderRoots(ctx), ctx.sceneGraph);
+    await renderer.preloadTextures(getFrameRenderRoots(ctx), ctx.sceneGraph, ctx.symbols);
 
     const pixelCount = width * height;
     const samplesPerFrame = Math.max(1, Math.floor(MAX_PALETTE_SAMPLE_PIXELS / frameCount));

@@ -539,7 +539,7 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
         });
 
         // Pre-load image textures so they render correctly
-        await renderer.preloadTextures(frameRenderRoots, sceneGraph);
+        await renderer.preloadTextures(frameRenderRoots, sceneGraph, frameRenderContext.symbols);
 
         try {
           for (let i = 0; i < frameCount; i++) {
@@ -626,7 +626,7 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
         });
 
         // Pre-load image textures so they render correctly
-        await renderer.preloadTextures(frameRenderRoots, sceneGraph);
+        await renderer.preloadTextures(frameRenderRoots, sceneGraph, frameRenderContext.symbols);
 
         try {
           for (let i = 0; i < frameCount; i++) {

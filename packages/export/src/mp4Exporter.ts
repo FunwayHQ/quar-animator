@@ -53,7 +53,7 @@ export async function exportMp4(
   let finalized = false;
 
   try {
-    await renderer.preloadTextures(getFrameRenderRoots(ctx), ctx.sceneGraph);
+    await renderer.preloadTextures(getFrameRenderRoots(ctx), ctx.sceneGraph, ctx.symbols);
     if (isCancelled()) return null;
 
     const canvas = renderer.renderFrame(ctx, frames[0]!);

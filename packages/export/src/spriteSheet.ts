@@ -112,7 +112,7 @@ export async function exportSpriteSheet(
   });
 
   // Pre-load image textures so they render correctly in the fresh WebGL context
-  await frameRenderer.preloadTextures(getFrameRenderRoots(ctx), ctx.sceneGraph);
+  await frameRenderer.preloadTextures(getFrameRenderRoots(ctx), ctx.sceneGraph, ctx.symbols);
 
   try {
     for (let i = 0; i < frameCount; i++) {
