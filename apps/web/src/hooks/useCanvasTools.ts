@@ -42,6 +42,7 @@ export interface UseCanvasToolsOptions {
   sceneGraph: SceneGraph;
   getTessellatedVertices?: (nodeId: string) => Float32Array | null;
   getDeformedVertices?: (nodeId: string) => Float32Array | null;
+  getVertexSkinMatrices?: (nodeId: string) => Float32Array | null;
 }
 
 export interface UseCanvasToolsReturn {
@@ -156,7 +157,8 @@ function reportWeightPaintSettings(tool: WeightPaintTool): void {
 }
 
 export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsReturn {
-  const { camera, sceneGraph, getTessellatedVertices, getDeformedVertices } = options;
+  const { camera, sceneGraph, getTessellatedVertices, getDeformedVertices, getVertexSkinMatrices } =
+    options;
 
   // Use the externally-provided SceneGraph
   const sceneGraphRef = useRef<SceneGraph>(sceneGraph);
@@ -448,6 +450,9 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
       getDeformedVertices: (nodeId: string) => {
         return getDeformedVertices?.(nodeId) ?? null;
       },
+      getVertexSkinMatrices: (nodeId: string) => {
+        return getVertexSkinMatrices?.(nodeId) ?? null;
+      },
       convertShapeToPath: (nodeId: string) => {
         return useEditorStore.getState().convertShapeToPath(sceneGraphRef.current, nodeId);
       },
@@ -551,6 +556,12 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
       setCursor(toolManagerRef.current.getCursor());
       syncDirectSelectionState();
 
+      // Leaving the Point Magnet finishes a Smart Bone recording
+      const recording = useEditorStore.getState();
+      if (recording.smartBoneRecordingActionId && activeTool !== 'point-magnet') {
+        recording.stopSmartBoneRecording(sceneGraphRef.current, { nextTool: activeTool });
+      }
+
       // Weight paint starts with the panel's bone, brush and mode
       if (activeTool === 'weight-paint') {
         const wpTool = toolManagerRef.current.getActiveTool();
@@ -607,6 +618,12 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
         prevTargetId = null;
 
         const pmTool = toolManagerRef.current?.getTool<PointMagnetTool>('point-magnet');
+        // Saved unless cancelled, or its target is gone (removed, another project)
+        const kept =
+          !state.smartBoneRecordingDiscard &&
+          state.smartBoneActions.some(
+            (a) => a.id === savedActionId && a.targets.some((t) => t.id === savedTargetId)
+          );
         if (pmTool) {
           // Extract, compact, and save working offsets
           const workingOffsets = pmTool.getWorkingOffsets();
@@ -617,7 +634,11 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
               compacted[nodeId] = clean;
             }
           }
-          useEditorStore.getState().saveMorphTargetOffsets(savedActionId, savedTargetId, compacted);
+          if (kept) {
+            useEditorStore
+              .getState()
+              .saveMorphTargetOffsets(savedActionId, savedTargetId, compacted);
+          }
 
           // Clear the tool's working offsets
           pmTool.setWorkingOffsets(new Map());

@@ -129,4 +129,54 @@ describe('undo and rigging', () => {
     expect(target.offsets).toEqual({});
     expect(sg.getNode('b2')!.transform.rotation).toBe(0);
   });
+
+  describe('ending a morph recording', () => {
+    function recording() {
+      addArm(sg);
+      sg.updateNode('b2', { transform: { ...sg.getNode('b2')!.transform, rotation: 15 } });
+      store().createSmartBoneAction(sg, 'b2');
+      const actionId = store().smartBoneActions[0]!.id;
+      store().addMorphTarget(sg, actionId, 90);
+      const targetId = store().smartBoneActions[0]!.targets[0]!.id;
+      store().setActiveTool('pen');
+      store().startSmartBoneRecording(actionId, targetId, sg);
+      expect(sg.getNode('b2')!.transform.rotation).toBe(90);
+      return { actionId, targetId };
+    }
+
+    it('gives the bone back its rotation when the action is removed', () => {
+      const { actionId } = recording();
+      store().removeSmartBoneAction(sg, actionId);
+      expect(sg.getNode('b2')!.transform.rotation).toBe(15);
+      expect(store().smartBoneRecordingActionId).toBeNull();
+      expect(store().activeTool).toBe('pen');
+    });
+
+    it('gives the bone back its rotation when the target is removed', () => {
+      const { actionId, targetId } = recording();
+      store().removeMorphTarget(sg, actionId, targetId);
+      expect(sg.getNode('b2')!.transform.rotation).toBe(15);
+      expect(store().smartBoneRecordingTargetId).toBeNull();
+    });
+
+    it('cancels on undo', () => {
+      recording();
+      store().undo(sg);
+      expect(store().smartBoneRecordingActionId).toBeNull();
+      expect(sg.getNode('b2')!.transform.rotation).toBe(15);
+    });
+
+    it('can hand over to another tool', () => {
+      recording();
+      store().stopSmartBoneRecording(sg, { nextTool: 'brush' });
+      expect(store().activeTool).toBe('brush');
+      expect(sg.getNode('b2')!.transform.rotation).toBe(15);
+    });
+
+    it('ends with the project', () => {
+      recording();
+      store().resetProject();
+      expect(store().smartBoneRecordingActionId).toBeNull();
+    });
+  });
 });

@@ -451,4 +451,33 @@ describe('useCanvasTools', () => {
       info.mockRestore();
     });
   });
+
+  describe('a Smart Bone recording', () => {
+    it('finishes, keeping its work, when another tool is picked', async () => {
+      const { createBoneNode } = await import('@quar/rigging');
+      sceneGraph.addNode(createBoneNode('arm', 'Arm', { x: 0, y: 0 }, 100));
+      const { result } = renderHook(() => useCanvasTools({ camera, sceneGraph }));
+      const store = useEditorStore.getState();
+      store.createSmartBoneAction(sceneGraph, 'arm');
+      const actionId = useEditorStore.getState().smartBoneActions.at(-1)!.id;
+      store.addMorphTarget(sceneGraph, actionId, 45);
+      const targetId = useEditorStore.getState().smartBoneActions.at(-1)!.targets[0]!.id;
+
+      act(() => useEditorStore.getState().startSmartBoneRecording(actionId, targetId, sceneGraph));
+      expect(sceneGraph.getNode('arm')!.transform.rotation).toBe(45);
+      const magnet = result.current.toolManagerRef.current!.getTool('point-magnet') as unknown as {
+        setWorkingOffsets(offsets: Map<string, unknown[]>): void;
+      };
+      magnet.setWorkingOffsets(new Map([['mesh', [{ vertexIndex: 0, dx: 4, dy: 0 }]]]));
+
+      act(() => useEditorStore.getState().setActiveTool('selection'));
+      const state = useEditorStore.getState();
+      expect(state.smartBoneRecordingActionId).toBeNull();
+      expect(state.activeTool).toBe('selection');
+      expect(sceneGraph.getNode('arm')!.transform.rotation).toBe(0);
+      expect(state.smartBoneActions.at(-1)!.targets[0]!.offsets).toEqual({
+        mesh: [{ vertexIndex: 0, dx: 4, dy: 0 }],
+      });
+    });
+  });
 });

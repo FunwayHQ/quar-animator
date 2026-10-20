@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { SkinData } from '@quar/types';
-import { deformVertices, computeSkinMatrix } from './cpuSkinning';
+import { deformVertices, computeSkinMatrix, skinLinearMatrices } from './cpuSkinning';
 import type { AffineTransform2D } from './cpuSkinning';
 
 function identityTransform(): AffineTransform2D {
@@ -386,5 +386,32 @@ describe('cpuSkinning', () => {
       expect(result[0]).toBeCloseTo(10);
       expect(result[1]).toBeCloseTo(20);
     });
+  });
+});
+
+describe('skinLinearMatrices', () => {
+  it('blends each vertex’s bones, and leaves unweighted vertices at the bind matrix', () => {
+    const skin: SkinData = {
+      vertices: [
+        { influences: [{ boneId: 'turned', weight: 1 }] },
+        {
+          influences: [
+            { boneId: 'turned', weight: 0.5 },
+            { boneId: 'still', weight: 0.5 },
+          ],
+        },
+        { influences: [] },
+      ],
+      inverseBindMatrices: { turned: [1, 0, 0, 1, 0, 0], still: [1, 0, 0, 1, 0, 0] },
+      meshBindMatrix: [2, 0, 0, 2, 0, 0],
+      vertexCount: 3,
+    };
+    const m = skinLinearMatrices(3, skin, {
+      turned: { a: 0, b: 1, c: -1, d: 0, tx: 5, ty: 5 },
+      still: { a: 1, b: 0, c: 0, d: 1, tx: 0, ty: 0 },
+    });
+    expect(Array.from(m.subarray(0, 4))).toEqual([0, 2, -2, 0]);
+    expect(Array.from(m.subarray(4, 8))).toEqual([1, 1, -1, 1]);
+    expect(Array.from(m.subarray(8, 12))).toEqual([2, 0, 0, 2]);
   });
 });

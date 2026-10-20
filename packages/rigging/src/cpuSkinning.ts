@@ -145,3 +145,51 @@ export function deformVertices(
 
   return result;
 }
+
+/**
+ * Each vertex's skinning as a linear map from its bind-space (mesh-local)
+ * offsets to world space: [a, b, c, d] per vertex — the blend of its bones'
+ * matrices, as deformVertices applies them (unweighted vertices: the mesh's
+ * bind matrix).
+ */
+export function skinLinearMatrices(
+  vertexCount: number,
+  skinData: SkinData,
+  boneWorldTransforms: Record<string, AffineTransform2D>
+): Float32Array {
+  const skinMatrices: Record<string, number[]> = {};
+  for (const boneId of Object.keys(skinData.inverseBindMatrices)) {
+    const boneWorld = boneWorldTransforms[boneId];
+    if (!boneWorld) continue;
+    const boneTimesIBM = computeSkinMatrix(boneWorld, skinData.inverseBindMatrices[boneId]!);
+    skinMatrices[boneId] = mul6(boneTimesIBM, skinData.meshBindMatrix);
+  }
+  const bind = skinData.meshBindMatrix;
+  const result = new Float32Array(vertexCount * 4);
+  for (let i = 0; i < vertexCount; i++) {
+    let a = 0;
+    let b = 0;
+    let c = 0;
+    let d = 0;
+    let total = 0;
+    for (const inf of skinData.vertices[i]?.influences ?? []) {
+      const m = skinMatrices[inf.boneId];
+      if (!m) continue;
+      a += inf.weight * m[0]!;
+      b += inf.weight * m[1]!;
+      c += inf.weight * m[2]!;
+      d += inf.weight * m[3]!;
+      total += inf.weight;
+    }
+    if (total <= 0.001) {
+      [a, b, c, d] = [bind[0]!, bind[1]!, bind[2]!, bind[3]!];
+    } else if (Math.abs(total - 1) > 0.001) {
+      a /= total;
+      b /= total;
+      c /= total;
+      d /= total;
+    }
+    result.set([a, b, c, d], i * 4);
+  }
+  return result;
+}

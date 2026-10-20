@@ -64,6 +64,7 @@ import {
   computeBoneMatrixUniforms,
   placeSkinData,
   fitSkinToVertices,
+  skinLinearMatrices,
 } from '@quar/rigging';
 import type { AffineTransform2D } from '@quar/rigging';
 
@@ -3856,6 +3857,29 @@ export class ShapeRenderer {
       this.placedSkin(node, skinData),
       boneWorldTransforms,
       withMorphs ? this.currentMorphOffsets?.get(node.id) : undefined
+    );
+  }
+
+  /**
+   * How a skinned node's skinning maps each vertex's bind-space offsets to
+   * world space now: [a, b, c, d] per vertex (indexed like getTessellatedVertices).
+   */
+  getVertexSkinMatrices(node: Node, sceneGraph: SceneGraph): Float32Array | null {
+    const boundSkin = (node as any).skinData as SkinData | undefined;
+    if (!boundSkin) return null;
+    const cached = this.geometryCache.get(node.id);
+    if (!cached) return null;
+    const skinData = this.fittedSkin(cached, boundSkin);
+    const boneWorldTransforms: Record<string, AffineTransform2D> = {};
+    for (const boneId of Object.keys(skinData.inverseBindMatrices)) {
+      if (!sceneGraph.getNode(boneId)) continue;
+      const bw = sceneGraph.getWorldTransform(boneId);
+      boneWorldTransforms[boneId] = { a: bw.a, b: bw.b, c: bw.c, d: bw.d, tx: bw.tx, ty: bw.ty };
+    }
+    return skinLinearMatrices(
+      cached.vertices.length / 2,
+      this.placedSkin(node, skinData),
+      boneWorldTransforms
     );
   }
 

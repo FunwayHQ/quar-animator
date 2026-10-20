@@ -144,6 +144,26 @@ describe('PointMagnetTool', () => {
     expect(rectOffsets.length).toBeGreaterThan(0);
   });
 
+  it('sculpts a posed mesh where the bones have it, in bind space', () => {
+    context.sceneGraph.addNode(createBoundRectangle('rect-1', createTestSkinData()));
+    // The bone has swung the mesh a quarter turn: vertex 1 (100, 0) is at (0, 100) now
+    context.getDeformedVertices = () => new Float32Array([0, 0, 0, 100, -100, 0, -100, 100]);
+    context.getVertexSkinMatrices = () =>
+      new Float32Array([0, 1, -1, 0, 0, 1, -1, 0, 0, 1, -1, 0, 0, 1, -1, 0]);
+    tool.setBrushRadius(20);
+    tool.onActivate();
+
+    // A push up, on the posed vertex 1
+    tool.onPointerDown(createMockPointerEvent({ worldPosition: { x: 0, y: 100 } }));
+    tool.onPointerMove(createMockPointerEvent({ worldPosition: { x: 0, y: 110 } }));
+
+    const offsets = tool.getWorkingOffsets().get('rect-1')!;
+    expect(offsets.map((o) => o.vertexIndex)).toEqual([1]);
+    // Up in the world is along the bone: +x in the mesh's bind space
+    expect(offsets[0]!.dx).toBeGreaterThan(0);
+    expect(offsets[0]!.dy).toBeCloseTo(0);
+  });
+
   it('does not displace without pointer down', () => {
     const skinData = createTestSkinData();
     const rect = createBoundRectangle('rect-1', skinData);

@@ -200,6 +200,12 @@ export function Canvas({
         ? (shapeRendererRef.current?.getDeformedVertices(node, sceneGraph) ?? null)
         : null;
     },
+    getVertexSkinMatrices: (nodeId: string) => {
+      const node = sceneGraph.getNode(nodeId);
+      return node
+        ? (shapeRendererRef.current?.getVertexSkinMatrices(node, sceneGraph) ?? null)
+        : null;
+    },
   });
 
   // Subscribe to scene graph changes to update selection bounds
@@ -683,7 +689,10 @@ export function Canvas({
 
           if (smartBoneActions.length > 0) {
             const result = evaluateSmartBones(
-              smartBoneActions,
+              // The action being recorded shows as the Point Magnet's working offsets
+              smartBoneRecordingActionId
+                ? smartBoneActions.filter((a) => a.id !== smartBoneRecordingActionId)
+                : smartBoneActions,
               sceneGraphRef.current,
               nodeVertexCounts
             );

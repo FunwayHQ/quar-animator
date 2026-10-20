@@ -48,6 +48,8 @@ export interface ToolManagerOptions {
   getTessellatedVertices?: (nodeId: string) => Float32Array | null;
   /** A bound node's vertices as its bones pose them, in world space */
   getDeformedVertices?: (nodeId: string) => Float32Array | null;
+  /** A bound node's per-vertex skinning, bind-space offset → world ([a, b, c, d] each) */
+  getVertexSkinMatrices?: (nodeId: string) => Float32Array | null;
   getGuides?: () => { id: string; axis: 'x' | 'y'; position: number }[];
   getSnapToGuides?: () => boolean;
   getSymbolDefinitions?: () => SymbolDefinition[];
@@ -259,6 +261,7 @@ export class ToolManager {
       convertShapeToPath: options.convertShapeToPath,
       getTessellatedVertices: options.getTessellatedVertices,
       getDeformedVertices: options.getDeformedVertices,
+      getVertexSkinMatrices: options.getVertexSkinMatrices,
       getGuides: options.getGuides,
       getSnapToGuides: options.getSnapToGuides,
       getSymbolDefinitions: options.getSymbolDefinitions,

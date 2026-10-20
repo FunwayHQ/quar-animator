@@ -36,6 +36,15 @@ export function readDriverValue(
 }
 
 /**
+ * A driver value as compared with its range: a rotation is taken at the turn
+ * nearest the range's middle, so −340° and 20° are the same pose.
+ */
+export function driverAngle(property: string, value: number, rangeMiddle: number): number {
+  if (property !== 'transform.rotation') return value;
+  return value + 360 * Math.round((rangeMiddle - value) / 360);
+}
+
+/**
  * Compute linear blend weight from driver value within [rangeMin, rangeMax].
  * Returns 0 when driverValue <= rangeMin, 1 when >= rangeMax.
  * Supports inverted ranges (rangeMin > rangeMax).
@@ -113,20 +122,25 @@ export function evaluateSmartBoneAction(
   const driverValue = readDriverValue(action.driver, sceneGraph);
   if (driverValue === null) return null;
 
-  const blendWeight = computeBlendWeight(
-    driverValue,
-    action.driver.rangeMin,
-    action.driver.rangeMax
-  );
-
-  // Sort targets by driverValue ascending
-  const sorted = [...action.targets].sort((a, b) => a.driverValue - b.driverValue);
+  // Everything in terms of progress through the range: 0 at rangeMin (the
+  // rest pose), 1 at rangeMax — whichever way round the range runs
+  const { rangeMin, rangeMax } = action.driver;
+  const span = rangeMax - rangeMin;
+  const progress = (value: number) => {
+    const v = driverAngle(action.driver.property, value, (rangeMin + rangeMax) / 2);
+    if (span === 0) return v >= rangeMin ? 1 : 0;
+    return (v - rangeMin) / span;
+  };
+  const current = Math.max(0, Math.min(1, progress(driverValue)));
+  const sorted = action.targets
+    .map((target) => ({ target, at: progress(target.driverValue) }))
+    .sort((a, b) => a.at - b.at);
 
   const result = new Map<string, Float32Array>();
 
   // Collect all affected node IDs across all targets
   const nodeIds = new Set<string>();
-  for (const target of sorted) {
+  for (const { target } of sorted) {
     for (const nid of Object.keys(target.offsets)) nodeIds.add(nid);
   }
 
@@ -134,23 +148,12 @@ export function evaluateSmartBoneAction(
     const vertexCount = nodeVertexCounts.get(nodeId);
     if (!vertexCount || vertexCount <= 0) continue;
 
-    // Find bracketing targets for this blend weight mapped to driver value space
-    const currentDriverVal =
-      action.driver.rangeMin + blendWeight * (action.driver.rangeMax - action.driver.rangeMin);
-
-    // Find lower and upper bracketing targets
-    let lower: MorphTarget | null = null;
-    let upper: MorphTarget | null = null;
-
-    for (let i = 0; i < sorted.length; i++) {
-      const entry = sorted[i];
-      if (!entry) continue;
-      if (entry.driverValue <= currentDriverVal) {
-        lower = entry;
-      }
-      if (entry.driverValue >= currentDriverVal && !upper) {
-        upper = entry;
-      }
+    // The targets either side of the driver
+    let lower: { target: MorphTarget; at: number } | null = null;
+    let upper: { target: MorphTarget; at: number } | null = null;
+    for (const entry of sorted) {
+      if (entry.at <= current) lower = entry;
+      if (entry.at >= current && !upper) upper = entry;
     }
 
     let offsets: MorphVertexOffset[];
@@ -159,23 +162,18 @@ export function evaluateSmartBoneAction(
       continue;
     } else if (!lower) {
       // Before the first target: ramp from the rest pose (zero displacement) up
-      // to the first target as the driver moves from rangeMin to its driverValue
-      // — previously the FULL morph was applied even at rest.
-      const denom = upper!.driverValue - action.driver.rangeMin;
-      const t = denom !== 0 ? (currentDriverVal - action.driver.rangeMin) / denom : 1;
-      offsets = interpolateMorphOffsets([], upper!.offsets[nodeId] ?? [], t);
+      // to the first target as the driver moves from rangeMin to it
+      const t = upper!.at > 0 ? current / upper!.at : 1;
+      offsets = interpolateMorphOffsets([], upper!.target.offsets[nodeId] ?? [], t);
     } else if (!upper || lower === upper) {
       // At or past a single target
-      offsets = (lower.offsets[nodeId] ?? []).map((o) => ({ ...o }));
+      offsets = (lower.target.offsets[nodeId] ?? []).map((o) => ({ ...o }));
     } else {
       // Between two targets — interpolate
-      const t =
-        upper.driverValue === lower.driverValue
-          ? 0
-          : (currentDriverVal - lower.driverValue) / (upper.driverValue - lower.driverValue);
+      const t = upper.at === lower.at ? 0 : (current - lower.at) / (upper.at - lower.at);
       offsets = interpolateMorphOffsets(
-        lower.offsets[nodeId] ?? [],
-        upper.offsets[nodeId] ?? [],
+        lower.target.offsets[nodeId] ?? [],
+        upper.target.offsets[nodeId] ?? [],
         t
       );
     }

@@ -430,3 +430,40 @@ describe('applyMorphOffsets', () => {
     expect(applyMorphOffsets(verts, offsets)).toBe(verts);
   });
 });
+
+describe('driver ranges and angles', () => {
+  const nodeVertexCounts = new Map<string, number>([['mesh-1', 1]]);
+  const bulge = (driverValue: number) => ({
+    id: 't',
+    name: 'Bulge',
+    driverValue,
+    offsets: { 'mesh-1': [{ vertexIndex: 0, dx: 10, dy: 0 }] },
+  });
+  const dxAt = (action: SmartBoneAction, rotation: number) =>
+    evaluateSmartBoneAction(
+      action,
+      makeSG({ 'bone-1': { type: 'bone', rotation } }),
+      nodeVertexCounts
+    )?.get('mesh-1')?.[0] ?? 0;
+
+  it('ramps up a range that runs from a larger angle to a smaller one', () => {
+    const action = makeAction({
+      driver: { boneId: 'bone-1', property: 'transform.rotation', rangeMin: 0, rangeMax: -90 },
+      targets: [bulge(-90)],
+    });
+    expect(dxAt(action, 0)).toBe(0);
+    expect(dxAt(action, -45)).toBeCloseTo(5);
+    expect(dxAt(action, -90)).toBeCloseTo(10);
+    // Past the range's start: still at rest
+    expect(dxAt(action, 30)).toBe(0);
+  });
+
+  it('takes a rotation at its turn nearest the range', () => {
+    const action = makeAction({ targets: [bulge(90)] });
+    // −270° is 90°, and 405° is 45°
+    expect(dxAt(action, -270)).toBeCloseTo(10);
+    expect(dxAt(action, 405)).toBeCloseTo(5);
+    // A target recorded a turn away still counts
+    expect(dxAt(makeAction({ targets: [bulge(450)] }), 90)).toBeCloseTo(10);
+  });
+});

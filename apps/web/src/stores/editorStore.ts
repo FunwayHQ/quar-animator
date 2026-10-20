@@ -574,6 +574,8 @@ export interface EditorStore extends SequenceActions {
   smartBoneRecordingTargetId: string | null;
   smartBoneRecordingPrevTool: ToolType | null;
   smartBoneRecordingPrevRotation: number | null;
+  /** The recording ending now is cancelled: its offsets aren't saved */
+  smartBoneRecordingDiscard: boolean;
   createSmartBoneAction: (sceneGraph: SceneGraphLike, boneId: string) => void;
   removeSmartBoneAction: (sceneGraph: SceneGraphLike, actionId: string) => void;
   setSmartBoneActionEnabled: (
@@ -588,7 +590,14 @@ export interface EditorStore extends SequenceActions {
   addMorphTarget: (sceneGraph: SceneGraphLike, actionId: string, driverValue: number) => void;
   removeMorphTarget: (sceneGraph: SceneGraphLike, actionId: string, targetId: string) => void;
   startSmartBoneRecording: (actionId: string, targetId: string, sceneGraph: SceneGraphLike) => void;
-  stopSmartBoneRecording: (sceneGraph: SceneGraphLike) => void;
+  /**
+   * End the Smart Bone recording: the driver bone gets its rotation back and
+   * the previous tool (or `nextTool`) returns. `discard` drops what was recorded.
+   */
+  stopSmartBoneRecording: (
+    sceneGraph: SceneGraphLike,
+    options?: { discard?: boolean; nextTool?: ToolType }
+  ) => void;
   saveMorphTargetOffsets: (
     actionId: string,
     targetId: string,
@@ -1530,6 +1539,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   smartBoneRecordingTargetId: null as string | null,
   smartBoneRecordingPrevTool: null as ToolType | null,
   smartBoneRecordingPrevRotation: null as number | null,
+  smartBoneRecordingDiscard: false,
 
   createSmartBoneAction: (sceneGraph, boneId) => {
     get().pushUndo(sceneGraph);
@@ -1545,19 +1555,14 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   },
 
   removeSmartBoneAction: (sceneGraph, actionId) => {
+    // A recording of it ends first, giving the bone its rotation back
+    if (get().smartBoneRecordingActionId === actionId) {
+      get().stopSmartBoneRecording(sceneGraph, { discard: true });
+    }
     get().pushUndo(sceneGraph);
     set({
       smartBoneActions: get().smartBoneActions.filter((a) => a.id !== actionId),
       isDirty: true,
-      // Stop recording if the removed action was being recorded
-      ...(get().smartBoneRecordingActionId === actionId
-        ? {
-            smartBoneRecordingActionId: null,
-            smartBoneRecordingTargetId: null,
-            smartBoneRecordingPrevTool: null,
-            smartBoneRecordingPrevRotation: null,
-          }
-        : {}),
     });
   },
 
@@ -1609,21 +1614,16 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   },
 
   removeMorphTarget: (sceneGraph, actionId, targetId) => {
+    // A recording of it ends first, giving the bone its rotation back
+    if (get().smartBoneRecordingTargetId === targetId) {
+      get().stopSmartBoneRecording(sceneGraph, { discard: true });
+    }
     get().pushUndo(sceneGraph);
     set({
       smartBoneActions: get().smartBoneActions.map((a) =>
         a.id === actionId ? { ...a, targets: a.targets.filter((t) => t.id !== targetId) } : a
       ),
       isDirty: true,
-      // Stop recording if the removed target was being recorded
-      ...(get().smartBoneRecordingTargetId === targetId
-        ? {
-            smartBoneRecordingActionId: null,
-            smartBoneRecordingTargetId: null,
-            smartBoneRecordingPrevTool: null,
-            smartBoneRecordingPrevRotation: null,
-          }
-        : {}),
     });
   },
 
@@ -1660,7 +1660,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     });
   },
 
-  stopSmartBoneRecording: (sceneGraph: SceneGraphLike) => {
+  stopSmartBoneRecording: (sceneGraph, options = {}) => {
     const state = get();
 
     // Restore bone rotation
@@ -1677,12 +1677,15 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     }
 
     set({
+      smartBoneRecordingDiscard: options.discard ?? false,
       smartBoneRecordingActionId: null,
       smartBoneRecordingTargetId: null,
-      activeTool: state.smartBoneRecordingPrevTool ?? 'selection',
+      activeTool: options.nextTool ?? state.smartBoneRecordingPrevTool ?? 'selection',
       smartBoneRecordingPrevTool: null,
       smartBoneRecordingPrevRotation: null,
     });
+    if (state.smartBoneRecordingDiscard || options.discard)
+      set({ smartBoneRecordingDiscard: false });
   },
 
   saveMorphTargetOffsets: (
@@ -3382,6 +3385,10 @@ function createHistoryActions(
     },
 
     undo: (sceneGraph: SceneGraphLike) => {
+      // Undo during a Smart Bone recording takes it all back: cancel it
+      if (get().smartBoneRecordingActionId) {
+        get().stopSmartBoneRecording(sceneGraph, { discard: true });
+      }
       const state = get();
       const { undoStack, redoStack } = state;
       if (undoStack.length === 0) return;
@@ -3407,6 +3414,9 @@ function createHistoryActions(
     },
 
     redo: (sceneGraph: SceneGraphLike) => {
+      if (get().smartBoneRecordingActionId) {
+        get().stopSmartBoneRecording(sceneGraph, { discard: true });
+      }
       const state = get();
       const { undoStack, redoStack } = state;
       if (redoStack.length === 0) return;
@@ -3473,6 +3483,10 @@ function createHistoryActions(
         guides: [],
         ikChains: [],
         smartBoneActions: [],
+        smartBoneRecordingActionId: null,
+        smartBoneRecordingTargetId: null,
+        smartBoneRecordingPrevTool: null,
+        smartBoneRecordingPrevRotation: null,
         vitruvianControllers: [],
         dynamicChains: [],
         globalWind: { strength: 0, direction: 0, turbulence: 0, frequency: 1, enabled: false },
@@ -3668,6 +3682,10 @@ function createPageActions(
       // page's undo/redo stacks are restored before we snapshot the active page.
       if (initial.editingSymbolId) {
         get().exitSymbolEdit(sceneGraph);
+      }
+      // A Smart Bone recording belongs to this page's bones: finish it here
+      if (initial.smartBoneRecordingActionId) {
+        get().stopSmartBoneRecording(sceneGraph);
       }
       get().flushSequenceEdits(sceneGraph);
 

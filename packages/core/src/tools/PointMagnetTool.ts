@@ -183,6 +183,44 @@ export class PointMagnetTool extends BaseTool {
 
       const vertexPositions = this.context.getTessellatedVertices?.(node.id);
       if (!vertexPositions || vertexPositions.length < 2) return;
+      const currentOffsets = this.workingOffsets.get(node.id) ?? [];
+
+      // The brush meets the mesh where the bones have it now (a recording
+      // poses the driver bone), and each vertex's push goes back through its
+      // own skinning into the bind space morph offsets live in
+      const posed = this.context.getDeformedVertices?.(node.id);
+      const skin = this.context.getVertexSkinMatrices?.(node.id);
+      if (
+        posed &&
+        skin &&
+        posed.length === vertexPositions.length &&
+        skin.length === vertexPositions.length * 2
+      ) {
+        const posedOffsets = applyBrushDisplacement(
+          currentOffsets,
+          worldX,
+          worldY,
+          this.brushRadius,
+          this.brushStrength,
+          dirX,
+          dirY,
+          this.falloff,
+          posed,
+          (i, dx, dy) => {
+            const [a, b, c, d] = [
+              skin[i * 4]!,
+              skin[i * 4 + 1]!,
+              skin[i * 4 + 2]!,
+              skin[i * 4 + 3]!,
+            ];
+            const det = a * d - b * c;
+            if (Math.abs(det) < 1e-12) return [dx, dy];
+            return [(d * dx - c * dy) / det, (-b * dx + a * dy) / det];
+          }
+        );
+        if (posedOffsets.length > 0) this.workingOffsets.set(node.id, posedOffsets);
+        return;
+      }
 
       // Tessellated vertices are in local space — transform brush position
       // and direction into local space so offsets are produced in local coords.
@@ -199,7 +237,6 @@ export class PointMagnetTool extends BaseTool {
       const scaleX = Math.sqrt(worldMat.a * worldMat.a + worldMat.b * worldMat.b);
       const localRadius = this.brushRadius / (scaleX || 1);
 
-      const currentOffsets = this.workingOffsets.get(node.id) ?? [];
       const newOffsets = applyBrushDisplacement(
         currentOffsets,
         localBrush.x,

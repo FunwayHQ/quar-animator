@@ -46,7 +46,9 @@ export function applyBrushDisplacement(
   directionX: number,
   directionY: number,
   falloff: FalloffType,
-  vertexWorldPositions: Float32Array
+  vertexWorldPositions: Float32Array,
+  /** The push on vertex i in the offsets' own space (offsets are bind-space for a posed mesh) */
+  toOffsetSpace?: (i: number, dx: number, dy: number) => [number, number]
 ): MorphVertexOffset[] {
   if (radius <= 0 || strength === 0) return [...currentOffsets];
 
@@ -87,8 +89,9 @@ export function applyBrushDisplacement(
     }
 
     const effectiveStrength = strength * falloffFactor;
-    const offsetDx = directionX * effectiveStrength;
-    const offsetDy = directionY * effectiveStrength;
+    const [offsetDx, offsetDy] = toOffsetSpace
+      ? toOffsetSpace(i, directionX * effectiveStrength, directionY * effectiveStrength)
+      : [directionX * effectiveStrength, directionY * effectiveStrength];
 
     const existing = offsetMap.get(i);
     if (existing) {
