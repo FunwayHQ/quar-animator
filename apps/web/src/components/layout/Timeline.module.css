@@ -178,6 +178,10 @@
   text-align: right;
 }
 
+.fpsInput {
+  width: 56px;
+}
+
 .durationInput:focus {
   border-color: var(--color-accent-primary);
   outline: 1px solid var(--color-accent-primary);

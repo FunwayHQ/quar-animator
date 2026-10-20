@@ -88,6 +88,44 @@ describe('Timeline', () => {
     expect(screen.getByText('00:20:00')).toBeInTheDocument();
   });
 
+  it('sets the frames per second for the whole document', () => {
+    const otherPage = { ...useEditorStore.getState().pages[0]!, id: 'page-2', name: 'Page 2' };
+    useEditorStore.setState((s) => ({ pages: [...s.pages, otherPage], isDirty: false }));
+    renderTimeline();
+
+    const fps = screen.getByRole('spinbutton', { name: 'Frames per second' });
+    expect(fps).toHaveValue(30);
+    fireEvent.change(fps, { target: { value: '24' } });
+    fireEvent.keyDown(fps, { key: 'Enter' });
+    fireEvent.blur(fps);
+
+    const state = useEditorStore.getState();
+    expect(state.frameRate).toBe(24);
+    expect(state.timeline.frameRate).toBe(24);
+    expect(state.pages.every((page) => page.timeline.frameRate === 24)).toBe(true);
+    expect(state.isDirty).toBe(true);
+    // 300 frames at 24 fps
+    expect(screen.getByText('00:12:12')).toBeInTheDocument();
+  });
+
+  it('keeps the frame rate within 1 to 120, and Escape keeps it as it was', () => {
+    renderTimeline();
+    const fps = screen.getByRole('spinbutton', { name: 'Frames per second' });
+
+    fireEvent.change(fps, { target: { value: '500' } });
+    fireEvent.blur(fps);
+    expect(useEditorStore.getState().frameRate).toBe(120);
+    expect(fps).toHaveValue(120);
+
+    fireEvent.change(fps, { target: { value: '12' } });
+    fireEvent.keyDown(fps, { key: 'Escape' });
+    expect(fps).toHaveValue(120);
+
+    fireEvent.change(fps, { target: { value: '' } });
+    fireEvent.blur(fps);
+    expect(useEditorStore.getState().frameRate).toBe(120);
+  });
+
   it('zooms the ruler and tracks together', () => {
     renderTimeline();
 

@@ -77,6 +77,7 @@ export function Timeline({ playback }: TimelineProps = {}) {
   const setIsPlaying = useEditorStore((s) => s.setIsPlaying);
   const setIsLooping = useEditorStore((s) => s.setIsLooping);
   const setTimelineDuration = useEditorStore((s) => s.setTimelineDuration);
+  const setFrameRate = useEditorStore((s) => s.setFrameRate);
   const toggleTimelineExpanded = useEditorStore((s) => s.toggleTimelineExpanded);
   const toggleAutoKeyframe = useEditorStore((s) => s.toggleAutoKeyframe);
   const selectKeyframe = useEditorStore((s) => s.selectKeyframe);
@@ -258,6 +259,22 @@ export function Timeline({ playback }: TimelineProps = {}) {
     setDurationDraft(String(duration));
   }, [duration]);
 
+  const [fpsDraft, setFpsDraft] = useState(String(frameRate));
+  useEffect(() => {
+    setFpsDraft(String(frameRate));
+  }, [frameRate]);
+
+  const commitFpsDraft = useCallback(() => {
+    const parsed = Number.parseInt(fpsDraft, 10);
+    if (Number.isFinite(parsed) && parsed >= 1) {
+      setFrameRate(parsed);
+      // Shown clamped (1–120) if it was out of range
+      setFpsDraft(String(Math.max(1, Math.min(120, parsed))));
+    } else {
+      setFpsDraft(String(frameRate));
+    }
+  }, [fpsDraft, frameRate, setFrameRate]);
+
   const commitDurationDraft = useCallback(() => {
     const parsedDuration = Number.parseInt(durationDraft, 10);
     if (Number.isFinite(parsedDuration) && parsedDuration >= 1) {
@@ -288,6 +305,36 @@ export function Timeline({ playback }: TimelineProps = {}) {
         }}
         aria-label="Timeline duration in frames"
         data-testid="timeline-duration-input"
+      />
+    </label>
+  );
+
+  // Frames per second, for the whole document. Keyframes keep their frame
+  // numbers, so a higher rate plays the same animation faster
+  const fpsControl = (
+    <label
+      className={styles.durationControl}
+      title="Frames per second, for the whole document. Keyframes keep their frames, so the animation plays faster or slower."
+    >
+      <span>FPS</span>
+      <input
+        className={`${styles.durationInput} ${styles.fpsInput}`}
+        type="number"
+        min={1}
+        max={120}
+        step={1}
+        value={fpsDraft}
+        onChange={(event) => setFpsDraft(event.target.value)}
+        onBlur={commitFpsDraft}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') {
+            event.currentTarget.blur();
+          } else if (event.key === 'Escape') {
+            setFpsDraft(String(frameRate));
+          }
+        }}
+        aria-label="Frames per second"
+        data-testid="timeline-fps-input"
       />
     </label>
   );
@@ -1028,6 +1075,7 @@ export function Timeline({ playback }: TimelineProps = {}) {
           </div>
 
           {durationControl}
+          {fpsControl}
 
           <button
             className={`${styles.optionButton} ${isLooping ? styles.active : ''}`}
@@ -1213,6 +1261,7 @@ export function Timeline({ playback }: TimelineProps = {}) {
         </div>
 
         {durationControl}
+        {fpsControl}
 
         <div className={styles.options}>
           {zoomControl}

@@ -2359,11 +2359,20 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     });
   },
   setFrameRate: (rate: number) => {
-    const r = Math.max(1, Math.min(120, Math.round(rate)));
-    set((state) => ({
-      frameRate: r,
-      timeline: { ...state.timeline, frameRate: r },
-    }));
+    const r = Number.isFinite(rate) ? Math.max(1, Math.min(120, Math.round(rate))) : 30;
+    set((state) => {
+      if (r === state.frameRate && r === state.timeline.frameRate) return {};
+      // The whole document runs at one rate: every page's timeline takes it
+      return {
+        frameRate: r,
+        timeline: { ...state.timeline, frameRate: r },
+        pages: state.pages.map((page) => ({
+          ...page,
+          timeline: { ...page.timeline, frameRate: r },
+        })),
+        isDirty: true,
+      };
+    });
   },
   setTimelineExpanded: (expanded: boolean) => set({ timelineExpanded: expanded }),
   toggleTimelineExpanded: () => set((state) => ({ timelineExpanded: !state.timelineExpanded })),
