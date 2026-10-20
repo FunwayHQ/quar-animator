@@ -430,6 +430,8 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
             endFrame: state.endFrame,
             frameRate: timeline.frameRate,
             name: 'Quar Animation',
+            // Shapes bound to bones are baked as their bones move them
+            skinning: { sceneGraph, rig: frameRenderContext.rig },
           },
           (id: string) => sceneGraph.getNode(id)
         );
@@ -1005,8 +1007,17 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
                     <AlertTriangle size={14} className={styles.warningIcon} />
                     <span className={styles.warningText}>
                       {lottieAnalysis.unsupportedCount} unsupported node(s) will be skipped:{' '}
-                      {lottieAnalysis.unsupportedTypes.join(', ')}. Text, images, effects,
-                      gradients, and rigging are not yet supported in Lottie export.
+                      {lottieAnalysis.unsupportedTypes.join(', ')}.
+                    </span>
+                  </div>
+                )}
+                {lottieAnalysis.unbentImageCount > 0 && (
+                  <div className={styles.warning} data-testid="lottie-unbent-images">
+                    <AlertTriangle size={14} className={styles.warningIcon} />
+                    <span className={styles.warningText}>
+                      {lottieAnalysis.unbentImageCount} image
+                      {lottieAnalysis.unbentImageCount === 1 ? '' : 's'} bound to bones will export
+                      without bending: Lottie can’t warp images. Shapes bend as in the editor.
                     </span>
                   </div>
                 )}

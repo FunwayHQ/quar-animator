@@ -65,6 +65,8 @@ export interface LottieConvertContext {
    * precomposition's center inside one). `canvasH` plays the same role for y.
    */
   originX?: number;
+  /** Bound shapes' outlines baked with their bones (see lottieSkinning.ts), by layer id */
+  skinnedPaths?: Map<string, LottieShapePath>;
 }
 
 // ============================================================================
@@ -181,6 +183,8 @@ export function nodeToLottieShapes(
   nodeResolver?: (id: string) => Node | undefined,
   context: LottieConvertContext = {}
 ): LottieShapeItem[] | null {
+  const baked = context.skinnedPaths?.get(node.id);
+  if (baked) return skinnedToLottieShapes(node, timeline, baked);
   switch (node.type) {
     case 'rectangle':
       return rectangleToLottieShapes(node, timeline);
@@ -199,6 +203,33 @@ export function nodeToLottieShapes(
     default:
       return null; // Image, Bone, etc. not supported
   }
+}
+
+/**
+ * A shape bound to bones: its outline as baked with the bones, styled as
+ * the shape is (an open path takes no fill).
+ */
+function skinnedToLottieShapes(
+  node: Node,
+  timeline: Timeline,
+  outline: LottieShapePath
+): LottieShapeItem[] {
+  const styled = node as Node & { fills?: Fill[]; strokes?: Stroke[] };
+  const closed = node.type !== 'path' || node.closed;
+  return [
+    outline,
+    ...strokesToLottie(styled.strokes ?? [], node.id, timeline),
+    ...(closed
+      ? fillsToLottie(
+          styled.fills ?? [],
+          node.id,
+          timeline,
+          node.type === 'path' ? node.fillRule : undefined,
+          getNodeLocalBounds(node)
+        )
+      : []),
+    createShapeTransform(),
+  ];
 }
 
 // ============================================================================

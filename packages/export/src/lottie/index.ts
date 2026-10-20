@@ -5,3 +5,4 @@ export * from './lottieExporter';
 export * from './lottieText';
 export * from './lottiePaint';
 export * from './lottieLayers';
+export * from './lottieSkinning';

@@ -4,6 +4,9 @@
  * Top-level orchestrator that wires scene graph traversal → Lottie JSON.
  */
 
+import type { SceneGraph } from '@quar/core';
+import type { FrameRig } from '../frameRenderer';
+import { bakeSkinnedOutlines } from './lottieSkinning';
 import type { Node, Timeline } from '@quar/types';
 import type { LottieAnimation, LottieAsset, LottieLayer } from './lottieTypes';
 import type { LottieConvertContext } from './lottieConverter';
@@ -24,6 +27,11 @@ export interface LottieExportOptions {
   name?: string;
   /** Glyph outlines for text; defaults to the editor's loaded fonts. */
   textOutlines?: TextOutlineProvider;
+  /**
+   * The scene and rig, to bake shapes bound to bones as animated paths
+   * (Lottie has no skinning). Without them, bound shapes export unbent.
+   */
+  skinning?: { sceneGraph: SceneGraph; rig?: FrameRig };
 }
 
 // ============================================================================
@@ -59,6 +67,17 @@ export function exportToLottieJson(
   const resolver = nodeResolver ?? buildNodeResolver(nodes);
   const context: LottieConvertContext = {
     textOutlines: options.textOutlines ?? editorTextOutlines,
+    ...(options.skinning
+      ? {
+          skinnedPaths: bakeSkinnedOutlines(
+            options.skinning.sceneGraph,
+            timeline,
+            options.skinning.rig,
+            startFrame,
+            endFrame
+          ).paths,
+        }
+      : {}),
   };
 
   // Convert nodes to layers (Lottie lists the top layer first)
@@ -148,13 +167,17 @@ export function analyzeLottieExport(
   unsupportedCount: number;
   unsupportedTypes: string[];
   animatedTrackCount: number;
+  /** Images bound to bones: Lottie can't warp them, so they export unbent */
+  unbentImageCount: number;
 } {
   let supportedCount = 0;
   let unsupportedCount = 0;
+  let unbentImageCount = 0;
   const unsupportedTypeSet = new Set<string>();
 
   const visit = (node: Node) => {
     if (!node.visible) return;
+    if (node.type === 'image' && node.skinData) unbentImageCount++;
     if (SUPPORTED_TYPES.has(node.type)) {
       supportedCount++;
     } else {
@@ -177,5 +200,6 @@ export function analyzeLottieExport(
     unsupportedCount,
     unsupportedTypes: Array.from(unsupportedTypeSet),
     animatedTrackCount: 0, // Populated by caller with timeline.tracks.length
+    unbentImageCount,
   };
 }

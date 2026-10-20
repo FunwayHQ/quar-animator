@@ -53,6 +53,7 @@ import earcut from 'earcut';
 import { triangulateContours } from './contourTriangulation';
 import { createImageMesh, imageMeshCells } from './imageMesh';
 import { BEND_MESH_CELL_SIZE, createBendMesh, subdivideOutline } from './bendMesh';
+import { shapeOutline } from './shapeOutline';
 import { getFontManager } from '../font/FontManager';
 import { textToSubpaths } from '../font/glyphConverter';
 import { getTextBounds } from '../font/textMetrics';
@@ -3529,76 +3530,11 @@ export class ShapeRenderer {
   }
 
   /**
-   * A single-contour shape's outline as its renderer tessellates it, or null
-   * for other layers (compound paths, text, groups…).
-   */
-  private outlineOf(node: Node): { vertices: Float32Array; closed: boolean } | null {
-    switch (node.type) {
-      case 'rectangle':
-        return {
-          vertices: tessellatePathToVertices(
-            createRectanglePath(
-              -node.width * node.transform.anchor.x,
-              -node.height * node.transform.anchor.y,
-              node.width,
-              node.height,
-              node.cornerRadius
-            ),
-            true,
-            DEFAULT_TESSELLATION_TOLERANCE
-          ),
-          closed: true,
-        };
-      case 'ellipse':
-        return {
-          vertices: tessellatePathToVertices(
-            createEllipsePath(0, 0, node.radiusX, node.radiusY),
-            true,
-            ELLIPSE_TESSELLATION_TOLERANCE
-          ),
-          closed: true,
-        };
-      case 'polygon': {
-        const pathPoints =
-          node.innerRadius !== undefined
-            ? createStarPath(
-                0,
-                0,
-                node.radius,
-                node.innerRadius,
-                node.sides,
-                undefined,
-                node.cornerRadius
-              )
-            : createPolygonPath(0, 0, node.radius, node.sides, undefined, node.cornerRadius);
-        return {
-          vertices: tessellatePathToVertices(pathPoints, true, DEFAULT_TESSELLATION_TOLERANCE),
-          closed: true,
-        };
-      }
-      case 'path': {
-        if (node.points.length < 2) return null;
-        if (node.subpaths && node.subpaths.length > 0 && node.closed) return null;
-        return {
-          vertices: tessellatePathToVertices(
-            applyCornerRadius(node.points, node.closed),
-            node.closed,
-            DEFAULT_TESSELLATION_TOLERANCE
-          ),
-          closed: node.closed,
-        };
-      }
-      default:
-        return null;
-    }
-  }
-
-  /**
    * A shape's bending mesh (see bendMesh.ts): its outline subdivided, with
    * points inside for a closed shape. Null for layers without a single outline.
    */
   private createBendGeometry(node: Node): TessellationCacheEntry | null {
-    const outline = this.outlineOf(node);
+    const outline = shapeOutline(node);
     if (!outline || outline.vertices.length < 4) return null;
     if (outline.closed) {
       const mesh = createBendMesh(outline.vertices);

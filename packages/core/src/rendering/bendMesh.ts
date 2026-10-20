@@ -68,12 +68,13 @@ export function subdivideOutline(
 }
 
 /**
- * The bending mesh of a closed outline (xy pairs, one contour): the outline
- * subdivided into pieces no longer than a cell, points inside on a grid a
- * cell apart, and a triangulation of both whose triangles are as close to
- * equilateral as the outline allows.
+ * A closed outline subdivided as its bending mesh's outline (the first
+ * vertices of the mesh), and the cell size the mesh is built with.
  */
-export function createBendMesh(outline: ArrayLike<number>, cellSize?: number): BendMesh {
+export function bendMeshOutline(
+  outline: ArrayLike<number>,
+  cellSize?: number
+): { ring: Float32Array; cell: number; bounds: [number, number, number, number] } {
   let minX = Infinity;
   let minY = Infinity;
   let maxX = -Infinity;
@@ -85,7 +86,21 @@ export function createBendMesh(outline: ArrayLike<number>, cellSize?: number): B
     maxY = Math.max(maxY, outline[i + 1]!);
   }
   const cell = cellSize ?? bendMeshCellSize(maxX - minX, maxY - minY);
-  const ring = subdivideOutline(outline, true, cell);
+  return { ring: subdivideOutline(outline, true, cell), cell, bounds: [minX, minY, maxX, maxY] };
+}
+
+/**
+ * The bending mesh of a closed outline (xy pairs, one contour): the outline
+ * subdivided into pieces no longer than a cell, points inside on a grid a
+ * cell apart, and a triangulation of both whose triangles are as close to
+ * equilateral as the outline allows.
+ */
+export function createBendMesh(outline: ArrayLike<number>, cellSize?: number): BendMesh {
+  const {
+    ring,
+    cell,
+    bounds: [minX, minY, maxX, maxY],
+  } = bendMeshOutline(outline, cellSize);
   const outlineVertexCount = ring.length / 2;
   if (outlineVertexCount < 3) {
     return { vertices: ring, outlineVertexCount, indices: [] };

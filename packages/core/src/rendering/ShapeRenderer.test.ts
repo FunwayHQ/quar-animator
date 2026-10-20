@@ -4,6 +4,7 @@
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { ShapeRenderer } from './ShapeRenderer';
+import { boundOutline } from './shapeOutline';
 import { WebGLRenderer } from './WebGLRenderer';
 import { SceneGraph, createDefaultTransform, createGroupNode } from '../SceneGraph';
 import { mat3 } from '../math';
@@ -1266,6 +1267,11 @@ describe('ShapeRenderer', () => {
         expect(bind.bendMesh).toBe(true);
         // The outline in 20-unit pieces, plus points inside
         expect(bind.vertices.length / 2).toBe(24 + 9);
+        // Numbered as exports number the bound outline
+        const outline = boundOutline({ ...rect, skinData: { bendMesh: true } } as any)!;
+        expect(Array.from(bind.vertices.subarray(0, outline.vertices.length))).toEqual(
+          Array.from(outline.vertices)
+        );
 
         sceneGraph.addNode({
           ...createRectangleNode('bone', 0, 0),
