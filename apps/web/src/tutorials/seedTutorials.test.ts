@@ -13,7 +13,7 @@ import {
   resetDB,
   saveProject,
 } from '../services/projectStorage';
-import { SEEDED_TUTORIALS_KEY, seedTutorials } from './seedTutorials';
+import { SEEDED_TUTORIALS_KEY, restoreTutorials, seedTutorials } from './seedTutorials';
 import { TUTORIALS } from './tutorials';
 import type { Tutorial } from './tutorials';
 
@@ -75,5 +75,34 @@ describe('seedTutorials', () => {
     await setSetting(SEEDED_TUTORIALS_KEY, 'not json');
 
     expect(await seedTutorials()).toHaveLength(TUTORIALS.length);
+  });
+
+  describe('restoreTutorials', () => {
+    it('brings back a deleted tutorial, and nothing else', async () => {
+      await seedTutorials();
+      await deleteProject(TUTORIALS[1]!.id);
+
+      const restored = await restoreTutorials();
+
+      expect(restored.map((tutorial) => tutorial.id)).toEqual([TUTORIALS[1]!.id]);
+      expect((await listProjects()).map((p) => p.id).sort()).toEqual(
+        TUTORIALS.map((tutorial) => tutorial.id).sort()
+      );
+      // Seeding afterwards doesn't add it a second time
+      expect(await seedTutorials()).toEqual([]);
+    });
+
+    it('leaves a tutorial the user changed as it is', async () => {
+      await seedTutorials();
+      await saveProject(TUTORIALS[0]!.id, 'My take on tutorial 1', '{}');
+
+      expect(await restoreTutorials()).toEqual([]);
+      expect((await loadProject(TUTORIALS[0]!.id))!.name).toBe('My take on tutorial 1');
+    });
+
+    it('works before the tutorials were ever seeded', async () => {
+      expect(await restoreTutorials()).toHaveLength(TUTORIALS.length);
+      expect(await seedTutorials()).toEqual([]);
+    });
   });
 });

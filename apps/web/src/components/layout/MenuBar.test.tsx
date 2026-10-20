@@ -14,6 +14,30 @@ import { setUiTheme } from '../../hooks/useUiTheme';
 import type { ProjectActions } from '../../hooks/useProjectActions';
 import type { ReactElement } from 'react';
 
+const restoreMocks = vi.hoisted(() => ({
+  restoreTutorials: vi.fn(),
+  success: vi.fn(),
+  info: vi.fn(),
+  error: vi.fn(),
+}));
+
+vi.mock('../../tutorials/seedTutorials', () => ({
+  restoreTutorials: restoreMocks.restoreTutorials,
+}));
+
+vi.mock('../common/Toast', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../common/Toast')>();
+  return {
+    ...actual,
+    toast: {
+      ...actual.toast,
+      success: restoreMocks.success,
+      info: restoreMocks.info,
+      error: restoreMocks.error,
+    },
+  };
+});
+
 function render(ui: ReactElement) {
   return baseRender(<SceneGraphProvider>{ui}</SceneGraphProvider>);
 }
@@ -304,6 +328,59 @@ describe('MenuBar', () => {
 
       const removeButton = screen.getByText('Remove IK Chain').closest('button');
       expect(removeButton).toBeDisabled();
+    });
+  });
+
+  describe('Help > Restore Tutorials', () => {
+    /** Open Help, then pick Restore Tutorials and let the restore finish. */
+    const restore = async () => {
+      fireEvent.click(screen.getByTestId('menu-help'));
+      const item = screen.getByRole('menuitem', { name: 'Restore Tutorials' });
+      await act(async () => {
+        fireEvent.click(item);
+      });
+    };
+
+    beforeEach(() => {
+      restoreMocks.restoreTutorials.mockReset();
+      restoreMocks.success.mockReset();
+      restoreMocks.info.mockReset();
+      restoreMocks.error.mockReset();
+    });
+
+    it('brings back the deleted tutorials and says where to find them', async () => {
+      restoreMocks.restoreTutorials.mockResolvedValue([
+        { id: 'tutorial-presets-and-sequences', name: 'Tutorial 2 · Motion presets & sequences' },
+      ]);
+      render(<MenuBar />);
+
+      await restore();
+
+      expect(restoreMocks.restoreTutorials).toHaveBeenCalledOnce();
+      expect(restoreMocks.success).toHaveBeenCalledWith(
+        'Restored “Tutorial 2 · Motion presets & sequences”. Open it from File > Open Project...'
+      );
+      expect(screen.queryByTestId('help-menu-dropdown')).toBeNull();
+    });
+
+    it('says so when every tutorial is still there', async () => {
+      restoreMocks.restoreTutorials.mockResolvedValue([]);
+      render(<MenuBar />);
+
+      await restore();
+
+      expect(restoreMocks.info).toHaveBeenCalledWith(
+        'All the tutorials are already in your projects'
+      );
+    });
+
+    it('reports a failure', async () => {
+      restoreMocks.restoreTutorials.mockRejectedValue(new Error('quota'));
+      render(<MenuBar />);
+
+      await restore();
+
+      expect(restoreMocks.error).toHaveBeenCalledWith('Could not restore the tutorials');
     });
   });
 });

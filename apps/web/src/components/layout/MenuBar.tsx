@@ -17,6 +17,7 @@ import { ProjectListDialog } from '../common/ProjectListDialog';
 import type { SmartBoneAction } from '@quar/types';
 import { showExportDialog } from '../common/ExportDialog';
 import { toast } from '../common/Toast';
+import { restoreTutorials } from '../../tutorials/seedTutorials';
 import { setUiTheme, useUiTheme } from '../../hooks/useUiTheme';
 import styles from './MenuBar.module.css';
 
@@ -343,6 +344,22 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
     if (!projectActions) return;
     projectActions.saveProject().catch(() => toast.error('Failed to save project'));
   }, [projectActions, closeMenu]);
+
+  const handleRestoreTutorials = useCallback(async () => {
+    try {
+      const restored = await restoreTutorials();
+      if (restored.length === 0) {
+        toast.info('All the tutorials are already in your projects');
+      } else {
+        const names = restored.map((tutorial) => `“${tutorial.name}”`).join(' and ');
+        toast.success(
+          `Restored ${names}. Open ${restored.length > 1 ? 'them' : 'it'} from File > Open Project...`
+        );
+      }
+    } catch {
+      toast.error('Could not restore the tutorials');
+    }
+  }, []);
 
   const handleSaveAs = useCallback(() => {
     closeMenu();
@@ -1104,6 +1121,13 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                     onClick={() => {
                       closeMenu();
                       setShowShortcutsDialog(true);
+                    }}
+                  />
+                  <MenuItem
+                    label="Restore Tutorials"
+                    onClick={() => {
+                      closeMenu();
+                      void handleRestoreTutorials();
                     }}
                   />
                   <Separator />
