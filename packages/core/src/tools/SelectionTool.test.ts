@@ -1662,6 +1662,23 @@ describe('SelectionTool', () => {
       expect(tool.hitTest({ x: 120, y: 100 })?.id).toBe('hidden');
     });
 
+    it('leaves hidden bones out of a marquee (and a click on empty canvas)', () => {
+      context.sceneGraph.addNode(createTestBone('hidden', 100, 100, 60));
+      context.isHiddenOnCanvas = (id) => id === 'hidden';
+      const at = (x: number, y: number) =>
+        createMockPointerEvent({
+          worldPosition: { x, y },
+          screenPosition: context.camera.worldToScreen({ x, y }),
+          button: 0,
+        });
+      tool.onPointerDown(at(120, 100));
+      tool.onPointerUp(at(120, 100));
+      tool.onPointerDown(at(50, 50));
+      tool.onPointerMove(at(200, 150));
+      tool.onPointerUp(at(200, 150));
+      expect(context.getSelectedIds().size).toBe(0);
+    });
+
     it('should still select root bone when clicking root directly', () => {
       const rootBone = createTestBone('rootBone', 100, 100, 60);
       const childBone = createTestBone('childBone', 60, 0, 40);

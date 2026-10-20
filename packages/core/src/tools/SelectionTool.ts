@@ -940,6 +940,7 @@ export class SelectionTool extends BaseTool {
 
     this.context.sceneGraph.traverseVisible((node) => {
       if (node.locked || node.type === 'artboard') return; // marquee ignores locked nodes and frames
+      if (this.context.isHiddenOnCanvas?.(node.id)) return;
       let bounds = this.getNodeBounds(node);
       if (!bounds) return;
 
