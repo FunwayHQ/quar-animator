@@ -1818,12 +1818,12 @@ export function Canvas({
               { type: 'separator' as const },
               {
                 id: 'release-boolean',
-                label: 'Release Boolean Group',
+                label: 'Release Boolean',
                 onClick: () => releaseBooleanGroup(sceneGraph),
               },
               {
                 id: 'flatten-boolean',
-                label: 'Flatten to Path',
+                label: 'Flatten Boolean',
                 onClick: () => flattenBooleanGroup(sceneGraph),
               },
             ]

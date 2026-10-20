@@ -1373,8 +1373,8 @@ export function Timeline({ playback }: TimelineProps = {}) {
           <div style={{ position: 'relative' }}>
             <button
               className={`${styles.optionButton} ${onionSkinEnabled ? styles.active : ''}`}
-              title="Toggle onion skinning (Shift+O)"
-              aria-label="Toggle onion skinning"
+              title="Onion skin settings (right-click turns it on or off, Shift+O)"
+              aria-label="Onion skin settings"
               onClick={() => setShowOnionSkinPanel(!showOnionSkinPanel)}
               onContextMenu={(e) => {
                 e.preventDefault();

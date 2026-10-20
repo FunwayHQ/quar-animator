@@ -98,7 +98,9 @@ describe('Editor Page', () => {
     render(<Editor />);
 
     expect(screen.getByTitle('Toggle loop (L)')).toBeInTheDocument();
-    expect(screen.getByTitle('Toggle onion skinning (Shift+O)')).toBeInTheDocument();
+    expect(
+      screen.getByTitle('Onion skin settings (right-click turns it on or off, Shift+O)')
+    ).toBeInTheDocument();
   });
 
   it('shows project name in menu bar', () => {

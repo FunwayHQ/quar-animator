@@ -1583,16 +1583,7 @@ export function PropertiesPanel() {
                   >
                     Detach
                   </button>
-                  <button
-                    className={styles.booleanButton}
-                    onClick={() => {
-                      useEditorStore.getState().resetInstanceOverrides(sceneGraph, symInst.id);
-                    }}
-                    title="Reset Overrides"
-                    data-testid="reset-overrides-button"
-                  >
-                    Reset
-                  </button>
+                  {/* No Reset (overrides) yet: nothing can make an instance differ from its symbol */}
                 </div>
               </div>
             );
@@ -2766,22 +2757,22 @@ export function PropertiesPanel() {
                 <button
                   className={styles.booleanOpButton}
                   onClick={() => flattenBooleanGroup(sceneGraph)}
-                  title="Flatten to path"
-                  aria-label="Flatten boolean group to path"
+                  title="Flatten Boolean: make the result one path"
+                  aria-label="Flatten Boolean"
                   data-testid="boolean-flatten"
                 >
                   <Combine size={14} />
-                  <span>Flatten</span>
+                  <span>Flatten Boolean</span>
                 </button>
                 <button
                   className={styles.booleanOpButton}
                   onClick={() => releaseBooleanGroup(sceneGraph)}
-                  title="Release shapes"
-                  aria-label="Release boolean group"
+                  title="Release Boolean: the shapes, separate again"
+                  aria-label="Release Boolean"
                   data-testid="boolean-release"
                 >
                   <Diff size={14} />
-                  <span>Release</span>
+                  <span>Release Boolean</span>
                 </button>
               </div>
             </div>
