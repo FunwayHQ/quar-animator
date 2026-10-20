@@ -83,6 +83,71 @@ function MenuItem({
   );
 }
 
+/**
+ * The project's name, top right. Clicking it renames the project in place:
+ * Enter (or clicking away) keeps the new name, Escape keeps the old one.
+ */
+function ProjectNameField({
+  isDirty,
+  onRename,
+}: {
+  isDirty: boolean;
+  onRename: (name: string) => void;
+}) {
+  const projectName = useProjectName();
+  const [draft, setDraft] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const editing = draft !== null;
+
+  useEffect(() => {
+    if (editing) inputRef.current?.select();
+  }, [editing]);
+
+  const commit = () => {
+    if (draft === null) return;
+    const name = draft.trim();
+    setDraft(null);
+    if (name && name !== projectName) onRename(name);
+  };
+
+  if (editing) {
+    return (
+      <input
+        ref={inputRef}
+        className={styles.projectNameInput}
+        value={draft}
+        maxLength={100}
+        aria-label="Project name"
+        data-testid="project-name-input"
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            commit();
+          } else if (e.key === 'Escape') {
+            e.preventDefault();
+            setDraft(null);
+          }
+        }}
+      />
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      className={styles.projectNameDisplay}
+      data-testid="project-name"
+      title="Click to rename"
+      onClick={() => setDraft(projectName)}
+    >
+      {isDirty && <span className={styles.dirtyDot} data-testid="dirty-indicator" />}
+      {projectName}
+    </button>
+  );
+}
+
 function Separator() {
   return <div className={styles.dropdownSeparator} role="separator" />;
 }
@@ -360,6 +425,20 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
       toast.error('Could not restore the tutorials');
     }
   }, []);
+
+  const handleRename = useCallback(
+    (name: string) => {
+      const store = useEditorStore.getState();
+      store.setProjectName(name);
+      store.markDirty();
+      // A saved project is renamed on the Projects page right away; a new one
+      // takes the name when it's first saved
+      if (store.projectId && projectActions) {
+        projectActions.saveProject().catch(() => toast.error('Failed to save project'));
+      }
+    },
+    [projectActions]
+  );
 
   const handleSaveAs = useCallback(() => {
     closeMenu();
@@ -1162,10 +1241,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
         )}
 
         <div className={styles.actions}>
-          <span className={styles.projectNameDisplay} data-testid="project-name">
-            {isDirty && <span className={styles.dirtyDot} data-testid="dirty-indicator" />}
-            {projectName}
-          </span>
+          <ProjectNameField isDirty={isDirty} onRename={handleRename} />
         </div>
       </header>
 

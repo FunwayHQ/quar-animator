@@ -265,7 +265,28 @@
   background: var(--color-bg-tertiary);
   border-radius: var(--radius-sm);
   border: 1px solid var(--color-border-subtle);
+  font-family: inherit;
+  cursor: text;
   transition: all var(--duration-fast);
+}
+
+.projectNameDisplay:hover {
+  color: var(--color-text-primary);
+  border-color: var(--color-border-strong);
+}
+
+.projectNameInput {
+  width: 220px;
+  font-family: inherit;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-primary);
+  padding: 4px 10px;
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-accent-primary);
+  border-radius: var(--radius-sm);
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(168, 85, 247, 0.25);
 }
 
 .dirtyDot {

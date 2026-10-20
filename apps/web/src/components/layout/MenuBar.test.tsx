@@ -383,4 +383,63 @@ describe('MenuBar', () => {
       expect(restoreMocks.error).toHaveBeenCalledWith('Could not restore the tutorials');
     });
   });
+
+  describe('renaming from the project name', () => {
+    it('renames the project in place with Enter', () => {
+      render(<MenuBar />);
+
+      fireEvent.click(screen.getByTestId('project-name'));
+      const input = screen.getByTestId('project-name-input');
+      expect(input).toHaveValue('Untitled Project');
+      fireEvent.change(input, { target: { value: '  Bouncing Ball  ' } });
+      fireEvent.keyDown(input, { key: 'Enter' });
+
+      expect(useEditorStore.getState().projectName).toBe('Bouncing Ball');
+      expect(useEditorStore.getState().isDirty).toBe(true);
+      expect(screen.getByTestId('project-name')).toHaveTextContent('Bouncing Ball');
+    });
+
+    it('keeps the new name when the field loses focus', () => {
+      render(<MenuBar />);
+
+      fireEvent.click(screen.getByTestId('project-name'));
+      const input = screen.getByTestId('project-name-input');
+      fireEvent.change(input, { target: { value: 'Walk Cycle' } });
+      fireEvent.blur(input);
+
+      expect(useEditorStore.getState().projectName).toBe('Walk Cycle');
+    });
+
+    it('keeps the old name on Escape, or when the new one is blank', () => {
+      render(<MenuBar />);
+
+      fireEvent.click(screen.getByTestId('project-name'));
+      fireEvent.change(screen.getByTestId('project-name-input'), { target: { value: 'Nope' } });
+      fireEvent.keyDown(screen.getByTestId('project-name-input'), { key: 'Escape' });
+      expect(useEditorStore.getState().projectName).toBe('Untitled Project');
+
+      fireEvent.click(screen.getByTestId('project-name'));
+      fireEvent.change(screen.getByTestId('project-name-input'), { target: { value: '   ' } });
+      fireEvent.keyDown(screen.getByTestId('project-name-input'), { key: 'Enter' });
+      expect(useEditorStore.getState().projectName).toBe('Untitled Project');
+      expect(useEditorStore.getState().isDirty).toBe(false);
+    });
+
+    it('saves a project that was saved before, so the Projects page shows the new name', () => {
+      const actions = createMockProjectActions();
+      render(<MenuBar projectActions={actions} />);
+
+      // Not saved yet: just takes the name
+      fireEvent.click(screen.getByTestId('project-name'));
+      fireEvent.change(screen.getByTestId('project-name-input'), { target: { value: 'Draft' } });
+      fireEvent.keyDown(screen.getByTestId('project-name-input'), { key: 'Enter' });
+      expect(actions.saveProject).not.toHaveBeenCalled();
+
+      act(() => useEditorStore.setState({ projectId: 'proj_1' }));
+      fireEvent.click(screen.getByTestId('project-name'));
+      fireEvent.change(screen.getByTestId('project-name-input'), { target: { value: 'Final' } });
+      fireEvent.keyDown(screen.getByTestId('project-name-input'), { key: 'Enter' });
+      expect(actions.saveProject).toHaveBeenCalledOnce();
+    });
+  });
 });
