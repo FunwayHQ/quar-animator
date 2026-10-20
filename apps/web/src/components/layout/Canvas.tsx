@@ -39,6 +39,7 @@ import { TextEditOverlay } from '../canvas/TextEditOverlay';
 import { BoneOverlay } from '../canvas/BoneOverlay';
 import { GhostSceneCache, poseSceneAtFrame } from '../canvas/onionSkinScenes';
 import { poseScene } from '../../stores/scenePosing';
+import { fitViewToArtwork } from '../canvas/fitView';
 import { bindLayersToBones } from '../canvas/bindToBones';
 import { ArtboardOverlay } from '../canvas/ArtboardOverlay';
 import { SequenceBadgesOverlay } from '../canvas/SequenceBadgesOverlay';
@@ -941,7 +942,8 @@ export function Canvas({
     const handleZoomIn = () => camera.zoomTo(camera.zoom * 1.25);
     const handleZoomOut = () => camera.zoomTo(camera.zoom * 0.8);
     const handleZoom100 = () => camera.zoomTo(1);
-    const handleFitToWindow = () => camera.reset();
+    const handleFitToWindow = () =>
+      fitViewToArtwork(camera, sceneGraph, useEditorStore.getState().symbols);
 
     window.addEventListener('menubar:zoom-in', handleZoomIn);
     window.addEventListener('menubar:zoom-out', handleZoomOut);
@@ -1036,7 +1038,7 @@ export function Canvas({
       window.removeEventListener('menubar:create-ik-chain', handleCreateIKChain);
       window.removeEventListener('menubar:remove-ik-chain', handleRemoveIKChain);
     };
-  }, [cameraReady, bindMeshToBones, unbindMesh, createIKChain, removeIKChain]); // Re-attach when camera becomes ready
+  }, [cameraReady, sceneGraph, bindMeshToBones, unbindMesh, createIKChain, removeIKChain]); // Re-attach when camera becomes ready
 
   // --------------------------------------------------------------------------
   // Mouse Handlers
@@ -1532,10 +1534,10 @@ export function Canvas({
         return;
       }
 
-      // Ctrl+0: Fit to window (reset zoom and position)
+      // Ctrl+0: Fit to window (frame all the artwork)
       if (e.code === 'Digit0' && (e.ctrlKey || e.metaKey)) {
         e.preventDefault();
-        camera.reset();
+        fitViewToArtwork(camera, sceneGraph, useEditorStore.getState().symbols);
         return;
       }
 
