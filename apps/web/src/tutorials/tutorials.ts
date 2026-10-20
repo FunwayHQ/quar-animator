@@ -332,3 +332,14 @@ export const TUTORIALS: Tutorial[] = [
     },
   },
 ];
+
+/** Whether a project is one of the tutorials (they're given ids of this form). */
+export function isTutorialId(id: string): boolean {
+  return id.startsWith('tutorial-');
+}
+
+/** A tutorial's place in the course; ones no longer in the catalog go last. */
+export function tutorialOrder(id: string): number {
+  const index = TUTORIALS.findIndex((tutorial) => tutorial.id === id);
+  return index < 0 ? TUTORIALS.length : index;
+}

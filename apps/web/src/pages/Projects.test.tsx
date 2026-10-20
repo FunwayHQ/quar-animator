@@ -148,6 +148,38 @@ describe('Projects', () => {
     expect(await screen.findByText('Walk Cycle')).toBeInTheDocument();
   });
 
+  it('lists tutorials in a section of their own, in course order', async () => {
+    mockListProjects.mockResolvedValue([
+      {
+        id: 'tutorial-presets-and-sequences',
+        name: 'Tutorial 2',
+        updatedAt: '2026-10-20T10:00:00.000Z',
+      },
+      ...mockProjects,
+      {
+        id: 'tutorial-draw-and-animate',
+        name: 'Tutorial 1',
+        updatedAt: '2026-10-19T10:00:00.000Z',
+      },
+    ]);
+    render(<Projects />);
+
+    const tutorials = await screen.findByTestId('tutorials-grid');
+    const own = screen.getByTestId('projects-grid');
+    expect(
+      [...tutorials.querySelectorAll('[data-testid^="project-card-"]')].map((c) => c.textContent)
+    ).toEqual([expect.stringContaining('Tutorial 1'), expect.stringContaining('Tutorial 2')]);
+    expect(own.textContent).not.toContain('Tutorial');
+    expect(own.textContent).toContain('Walk Cycle');
+    expect(screen.getByRole('heading', { name: 'Tutorials' })).toBeInTheDocument();
+  });
+
+  it('leaves the Tutorials section out when there are none', async () => {
+    render(<Projects />);
+    await screen.findByText('Walk Cycle');
+    expect(screen.queryByTestId('tutorials-grid')).toBeNull();
+  });
+
   it('should render the New Project card when projects exist', async () => {
     render(<Projects />);
     await waitFor(() => {

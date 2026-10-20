@@ -19,6 +19,7 @@ import { toast } from '../components/common/Toast';
 import { setUiTheme, useUiTheme } from '../hooks/useUiTheme';
 import { useProjectThumbnails } from '../hooks/useProjectThumbnails';
 import { seedTutorials } from '../tutorials/seedTutorials';
+import { isTutorialId, tutorialOrder } from '../tutorials/tutorials';
 import type { ThumbnailView } from '../hooks/useProjectThumbnails';
 import type { ProjectListItem } from '../services/projectStorage';
 import styles from './Projects.module.css';
@@ -204,6 +205,72 @@ export function Projects() {
     }
   }, [navigate]);
 
+  // Tutorials get a section of their own, in course order
+  const ownProjects = projects.filter((project) => !isTutorialId(project.id));
+  const tutorialProjects = projects
+    .filter((project) => isTutorialId(project.id))
+    .sort((a, b) => tutorialOrder(a.id) - tutorialOrder(b.id));
+
+  const renderCard = (project: ProjectListItem) => (
+    <div
+      key={project.id}
+      className={styles.card}
+      onClick={() => handleOpenProject(project.id)}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          handleOpenProject(project.id);
+        }
+      }}
+      data-testid={`project-card-${project.id}`}
+    >
+      <div className={styles.cardThumbnail}>
+        <CardThumbnail projectId={project.id} thumbnail={thumbnails[project.id]} />
+      </div>
+      <div className={styles.cardInfo}>
+        <div className={styles.cardMeta}>
+          {renamingId === project.id ? (
+            <input
+              ref={renameInputRef}
+              className={styles.renameInput}
+              value={renameValue}
+              maxLength={100}
+              onChange={(e) => setRenameValue(e.target.value)}
+              onBlur={() => void handleRenameCommit()}
+              onKeyDown={handleRenameKeyDown}
+              onClick={(e) => e.stopPropagation()}
+              data-testid={`rename-input-${project.id}`}
+            />
+          ) : (
+            <div
+              className={styles.cardName}
+              onDoubleClick={(e) => handleRenameStart(e, project)}
+              title="Double-click to rename"
+            >
+              {project.name}
+            </div>
+          )}
+          <div className={styles.cardDate}>{formatDate(project.updatedAt)}</div>
+        </div>
+        <button
+          className={`${styles.deleteButton} ${pendingDeleteId === project.id ? styles.deleteConfirm : ''}`}
+          onClick={(e) => void handleDelete(e, project.id)}
+          aria-label={
+            pendingDeleteId === project.id
+              ? `Confirm delete ${project.name}`
+              : `Delete ${project.name}`
+          }
+          title={pendingDeleteId === project.id ? 'Click again to confirm' : 'Delete'}
+          data-testid={`delete-${project.id}`}
+        >
+          <Trash2 size={14} />
+        </button>
+      </div>
+    </div>
+  );
+
   if (loading) {
     return (
       <div className={styles.page} data-testid="projects-page">
@@ -277,66 +344,17 @@ export function Projects() {
               </button>
 
               {/* Existing project cards */}
-              {projects.map((project) => (
-                <div
-                  key={project.id}
-                  className={styles.card}
-                  onClick={() => handleOpenProject(project.id)}
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault();
-                      handleOpenProject(project.id);
-                    }
-                  }}
-                  data-testid={`project-card-${project.id}`}
-                >
-                  <div className={styles.cardThumbnail}>
-                    <CardThumbnail projectId={project.id} thumbnail={thumbnails[project.id]} />
-                  </div>
-                  <div className={styles.cardInfo}>
-                    <div className={styles.cardMeta}>
-                      {renamingId === project.id ? (
-                        <input
-                          ref={renameInputRef}
-                          className={styles.renameInput}
-                          value={renameValue}
-                          maxLength={100}
-                          onChange={(e) => setRenameValue(e.target.value)}
-                          onBlur={() => void handleRenameCommit()}
-                          onKeyDown={handleRenameKeyDown}
-                          onClick={(e) => e.stopPropagation()}
-                          data-testid={`rename-input-${project.id}`}
-                        />
-                      ) : (
-                        <div
-                          className={styles.cardName}
-                          onDoubleClick={(e) => handleRenameStart(e, project)}
-                          title="Double-click to rename"
-                        >
-                          {project.name}
-                        </div>
-                      )}
-                      <div className={styles.cardDate}>{formatDate(project.updatedAt)}</div>
-                    </div>
-                    <button
-                      className={`${styles.deleteButton} ${pendingDeleteId === project.id ? styles.deleteConfirm : ''}`}
-                      onClick={(e) => void handleDelete(e, project.id)}
-                      aria-label={
-                        pendingDeleteId === project.id
-                          ? `Confirm delete ${project.name}`
-                          : `Delete ${project.name}`
-                      }
-                      title={pendingDeleteId === project.id ? 'Click again to confirm' : 'Delete'}
-                      data-testid={`delete-${project.id}`}
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
-                </div>
-              ))}
+              {ownProjects.map(renderCard)}
             </div>
+
+            {tutorialProjects.length > 0 && (
+              <>
+                <h2 className={`${styles.sectionTitle} ${styles.tutorialsTitle}`}>Tutorials</h2>
+                <div className={styles.grid} data-testid="tutorials-grid">
+                  {tutorialProjects.map(renderCard)}
+                </div>
+              </>
+            )}
           </>
         )}
       </div>

@@ -99,6 +99,10 @@
   padding: 32px 32px 48px;
 }
 
+.tutorialsTitle {
+  margin-top: 40px;
+}
+
 .sectionTitle {
   font-size: var(--font-size-lg);
   font-weight: var(--font-weight-medium);
