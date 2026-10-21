@@ -32,10 +32,12 @@ export interface ShapeOutline {
 export function getShapeOutlinePoints(node: Node): ShapeOutline | null {
   switch (node.type) {
     case 'rectangle': {
-      // createRectanglePath takes x,y as top-left; center at origin → x=-w/2, y=-h/2
+      // createRectanglePath takes x,y as the low corner; the rectangle sits
+      // about its anchor (centered at the default 0.5, 0.5), as it renders
+      const anchor = node.transform.anchor ?? { x: 0.5, y: 0.5 };
       const points = createRectanglePath(
-        -node.width / 2,
-        -node.height / 2,
+        -node.width * anchor.x,
+        -node.height * anchor.y,
         node.width,
         node.height,
         node.cornerRadius

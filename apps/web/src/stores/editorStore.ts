@@ -12,6 +12,9 @@ import type {
   Keyframe,
   Node,
   PathNode,
+  RectangleNode,
+  EllipseNode,
+  PolygonNode,
   GroupNode,
   Timeline,
   EasingFunction,
@@ -70,6 +73,7 @@ import { flipInParentSpace, flipMatrix, flipPlacement, type FlipAxis } from './f
 import { symbolsUsedBy, type ClipboardPayload } from '../services/systemClipboard';
 import { pastedTracks, type RootMove } from './clipboardAnimation';
 import { reversedContours, reversedTracks } from './pathCommands';
+import { shapeTracksToOutline } from './shapeToPathAnimation';
 
 /** The selected layers that are unlocked paths. */
 function selectedPaths(sceneGraph: SceneGraphLike, ids: Set<string>): PathNode[] {
@@ -911,7 +915,14 @@ export interface EditorStore extends SequenceActions {
 
   // Convert operations
   convertTextToPath: (sceneGraph: SceneGraphLike) => void;
+  /** Edit > Convert to Path: the selected shapes in place, the selected text as letters. */
+  convertSelectionToPaths: (sceneGraph: SceneGraphLike) => void;
   convertShapeToPath: (sceneGraph: SceneGraphLike, nodeId: string) => string | null;
+  /**
+   * Rectangles, ellipses and polygons to paths, in place (same layer, its
+   * size animation as outline keyframes); returns the ids converted. Undoable.
+   */
+  convertShapesToPaths: (sceneGraph: SceneGraphLike, nodeIds: string[]) => string[];
   outlineStroke: (sceneGraph: SceneGraphLike) => void;
 
   // Undo/Redo history
@@ -3424,6 +3435,28 @@ function createBooleanActions(
       set({ isDirty: true });
     },
 
+    convertSelectionToPaths: (sceneGraph: SceneGraphLike) => {
+      const selected = [...get().selectedNodeIds].map((id) => sceneGraph.getNode(id));
+      const shapeIds = selected
+        .filter(
+          (n) => n && (n.type === 'rectangle' || n.type === 'ellipse' || n.type === 'polygon')
+        )
+        .map((n) => n!.id);
+      const hasText = selected.some((n) => n?.type === 'text');
+      if (shapeIds.length === 0 && !hasText) {
+        toast.info('Select text or shapes to convert to paths');
+        return;
+      }
+      const converted = shapeIds.length > 0 ? get().convertShapesToPaths(sceneGraph, shapeIds) : [];
+      if (hasText) {
+        // Text is converted from the selection: keep it in (shapes done stay selected too)
+        const textIds = selected.filter((n) => n?.type === 'text').map((n) => n.id);
+        set({ selectedNodeIds: new Set(textIds) });
+        get().convertTextToPath(sceneGraph);
+        set({ selectedNodeIds: new Set([...get().selectedNodeIds, ...converted]) });
+      }
+    },
+
     convertTextToPath: (sceneGraph: SceneGraphLike) => {
       const { selectedNodeIds } = get();
       if (selectedNodeIds.size === 0) return;
@@ -3476,62 +3509,62 @@ function createBooleanActions(
     },
 
     convertShapeToPath: (sceneGraph: SceneGraphLike, nodeId: string): string | null => {
-      const node = sceneGraph.getNode(nodeId);
-      if (!node) return null;
-      if (node.type !== 'rectangle' && node.type !== 'ellipse' && node.type !== 'polygon') {
-        return null;
-      }
+      const converted = get().convertShapesToPaths(sceneGraph, [nodeId]);
+      return converted[0] ?? null;
+    },
 
-      const outline = getShapeOutlinePoints(node);
-      if (!outline || outline.points.length < 2) return null;
+    convertShapesToPaths: (sceneGraph: SceneGraphLike, nodeIds: string[]): string[] => {
+      const shapes = nodeIds
+        .map((id) => sceneGraph.getNode(id))
+        .filter(
+          (node): node is RectangleNode | EllipseNode | PolygonNode =>
+            !!node &&
+            !node.locked &&
+            (node.type === 'rectangle' || node.type === 'ellipse' || node.type === 'polygon')
+        );
+      const outlines = shapes.map((node) => getShapeOutlinePoints(node));
+      if (!outlines.some((outline) => outline && outline.points.length >= 2)) return [];
 
       get().pushUndo(sceneGraph);
+      let timeline = get().timeline;
+      const converted: string[] = [];
+      shapes.forEach((node, i) => {
+        const outline = outlines[i];
+        if (!outline || outline.points.length < 2) return;
+        // In place: the same layer (id, name, place, transform), so its
+        // keyframes, mask and bindings carry on; its size keyframes become
+        // outline keyframes
+        const pathNode: PathNode = {
+          id: node.id,
+          name: node.name,
+          type: 'path',
+          parent: node.parent,
+          children: [],
+          transform: structuredClone(node.transform),
+          visible: node.visible,
+          locked: node.locked,
+          opacity: node.opacity,
+          blendMode: node.blendMode,
+          effects: node.effects ? [...node.effects] : undefined,
+          points: outline.points,
+          subpaths: outline.subpaths,
+          closed: outline.closed,
+          fills: structuredClone(node.fills ?? []),
+          strokes: structuredClone(node.strokes ?? []),
+        };
+        const siblings = node.parent
+          ? (sceneGraph.getNode(node.parent)?.children ?? [])
+          : sceneGraph.getRootNodes().map((n: Node) => n.id);
+        const index = siblings.indexOf(node.id);
+        sceneGraph.removeNode(node.id);
+        sceneGraph.addNode(pathNode, node.parent ?? undefined);
+        if (index >= 0) sceneGraph.moveNode(node.id, node.parent ?? null, index);
+        timeline = shapeTracksToOutline(timeline, node);
+        converted.push(node.id);
+      });
 
-      const newId = `s2p_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-      const fills = 'fills' in node ? (node as any).fills : [];
-      const strokes = 'strokes' in node ? (node as any).strokes : [];
-
-      const pathNode: PathNode = {
-        id: newId,
-        name: `${node.name} (Path)`,
-        type: 'path',
-        parent: node.parent,
-        children: [],
-        transform: {
-          position: { ...node.transform.position },
-          rotation: node.transform.rotation,
-          scale: { ...node.transform.scale },
-          anchor: { x: 0.5, y: 0.5 },
-          skew: { ...node.transform.skew },
-        },
-        visible: node.visible,
-        locked: node.locked,
-        opacity: node.opacity,
-        blendMode: node.blendMode,
-        effects: node.effects ? [...node.effects] : undefined,
-        points: outline.points,
-        subpaths: outline.subpaths,
-        closed: outline.closed,
-        fills: fills.length > 0 ? structuredClone(fills) : [],
-        strokes: strokes.length > 0 ? structuredClone(strokes) : [],
-      };
-
-      // Find insertion point (preserve z-order)
-      const parentId = node.parent;
-      const siblings = parentId
-        ? (sceneGraph.getNode(parentId)?.children ?? [])
-        : sceneGraph.getRootNodes().map((n: Node) => n.id);
-      const insertIndex = siblings.indexOf(nodeId);
-
-      // Add path node, position it, remove original
-      sceneGraph.addNode(pathNode, parentId ?? undefined);
-      if (insertIndex >= 0) {
-        sceneGraph.moveNode(newId, parentId ?? null, insertIndex);
-      }
-      sceneGraph.removeNode(nodeId);
-
-      set({ selectedNodeIds: new Set([newId]), isDirty: true });
-      return newId;
+      set({ timeline, selectedNodeIds: new Set(converted), isDirty: true });
+      return converted;
     },
 
     outlineStroke: (sceneGraph: SceneGraphLike) => {

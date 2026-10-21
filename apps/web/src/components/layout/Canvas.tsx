@@ -155,7 +155,6 @@ export function Canvas({
   const flattenBooleanGroup = useEditorStore((state) => state.flattenBooleanGroup);
   const releaseBooleanGroup = useEditorStore((state) => state.releaseBooleanGroup);
   const changeBooleanOp = useEditorStore((state) => state.changeBooleanOp);
-  const convertTextToPath = useEditorStore((state) => state.convertTextToPath);
   const outlineStroke = useEditorStore((state) => state.outlineStroke);
   const editingGradient = useEditorStore((state) => state.editingGradient);
   const showRulers = useEditorStore((state) => state.showRulers);
@@ -348,7 +347,7 @@ export function Canvas({
           break;
         case 'p':
           e.preventDefault();
-          convertTextToPath(sceneGraph);
+          useEditorStore.getState().convertSelectionToPaths(sceneGraph);
           break;
         case 'o':
           e.preventDefault();
@@ -363,15 +362,7 @@ export function Canvas({
 
     window.addEventListener('keydown', handleBooleanKeyDown);
     return () => window.removeEventListener('keydown', handleBooleanKeyDown);
-  }, [
-    sceneGraph,
-    booleanUnion,
-    booleanSubtract,
-    booleanIntersect,
-    booleanExclude,
-    convertTextToPath,
-    outlineStroke,
-  ]);
+  }, [sceneGraph, booleanUnion, booleanSubtract, booleanIntersect, booleanExclude, outlineStroke]);
 
   // Selection bounds for display: un-rotated bounds + rotation angle for single selection,
   // AABB + rotation 0 for multi-selection.
@@ -1900,10 +1891,12 @@ export function Canvas({
           label: 'Convert to Path',
           shortcut: 'Ctrl+Shift+P',
           disabled: !Array.from(selectedNodeIds).some((id) => {
-            const n = sceneGraph.getNode(id);
-            return n && n.type === 'text';
+            const type = sceneGraph.getNode(id)?.type;
+            return (
+              type === 'text' || type === 'rectangle' || type === 'ellipse' || type === 'polygon'
+            );
           }),
-          onClick: () => convertTextToPath(sceneGraph),
+          onClick: () => useEditorStore.getState().convertSelectionToPaths(sceneGraph),
         },
         {
           id: 'outline-stroke',
@@ -2144,7 +2137,6 @@ export function Canvas({
     flattenBooleanGroup,
     releaseBooleanGroup,
     changeBooleanOp,
-    convertTextToPath,
     outlineStroke,
     createBrushProfileFromSelection,
     bindMeshToBones,

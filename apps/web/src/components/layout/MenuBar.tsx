@@ -208,7 +208,6 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
   const duplicateSelectionAction = useEditorStore((state) => state.duplicateSelection);
   const deleteSelectionAction = useEditorStore((state) => state.deleteSelection);
   const selectAllAction = useEditorStore((state) => state.selectAll);
-  const convertTextToPathAction = useEditorStore((state) => state.convertTextToPath);
   const outlineStrokeAction = useEditorStore((state) => state.outlineStroke);
   const groupSelectionAction = useEditorStore((state) => state.groupSelection);
   const ungroupSelectionAction = useEditorStore((state) => state.ungroupSelection);
@@ -252,10 +251,11 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
   const hasSelection = selectedNodeIds.size > 0;
   const hasMultipleSelected = selectedNodeIds.size >= 2;
 
-  const hasTextSelected = useMemo(() => {
+  // Text, rectangles, ellipses and polygons convert to paths
+  const hasConvertibleSelected = useMemo(() => {
     return Array.from(selectedNodeIds).some((id) => {
-      const n = sceneGraph.getNode(id);
-      return n && n.type === 'text';
+      const type = sceneGraph.getNode(id)?.type;
+      return type === 'text' || type === 'rectangle' || type === 'ellipse' || type === 'polygon';
     });
   }, [selectedNodeIds, sceneGraph]);
 
@@ -798,10 +798,10 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                   <MenuItem
                     label="Convert to Path"
                     shortcut="Ctrl+Shift+P"
-                    disabled={!hasTextSelected}
+                    disabled={!hasConvertibleSelected}
                     onClick={() => {
                       closeMenu();
-                      convertTextToPathAction(sceneGraph);
+                      useEditorStore.getState().convertSelectionToPaths(sceneGraph);
                     }}
                   />
                   <MenuItem
