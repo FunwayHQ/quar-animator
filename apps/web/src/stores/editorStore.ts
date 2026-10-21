@@ -151,6 +151,12 @@ interface HistorySnapshot {
   smartBoneActions: SmartBoneAction[];
   dynamicChains: DynamicChain[];
   vitruvianControllers: VitruvianController[];
+  /**
+   * Symbols the step this snapshot undoes (or redoes) added to the library —
+   * a paste from another project — taken out on undo, put back on redo.
+   * (The library isn't in snapshots: symbol editing keeps its own history.)
+   */
+  symbolsAdded?: SymbolDefinition[];
 }
 
 interface HistoryCapturable {
@@ -2192,6 +2198,13 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       ...(missing.length > 0 ? { symbols: [...symbols, ...structuredClone(missing)] } : {}),
     });
     get().pasteClipboard(sceneGraph);
+    if (missing.length > 0) {
+      // Undoing the paste takes out the symbols it brought in
+      const undoStack = [...get().undoStack];
+      const step = undoStack.pop();
+      if (step)
+        set({ undoStack: [...undoStack, { ...step, symbolsAdded: structuredClone(missing) }] });
+    }
   },
   duplicateSelection: (sceneGraph: SceneGraphLike) => {
     const { copySelection } = get();
@@ -3587,10 +3600,17 @@ function createHistoryActions(
       const newUndoStack = [...undoStack];
       const snapshot = newUndoStack.pop()!;
       sceneGraph.fromJSON(structuredClone(snapshot.sceneData));
+      // Symbols that step brought in go, and come back on redo
+      const added = snapshot.symbolsAdded ?? [];
+      if (added.length > 0) now.symbolsAdded = added;
+      const addedIds = new Set(added.map((symbol) => symbol.id));
 
       set({
         undoStack: newUndoStack,
         redoStack: newRedoStack,
+        ...(added.length > 0
+          ? { symbols: state.symbols.filter((symbol) => !addedIds.has(symbol.id)) }
+          : {}),
         canUndo: newUndoStack.length > 0,
         canRedo: true,
         enteredGroupId: null,
@@ -3615,10 +3635,18 @@ function createHistoryActions(
       const newRedoStack = [...redoStack];
       const snapshot = newRedoStack.pop()!;
       sceneGraph.fromJSON(structuredClone(snapshot.sceneData));
+      // Symbols the step brought in come back (and go again on undo)
+      const added = snapshot.symbolsAdded ?? [];
+      if (added.length > 0) now.symbolsAdded = added;
+      const present = new Set(state.symbols.map((symbol) => symbol.id));
+      const restored = added.filter((symbol) => !present.has(symbol.id));
 
       set({
         undoStack: newUndoStack,
         redoStack: newRedoStack,
+        ...(restored.length > 0
+          ? { symbols: [...state.symbols, ...structuredClone(restored)] }
+          : {}),
         canUndo: true,
         canRedo: newRedoStack.length > 0,
         enteredGroupId: null,

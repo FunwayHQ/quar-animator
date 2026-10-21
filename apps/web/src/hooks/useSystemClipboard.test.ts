@@ -148,4 +148,38 @@ describe('pastePayload', () => {
     useEditorStore.getState().pastePayload(target, payload);
     expect(useEditorStore.getState().symbols).toHaveLength(1);
   });
+
+  it('undoing the paste takes out the symbols it brought in; redo puts them back', () => {
+    const symbol: SymbolDefinition = {
+      id: 'sym-2',
+      name: 'Star',
+      sceneGraphJSON: { nodes: [rect('in')], rootNodeIds: ['in'] },
+    };
+    const instance = {
+      ...rect('inst2'),
+      type: 'symbol-instance',
+      symbolId: 'sym-2',
+      overrides: [],
+    } as unknown as Node;
+    const keep: SymbolDefinition = { ...symbol, id: 'already-here', name: 'Mine' };
+    const target = new SceneGraph();
+    useEditorStore.setState({ symbols: [keep], undoStack: [], redoStack: [] });
+
+    useEditorStore
+      .getState()
+      .pastePayload(target, { nodes: [instance], extras: null, symbols: [symbol] });
+    const ids = () => useEditorStore.getState().symbols.map((s) => s.id);
+    expect(ids()).toEqual(['already-here', 'sym-2']);
+
+    useEditorStore.getState().undo(target);
+    expect(target.getRootNodes()).toHaveLength(0);
+    expect(ids()).toEqual(['already-here']);
+
+    useEditorStore.getState().redo(target);
+    expect(target.getRootNodes()).toHaveLength(1);
+    expect(ids()).toEqual(['already-here', 'sym-2']);
+
+    useEditorStore.getState().undo(target);
+    expect(ids()).toEqual(['already-here']);
+  });
 });
