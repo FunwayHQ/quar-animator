@@ -2388,4 +2388,37 @@ describe('DirectSelectionTool', () => {
       expect(tool.getSelectedPoints()).toEqual([]);
     });
   });
+
+  describe('dragging a segment', () => {
+    it('bends it, the middle following the pointer, as one undo step', () => {
+      const onTransformStart = vi.fn();
+      const onTransformComplete = vi.fn();
+      context.onTransformStart = onTransformStart;
+      context.onTransformComplete = onTransformComplete;
+      const path = createTestPath(context, [createPoint(0, 0), createPoint(100, 0)]);
+      // The straight segment's middle, in its cubic parameter, is at x=50
+      tool.onPointerDown(createMockPointerEvent({ worldPosition: { x: 50, y: 0 }, button: 0 }));
+      tool.onPointerMove(createMockPointerEvent({ worldPosition: { x: 50, y: 20 } }));
+      tool.onPointerMove(createMockPointerEvent({ worldPosition: { x: 50, y: 30 } }));
+      tool.onPointerUp(createMockPointerEvent({ worldPosition: { x: 50, y: 30 } }));
+
+      const [a, b] = (context.sceneGraph.getNode(path.id) as PathNode).points;
+      expect(a!.position).toEqual({ x: 0, y: 0 });
+      expect(a!.handleOut!.y).toBeCloseTo(40);
+      expect(b!.handleIn!.y).toBeCloseTo(40);
+      expect(onTransformStart).toHaveBeenCalledTimes(1);
+      expect(onTransformComplete).toHaveBeenCalledWith(new Set([path.id]), 'vertex-move');
+      expect(context.getSelectedIds().has(path.id)).toBe(true);
+    });
+
+    it('a click on a segment without dragging selects the path, changing nothing', () => {
+      const path = createTestPath(context, [createPoint(0, 0), createPoint(100, 0)]);
+      tool.onPointerDown(createMockPointerEvent({ worldPosition: { x: 50, y: 0 }, button: 0 }));
+      tool.onPointerUp(createMockPointerEvent({ worldPosition: { x: 50, y: 0 } }));
+
+      const [a] = (context.sceneGraph.getNode(path.id) as PathNode).points;
+      expect(a!.handleOut).toBeNull();
+      expect(context.getSelectedIds().has(path.id)).toBe(true);
+    });
+  });
 });

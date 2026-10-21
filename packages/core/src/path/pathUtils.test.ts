@@ -32,6 +32,7 @@ import {
   setAllPoints,
   getContourRange,
   splitSegment,
+  bendSegment,
 } from './pathUtils';
 import { bezier } from './bezier';
 import type { PathPoint } from '@quar/types';
@@ -1112,5 +1113,49 @@ describe('splitSegment', () => {
     expect(start.type).toBe('smooth');
     expect(start.handleOut!.x).toBeCloseTo(10);
     expect(start.handleIn).toEqual({ x: -20, y: 0 });
+  });
+});
+
+describe('bendSegment', () => {
+  const corner = (x: number, y: number): PathPoint => ({
+    position: { x, y },
+    handleIn: null,
+    handleOut: null,
+    type: 'corner',
+  });
+  const pointAt = (p: PathPoint, q: PathPoint, t: number) =>
+    bezier.cubicPoint(
+      p.position,
+      { x: p.position.x + (p.handleOut?.x ?? 0), y: p.position.y + (p.handleOut?.y ?? 0) },
+      { x: q.position.x + (q.handleIn?.x ?? 0), y: q.position.y + (q.handleIn?.y ?? 0) },
+      q.position,
+      t
+    );
+
+  it('carries the point dragged exactly with the pointer, ends staying put', () => {
+    const a = corner(0, 0);
+    const b = corner(100, 0);
+    for (const t of [0.5, 0.3]) {
+      const before = pointAt(a, b, t);
+      const { start, end } = bendSegment(a, b, t, { x: 10, y: 40 });
+      const after = pointAt(start, end, t);
+      expect(after.x).toBeCloseTo(before.x + 10);
+      expect(after.y).toBeCloseTo(before.y + 40);
+      expect(start.position).toEqual(a.position);
+      expect(end.position).toEqual(b.position);
+    }
+  });
+
+  it('keeps a smooth end smooth, turning its other handle', () => {
+    const a: PathPoint = {
+      ...corner(0, 0),
+      handleIn: { x: -30, y: 0 },
+      handleOut: { x: 30, y: 0 },
+      type: 'smooth',
+    };
+    const { start } = bendSegment(a, corner(100, 0), 0.5, { x: 0, y: 50 });
+    const cross = start.handleIn!.x * start.handleOut!.y - start.handleIn!.y * start.handleOut!.x;
+    expect(cross).toBeCloseTo(0);
+    expect(Math.hypot(start.handleIn!.x, start.handleIn!.y)).toBeCloseTo(30);
   });
 });

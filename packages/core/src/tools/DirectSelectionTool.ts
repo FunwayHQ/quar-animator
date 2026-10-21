@@ -28,6 +28,7 @@ import {
   getContourRange,
   getAbsoluteControlPoints,
   splitSegment,
+  bendSegment,
 } from '../path/pathUtils';
 import { bezier } from '../path/bezier';
 import { getTextLocalBounds } from '../font/textPlacement';
@@ -134,7 +135,7 @@ interface SelectedPoint {
   pointIndex: number;
 }
 
-type DragMode = 'idle' | 'dragging-point' | 'dragging-handle' | 'marquee';
+type DragMode = 'idle' | 'dragging-point' | 'dragging-handle' | 'bending-segment' | 'marquee';
 
 // ============================================================================
 // DirectSelectionTool Class
@@ -156,6 +157,15 @@ export class DirectSelectionTool extends BaseTool {
   private dragHandle: HandleHit | null = null;
   private initialPointPositions: Map<string, Vector2> = new Map();
   private hasDragged: boolean = false;
+
+  // Segment bend: the segment pressed, its ends as they were, and the click's Shift
+  private bend: {
+    hit: SegmentHit;
+    endIndex: number;
+    start: PathPoint;
+    end: PathPoint;
+    shiftKey: boolean;
+  } | null = null;
 
   // Marquee: a drag from off the path's points picks the points inside
   private marqueeRect: Rect | null = null;
@@ -274,6 +284,26 @@ export class DirectSelectionTool extends BaseTool {
       return;
     }
 
+    // On a segment: a drag bends it (a click still picks the layer, on release)
+    const segmentHit = this.hitTestSegment(worldPos);
+    if (segmentHit) {
+      const node = this.context.sceneGraph.getNode(segmentHit.nodeId) as PathNode;
+      const allPts = getAllPoints(node);
+      const { start, end } = getContourRange(getSubpathBoundaries(node), segmentHit.segmentIndex);
+      const endIndex = start + ((segmentHit.segmentIndex - start + 1) % (end - start));
+      this.bend = {
+        hit: segmentHit,
+        endIndex,
+        start: allPts[segmentHit.segmentIndex]!,
+        end: allPts[endIndex]!,
+        shiftKey: event.shiftKey,
+      };
+      this.dragMode = 'bending-segment';
+      this.state.isDragging = true;
+      this.hasDragged = false;
+      return;
+    }
+
     // Nothing of a path here: a drag draws a marquee to pick points, and a
     // click picks a layer (handled on release, once it's clearly a click)
     this.dragMode = 'marquee';
@@ -382,11 +412,41 @@ export class DirectSelectionTool extends BaseTool {
 
     if (!this.state.isDragging) {
       // Update hover state for cursor feedback
-      this.currentHover = this.hitTestHandle(worldPos) || this.hitTestPoint(worldPos);
+      this.currentHover =
+        this.hitTestHandle(worldPos) ||
+        this.hitTestPoint(worldPos) ||
+        this.hitTestSegment(worldPos);
       return;
     }
 
     if (!this.dragStartPoint) return;
+
+    if (this.dragMode === 'bending-segment' && this.bend) {
+      const worldDelta = vec2.subtract(worldPos, this.dragStartPoint);
+      if (!this.hasDragged && vec2.length(worldDelta) <= 3 / this.context.camera.zoom) return;
+      const node = this.context.sceneGraph.getNode(this.bend.hit.nodeId);
+      if (!node) return;
+      if (!this.hasDragged) {
+        this.hasDragged = true;
+        this.context.onTransformStart?.();
+        if (!this.context.getSelectedIds().has(node.id)) {
+          this.clearPointSelection();
+          this.context.setSelectedIds([node.id]);
+        }
+      }
+      const invLinear = mat3.invert(this.getNodeLinearMatrix(node));
+      const localDelta = invLinear ? mat3.transformPoint(invLinear, worldDelta) : worldDelta;
+      const bent = bendSegment(this.bend.start, this.bend.end, this.bend.hit.t, localDelta);
+      const allPts = [...getAllPoints(node)];
+      allPts[this.bend.hit.segmentIndex] = bent.start;
+      allPts[this.bend.endIndex] = bent.end;
+      const split = setAllPoints(node, allPts);
+      this.context.sceneGraph.updateNode(node.id, {
+        points: split.points,
+        subpaths: split.subpaths,
+      });
+      return;
+    }
 
     if (this.dragMode === 'marquee') {
       // A few pixels of movement before it's a marquee rather than a click
@@ -494,6 +554,15 @@ export class DirectSelectionTool extends BaseTool {
   }
 
   onPointerUp(_event: CanvasPointerEvent): void {
+    if (this.dragMode === 'bending-segment' && this.bend) {
+      if (this.hasDragged) {
+        this.context.onTransformComplete?.(new Set([this.bend.hit.nodeId]), 'vertex-move');
+      } else if (this.dragStartPoint) {
+        this.handleNodeClick(this.dragStartPoint, this.bend.shiftKey);
+      }
+      this.bend = null;
+    }
+
     if (this.dragMode === 'marquee' && this.dragStartPoint) {
       if (this.marqueeRect) this.selectPointsInRect(this.marqueeRect, this.marqueeAdditive);
       else this.handleNodeClick(this.dragStartPoint, this.marqueeAdditive);
@@ -1238,7 +1307,7 @@ export class DirectSelectionTool extends BaseTool {
       ) {
         return 'crosshair';
       } else if (this.currentHover.type === 'segment') {
-        return 'copy'; // Indicates adding a point
+        return 'pointer'; // Drag to bend, double-click to add a point
       }
     }
     return this.cursor;
@@ -1262,6 +1331,7 @@ export class DirectSelectionTool extends BaseTool {
     this.dragHandle = null;
     this.initialPointPositions.clear();
     this.marqueeRect = null;
+    this.bend = null;
     this.lastClickTime = 0;
     this.lastClickPosition = null;
     this.currentHover = null;

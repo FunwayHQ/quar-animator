@@ -6,6 +6,7 @@
 import type { PathPoint, PathNode, Vector2, Rect } from '@quar/types';
 import { vec2 } from '../math';
 import { bezier } from './bezier';
+import { updateHandleWithSymmetry } from './pointUtils';
 
 /** Epsilon for geometry length/distance comparisons (e.g. degenerate edges, closing gaps) */
 const GEOMETRY_EPSILON = 0.001;
@@ -213,6 +214,32 @@ export function splitSegment(
       type: handleIn && handleOut ? 'smooth' : 'corner',
     },
     end: { ...p1, handleIn: handle(p1.position, second.p2), type: unmatched(p1.type) },
+  };
+}
+
+/**
+ * Bend the segment from p0 to p1 so its point at t moves by `delta` (as when
+ * dragging the segment itself): both control points move, the nearer one
+ * more, by weights that carry the curve's point at t exactly with the
+ * pointer. t is held 0.1 away from the ends, where that would take huge
+ * handles. Smooth end points stay smooth: their other handle turns too.
+ */
+export function bendSegment(
+  p0: PathPoint,
+  p1: PathPoint,
+  t: number,
+  delta: Vector2
+): { start: PathPoint; end: PathPoint } {
+  const s = Math.min(0.9, Math.max(0.1, t));
+  // B(t) moves by 3(1-s)²s·w1 + 3(1-s)s²·w2 times delta: with w1 = (1-s)k and
+  // w2 = sk, k makes that 1
+  const k = 1 / (3 * s * (1 - s) * ((1 - s) ** 2 + s ** 2));
+  const { cp1, cp2 } = getAbsoluteControlPoints(p0, p1);
+  const c1 = vec2.add(cp1, vec2.multiply(delta, (1 - s) * k));
+  const c2 = vec2.add(cp2, vec2.multiply(delta, s * k));
+  return {
+    start: updateHandleWithSymmetry(p0, 'out', vec2.subtract(c1, p0.position)),
+    end: updateHandleWithSymmetry(p1, 'in', vec2.subtract(c2, p1.position)),
   };
 }
 
