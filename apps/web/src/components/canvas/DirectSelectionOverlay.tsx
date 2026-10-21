@@ -63,19 +63,15 @@ function isPointSelected(
 }
 
 /**
- * Get the world transform matrix for a path node.
- * For nested nodes (children of groups), includes parent chain.
+ * Get the world transform matrix for a path node, parent chain included.
+ * Like the scene graph and the tool, it leaves out the normalized anchor
+ * (applying it drew points and handles half a unit, times the scale, off).
  */
 function getNodeWorldMatrix(node: PathNode, sceneGraph: SceneGraph | null): Matrix3 {
-  if (node.parent && sceneGraph) {
+  if (sceneGraph?.getNode(node.id)) {
     return sceneGraph.getWorldTransform(node.id);
   }
-  return mat3.compose(
-    node.transform.position,
-    node.transform.rotation,
-    node.transform.scale,
-    node.transform.anchor
-  );
+  return mat3.compose(node.transform.position, node.transform.rotation, node.transform.scale);
 }
 
 /**
@@ -90,16 +86,23 @@ function getPointWorldPos(
 }
 
 /**
- * Transform a local-space handle offset to world-space offset (rotation + scale only, no translation).
+ * Where a point's handle (an offset from it, in local space) is on screen:
+ * the handle's end goes through the same matrices as the point, so the
+ * camera decides how it maps (zoom, flip and any rotation).
  */
-function getHandleWorldOffset(
+function handleScreenPos(
   node: PathNode,
+  point: PathPoint,
   handle: Vector2,
+  toScreen: (pos: Vector2) => Vector2,
   sceneGraph: SceneGraph | null
 ): Vector2 {
-  const m = getNodeWorldMatrix(node, sceneGraph);
-  // Linear part only (no translation) to transform direction vectors
-  return mat3.transformPoint({ a: m.a, b: m.b, c: m.c, d: m.d, tx: 0, ty: 0 }, handle);
+  return toScreen(
+    mat3.transformPoint(getNodeWorldMatrix(node, sceneGraph), {
+      x: point.position.x + handle.x,
+      y: point.position.y + handle.y,
+    })
+  );
 }
 
 // ============================================================================
@@ -153,7 +156,6 @@ export function DirectSelectionOverlay({
   if (!camera || (pathNodes.length === 0 && (!imageNodes || imageNodes.length === 0))) return null;
 
   const toScreen = (pos: Vector2): Vector2 => camera.worldToScreen(pos);
-  const zoom = camera.zoom;
 
   return (
     <svg className={styles.overlay}>
@@ -169,7 +171,7 @@ export function DirectSelectionOverlay({
                 <path
                   key={`outline-${ci}`}
                   className={styles.pathOutline}
-                  d={buildContourD(node, contour, node.closed, toScreen, zoom, sceneGraph)}
+                  d={buildContourD(node, contour, node.closed, toScreen, sceneGraph)}
                 />
               ) : null
             )}
@@ -185,9 +187,13 @@ export function DirectSelectionOverlay({
                 <g key={`handles-${index}`}>
                   {point.handleIn &&
                     (() => {
-                      const wo = getHandleWorldOffset(node, point.handleIn, sceneGraph);
-                      const hx = screenPos.x + wo.x * zoom;
-                      const hy = screenPos.y - wo.y * zoom;
+                      const { x: hx, y: hy } = handleScreenPos(
+                        node,
+                        point,
+                        point.handleIn,
+                        toScreen,
+                        sceneGraph
+                      );
                       return (
                         <>
                           <line
@@ -203,9 +209,13 @@ export function DirectSelectionOverlay({
                     })()}
                   {point.handleOut &&
                     (() => {
-                      const wo = getHandleWorldOffset(node, point.handleOut, sceneGraph);
-                      const hx = screenPos.x + wo.x * zoom;
-                      const hy = screenPos.y - wo.y * zoom;
+                      const { x: hx, y: hy } = handleScreenPos(
+                        node,
+                        point,
+                        point.handleOut,
+                        toScreen,
+                        sceneGraph
+                      );
                       return (
                         <>
                           <line
@@ -298,7 +308,6 @@ function buildContourD(
   contour: PathPoint[],
   closed: boolean,
   toScreen: (pos: Vector2) => Vector2,
-  zoom: number,
   sceneGraph: SceneGraph | null
 ): string {
   if (contour.length < 2) return '';
@@ -316,16 +325,14 @@ function buildContourD(
       const prevScreen = toScreen(getPointWorldPos(node, prev, sceneGraph));
 
       if (prev.handleOut || p.handleIn) {
-        // Cubic bezier — transform handle offsets through node rotation+scale
-        const ho = prev.handleOut
-          ? getHandleWorldOffset(node, prev.handleOut, sceneGraph)
-          : { x: 0, y: 0 };
-        const hi = p.handleIn ? getHandleWorldOffset(node, p.handleIn, sceneGraph) : { x: 0, y: 0 };
-        const cp1x = prevScreen.x + ho.x * zoom;
-        const cp1y = prevScreen.y - ho.y * zoom;
-        const cp2x = screen.x + hi.x * zoom;
-        const cp2y = screen.y - hi.y * zoom;
-        parts.push(`C ${cp1x} ${cp1y} ${cp2x} ${cp2y} ${screen.x} ${screen.y}`);
+        // Cubic bezier — the control points go through the same mapping
+        const cp1 = prev.handleOut
+          ? handleScreenPos(node, prev, prev.handleOut, toScreen, sceneGraph)
+          : prevScreen;
+        const cp2 = p.handleIn
+          ? handleScreenPos(node, p, p.handleIn, toScreen, sceneGraph)
+          : screen;
+        parts.push(`C ${cp1.x} ${cp1.y} ${cp2.x} ${cp2.y} ${screen.x} ${screen.y}`);
       } else {
         parts.push(`L ${screen.x} ${screen.y}`);
       }
@@ -340,17 +347,13 @@ function buildContourD(
     const lastScreen = toScreen(getPointWorldPos(node, last, sceneGraph));
 
     if (last.handleOut || first.handleIn) {
-      const ho = last.handleOut
-        ? getHandleWorldOffset(node, last.handleOut, sceneGraph)
-        : { x: 0, y: 0 };
-      const hi = first.handleIn
-        ? getHandleWorldOffset(node, first.handleIn, sceneGraph)
-        : { x: 0, y: 0 };
-      const cp1x = lastScreen.x + ho.x * zoom;
-      const cp1y = lastScreen.y - ho.y * zoom;
-      const cp2x = firstScreen.x + hi.x * zoom;
-      const cp2y = firstScreen.y - hi.y * zoom;
-      parts.push(`C ${cp1x} ${cp1y} ${cp2x} ${cp2y} ${firstScreen.x} ${firstScreen.y}`);
+      const cp1 = last.handleOut
+        ? handleScreenPos(node, last, last.handleOut, toScreen, sceneGraph)
+        : lastScreen;
+      const cp2 = first.handleIn
+        ? handleScreenPos(node, first, first.handleIn, toScreen, sceneGraph)
+        : firstScreen;
+      parts.push(`C ${cp1.x} ${cp1.y} ${cp2.x} ${cp2.y} ${firstScreen.x} ${firstScreen.y}`);
     } else {
       parts.push('Z');
     }
