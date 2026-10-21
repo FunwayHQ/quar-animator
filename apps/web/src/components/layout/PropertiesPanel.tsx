@@ -2114,6 +2114,15 @@ export function PropertiesPanel() {
                           <div
                             className={styles.colorSwatch}
                             style={{ background: bone.boneColor }}
+                            role="button"
+                            tabIndex={0}
+                            aria-label={`Bone color: ${bone.boneColor}`}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault();
+                                e.currentTarget.click();
+                              }
+                            }}
                             onClick={() => {
                               const input = document.createElement('input');
                               input.type = 'color';

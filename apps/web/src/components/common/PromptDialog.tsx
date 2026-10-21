@@ -108,6 +108,8 @@ export function PromptDialog({
   return createPortal(
     <div
       className={`${styles.backdrop} ${exiting ? styles.exiting : ''}`}
+      // Catches clicks outside the dialog (Escape closes it from the keyboard)
+      role="presentation"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) close(false);
       }}

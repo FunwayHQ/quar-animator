@@ -133,7 +133,18 @@ export default function SymbolLibraryPanel() {
               <div
                 key={symbol.id}
                 className={styles.symbolItem}
+                role="button"
+                tabIndex={0}
+                title="Click to place an instance, double-click to edit"
                 onClick={() => handleClick(symbol.id)}
+                onKeyDown={(e) => {
+                  // Enter or Space places an instance (not keys typed while renaming)
+                  if (e.target !== e.currentTarget) return;
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    placeSymbolInstance(sceneGraph, symbol.id);
+                  }
+                }}
                 onDoubleClick={() => handleDoubleClick(symbol.id)}
                 onContextMenu={(e) => handleContextMenu(e, symbol.id)}
                 data-testid={`symbol-item-${symbol.id}`}

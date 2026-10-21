@@ -111,17 +111,26 @@ export function Panel({
           ...(collapsible && { cursor: 'pointer' }),
           ...(!isExpanded && { borderBottom: 'none' }),
         }}
+        role={collapsible ? 'button' : undefined}
+        tabIndex={collapsible ? 0 : undefined}
+        aria-expanded={collapsible ? isExpanded : undefined}
         onClick={handleToggle}
+        onKeyDown={(e) => {
+          // Not keys pressed on the header's own actions
+          if (e.target !== e.currentTarget) return;
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            handleToggle();
+          }
+        }}
       >
         <div style={headerLeftStyles}>
           {collapsible && <ChevronIcon size={14} style={chevronStyles} />}
           <h3 style={titleStyles}>{title}</h3>
         </div>
         {headerActions && (
-          <div
-            style={headerActionsStyles}
-            onClick={(e) => e.stopPropagation()}
-          >
+          // Clicks on the actions don't fold the panel
+          <div style={headerActionsStyles} role="presentation" onClick={(e) => e.stopPropagation()}>
             {headerActions}
           </div>
         )}

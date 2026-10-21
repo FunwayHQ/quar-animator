@@ -175,6 +175,36 @@ describe('SymbolLibraryPanel', () => {
     }
   });
 
+  it('places an instance with Enter, but not with keys typed while renaming', () => {
+    const placeSpy = vi.fn();
+    const orig = useEditorStore.getState().placeSymbolInstance;
+    useEditorStore.setState({
+      symbols: [makeSymbolDef('sym-1', 'Button')],
+      placeSymbolInstance: placeSpy,
+    });
+    try {
+      renderWithProvider(<SymbolLibraryPanel />);
+      const item = screen.getByTestId('symbol-item-sym-1');
+      act(() => {
+        fireEvent.keyDown(item, { key: 'Enter' });
+      });
+      expect(placeSpy).toHaveBeenCalledTimes(1);
+
+      act(() => {
+        fireEvent.contextMenu(item);
+      });
+      act(() => {
+        fireEvent.click(screen.getByText('Rename'));
+      });
+      act(() => {
+        fireEvent.keyDown(screen.getByDisplayValue('Button'), { key: 'Enter' });
+      });
+      expect(placeSpy).toHaveBeenCalledTimes(1);
+    } finally {
+      useEditorStore.setState({ placeSymbolInstance: orig });
+    }
+  });
+
   it('right-click shows context menu', () => {
     useEditorStore.setState({
       symbols: [makeSymbolDef('sym-1', 'Button')],

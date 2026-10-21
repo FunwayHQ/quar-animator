@@ -2499,7 +2499,15 @@ export function Canvas({
               pointerEvents: 'auto',
               cursor: 'pointer',
             }}
+            role="button"
+            tabIndex={0}
             onClick={() => useEditorStore.getState().exitSymbolEdit(sceneGraph)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                useEditorStore.getState().exitSymbolEdit(sceneGraph);
+              }
+            }}
           >
             Editing Symbol: {symDef?.name ?? 'Unknown'} — Click or press Escape to exit
           </div>

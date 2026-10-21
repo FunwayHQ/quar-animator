@@ -20,7 +20,11 @@ describe('Panel', () => {
   });
 
   it('can be collapsed by default', () => {
-    render(<Panel title="Panel" defaultExpanded={false}>Hidden content</Panel>);
+    render(
+      <Panel title="Panel" defaultExpanded={false}>
+        Hidden content
+      </Panel>
+    );
     expect(screen.queryByText('Hidden content')).not.toBeInTheDocument();
   });
 
@@ -84,12 +88,41 @@ describe('Panel', () => {
     expect(screen.getByText('Always visible')).toBeInTheDocument();
   });
 
+  it('folds from the keyboard, but not from keys on its actions', async () => {
+    const user = userEvent.setup();
+    render(
+      <Panel title="Keys" headerActions={<button>Action</button>}>
+        Body
+      </Panel>
+    );
+    const header = screen.getByRole('button', { name: /Keys/ });
+    expect(header).toHaveAttribute('aria-expanded', 'true');
+
+    header.focus();
+    await user.keyboard('{Enter}');
+    expect(screen.queryByText('Body')).not.toBeInTheDocument();
+    expect(header).toHaveAttribute('aria-expanded', 'false');
+
+    await user.keyboard(' ');
+    expect(screen.getByText('Body')).toBeInTheDocument();
+
+    screen.getByRole('button', { name: 'Action' }).focus();
+    await user.keyboard('{Enter}');
+    expect(screen.getByText('Body')).toBeInTheDocument();
+  });
+
+  it("is no button when it can't fold", () => {
+    render(
+      <Panel title="Still" collapsible={false}>
+        Body
+      </Panel>
+    );
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
+  });
+
   it('renders header actions', () => {
     render(
-      <Panel
-        title="With Actions"
-        headerActions={<button>Action</button>}
-      >
+      <Panel title="With Actions" headerActions={<button>Action</button>}>
         Content
       </Panel>
     );
@@ -102,10 +135,7 @@ describe('Panel', () => {
     const user = userEvent.setup();
 
     render(
-      <Panel
-        title="Panel"
-        headerActions={<button onClick={onAction}>Action</button>}
-      >
+      <Panel title="Panel" headerActions={<button onClick={onAction}>Action</button>}>
         Content
       </Panel>
     );
