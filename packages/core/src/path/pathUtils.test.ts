@@ -31,7 +31,9 @@ import {
   getSubpathBoundaries,
   setAllPoints,
   getContourRange,
+  splitSegment,
 } from './pathUtils';
+import { bezier } from './bezier';
 import type { PathPoint } from '@quar/types';
 
 // Helper to check if two numbers are approximately equal
@@ -1045,5 +1047,68 @@ describe('getContourRange', () => {
   it('should default to first contour for out-of-range', () => {
     const boundaries = [0, 3];
     expect(getContourRange(boundaries, 10)).toEqual({ start: 0, end: 3 });
+  });
+});
+
+describe('splitSegment', () => {
+  const corner = (x: number, y: number): PathPoint => ({
+    position: { x, y },
+    handleIn: null,
+    handleOut: null,
+    type: 'corner',
+  });
+
+  it('puts a corner on a straight segment, leaving its ends alone', () => {
+    const a = corner(0, 0);
+    const b = corner(100, 50);
+    const { start, point, end } = splitSegment(a, b, 0.25);
+    expect(point).toEqual({
+      position: { x: 25, y: 12.5 },
+      handleIn: null,
+      handleOut: null,
+      type: 'corner',
+    });
+    expect(start).toBe(a);
+    expect(end).toBe(b);
+  });
+
+  it('keeps a curve exactly as it was', () => {
+    // An arch from (0,0) to (100,0), its handles pulled up
+    const a: PathPoint = { ...corner(0, 0), handleOut: { x: 10, y: 60 }, type: 'smooth' };
+    const b: PathPoint = { ...corner(100, 0), handleIn: { x: -30, y: 40 }, type: 'smooth' };
+    const along = (p: PathPoint, q: PathPoint, t: number) =>
+      bezier.cubicPoint(
+        p.position,
+        { x: p.position.x + (p.handleOut?.x ?? 0), y: p.position.y + (p.handleOut?.y ?? 0) },
+        { x: q.position.x + (q.handleIn?.x ?? 0), y: q.position.y + (q.handleIn?.y ?? 0) },
+        q.position,
+        t
+      );
+
+    const { start, point, end } = splitSegment(a, b, 0.4);
+
+    expect(point.position.x).toBeCloseTo(along(a, b, 0.4).x);
+    expect(point.position.y).toBeCloseTo(along(a, b, 0.4).y);
+    expect(point.type).toBe('smooth');
+    // Each half retraces its part of the original curve
+    for (const u of [0.25, 0.5, 0.75]) {
+      expect(along(start, point, u).x).toBeCloseTo(along(a, b, 0.4 * u).x);
+      expect(along(start, point, u).y).toBeCloseTo(along(a, b, 0.4 * u).y);
+      expect(along(point, end, u).x).toBeCloseTo(along(a, b, 0.4 + 0.6 * u).x);
+      expect(along(point, end, u).y).toBeCloseTo(along(a, b, 0.4 + 0.6 * u).y);
+    }
+  });
+
+  it('turns a symmetric end smooth, its handles no longer the same length', () => {
+    const a: PathPoint = {
+      ...corner(0, 0),
+      handleIn: { x: -20, y: 0 },
+      handleOut: { x: 20, y: 0 },
+      type: 'symmetric',
+    };
+    const { start } = splitSegment(a, corner(100, 0), 0.5);
+    expect(start.type).toBe('smooth');
+    expect(start.handleOut!.x).toBeCloseTo(10);
+    expect(start.handleIn).toEqual({ x: -20, y: 0 });
   });
 });

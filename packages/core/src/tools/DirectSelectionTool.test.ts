@@ -732,6 +732,29 @@ describe('DirectSelectionTool', () => {
       expect(selected[0].pointIndex).toBe(1); // New point inserted at index 1
     });
 
+    it('adds a point on a curve, away from its chord, without changing its shape', () => {
+      // An arch from (0,0) to (100,0) that peaks at y=37.5, far from the chord
+      const path = createTestPath(context, [
+        createSmoothPoint(0, 0, null, { x: 0, y: 50 }),
+        createSmoothPoint(100, 0, { x: 0, y: 50 }, null),
+      ]);
+      const top = { x: 50, y: 37.5 };
+
+      tool.onPointerDown(createMockPointerEvent({ worldPosition: top, button: 0 }));
+      tool.onPointerUp(createMockPointerEvent({ worldPosition: top }));
+      tool.onPointerDown(createMockPointerEvent({ worldPosition: top, button: 0 }));
+
+      const [a, added, b] = (context.sceneGraph.getNode(path.id) as PathNode).points;
+      expect(added!.position.x).toBeCloseTo(50);
+      expect(added!.position.y).toBeCloseTo(37.5);
+      // The halves keep the arch: shorter outer handles, a level handle pair on top
+      expect(a!.handleOut!.y).toBeCloseTo(25);
+      expect(b!.handleIn!.y).toBeCloseTo(25);
+      expect(added!.handleIn!.y).toBeCloseTo(0);
+      expect(added!.handleIn!.x).toBeCloseTo(-25);
+      expect(added!.handleOut!.x).toBeCloseTo(25);
+    });
+
     // X1-2: Y-coordinate interpolation fix
     it('should interpolate Y coordinate correctly for non-horizontal segments', () => {
       // Create a vertical segment from (0,0) to (0,100)

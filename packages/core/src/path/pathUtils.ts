@@ -169,6 +169,51 @@ export function getAbsoluteControlPoints(
   };
 }
 
+/**
+ * Split the segment from p0 to p1 at t (0–1) without changing its shape
+ * (de Casteljau): the outer handles shorten and the new point gets the
+ * handles between them. A straight segment stays straight, its new point a
+ * corner. A symmetric end point becomes smooth, since its two handles no
+ * longer match in length.
+ */
+export function splitSegment(
+  p0: PathPoint,
+  p1: PathPoint,
+  t: number
+): { start: PathPoint; point: PathPoint; end: PathPoint } {
+  if (!p0.handleOut && !p1.handleIn) {
+    return {
+      start: p0,
+      point: {
+        position: vec2.lerp(p0.position, p1.position, t),
+        handleIn: null,
+        handleOut: null,
+        type: 'corner',
+      },
+      end: p1,
+    };
+  }
+  const { cp1, cp2 } = getAbsoluteControlPoints(p0, p1);
+  const [first, second] = bezier.subdivide(p0.position, cp1, cp2, p1.position, t);
+  const handle = (from: Vector2, to: Vector2): Vector2 | null => {
+    const offset = vec2.subtract(to, from);
+    return vec2.length(offset) < GEOMETRY_EPSILON ? null : offset;
+  };
+  const unmatched = (type: PathPoint['type']) => (type === 'symmetric' ? 'smooth' : type);
+  const handleIn = handle(first.p3, first.p2);
+  const handleOut = handle(first.p3, second.p1);
+  return {
+    start: { ...p0, handleOut: handle(p0.position, first.p1), type: unmatched(p0.type) },
+    point: {
+      position: first.p3,
+      handleIn,
+      handleOut,
+      type: handleIn && handleOut ? 'smooth' : 'corner',
+    },
+    end: { ...p1, handleIn: handle(p1.position, second.p2), type: unmatched(p1.type) },
+  };
+}
+
 // ============================================================================
 // Path Bounds
 // ============================================================================

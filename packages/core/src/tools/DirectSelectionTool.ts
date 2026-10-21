@@ -26,7 +26,10 @@ import {
   getSubpathBoundaries,
   setAllPoints,
   getContourRange,
+  getAbsoluteControlPoints,
+  splitSegment,
 } from '../path/pathUtils';
+import { bezier } from '../path/bezier';
 import { getTextLocalBounds } from '../font/textPlacement';
 
 // ============================================================================
@@ -585,14 +588,18 @@ export class DirectSelectionTool extends BaseTool {
     return null;
   }
 
+  /** The segment nearest the pointer, within reach, measured along its curve. */
   private hitTestSegment(worldPos: Vector2): SegmentHit | null {
     const hitRadius = 8 / this.context.camera.zoom;
+    let best: (SegmentHit & { distance: number }) | null = null;
 
     const paths = this.getPathNodes();
 
     for (const node of paths) {
       const allPts = getAllPoints(node);
       const boundaries = getSubpathBoundaries(node);
+      const worldMatrix = this.getNodeWorldMatrix(node);
+      const toWorld = (v: Vector2) => mat3.transformPoint(worldMatrix, v);
 
       for (let c = 0; c < boundaries.length - 1; c++) {
         const start = boundaries[c]!;
@@ -606,23 +613,33 @@ export class DirectSelectionTool extends BaseTool {
 
           const p1 = allPts[flatIdx]!;
           const p2 = allPts[nextFlatIdx]!;
+          const { cp1, cp2 } = getAbsoluteControlPoints(p1, p2);
 
-          const p1World = this.getPointWorldPosition(node, p1);
-          const p2World = this.getPointWorldPosition(node, p2);
+          // An affine map keeps a bezier a bezier, with the same t along it
+          const nearest = bezier.nearestPoint(
+            toWorld(p1.position),
+            toWorld(cp1),
+            toWorld(cp2),
+            toWorld(p2.position),
+            worldPos
+          );
 
-          // Simple line segment distance (ignoring bezier for now)
-          const dist = this.pointToLineDistance(worldPos, p1World, p2World);
-
-          if (dist < hitRadius) {
-            // Calculate t parameter
-            const t = this.getParameterOnLine(worldPos, p1World, p2World);
-            return { type: 'segment', nodeId: node.id, segmentIndex: flatIdx, t };
+          if (nearest.distance < hitRadius && (!best || nearest.distance < best.distance)) {
+            best = {
+              type: 'segment',
+              nodeId: node.id,
+              segmentIndex: flatIdx,
+              t: nearest.t,
+              distance: nearest.distance,
+            };
           }
         }
       }
     }
 
-    return null;
+    if (!best) return null;
+    const { distance: _distance, ...hit } = best;
+    return hit;
   }
 
   // --------------------------------------------------------------------------
@@ -740,38 +757,16 @@ export class DirectSelectionTool extends BaseTool {
     const localIdx = hit.segmentIndex - start;
     const nextLocalIdx = (localIdx + 1) % contourLen;
 
-    const p1 = allPts[hit.segmentIndex]!;
-    const p2 = allPts[start + nextLocalIdx]!;
-
-    const p1World = this.getPointWorldPosition(node, p1);
-    const p2World = this.getPointWorldPosition(node, p2);
-
-    // Interpolate position in world space
-    const newWorldPos = {
-      x: p1World.x + (p2World.x - p1World.x) * hit.t,
-      y: p1World.y + (p2World.y - p1World.y) * hit.t,
-    };
-
-    // Convert back to local coordinates via inverse world matrix
-    const worldMatrix = this.getNodeWorldMatrix(node);
-    const invWorld = mat3.invert(worldMatrix);
-    const localPos = invWorld
-      ? mat3.transformPoint(invWorld, newWorldPos)
-      : {
-          x: newWorldPos.x - node.transform.position.x,
-          y: newWorldPos.y - node.transform.position.y,
-        };
-
-    const newPoint: PathPoint = {
-      position: localPos,
-      handleIn: null,
-      handleOut: null,
-      type: 'corner',
-    };
+    // Split the curve where it was hit (t is the same in local space), so
+    // its shape doesn't change
+    const endIndex = start + nextLocalIdx;
+    const split = splitSegment(allPts[hit.segmentIndex]!, allPts[endIndex]!, hit.t);
 
     // Insert the new point after the segment start within the flat array
     const newAll = [...allPts];
-    newAll.splice(hit.segmentIndex + 1, 0, newPoint);
+    newAll[hit.segmentIndex] = split.start;
+    newAll[endIndex] = split.end;
+    newAll.splice(hit.segmentIndex + 1, 0, split.point);
 
     // Rebuild points + subpaths — boundaries shifted by 1 for contours after insertion
     const newContours: PathPoint[][] = [];
@@ -1066,37 +1061,6 @@ export class DirectSelectionTool extends BaseTool {
   private getPointWorldPosition(node: PathNode | Node, point: PathPoint): Vector2 {
     const worldMatrix = this.getNodeWorldMatrix(node);
     return mat3.transformPoint(worldMatrix, point.position);
-  }
-
-  private pointToLineDistance(point: Vector2, lineStart: Vector2, lineEnd: Vector2): number {
-    const dx = lineEnd.x - lineStart.x;
-    const dy = lineEnd.y - lineStart.y;
-    const lengthSq = dx * dx + dy * dy;
-
-    if (lengthSq === 0) {
-      return vec2.distance(point, lineStart);
-    }
-
-    let t = ((point.x - lineStart.x) * dx + (point.y - lineStart.y) * dy) / lengthSq;
-    t = Math.max(0, Math.min(1, t));
-
-    const closest = {
-      x: lineStart.x + t * dx,
-      y: lineStart.y + t * dy,
-    };
-
-    return vec2.distance(point, closest);
-  }
-
-  private getParameterOnLine(point: Vector2, lineStart: Vector2, lineEnd: Vector2): number {
-    const dx = lineEnd.x - lineStart.x;
-    const dy = lineEnd.y - lineStart.y;
-    const lengthSq = dx * dx + dy * dy;
-
-    if (lengthSq === 0) return 0;
-
-    const t = ((point.x - lineStart.x) * dx + (point.y - lineStart.y) * dy) / lengthSq;
-    return Math.max(0, Math.min(1, t));
   }
 
   // --------------------------------------------------------------------------
