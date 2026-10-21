@@ -34,7 +34,7 @@ export function EasingCurvePreview({
   const innerW = width - 4; // 2px padding each side
 
   const pathD: string = useMemo(
-    () => easingToSvgPath(easing, innerW, innerH, 48) as string,
+    () => easingToSvgPath(easing, innerW, innerH, 48),
     [easing, innerW, innerH]
   );
 

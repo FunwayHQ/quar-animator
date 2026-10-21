@@ -49,7 +49,7 @@ export function computeFKChain(rootBoneId: string, sceneGraph: BoneSceneGraph): 
     const node = sceneGraph.getNode(boneId);
     if (!node || node.type !== 'bone') return;
 
-    const bone = node as BoneNode;
+    const bone = node;
     const worldTransform = sceneGraph.getWorldTransform(boneId);
 
     // Extract world position (translation component of world matrix)
@@ -83,7 +83,7 @@ export function poseBone(boneId: string, rotation: number, sceneGraph: BoneScene
   const node = sceneGraph.getNode(boneId);
   if (!node || node.type !== 'bone') return;
 
-  const bone = node as BoneNode;
+  const bone = node;
   const clamped = clampBoneRotation(bone, rotation);
 
   sceneGraph.updateNode(boneId, {

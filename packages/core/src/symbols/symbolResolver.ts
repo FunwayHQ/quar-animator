@@ -83,7 +83,7 @@ export function resolveSymbolInstance(
   }
 
   // Deep-clone the definition's nodes
-  const clonedNodes: Node[] = structuredClone(definition.sceneGraphJSON.nodes) as Node[];
+  const clonedNodes: Node[] = structuredClone(definition.sceneGraphJSON.nodes);
 
   // Apply overrides
   const resolved = applyOverrides(clonedNodes, instance.overrides);

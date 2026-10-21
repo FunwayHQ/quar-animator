@@ -56,18 +56,16 @@ export function EasingEditor({ easing, onChange, anchorX, anchorY, onClose }: Ea
 
   // Local editing state: either cubic bezier points or a named easing
   const [currentEasing, setCurrentEasing] = useState<EasingFunction>(easing);
-  const bezierPoints: [number, number, number, number] | null = easingToBezierPoints(
-    currentEasing
-  ) as [number, number, number, number] | null;
+  const bezierPoints: [number, number, number, number] | null = easingToBezierPoints(currentEasing);
   const isCubicBezier = bezierPoints !== null && typeof currentEasing !== 'string';
 
   // P1 and P2 for the cubic bezier (local state)
   const [p1, setP1] = useState<[number, number]>(() => {
-    const pts = easingToBezierPoints(easing) as [number, number, number, number] | null;
+    const pts = easingToBezierPoints(easing);
     return pts ? [pts[0], pts[1]] : [0.25, 0.1];
   });
   const [p2, setP2] = useState<[number, number]>(() => {
-    const pts = easingToBezierPoints(easing) as [number, number, number, number] | null;
+    const pts = easingToBezierPoints(easing);
     return pts ? [pts[2], pts[3]] : [0.25, 1];
   });
 
@@ -81,7 +79,7 @@ export function EasingEditor({ easing, onChange, anchorX, anchorY, onClose }: Ea
 
   // Sync from currentEasing when changing presets
   const syncPointsFromEasing = useCallback((e: EasingFunction) => {
-    const pts = easingToBezierPoints(e) as [number, number, number, number] | null;
+    const pts = easingToBezierPoints(e);
     if (pts) {
       setP1([pts[0], pts[1]]);
       setP2([pts[2], pts[3]]);
@@ -258,7 +256,7 @@ export function EasingEditor({ easing, onChange, anchorX, anchorY, onClose }: Ea
       return `M${sx},${sy} C${c1x},${c1y} ${c2x},${c2y} ${ex},${ey}`;
     }
     // Sampled path for non-bezier easings
-    return (easingToSvgPath(currentEasing, CURVE_SIZE, CURVE_SIZE, 96) as string)
+    return easingToSvgPath(currentEasing, CURVE_SIZE, CURVE_SIZE, 96)
       .replace(/M/, `M`)
       .replace(/(\d)/g, (_, d) => d) // just re-offset
       .split(' ')
@@ -460,7 +458,7 @@ export function EasingEditor({ easing, onChange, anchorX, anchorY, onClose }: Ea
                       key={item.label}
                       className={`${styles.presetCell} ${isActive ? styles.presetCellActive : ''}`}
                       onClick={() => handlePresetClick(item.value)}
-                      title={getEasingDisplayName(item.value) as string}
+                      title={getEasingDisplayName(item.value)}
                       data-testid={`easing-preset-${item.label.replace(/\s+/g, '-').toLowerCase()}`}
                     >
                       <EasingCurvePreview

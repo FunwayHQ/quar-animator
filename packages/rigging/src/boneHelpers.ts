@@ -91,7 +91,7 @@ export function getBoneChain(boneId: string, sceneGraph: BoneSceneGraph): BoneNo
   while (currentId) {
     const node = sceneGraph.getNode(currentId);
     if (!node || node.type !== 'bone') break;
-    chain.unshift(node as BoneNode);
+    chain.unshift(node);
     currentId = node.parent;
   }
 
@@ -113,7 +113,7 @@ export function getBoneWorldTip(boneId: string, sceneGraph: BoneSceneGraph): Vec
   const node = sceneGraph.getNode(boneId);
   if (!node || node.type !== 'bone') return null;
 
-  const bone = node as BoneNode;
+  const bone = node;
   const worldTransform = sceneGraph.getWorldTransform(boneId);
 
   // Transform the tip point (bone.length, 0) through the world matrix
