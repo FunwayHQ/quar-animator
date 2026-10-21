@@ -457,7 +457,8 @@ export class PenTool extends BaseTool {
    * the right way round), closing it when asked; undoable, its keyframes kept.
    */
   private finishContinuing(closed: boolean): void {
-    const { node, fromStart } = this.continuing!;
+    if (!this.continuing) return;
+    const { node, fromStart } = this.continuing;
     const added = this.currentPath.length - node.points.length;
     const inverse = mat3.invert(this.context.sceneGraph.getWorldTransform(node.id));
     if ((added <= 0 && !closed) || !inverse || !this.context.sceneGraph.getNode(node.id)) {

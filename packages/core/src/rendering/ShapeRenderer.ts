@@ -25,7 +25,7 @@ import type {
   SkinData,
 } from '@quar/types';
 import { resolveSymbolInstance, getResolvedRootNodes } from '../symbols/symbolResolver';
-import { WebGLRenderer, type ShaderProgram } from './WebGLRenderer';
+import { WebGLRenderer, attributeLocation, type ShaderProgram } from './WebGLRenderer';
 import { EffectRenderer } from './EffectRenderer';
 import { FramebufferManager } from './FramebufferManager';
 import { createGhostComposite, type GhostComposite } from './PostProcessShaders';
@@ -1010,8 +1010,15 @@ export class ShapeRenderer {
     if (this.indexBuffer) this.bufferCapacity.set(this.indexBuffer, this.indices.byteLength);
 
     if (this.program) {
-      gl.enableVertexAttribArray(this.program.attributes.a_position!);
-      gl.vertexAttribPointer(this.program.attributes.a_position!, 2, gl.FLOAT, false, 0, 0);
+      gl.enableVertexAttribArray(attributeLocation(this.program, 'a_position'));
+      gl.vertexAttribPointer(
+        attributeLocation(this.program, 'a_position'),
+        2,
+        gl.FLOAT,
+        false,
+        0,
+        0
+      );
     }
 
     this.renderer.bindVAO(null);
@@ -1037,9 +1044,9 @@ export class ShapeRenderer {
     const stride = 10 * Float32Array.BYTES_PER_ELEMENT; // 40 bytes
 
     // a_position at offset 0 (2 floats)
-    gl.enableVertexAttribArray(this.skinnedProgram.attributes.a_position!);
+    gl.enableVertexAttribArray(attributeLocation(this.skinnedProgram, 'a_position'));
     gl.vertexAttribPointer(
-      this.skinnedProgram.attributes.a_position!,
+      attributeLocation(this.skinnedProgram, 'a_position'),
       2,
       gl.FLOAT,
       false,
@@ -1048,9 +1055,9 @@ export class ShapeRenderer {
     );
 
     // a_boneIndices at offset 8 (4 floats)
-    gl.enableVertexAttribArray(this.skinnedProgram.attributes.a_boneIndices!);
+    gl.enableVertexAttribArray(attributeLocation(this.skinnedProgram, 'a_boneIndices'));
     gl.vertexAttribPointer(
-      this.skinnedProgram.attributes.a_boneIndices!,
+      attributeLocation(this.skinnedProgram, 'a_boneIndices'),
       4,
       gl.FLOAT,
       false,
@@ -1059,9 +1066,9 @@ export class ShapeRenderer {
     );
 
     // a_boneWeights at offset 24 (4 floats)
-    gl.enableVertexAttribArray(this.skinnedProgram.attributes.a_boneWeights!);
+    gl.enableVertexAttribArray(attributeLocation(this.skinnedProgram, 'a_boneWeights'));
     gl.vertexAttribPointer(
-      this.skinnedProgram.attributes.a_boneWeights!,
+      attributeLocation(this.skinnedProgram, 'a_boneWeights'),
       4,
       gl.FLOAT,
       false,
@@ -1087,14 +1094,28 @@ export class ShapeRenderer {
     this.weightVertexBuffer = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, this.weightVertexBuffer);
     gl.bufferData(gl.ARRAY_BUFFER, MAX_VERTICES * 2 * 4, gl.DYNAMIC_DRAW);
-    gl.enableVertexAttribArray(this.weightProgram.attributes.a_position!);
-    gl.vertexAttribPointer(this.weightProgram.attributes.a_position!, 2, gl.FLOAT, false, 0, 0);
+    gl.enableVertexAttribArray(attributeLocation(this.weightProgram, 'a_position'));
+    gl.vertexAttribPointer(
+      attributeLocation(this.weightProgram, 'a_position'),
+      2,
+      gl.FLOAT,
+      false,
+      0,
+      0
+    );
 
     this.weightColorBuffer = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, this.weightColorBuffer);
     gl.bufferData(gl.ARRAY_BUFFER, MAX_VERTICES * 3 * 4, gl.DYNAMIC_DRAW);
-    gl.enableVertexAttribArray(this.weightProgram.attributes.a_color!);
-    gl.vertexAttribPointer(this.weightProgram.attributes.a_color!, 3, gl.FLOAT, false, 0, 0);
+    gl.enableVertexAttribArray(attributeLocation(this.weightProgram, 'a_color'));
+    gl.vertexAttribPointer(
+      attributeLocation(this.weightProgram, 'a_color'),
+      3,
+      gl.FLOAT,
+      false,
+      0,
+      0
+    );
 
     this.renderer.bindVAO(null);
   }
@@ -1114,9 +1135,9 @@ export class ShapeRenderer {
 
     const stride = 4 * Float32Array.BYTES_PER_ELEMENT; // 4 floats per vertex
     // a_position at location 0
-    gl.enableVertexAttribArray(this.textureProgram.attributes.a_position!);
+    gl.enableVertexAttribArray(attributeLocation(this.textureProgram, 'a_position'));
     gl.vertexAttribPointer(
-      this.textureProgram.attributes.a_position!,
+      attributeLocation(this.textureProgram, 'a_position'),
       2,
       gl.FLOAT,
       false,
@@ -1124,9 +1145,9 @@ export class ShapeRenderer {
       0
     );
     // a_texCoord at location 1
-    gl.enableVertexAttribArray(this.textureProgram.attributes.a_texCoord!);
+    gl.enableVertexAttribArray(attributeLocation(this.textureProgram, 'a_texCoord'));
     gl.vertexAttribPointer(
-      this.textureProgram.attributes.a_texCoord!,
+      attributeLocation(this.textureProgram, 'a_texCoord'),
       2,
       gl.FLOAT,
       false,
@@ -1193,7 +1214,8 @@ export class ShapeRenderer {
    * Used by the export pipeline where async loading is not viable.
    */
   loadTextureSync(src: string): WebGLTexture | null {
-    if (this.textureCache.has(src)) return this.textureCache.get(src)!;
+    const known = this.textureCache.get(src);
+    if (known !== undefined) return known;
 
     const gl = this.renderer.context;
     const img = new Image();
@@ -1424,6 +1446,8 @@ export class ShapeRenderer {
     exportNodeIds?: string[]
   ): void {
     if (!this.program || !this.vao) return;
+    // Checked here; the effect passes below call back into it
+    const program = this.program;
 
     const gl = this.renderer.context;
 
@@ -1545,13 +1569,9 @@ export class ShapeRenderer {
               node.effects,
               node.blendMode,
               () => {
-                this.renderer.useProgram(this.program!);
+                this.renderer.useProgram(program);
                 this.renderer.bindVAO(this.vao);
-                gl.uniformMatrix3fv(
-                  this.program!.uniforms.u_viewProjection ?? null,
-                  false,
-                  vpArray
-                );
+                gl.uniformMatrix3fv(program.uniforms.u_viewProjection ?? null, false, vpArray);
                 if (this.gradientProgram) {
                   this.renderer.useProgram(this.gradientProgram);
                   gl.uniformMatrix3fv(
@@ -1559,7 +1579,7 @@ export class ShapeRenderer {
                     false,
                     vpArray
                   );
-                  this.renderer.useProgram(this.program!);
+                  this.renderer.useProgram(program);
                 }
                 this.currentVPArray = vpArray;
                 renderSymbolChildren();
@@ -1567,9 +1587,9 @@ export class ShapeRenderer {
               canvasWidth,
               canvasHeight
             );
-            this.renderer.useProgram(this.program!);
+            this.renderer.useProgram(program);
             this.renderer.bindVAO(this.vao);
-            gl.uniformMatrix3fv(this.program!.uniforms.u_viewProjection ?? null, false, vpArray);
+            gl.uniformMatrix3fv(program.uniforms.u_viewProjection ?? null, false, vpArray);
             if (this.gradientProgram) {
               this.renderer.useProgram(this.gradientProgram);
               gl.uniformMatrix3fv(
@@ -1577,7 +1597,7 @@ export class ShapeRenderer {
                 false,
                 vpArray
               );
-              this.renderer.useProgram(this.program!);
+              this.renderer.useProgram(program);
             }
             this.currentVPArray = vpArray;
           } else {
@@ -1635,13 +1655,9 @@ export class ShapeRenderer {
               node.effects,
               node.blendMode,
               () => {
-                this.renderer.useProgram(this.program!);
+                this.renderer.useProgram(program);
                 this.renderer.bindVAO(this.vao);
-                gl.uniformMatrix3fv(
-                  this.program!.uniforms.u_viewProjection ?? null,
-                  false,
-                  vpArray
-                );
+                gl.uniformMatrix3fv(program.uniforms.u_viewProjection ?? null, false, vpArray);
                 if (this.gradientProgram) {
                   this.renderer.useProgram(this.gradientProgram);
                   gl.uniformMatrix3fv(
@@ -1649,7 +1665,7 @@ export class ShapeRenderer {
                     false,
                     vpArray
                   );
-                  this.renderer.useProgram(this.program!);
+                  this.renderer.useProgram(program);
                 }
                 this.currentVPArray = vpArray;
                 renderBoolGroup();
@@ -1657,9 +1673,9 @@ export class ShapeRenderer {
               canvasWidth,
               canvasHeight
             );
-            this.renderer.useProgram(this.program!);
+            this.renderer.useProgram(program);
             this.renderer.bindVAO(this.vao);
-            gl.uniformMatrix3fv(this.program!.uniforms.u_viewProjection ?? null, false, vpArray);
+            gl.uniformMatrix3fv(program.uniforms.u_viewProjection ?? null, false, vpArray);
             if (this.gradientProgram) {
               this.renderer.useProgram(this.gradientProgram);
               gl.uniformMatrix3fv(
@@ -1667,7 +1683,7 @@ export class ShapeRenderer {
                 false,
                 vpArray
               );
-              this.renderer.useProgram(this.program!);
+              this.renderer.useProgram(program);
             }
             this.currentVPArray = vpArray;
           } else {
@@ -1685,9 +1701,9 @@ export class ShapeRenderer {
             node.blendMode,
             () => {
               // Re-setup shader state since effect renderer may have changed it
-              this.renderer.useProgram(this.program!);
+              this.renderer.useProgram(program);
               this.renderer.bindVAO(this.vao);
-              gl.uniformMatrix3fv(this.program!.uniforms.u_viewProjection ?? null, false, vpArray);
+              gl.uniformMatrix3fv(program.uniforms.u_viewProjection ?? null, false, vpArray);
               if (this.gradientProgram) {
                 this.renderer.useProgram(this.gradientProgram);
                 gl.uniformMatrix3fv(
@@ -1695,7 +1711,7 @@ export class ShapeRenderer {
                   false,
                   vpArray
                 );
-                this.renderer.useProgram(this.program!);
+                this.renderer.useProgram(program);
               }
               this.currentVPArray = vpArray;
               renderShape();
@@ -1704,9 +1720,9 @@ export class ShapeRenderer {
             canvasHeight
           );
           // Restore shader state for next node
-          this.renderer.useProgram(this.program!);
+          this.renderer.useProgram(program);
           this.renderer.bindVAO(this.vao);
-          gl.uniformMatrix3fv(this.program!.uniforms.u_viewProjection ?? null, false, vpArray);
+          gl.uniformMatrix3fv(program.uniforms.u_viewProjection ?? null, false, vpArray);
           if (this.gradientProgram) {
             this.renderer.useProgram(this.gradientProgram);
             gl.uniformMatrix3fv(
@@ -1714,7 +1730,7 @@ export class ShapeRenderer {
               false,
               vpArray
             );
-            this.renderer.useProgram(this.program!);
+            this.renderer.useProgram(program);
           }
           this.currentVPArray = vpArray;
         } else {
@@ -2634,7 +2650,7 @@ export class ShapeRenderer {
 
     for (const fill of fills) {
       if (fill.visible && fill.type !== 'none') {
-        this.renderFill(vertices!, fillIndices!, fill, nodeOpacity);
+        this.renderFill(vertices, fillIndices, fill, nodeOpacity);
       }
     }
 
@@ -3329,10 +3345,10 @@ export class ShapeRenderer {
     nodeOpacity: number
   ): void {
     if (!this.skinnedProgram || !this.skinnedVAO || !this.skinnedVertexBuffer) return;
+    const { skinnedVertexData, boneIdToIndex } = cached;
+    if (!skinnedVertexData || !boneIdToIndex) return;
 
     const gl = this.renderer.context;
-    const skinnedVertexData = cached.skinnedVertexData!;
-    const boneIdToIndex = cached.boneIdToIndex!;
     const fillIndices = cached.fillIndices;
 
     // Compute bone matrix uniforms
@@ -3503,8 +3519,9 @@ export class ShapeRenderer {
       if (existing && existing.geoKey === geoKey) return existing;
       const entry = this.createBendGeometry(node);
       if (entry) {
-        this.geometryCache.set(node.id, { ...entry, geoKey });
-        return this.geometryCache.get(node.id)!;
+        const bent = { ...entry, geoKey };
+        this.geometryCache.set(node.id, bent);
+        return bent;
       }
     }
 
@@ -4039,7 +4056,7 @@ export class ShapeRenderer {
     }
 
     // Restore normal shader state
-    this.renderer.useProgram(this.program!);
+    if (this.program) this.renderer.useProgram(this.program);
     this.renderer.bindVAO(this.vao);
   }
 

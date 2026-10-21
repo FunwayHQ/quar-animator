@@ -504,7 +504,8 @@ export class SceneGraph {
     };
     const processQueue = (): void => {
       while (qi < queue.length) {
-        const node = newNodes.get(queue[qi++]!)!;
+        const node = newNodes.get(queue[qi++]!);
+        if (!node) continue;
         const kept: string[] = [];
         for (const childId of node.children) {
           if (visited.has(childId)) continue; // cycle back-edge or shared child
@@ -587,10 +588,12 @@ export class SceneGraph {
   // --------------------------------------------------------------------------
 
   on(type: SceneGraphEventType, callback: EventCallback): () => void {
-    if (!this.listeners.has(type)) {
-      this.listeners.set(type, new Set());
+    let listeners = this.listeners.get(type);
+    if (!listeners) {
+      listeners = new Set();
+      this.listeners.set(type, listeners);
     }
-    this.listeners.get(type)!.add(callback);
+    listeners.add(callback);
 
     return () => {
       const set = this.listeners.get(type);

@@ -57,7 +57,19 @@ module.exports = {
     '@typescript-eslint/no-explicit-any': 'warn',
     '@typescript-eslint/explicit-function-return-type': 'off',
     '@typescript-eslint/explicit-module-boundary-types': 'off',
-    '@typescript-eslint/no-non-null-assertion': 'warn',
+    // With noUncheckedIndexedAccess, `xs[i]!` is how an index known to be in
+    // range is read: those are fine. Any other `!` (a map lookup, a find, a
+    // ref) should be narrowed instead.
+    '@typescript-eslint/no-non-null-assertion': 'off',
+    'no-restricted-syntax': [
+      'warn',
+      {
+        selector:
+          "TSNonNullExpression:not([expression.type='MemberExpression'][expression.computed=true])",
+        message:
+          'Narrow this (a check, ?? or a guard) rather than asserting it with `!`. Only index reads (xs[i]!) may assert.',
+      },
+    ],
     '@typescript-eslint/no-floating-promises': 'error',
     '@typescript-eslint/await-thenable': 'error',
     '@typescript-eslint/no-misused-promises': 'error',
@@ -88,7 +100,7 @@ module.exports = {
       },
       rules: {
         '@typescript-eslint/no-explicit-any': 'off',
-        '@typescript-eslint/no-non-null-assertion': 'off',
+        'no-restricted-syntax': 'off',
       },
     },
     {

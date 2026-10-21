@@ -179,8 +179,8 @@ function insertPoint(vertices: Float32Array, tris: Triangle[], p: number): void 
     const other = tris.findIndex(
       (tri, i) => i !== t && tri.includes(u) && tri.includes(v) && !tri.includes(p)
     );
-    if (other >= 0) {
-      const x = tris[other]!.find((vertex) => vertex !== u && vertex !== v)!;
+    const x = other >= 0 ? tris[other]!.find((vertex) => vertex !== u && vertex !== v) : undefined;
+    if (x !== undefined) {
       tris[other] = [v, p, x];
       tris.push([p, u, x]);
     }
@@ -256,13 +256,16 @@ function improveTriangles(
   for (const [a, b, c] of tris) queue.push([a, b], [b, c], [c, a]);
   let budget = 20 * tris.length + 100;
   while (queue.length > 0 && budget-- > 0) {
-    const [a, b] = queue.pop()!;
+    const edge = queue.pop();
+    if (!edge) break;
+    const [a, b] = edge;
     if (isOutlineEdge(a, b)) continue;
     const list = edges.get(key(a, b));
     if (!list || list.length !== 2) continue;
     const [t1, t2] = list as [number, number];
-    const c = tris[t1]!.find((v) => v !== a && v !== b)!;
-    const d = tris[t2]!.find((v) => v !== a && v !== b)!;
+    const c = tris[t1]!.find((v) => v !== a && v !== b);
+    const d = tris[t2]!.find((v) => v !== a && v !== b);
+    if (c === undefined || d === undefined) continue;
     // Orient so that a → b runs counter-clockwise in t1 (c on its left)
     const [p, q] = orient(vertices, a, b, c) > 0 ? [a, b] : [b, a];
     if (!inCircle(vertices, p, q, c, d)) continue;

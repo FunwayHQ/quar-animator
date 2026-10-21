@@ -157,8 +157,10 @@ export function setPointType(
     point.handleIn || point.handleOut
       ? point
       : convertPointType({ ...point, type: 'corner' }, prevPosition, nextPosition);
-  const out = base.handleOut ?? vec2.multiply(base.handleIn!, -1);
-  const into = base.handleIn ?? vec2.multiply(base.handleOut!, -1);
+  const out = base.handleOut ?? (base.handleIn && vec2.multiply(base.handleIn, -1));
+  const into = base.handleIn ?? (base.handleOut && vec2.multiply(base.handleOut, -1));
+  // No handles to set (a point with no neighbours)
+  if (!out || !into) return { ...base, type };
   // The line through the point both handles lean towards
   const lean = vec2.subtract(vec2.normalize(out), vec2.normalize(into));
   const direction = vec2.length(lean) > 1e-9 ? vec2.normalize(lean) : vec2.normalize(out);

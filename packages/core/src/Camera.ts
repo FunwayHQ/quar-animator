@@ -351,10 +351,12 @@ export class Camera {
   // --------------------------------------------------------------------------
 
   on(type: CameraEventType, callback: CameraEventCallback): () => void {
-    if (!this.listeners.has(type)) {
-      this.listeners.set(type, new Set());
+    let listeners = this.listeners.get(type);
+    if (!listeners) {
+      listeners = new Set();
+      this.listeners.set(type, listeners);
     }
-    this.listeners.get(type)!.add(callback);
+    listeners.add(callback);
 
     return () => {
       this.listeners.get(type)?.delete(callback);

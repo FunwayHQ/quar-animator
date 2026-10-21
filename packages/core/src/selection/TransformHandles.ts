@@ -256,8 +256,9 @@ export class TransformHandles {
    * Uses the corner handle positions to define the rectangle in screen space
    */
   private isOutsideBounds(screenPoint: Vector2, handles: TransformHandle[]): boolean {
-    const tl = handles.find((h) => h.position === 'top-left')!;
-    const br = handles.find((h) => h.position === 'bottom-right')!;
+    const tl = handles.find((h) => h.position === 'top-left');
+    const br = handles.find((h) => h.position === 'bottom-right');
+    if (!tl || !br) return false;
 
     // In screen space, determine the axis-aligned bounding rect from corners
     const minX = Math.min(tl.screenPosition.x, br.screenPosition.x);

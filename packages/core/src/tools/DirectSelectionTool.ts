@@ -742,10 +742,9 @@ export class DirectSelectionTool extends BaseTool {
         if (point) points[index] = { ...point, position: vec2.add(point.position, localDelta) };
       }
       if (node.type === 'image') {
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-explicit-any
         this.context.sceneGraph.updateNode(nodeId, {
           vertexOffsets: imagePointsToOffsets(node, points),
-        } as any);
+        });
       } else {
         const split = setAllPoints(node, points);
         this.context.sceneGraph.updateNode(nodeId, {

@@ -21,6 +21,11 @@ export interface ShaderProgram {
   uniforms: Record<string, WebGLUniformLocation>;
 }
 
+/** Where a program's attribute is bound: -1, as WebGL reports one it lacks, if it has none. */
+export function attributeLocation(program: ShaderProgram, name: string): number {
+  return program.attributes[name] ?? -1;
+}
+
 export interface BufferInfo {
   buffer: WebGLBuffer;
   type: number;

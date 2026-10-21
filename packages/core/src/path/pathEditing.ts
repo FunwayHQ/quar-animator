@@ -256,8 +256,8 @@ export function simplifyContour(
   }
   if (closed && result.length > 1) {
     // The loop ends on the point it started from: one point, both handles
-    const last = result.pop()!;
-    result[0] = { ...result[0]!, handleIn: last.handleIn };
+    const last = result.pop();
+    result[0] = { ...result[0]!, handleIn: last?.handleIn ?? null };
   }
   return result.length >= 2 && result.length < n ? result : points;
 }

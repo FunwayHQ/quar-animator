@@ -105,8 +105,9 @@ export function nodeToPolygon(
         }
       }
     }
-    if (parent >= 0) {
-      polygons[exteriorPolygonIndex.get(parent)!]!.push(rings[i]!);
+    const container = parent >= 0 ? polygons[exteriorPolygonIndex.get(parent) ?? -1] : undefined;
+    if (container) {
+      container.push(rings[i]!);
     } else {
       // No container found — keep the piece as its own Polygon.
       polygons.push([rings[i]!]);

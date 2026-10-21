@@ -4,7 +4,7 @@
  */
 
 import type { Matrix3, Rect } from '@quar/types';
-import { WebGLRenderer, type ShaderProgram } from './WebGLRenderer';
+import { WebGLRenderer, attributeLocation, type ShaderProgram } from './WebGLRenderer';
 import { mat3 } from '../math';
 
 // ============================================================================
@@ -126,8 +126,15 @@ export class Grid {
     gl.bufferData(gl.ARRAY_BUFFER, this.vertices.byteLength, gl.DYNAMIC_DRAW);
 
     if (this.program) {
-      gl.enableVertexAttribArray(this.program.attributes.a_position!);
-      gl.vertexAttribPointer(this.program.attributes.a_position!, 2, gl.FLOAT, false, 0, 0);
+      gl.enableVertexAttribArray(attributeLocation(this.program, 'a_position'));
+      gl.vertexAttribPointer(
+        attributeLocation(this.program, 'a_position'),
+        2,
+        gl.FLOAT,
+        false,
+        0,
+        0
+      );
     }
 
     // Create color buffer
@@ -136,8 +143,8 @@ export class Grid {
     gl.bufferData(gl.ARRAY_BUFFER, this.colors.byteLength, gl.DYNAMIC_DRAW);
 
     if (this.program) {
-      gl.enableVertexAttribArray(this.program.attributes.a_color!);
-      gl.vertexAttribPointer(this.program.attributes.a_color!, 4, gl.FLOAT, false, 0, 0);
+      gl.enableVertexAttribArray(attributeLocation(this.program, 'a_color'));
+      gl.vertexAttribPointer(attributeLocation(this.program, 'a_color'), 4, gl.FLOAT, false, 0, 0);
     }
 
     this.renderer.bindVAO(null);

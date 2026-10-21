@@ -54,8 +54,9 @@ export class FramebufferManager {
 
     const bucket = this.pool.get(key);
 
-    if (bucket && bucket.length > 0) {
-      const entry = bucket.pop()!;
+    const pooled = bucket?.pop();
+    if (pooled) {
+      const entry = pooled;
       this.active.add(entry);
       // Clear the FBO
       this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, entry.fbo);

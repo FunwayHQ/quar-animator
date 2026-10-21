@@ -176,7 +176,7 @@ export class BrushTool extends BaseTool {
     // Filter through Kalman
     const dt = Math.max(0.001, (event.timestamp - this.lastTimestamp) / 1000);
     this.lastTimestamp = event.timestamp;
-    const filteredPos = this.kalman!.filter(rawPos, dt);
+    const filteredPos = this.kalman ? this.kalman.filter(rawPos, dt) : rawPos;
 
     // Minimum distance filter
     if (this.allPoints.length > 0) {

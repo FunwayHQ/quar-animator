@@ -204,7 +204,8 @@ export class BoneTool extends BaseTool {
   // --------------------------------------------------------------------------
 
   private createStandaloneBone(length: number, rotation: number): void {
-    const node = this.createBoneNode(this.startPoint!.x, this.startPoint!.y, rotation, length);
+    if (!this.startPoint) return;
+    const node = this.createBoneNode(this.startPoint.x, this.startPoint.y, rotation, length);
     this.context.sceneGraph.addNode(node);
     this.context.setSelectedIds([node.id]);
     this.lastCreatedBoneId = node.id;

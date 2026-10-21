@@ -159,6 +159,11 @@ export function parseSvg(svgString: string): ParsedSvg {
 // ViewBox
 // ============================================================================
 
+/** An attribute's number, or undefined when it's absent or empty. */
+function optionalNumber(value: string | null): number | undefined {
+  return value ? parseFloat(value) : undefined;
+}
+
 function parseViewBox(
   attr: string | null
 ): { x: number; y: number; width: number; height: number } | null {
@@ -460,8 +465,8 @@ function parseElement(
         y: parseFloat(el.getAttribute('y') || '0'),
         width: parseFloat(el.getAttribute('width') || '0'),
         height: parseFloat(el.getAttribute('height') || '0'),
-        rx: el.getAttribute('rx') ? parseFloat(el.getAttribute('rx')!) : undefined,
-        ry: el.getAttribute('ry') ? parseFloat(el.getAttribute('ry')!) : undefined,
+        rx: optionalNumber(el.getAttribute('rx')),
+        ry: optionalNumber(el.getAttribute('ry')),
       } as SvgRect;
     }
 
