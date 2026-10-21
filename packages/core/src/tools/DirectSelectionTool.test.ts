@@ -2421,4 +2421,65 @@ describe('DirectSelectionTool', () => {
       expect(context.getSelectedIds().has(path.id)).toBe(true);
     });
   });
+
+  describe('snapping a dragged point', () => {
+    const dragPoint = (from: { x: number; y: number }, to: { x: number; y: number }) => {
+      tool.onPointerDown(createMockPointerEvent({ worldPosition: from, button: 0 }));
+      tool.onPointerMove(createMockPointerEvent({ worldPosition: to }));
+      tool.onPointerUp(createMockPointerEvent({ worldPosition: to }));
+    };
+
+    it("lands on another path's point when dropped close to it", () => {
+      const moving = createTestPath(context, [createPoint(0, 0), createPoint(100, 0)]);
+      createTestPath(context, [createPoint(200, 50), createPoint(300, 50)]);
+
+      dragPoint({ x: 100, y: 0 }, { x: 197, y: 53 });
+
+      expect((context.sceneGraph.getNode(moving.id) as PathNode).points[1]!.position).toEqual({
+        x: 200,
+        y: 50,
+      });
+    });
+
+    it('stays where dropped with nothing in reach', () => {
+      const moving = createTestPath(context, [createPoint(0, 0), createPoint(100, 0)]);
+      dragPoint({ x: 100, y: 0 }, { x: 137, y: 23 });
+      expect((context.sceneGraph.getNode(moving.id) as PathNode).points[1]!.position).toEqual({
+        x: 137,
+        y: 23,
+      });
+    });
+
+    it('snaps to the grid, and to a guide on its axis, when those are on', () => {
+      context.getSnapToGrid = () => true;
+      context.getGridSize = () => 20;
+      context.getSnapToGuides = () => true;
+      context.getGuides = () => [{ id: 'g', axis: 'x', position: 133 }];
+      const moving = createTestPath(context, [createPoint(0, 0), createPoint(100, 0)]);
+
+      dragPoint({ x: 100, y: 0 }, { x: 131, y: 27 });
+
+      // x on the guide at 133, y on the grid at 20
+      expect((context.sceneGraph.getNode(moving.id) as PathNode).points[1]!.position).toEqual({
+        x: 133,
+        y: 20,
+      });
+    });
+
+    it('moves the other picked points by the same snapped amount', () => {
+      const moving = createTestPath(context, [createPoint(0, 0), createPoint(100, 0)]);
+      createTestPath(context, [createPoint(200, 50), createPoint(300, 50)]);
+      tool.onPointerDown(createMockPointerEvent({ worldPosition: { x: 0, y: 0 }, button: 0 }));
+      tool.onPointerUp(createMockPointerEvent({ worldPosition: { x: 0, y: 0 } }));
+      tool.onPointerDown(
+        createMockPointerEvent({ worldPosition: { x: 100, y: 0 }, button: 0, shiftKey: true })
+      );
+      tool.onPointerMove(createMockPointerEvent({ worldPosition: { x: 198, y: 49 } }));
+      tool.onPointerUp(createMockPointerEvent({ worldPosition: { x: 198, y: 49 } }));
+
+      const points = (context.sceneGraph.getNode(moving.id) as PathNode).points;
+      expect(points[1]!.position).toEqual({ x: 200, y: 50 });
+      expect(points[0]!.position).toEqual({ x: 100, y: 50 });
+    });
+  });
 });

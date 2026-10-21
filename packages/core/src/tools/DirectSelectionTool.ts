@@ -157,6 +157,8 @@ export class DirectSelectionTool extends BaseTool {
   private dragHandle: HandleHit | null = null;
   private initialPointPositions: Map<string, Vector2> = new Map();
   private hasDragged: boolean = false;
+  /** The point pressed to start a point drag, where it was: it decides the snap. */
+  private grabbed: { nodeId: string; pointIndex: number; world: Vector2 } | null = null;
 
   // Segment bend: the segment pressed, its ends as they were, and the click's Shift
   private bend: {
@@ -267,6 +269,24 @@ export class DirectSelectionTool extends BaseTool {
       this.dragMode = 'dragging-point';
       this.state.isDragging = true;
       this.hasDragged = false;
+
+      // The pressed point snaps; the rest of the picked points move with it
+      const pressed = this.context.sceneGraph.getNode(pointHit.nodeId);
+      const pressedPoints =
+        pressed?.type === 'image'
+          ? getImagePoints(pressed)
+          : pressed?.type === 'path'
+            ? getAllPoints(pressed)
+            : [];
+      const pressedPoint = pressedPoints[pointHit.pointIndex];
+      this.grabbed =
+        pressed && pressedPoint
+          ? {
+              nodeId: pointHit.nodeId,
+              pointIndex: pointHit.pointIndex,
+              world: this.getPointWorldPosition(pressed, pressedPoint),
+            }
+          : null;
 
       // Store initial positions of all selected points
       this.initialPointPositions.clear();
@@ -462,7 +482,7 @@ export class DirectSelectionTool extends BaseTool {
     if (this.dragMode === 'dragging-point') {
       this.hasDragged = true;
       // Move selected points — convert world-space delta to local-space
-      const worldDelta = vec2.subtract(worldPos, this.dragStartPoint);
+      const worldDelta = this.snapDragDelta(vec2.subtract(worldPos, this.dragStartPoint));
 
       for (const sel of this.selectedPoints) {
         const node = this.context.sceneGraph.getNode(sel.nodeId);
@@ -581,8 +601,57 @@ export class DirectSelectionTool extends BaseTool {
     this.dragMode = 'idle';
     this.dragStartPoint = null;
     this.dragHandle = null;
+    this.grabbed = null;
     this.initialPointPositions.clear();
     this.state.isDragging = false;
+  }
+
+  /**
+   * A point drag's world delta, snapped by where it takes the pressed point:
+   * onto another point within reach (always), else onto guides and the grid
+   * when those snap settings are on (a guide wins on its axis when close).
+   */
+  private snapDragDelta(delta: Vector2): Vector2 {
+    if (!this.grabbed) return delta;
+    const target = vec2.add(this.grabbed.world, delta);
+    const zoom = this.context.camera.zoom;
+
+    let nearest: Vector2 | null = null;
+    let nearestDistance = 6 / zoom;
+    for (const node of [...this.getPathNodes(), ...this.getImageNodes()]) {
+      const points = node.type === 'image' ? getImagePoints(node) : getAllPoints(node);
+      points.forEach((point, pointIndex) => {
+        if (this.isPointSelected(node.id, pointIndex)) return; // they're moving too
+        const world = this.getPointWorldPosition(node, point);
+        const distance = vec2.distance(world, target);
+        if (distance < nearestDistance) {
+          nearest = world;
+          nearestDistance = distance;
+        }
+      });
+    }
+    if (nearest) return vec2.subtract(nearest, this.grabbed.world);
+
+    const grid = this.context.getSnapToGrid?.() ? (this.context.getGridSize?.() ?? 20) : null;
+    const guides = this.context.getSnapToGuides?.() ? (this.context.getGuides?.() ?? []) : [];
+    const snapAxis = (value: number, axis: 'x' | 'y'): number => {
+      let best: number | null = null;
+      let bestDistance = 5 / zoom;
+      for (const guide of guides) {
+        if (guide.axis !== axis) continue;
+        const distance = Math.abs(guide.position - value);
+        if (distance < bestDistance) {
+          best = guide.position;
+          bestDistance = distance;
+        }
+      }
+      if (best !== null) return best;
+      return grid ? Math.round(value / grid) * grid : value;
+    };
+    return vec2.subtract(
+      { x: snapAxis(target.x, 'x'), y: snapAxis(target.y, 'y') },
+      this.grabbed.world
+    );
   }
 
   // --------------------------------------------------------------------------
