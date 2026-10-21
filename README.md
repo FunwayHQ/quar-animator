@@ -7,7 +7,7 @@
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.3-blue)
 ![React](https://img.shields.io/badge/React-18-61dafb)
 ![WebGL](https://img.shields.io/badge/WebGL-2.0-red)
-![Tests](https://img.shields.io/badge/tests-4312%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-4362%20passing-brightgreen)
 
 **Free, open-source, web-native 2D animation platform**
 
@@ -165,7 +165,7 @@ Vector Path (Bezier) → Earcut Tessellation → WebGL Vertex Buffers → GPU Re
 | 6      | Path Editing (Direct Selection)         | 36    |
 | 7      | Brush & Eraser Tools                    | 77    |
 
-**Total Test Coverage: 4312 tests** (1877 core, 1252 web, 513 animation, 310 export, 271 rigging, 89 UI)
+**Total Test Coverage: 4362 tests** (1893 core, 1284 web, 513 animation, 310 export, 271 rigging, 91 UI)
 
 ### Roadmap
 
