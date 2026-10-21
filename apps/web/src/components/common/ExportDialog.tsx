@@ -83,17 +83,31 @@ const TABS: { id: ExportTab; label: string }[] = [
   { id: 'lottie', label: 'Lottie JSON' },
 ];
 
-function getSelectedArtboardScope(sceneGraph: SceneGraph, selectedIds: Set<string>) {
-  if (selectedIds.size !== 1) return null;
-
-  const [selectedId] = selectedIds;
-  if (!selectedId) return null;
-
-  const node = sceneGraph.getNode(selectedId);
+/**
+ * The artboard an export is of: the one selected — or, with nothing
+ * selected, the page's only artboard (`implicit`). Null otherwise: the
+ * export frames everything on the page.
+ */
+export function getArtboardScope(sceneGraph: SceneGraph, selectedIds: Set<string>) {
+  let node = null;
+  let implicit = false;
+  if (selectedIds.size === 1) {
+    const [selectedId] = selectedIds;
+    const selected = selectedId ? sceneGraph.getNode(selectedId) : undefined;
+    if (selected?.type === 'artboard') node = selected;
+  } else if (selectedIds.size === 0) {
+    const boards = sceneGraph
+      .getRootNodes()
+      .filter((root) => root.type === 'artboard' && root.visible);
+    if (boards.length === 1) {
+      node = boards[0]!;
+      implicit = true;
+    }
+  }
   if (!node || node.type !== 'artboard') return null;
 
-  const bounds = new SelectionManager().getSelectionBounds(new Set([selectedId]), sceneGraph)?.rect;
-  return bounds ? { node, bounds } : null;
+  const bounds = new SelectionManager().getSelectionBounds(new Set([node.id]), sceneGraph)?.rect;
+  return bounds ? { node, bounds, implicit } : null;
 }
 
 /** Exports are at most this many pixels a side. */
@@ -209,7 +223,7 @@ function describeGifCompression(compression: number): string {
 function getLottieExportScene(
   sceneGraph: SceneGraph,
   timeline: Timeline,
-  artboardScope: ReturnType<typeof getSelectedArtboardScope>,
+  artboardScope: ReturnType<typeof getArtboardScope>,
   outputWidth: number,
   outputHeight: number
 ): { nodes: Node[]; timeline: Timeline } {
@@ -311,7 +325,7 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
   const selectedNodeIds = useEditorStore((s) => s.selectedNodeIds);
   // What shows behind the art in formats without transparency (or with it off)
   const documentBackground = useEditorStore((s) => s.documentBackground);
-  const selectedArtboard = getSelectedArtboardScope(sceneGraph, selectedNodeIds);
+  const selectedArtboard = getArtboardScope(sceneGraph, selectedNodeIds);
   // With no artboard chosen, the export frames all the artwork, wherever it moves
   const [sceneScope] = useState(() =>
     selectedArtboard
@@ -820,6 +834,8 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
             {selectedArtboard && (
               <div className={styles.scopeNote} data-testid="export-artboard-scope">
                 Only “{selectedArtboard.node.name || 'Artboard'}” and its contents will be included.
+                {selectedArtboard.implicit &&
+                  ' It’s the page’s only artboard: select everything (Ctrl+A) first to export the whole page.'}
               </div>
             )}
             {!selectedArtboard && sceneScope && (

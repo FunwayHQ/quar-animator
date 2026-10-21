@@ -309,7 +309,21 @@ describe('ExportDialog', () => {
     expect(mockStore.setExporting).toHaveBeenCalledWith(true);
   });
 
-  it('frames the whole scene when no artboard is selected, sized to fit it', async () => {
+  it("exports the page's only artboard when nothing is selected, saying how to export it all", async () => {
+    renderWithArtboard(<ExportDialogHost />);
+    act(() => showExportDialog('gif'));
+
+    expect(screen.getByTestId('export-artboard-scope')).toHaveTextContent(
+      /Title Card.*page’s only artboard.*select everything/i
+    );
+    fireEvent.click(screen.getByTestId('export-dialog-export'));
+    await waitFor(() => expect(exportGif).toHaveBeenCalledOnce());
+    const [ctx] = vi.mocked(exportGif).mock.calls[0]!;
+    expect(ctx.exportRootIds).toEqual(['artboard-1']);
+  });
+
+  it('frames the whole scene when everything is selected, sized to fit it', async () => {
+    mockStore.selectedNodeIds = new Set(['artboard-1', 'shape-in-artboard']);
     renderWithArtboard(<ExportDialogHost />);
     act(() => showExportDialog('gif'));
 
