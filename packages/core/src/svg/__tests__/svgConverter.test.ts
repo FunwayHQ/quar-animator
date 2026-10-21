@@ -442,6 +442,47 @@ describe('convertSvgToNodes', () => {
       expect(gradient.radius).toBeCloseTo(0.5);
     });
 
+    it('keeps a radial focal point, Y up like the center', () => {
+      const gradient = gradientOf(`
+        <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+          <rect width="100" height="100" fill="url(#g)"/>
+          <radialGradient id="g" cx="0.5" cy="0.5" r="0.5" fx="0.25" fy="0.25">
+            <stop stop-color="white"/><stop offset="1" stop-color="black"/>
+          </radialGradient>
+        </svg>
+      `);
+      expect(gradient.center).toEqual({ x: 0.5, y: 0.5 });
+      expect(gradient.focal!.x).toBeCloseTo(0.25);
+      expect(gradient.focal!.y).toBeCloseTo(0.75); // SVG's top-left quarter
+    });
+
+    it('places a user-space focal point on the shape, and inherits one through href', () => {
+      const node = convert(`
+        <svg viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="200" cy="200" r="100" fill="url(#child)"/>
+          <radialGradient id="base" cx="200" cy="200" r="100" fx="250" fy="200" gradientUnits="userSpaceOnUse">
+            <stop stop-color="white"/><stop offset="1" stop-color="black"/>
+          </radialGradient>
+          <radialGradient id="child" href="#base"/>
+        </svg>
+      `).nodes[0] as EllipseNode;
+      const gradient = node.fills[0]!.gradient!;
+      expect(gradient.focal!.x).toBeCloseTo(0.75);
+      expect(gradient.focal!.y).toBeCloseTo(0.5);
+    });
+
+    it('leaves out a focal point that is the center', () => {
+      const gradient = gradientOf(`
+        <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+          <rect width="100" height="100" fill="url(#g)"/>
+          <radialGradient id="g" cx="0.4" fx="0.4">
+            <stop stop-color="white"/><stop offset="1" stop-color="black"/>
+          </radialGradient>
+        </svg>
+      `);
+      expect(gradient.focal).toBeUndefined();
+    });
+
     it('paints a gradient with no direction in its last color', () => {
       const gradient = gradientOf(`
         <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">

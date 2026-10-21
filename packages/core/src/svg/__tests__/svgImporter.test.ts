@@ -156,7 +156,7 @@ describe('importSvg', () => {
       </svg>
     `;
     const result = importSvg(svg, sceneGraph, generateId);
-    const ids = result.nodes.map(n => n.id);
+    const ids = result.nodes.map((n) => n.id);
     const uniqueIds = new Set(ids);
     expect(uniqueIds.size).toBe(ids.length);
   });

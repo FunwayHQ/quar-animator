@@ -130,7 +130,10 @@ function gradientToSvgDef(gradient: Gradient, id: string): string {
     const cx = gradient.center ? fmt(gradient.center.x * 100) + '%' : '50%';
     const cy = gradient.center ? fmt((1 - gradient.center.y) * 100) + '%' : '50%';
     const r = gradient.radius != null ? fmt(gradient.radius * 100) + '%' : '50%';
-    return `<radialGradient id="${id}" cx="${cx}" cy="${cy}" r="${r}">${stops}</radialGradient>`;
+    const focal = gradient.focal
+      ? ` fx="${fmt(gradient.focal.x * 100)}%" fy="${fmt((1 - gradient.focal.y) * 100)}%"`
+      : '';
+    return `<radialGradient id="${id}" cx="${cx}" cy="${cy}" r="${r}"${focal}>${stops}</radialGradient>`;
   }
 
   // Fallback: treat conic or unknown as linear

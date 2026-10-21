@@ -1,7 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import {
-  parseSvgColor, parseSvgTransform, parseSvgLength,
-  parseUrlRef, parseSvgPoints, resolveStyle,
+  parseSvgColor,
+  parseSvgTransform,
+  parseSvgLength,
+  parseUrlRef,
+  parseSvgPoints,
+  resolveStyle,
 } from '../svgUtils';
 
 // ============================================================================
@@ -302,10 +306,7 @@ describe('resolveStyle', () => {
       display: 'inline',
       visibility: 'visible',
     };
-    const doc = new DOMParser().parseFromString(
-      '<svg><rect /></svg>',
-      'image/svg+xml'
-    );
+    const doc = new DOMParser().parseFromString('<svg><rect /></svg>', 'image/svg+xml');
     const rect = doc.querySelector('rect')!;
     const style = resolveStyle(rect, parentStyle);
     expect(style.fill).toBe('green');
@@ -313,10 +314,7 @@ describe('resolveStyle', () => {
   });
 
   it('handles fill=none', () => {
-    const doc = new DOMParser().parseFromString(
-      '<svg><rect fill="none" /></svg>',
-      'image/svg+xml'
-    );
+    const doc = new DOMParser().parseFromString('<svg><rect fill="none" /></svg>', 'image/svg+xml');
     const rect = doc.querySelector('rect')!;
     const style = resolveStyle(rect);
     expect(style.fill).toBeNull();

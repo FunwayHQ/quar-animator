@@ -2,7 +2,9 @@
  * GradientHandleOverlay — Figma-style gradient placement handles on the canvas.
  *
  * Linear gradients: dashed line with start (white) and end (violet) circle handles.
- * Radial gradients: center handle + radius handle connected by a line.
+ * Radial gradients: center handle + radius handle connected by a line, and a
+ * focal-point diamond once Shift-dragging the center pulls one out (dragging
+ * it back onto the center puts it away again).
  *
  * Drag handling is self-contained: pointerdown on handle → document pointermove/up listeners.
  */
@@ -16,6 +18,7 @@ import {
   worldToGradientNormalized,
   linearGradientFromAngle,
   angleFromLinearGradient,
+  clampFocalPoint,
 } from '@quar/core';
 import { mat3 } from '@quar/core';
 import type { SceneGraph } from '@quar/core';
@@ -34,13 +37,15 @@ interface GradientHandleOverlayProps {
   sceneGraph: SceneGraph;
 }
 
-type DraggingHandle = 'start' | 'end' | 'center' | 'radius' | null;
+type DraggingHandle = 'start' | 'end' | 'center' | 'radius' | 'focal' | null;
 
 // ============================================================================
 // Helpers
 // ============================================================================
 
 const HANDLE_RADIUS = 6;
+/** A focal point dropped this close to the center (screen px) goes back into it. */
+const FOCAL_MERGE_DISTANCE = HANDLE_RADIUS * 1.5;
 
 function getGradient(node: Node, fillIndex: number, source: 'fill' | 'stroke'): Gradient | null {
   const shaped = node as {
@@ -127,7 +132,7 @@ export function GradientHandleOverlay({
             angle: newAngle,
           };
         } else if (draggingRef.current === 'center') {
-          // Move center and keep relative radius position
+          // Move center and keep relative radius (and focal point) position
           const oldCenter = currentGradient.center ?? { x: 0.5, y: 0.5 };
           const oldEnd = currentGradient.end ?? {
             x: oldCenter.x + (currentGradient.radius ?? 0.5),
@@ -135,11 +140,27 @@ export function GradientHandleOverlay({
           };
           const dx = normalizedPos.x - oldCenter.x;
           const dy = normalizedPos.y - oldCenter.y;
+          const focal = currentGradient.focal;
           updatedGradient = {
             ...currentGradient,
             center: normalizedPos,
             end: { x: oldEnd.x + dx, y: oldEnd.y + dy },
+            ...(focal ? { focal: { x: focal.x + dx, y: focal.y + dy } } : {}),
           };
+        } else if (draggingRef.current === 'focal') {
+          const center = currentGradient.center ?? { x: 0.5, y: 0.5 };
+          const centerOnScreen = camera.worldToScreen(
+            gradientNormalizedToWorld(center, localBounds, worldMatrix)
+          );
+          const { focal: _focal, ...withoutFocal } = currentGradient;
+          updatedGradient =
+            Math.hypot(screenPos.x - centerOnScreen.x, screenPos.y - centerOnScreen.y) <
+            FOCAL_MERGE_DISTANCE
+              ? withoutFocal
+              : {
+                  ...currentGradient,
+                  focal: clampFocalPoint(center, currentGradient.radius ?? 0.5, normalizedPos),
+                };
         } else if (draggingRef.current === 'radius') {
           const center = currentGradient.center ?? { x: 0.5, y: 0.5 };
           const dx = normalizedPos.x - center.x;
@@ -202,7 +223,13 @@ export function GradientHandleOverlay({
 
   // ---- Compute handle screen positions ----
 
-  let screenPositions: { start?: Vector2; end?: Vector2; center?: Vector2; radius?: Vector2 } = {};
+  let screenPositions: {
+    start?: Vector2;
+    end?: Vector2;
+    center?: Vector2;
+    radius?: Vector2;
+    focal?: Vector2;
+  } = {};
 
   if (gradient.type === 'linear') {
     const start = gradient.start ?? linearGradientFromAngle(gradient.angle ?? 0).start;
@@ -223,6 +250,13 @@ export function GradientHandleOverlay({
       center: camera.worldToScreen(worldCenter),
       radius: camera.worldToScreen(worldRadius),
     };
+    if (gradient.focal) {
+      // Where it's drawn: inside the circle
+      const focal = clampFocalPoint(center, r, gradient.focal);
+      screenPositions.focal = camera.worldToScreen(
+        gradientNormalizedToWorld(focal, localBounds, worldMatrix)
+      );
+    }
   }
 
   // ---- Render ----
@@ -253,7 +287,7 @@ export function GradientHandleOverlay({
   }
 
   if (gradient.type === 'radial' && screenPositions.center && screenPositions.radius) {
-    const { center, radius } = screenPositions;
+    const { center, radius, focal } = screenPositions;
     return (
       <svg className={styles.overlay} data-testid="gradient-handle-overlay">
         <line
@@ -263,14 +297,29 @@ export function GradientHandleOverlay({
           y2={radius.y}
           className={styles.gradientLine}
         />
+        {focal && (
+          <line
+            x1={center.x}
+            y1={center.y}
+            x2={focal.x}
+            y2={focal.y}
+            className={styles.gradientLine}
+          />
+        )}
         <circle
           cx={center.x}
           cy={center.y}
           r={HANDLE_RADIUS}
           className={styles.handleCenter}
-          onPointerDown={(e) => handlePointerDown('center', e)}
+          onPointerDown={(e) => handlePointerDown(e.shiftKey ? 'focal' : 'center', e)}
           data-testid="gradient-handle-center"
-        />
+        >
+          <title>
+            {focal
+              ? 'Center: drag to move the gradient'
+              : 'Center: drag to move the gradient, Shift-drag to pull out a focal point'}
+          </title>
+        </circle>
         <circle
           cx={radius.x}
           cy={radius.y}
@@ -279,6 +328,22 @@ export function GradientHandleOverlay({
           onPointerDown={(e) => handlePointerDown('radius', e)}
           data-testid="gradient-handle-radius"
         />
+        {focal && (
+          <rect
+            x={focal.x - HANDLE_RADIUS * 0.8}
+            y={focal.y - HANDLE_RADIUS * 0.8}
+            width={HANDLE_RADIUS * 1.6}
+            height={HANDLE_RADIUS * 1.6}
+            transform={`rotate(45 ${focal.x} ${focal.y})`}
+            className={styles.handleFocal}
+            onPointerDown={(e) => handlePointerDown('focal', e)}
+            data-testid="gradient-handle-focal"
+          >
+            <title>
+              Focal point: where the gradient starts. Drop it on the center to remove it
+            </title>
+          </rect>
+        )}
       </svg>
     );
   }

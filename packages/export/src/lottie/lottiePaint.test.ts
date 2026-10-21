@@ -111,6 +111,29 @@ describe('gradient fills', () => {
       [-50, -50, 50, 50]
     ) as LottieShapeGradientFill[];
     expect(fill).toMatchObject({ t: 2, s: { k: [0, -0] }, e: { k: [50, -0] } });
+    expect(fill).not.toHaveProperty('h');
+  });
+
+  it("exports a radial focal point as Lottie's highlight", () => {
+    const [right, up] = [
+      { x: 0.75, y: 0.5 },
+      { x: 0.5, y: 0.75 },
+    ].map(
+      (focal) =>
+        fillsToLottie(
+          [gradientFill({ type: 'radial', stops, center: { x: 0.5, y: 0.5 }, radius: 0.5, focal })],
+          'n1',
+          empty,
+          undefined,
+          [-50, -50, 50, 50]
+        )[0] as LottieShapeGradientFill
+    );
+    // Halfway to the circle, along the start→end line
+    expect(right!.h).toEqual({ a: 0, k: 50 });
+    expect(right!.a).toEqual({ a: 0, k: 0 });
+    // Up the shape is -90° in Lottie's Y-down space
+    expect(up!.h).toEqual({ a: 0, k: 50 });
+    expect(up!.a).toEqual({ a: 0, k: -90 });
   });
 
   it('adds alpha stops when a stop is translucent', () => {

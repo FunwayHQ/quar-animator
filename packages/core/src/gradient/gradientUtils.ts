@@ -100,6 +100,48 @@ export function normalizeGradientStops(stops: GradientStop[]): GradientStop[] {
 // CPU-side gradient sampling
 // ============================================================================
 
+/** How far from the center a radial gradient's focal point can be, as a share of its radius. */
+export const MAX_FOCAL_DISTANCE = 0.99;
+
+/**
+ * A radial gradient's focal point as drawn: kept inside its circle (as SVG
+ * and Lottie do), so every point of the shape is on exactly one ring.
+ */
+export function clampFocalPoint(center: Vector2, radius: number, focal?: Vector2): Vector2 {
+  if (!focal) return center;
+  const dx = focal.x - center.x;
+  const dy = focal.y - center.y;
+  const distance = Math.sqrt(dx * dx + dy * dy);
+  const max = Math.max(radius, 0.001) * MAX_FOCAL_DISTANCE;
+  if (distance <= max) return focal;
+  return { x: center.x + (dx / distance) * max, y: center.y + (dy / distance) * max };
+}
+
+/**
+ * Where a radial gradient's ramp is at a normalized position: 0 at the focal
+ * point, 1 on the circle. The rings are circles growing from the focal point
+ * to the outer circle (SVG's radial gradient with fx/fy); with no focal point
+ * they're centered, and t is just the distance over the radius. Matches the
+ * gradient shader.
+ */
+export function radialGradientT(
+  p: Vector2,
+  center: Vector2,
+  radius: number,
+  focalPoint?: Vector2
+): number {
+  const r = Math.max(radius, 0.001);
+  const focal = clampFocalPoint(center, r, focalPoint);
+  const dx = p.x - focal.x;
+  const dy = p.y - focal.y;
+  const cx = center.x - focal.x;
+  const cy = center.y - focal.y;
+  // The ring through p: |d - t·c| = t·r, solved for t ≥ 0 (a < 0 inside the circle)
+  const a = cx * cx + cy * cy - r * r;
+  const b = dx * cx + dy * cy;
+  return (b - Math.sqrt(Math.max(b * b - a * (dx * dx + dy * dy), 0))) / a;
+}
+
 /**
  * Sample the gradient color at a given position within the vertex bounding box.
  * Used for thumbnails, tests, and CPU-side rendering.
@@ -142,13 +184,12 @@ export function sampleGradientColor(
       t = (nx - 0.5) * dir.x + (ny - 0.5) * dir.y + 0.5;
     }
   } else if (gradient.type === 'radial') {
-    const cx = gradient.center?.x ?? 0.5;
-    const cy = gradient.center?.y ?? 0.5;
-    let r = gradient.radius ?? 0.5;
-    if (r <= 0) r = 0.001;
-    const dx = nx - cx;
-    const dy = ny - cy;
-    t = Math.sqrt(dx * dx + dy * dy) / r;
+    t = radialGradientT(
+      { x: nx, y: ny },
+      gradient.center ?? { x: 0.5, y: 0.5 },
+      gradient.radius ?? 0.5,
+      gradient.focal
+    );
   } else {
     // conic
     const cx = gradient.center?.x ?? 0.5;

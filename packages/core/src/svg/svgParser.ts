@@ -286,6 +286,11 @@ function collectGradients(
       if (fy !== null) gradient.fy = parseGradientCoord(fy, down);
     }
 
+    // Units given here aren't taken from a gradient this one refers to
+    if (el.hasAttribute('gradientUnits')) {
+      (gradient as ParsedGradient & { _ownUnits?: boolean })._ownUnits = true;
+    }
+
     // Store href for later inheritance resolution
     const href =
       el.getAttribute('href') || el.getAttributeNS('http://www.w3.org/1999/xlink', 'href');
@@ -351,6 +356,13 @@ function resolveGradientInheritance(gradients: Map<string, ParsedGradient>): voi
       gradient.stops = [...parent.stops];
     }
 
+    // Inherit units and transform if not set (else inherited user-space
+    // coordinates would be read as fractions of the shape)
+    if (!(gradient as ParsedGradient & { _ownUnits?: boolean })._ownUnits) {
+      gradient.gradientUnits = parent.gradientUnits;
+    }
+    gradient.gradientTransform ??= parent.gradientTransform;
+
     // Inherit coordinates if not set
     if (gradient.type === 'linear') {
       if (gradient.x1 === undefined) gradient.x1 = parent.x1;
@@ -361,10 +373,15 @@ function resolveGradientInheritance(gradients: Map<string, ParsedGradient>): voi
       if (gradient.cx === undefined) gradient.cx = parent.cx;
       if (gradient.cy === undefined) gradient.cy = parent.cy;
       if (gradient.r === undefined) gradient.r = parent.r;
+      if (gradient.fx === undefined) gradient.fx = parent.fx;
+      if (gradient.fy === undefined) gradient.fy = parent.fy;
     }
 
-    // Clean up internal property
+    // Clean up internal properties
     delete (gradient as ParsedGradient & { _href?: string })._href;
+  }
+  for (const gradient of gradients.values()) {
+    delete (gradient as ParsedGradient & { _ownUnits?: boolean })._ownUnits;
   }
 }
 

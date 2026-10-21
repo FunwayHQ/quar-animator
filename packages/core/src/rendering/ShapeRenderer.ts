@@ -34,6 +34,7 @@ import {
   computeBounds,
   normalizeGradientStops,
   linearGradientFromAngle,
+  clampFocalPoint,
 } from '../gradient/gradientUtils';
 import { SceneGraph } from '../SceneGraph';
 import { mat3 } from '../math';
@@ -167,6 +168,7 @@ uniform vec4 u_bounds;         // minX, minY, maxX, maxY
 uniform float u_angle;         // linear: angle, conic: startAngle
 uniform vec2 u_center;         // radial/conic center (normalized 0-1)
 uniform float u_radius;        // radial radius (normalized)
+uniform vec2 u_focal;          // radial focal point (normalized 0-1, inside the circle)
 uniform float u_opacity;       // fill/stroke opacity multiplier
 uniform vec2 u_gradStart;      // linear gradient start (normalized 0-1)
 uniform vec2 u_gradEnd;        // linear gradient end (normalized 0-1)
@@ -187,7 +189,14 @@ void main() {
     vec2 normDir = gradDir / max(gradLen, 0.001);
     t = dot(npos - u_gradStart, normDir) / max(gradLen, 0.001);
   } else if (u_gradientType == 1) {
-    t = length(npos - u_center) / max(u_radius, 0.001);
+    // The ring through npos grows from the focal point to the circle
+    // (radialGradientT in gradientUtils)
+    vec2 d = npos - u_focal;
+    vec2 c = u_center - u_focal;
+    float r = max(u_radius, 0.001);
+    float a = dot(c, c) - r * r;
+    float b = dot(d, c);
+    t = (b - sqrt(max(b * b - a * dot(d, d), 0.0))) / a;
   } else {
     vec2 d = npos - u_center;
     float a = atan(d.y, d.x) + 3.14159265;
@@ -901,6 +910,7 @@ export class ShapeRenderer {
         'u_angle',
         'u_center',
         'u_radius',
+        'u_focal',
         'u_opacity',
         'u_gradStart',
         'u_gradEnd',
@@ -968,6 +978,7 @@ export class ShapeRenderer {
         'u_angle',
         'u_center',
         'u_radius',
+        'u_focal',
         'u_opacity',
         'u_gradStart',
         'u_gradEnd',
@@ -3035,6 +3046,12 @@ export class ShapeRenderer {
       new Float32Array([gradient.center?.x ?? 0.5, gradient.center?.y ?? 0.5])
     );
     gl.uniform1f(u['u_radius'] ?? null, gradient.radius ?? 0.5);
+    const focal = clampFocalPoint(
+      gradient.center ?? { x: 0.5, y: 0.5 },
+      gradient.radius ?? 0.5,
+      gradient.focal
+    );
+    gl.uniform2fv(u['u_focal'] ?? null, new Float32Array([focal.x, focal.y]));
     gl.uniform1f(u['u_opacity'] ?? null, opacity);
 
     // Linear gradient start/end — fall back to angle-based computation

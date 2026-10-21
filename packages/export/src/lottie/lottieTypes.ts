@@ -248,6 +248,8 @@ export interface LottieShapeGradientFill {
   t: 1 | 2; // 1 = linear, 2 = radial
   s: LottieAnimatedMulti; // Start point
   e: LottieAnimatedMulti; // End point (radial: a point on the radius)
+  h?: LottieAnimatedValue; // Radial highlight (focal point) distance, % of the radius
+  a?: LottieAnimatedValue; // Radial highlight angle from the start→end line, degrees
   g: {
     p: number; // Number of color stops
     k: LottieAnimatedMulti; // [offset, r, g, b]… then optional [offset, alpha]…

@@ -64,3 +64,15 @@
 .handleRadius:hover {
   fill: #9333ea;
 }
+
+.handleFocal {
+  fill: white;
+  stroke: #a855f7;
+  stroke-width: 2;
+  pointer-events: auto;
+  cursor: grab;
+}
+
+.handleFocal:hover {
+  fill: #f3e8ff;
+}

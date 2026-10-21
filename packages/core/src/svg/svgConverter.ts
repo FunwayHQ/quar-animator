@@ -779,12 +779,19 @@ function convertGradient(g: ParsedGradient, frame: GradientFrame): Gradient {
   }
 
   // Quar's radial gradients are circles in normalized bounds: a circle the
-  // map stretches unevenly keeps its area (the focal point isn't supported)
+  // map stretches unevenly keeps its area. The focal point (fx, fy) defaults
+  // to the center, so only one set apart is kept.
   const det = m[0] * m[3] - m[1] * m[2];
-  return {
+  const cx = g.cx ?? 0.5;
+  const cy = g.cy ?? 0.5;
+  const radial: Gradient = {
     type: 'radial',
     stops,
-    center: applyAffine(m, { x: g.cx ?? 0.5, y: g.cy ?? 0.5 }),
+    center: applyAffine(m, { x: cx, y: cy }),
     radius: (g.r ?? 0.5) * Math.sqrt(Math.abs(det)),
   };
+  const fx = g.fx ?? cx;
+  const fy = g.fy ?? cy;
+  if (fx !== cx || fy !== cy) radial.focal = applyAffine(m, { x: fx, y: fy });
+  return radial;
 }

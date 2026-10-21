@@ -4,7 +4,7 @@
 
 import type { Color, Fill, Gradient, PropertyTrack, Timeline } from '@quar/types';
 import { evaluateTrack } from '@quar/animation';
-import { linearGradientFromAngle, normalizeGradientStops } from '@quar/core';
+import { clampFocalPoint, linearGradientFromAngle, normalizeGradientStops } from '@quar/core';
 import type {
   LottieAnimatedColor,
   LottieAnimatedMulti,
@@ -81,6 +81,8 @@ interface GradientGeometry {
   /** [offset, r, g, b]… then [offset, alpha]… */
   stops: number[];
   count: number;
+  /** Radial: the focal point as Lottie's highlight — [% of the radius, degrees]. */
+  highlight?: [number, number];
 }
 
 /**
@@ -105,12 +107,24 @@ function gradientGeometry(gradient: Gradient, bounds: LocalBounds): GradientGeom
     const center = gradient.center ?? { x: 0.5, y: 0.5 };
     const radius = (gradient.radius ?? 0.5) * Math.sqrt(Math.abs(w * h));
     const start = toLocal(center);
+    // The highlight is measured from the start along the start→end line (+X here)
+    const focal = toLocal(clampFocalPoint(center, gradient.radius ?? 0.5, gradient.focal));
+    const fx = focal[0]! - start[0]!;
+    const fy = focal[1]! - start[1]!;
+    const distance = Math.sqrt(fx * fx + fy * fy);
     return {
       type: 2,
       start,
       end: [start[0]! + radius, start[1]!],
       stops: [...colors, ...alphas],
       count: stops.length,
+      highlight:
+        radius > 0
+          ? [
+              Math.min(99, (distance / radius) * 100),
+              distance > 0 ? (Math.atan2(fy, fx) * 180) / Math.PI : 0,
+            ]
+          : [0, 0],
     };
   }
 
@@ -150,6 +164,15 @@ function setPath(target: Record<string, unknown>, path: string[], value: unknown
     current = next as Record<string, unknown>;
   }
   current[path[path.length - 1]!] = value;
+}
+
+/** One number over time, static when it doesn't change. */
+function scalar(values: number[], times: number[]): LottieAnimatedValue {
+  const animated = multi(
+    values.map((value) => [value]),
+    times
+  );
+  return animated.a === 0 ? { a: 0, k: values[0]! } : (animated as LottieAnimatedValue);
 }
 
 function multi(values: number[][], times: number[]): LottieAnimatedMulti {
@@ -225,6 +248,20 @@ export function gradientFillToLottie(
   }
 
   const base = geometries[0]!;
+  // A focal point set apart from the center is Lottie's highlight
+  const highlights = geometries.map((g): [number, number] => g.highlight ?? [0, 0]);
+  const highlight = highlights.some(([length]) => length > 0)
+    ? {
+        h: scalar(
+          highlights.map(([length]) => length),
+          times
+        ),
+        a: scalar(
+          highlights.map(([, angle]) => angle),
+          times
+        ),
+      }
+    : {};
   return {
     ty: 'gf',
     nm: `Gradient Fill ${fillIndex + 1}`,
@@ -238,6 +275,7 @@ export function gradientFillToLottie(
       geometries.map((g) => g.end),
       times
     ),
+    ...highlight,
     g: {
       p: base.count,
       k: multi(

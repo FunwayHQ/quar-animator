@@ -51,6 +51,12 @@ export interface Gradient {
   angle?: number; // For linear and conic (startAngle)
   center?: Vector2; // For radial and conic
   radius?: number; // For radial
+  /**
+   * For radial: where the ramp starts (normalized 0-1 like center, Y up),
+   * off-center for a highlight; drawn at most 0.99 of the radius from the
+   * center. The center when absent.
+   */
+  focal?: Vector2;
   start?: Vector2; // Normalized 0-1, relative to shape local bounds (linear)
   end?: Vector2; // Normalized 0-1, relative to shape local bounds (linear)
 }

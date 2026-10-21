@@ -5,6 +5,8 @@ import {
   sampleGradientColor,
   createDefaultGradient,
   getNodeLocalBounds,
+  radialGradientT,
+  clampFocalPoint,
 } from './gradientUtils';
 import { createPolygonPath, tessellatePathToVertices } from '../path/pathUtils';
 import type { GradientStop, Node } from '@quar/types';
@@ -246,5 +248,47 @@ describe('getNodeLocalBounds', () => {
     const [, , , maxY] = getNodeLocalBounds(path);
     // The anchor-only bbox has maxY = 0; the curve bulges well beyond it.
     expect(maxY).toBeGreaterThan(10);
+  });
+});
+
+describe('radial focal point', () => {
+  const center = { x: 0.5, y: 0.5 };
+
+  it('without one, the ramp is the distance from the center over the radius', () => {
+    expect(radialGradientT({ x: 0.75, y: 0.5 }, center, 0.5)).toBeCloseTo(0.5);
+    expect(radialGradientT({ x: 0.5, y: 0.1 }, center, 0.5)).toBeCloseTo(0.8);
+  });
+
+  it('starts at the focal point and reaches 1 all round the circle', () => {
+    const focal = { x: 0.3, y: 0.6 };
+    expect(radialGradientT(focal, center, 0.5, focal)).toBeCloseTo(0);
+    for (let degrees = 0; degrees < 360; degrees += 45) {
+      const angle = (degrees * Math.PI) / 180;
+      const onCircle = { x: 0.5 + 0.5 * Math.cos(angle), y: 0.5 + 0.5 * Math.sin(angle) };
+      expect(radialGradientT(onCircle, center, 0.5, focal)).toBeCloseTo(1);
+    }
+  });
+
+  it('packs the rings on the side the focal point is moved to', () => {
+    // From a focal point at x=0.3 the circle's edge is 0.3 away on the left
+    // and 0.7 on the right: halfway is 0.15 and 0.35 out
+    const focal = { x: 0.3, y: 0.5 };
+    expect(radialGradientT({ x: 0.15, y: 0.5 }, center, 0.5, focal)).toBeCloseTo(0.5);
+    expect(radialGradientT({ x: 0.65, y: 0.5 }, center, 0.5, focal)).toBeCloseTo(0.5);
+  });
+
+  it('keeps a focal point outside the circle just inside it', () => {
+    const clamped = clampFocalPoint(center, 0.5, { x: 3, y: 0.5 });
+    expect(clamped.x).toBeCloseTo(0.5 + 0.5 * 0.99);
+    expect(clamped.y).toBeCloseTo(0.5);
+    expect(clampFocalPoint(center, 0.5, { x: 0.4, y: 0.4 })).toEqual({ x: 0.4, y: 0.4 });
+    expect(clampFocalPoint(center, 0.5)).toBe(center);
+  });
+
+  it('samples the first stop at the focal point', () => {
+    const verts = new Float32Array([0, 0, 100, 0, 100, 100, 0, 100]);
+    const gradient = { ...createDefaultGradient('radial'), focal: { x: 0.25, y: 0.75 } };
+    const color = sampleGradientColor(gradient, verts, 25, 75);
+    expect(color).toEqual(gradient.stops[0]!.color);
   });
 });

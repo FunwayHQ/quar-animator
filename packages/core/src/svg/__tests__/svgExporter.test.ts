@@ -231,6 +231,30 @@ describe('fillToSvgAttrs', () => {
     expect(defs[0]).toContain('cx="50%"');
     expect(defs[0]).toContain('cy="50%"');
   });
+
+  it('writes a radial focal point as fx/fy, Y down', () => {
+    const defs: string[] = [];
+    fillToSvgAttrs(
+      {
+        type: 'gradient',
+        gradient: {
+          type: 'radial',
+          stops: [
+            { offset: 0, color: makeColor(255, 255, 255) },
+            { offset: 1, color: makeColor(0, 0, 0) },
+          ],
+          center: { x: 0.5, y: 0.5 },
+          radius: 0.5,
+          focal: { x: 0.25, y: 0.75 },
+        },
+        opacity: 1,
+        visible: true,
+      },
+      defs
+    );
+    expect(defs[0]).toContain('fx="25%"');
+    expect(defs[0]).toContain('fy="25%"');
+  });
 });
 
 // ============================================================================
