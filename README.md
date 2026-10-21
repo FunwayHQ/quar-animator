@@ -11,7 +11,7 @@
 
 **Free, open-source, web-native 2D animation platform**
 
-_Filling the gap left by Adobe Animate's discontinuation_
+_A free, actively developed alternative to Adobe Animate, which Adobe now keeps in maintenance mode_
 
 **[▶ Try it live at animator.quar.pro](https://animator.quar.pro)**
 
@@ -259,7 +259,7 @@ We welcome contributions! Please read our contributing guidelines before submitt
 
 ## License
 
-MIT License - see [LICENSE](LICENSE) for details.
+MIT License — Copyright © 2026 Funway Interactive SRL. See [LICENSE](LICENSE) for details.
 
 ---
 
