@@ -247,7 +247,7 @@ export class PolygonTool extends BaseTool {
       sides: this.options.sides,
       radius,
       fills: [this.context.defaultFill],
-      strokes: [this.context.defaultStroke],
+      strokes: [this.context.strokeAt?.({ x: cx, y: cy }) ?? this.context.defaultStroke],
     };
 
     // Add inner radius for star shapes

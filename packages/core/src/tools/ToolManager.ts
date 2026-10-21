@@ -10,6 +10,7 @@ import type {
   Stroke,
   SymbolDefinition,
   PathNode,
+  Vector2,
 } from '@quar/types';
 import { BaseTool, type ToolContext, type TransformType, type PathPointsChange } from './BaseTool';
 import { SelectionTool } from './SelectionTool';
@@ -47,6 +48,7 @@ export interface ToolManagerOptions {
   onTransformStart?: () => void;
   onTransformComplete?: (nodeIds: Set<string>, type: TransformType) => void;
   onPathPointsChange?: (nodeId: string, before: PathNode, change: PathPointsChange) => void;
+  strokeAt?: (point: Vector2) => Stroke;
   getSnapToGrid?: () => boolean;
   getGridSize?: () => number;
   getEnteredGroupId?: () => string | null;
@@ -264,6 +266,7 @@ export class ToolManager {
       onTransformStart: options.onTransformStart,
       onTransformComplete: options.onTransformComplete,
       onPathPointsChange: options.onPathPointsChange,
+      strokeAt: options.strokeAt,
       getSnapToGrid: options.getSnapToGrid,
       getGridSize: options.getGridSize,
       getEnteredGroupId: options.getEnteredGroupId,

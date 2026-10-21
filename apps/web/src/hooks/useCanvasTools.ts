@@ -32,6 +32,7 @@ import type {
 } from '@quar/types';
 import { useEditorStore } from '../stores/editorStore';
 import { remapVertexTracks } from '../stores/vertexTracks';
+import { backdropColorAt, strokeAgainst } from '../components/canvas/backdrop';
 import { toast } from '../components/common/Toast';
 
 // ============================================================================
@@ -437,6 +438,15 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
       },
       onTransformStart,
       onTransformComplete,
+      strokeAt: (point: Vector2) =>
+        strokeAgainst(
+          defaultStrokeRef.current,
+          backdropColorAt(
+            sceneGraphRef.current,
+            point,
+            useEditorStore.getState().documentBackground
+          )
+        ),
       onPathPointsChange: (nodeId: string, before: PathNode, change: PathPointsChange) => {
         // Keep the path's per-point keyframes on their points
         const { timeline } = useEditorStore.getState();

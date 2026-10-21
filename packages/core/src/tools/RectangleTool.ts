@@ -158,7 +158,7 @@ export class RectangleTool extends BaseTool {
       height,
       cornerRadius: [0, 0, 0, 0],
       fills: [this.context.defaultFill],
-      strokes: [this.context.defaultStroke],
+      strokes: [this.context.strokeAt?.({ x: cx, y: cy }) ?? this.context.defaultStroke],
     };
   }
 }

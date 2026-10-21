@@ -182,7 +182,7 @@ export class EllipseTool extends BaseTool {
       radiusX,
       radiusY,
       fills: [this.context.defaultFill],
-      strokes: [this.context.defaultStroke],
+      strokes: [this.context.strokeAt?.({ x: cx, y: cy }) ?? this.context.defaultStroke],
     };
   }
 }

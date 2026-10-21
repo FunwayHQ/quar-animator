@@ -4,6 +4,7 @@
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import { RectangleTool } from './RectangleTool';
+import type { RectangleNode } from '@quar/types';
 import type { ToolContext } from './BaseTool';
 import { createMockToolContext, createMockPointerEvent } from '../test/setup';
 
@@ -35,6 +36,21 @@ describe('RectangleTool', () => {
   // ==========================================================================
 
   describe('rectangle creation', () => {
+    it("outlines the rectangle in the stroke chosen for what's behind its middle", () => {
+      const asked: { x: number; y: number }[] = [];
+      context.strokeAt = (point) => {
+        asked.push(point);
+        return { ...context.defaultStroke, color: { r: 244, g: 244, b: 245, a: 1 } };
+      };
+      tool.onPointerDown(createMockPointerEvent({ worldPosition: { x: 0, y: 0 }, button: 0 }));
+      tool.onPointerMove(createMockPointerEvent({ worldPosition: { x: 100, y: 50 } }));
+      tool.onPointerUp(createMockPointerEvent({ worldPosition: { x: 100, y: 50 }, button: 0 }));
+
+      const [node] = Array.from(context.sceneGraph.getNodes()) as RectangleNode[];
+      expect(asked.at(-1)).toEqual({ x: 50, y: 25 });
+      expect(node!.strokes[0]!.color.r).toBe(244);
+    });
+
     it('should create rectangle on drag', () => {
       const downEvent = createMockPointerEvent({
         worldPosition: { x: 0, y: 0 },

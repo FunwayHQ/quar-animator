@@ -553,6 +553,9 @@ export class PenTool extends BaseTool {
 
     // Create final path node and center geometry for correct rotation pivot
     const node = this.createPathNode(this.currentPath, closed);
+    // Its outline in a color that shows where it's drawn
+    const center = { x: (minX + maxX) / 2, y: (minY + maxY) / 2 };
+    node.strokes = [this.context.strokeAt?.(center) ?? this.context.defaultStroke];
     centerPathNodeGeometry(node);
 
     // Add to scene graph

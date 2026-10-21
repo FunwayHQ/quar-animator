@@ -712,6 +712,27 @@ describe('PenTool', () => {
     });
   });
 
+  it("outlines a finished path in the stroke chosen for what's behind its middle", () => {
+    const asked: { x: number; y: number }[] = [];
+    context.strokeAt = (point) => {
+      asked.push(point);
+      return { ...context.defaultStroke, color: { r: 244, g: 244, b: 245, a: 1 } };
+    };
+    for (const [x, y] of [
+      [0, 0],
+      [100, 0],
+      [100, 60],
+    ] as const) {
+      tool.onPointerDown(createMockPointerEvent({ worldPosition: { x, y }, button: 0 }));
+      tool.onPointerUp(createMockPointerEvent({ worldPosition: { x, y }, buttons: 0 }));
+    }
+    tool.onKeyDown(new KeyboardEvent('keydown', { key: 'Enter' }));
+
+    const [node] = Array.from(context.sceneGraph.getNodes()) as PathNode[];
+    expect(asked).toEqual([{ x: 50, y: 30 }]);
+    expect(node!.strokes[0]!.color.r).toBe(244);
+  });
+
   describe('Shift and Alt', () => {
     it('constrainTo45 keeps how far along the nearest 45° line the pointer is', () => {
       expect(constrainTo45({ x: 0, y: 0 }, { x: 100, y: 8 })).toEqual({ x: 100, y: 0 });

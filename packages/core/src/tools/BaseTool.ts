@@ -45,6 +45,8 @@ export interface ToolContext {
   clearSelection: () => void;
   defaultFill: Fill;
   defaultStroke: Stroke;
+  /** The default stroke, in a color that shows against what's behind `point` */
+  strokeAt?: (point: Vector2) => Stroke;
   generateId: () => string;
   setActiveTool: (tool: ToolType) => void;
   onTransformStart?: () => void;
