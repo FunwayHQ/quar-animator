@@ -4,8 +4,17 @@
 
 import { describe, it, expect } from 'vitest';
 import type { PathPoint } from '@quar/types';
-import { cutContour, joinContours, simplifyContour, transformContour } from './pathEditing';
+import {
+  cutContour,
+  joinContours,
+  simplifyContour,
+  transformContour,
+  posedPointFrames,
+  posedSegmentPoints,
+  nearestPathSegment,
+} from './pathEditing';
 import { bezier } from './bezier';
+import { mat3 } from '../math';
 import { getAbsoluteControlPoints } from './pathUtils';
 
 const corner = (x: number, y: number): PathPoint => ({
@@ -126,5 +135,79 @@ describe('transformContour', () => {
     expect(p!.position.y).toBeCloseTo(10);
     expect(p!.handleOut!.x).toBeCloseTo(0);
     expect(p!.handleOut!.y).toBeCloseTo(5);
+  });
+});
+
+describe('posedPointFrames', () => {
+  const at = (x: number, y: number) => ({
+    position: { x, y },
+    handleIn: null,
+    handleOut: null,
+    type: 'corner' as const,
+  });
+  // Two vertices: one moved by (10, 0), one turned a quarter and moved to (0, 50)
+  const pose = {
+    vertices: new Float32Array([0, 0, 100, 0]),
+    deformed: new Float32Array([10, 0, 0, 150]),
+    linear: new Float32Array([1, 0, 0, 1, 0, 1, -1, 0]),
+  };
+
+  it('maps each point through the skinning of the mesh vertex nearest it', () => {
+    const frames = posedPointFrames([at(0, 0), at(98, 1)], pose)!;
+    expect(frames[0]).toEqual({ a: 1, b: 0, c: 0, d: 1, tx: 10, ty: 0 });
+    // Exactly where the vertex is drawn at the vertex, its skinning around it
+    expect(mat3.transformPoint(frames[1]!, { x: 100, y: 0 })).toEqual({ x: 0, y: 150 });
+    expect(mat3.transformPoint(frames[1]!, { x: 98, y: 1 })).toEqual({ x: -1, y: 148 });
+  });
+
+  it("is null when the pose doesn't fit together", () => {
+    expect(posedPointFrames([at(0, 0)], { ...pose, deformed: new Float32Array(2) })).toBeNull();
+    expect(posedPointFrames([at(0, 0)], { ...pose, linear: new Float32Array(4) })).toBeNull();
+    expect(
+      posedPointFrames([at(0, 0)], {
+        vertices: new Float32Array(0),
+        deformed: new Float32Array(0),
+        linear: new Float32Array(0),
+      })
+    ).toBeNull();
+  });
+});
+
+describe('segments of a bound path', () => {
+  const at = (x: number, y: number) => ({
+    position: { x, y },
+    handleIn: null,
+    handleOut: null,
+    type: 'corner' as const,
+  });
+  // A straight segment (0,0)–(100,0) whose far half the bones lift 50 up
+  const pose = {
+    vertices: new Float32Array([0, 0, 25, 0, 50, 0, 75, 0, 100, 0]),
+    deformed: new Float32Array([0, 0, 25, 0, 50, 0, 75, 50, 100, 50]),
+    linear: new Float32Array(Array.from({ length: 5 }, () => [1, 0, 0, 1]).flat()),
+  };
+
+  it('follows the bend, not the chord between its ends', () => {
+    const points = posedSegmentPoints(at(0, 0), at(100, 0), pose, 4)!;
+    expect(points).toHaveLength(5);
+    expect(points[0]).toEqual({ x: 0, y: 0 });
+    expect(points[4]).toEqual({ x: 100, y: 50 });
+    // Even steps of the curve's parameter: t = 0.75 is at x ≈ 84, lifted with the far half
+    expect(points[3]!.x).toBeCloseTo(84.375);
+    expect(points[3]!.y).toBe(50);
+    expect(points[1]!.y).toBe(0);
+  });
+
+  it('is hit where the bones draw it', () => {
+    const node = {
+      points: [at(0, 0), at(100, 0)],
+      closed: false,
+    } as unknown as Parameters<typeof nearestPathSegment>[0];
+    const identity = { a: 1, b: 0, c: 0, d: 1, tx: 0, ty: 0 };
+    // On the chord, but off the bent segment
+    expect(nearestPathSegment(node, identity, { x: 80, y: 20 }, 5, pose)).toBeNull();
+    const hit = nearestPathSegment(node, identity, { x: 90, y: 50 }, 5, pose)!;
+    expect(hit.segmentIndex).toBe(0);
+    expect(hit.t).toBeGreaterThan(0.75);
   });
 });

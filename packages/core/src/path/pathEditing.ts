@@ -17,6 +17,96 @@ import {
   splitSegment,
 } from './pathUtils';
 
+/** A bound path's skinning as the renderer has it, indexed by mesh vertex. */
+export interface PathSkinPose {
+  /** The mesh's vertices at rest, in the path's local space (x, y pairs) */
+  vertices: Float32Array;
+  /** The same vertices where the bones have them now, in world space */
+  deformed: Float32Array;
+  /** How each vertex's skinning maps local offsets to world: [a, b, c, d] */
+  linear: Float32Array;
+}
+
+/**
+ * Where each of a bound path's points (flat index) is drawn: a map from the
+ * path's local space to world that holds at that point — the skinning of the
+ * mesh vertex nearest it, so the point sits where the bones have it and its
+ * handles turn with it. Edits go back through its inverse. Null when `pose`
+ * doesn't fit together (then the path's world matrix is right).
+ */
+export function posedPointFrames(points: PathPoint[], pose: PathSkinPose): Matrix3[] | null {
+  const { vertices, deformed, linear } = pose;
+  const count = vertices.length / 2;
+  if (count === 0 || deformed.length !== vertices.length || linear.length !== count * 4) {
+    return null;
+  }
+  return points.map(({ position }) => {
+    let nearest = 0;
+    let nearestDistance = Infinity;
+    for (let v = 0; v < count; v++) {
+      const distance =
+        (vertices[v * 2]! - position.x) ** 2 + (vertices[v * 2 + 1]! - position.y) ** 2;
+      if (distance < nearestDistance) {
+        nearest = v;
+        nearestDistance = distance;
+      }
+    }
+    const a = linear[nearest * 4]!;
+    const b = linear[nearest * 4 + 1]!;
+    const c = linear[nearest * 4 + 2]!;
+    const d = linear[nearest * 4 + 3]!;
+    const vx = vertices[nearest * 2]!;
+    const vy = vertices[nearest * 2 + 1]!;
+    // At the vertex, where the bones have it; around it, as its skinning maps
+    return {
+      a,
+      b,
+      c,
+      d,
+      tx: deformed[nearest * 2]! - (a * vx + c * vy),
+      ty: deformed[nearest * 2 + 1]! - (b * vx + d * vy),
+    };
+  });
+}
+
+/** Points sampled along each segment of a bound path, to draw and hit it as its bones bend it. */
+export const POSED_SEGMENT_SAMPLES = 16;
+
+/**
+ * A segment of a bound path as its bones draw it: points along its curve
+ * (at even steps of its parameter, ends included), each mapped as the mesh
+ * nearest it is (posedPointFrames). Null when `pose` doesn't fit together.
+ */
+export function posedSegmentPoints(
+  from: PathPoint,
+  to: PathPoint,
+  pose: PathSkinPose,
+  samples = POSED_SEGMENT_SAMPLES
+): Vector2[] | null {
+  const { cp1, cp2 } = getAbsoluteControlPoints(from, to);
+  const along = Array.from({ length: samples + 1 }, (_, k) =>
+    bezier.cubicPoint(from.position, cp1, cp2, to.position, k / samples)
+  );
+  const frames = posedPointFrames(
+    along.map((position) => ({ position, handleIn: null, handleOut: null, type: 'corner' })),
+    pose
+  );
+  return frames ? along.map((point, k) => mat3.transformPoint(frames[k]!, point)) : null;
+}
+
+/**
+ * Where each point (flat index) is drawn: its posedPointFrames when the node
+ * is bound and `pose` fits, else the node's world matrix.
+ */
+export function pointFrameLookup(
+  points: PathPoint[],
+  world: Matrix3,
+  pose: PathSkinPose | null
+): (index: number) => Matrix3 {
+  const frames = pose ? posedPointFrames(points, pose) : null;
+  return (index) => frames?.[index] ?? world;
+}
+
 /** A path's points as a node stores them: the main contour, then any others. */
 export interface PathContours {
   points: PathPoint[];
@@ -96,15 +186,16 @@ export function deletePathPoints(
 }
 
 /**
- * The segment of the path nearest `worldPos`, within `radius`, measured along
- * its curve (`toWorld` maps the path's local space to the world). Its t is
- * the cubic's parameter, the same in local space.
+ * The segment of the path nearest `worldPos` within `radius`: its index (the
+ * flat index it starts at), how far along it (t, the curve's parameter) and
+ * how far away. A bound path (`pose`) is measured as its bones draw it.
  */
 export function nearestPathSegment(
   node: PathNode,
   toWorld: Matrix3,
   worldPos: Vector2,
-  radius: number
+  radius: number,
+  pose: PathSkinPose | null = null
 ): { segmentIndex: number; t: number; distance: number } | null {
   const allPts = getAllPoints(node);
   const boundaries = getSubpathBoundaries(node);
@@ -119,19 +210,44 @@ export function nearestPathSegment(
       const segmentIndex = start + local;
       const p1 = allPts[segmentIndex]!;
       const p2 = allPts[start + ((local + 1) % contourLength)]!;
-      const { cp1, cp2 } = getAbsoluteControlPoints(p1, p2);
-      // An affine map keeps a bezier a bezier, with the same t along it
-      const nearest = bezier.nearestPoint(
-        world(p1.position),
-        world(cp1),
-        world(cp2),
-        world(p2.position),
-        worldPos
-      );
+      const posed = pose ? posedSegmentPoints(p1, p2, pose) : null;
+      let nearest: { t: number; distance: number };
+      if (posed) {
+        nearest = nearestOnPolyline(posed, worldPos);
+      } else {
+        const { cp1, cp2 } = getAbsoluteControlPoints(p1, p2);
+        // An affine map keeps a bezier a bezier, with the same t along it
+        nearest = bezier.nearestPoint(
+          world(p1.position),
+          world(cp1),
+          world(cp2),
+          world(p2.position),
+          worldPos
+        );
+      }
       if (nearest.distance < radius && (!best || nearest.distance < best.distance)) {
         best = { segmentIndex, t: nearest.t, distance: nearest.distance };
       }
     }
+  }
+  return best;
+}
+
+/** The nearest place on a polyline of evenly spaced samples: t from 0 to 1 along it. */
+function nearestOnPolyline(points: Vector2[], target: Vector2): { t: number; distance: number } {
+  let best = { t: 0, distance: Infinity };
+  const steps = points.length - 1;
+  for (let k = 0; k < steps; k++) {
+    const a = points[k]!;
+    const b = points[k + 1]!;
+    const ab = vec2.subtract(b, a);
+    const lengthSq = vec2.dot(ab, ab);
+    const u =
+      lengthSq > 0
+        ? Math.min(1, Math.max(0, vec2.dot(vec2.subtract(target, a), ab) / lengthSq))
+        : 0;
+    const distance = vec2.distance(target, vec2.lerp(a, b, u));
+    if (distance < best.distance) best = { t: (k + u) / steps, distance };
   }
   return best;
 }

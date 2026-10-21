@@ -2580,6 +2580,15 @@ export function Canvas({
           selectedPoints={directSelectionPoints}
           camera={cameraRef.current}
           sceneGraph={sceneGraph}
+          getSkinPose={(nodeId) => {
+            const renderer = shapeRendererRef.current;
+            const node = sceneGraph.getNode(nodeId);
+            if (!renderer || !node) return null;
+            const vertices = renderer.getTessellatedVertices(nodeId);
+            const deformed = renderer.getDeformedVertices(node, sceneGraph);
+            const linear = renderer.getVertexSkinMatrices(node, sceneGraph);
+            return vertices && deformed && linear ? { vertices, deformed, linear } : null;
+          }}
         />
       )}
       {artboardNodes.length > 0 && (

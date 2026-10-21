@@ -76,4 +76,35 @@ describe('DirectSelectionOverlay placement', () => {
     expect(Number(handle.getAttribute('cx'))).toBeCloseTo(expected.x);
     expect(Number(handle.getAttribute('cy'))).toBeCloseTo(expected.y);
   });
+
+  it('draws a bound path where its bones pose it, handles turned with it', () => {
+    const { node, sceneGraph } = scaledPath();
+    const bound = { ...node, skinData: {} as PathNode['skinData'] };
+    const camera = new Camera();
+    // The bones turn the mesh a quarter and put it at (500, 0): (x, y) → (500 - y, x)
+    const pose = {
+      vertices: new Float32Array([1, 0, 4, 0]),
+      deformed: new Float32Array([500, 1, 500, 4]),
+      linear: new Float32Array([0, 1, -1, 0, 0, 1, -1, 0]),
+    };
+    const { container } = render(
+      <DirectSelectionOverlay
+        pathNodes={[bound]}
+        selectedPoints={[{ nodeId: 'p', pointIndex: 0 }]}
+        camera={camera}
+        sceneGraph={sceneGraph}
+        getSkinPose={() => pose}
+      />
+    );
+
+    const point = camera.worldToScreen({ x: 500, y: 1 });
+    const rects = container.querySelectorAll('rect');
+    expect(Number(rects[0]!.getAttribute('x')) + 4).toBeCloseTo(point.x);
+    expect(Number(rects[0]!.getAttribute('y')) + 4).toBeCloseTo(point.y);
+    // Its handle (1, 1) turned: (-1, 1) from it
+    const handle = camera.worldToScreen({ x: 499, y: 2 });
+    const circle = container.querySelector('circle')!;
+    expect(Number(circle.getAttribute('cx'))).toBeCloseTo(handle.x);
+    expect(Number(circle.getAttribute('cy'))).toBeCloseTo(handle.y);
+  });
 });

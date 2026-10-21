@@ -32,6 +32,8 @@ import {
   deletePathPoints,
   insertPathPoint,
   nearestPathSegment,
+  pointFrameLookup,
+  type PathSkinPose,
   segmentEndIndex,
 } from '../path/pathEditing';
 import { getTextLocalBounds } from '../font/textPlacement';
@@ -158,7 +160,10 @@ export class DirectSelectionTool extends BaseTool {
   private dragMode: DragMode = 'idle';
   private dragStartPoint: Vector2 | null = null;
   private dragHandle: HandleHit | null = null;
+  private dragHandleFrame: Matrix3 | null = null;
   private initialPointPositions: Map<string, Vector2> = new Map();
+  /** Where each dragged point was drawn from at the start (pointFrames) */
+  private initialPointFrames: Map<string, Matrix3> = new Map();
   private hasDragged: boolean = false;
   /** The point pressed to start a point drag, where it was: it decides the snap. */
   private grabbed: { nodeId: string; pointIndex: number; world: Vector2 } | null = null;
@@ -169,6 +174,7 @@ export class DirectSelectionTool extends BaseTool {
     endIndex: number;
     start: PathPoint;
     end: PathPoint;
+    frame: Matrix3;
     shiftKey: boolean;
   } | null = null;
 
@@ -241,6 +247,8 @@ export class DirectSelectionTool extends BaseTool {
       this.context.onTransformStart?.();
       this.dragMode = 'dragging-handle';
       this.dragHandle = handleHit;
+      const handleNode = this.context.sceneGraph.getNode(handleHit.nodeId);
+      this.dragHandleFrame = handleNode ? this.pointFrames(handleNode)(handleHit.pointIndex) : null;
       this.state.isDragging = true;
       this.hasDragged = false;
 
@@ -287,12 +295,17 @@ export class DirectSelectionTool extends BaseTool {
           ? {
               nodeId: pointHit.nodeId,
               pointIndex: pointHit.pointIndex,
-              world: this.getPointWorldPosition(pressed, pressedPoint),
+              world: mat3.transformPoint(
+                this.pointFrames(pressed)(pointHit.pointIndex),
+                pressedPoint.position
+              ),
             }
           : null;
 
       // Store initial positions of all selected points
       this.initialPointPositions.clear();
+      this.initialPointFrames.clear();
+      const framesOf = new Map<string, (index: number) => Matrix3>();
       for (const sel of this.selectedPoints) {
         const node = this.context.sceneGraph.getNode(sel.nodeId);
         if (node) {
@@ -301,6 +314,12 @@ export class DirectSelectionTool extends BaseTool {
           if (allPts[sel.pointIndex]) {
             const key = `${sel.nodeId}:${sel.pointIndex}`;
             this.initialPointPositions.set(key, { ...allPts[sel.pointIndex]!.position });
+            let frames = framesOf.get(node.id);
+            if (!frames) {
+              frames = this.pointFrames(node);
+              framesOf.set(node.id, frames);
+            }
+            this.initialPointFrames.set(key, frames(sel.pointIndex));
           }
         }
       }
@@ -318,6 +337,7 @@ export class DirectSelectionTool extends BaseTool {
         endIndex,
         start: allPts[segmentHit.segmentIndex]!,
         end: allPts[endIndex]!,
+        frame: this.pointFrames(node)(segmentHit.segmentIndex),
         shiftKey: event.shiftKey,
       };
       this.dragMode = 'bending-segment';
@@ -456,7 +476,7 @@ export class DirectSelectionTool extends BaseTool {
           this.context.setSelectedIds([node.id]);
         }
       }
-      const invLinear = mat3.invert(this.getNodeLinearMatrix(node));
+      const invLinear = mat3.invert(linearPart(this.bend.frame));
       const localDelta = invLinear ? mat3.transformPoint(invLinear, worldDelta) : worldDelta;
       const bent = bendSegment(this.bend.start, this.bend.end, this.bend.hit.t, localDelta);
       const allPts = [...getAllPoints(node)];
@@ -495,8 +515,8 @@ export class DirectSelectionTool extends BaseTool {
         if (!initialPos) continue;
 
         // Convert world delta to local delta via inverse linear transform
-        const linearMatrix = this.getNodeLinearMatrix(node);
-        const invLinear = mat3.invert(linearMatrix);
+        const frame = this.initialPointFrames.get(key) ?? this.getNodeWorldMatrix(node);
+        const invLinear = mat3.invert(linearPart(frame));
         const localDelta = invLinear ? mat3.transformPoint(invLinear, worldDelta) : worldDelta;
 
         if (node.type === 'image') {
@@ -535,12 +555,12 @@ export class DirectSelectionTool extends BaseTool {
       const allPts = getAllPoints(node);
       const point = allPts[this.dragHandle.pointIndex]!;
       // Get the point's world position and compute handle offset in world space
-      const pointWorldPos = this.getPointWorldPosition(node, point);
+      const frame = this.dragHandleFrame ?? this.getNodeWorldMatrix(node);
+      const pointWorldPos = mat3.transformPoint(frame, point.position);
       const worldHandleOffset = vec2.subtract(worldPos, pointWorldPos);
 
       // Convert world handle offset to local-space via inverse linear transform
-      const linearMatrix = this.getNodeLinearMatrix(node);
-      const invLinear = mat3.invert(linearMatrix);
+      const invLinear = mat3.invert(linearPart(frame));
       const localHandleOffset = invLinear
         ? mat3.transformPoint(invLinear, worldHandleOffset)
         : worldHandleOffset;
@@ -603,8 +623,10 @@ export class DirectSelectionTool extends BaseTool {
     this.dragMode = 'idle';
     this.dragStartPoint = null;
     this.dragHandle = null;
+    this.dragHandleFrame = null;
     this.grabbed = null;
     this.initialPointPositions.clear();
+    this.initialPointFrames.clear();
     this.state.isDragging = false;
   }
 
@@ -622,9 +644,10 @@ export class DirectSelectionTool extends BaseTool {
     let nearestDistance = 6 / zoom;
     for (const node of [...this.getPathNodes(), ...this.getImageNodes()]) {
       const points = node.type === 'image' ? getImagePoints(node) : getAllPoints(node);
+      const frames = this.pointFrames(node);
       points.forEach((point, pointIndex) => {
         if (this.isPointSelected(node.id, pointIndex)) return; // they're moving too
-        const world = this.getPointWorldPosition(node, point);
+        const world = mat3.transformPoint(frames(pointIndex), point.position);
         const distance = vec2.distance(world, target);
         if (distance < nearestDistance) {
           nearest = world;
@@ -734,12 +757,14 @@ export class DirectSelectionTool extends BaseTool {
     for (const [nodeId, indices] of byNode) {
       const node = this.context.sceneGraph.getNode(nodeId);
       if (!node || (node.type !== 'path' && node.type !== 'image')) continue;
-      const invLinear = mat3.invert(this.getNodeLinearMatrix(node));
-      const localDelta = invLinear ? mat3.transformPoint(invLinear, worldDelta) : worldDelta;
+      const frames = this.pointFrames(node);
       const points = node.type === 'image' ? getImagePoints(node) : [...getAllPoints(node)];
       for (const index of indices) {
         const point = points[index];
-        if (point) points[index] = { ...point, position: vec2.add(point.position, localDelta) };
+        if (!point) continue;
+        const invLinear = mat3.invert(linearPart(frames(index)));
+        const localDelta = invLinear ? mat3.transformPoint(invLinear, worldDelta) : worldDelta;
+        points[index] = { ...point, position: vec2.add(point.position, localDelta) };
       }
       if (node.type === 'image') {
         this.context.sceneGraph.updateNode(nodeId, {
@@ -766,9 +791,10 @@ export class DirectSelectionTool extends BaseTool {
     const paths = this.getPathNodes();
     for (const node of paths) {
       const allPts = getAllPoints(node);
+      const frames = this.pointFrames(node);
       for (let i = 0; i < allPts.length; i++) {
         const point = allPts[i]!;
-        const pointWorldPos = this.getPointWorldPosition(node, point);
+        const pointWorldPos = mat3.transformPoint(frames(i), point.position);
         if (vec2.distance(worldPos, pointWorldPos) < hitRadius) {
           return { type: 'point', nodeId: node.id, pointIndex: i };
         }
@@ -779,8 +805,9 @@ export class DirectSelectionTool extends BaseTool {
     const images = this.getImageNodes();
     for (const node of images) {
       const pts = getImagePoints(node);
+      const frames = this.pointFrames(node);
       for (let i = 0; i < pts.length; i++) {
-        const pointWorldPos = this.getPointWorldPosition(node as unknown as PathNode, pts[i]!);
+        const pointWorldPos = mat3.transformPoint(frames(i), pts[i]!.position);
         if (vec2.distance(worldPos, pointWorldPos) < hitRadius) {
           return { type: 'point', nodeId: node.id, pointIndex: i };
         }
@@ -801,8 +828,9 @@ export class DirectSelectionTool extends BaseTool {
       const point = getAllPoints(node)[sel.pointIndex];
       if (!point) continue;
 
-      const pointWorldPos = this.getPointWorldPosition(node, point);
-      const linearMatrix = this.getNodeLinearMatrix(node);
+      const frame = this.pointFrames(node)(sel.pointIndex);
+      const pointWorldPos = mat3.transformPoint(frame, point.position);
+      const linearMatrix = linearPart(frame);
 
       // Test handle in
       if (point.handleIn) {
@@ -831,7 +859,13 @@ export class DirectSelectionTool extends BaseTool {
     const hitRadius = 8 / this.context.camera.zoom;
     let best: (SegmentHit & { distance: number }) | null = null;
     for (const node of this.getPathNodes()) {
-      const nearest = nearestPathSegment(node, this.getNodeWorldMatrix(node), worldPos, hitRadius);
+      const nearest = nearestPathSegment(
+        node,
+        this.getNodeWorldMatrix(node),
+        worldPos,
+        hitRadius,
+        this.skinPose(node)
+      );
       if (nearest && (!best || nearest.distance < best.distance)) {
         best = { type: 'segment', nodeId: node.id, ...nearest };
       }
@@ -889,8 +923,9 @@ export class DirectSelectionTool extends BaseTool {
     const layers = [...this.getPathNodes(), ...this.getImageNodes()];
     for (const node of layers) {
       const points = node.type === 'image' ? getImagePoints(node) : getAllPoints(node);
+      const frames = this.pointFrames(node);
       points.forEach((point, pointIndex) => {
-        const world = this.getPointWorldPosition(node, point);
+        const world = mat3.transformPoint(frames(pointIndex), point.position);
         if (
           rect.contains(area, world) &&
           !picked.some((p) => p.nodeId === node.id && p.pointIndex === pointIndex)
@@ -1257,17 +1292,25 @@ export class DirectSelectionTool extends BaseTool {
   }
 
   /**
-   * Get the linear part of the world matrix (rotation + scale, no translation).
-   * Used for transforming direction vectors / offsets (handles).
+   * Where each of the node's points is drawn, by flat index: its world
+   * matrix — or, for a path or image its bones bend, each point's own map
+   * (posedPointFrames), so points sit where the canvas shows them and edits
+   * made there go back to where they are at rest.
    */
-  private getNodeLinearMatrix(node: PathNode | Node) {
-    const m = this.getNodeWorldMatrix(node);
-    return { a: m.a, b: m.b, c: m.c, d: m.d, tx: 0, ty: 0 };
+  private pointFrames(node: Node): (index: number) => Matrix3 {
+    const world = this.getNodeWorldMatrix(node);
+    if (node.type !== 'path' && node.type !== 'image') return () => world;
+    const points = node.type === 'image' ? getImagePoints(node) : getAllPoints(node);
+    return pointFrameLookup(points, world, this.skinPose(node));
   }
 
-  private getPointWorldPosition(node: PathNode | Node, point: PathPoint): Vector2 {
-    const worldMatrix = this.getNodeWorldMatrix(node);
-    return mat3.transformPoint(worldMatrix, point.position);
+  /** A bound node's skinning now, as the renderer has it (null when it isn't bound). */
+  private skinPose(node: Node): PathSkinPose | null {
+    if ((node.type !== 'path' && node.type !== 'image') || !node.skinData) return null;
+    const vertices = this.context.getTessellatedVertices?.(node.id);
+    const deformed = this.context.getDeformedVertices?.(node.id);
+    const linear = this.context.getVertexSkinMatrices?.(node.id);
+    return vertices && deformed && linear ? { vertices, deformed, linear } : null;
   }
 
   // --------------------------------------------------------------------------
@@ -1329,4 +1372,9 @@ export class DirectSelectionTool extends BaseTool {
     this.currentHover = null;
     this.state.isDragging = false;
   }
+}
+
+/** A matrix's linear part (rotation, scale, skew): how it maps offsets such as handles. */
+function linearPart(m: Matrix3): Matrix3 {
+  return { a: m.a, b: m.b, c: m.c, d: m.d, tx: 0, ty: 0 };
 }

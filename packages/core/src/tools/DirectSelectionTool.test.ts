@@ -2422,6 +2422,72 @@ describe('DirectSelectionTool', () => {
     });
   });
 
+  describe('a bound path its bones pose', () => {
+    // The bones turn the path a quarter turn and move it to x = 500:
+    // (x, y) at rest is drawn at (500 - y, x)
+    let path: PathNode;
+    beforeEach(() => {
+      path = createTestPath(context, [
+        { ...createPoint(0, 0), handleOut: { x: 20, y: 0 } },
+        createPoint(100, 0),
+      ]);
+      context.sceneGraph.updateNode(path.id, { skinData: {} as PathNode['skinData'] });
+      const rest = () => {
+        const node = context.sceneGraph.getNode(path.id) as PathNode;
+        return node.points.flatMap((p) => [p.position.x, p.position.y]);
+      };
+      context.getTessellatedVertices = () => new Float32Array(rest());
+      context.getDeformedVertices = () => {
+        const xy = rest();
+        return new Float32Array(xy.flatMap((v, i) => (i % 2 === 0 ? [500 - xy[i + 1]!, v] : [])));
+      };
+      context.getVertexSkinMatrices = () =>
+        new Float32Array(path.points.flatMap(() => [0, 1, -1, 0]));
+    });
+    const down = (x: number, y: number) =>
+      tool.onPointerDown(createMockPointerEvent({ worldPosition: { x, y }, button: 0 }));
+    const move = (x: number, y: number) =>
+      tool.onPointerMove(createMockPointerEvent({ worldPosition: { x, y } }));
+    const up = (x: number, y: number) =>
+      tool.onPointerUp(createMockPointerEvent({ worldPosition: { x, y } }));
+    const node = () => context.sceneGraph.getNode(path.id) as PathNode;
+
+    it('picks a point where the bones draw it, not where it is at rest', () => {
+      down(100, 0);
+      up(100, 0);
+      expect(tool.getSelectedPoints()).toEqual([]);
+      down(500, 100);
+      up(500, 100);
+      expect(tool.getSelectedPoints()).toEqual([{ nodeId: path.id, pointIndex: 1 }]);
+    });
+
+    it('moves a dragged point so the bones draw it under the pointer', () => {
+      down(500, 100);
+      move(490, 100);
+      up(490, 100);
+      // Drawn at (500 - 10, 100): 10 up at rest
+      expect(node().points[1]!.position).toEqual({ x: 100, y: 10 });
+    });
+
+    it('drags a handle where the bones turn it', () => {
+      down(500, 0);
+      up(500, 0);
+      // Its handle (20, 0) is drawn turned: at (500, 20)
+      down(500, 20);
+      move(490, 20);
+      up(490, 20);
+      expect(node().points[0]!.handleOut).toEqual({ x: 20, y: 10 });
+    });
+
+    it('nudges points by what the arrow keys mean on screen', () => {
+      down(500, 100);
+      up(500, 100);
+      tool.onKeyDown(new KeyboardEvent('keydown', { key: 'ArrowLeft' }));
+      // One to the left on screen is one up at rest
+      expect(node().points[1]!.position).toEqual({ x: 100, y: 1 });
+    });
+  });
+
   describe('snapping a dragged point', () => {
     const dragPoint = (from: { x: number; y: number }, to: { x: number; y: number }) => {
       tool.onPointerDown(createMockPointerEvent({ worldPosition: from, button: 0 }));

@@ -3,7 +3,14 @@
  */
 
 import type { PathNode, PathPoint, Vector2, Matrix3, ImageNode } from '@quar/types';
-import { type Camera, type SceneGraph, mat3 } from '@quar/core';
+import {
+  type Camera,
+  type PathSkinPose,
+  type SceneGraph,
+  mat3,
+  pointFrameLookup,
+  posedSegmentPoints,
+} from '@quar/core';
 import styles from './DirectSelectionOverlay.module.css';
 
 // ============================================================================
@@ -16,6 +23,8 @@ export interface DirectSelectionOverlayProps {
   selectedPoints: Array<{ nodeId: string; pointIndex: number }>;
   camera: Camera | null;
   sceneGraph: SceneGraph | null;
+  /** A bound layer's skinning now, so its points show where its bones draw them */
+  getSkinPose?: (nodeId: string) => PathSkinPose | null;
 }
 
 // ============================================================================
@@ -74,15 +83,22 @@ function getNodeWorldMatrix(node: PathNode, sceneGraph: SceneGraph | null): Matr
   return mat3.compose(node.transform.position, node.transform.rotation, node.transform.scale);
 }
 
-/**
- * Get the world position of a path point (applying full transform: position + rotation + scale).
- */
-function getPointWorldPos(
-  node: PathNode,
-  point: PathPoint,
-  sceneGraph: SceneGraph | null
-): Vector2 {
-  return mat3.transformPoint(getNodeWorldMatrix(node, sceneGraph), point.position);
+/** A bound layer's skinning now (null when it isn't bound). */
+function skinPoseOf(
+  node: PathNode | ImageNode,
+  getSkinPose: DirectSelectionOverlayProps['getSkinPose']
+): PathSkinPose | null {
+  return node.skinData ? (getSkinPose?.(node.id) ?? null) : null;
+}
+
+/** Where each point (flat index) is drawn: the node's world matrix, or its bones' posing. */
+function pointFramesOf(
+  node: PathNode | ImageNode,
+  points: PathPoint[],
+  sceneGraph: SceneGraph | null,
+  pose: PathSkinPose | null
+): (index: number) => Matrix3 {
+  return pointFrameLookup(points, getNodeWorldMatrix(node as PathNode, sceneGraph), pose);
 }
 
 /**
@@ -91,14 +107,13 @@ function getPointWorldPos(
  * camera decides how it maps (zoom, flip and any rotation).
  */
 function handleScreenPos(
-  node: PathNode,
+  frame: Matrix3,
   point: PathPoint,
   handle: Vector2,
-  toScreen: (pos: Vector2) => Vector2,
-  sceneGraph: SceneGraph | null
+  toScreen: (pos: Vector2) => Vector2
 ): Vector2 {
   return toScreen(
-    mat3.transformPoint(getNodeWorldMatrix(node, sceneGraph), {
+    mat3.transformPoint(frame, {
       x: point.position.x + handle.x,
       y: point.position.y + handle.y,
     })
@@ -152,6 +167,7 @@ export function DirectSelectionOverlay({
   selectedPoints,
   camera,
   sceneGraph,
+  getSkinPose,
 }: DirectSelectionOverlayProps) {
   if (!camera || (pathNodes.length === 0 && (!imageNodes || imageNodes.length === 0))) return null;
 
@@ -162,6 +178,9 @@ export function DirectSelectionOverlay({
       {pathNodes.map((node) => {
         const allPts = getAllPoints(node);
         const contours = getContours(node);
+        const starts = getSubpathBoundaries(node);
+        const pose = skinPoseOf(node, getSkinPose);
+        const frame = pointFramesOf(node, allPts, sceneGraph, pose);
 
         return (
           <g key={node.id}>
@@ -171,7 +190,7 @@ export function DirectSelectionOverlay({
                 <path
                   key={`outline-${ci}`}
                   className={styles.pathOutline}
-                  d={buildContourD(node, contour, node.closed, toScreen, sceneGraph)}
+                  d={buildContourD(contour, starts[ci]!, node.closed, toScreen, frame, pose)}
                 />
               ) : null
             )}
@@ -181,18 +200,17 @@ export function DirectSelectionOverlay({
               const selected = isPointSelected(selectedPoints, node.id, index);
               if (!selected) return null;
 
-              const screenPos = toScreen(getPointWorldPos(node, point, sceneGraph));
+              const screenPos = toScreen(mat3.transformPoint(frame(index), point.position));
 
               return (
                 <g key={`handles-${index}`}>
                   {point.handleIn &&
                     (() => {
                       const { x: hx, y: hy } = handleScreenPos(
-                        node,
+                        frame(index),
                         point,
                         point.handleIn,
-                        toScreen,
-                        sceneGraph
+                        toScreen
                       );
                       return (
                         <>
@@ -210,11 +228,10 @@ export function DirectSelectionOverlay({
                   {point.handleOut &&
                     (() => {
                       const { x: hx, y: hy } = handleScreenPos(
-                        node,
+                        frame(index),
                         point,
                         point.handleOut,
-                        toScreen,
-                        sceneGraph
+                        toScreen
                       );
                       return (
                         <>
@@ -236,7 +253,7 @@ export function DirectSelectionOverlay({
             {/* Control points (rendered on top of handles) */}
             {allPts.map((point: PathPoint, index: number) => {
               const selected = isPointSelected(selectedPoints, node.id, index);
-              const screenPos = toScreen(getPointWorldPos(node, point, sceneGraph));
+              const screenPos = toScreen(mat3.transformPoint(frame(index), point.position));
 
               return (
                 <rect
@@ -257,18 +274,18 @@ export function DirectSelectionOverlay({
       {/* Image node vertices — 4 corner control points */}
       {imageNodes?.map((node) => {
         const pts = getImagePoints(node);
-        const worldMatrix = getNodeWorldMatrix(node as unknown as PathNode, sceneGraph);
+        const frame = pointFramesOf(node, pts, sceneGraph, skinPoseOf(node, getSkinPose));
 
         return (
           <g key={node.id}>
             {/* Quad outline */}
             {(() => {
-              const transformPt = (p: PathPoint) =>
-                toScreen(mat3.transformPoint(worldMatrix, p.position));
-              const bl = transformPt(pts[0]!);
-              const br = transformPt(pts[1]!);
-              const tl = transformPt(pts[2]!);
-              const tr = transformPt(pts[3]!);
+              const transformPt = (index: number) =>
+                toScreen(mat3.transformPoint(frame(index), pts[index]!.position));
+              const bl = transformPt(0);
+              const br = transformPt(1);
+              const tl = transformPt(2);
+              const tr = transformPt(3);
               return (
                 <path
                   className={styles.pathOutline}
@@ -280,7 +297,7 @@ export function DirectSelectionOverlay({
             {/* Corner control points */}
             {pts.map((point, index) => {
               const selected = isPointSelected(selectedPoints, node.id, index);
-              const screenPos = toScreen(mat3.transformPoint(worldMatrix, point.position));
+              const screenPos = toScreen(mat3.transformPoint(frame(index), point.position));
               return (
                 <rect
                   key={`img-point-${index}`}
@@ -302,61 +319,52 @@ export function DirectSelectionOverlay({
 
 /**
  * Build SVG path d attribute for a single contour (for visual reference).
+ * `start` is its first point's flat index, for where each point is drawn.
  */
 function buildContourD(
-  node: PathNode,
   contour: PathPoint[],
+  start: number,
   closed: boolean,
   toScreen: (pos: Vector2) => Vector2,
-  sceneGraph: SceneGraph | null
+  frame: (index: number) => Matrix3,
+  pose: PathSkinPose | null
 ): string {
   if (contour.length < 2) return '';
 
-  const parts: string[] = [];
-
-  for (let i = 0; i < contour.length; i++) {
-    const p = contour[i]!;
-    const screen = toScreen(getPointWorldPos(node, p, sceneGraph));
-
-    if (i === 0) {
-      parts.push(`M ${screen.x} ${screen.y}`);
-    } else {
-      const prev = contour[i - 1]!;
-      const prevScreen = toScreen(getPointWorldPos(node, prev, sceneGraph));
-
-      if (prev.handleOut || p.handleIn) {
-        // Cubic bezier — the control points go through the same mapping
-        const cp1 = prev.handleOut
-          ? handleScreenPos(node, prev, prev.handleOut, toScreen, sceneGraph)
-          : prevScreen;
-        const cp2 = p.handleIn
-          ? handleScreenPos(node, p, p.handleIn, toScreen, sceneGraph)
-          : screen;
-        parts.push(`C ${cp1.x} ${cp1.y} ${cp2.x} ${cp2.y} ${screen.x} ${screen.y}`);
-      } else {
-        parts.push(`L ${screen.x} ${screen.y}`);
-      }
+  const screenOf = (i: number) =>
+    toScreen(mat3.transformPoint(frame(start + i), contour[i]!.position));
+  /** The curve from point i to point j, or a line when neither has a handle. */
+  const segment = (i: number, j: number, end: Vector2): string => {
+    const from = contour[i]!;
+    const to = contour[j]!;
+    // A bound path's segments bend with its bones: drawn through points along them
+    const posed = pose ? posedSegmentPoints(from, to, pose) : null;
+    if (posed) {
+      return posed
+        .slice(1)
+        .map((point) => toScreen(point))
+        .map(({ x, y }) => `L ${x} ${y}`)
+        .join(' ');
     }
-  }
+    if (!from.handleOut && !to.handleIn) return `L ${end.x} ${end.y}`;
+    // Cubic bezier — the control points go through the same mapping
+    const cp1 = from.handleOut
+      ? handleScreenPos(frame(start + i), from, from.handleOut, toScreen)
+      : screenOf(i);
+    const cp2 = to.handleIn ? handleScreenPos(frame(start + j), to, to.handleIn, toScreen) : end;
+    return `C ${cp1.x} ${cp1.y} ${cp2.x} ${cp2.y} ${end.x} ${end.y}`;
+  };
+
+  const first = screenOf(0);
+  const parts: string[] = [`M ${first.x} ${first.y}`];
+  for (let i = 1; i < contour.length; i++) parts.push(segment(i - 1, i, screenOf(i)));
 
   // Close path if needed
   if (closed && contour.length >= 3) {
-    const first = contour[0]!;
-    const last = contour[contour.length - 1]!;
-    const firstScreen = toScreen(getPointWorldPos(node, first, sceneGraph));
-    const lastScreen = toScreen(getPointWorldPos(node, last, sceneGraph));
-
-    if (last.handleOut || first.handleIn) {
-      const cp1 = last.handleOut
-        ? handleScreenPos(node, last, last.handleOut, toScreen, sceneGraph)
-        : lastScreen;
-      const cp2 = first.handleIn
-        ? handleScreenPos(node, first, first.handleIn, toScreen, sceneGraph)
-        : firstScreen;
-      parts.push(`C ${cp1.x} ${cp1.y} ${cp2.x} ${cp2.y} ${firstScreen.x} ${firstScreen.y}`);
-    } else {
-      parts.push('Z');
-    }
+    const last = contour.length - 1;
+    // A straight closing segment is a Z, unless the bones bend it
+    const curved = pose || contour[last]!.handleOut || contour[0]!.handleIn;
+    parts.push(curved ? segment(last, 0, first) : 'Z');
   }
 
   return parts.join(' ');
