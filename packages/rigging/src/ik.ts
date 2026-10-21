@@ -553,7 +553,8 @@ export function applyIKResult(result: IKSolveResult, sceneGraph: IKSceneGraph): 
     if (!node || node.type !== 'bone') return;
     const bone = node;
 
-    let rotation = result.rotations.get(boneId)!;
+    let rotation = result.rotations.get(boneId);
+    if (rotation === undefined) return;
     const solvedNext = result.positions?.[i + 1];
     if (solvedNext) {
       const aimed = aimRotation(bone, boneIds[i + 1], solvedNext, sceneGraph);

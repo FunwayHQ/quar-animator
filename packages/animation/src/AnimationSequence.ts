@@ -287,7 +287,8 @@ export function moveSequenceStep(
   if (fromIndex < 0 || fromIndex >= steps.length) return sequence;
   const target = Math.max(0, Math.min(steps.length - 1, toIndex));
   const [moved] = steps.splice(fromIndex, 1);
-  steps.splice(target, 0, moved!);
+  if (!moved) return sequence;
+  steps.splice(target, 0, moved);
   return normalizeSequence({ ...sequence, steps });
 }
 

@@ -100,7 +100,7 @@ function timing(ctx: LayerBuildContext) {
 
 /** Convert Y-up vertices to an image's own space (top-left origin, Y-down). */
 function toImageSpace(vertices: LottieShapeVertices, height: number): LottieShapeVertices {
-  return { ...vertices, v: vertices.v.map(([x, y]) => [x!, y! + height]) };
+  return { ...vertices, v: vertices.v.map(([x = 0, y = 0]) => [x, y + height]) };
 }
 
 function imageLayer(
@@ -251,7 +251,10 @@ function precompLayer(node: Node, ind: number, frame: Frame, ctx: LayerBuildCont
         inv: false,
         pt: {
           a: 0,
-          k: { ...rect, v: rect.v.map(([x, y]) => [x! + inner.originX, y! + inner.originY]) },
+          k: {
+            ...rect,
+            v: rect.v.map(([x = 0, y = 0]) => [x + inner.originX, y + inner.originY]),
+          },
         },
         o: { a: 0, k: 100 },
       },

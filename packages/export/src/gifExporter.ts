@@ -220,7 +220,8 @@ export async function exportGif(
     let pendingDelay = 0;
     let writtenFrames = 0;
     const writePending = (dispose: number) => {
-      gif.writeFrame(pending!, width, height, {
+      if (!pending) return;
+      gif.writeFrame(pending, width, height, {
         ...(writtenFrames === 0 ? { palette, repeat: 0 } : {}),
         delay: Math.min(65535, pendingDelay) * 10,
         transparent: true,

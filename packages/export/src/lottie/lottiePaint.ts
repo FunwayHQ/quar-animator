@@ -31,7 +31,7 @@ export function colorTrackToLottie(
   fallback: Color | undefined
 ): LottieAnimatedColor {
   const kfs = track?.keyframes ?? [];
-  if (kfs.length === 0) return { a: 0, k: fallback ? rgba(fallback) : [0, 0, 0, 1] };
+  if (!track || kfs.length === 0) return { a: 0, k: fallback ? rgba(fallback) : [0, 0, 0, 1] };
   if (kfs.length === 1) return { a: 0, k: rgba(kfs[0]!.value) };
 
   // Bounce/elastic can't be one bezier: sample every frame instead
@@ -40,10 +40,10 @@ export function colorTrackToLottie(
     const first = Math.floor(kfs[0]!.time);
     const last = Math.ceil(kfs[kfs.length - 1]!.time);
     for (let frame = first; frame <= last; frame++) {
-      const value = rgba(evaluateTrack(track!, frame) as Color);
+      const value = rgba(evaluateTrack(track, frame) as Color);
       const keyframe: LottieColorKeyframe = { t: frame, s: value };
       if (frame < last) {
-        keyframe.e = rgba(evaluateTrack(track!, frame + 1) as Color);
+        keyframe.e = rgba(evaluateTrack(track, frame + 1) as Color);
         Object.assign(keyframe, LINEAR);
       }
       keyframes.push(keyframe);

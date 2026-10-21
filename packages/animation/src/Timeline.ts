@@ -213,12 +213,9 @@ export function interpolateValue<T>(
 ): T | undefined {
   const [before, after] = findSurroundingKeyframes(track, time);
 
-  if (!before && !after) {
-    return undefined;
-  }
-
+  // Before the first keyframe (or none at all)
   if (!before) {
-    return after!.value;
+    return after?.value;
   }
 
   if (!after || before.time === after.time) {

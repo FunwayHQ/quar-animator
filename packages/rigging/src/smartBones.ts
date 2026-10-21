@@ -158,13 +158,12 @@ export function evaluateSmartBoneAction(
 
     let offsets: MorphVertexOffset[];
 
-    if (!lower && !upper) {
-      continue;
-    } else if (!lower) {
+    if (!lower) {
+      if (!upper) continue;
       // Before the first target: ramp from the rest pose (zero displacement) up
       // to the first target as the driver moves from rangeMin to it
-      const t = upper!.at > 0 ? current / upper!.at : 1;
-      offsets = interpolateMorphOffsets([], upper!.target.offsets[nodeId] ?? [], t);
+      const t = upper.at > 0 ? current / upper.at : 1;
+      offsets = interpolateMorphOffsets([], upper.target.offsets[nodeId] ?? [], t);
     } else if (!upper || lower === upper) {
       // At or past a single target
       offsets = (lower.target.offsets[nodeId] ?? []).map((o) => ({ ...o }));

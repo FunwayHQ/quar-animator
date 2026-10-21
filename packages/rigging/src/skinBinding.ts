@@ -341,7 +341,7 @@ export function computeAutoWeights(
       if (!next || share > next.share) next = { bone: child, share };
     }
     if (next && next.share > 0) {
-      const ownWeight = weights.get(own.id)!;
+      const ownWeight = weights.get(own.id) ?? 0;
       const share = Math.min(next.share, ownWeight);
       weights.set(own.id, ownWeight - share);
       weights.set(next.bone.id, (weights.get(next.bone.id) ?? 0) + share);

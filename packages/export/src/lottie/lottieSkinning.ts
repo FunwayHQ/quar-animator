@@ -99,18 +99,21 @@ export function bakeSkinnedOutlines(
       );
     }
 
-    const outlines = new Map(shapeIds.map((id) => [id, boundOutline(posed.getNode(id)!)!]));
+    // Each bound shape, posed, with its outline
+    const shapes = shapeIds.flatMap((id) => {
+      const node = posed.getNode(id);
+      const outline = node && boundOutline(node);
+      return node && outline ? [{ nodeId: id, node, outline }] : [];
+    });
     const morphs = rig?.smartBoneActions?.length
       ? evaluateSmartBones(
           rig.smartBoneActions,
           posed,
-          new Map(shapeIds.map((id) => [id, outlines.get(id)!.vertices.length / 2]))
+          new Map(shapes.map(({ nodeId, outline }) => [nodeId, outline.vertices.length / 2]))
         )
       : undefined;
 
-    for (const nodeId of shapeIds) {
-      const node = posed.getNode(nodeId)!;
-      const outline = outlines.get(nodeId)!;
+    for (const { nodeId, node, outline } of shapes) {
       // Weights for the outline (refitted only when the outline changes)
       const known = fitted.get(nodeId);
       const sameOutline =
@@ -141,7 +144,7 @@ export function bakeSkinnedOutlines(
         v.push([round(p.x), round(-p.y)]);
       }
       const zero = v.map(() => [0, 0]);
-      series.get(nodeId)!.push({ v, i: zero, o: zero, c: outline.closed });
+      series.get(nodeId)?.push({ v, i: zero, o: zero, c: outline.closed });
     }
   }
 
