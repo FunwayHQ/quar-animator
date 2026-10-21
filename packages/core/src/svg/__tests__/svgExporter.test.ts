@@ -987,3 +987,90 @@ describe('exportNodesToSvg', () => {
     expect(svg).toContain('<ellipse');
   });
 });
+
+describe('exportNodesToSvg: masks, boolean groups and clipping artboards', () => {
+  const square = (id: string, x: number, size = 100): RectangleNode => ({
+    ...makeBaseNodeFields(id, 'rectangle', {
+      transform: makeTransform({ position: { x, y: 0 } }),
+    }),
+    type: 'rectangle',
+    width: size,
+    height: size,
+    cornerRadius: [0, 0, 0, 0],
+    fills: [makeSolidFill()],
+    strokes: [],
+  });
+  const group = (id: string, extra: Partial<GroupNode>): GroupNode => ({
+    ...makeBaseNodeFields(id, 'group'),
+    type: 'group',
+    ...extra,
+  });
+
+  it('draws a boolean group as the shape its operation makes, in its own paint', () => {
+    const g = group('bool', {
+      booleanOp: 'subtract',
+      fills: [makeSolidFill(makeColor(0, 128, 255))],
+    });
+    sceneGraph.addNode(g);
+    sceneGraph.addNode(square('a', 0, 100), 'bool');
+    // Inside it (squares sit on their bottom-left corner here)
+    sceneGraph.addNode(
+      { ...square('b', 30, 40), transform: makeTransform({ position: { x: 30, y: 30 } }) },
+      'bool'
+    );
+
+    const svg = exportNodesToSvg([g], sceneGraph);
+    // One path, a square with a square hole: two rings
+    expect(svg.match(/<path /g)).toHaveLength(1);
+    expect(svg.match(/Z/g)).toHaveLength(2);
+    expect(svg).toContain('fill-rule="evenodd"');
+    expect(svg).toContain('fill="#0080ff"');
+    expect(svg).not.toContain('<rect');
+  });
+
+  it('clips a mask group by its mask shape, which it doesn’t draw', () => {
+    const g = group('masked', { maskNodeId: 'mask', maskMode: 'clip' });
+    sceneGraph.addNode(g);
+    sceneGraph.addNode(square('mask', 0, 50), 'masked');
+    sceneGraph.addNode(square('art', 20, 100), 'masked');
+
+    const svg = exportNodesToSvg([g], sceneGraph);
+    expect(svg).toMatch(/<clipPath id="(mask_\d+)"><rect[^>]*\/><\/clipPath>/);
+    expect(svg).toMatch(/<g clip-path="url\(#mask_\d+\)"><rect/);
+    // The mask shape is in the clip only
+    expect(svg.match(/<rect /g)).toHaveLength(2);
+  });
+
+  it('masks by alpha or luminance with an SVG mask', () => {
+    for (const mode of ['alpha', 'luminance'] as const) {
+      const fresh = new SceneGraph();
+      const g = group('masked', { maskNodeId: 'mask', maskMode: mode });
+      fresh.addNode(g);
+      fresh.addNode(square('mask', 0, 50), 'masked');
+      fresh.addNode(square('art', 20, 100), 'masked');
+      const svg = exportNodesToSvg([g], fresh);
+      expect(svg).toContain(`mask-type="${mode}"`);
+      expect(svg).toMatch(/<g mask="url\(#mask_\d+\)">/);
+    }
+  });
+
+  it('clips an artboard’s contents to it', () => {
+    const artboard: ArtboardNode = {
+      ...makeBaseNodeFields('board', 'artboard'),
+      type: 'artboard',
+      width: 200,
+      height: 100,
+      fills: [],
+      clipContent: true,
+    };
+    sceneGraph.addNode(artboard);
+    sceneGraph.addNode(square('spill', 150, 100), 'board');
+    const svg = exportNodesToSvg([artboard], sceneGraph);
+    expect(svg).toMatch(
+      /<clipPath id="artboard_\d+"><rect x="-?0" y="-?0" width="200" height="100"\/>/
+    );
+    expect(svg).toMatch(/<g clip-path="url\(#artboard_\d+\)">/);
+    // Framed by the artboard, not by what spills out of it
+    expect(svg).toContain('viewBox="0 0 200 100"');
+  });
+});

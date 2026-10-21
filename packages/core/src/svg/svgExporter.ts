@@ -32,6 +32,8 @@ import {
 } from '../path/pathUtils';
 import { resolveSymbolInstance, getResolvedRootNodes } from '../symbols/symbolResolver';
 import { SceneGraph } from '../SceneGraph';
+import { mat3 } from '../math';
+import { nodeToPolygon, performBoolean } from '../boolean/booleanOps';
 import { getTextBox } from '../font/textLayout';
 import { getTextNodeBounds, getTextNodeLines } from '../font/textMetrics';
 import { getTextLocalBounds } from '../font/textPlacement';
@@ -534,16 +536,114 @@ function groupToSvg(
 ): string {
   const tfAttr = transformToSvgAttr(node.transform);
   const opacityAttr = node.opacity < 1 ? ` opacity="${fmt(node.opacity)}"` : '';
+  if (node.booleanOp) return booleanGroupToSvg(node, sceneGraph, defs, tfAttr, opacityAttr);
 
+  // A mask group: its mask layer isn't drawn, it clips (or masks) the rest
+  const maskNode =
+    node.maskNodeId && node.maskMode ? sceneGraph.getNode(node.maskNodeId) : undefined;
   const childElements: string[] = [];
   for (const childId of node.children) {
     const child = sceneGraph.getNode(childId);
-    if (child && child.visible) {
+    if (child && child.visible && child !== maskNode) {
       childElements.push(nodeToSvgElement(child, sceneGraph, defs, symbolDefs));
     }
   }
+  let content = childElements.join('');
+  if (maskNode && node.maskMode) {
+    content = maskedContent(content, maskNode, node.maskMode, sceneGraph, defs, symbolDefs);
+  }
 
-  return `<g${tfAttr}${opacityAttr}>${childElements.join('')}</g>`;
+  return `<g${tfAttr}${opacityAttr}>${content}</g>`;
+}
+
+/**
+ * Content under a mask layer: a clipPath for a clip by one shape (a clipPath
+ * can't hold groups), else an SVG mask reading the mask's alpha or luminance.
+ */
+function maskedContent(
+  content: string,
+  maskNode: Node,
+  mode: NonNullable<GroupNode['maskMode']>,
+  sceneGraph: SceneGraph,
+  defs: string[],
+  symbolDefs?: Map<string, SymbolDefinition>
+): string {
+  const maskElement = nodeToSvgElement(maskNode, sceneGraph, defs, symbolDefs);
+  const id = nextDefsId('mask');
+  const isShape = maskElement.startsWith('<') && !maskElement.startsWith('<g');
+  if (mode === 'clip' && isShape) {
+    defs.push(`<clipPath id="${id}">${maskElement}</clipPath>`);
+    return `<g clip-path="url(#${id})">${content}</g>`;
+  }
+  // Masks cover everything, not just a margin around what they mask
+  const maskType = mode === 'luminance' ? 'luminance' : 'alpha';
+  defs.push(
+    `<mask id="${id}" mask-type="${maskType}" maskUnits="userSpaceOnUse" x="-100000" y="-100000" width="200000" height="200000">${maskElement}</mask>`
+  );
+  return `<g mask="url(#${id})">${content}</g>`;
+}
+
+/**
+ * A boolean group as the shape its operation makes, in the group's own
+ * space (nested boolean groups worked out first), painted with the group's
+ * fills and strokes.
+ */
+function booleanGroupToSvg(
+  node: GroupNode,
+  sceneGraph: SceneGraph,
+  defs: string[],
+  tfAttr: string,
+  opacityAttr: string
+): string {
+  const result = booleanGroupPolygon(node, sceneGraph, mat3.identity(), 0);
+  if (!result || result.length === 0) return '';
+  const d = result
+    .flatMap((polygon) => polygon)
+    .map((ring) => {
+      // polygon-clipping closes each ring by repeating its first point
+      const points = ring.length > 1 ? ring.slice(0, -1) : ring;
+      if (points.length < 3) return '';
+      return `${points.map(([x, y], i) => `${i === 0 ? 'M' : 'L'}${fmt(x)},${fmt(y)}`).join('')}Z`;
+    })
+    .filter(Boolean)
+    .join(' ');
+  if (!d) return '';
+  // The result's rings never overlap: holes are holes either way round
+  return paintedShape(
+    'path',
+    ` d="${d}" fill-rule="evenodd"`,
+    node.fills ?? [],
+    node.strokes ?? [],
+    tfAttr,
+    opacityAttr,
+    defs
+  );
+}
+
+const MAX_BOOLEAN_DEPTH = 10;
+
+/** A boolean group's result, its children placed by `toSpace` (the group's space → the result's). */
+function booleanGroupPolygon(
+  group: GroupNode,
+  sceneGraph: SceneGraph,
+  toSpace: Matrix3,
+  depth: number
+): ReturnType<typeof nodeToPolygon> {
+  const op = group.booleanOp;
+  if (!op || depth > MAX_BOOLEAN_DEPTH) return null;
+  let accum: ReturnType<typeof nodeToPolygon> = null;
+  for (const child of sceneGraph.getChildren(group.id)) {
+    if (!child.visible) continue;
+    const { position, rotation, scale } = child.transform;
+    const placement = mat3.multiply(toSpace, mat3.compose(position, rotation, scale));
+    const polygon =
+      child.type === 'group' && child.booleanOp
+        ? booleanGroupPolygon(child, sceneGraph, placement, depth + 1)
+        : nodeToPolygon(child, placement);
+    if (!polygon) continue;
+    accum = accum ? performBoolean(accum, polygon, op) : polygon;
+  }
+  return accum;
 }
 
 function artboardToSvg(
@@ -575,11 +675,24 @@ function artboardToSvg(
   }
 
   // Render children
+  const children: string[] = [];
   for (const childId of node.children) {
     const child = sceneGraph.getNode(childId);
     if (child && child.visible) {
-      elements.push(nodeToSvgElement(child, sceneGraph, defs, symbolDefs));
+      children.push(nodeToSvgElement(child, sceneGraph, defs, symbolDefs));
     }
+  }
+  if (node.clipContent && children.length > 0) {
+    // Its contents show only inside it, as on the canvas
+    const id = nextDefsId('artboard');
+    const anchorX = node.transform.anchor.x * node.width;
+    const anchorY = node.transform.anchor.y * node.height;
+    defs.push(
+      `<clipPath id="${id}"><rect x="${fmt(-anchorX)}" y="${fmt(-anchorY)}" width="${fmt(node.width)}" height="${fmt(node.height)}"/></clipPath>`
+    );
+    elements.push(`<g clip-path="url(#${id})">${children.join('')}</g>`);
+  } else {
+    elements.push(...children);
   }
 
   return `<g${tfAttr}${opacityAttr}>${elements.join('')}</g>`;
@@ -832,7 +945,10 @@ function getLocalExtent(
         maxX: node.width - ax,
         maxY: node.height - ay,
       };
-      bounds = containerLocalBounds(node, sceneGraph, symbolDefs, artboardBounds);
+      // A clipping artboard shows nothing past its edges
+      bounds = node.clipContent
+        ? artboardBounds
+        : containerLocalBounds(node, sceneGraph, symbolDefs, artboardBounds);
       break;
     }
     case 'group': {
