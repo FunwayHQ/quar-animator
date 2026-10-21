@@ -39,6 +39,11 @@ export interface Tutorial {
   /** Stable id: the project's id, and how its seeding is remembered. */
   id: string;
   name: string;
+  /**
+   * Raised when the tutorial's content changes, so copies seeded earlier and
+   * never edited are replaced with it (1 when absent).
+   */
+  version?: number;
   build: (createdAt: string) => ProjectDataV2;
 }
 

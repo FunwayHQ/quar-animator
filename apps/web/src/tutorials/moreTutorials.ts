@@ -563,11 +563,15 @@ export const MORE_TUTORIALS: Tutorial[] = [
     pointsPage(ids),
     combinePage(ids),
   ]),
-  build('tutorial-text', 'Tutorial 4 · Text', 't4', (ids) => [
-    textBoxesPage(ids),
-    textStylePage(ids),
-    outlinesPage(ids),
-  ]),
+  {
+    // 2: Figma-style text editing keys, Google Fonts asked for on first pick
+    ...build('tutorial-text', 'Tutorial 4 · Text', 't4', (ids) => [
+      textBoxesPage(ids),
+      textStylePage(ids),
+      outlinesPage(ids),
+    ]),
+    version: 2,
+  },
   build('tutorial-rigging', 'Tutorial 5 · Rigging', 't5', (ids) => [
     bonesPage(ids),
     bindPage(ids),

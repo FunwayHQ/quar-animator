@@ -4,7 +4,7 @@
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import 'fake-indexeddb/auto';
-import { parseQuarFile } from '@quar/core';
+import { parseQuarFile, writeQuarFile } from '@quar/core';
 import {
   deleteProject,
   getSetting,
@@ -56,7 +56,7 @@ describe('seedTutorials', () => {
     await seedTutorials([first]);
 
     expect(await seedTutorials(TUTORIALS)).toEqual(later.map((tutorial) => tutorial.id));
-    expect(JSON.parse((await getSetting(SEEDED_TUTORIALS_KEY))!)).toEqual(
+    expect(Object.keys(JSON.parse((await getSetting(SEEDED_TUTORIALS_KEY))!))).toEqual(
       TUTORIALS.map((tutorial) => tutorial.id)
     );
   });
@@ -75,6 +75,54 @@ describe('seedTutorials', () => {
     await setSetting(SEEDED_TUTORIALS_KEY, 'not json');
 
     expect(await seedTutorials()).toHaveLength(TUTORIALS.length);
+  });
+
+  describe('a tutorial updated since it was given', () => {
+    const textId = 'tutorial-text';
+    const nameOf = async () => {
+      const stored = await loadProject(textId);
+      return (parseQuarFile(stored!.data) as { name: string }).name;
+    };
+    /** As an earlier build left things: the old record format, a copy from version 1. */
+    async function givenEarlier(copy: Record<string, unknown>) {
+      const { setSetting } = await import('../services/projectStorage');
+      await setSetting(SEEDED_TUTORIALS_KEY, JSON.stringify(TUTORIALS.map((t) => t.id)));
+      await saveProject(textId, 'Tutorial 4 · Text', writeQuarFile(copy));
+    }
+
+    it('replaces a copy that was never edited', async () => {
+      const at = '2026-10-20T10:00:00.000Z';
+      await givenEarlier({
+        version: '2.0',
+        name: 'Old text',
+        createdAt: at,
+        updatedAt: at,
+        pages: [],
+      });
+
+      await seedTutorials();
+
+      expect(await nameOf()).toBe('Tutorial 4 · Text');
+      expect(JSON.parse((await getSetting(SEEDED_TUTORIALS_KEY))!)[textId]).toBe(2);
+    });
+
+    it('leaves a copy the user edited, and one they deleted', async () => {
+      await givenEarlier({
+        version: '2.0',
+        name: 'My notes',
+        createdAt: '2026-10-20T10:00:00.000Z',
+        updatedAt: '2026-10-20T11:30:00.000Z',
+        pages: [],
+      });
+      await seedTutorials();
+      expect(await nameOf()).toBe('My notes');
+
+      await deleteProject(textId);
+      const { setSetting } = await import('../services/projectStorage');
+      await setSetting(SEEDED_TUTORIALS_KEY, JSON.stringify({ [textId]: 1 }));
+      await seedTutorials(TUTORIALS.filter((t) => t.id === textId));
+      expect(await loadProject(textId)).toBeUndefined();
+    });
   });
 
   describe('restoreTutorials', () => {
