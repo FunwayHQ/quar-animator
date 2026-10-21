@@ -12,6 +12,7 @@ import {
 } from '../../stores/editorStore';
 import { useSceneGraph } from '../../contexts/SceneGraphContext';
 import { flipSelected } from '../canvas/flipSelected';
+import { copyLayers, pasteLayers } from '../../hooks/useSystemClipboard';
 import type { SceneGraph } from '@quar/core';
 import type { ProjectActions } from '../../hooks/useProjectActions';
 import type { ProjectListItem } from '../../services/projectStorage';
@@ -203,9 +204,6 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
   // --- Store actions ---
   const undoAction = useEditorStore((state) => state.undo);
   const redoAction = useEditorStore((state) => state.redo);
-  const cutSelectionAction = useEditorStore((state) => state.cutSelection);
-  const copySelectionAction = useEditorStore((state) => state.copySelection);
-  const pasteClipboardAction = useEditorStore((state) => state.pasteClipboard);
   const duplicateSelectionAction = useEditorStore((state) => state.duplicateSelection);
   const deleteSelectionAction = useEditorStore((state) => state.deleteSelection);
   const selectAllAction = useEditorStore((state) => state.selectAll);
@@ -588,7 +586,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                     disabled={!hasSelection}
                     onClick={() => {
                       closeMenu();
-                      cutSelectionAction(sceneGraph);
+                      copyLayers(sceneGraph, 'cut');
                     }}
                   />
                   <MenuItem
@@ -597,7 +595,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                     disabled={!hasSelection}
                     onClick={() => {
                       closeMenu();
-                      copySelectionAction(sceneGraph);
+                      copyLayers(sceneGraph, 'copy');
                     }}
                   />
                   <MenuItem
@@ -606,7 +604,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                     disabled={!clipboard}
                     onClick={() => {
                       closeMenu();
-                      pasteClipboardAction(sceneGraph);
+                      void pasteLayers(sceneGraph);
                     }}
                   />
                   <MenuItem

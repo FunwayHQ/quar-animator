@@ -42,6 +42,8 @@ import { poseScene } from '../../stores/scenePosing';
 import { fitViewToArtwork } from '../canvas/fitView';
 import { deleteKeyTarget } from '../canvas/deleteKeyTarget';
 import { flipSelected } from '../canvas/flipSelected';
+import { copyLayers } from '../../hooks/useSystemClipboard';
+import { decodeClipboard } from '../../services/systemClipboard';
 import { bindLayersToBones } from '../canvas/bindToBones';
 import { ArtboardOverlay } from '../canvas/ArtboardOverlay';
 import { SequenceBadgesOverlay } from '../canvas/SequenceBadgesOverlay';
@@ -136,7 +138,6 @@ export function Canvas({
   );
   const sequenceSteps = useEditorStore((state) => state.animationSequence.steps);
   const clipboard = useEditorStore((state) => state.clipboard);
-  const copySelection = useEditorStore((state) => state.copySelection);
   const pasteClipboard = useEditorStore((state) => state.pasteClipboard);
   const duplicateSelection = useEditorStore((state) => state.duplicateSelection);
   const deleteSelection = useEditorStore((state) => state.deleteSelection);
@@ -156,7 +157,6 @@ export function Canvas({
   const changeBooleanOp = useEditorStore((state) => state.changeBooleanOp);
   const convertTextToPath = useEditorStore((state) => state.convertTextToPath);
   const outlineStroke = useEditorStore((state) => state.outlineStroke);
-  const cutSelection = useEditorStore((state) => state.cutSelection);
   const editingGradient = useEditorStore((state) => state.editingGradient);
   const showRulers = useEditorStore((state) => state.showRulers);
   const guides = useEditorStore((state) => state.guides);
@@ -1328,6 +1328,12 @@ export function Canvas({
     //    Handles SVG copied from Figma/Illustrator/Inkscape/browsers as text.
     try {
       const text = await navigator.clipboard.readText();
+      // Layers copied in Quar Animator, maybe in another window or browser
+      const layers = decodeClipboard(text);
+      if (layers && sceneGraphRef.current) {
+        useEditorStore.getState().pastePayload(sceneGraphRef.current, layers);
+        return true;
+      }
       if (text) {
         const svgMatch = text.match(/<svg[\s\S]*?<\/svg>/i);
         if (svgMatch) {
@@ -1355,6 +1361,11 @@ export function Canvas({
               try {
                 const htmlBlob = await item.getType('text/html');
                 const html = await htmlBlob.text();
+                const layers = decodeClipboard(null, html);
+                if (layers && sceneGraphRef.current) {
+                  useEditorStore.getState().pastePayload(sceneGraphRef.current, layers);
+                  return true;
+                }
                 const svgMatch = html.match(/<svg[\s\S]*?<\/svg>/i);
                 if (svgMatch) {
                   importSvgString(svgMatch[0]);
@@ -1403,6 +1414,16 @@ export function Canvas({
 
       const sg = sceneGraphRef.current;
       if (!sg) return;
+
+      // Layers copied in Quar Animator (another window or browser, or this one)
+      const layers = decodeClipboard(
+        e.clipboardData?.getData('text/plain'),
+        e.clipboardData?.getData('text/html')
+      );
+      if (layers) {
+        useEditorStore.getState().pastePayload(sg, layers);
+        return;
+      }
 
       const items = e.clipboardData?.items;
       if (!items || items.length === 0) {
@@ -1579,12 +1600,10 @@ export function Canvas({
       }
 
       // Undo/redo are global (useUndoShortcuts), so they work wherever focus is
-      if (!isInput && (e.ctrlKey || e.metaKey)) {
-        if (e.key === 'x' && !e.shiftKey) {
-          e.preventDefault();
-          cutSelection(sceneGraph);
-          return;
-        }
+      // Cut and copy go through the browser's cut/copy events (useSystemClipboard),
+      // which put the layers on the system clipboard too
+      if (!isInput && (e.ctrlKey || e.metaKey) && (e.key === 'x' || e.key === 'c') && !e.shiftKey) {
+        return;
       }
 
       // Clipboard shortcuts (skip if active element is an input)
@@ -1596,10 +1615,6 @@ export function Canvas({
           } else {
             groupSelection(sceneGraph);
           }
-          return;
-        }
-        if (e.key === 'c') {
-          copySelection(sceneGraph);
           return;
         }
         if (e.key === 'v') {
@@ -1647,7 +1662,6 @@ export function Canvas({
     [
       toolKeyDown,
       sceneGraph,
-      copySelection,
       pasteClipboard,
       pasteFromSystemClipboard,
       duplicateSelection,
@@ -1659,7 +1673,6 @@ export function Canvas({
       sendBackward,
       bringToFront,
       sendToBack,
-      cutSelection,
       isPenToolDrawing,
       isDirectSelectionActive,
       directSelectionPoints,
@@ -1731,7 +1744,12 @@ export function Canvas({
       });
 
       return [
-        { id: 'copy', label: 'Copy', shortcut: 'Ctrl+C', onClick: () => copySelection(sceneGraph) },
+        {
+          id: 'copy',
+          label: 'Copy',
+          shortcut: 'Ctrl+C',
+          onClick: () => copyLayers(sceneGraph, 'copy'),
+        },
         {
           id: 'duplicate',
           label: 'Duplicate',
@@ -2088,7 +2106,6 @@ export function Canvas({
     selectedNodeIds,
     clipboard,
     sceneGraph,
-    copySelection,
     duplicateSelection,
     pasteClipboard,
     pasteFromSystemClipboard,

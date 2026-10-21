@@ -67,6 +67,7 @@ import {
   type Placement,
 } from './reparent';
 import { flipInParentSpace, flipMatrix, flipPlacement, type FlipAxis } from './flip';
+import { symbolsUsedBy, type ClipboardPayload } from '../services/systemClipboard';
 import {
   DEFAULT_ONION_SKIN_SETTINGS,
   DEFAULT_DOCUMENT_BACKGROUND,
@@ -675,6 +676,13 @@ export interface EditorStore extends SequenceActions {
   clipboardExtras: ClipboardExtras | null;
   copySelection: (sceneGraph: SceneGraphLike) => void;
   pasteClipboard: (sceneGraph: SceneGraphLike) => void;
+  /** The clipboard as it goes on the system clipboard (with the symbols it uses). */
+  clipboardPayload: () => ClipboardPayload | null;
+  /**
+   * Paste layers from the system clipboard (another window, or browser):
+   * symbols this project lacks are added first. Undoable, like any paste.
+   */
+  pastePayload: (sceneGraph: SceneGraphLike, payload: ClipboardPayload) => void;
   duplicateSelection: (sceneGraph: SceneGraphLike) => void;
   deleteSelection: (sceneGraph: SceneGraphLike) => void;
   selectAll: (sceneGraph: SceneGraphLike) => void;
@@ -2132,6 +2140,26 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       smartBoneActions: [...get().smartBoneActions, ...rig.smartBoneActions],
       isDirty: true,
     });
+  },
+  clipboardPayload: () => {
+    const { clipboard, clipboardExtras, symbols } = get();
+    if (!clipboard || clipboard.length === 0) return null;
+    return {
+      nodes: clipboard,
+      extras: clipboardExtras,
+      symbols: symbolsUsedBy(clipboard, symbols),
+    };
+  },
+  pastePayload: (sceneGraph: SceneGraphLike, payload: ClipboardPayload) => {
+    const { symbols } = get();
+    const known = new Set(symbols.map((symbol) => symbol.id));
+    const missing = payload.symbols.filter((symbol) => !known.has(symbol.id));
+    set({
+      clipboard: payload.nodes,
+      clipboardExtras: payload.extras,
+      ...(missing.length > 0 ? { symbols: [...symbols, ...structuredClone(missing)] } : {}),
+    });
+    get().pasteClipboard(sceneGraph);
   },
   duplicateSelection: (sceneGraph: SceneGraphLike) => {
     const { copySelection } = get();
