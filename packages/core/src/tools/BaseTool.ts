@@ -11,6 +11,7 @@ import type {
   Stroke,
   Vector2,
   SymbolDefinition,
+  PathNode,
 } from '@quar/types';
 import type { SceneGraph } from '../SceneGraph';
 import type { Camera } from '../Camera';
@@ -21,6 +22,16 @@ import type { SmartGuide } from './smartGuides';
 // ============================================================================
 
 export type TransformType = 'move' | 'resize' | 'rotate' | 'vertex-move';
+
+/**
+ * Points added to or taken from a path, by flat index (all contours in
+ * order), so its per-point keyframes can be kept on their points.
+ */
+export type PathPointsChange =
+  /** A point split into the segment that starts at segmentIndex, t along it */
+  | { kind: 'insert'; segmentIndex: number; t: number }
+  /** These points deleted (contours left empty go too) */
+  | { kind: 'delete'; indices: number[] };
 
 export interface ToolContext {
   sceneGraph: SceneGraph;
@@ -35,6 +46,8 @@ export interface ToolContext {
   setActiveTool: (tool: ToolType) => void;
   onTransformStart?: () => void;
   onTransformComplete?: (nodeIds: Set<string>, type: TransformType) => void;
+  /** A path gained or lost points; `before` is the path as it was. */
+  onPathPointsChange?: (nodeId: string, before: PathNode, change: PathPointsChange) => void;
   getSnapToGrid?: () => boolean;
   getGridSize?: () => number;
   getEnteredGroupId?: () => string | null;

@@ -717,6 +717,7 @@ export class DirectSelectionTool extends BaseTool {
     for (const [nodeId, indices] of pointsByNode) {
       const node = this.context.sceneGraph.getNode(nodeId) as PathNode;
       if (!node || node.type !== 'path') continue;
+      const before = structuredClone(node);
 
       const allPts = getAllPoints(node);
       const boundaries = getSubpathBoundaries(node);
@@ -739,6 +740,7 @@ export class DirectSelectionTool extends BaseTool {
         const points = newContours[0];
         const subpaths = newContours.length > 1 ? newContours.slice(1) : undefined;
         this.context.sceneGraph.updateNode(nodeId, { points, subpaths });
+        this.context.onPathPointsChange?.(nodeId, before, { kind: 'delete', indices });
       }
     }
 
@@ -749,6 +751,7 @@ export class DirectSelectionTool extends BaseTool {
     const node = this.context.sceneGraph.getNode(hit.nodeId) as PathNode;
     if (!node || node.type !== 'path') return;
     this.context.onTransformStart?.();
+    const before = structuredClone(node);
 
     const allPts = getAllPoints(node);
     const boundaries = getSubpathBoundaries(node);
@@ -782,6 +785,11 @@ export class DirectSelectionTool extends BaseTool {
     const points = newContours[0];
     const subpaths = newContours.length > 1 ? newContours.slice(1) : undefined;
     this.context.sceneGraph.updateNode(hit.nodeId, { points, subpaths });
+    this.context.onPathPointsChange?.(hit.nodeId, before, {
+      kind: 'insert',
+      segmentIndex: hit.segmentIndex,
+      t: hit.t,
+    });
 
     // Select the new point (flat index = hit.segmentIndex + 1)
     this.selectPoint(hit.nodeId, hit.segmentIndex + 1, false);

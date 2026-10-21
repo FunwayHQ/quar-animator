@@ -16,7 +16,7 @@ import {
   getAllPoints,
   type SmartGuide,
 } from '@quar/core';
-import type { TransformType } from '@quar/core';
+import type { TransformType, PathPointsChange } from '@quar/core';
 import { findTrack } from '@quar/animation';
 import { compactMorphOffsets, getBoneVisibility } from '@quar/rigging';
 import type { MorphVertexOffset } from '@quar/types';
@@ -31,6 +31,7 @@ import type {
   Vector2,
 } from '@quar/types';
 import { useEditorStore } from '../stores/editorStore';
+import { remapVertexTracks } from '../stores/vertexTracks';
 import { toast } from '../components/common/Toast';
 
 // ============================================================================
@@ -431,6 +432,12 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
       },
       onTransformStart,
       onTransformComplete,
+      onPathPointsChange: (nodeId: string, before: PathNode, change: PathPointsChange) => {
+        // Keep the path's per-point keyframes on their points
+        const { timeline } = useEditorStore.getState();
+        const next = remapVertexTracks(timeline, nodeId, before, change);
+        if (next !== timeline) useEditorStore.setState({ timeline: next, isDirty: true });
+      },
       getSnapToGrid,
       getGridSize,
       getEnteredGroupId: () => useEditorStore.getState().enteredGroupId,

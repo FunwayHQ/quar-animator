@@ -755,6 +755,34 @@ describe('DirectSelectionTool', () => {
       expect(added!.handleOut!.x).toBeCloseTo(25);
     });
 
+    it('reports the points it adds and deletes, with the path as it was', () => {
+      const onPathPointsChange = vi.fn();
+      context.onPathPointsChange = onPathPointsChange;
+      const path = createTestPath(context, [createPoint(0, 0), createPoint(100, 0)]);
+      const mid = { x: 25, y: 0 };
+
+      tool.onPointerDown(createMockPointerEvent({ worldPosition: mid, button: 0 }));
+      tool.onPointerUp(createMockPointerEvent({ worldPosition: mid }));
+      tool.onPointerDown(createMockPointerEvent({ worldPosition: mid, button: 0 }));
+
+      expect(onPathPointsChange).toHaveBeenLastCalledWith(
+        path.id,
+        expect.objectContaining({ points: [createPoint(0, 0), createPoint(100, 0)] }),
+        { kind: 'insert', segmentIndex: 0, t: expect.any(Number) as number }
+      );
+      // Under the pointer
+      const added = (context.sceneGraph.getNode(path.id) as PathNode).points[1]!;
+      expect(added.position.x).toBeCloseTo(25);
+
+      // The new point is selected: delete it
+      tool.onKeyDown(new KeyboardEvent('keydown', { key: 'Delete' }));
+      expect(onPathPointsChange).toHaveBeenLastCalledWith(
+        path.id,
+        expect.objectContaining({ points: expect.arrayContaining([]) as unknown }),
+        { kind: 'delete', indices: [1] }
+      );
+    });
+
     // X1-2: Y-coordinate interpolation fix
     it('should interpolate Y coordinate correctly for non-horizontal segments', () => {
       // Create a vertical segment from (0,0) to (0,100)

@@ -3,8 +3,15 @@
  * Manages tool instances and routes events to the active tool
  */
 
-import type { ToolType, CanvasPointerEvent, Fill, Stroke, SymbolDefinition } from '@quar/types';
-import { BaseTool, type ToolContext, type TransformType } from './BaseTool';
+import type {
+  ToolType,
+  CanvasPointerEvent,
+  Fill,
+  Stroke,
+  SymbolDefinition,
+  PathNode,
+} from '@quar/types';
+import { BaseTool, type ToolContext, type TransformType, type PathPointsChange } from './BaseTool';
 import { SelectionTool } from './SelectionTool';
 import { DirectSelectionTool } from './DirectSelectionTool';
 import { RectangleTool } from './RectangleTool';
@@ -39,6 +46,7 @@ export interface ToolManagerOptions {
   onToolChange?: (tool: ToolType) => void;
   onTransformStart?: () => void;
   onTransformComplete?: (nodeIds: Set<string>, type: TransformType) => void;
+  onPathPointsChange?: (nodeId: string, before: PathNode, change: PathPointsChange) => void;
   getSnapToGrid?: () => boolean;
   getGridSize?: () => number;
   getEnteredGroupId?: () => string | null;
@@ -255,6 +263,7 @@ export class ToolManager {
       setActiveTool: (tool: ToolType) => this.setActiveTool(tool),
       onTransformStart: options.onTransformStart,
       onTransformComplete: options.onTransformComplete,
+      onPathPointsChange: options.onPathPointsChange,
       getSnapToGrid: options.getSnapToGrid,
       getGridSize: options.getGridSize,
       getEnteredGroupId: options.getEnteredGroupId,
