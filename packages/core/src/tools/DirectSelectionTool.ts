@@ -438,8 +438,9 @@ export class DirectSelectionTool extends BaseTool {
       const handleType = this.dragHandle.type === 'handle-out' ? 'out' : 'in';
 
       const newAll = [...allPts];
-      // Ctrl+drag: break symmetry, move only the dragged handle
-      if (event.ctrlKey) {
+      // Alt-drag (as in Illustrator and Figma; Ctrl too, though on a Mac
+      // Ctrl-click is a right-click): break symmetry, move only this handle
+      if (event.altKey || event.ctrlKey) {
         const updated = { ...point };
         if (handleType === 'out') {
           updated.handleOut = localHandleOffset;
@@ -820,6 +821,7 @@ export class DirectSelectionTool extends BaseTool {
     const prevPoint = prevIdx >= 0 ? allPts[prevIdx] : null;
     const nextPoint = nextIdx >= 0 && nextIdx !== pointIndex ? allPts[nextIdx] : null;
 
+    this.context.onTransformStart?.();
     const newAll = [...allPts];
     newAll[pointIndex] = convertPointTypeUtil(
       point,
@@ -831,6 +833,8 @@ export class DirectSelectionTool extends BaseTool {
       points: split.points,
       subpaths: split.subpaths,
     });
+    // Its handles changed like a handle drag's: keyed the same way
+    this.context.onTransformComplete?.(new Set([nodeId]), 'vertex-move');
 
     // Select the converted point
     this.selectPoint(nodeId, pointIndex, false);
@@ -847,7 +851,7 @@ export class DirectSelectionTool extends BaseTool {
   private getPathNodes(): PathNode[] {
     const paths: PathNode[] = [];
     this.context.sceneGraph.traverseVisible((node: Node) => {
-      if (node.type === 'path') {
+      if (node.type === 'path' && !this.isLockedInScene(node)) {
         const resolved = this.resolveHitToScope(node);
         if (resolved && resolved.id === node.id) {
           paths.push(node);
@@ -861,7 +865,7 @@ export class DirectSelectionTool extends BaseTool {
   private getImageNodes(): ImageNode[] {
     const images: ImageNode[] = [];
     this.context.sceneGraph.traverseVisible((node: Node) => {
-      if (node.type === 'image') {
+      if (node.type === 'image' && !this.isLockedInScene(node)) {
         const resolved = this.resolveHitToScope(node);
         if (resolved && resolved.id === node.id) {
           images.push(node);
@@ -869,6 +873,15 @@ export class DirectSelectionTool extends BaseTool {
       }
     });
     return images;
+  }
+
+  /** Locked, or inside a locked group: not editable on the canvas. */
+  private isLockedInScene(node: Node): boolean {
+    for (let current: Node | null = node; current; ) {
+      if (current.locked) return true;
+      current = current.parent ? (this.context.sceneGraph.getNode(current.parent) ?? null) : null;
+    }
+    return false;
   }
 
   // --------------------------------------------------------------------------
@@ -912,6 +925,7 @@ export class DirectSelectionTool extends BaseTool {
 
     this.context.sceneGraph.traverseVisible((node: Node) => {
       if (node.type === 'group') return; // Skip groups — hit children, resolve up
+      if (this.isLockedInScene(node)) return; // clicks pass through locked layers
 
       const localBounds = this.getLocalBoundsForNode(node);
       if (!localBounds) return;

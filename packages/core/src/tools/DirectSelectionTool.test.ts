@@ -6,6 +6,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { DirectSelectionTool } from './DirectSelectionTool';
 import type { ToolContext } from './BaseTool';
 import type {
+  Node,
   PathNode,
   PathPoint,
   ImageNode,
@@ -2163,6 +2164,103 @@ describe('DirectSelectionTool', () => {
       // After conversion, all 4 points should be selected
       const selected = tool.getSelectedPoints();
       expect(selected.length).toBe(4);
+    });
+  });
+
+  describe('handles, conversion and locked layers', () => {
+    /** A smooth point at the origin, handles 50 either side, selected. */
+    function selectedSmoothPoint() {
+      const path = createTestPath(context, [
+        createSmoothPoint(0, 0, { x: -50, y: 0 }, { x: 50, y: 0 }),
+        createPoint(200, 0),
+      ]);
+      tool.onPointerDown(createMockPointerEvent({ worldPosition: { x: 0, y: 0 }, button: 0 }));
+      tool.onPointerUp(createMockPointerEvent({ worldPosition: { x: 0, y: 0 } }));
+      return path;
+    }
+
+    it('Alt-dragging a handle moves only that handle', () => {
+      const path = selectedSmoothPoint();
+      const handle = { x: 50, y: 0 };
+      tool.onPointerDown(createMockPointerEvent({ worldPosition: handle, button: 0 }));
+      tool.onPointerMove(createMockPointerEvent({ worldPosition: { x: 40, y: 40 }, altKey: true }));
+      tool.onPointerUp(createMockPointerEvent({ worldPosition: { x: 40, y: 40 } }));
+
+      const point = (context.sceneGraph.getNode(path.id) as PathNode).points[0]!;
+      expect(point.handleOut).toEqual({ x: 40, y: 40 });
+      expect(point.handleIn).toEqual({ x: -50, y: 0 });
+      expect(point.type).toBe('corner');
+    });
+
+    it('a plain handle drag keeps the other handle opposite', () => {
+      const path = selectedSmoothPoint();
+      tool.onPointerDown(createMockPointerEvent({ worldPosition: { x: 50, y: 0 }, button: 0 }));
+      tool.onPointerMove(createMockPointerEvent({ worldPosition: { x: 0, y: 50 } }));
+      tool.onPointerUp(createMockPointerEvent({ worldPosition: { x: 0, y: 50 } }));
+
+      const point = (context.sceneGraph.getNode(path.id) as PathNode).points[0]!;
+      expect(point.handleIn!.x).toBeCloseTo(0);
+      expect(point.handleIn!.y).toBeCloseTo(-50);
+    });
+
+    it('Alt-clicking a point can be undone, and is keyed like a handle drag', () => {
+      const onTransformStart = vi.fn();
+      const onTransformComplete = vi.fn();
+      context.onTransformStart = onTransformStart;
+      context.onTransformComplete = onTransformComplete;
+      const path = createTestPath(context, [
+        createPoint(0, 0),
+        createPoint(100, 0),
+        createPoint(200, 50),
+      ]);
+
+      tool.onPointerDown(
+        createMockPointerEvent({ worldPosition: { x: 100, y: 0 }, button: 0, altKey: true })
+      );
+
+      expect((context.sceneGraph.getNode(path.id) as PathNode).points[1]!.type).toBe('smooth');
+      expect(onTransformStart).toHaveBeenCalledTimes(1);
+      expect(onTransformComplete).toHaveBeenCalledWith(new Set([path.id]), 'vertex-move');
+    });
+
+    it("doesn't edit a locked path's points", () => {
+      const path = createTestPath(context, [createPoint(0, 0), createPoint(100, 0)]);
+      context.sceneGraph.updateNode(path.id, { locked: true });
+
+      tool.onPointerDown(createMockPointerEvent({ worldPosition: { x: 0, y: 0 }, button: 0 }));
+      tool.onPointerMove(createMockPointerEvent({ worldPosition: { x: 30, y: 30 } }));
+      tool.onPointerUp(createMockPointerEvent({ worldPosition: { x: 30, y: 30 } }));
+
+      expect(tool.getSelectedPoints()).toEqual([]);
+      expect((context.sceneGraph.getNode(path.id) as PathNode).points[0]!.position).toEqual({
+        x: 0,
+        y: 0,
+      });
+    });
+
+    it("doesn't edit the points of a path inside a locked group", () => {
+      const group: Node = {
+        id: 'group',
+        name: 'Group',
+        type: 'group',
+        parent: null,
+        children: [],
+        transform: createDefaultTransform(),
+        visible: true,
+        locked: true,
+        opacity: 1,
+        blendMode: 'normal',
+      } as Node;
+      context.sceneGraph.addNode(group);
+      const path = createTestPath(context, [createPoint(0, 0), createPoint(100, 0)]);
+      context.sceneGraph.removeNode(path.id);
+      context.sceneGraph.addNode({ ...path, parent: null }, 'group');
+      context.setEnteredGroupId = vi.fn();
+      context.getEnteredGroupId = () => 'group';
+
+      tool.onPointerDown(createMockPointerEvent({ worldPosition: { x: 0, y: 0 }, button: 0 }));
+
+      expect(tool.getSelectedPoints()).toEqual([]);
     });
   });
 });
