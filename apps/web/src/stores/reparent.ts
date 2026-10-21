@@ -146,6 +146,19 @@ export function reparentTimeline(
   base: Placement,
   m: Matrix3
 ): Timeline {
+  return remapPlacementTimeline(timeline, nodeId, base, (placement) => mapPlacement(placement, m));
+}
+
+/**
+ * The timeline with the node's placement keyframes passed through `map`,
+ * each with the rest of the placement at its time (see reparentTimeline).
+ */
+export function remapPlacementTimeline(
+  timeline: Timeline,
+  nodeId: string,
+  base: Placement,
+  map: (placement: Placement) => Placement
+): Timeline {
   const tracks = new Map(
     timeline.tracks
       .filter(
@@ -177,7 +190,7 @@ export function reparentTimeline(
         ...track,
         keyframes: track.keyframes.map((keyframe) =>
           typeof keyframe.value === 'number'
-            ? { ...keyframe, value: mapPlacement(placementAt(keyframe.time), m)[property] }
+            ? { ...keyframe, value: map(placementAt(keyframe.time))[property] }
             : keyframe
         ),
       };
@@ -191,11 +204,20 @@ export function reparentRestPose(
   base: Placement,
   m: Matrix3
 ): Record<string, number> {
+  return remapRestPose(pose, base, (placement) => mapPlacement(placement, m));
+}
+
+/** An Animation Sequence rest pose (property → value) passed through `map`. */
+export function remapRestPose(
+  pose: Record<string, number>,
+  base: Placement,
+  map: (placement: Placement) => Placement
+): Record<string, number> {
   const placement = { ...base };
   for (const property of PLACEMENT_PROPERTIES) {
     if (pose[property] !== undefined) placement[property] = pose[property];
   }
-  const mapped = mapPlacement(placement, m);
+  const mapped = map(placement);
   const next = { ...pose };
   for (const property of PLACEMENT_PROPERTIES) {
     if (next[property] !== undefined) next[property] = mapped[property];

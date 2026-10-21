@@ -11,6 +11,8 @@ import {
   type SceneGraphLike,
 } from '../../stores/editorStore';
 import { useSceneGraph } from '../../contexts/SceneGraphContext';
+import { flipSelected } from '../canvas/flipSelected';
+import type { SceneGraph } from '@quar/core';
 import type { ProjectActions } from '../../hooks/useProjectActions';
 import type { ProjectListItem } from '../../services/projectStorage';
 import { ProjectListDialog } from '../common/ProjectListDialog';
@@ -685,6 +687,25 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                     onClick={() => {
                       closeMenu();
                       sendToBackAction(sceneGraph);
+                    }}
+                  />
+                  <Separator />
+                  <MenuItem
+                    label="Flip Horizontal"
+                    shortcut="Shift+H"
+                    disabled={!hasSelection}
+                    onClick={() => {
+                      closeMenu();
+                      flipSelected(sceneGraph as unknown as SceneGraph, 'horizontal');
+                    }}
+                  />
+                  <MenuItem
+                    label="Flip Vertical"
+                    shortcut="Shift+V"
+                    disabled={!hasSelection}
+                    onClick={() => {
+                      closeMenu();
+                      flipSelected(sceneGraph as unknown as SceneGraph, 'vertical');
                     }}
                   />
                   <Separator />

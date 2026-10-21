@@ -41,6 +41,7 @@ import { GhostSceneCache, poseSceneAtFrame } from '../canvas/onionSkinScenes';
 import { poseScene } from '../../stores/scenePosing';
 import { fitViewToArtwork } from '../canvas/fitView';
 import { deleteKeyTarget } from '../canvas/deleteKeyTarget';
+import { flipSelected } from '../canvas/flipSelected';
 import { bindLayersToBones } from '../canvas/bindToBones';
 import { ArtboardOverlay } from '../canvas/ArtboardOverlay';
 import { SequenceBadgesOverlay } from '../canvas/SequenceBadgesOverlay';
@@ -1768,6 +1769,19 @@ export function Canvas({
           label: 'Send to Back',
           shortcut: 'Ctrl+Shift+[',
           onClick: () => sendToBack(sceneGraph),
+        },
+        { type: 'separator' },
+        {
+          id: 'flip-horizontal',
+          label: 'Flip Horizontal',
+          shortcut: 'Shift+H',
+          onClick: () => flipSelected(sceneGraph, 'horizontal'),
+        },
+        {
+          id: 'flip-vertical',
+          label: 'Flip Vertical',
+          shortcut: 'Shift+V',
+          onClick: () => flipSelected(sceneGraph, 'vertical'),
         },
         { type: 'separator' },
         {

@@ -17,6 +17,7 @@ import { useTimelineShortcuts } from '../hooks/useTimelineShortcuts';
 import { useProjectActions } from '../hooks/useProjectActions';
 import { useProjectShortcuts } from '../hooks/useProjectShortcuts';
 import { useUndoShortcuts } from '../hooks/useUndoShortcuts';
+import { useFlipShortcuts } from '../hooks/useFlipShortcuts';
 import { useEditorStore } from '../stores/editorStore';
 import { useSceneGraph } from '../contexts/SceneGraphContext';
 import { useDirtyTracking } from '../hooks/useDirtyTracking';
@@ -28,6 +29,7 @@ function EditorInner() {
 
   const sceneGraph = useSceneGraph();
   useUndoShortcuts(sceneGraph);
+  useFlipShortcuts(sceneGraph);
   // Unsaved changes: any scene edit, but not an export posing frames
   useDirtyTracking(sceneGraph);
 

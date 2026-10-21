@@ -59,10 +59,14 @@ import {
   mapPlacement,
   multiply6,
   placementOf,
+  remapPlacementTimeline,
+  remapRestPose,
   reparentMatrix,
   reparentRestPose,
   reparentTimeline,
+  type Placement,
 } from './reparent';
+import { flipInParentSpace, flipMatrix, flipPlacement, type FlipAxis } from './flip';
 import {
   DEFAULT_ONION_SKIN_SETTINGS,
   DEFAULT_DOCUMENT_BACKGROUND,
@@ -689,6 +693,17 @@ export interface EditorStore extends SequenceActions {
     id: string,
     parentId: string | null,
     index?: number
+  ) => void;
+  /**
+   * Mirror these layers across a vertical (horizontal flip) or horizontal
+   * line through `center` on the canvas, keyframes and Animation Sequence
+   * rest pose too; undoable.
+   */
+  flipLayers: (
+    sceneGraph: SceneGraphLike,
+    ids: string[],
+    axis: FlipAxis,
+    center: import('@quar/types').Vector2
   ) => void;
 
   // Timeline state
@@ -2308,6 +2323,38 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         ...state.animationSequence,
         restPoses: { ...state.animationSequence.restPoses, [id]: reparentRestPose(pose, base, m) },
       };
+      set(applySequence(sceneGraph, { ...state, timeline }, sequence));
+    } else {
+      set({ timeline, isDirty: true });
+    }
+  },
+
+  flipLayers: (sceneGraph, ids, axis, center) => {
+    const layers = ids.filter((id) => sceneGraph.getNode(id));
+    if (layers.length === 0) return;
+    get().pushUndo(sceneGraph);
+
+    const state = get();
+    const flip = flipMatrix(axis, center);
+    let timeline = state.timeline;
+    let restPoses = state.animationSequence.restPoses;
+    for (const id of layers) {
+      const node = sceneGraph.getNode(id)!;
+      const m = flipInParentSpace(
+        flip,
+        node.parent ? sceneGraph.getWorldTransform(node.parent) : null
+      );
+      const map = (placement: Placement) => flipPlacement(placement, m, axis);
+      const base = placementOf(node.transform);
+      sceneGraph.updateNode(id, { transform: applyPlacement(node.transform, map(base)) });
+      timeline = remapPlacementTimeline(timeline, id, base, map);
+      const pose = restPoses[id];
+      if (pose) restPoses = { ...restPoses, [id]: remapRestPose(pose, base, map) };
+    }
+
+    if (restPoses !== state.animationSequence.restPoses) {
+      // Recompile so the sequence's own keyframes follow the flipped rest pose
+      const sequence = { ...state.animationSequence, restPoses };
       set(applySequence(sceneGraph, { ...state, timeline }, sequence));
     } else {
       set({ timeline, isDirty: true });
