@@ -425,7 +425,7 @@ export class DirectSelectionTool extends BaseTool {
       const worldDelta = vec2.subtract(worldPos, this.dragStartPoint);
       if (!this.hasDragged && vec2.length(worldDelta) <= 3 / this.context.camera.zoom) return;
       const node = this.context.sceneGraph.getNode(this.bend.hit.nodeId);
-      if (!node) return;
+      if (node?.type !== 'path') return;
       if (!this.hasDragged) {
         this.hasDragged = true;
         this.context.onTransformStart?.();
