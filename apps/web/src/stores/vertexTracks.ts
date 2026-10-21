@@ -285,3 +285,52 @@ function easingAt(
       .find((kf) => kf.time === time);
   return keyframe?.easing ?? 'linear';
 }
+
+/**
+ * The timeline with a path's per-point tracks renamed point by point:
+ * `rename` gets a track's contour, point index and the rest of its property
+ * ('handleIn.x', say) and returns the new property, or null to drop the
+ * track; whole-shape keyframes go through `reshape`. For edits that reorder
+ * points (reversing a path, cutting it open) or move them to another path.
+ */
+export function rewritePointTracks(
+  timeline: Timeline,
+  nodeId: string,
+  rename: (contour: number, index: number, rest: string) => string | null,
+  reshape?: (points: PathPoint[]) => PathPoint[]
+): Timeline {
+  let changed = false;
+  const tracks: PropertyTrack[] = [];
+  for (const track of timeline.tracks) {
+    if (track.nodeId !== nodeId) {
+      tracks.push(track);
+      continue;
+    }
+    if (track.property === 'points' && reshape) {
+      changed = true;
+      tracks.push({
+        ...track,
+        keyframes: track.keyframes.map((keyframe) =>
+          Array.isArray(keyframe.value)
+            ? { ...keyframe, value: reshape(keyframe.value as PathPoint[]) }
+            : keyframe
+        ),
+      });
+      continue;
+    }
+    const match = POINT_PROPERTY.exec(track.property);
+    if (!match) {
+      tracks.push(track);
+      continue;
+    }
+    const contour = match[1] !== undefined ? 0 : Number(match[2]) + 1;
+    const index = Number(match[1] ?? match[3]);
+    const property = rename(contour, index, match[4]!);
+    changed = true;
+    if (property !== null) tracks.push({ ...track, property });
+  }
+  return changed ? { ...timeline, tracks } : timeline;
+}
+
+/** A point's property prefix in a path (points.<i> or subpaths.<s>.<i>). */
+export { pointPrefix };

@@ -14,7 +14,7 @@ import {
   toGlColor,
 } from '@quar/core';
 import type { SceneGraphEvent } from '@quar/core';
-import type { Color, Node, Vector2 } from '@quar/types';
+import type { Color, Node, PathNode, Vector2 } from '@quar/types';
 import {
   evaluateIKChains,
   evaluateSmartBones,
@@ -1742,6 +1742,10 @@ export function Canvas({
         const n = sceneGraph.getNode(id);
         return n && n.type === 'group' && n.booleanOp !== undefined;
       });
+      const pathNodes = Array.from(selectedNodeIds)
+        .map((id) => sceneGraph.getNode(id))
+        .filter((n) => n?.type === 'path' && !n.locked) as PathNode[];
+      const pathsClosed = pathNodes.length > 0 && pathNodes.every((path) => path.closed);
 
       return [
         {
@@ -1871,6 +1875,22 @@ export function Canvas({
                 id: 'flatten-boolean',
                 label: 'Flatten Boolean',
                 onClick: () => flattenBooleanGroup(sceneGraph),
+              },
+            ]
+          : []),
+        ...(pathNodes.length > 0
+          ? [
+              { type: 'separator' as const },
+              {
+                id: 'reverse-path',
+                label: 'Reverse Path',
+                onClick: () => useEditorStore.getState().reverseSelectedPaths(sceneGraph),
+              },
+              {
+                id: 'close-path',
+                label: pathsClosed ? 'Open Path' : 'Close Path',
+                onClick: () =>
+                  useEditorStore.getState().setSelectedPathsClosed(sceneGraph, !pathsClosed),
               },
             ]
           : []),

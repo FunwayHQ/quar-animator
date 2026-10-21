@@ -1775,6 +1775,17 @@ describe('PropertiesPanel', () => {
       expect(point.handleIn!.y).toBeCloseTo(-30 / Math.SQRT2);
     });
 
+    it("switches a path's fill rule", () => {
+      const sg = setup([corner(0, 0), corner(100, 0), corner(50, 80)], []);
+      act(() => {
+        useEditorStore.setState({ activeTool: 'selection' });
+      });
+      act(() => {
+        fireEvent.change(screen.getByTestId('path-fill-rule'), { target: { value: 'evenodd' } });
+      });
+      expect((sg.getNode('p1') as PathNode).fillRule).toBe('evenodd');
+    });
+
     it('shows no handle fields with several points picked', () => {
       setup([corner(0, 0), { ...corner(100, 0), handleOut: { x: 30, y: 0 } }], [0, 1]);
       expect(screen.queryByTestId('vertex-handle-out-x')).toBeNull();

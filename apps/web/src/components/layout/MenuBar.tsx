@@ -18,7 +18,7 @@ import type { SceneGraph } from '@quar/core';
 import type { ProjectActions } from '../../hooks/useProjectActions';
 import type { ProjectListItem } from '../../services/projectStorage';
 import { ProjectListDialog } from '../common/ProjectListDialog';
-import type { SmartBoneAction } from '@quar/types';
+import type { SmartBoneAction, PathNode } from '@quar/types';
 import { showExportDialog } from '../common/ExportDialog';
 import { toast } from '../common/Toast';
 import { restoreTutorials } from '../../tutorials/seedTutorials';
@@ -274,6 +274,17 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
       return n && n.type === 'group';
     });
   }, [selectedNodeIds, sceneGraph]);
+
+  // The selected unlocked paths (for the Path section)
+  const selectedPathNodes = useMemo(
+    () =>
+      Array.from(selectedNodeIds)
+        .map((id) => sceneGraph.getNode(id))
+        .filter((n): n is PathNode => n?.type === 'path' && !n.locked),
+    [selectedNodeIds, sceneGraph]
+  );
+  const allPathsClosed =
+    selectedPathNodes.length > 0 && selectedPathNodes.every((path) => path.closed);
 
   const hasBooleanGroupSelected = useMemo(() => {
     return Array.from(selectedNodeIds).some((id) => {
@@ -762,6 +773,24 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                     onClick={() => {
                       closeMenu();
                       releaseBooleanGroupAction(sceneGraph);
+                    }}
+                  />
+                  <Separator />
+                  <SectionHeader label="Path" />
+                  <MenuItem
+                    label="Reverse Path"
+                    disabled={selectedPathNodes.length === 0}
+                    onClick={() => {
+                      closeMenu();
+                      useEditorStore.getState().reverseSelectedPaths(sceneGraph);
+                    }}
+                  />
+                  <MenuItem
+                    label={allPathsClosed ? 'Open Path' : 'Close Path'}
+                    disabled={selectedPathNodes.length === 0}
+                    onClick={() => {
+                      closeMenu();
+                      useEditorStore.getState().setSelectedPathsClosed(sceneGraph, !allPathsClosed);
                     }}
                   />
                   <Separator />

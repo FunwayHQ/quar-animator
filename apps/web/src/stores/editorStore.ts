@@ -69,6 +69,14 @@ import {
 import { flipInParentSpace, flipMatrix, flipPlacement, type FlipAxis } from './flip';
 import { symbolsUsedBy, type ClipboardPayload } from '../services/systemClipboard';
 import { pastedTracks, type RootMove } from './clipboardAnimation';
+import { reversedContours, reversedTracks } from './pathCommands';
+
+/** The selected layers that are unlocked paths. */
+function selectedPaths(sceneGraph: SceneGraphLike, ids: Set<string>): PathNode[] {
+  return [...ids]
+    .map((id) => sceneGraph.getNode(id))
+    .filter((node): node is PathNode => node?.type === 'path' && !node.locked);
+}
 import {
   DEFAULT_ONION_SKIN_SETTINGS,
   DEFAULT_DOCUMENT_BACKGROUND,
@@ -709,6 +717,12 @@ export interface EditorStore extends SequenceActions {
     parentId: string | null,
     index?: number
   ) => void;
+  /** Reverse the selected paths' direction (keyframes follow); undoable. */
+  reverseSelectedPaths: (sceneGraph: SceneGraphLike) => void;
+  /** Close or open the selected paths; undoable. */
+  setSelectedPathsClosed: (sceneGraph: SceneGraphLike, closed: boolean) => void;
+  /** How the selected paths fill where their contours overlap; undoable. */
+  setSelectedPathsFillRule: (sceneGraph: SceneGraphLike, rule: 'nonzero' | 'evenodd') => void;
   /**
    * Mirror these layers across a vertical (horizontal flip) or horizontal
    * line through `center` on the canvas, keyframes and Animation Sequence
@@ -2402,6 +2416,39 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     }
   },
 
+  reverseSelectedPaths: (sceneGraph) => {
+    const paths = selectedPaths(sceneGraph, get().selectedNodeIds);
+    if (paths.length === 0) return;
+    get().pushUndo(sceneGraph);
+    let timeline = get().timeline;
+    for (const path of paths) {
+      sceneGraph.updateNode(path.id, reversedContours(path));
+      timeline = reversedTracks(timeline, path);
+    }
+    set({ timeline, isDirty: true });
+  },
+  setSelectedPathsClosed: (sceneGraph, closed) => {
+    const paths = selectedPaths(sceneGraph, get().selectedNodeIds).filter(
+      (path) => path.closed !== closed
+    );
+    if (paths.length === 0) return;
+    get().pushUndo(sceneGraph);
+    for (const path of paths) {
+      // Closed, a path without a fill gets the default one, as when the Pen closes it
+      const fill = closed && path.fills.length === 0 ? { fills: [{ ...get().defaultFill }] } : {};
+      sceneGraph.updateNode(path.id, { closed, ...fill });
+    }
+    set({ isDirty: true });
+  },
+  setSelectedPathsFillRule: (sceneGraph, rule) => {
+    const paths = selectedPaths(sceneGraph, get().selectedNodeIds).filter(
+      (path) => (path.fillRule ?? 'nonzero') !== rule
+    );
+    if (paths.length === 0) return;
+    get().pushUndo(sceneGraph);
+    for (const path of paths) sceneGraph.updateNode(path.id, { fillRule: rule });
+    set({ isDirty: true });
+  },
   flipLayers: (sceneGraph, ids, axis, center) => {
     const layers = ids.filter((id) => sceneGraph.getNode(id));
     if (layers.length === 0) return;

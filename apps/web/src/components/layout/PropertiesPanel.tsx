@@ -3406,6 +3406,33 @@ export function PropertiesPanel() {
                   >
                     <Plus size={12} /> Add Fill
                   </button>
+                  {node.type === 'path' && (
+                    <div className={styles.inputGroup}>
+                      <span
+                        className={styles.propertyLabel}
+                        title="Where contours overlap or cross"
+                      >
+                        Fill rule
+                      </span>
+                      <select
+                        className={styles.select}
+                        value={node.fillRule ?? 'nonzero'}
+                        onChange={(e) =>
+                          useEditorStore
+                            .getState()
+                            .setSelectedPathsFillRule(
+                              sceneGraph,
+                              e.target.value as 'nonzero' | 'evenodd'
+                            )
+                        }
+                        aria-label="Fill rule"
+                        data-testid="path-fill-rule"
+                      >
+                        <option value="nonzero">Nonzero (overlaps filled)</option>
+                        <option value="evenodd">Even-odd (overlaps make holes)</option>
+                      </select>
+                    </div>
+                  )}
                 </div>
 
                 {/* Strokes list */}
