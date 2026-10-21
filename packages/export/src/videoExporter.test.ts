@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { exportMp4 } from './mp4Exporter';
+import { exportMp4, exportWebm } from './videoExporter';
 
 const mocks = vi.hoisted(() => ({
   canEncodeVideo: vi.fn(),
+  getFirstEncodableVideoCodec: vi.fn(),
   renderer: {
     preloadTextures: vi.fn(async () => {}),
     renderFrame: vi.fn((_: unknown, frame: number) => ({ frame }) as unknown as HTMLCanvasElement),
@@ -36,6 +37,10 @@ vi.mock('./frameRenderer', () => ({
 
 vi.mock('mediabunny', () => ({
   canEncodeVideo: mocks.canEncodeVideo,
+  getFirstEncodableVideoCodec: mocks.getFirstEncodableVideoCodec,
+  WebMOutputFormat: class {
+    readonly container = 'webm';
+  },
   Quality: class {
     constructor(readonly quality: string) {}
   },
@@ -222,5 +227,61 @@ describe('exportMp4', () => {
     expect(mocks.source?.closed).toBe(true);
     expect(mocks.output?.state).toBe('canceled');
     expect(mocks.renderer.dispose).toHaveBeenCalledOnce();
+  });
+});
+
+describe('exportWebm', () => {
+  const ctx = {
+    sceneGraph: { getRootNodes: () => [] } as never,
+    timeline: { tracks: [] } as never,
+  };
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.output = null;
+    mocks.source = null;
+  });
+
+  it('encodes VP9 (else VP8) into WebM, any size', async () => {
+    mocks.getFirstEncodableVideoCodec.mockResolvedValue('vp9');
+    const blob = await exportWebm(ctx, {
+      width: 63,
+      height: 47,
+      frameRate: 24,
+      startFrame: 0,
+      endFrame: 2,
+    });
+    expect(blob?.type).toBe('video/webm');
+    expect(mocks.getFirstEncodableVideoCodec).toHaveBeenCalledWith(
+      ['vp9', 'vp8'],
+      expect.objectContaining({ width: 63, height: 47 })
+    );
+    expect(mocks.source?.config).toMatchObject({ codec: 'vp9', alpha: 'discard' });
+    expect(mocks.source?.frames).toHaveLength(3);
+    expect(createFrameRendererMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({ backgroundColor: { r: 26, g: 26, b: 26, a: 1 } })
+    );
+  });
+
+  it('keeps transparency: nothing behind the artwork, encoded as alpha', async () => {
+    mocks.getFirstEncodableVideoCodec.mockResolvedValue('vp9');
+    await exportWebm(ctx, {
+      width: 64,
+      height: 48,
+      frameRate: 24,
+      startFrame: 0,
+      endFrame: 0,
+      transparent: true,
+    });
+    expect(createFrameRendererMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({ backgroundColor: null })
+    );
+    expect(mocks.source?.config).toMatchObject({ alpha: 'keep' });
+  });
+
+  it('explains when the browser cannot encode WebM', async () => {
+    mocks.getFirstEncodableVideoCodec.mockResolvedValue(null);
+    await expect(
+      exportWebm(ctx, { width: 64, height: 48, frameRate: 24, startFrame: 0, endFrame: 0 })
+    ).rejects.toThrow(/can’t encode WebM/);
   });
 });

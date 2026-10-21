@@ -1253,7 +1253,13 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                       showExportDialog('mp4');
                     }}
                   />
-                  <MenuItem label="Export as WebM..." disabled onClick={closeMenu} />
+                  <MenuItem
+                    label="Export as WebM..."
+                    onClick={() => {
+                      closeMenu();
+                      showExportDialog('webm');
+                    }}
+                  />
                   <Separator />
                   <MenuItem
                     label="Export as Lottie JSON..."

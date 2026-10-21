@@ -95,7 +95,14 @@ export {
   type GifTiming,
 } from './gifExporter';
 
-export { exportMp4, type Mp4ExportOptions } from './mp4Exporter';
+export {
+  exportMp4,
+  exportVideo,
+  exportWebm,
+  type Mp4ExportOptions,
+  type VideoExportOptions,
+  type VideoFormat,
+} from './videoExporter';
 
 // ============================================================================
 // Sprite Sheet

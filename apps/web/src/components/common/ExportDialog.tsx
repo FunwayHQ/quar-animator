@@ -1,7 +1,7 @@
 /**
  * Export Dialog for Quar Animator
  *
- * Modal dialog with tabs for PNG Sequence, Sprite Sheet, GIF, MP4, and Lottie JSON export.
+ * Modal dialog with tabs for PNG Sequence, Sprite Sheet, GIF, MP4, WebM and Lottie JSON export.
  * Follows the PromptDialog imperative + host pattern.
  *
  * Usage (imperative):
@@ -37,7 +37,7 @@ import styles from './ExportDialog.module.css';
 // Types
 // ============================================================================
 
-export type ExportTab = 'png-sequence' | 'sprite-sheet' | 'gif' | 'mp4' | 'lottie';
+export type ExportTab = 'png-sequence' | 'sprite-sheet' | 'gif' | 'mp4' | 'webm' | 'lottie';
 
 interface ExportDialogState {
   tab: ExportTab;
@@ -59,6 +59,10 @@ interface ExportDialogState {
   // MP4
   mp4Fps: number;
   mp4Speed: number;
+  // WebM
+  webmFps: number;
+  webmSpeed: number;
+  webmTransparent: boolean;
   /** 0 (best quality) … 100 (smallest file) */
   gifCompression: number;
   // Sprite Sheet
@@ -81,6 +85,7 @@ const TABS: { id: ExportTab; label: string }[] = [
   { id: 'sprite-sheet', label: 'Sprite Sheet' },
   { id: 'gif', label: 'GIF' },
   { id: 'mp4', label: 'MP4' },
+  { id: 'webm', label: 'WebM' },
   { id: 'lottie', label: 'Lottie JSON' },
 ];
 
@@ -159,7 +164,7 @@ function TimingFields({
   onSpeed,
   summary,
 }: {
-  format: 'gif' | 'mp4';
+  format: 'gif' | 'mp4' | 'webm';
   rates: number[];
   projectRate: number;
   fps: number;
@@ -369,6 +374,9 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
     gifSpeed: 1,
     mp4Fps: timeline.frameRate,
     mp4Speed: 1,
+    webmFps: timeline.frameRate,
+    webmSpeed: 1,
+    webmTransparent: false,
     gifCompression: 0,
     spriteLayout: 'grid',
     spriteColumns: 0, // 0 = auto
@@ -536,6 +544,28 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
         );
         if (blob && !cancelledRef.current) {
           downloadBlob(blob, 'animation.mp4');
+          close();
+        }
+      } else if (state.tab === 'webm') {
+        const { exportWebm } = await import('@quar/export');
+        const blob = await exportWebm(
+          frameRenderContext,
+          {
+            width: state.width,
+            height: state.height,
+            frameRate: timeline.frameRate,
+            startFrame: state.startFrame,
+            endFrame: state.endFrame,
+            fps: state.webmFps,
+            speed: state.webmSpeed,
+            transparent: state.webmTransparent,
+            backgroundColor: documentBackground,
+          },
+          (progress) => setState((s) => ({ ...s, progress })),
+          () => cancelledRef.current
+        );
+        if (blob && !cancelledRef.current) {
+          downloadBlob(blob, 'animation.webm');
           close();
         }
       } else if (state.tab === 'png-sequence') {
@@ -1007,6 +1037,48 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
                 <div className={styles.warning} role="note">
                   <span className={styles.warningText}>
                     MP4 uses H.264 encoding and a solid background. Availability depends on your
+                    browser and device.
+                  </span>
+                </div>
+              </>
+            )}
+
+            {state.tab === 'webm' && (
+              <>
+                <div className={styles.formRow}>
+                  <span className={styles.label}>Background</span>
+                  <label className={styles.checkbox}>
+                    <input
+                      type="checkbox"
+                      checked={state.webmTransparent}
+                      onChange={(e) => update('webmTransparent', e.target.checked)}
+                      data-testid="export-webm-transparent"
+                    />
+                    <span>Transparent</span>
+                  </label>
+                </div>
+                <TimingFields
+                  format="webm"
+                  rates={frameRateChoices(timeline.frameRate)}
+                  projectRate={timeline.frameRate}
+                  fps={state.webmFps}
+                  speed={state.webmSpeed}
+                  onFps={(fps) => update('webmFps', fps)}
+                  onSpeed={(speed) => update('webmSpeed', speed)}
+                  summary={describeVideoTiming(
+                    sampleTimeline({
+                      frameRate: timeline.frameRate,
+                      startFrame: state.startFrame,
+                      endFrame: state.endFrame,
+                      fps: state.webmFps,
+                      speed: state.webmSpeed,
+                    })
+                  )}
+                />
+                <div className={styles.warning} role="note">
+                  <span className={styles.warningText}>
+                    WebM uses VP9 (VP8 where VP9 isn’t available) and can keep a transparent
+                    background, which Chrome, Edge and Firefox show. Availability depends on your
                     browser and device.
                   </span>
                 </div>

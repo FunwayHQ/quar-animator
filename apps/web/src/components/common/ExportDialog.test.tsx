@@ -4,7 +4,13 @@ import { useEffect } from 'react';
 import type { ReactElement } from 'react';
 import { createDefaultTransform } from '@quar/core';
 import type { ArtboardNode, Node } from '@quar/types';
-import { analyzeLottieExport, exportGif, exportLottieBlob, exportMp4 } from '@quar/export';
+import {
+  analyzeLottieExport,
+  exportGif,
+  exportLottieBlob,
+  exportMp4,
+  exportWebm,
+} from '@quar/export';
 import { downloadBlob } from '../../services/exportService';
 import { SceneGraphProvider, useSceneGraph } from '../../contexts/SceneGraphContext';
 
@@ -43,6 +49,7 @@ vi.mock('@quar/export', async () => {
     exportLottieBlob: vi.fn().mockReturnValue(new Blob(['{}'], { type: 'application/json' })),
     exportGif: vi.fn().mockResolvedValue(new Blob(['gif'], { type: 'image/gif' })),
     exportMp4: vi.fn().mockResolvedValue(new Blob(['mp4'], { type: 'video/mp4' })),
+    exportWebm: vi.fn().mockResolvedValue(new Blob(['webm'], { type: 'video/webm' })),
     MAX_GIF_FPS: 50,
     sampleTimeline: (
       o: { frameRate: number; startFrame: number; endFrame: number; fps?: number; speed?: number },
@@ -451,6 +458,26 @@ describe('ExportDialog', () => {
 
     expect(await screen.findByTestId('export-error')).toHaveTextContent(
       /does not support H\.264 MP4 encoding/
+    );
+  });
+
+  it('exports WebM with the chosen timing and transparency', async () => {
+    render(<ExportDialogHost />);
+    act(() => showExportDialog('webm'));
+    expect(screen.getByText(/WebM uses VP9/)).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('export-webm-transparent'));
+    fireEvent.change(screen.getByTestId('export-webm-speed'), { target: { value: '2' } });
+    expect(screen.getByTestId('export-webm-timing')).toHaveTextContent('30 frames · 1.0 s');
+
+    fireEvent.click(screen.getByTestId('export-dialog-export'));
+    await waitFor(() => expect(exportWebm).toHaveBeenCalledOnce());
+    expect(vi.mocked(exportWebm).mock.calls[0]![1]).toMatchObject({
+      transparent: true,
+      speed: 2,
+      fps: 30,
+    });
+    await waitFor(() =>
+      expect(downloadBlob).toHaveBeenCalledWith(expect.any(Blob), 'animation.webm')
     );
   });
 
