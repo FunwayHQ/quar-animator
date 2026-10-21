@@ -648,7 +648,7 @@ export function PropertiesPanel() {
         addKeyframeAtFrame(selectedId, `transform.position.${axis}`, currentFrame, centerValue);
       }
     },
-    [selectedId, sceneGraph, autoKeyframe, currentFrame, addKeyframeAtFrame]
+    [selectedId, sceneGraph, autoKeyframe, currentFrame, addKeyframeAtFrame, symbols]
   );
 
   const handleRotationChange = useCallback(
@@ -762,7 +762,7 @@ export function PropertiesPanel() {
         }
       }
     },
-    [selectedId, sceneGraph, autoKeyframe, currentFrame, addKeyframeAtFrame]
+    [selectedId, sceneGraph, autoKeyframe, currentFrame, addKeyframeAtFrame, symbols]
   );
 
   const handleSizeChange = useCallback(
@@ -800,7 +800,7 @@ export function PropertiesPanel() {
 
       applySize(currentNode, newW, newH);
     },
-    [selectedId, sceneGraph, aspectRatioLocked, applySize]
+    [selectedId, sceneGraph, aspectRatioLocked, applySize, symbols]
   );
 
   // ============================================================================
@@ -1355,7 +1355,7 @@ export function PropertiesPanel() {
         }
       }
     }
-  }, [toggleSnapToGrid, selectedNodeIds, sceneGraph]);
+  }, [toggleSnapToGrid, selectedNodeIds, sceneGraph, symbols]);
 
   // Color picker popover state
   const [activePickerKey, setActivePickerKey] = useState<string | null>(null);

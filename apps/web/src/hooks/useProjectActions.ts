@@ -94,7 +94,7 @@ export function useProjectActions(options: UseProjectActionsOptions = {}): Proje
       activePageId: state.activePageId,
       symbols: state.symbols,
     };
-  }, []);
+  }, [sceneGraph]);
 
   // Apply editor state from deserialized data
   const applyEditorState = useCallback((state: Record<string, unknown>) => {

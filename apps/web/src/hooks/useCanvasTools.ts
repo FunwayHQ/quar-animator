@@ -804,7 +804,7 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
       syncPenToolState();
       syncDirectSelectionState();
     },
-    [syncPenToolState]
+    [syncPenToolState, syncDirectSelectionState]
   );
 
   const handleKeyUp = useCallback(

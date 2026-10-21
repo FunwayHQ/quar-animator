@@ -137,7 +137,6 @@ export function Canvas({
     (state) => state.sequenceWindowOpen && state.editingSymbolId === null
   );
   const sequenceSteps = useEditorStore((state) => state.animationSequence.steps);
-  const clipboard = useEditorStore((state) => state.clipboard);
   const pasteClipboard = useEditorStore((state) => state.pasteClipboard);
   const duplicateSelection = useEditorStore((state) => state.duplicateSelection);
   const deleteSelection = useEditorStore((state) => state.deleteSelection);
@@ -482,7 +481,7 @@ export function Canvas({
       selectedNodeIds.size > 0 &&
       [...selectedNodeIds].every((id) => sceneGraph.getNode(id)?.type === 'bone');
     return onlyBones ? handles.filter((handle) => handle.position.startsWith('rotate')) : handles;
-    // cameraVersion triggers recalculation when camera changes (pan + zoom)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the camera pans and zooms in place: cameraVersion says when
   }, [selectionBounds, cameraVersion, selectedNodeIds, sceneGraph]);
 
   // Convert selection bounds to screen coordinates for overlay
@@ -516,7 +515,7 @@ export function Canvas({
       },
       center: camera.worldToScreen(selectionBounds.center),
     };
-    // cameraVersion triggers recalculation when camera changes (pan + zoom)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the camera pans and zooms in place: cameraVersion says when
   }, [selectionBounds, cameraVersion]);
 
   // Convert marquee rect (world coords) to screen coords for overlay
@@ -534,6 +533,7 @@ export function Canvas({
       width: Math.abs(p2.x - p1.x),
       height: Math.abs(p2.y - p1.y),
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the camera pans and zooms in place: cameraVersion says when
   }, [marqueeRect, cameraVersion]);
 
   // --------------------------------------------------------------------------
@@ -1037,7 +1037,15 @@ export function Canvas({
       window.removeEventListener('menubar:create-ik-chain', handleCreateIKChain);
       window.removeEventListener('menubar:remove-ik-chain', handleRemoveIKChain);
     };
-  }, [cameraReady, sceneGraph, bindMeshToBones, unbindMesh, createIKChain, removeIKChain]); // Re-attach when camera becomes ready
+  }, [
+    cameraReady,
+    sceneGraph,
+    sceneGraphRef,
+    bindMeshToBones,
+    unbindMesh,
+    createIKChain,
+    removeIKChain,
+  ]); // Re-attach when camera becomes ready
 
   // --------------------------------------------------------------------------
   // Mouse Handlers
@@ -1262,7 +1270,7 @@ export function Canvas({
         // Invalid SVG — ignore
       }
     },
-    [getCanvasCenter]
+    [getCanvasCenter, sceneGraphRef]
   );
 
   const importImageBlob = useCallback(
@@ -1310,7 +1318,7 @@ export function Canvas({
       };
       reader.readAsDataURL(blob);
     },
-    [getCanvasCenter]
+    [getCanvasCenter, sceneGraphRef]
   );
 
   /**
@@ -1397,7 +1405,7 @@ export function Canvas({
     }
 
     return false;
-  }, [importSvgString, importImageBlob]);
+  }, [importSvgString, importImageBlob, sceneGraphRef]);
 
   // Handle native paste event (backup for when Clipboard API is unavailable)
   const handlePaste = useCallback(
@@ -1474,7 +1482,7 @@ export function Canvas({
 
       pasteClipboard(sg);
     },
-    [pasteClipboard, importSvgString, importImageBlob]
+    [pasteClipboard, importSvgString, importImageBlob, sceneGraphRef]
   );
 
   // Document-level paste handler with dual strategy:
@@ -1521,7 +1529,7 @@ export function Canvas({
       document.removeEventListener('keydown', handleGlobalKeyDown);
       document.removeEventListener('paste', handleGlobalPaste);
     };
-  }, [handlePaste, pasteFromSystemClipboard, pasteClipboard]);
+  }, [handlePaste, pasteFromSystemClipboard, pasteClipboard, sceneGraphRef]);
 
   // --------------------------------------------------------------------------
   // Keyboard Handlers
@@ -1663,8 +1671,6 @@ export function Canvas({
     [
       toolKeyDown,
       sceneGraph,
-      pasteClipboard,
-      pasteFromSystemClipboard,
       duplicateSelection,
       deleteSelection,
       selectAll,
@@ -2154,7 +2160,6 @@ export function Canvas({
     ];
   }, [
     selectedNodeIds,
-    clipboard,
     sceneGraph,
     duplicateSelection,
     pasteClipboard,
@@ -2181,7 +2186,6 @@ export function Canvas({
     createIKChain,
     removeIKChain,
     ikChains,
-    ikTargetNodes,
     isDirectSelectionActive,
     directSelectionPoints,
     deleteDirectSelectionPoints,

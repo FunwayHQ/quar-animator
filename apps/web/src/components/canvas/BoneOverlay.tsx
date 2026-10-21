@@ -73,6 +73,7 @@ export function BoneOverlay({
         isDynamic,
       };
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the camera pans and zooms in place: cameraVersion says when
   }, [
     boneNodes,
     selectedNodeIds,
@@ -98,6 +99,7 @@ export function BoneOverlay({
         ikChainId: target.ikChainId,
       };
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the camera pans and zooms in place: cameraVersion says when
   }, [ikTargetNodes, selectedNodeIds, camera, cameraVersion, sceneGraph]);
 
   // Dashed lines from end effector tip to IK target
@@ -128,7 +130,7 @@ export function BoneOverlay({
     }
 
     return lines;
-    // The bones and targets move the line's ends
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the line's ends move with the bones and targets, and the camera
   }, [ikChains, boneNodes, ikTargetNodes, camera, cameraVersion, sceneGraph]);
 
   if (!camera || (markers.length === 0 && ikMarkers.length === 0)) return null;

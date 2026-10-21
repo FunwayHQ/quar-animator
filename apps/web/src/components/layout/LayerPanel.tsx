@@ -813,6 +813,7 @@ export function LayerPanel() {
     sendToBack,
     handleToggleVisibility,
     handleToggleLock,
+    pushUndo,
   ]);
 
   // ========================================================================
