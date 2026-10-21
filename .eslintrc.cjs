@@ -30,6 +30,8 @@ module.exports = {
     '**/*.test.ts',
     '**/*.test.tsx',
     '**/test/setup.ts',
+    // Scripts that make the promo video, not part of the app
+    'marketing',
   ],
   parser: '@typescript-eslint/parser',
   parserOptions: {

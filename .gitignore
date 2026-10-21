@@ -61,3 +61,8 @@ storybook-static/
 # Playwright MCP screenshots
 .playwright-mcp/
 *.png
+
+# Marketing videos, made by the scripts in marketing/source (kept out of git)
+marketing/*.mp4
+marketing/*.jpg
+marketing/source/out/
