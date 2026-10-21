@@ -3,7 +3,7 @@
  * Creates custom bezier paths by clicking and dragging
  */
 
-import type { CanvasPointerEvent, PathNode, PathPoint, Vector2 } from '@quar/types';
+import type { CanvasPointerEvent, Node, PathNode, PathPoint, Vector2 } from '@quar/types';
 import { BaseTool, type ToolContext } from './BaseTool';
 import { createDefaultTransform } from '../SceneGraph';
 import { vec2 } from '../math';
@@ -11,7 +11,27 @@ import {
   convertPointType as convertPointTypeUtil,
   updateHandleWithSymmetry,
 } from '../path/pointUtils';
-import { centerPathNodeGeometry } from '../path/pathUtils';
+import { centerPathNodeGeometry, getSubpathBoundaries } from '../path/pathUtils';
+import {
+  deletePathPoints,
+  insertPathPoint,
+  nearestPathPoint,
+  nearestPathSegment,
+} from '../path/pathEditing';
+
+/** A crosshair with a small + or − beside it (the Pen over a selected path). */
+function badgeCursor(sign: 'add' | 'remove'): string {
+  const cross = 'M8 1v14M1 8h14';
+  const badge = sign === 'add' ? 'M16 19h7M19.5 15.5v7' : 'M16 19h7';
+  const svg =
+    `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none">` +
+    `<path d="${cross} ${badge}" stroke="#fff" stroke-width="3"/>` +
+    `<path d="${cross} ${badge}" stroke="#000" stroke-width="1.2"/></svg>`;
+  return `url("data:image/svg+xml,${encodeURIComponent(svg)}") 8 8, crosshair`;
+}
+
+const ADD_POINT_CURSOR = badgeCursor('add');
+const REMOVE_POINT_CURSOR = badgeCursor('remove');
 
 // ============================================================================
 // PenTool Class
@@ -45,6 +65,8 @@ export class PenTool extends BaseTool {
 
   private currentPath: PathPoint[] = [];
   private isDrawing: boolean = false;
+  /** Not drawing: what a click on a selected path under the pointer would do */
+  private hoverEdit: 'add' | 'remove' | null = null;
   private isDraggingHandle: boolean = false;
   private previewNode: PathNode | null = null;
 
@@ -72,6 +94,9 @@ export class PenTool extends BaseTool {
       event.shiftKey && last
         ? constrainTo45(last.position, event.worldPosition)
         : { ...event.worldPosition };
+
+    // On a selected path: a click on a segment adds a point, on a point removes it
+    if (!this.isDrawing && this.editSelectedPath(event.worldPosition)) return;
 
     if (!this.isDrawing) {
       // Start new path
@@ -111,7 +136,10 @@ export class PenTool extends BaseTool {
   }
 
   onPointerMove(event: CanvasPointerEvent): void {
-    if (!this.isDrawing) return;
+    if (!this.isDrawing) {
+      this.hoverEdit = this.selectedPathTarget(event.worldPosition)?.edit ?? null;
+      return;
+    }
 
     const last = this.currentPath[this.currentPath.length - 1];
     // Shift holds the next segment (or, while dragging one out, the handle) to 45°
@@ -308,9 +336,94 @@ export class PenTool extends BaseTool {
     }
   }
 
+  /** Over a selected path: + to add a point on a segment, − to remove a point. */
+  getCursor(): string {
+    if (this.hoverEdit === 'add') return ADD_POINT_CURSOR;
+    if (this.hoverEdit === 'remove') return REMOVE_POINT_CURSOR;
+    return this.cursor;
+  }
+
   // --------------------------------------------------------------------------
   // Private Methods
   // --------------------------------------------------------------------------
+
+  /**
+   * What's under the pointer on a selected (unlocked) path: one of its points
+   * (but not an open path's ends, which a click starts drawing from) to
+   * remove, or a segment to add a point to.
+   */
+  private selectedPathTarget(
+    worldPos: Vector2
+  ):
+    | { edit: 'remove'; node: PathNode; index: number }
+    | { edit: 'add'; node: PathNode; segmentIndex: number; t: number }
+    | null {
+    const radius = 8 / this.context.camera.zoom;
+    const { sceneGraph } = this.context;
+    for (const id of this.context.getSelectedIds()) {
+      const node = sceneGraph.getNode(id);
+      if (node?.type !== 'path' || this.isLockedInScene(node)) continue;
+      const toWorld = sceneGraph.getWorldTransform(id);
+      const index = nearestPathPoint(node, toWorld, worldPos, radius);
+      if (index !== null) {
+        if (this.isOpenEnd(node, index)) continue;
+        return { edit: 'remove', node, index };
+      }
+      const segment = nearestPathSegment(node, toWorld, worldPos, radius);
+      if (segment) return { edit: 'add', node, segmentIndex: segment.segmentIndex, t: segment.t };
+    }
+    return null;
+  }
+
+  /** The first or last point of an open path's contour. */
+  private isOpenEnd(node: PathNode, index: number): boolean {
+    if (node.closed) return false;
+    const boundaries = getSubpathBoundaries(node);
+    return boundaries.some((start, c) => {
+      const end = boundaries[c + 1];
+      return end !== undefined && end > start && (index === start || index === end - 1);
+    });
+  }
+
+  private isLockedInScene(node: Node): boolean {
+    for (let current: Node | undefined = node; current; ) {
+      if (current.locked) return true;
+      current = current.parent ? this.context.sceneGraph.getNode(current.parent) : undefined;
+    }
+    return false;
+  }
+
+  /** Add or remove a point of a selected path under the pointer; true when it did. */
+  private editSelectedPath(worldPos: Vector2): boolean {
+    const target = this.selectedPathTarget(worldPos);
+    if (!target) return false;
+    const { node } = target;
+    const before = structuredClone(node);
+    if (target.edit === 'remove') {
+      const remaining = deletePathPoints(node, [target.index]);
+      // A path keeps at least two points: the click does nothing more
+      if (!remaining) return true;
+      this.context.onTransformStart?.();
+      this.context.sceneGraph.updateNode(node.id, remaining);
+      this.context.onPathPointsChange?.(node.id, before, {
+        kind: 'delete',
+        indices: [target.index],
+      });
+    } else {
+      this.context.onTransformStart?.();
+      this.context.sceneGraph.updateNode(
+        node.id,
+        insertPathPoint(node, target.segmentIndex, target.t)
+      );
+      this.context.onPathPointsChange?.(node.id, before, {
+        kind: 'insert',
+        segmentIndex: target.segmentIndex,
+        t: target.t,
+      });
+    }
+    this.hoverEdit = this.selectedPathTarget(worldPos)?.edit ?? null;
+    return true;
+  }
 
   private finalizePath(closed: boolean): void {
     if (this.currentPath.length < 2) {

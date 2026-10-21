@@ -2,10 +2,12 @@
  * Tests for PenTool
  */
 
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { PenTool, constrainTo45 } from './PenTool';
 import type { ToolContext } from './BaseTool';
+import type { PathNode } from '@quar/types';
 import { createMockToolContext, createMockPointerEvent } from '../test/setup';
+import { createDefaultTransform } from '../SceneGraph';
 
 describe('PenTool', () => {
   let context: ToolContext;
@@ -752,6 +754,136 @@ describe('PenTool', () => {
       expect(point.handleOut).toEqual({ x: 0, y: 40 });
       expect(point.handleIn).toEqual({ x: -40, y: -0 });
       expect(point.type).toBe('corner');
+    });
+  });
+
+  describe('editing a selected path', () => {
+    function addPath(points: [number, number][], closed: boolean) {
+      const node = {
+        id: context.generateId(),
+        name: 'Path',
+        type: 'path' as const,
+        parent: null,
+        children: [],
+        transform: createDefaultTransform(),
+        visible: true,
+        locked: false,
+        opacity: 1,
+        blendMode: 'normal' as const,
+        points: points.map(([x, y]) => ({
+          position: { x, y },
+          handleIn: null,
+          handleOut: null,
+          type: 'corner' as const,
+        })),
+        closed,
+        fills: [],
+        strokes: [],
+      };
+      context.sceneGraph.addNode(node);
+      return node;
+    }
+    const pointsOf = (id: string) =>
+      (context.sceneGraph.getNode(id) as PathNode).points.map((p) => p.position);
+    const click = (x: number, y: number) => {
+      tool.onPointerDown(createMockPointerEvent({ worldPosition: { x, y }, button: 0 }));
+      tool.onPointerUp(createMockPointerEvent({ worldPosition: { x, y }, buttons: 0 }));
+    };
+
+    it('adds a point where a segment is clicked, keeping the shape', () => {
+      const onPathPointsChange = vi.fn();
+      context.onPathPointsChange = onPathPointsChange;
+      const path = addPath(
+        [
+          [0, 0],
+          [100, 0],
+          [100, 100],
+        ],
+        true
+      );
+      context.setSelectedIds([path.id]);
+
+      tool.onPointerMove(createMockPointerEvent({ worldPosition: { x: 100, y: 50 }, buttons: 0 }));
+      expect(tool.getCursor()).toMatch(/^url\(/);
+      click(100, 50);
+
+      expect(pointsOf(path.id)).toEqual([
+        { x: 0, y: 0 },
+        { x: 100, y: 0 },
+        { x: 100, y: 50 },
+        { x: 100, y: 100 },
+      ]);
+      expect(tool.isCurrentlyDrawing()).toBe(false);
+      expect(onPathPointsChange).toHaveBeenCalledWith(
+        path.id,
+        expect.anything(),
+        expect.objectContaining({ kind: 'insert', segmentIndex: 1 })
+      );
+    });
+
+    it('removes a point that is clicked', () => {
+      const path = addPath(
+        [
+          [0, 0],
+          [100, 0],
+          [100, 100],
+          [0, 100],
+        ],
+        true
+      );
+      context.setSelectedIds([path.id]);
+
+      click(100, 0);
+
+      expect(pointsOf(path.id)).toEqual([
+        { x: 0, y: 0 },
+        { x: 100, y: 100 },
+        { x: 0, y: 100 },
+      ]);
+    });
+
+    it("starts drawing from an open path's end rather than removing it", () => {
+      const path = addPath(
+        [
+          [0, 0],
+          [100, 0],
+          [200, 0],
+        ],
+        false
+      );
+      context.setSelectedIds([path.id]);
+
+      click(200, 0);
+
+      expect(pointsOf(path.id)).toHaveLength(3);
+      expect(tool.isCurrentlyDrawing()).toBe(true);
+    });
+
+    it('leaves paths that are not selected, or locked, alone', () => {
+      const unselected = addPath(
+        [
+          [0, 0],
+          [100, 0],
+          [100, 100],
+        ],
+        true
+      );
+      click(100, 50);
+      expect(pointsOf(unselected.id)).toHaveLength(3);
+      tool.onKeyDown(new KeyboardEvent('keydown', { key: 'Escape' }));
+
+      const locked = addPath(
+        [
+          [0, 300],
+          [100, 300],
+          [100, 400],
+        ],
+        true
+      );
+      context.sceneGraph.updateNode(locked.id, { locked: true });
+      context.setSelectedIds([locked.id]);
+      click(100, 350);
+      expect(pointsOf(locked.id)).toHaveLength(3);
     });
   });
 });

@@ -26,11 +26,14 @@ import {
   getSubpathBoundaries,
   setAllPoints,
   getContourRange,
-  getAbsoluteControlPoints,
-  splitSegment,
   bendSegment,
 } from '../path/pathUtils';
-import { bezier } from '../path/bezier';
+import {
+  deletePathPoints,
+  insertPathPoint,
+  nearestPathSegment,
+  segmentEndIndex,
+} from '../path/pathEditing';
 import { getTextLocalBounds } from '../font/textPlacement';
 
 // ============================================================================
@@ -309,8 +312,7 @@ export class DirectSelectionTool extends BaseTool {
     if (segmentHit) {
       const node = this.context.sceneGraph.getNode(segmentHit.nodeId) as PathNode;
       const allPts = getAllPoints(node);
-      const { start, end } = getContourRange(getSubpathBoundaries(node), segmentHit.segmentIndex);
-      const endIndex = start + ((segmentHit.segmentIndex - start + 1) % (end - start));
+      const endIndex = segmentEndIndex(node, segmentHit.segmentIndex);
       this.bend = {
         hit: segmentHit,
         endIndex,
@@ -829,51 +831,12 @@ export class DirectSelectionTool extends BaseTool {
   private hitTestSegment(worldPos: Vector2): SegmentHit | null {
     const hitRadius = 8 / this.context.camera.zoom;
     let best: (SegmentHit & { distance: number }) | null = null;
-
-    const paths = this.getPathNodes();
-
-    for (const node of paths) {
-      const allPts = getAllPoints(node);
-      const boundaries = getSubpathBoundaries(node);
-      const worldMatrix = this.getNodeWorldMatrix(node);
-      const toWorld = (v: Vector2) => mat3.transformPoint(worldMatrix, v);
-
-      for (let c = 0; c < boundaries.length - 1; c++) {
-        const start = boundaries[c]!;
-        const end = boundaries[c + 1]!;
-        const contourLen = end - start;
-        const numSegments = node.closed ? contourLen : contourLen - 1;
-
-        for (let local = 0; local < numSegments; local++) {
-          const flatIdx = start + local;
-          const nextFlatIdx = start + ((local + 1) % contourLen);
-
-          const p1 = allPts[flatIdx]!;
-          const p2 = allPts[nextFlatIdx]!;
-          const { cp1, cp2 } = getAbsoluteControlPoints(p1, p2);
-
-          // An affine map keeps a bezier a bezier, with the same t along it
-          const nearest = bezier.nearestPoint(
-            toWorld(p1.position),
-            toWorld(cp1),
-            toWorld(cp2),
-            toWorld(p2.position),
-            worldPos
-          );
-
-          if (nearest.distance < hitRadius && (!best || nearest.distance < best.distance)) {
-            best = {
-              type: 'segment',
-              nodeId: node.id,
-              segmentIndex: flatIdx,
-              t: nearest.t,
-              distance: nearest.distance,
-            };
-          }
-        }
+    for (const node of this.getPathNodes()) {
+      const nearest = nearestPathSegment(node, this.getNodeWorldMatrix(node), worldPos, hitRadius);
+      if (nearest && (!best || nearest.distance < best.distance)) {
+        best = { type: 'segment', nodeId: node.id, ...nearest };
       }
     }
-
     if (!best) return null;
     const { distance: _distance, ...hit } = best;
     return hit;
@@ -987,27 +950,12 @@ export class DirectSelectionTool extends BaseTool {
       if (!node || node.type !== 'path') continue;
       const before = structuredClone(node);
 
-      const allPts = getAllPoints(node);
-      const boundaries = getSubpathBoundaries(node);
-      const deleteSet = new Set(indices);
-
-      // Split into contours, remove marked points, drop empty contours
-      const newContours: PathPoint[][] = [];
-      for (let c = 0; c < boundaries.length - 1; c++) {
-        const start = boundaries[c] ?? 0;
-        const end = boundaries[c + 1] ?? allPts.length;
-        const contour = allPts.slice(start, end).filter((_pt, idx) => !deleteSet.has(start + idx));
-        if (contour.length > 0) newContours.push(contour);
-      }
-
-      const totalRemaining = newContours.reduce((sum, c) => sum + c.length, 0);
-      if (totalRemaining < 2) {
+      const remaining = deletePathPoints(node, indices);
+      if (!remaining) {
         // Remove the entire path if less than 2 points remain
         this.context.sceneGraph.removeNode(nodeId);
       } else {
-        const points = newContours[0];
-        const subpaths = newContours.length > 1 ? newContours.slice(1) : undefined;
-        this.context.sceneGraph.updateNode(nodeId, { points, subpaths });
+        this.context.sceneGraph.updateNode(nodeId, remaining);
         this.context.onPathPointsChange?.(nodeId, before, { kind: 'delete', indices });
       }
     }
@@ -1021,38 +969,9 @@ export class DirectSelectionTool extends BaseTool {
     this.context.onTransformStart?.();
     const before = structuredClone(node);
 
-    const allPts = getAllPoints(node);
-    const boundaries = getSubpathBoundaries(node);
-    const { start, end } = getContourRange(boundaries, hit.segmentIndex);
-    const contourLen = end - start;
-    const localIdx = hit.segmentIndex - start;
-    const nextLocalIdx = (localIdx + 1) % contourLen;
-
     // Split the curve where it was hit (t is the same in local space), so
     // its shape doesn't change
-    const endIndex = start + nextLocalIdx;
-    const split = splitSegment(allPts[hit.segmentIndex]!, allPts[endIndex]!, hit.t);
-
-    // Insert the new point after the segment start within the flat array
-    const newAll = [...allPts];
-    newAll[hit.segmentIndex] = split.start;
-    newAll[endIndex] = split.end;
-    newAll.splice(hit.segmentIndex + 1, 0, split.point);
-
-    // Rebuild points + subpaths — boundaries shifted by 1 for contours after insertion
-    const newContours: PathPoint[][] = [];
-    let offset = 0;
-    for (let c = 0; c < boundaries.length - 1; c++) {
-      const cStart = boundaries[c]!;
-      const cEnd = boundaries[c + 1]!;
-      const extra = cStart <= hit.segmentIndex && hit.segmentIndex < cEnd ? 1 : 0;
-      newContours.push(newAll.slice(offset, offset + (cEnd - cStart) + extra));
-      offset += cEnd - cStart + extra;
-    }
-
-    const points = newContours[0];
-    const subpaths = newContours.length > 1 ? newContours.slice(1) : undefined;
-    this.context.sceneGraph.updateNode(hit.nodeId, { points, subpaths });
+    this.context.sceneGraph.updateNode(hit.nodeId, insertPathPoint(node, hit.segmentIndex, hit.t));
     this.context.onPathPointsChange?.(hit.nodeId, before, {
       kind: 'insert',
       segmentIndex: hit.segmentIndex,
