@@ -12,6 +12,7 @@ import {
 } from '../../stores/editorStore';
 import { useSceneGraph } from '../../contexts/SceneGraphContext';
 import { flipSelected } from '../canvas/flipSelected';
+import { hasGoogleFontsConsent, setGoogleFontsConsent } from '../common/ConsentBanner';
 import { copyLayers, pasteLayers } from '../../hooks/useSystemClipboard';
 import type { SceneGraph } from '@quar/core';
 import type { ProjectActions } from '../../hooks/useProjectActions';
@@ -1232,6 +1233,20 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                     onClick={() => {
                       closeMenu();
                       void handleRestoreTutorials();
+                    }}
+                  />
+                  <MenuItem
+                    label="Use Google Fonts"
+                    checked={hasGoogleFontsConsent()}
+                    onClick={() => {
+                      closeMenu();
+                      const on = !hasGoogleFontsConsent();
+                      setGoogleFontsConsent(on);
+                      toast.info(
+                        on
+                          ? 'Google Fonts are on: fonts other than Inter load from Google when you pick them.'
+                          : 'Google Fonts are off: nothing more loads from Google. Fonts already loaded stay until you reload.'
+                      );
                     }}
                   />
                   <Separator />

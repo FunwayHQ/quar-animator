@@ -331,6 +331,23 @@ describe('MenuBar', () => {
     });
   });
 
+  it('Help > Use Google Fonts turns them off, and on again', () => {
+    localStorage.setItem('quar-google-fonts-consent', 'true');
+    render(<MenuBar />);
+
+    fireEvent.click(screen.getByTestId('menu-help'));
+    const item = screen.getByRole('menuitemcheckbox', { name: /Use Google Fonts/ });
+    expect(item).toHaveAttribute('aria-checked', 'true');
+    fireEvent.click(item);
+    expect(localStorage.getItem('quar-google-fonts-consent')).not.toBe('true');
+
+    fireEvent.click(screen.getByTestId('menu-help'));
+    const off = screen.getByRole('menuitemcheckbox', { name: /Use Google Fonts/ });
+    expect(off).toHaveAttribute('aria-checked', 'false');
+    fireEvent.click(off);
+    expect(localStorage.getItem('quar-google-fonts-consent')).toBe('true');
+  });
+
   it('Help > Report Issues opens the project on GitHub', () => {
     const open = vi.spyOn(window, 'open').mockReturnValue(null);
     render(<MenuBar />);
