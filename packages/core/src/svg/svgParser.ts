@@ -144,7 +144,10 @@ export function parseSvg(svgString: string): ParsedSvg {
   const height = parseSvgLength(svgEl.getAttribute('height') || '') || viewBox?.height || 150;
 
   // Collect defs
-  const defs = collectDefs(svgEl);
+  const defs = collectDefs(svgEl, {
+    width: viewBox?.width ?? width,
+    height: viewBox?.height ?? height,
+  });
 
   // Walk children (excluding defs)
   const elements = walkChildren(svgEl, defs, undefined);
@@ -173,7 +176,13 @@ function parseViewBox(
 // Defs Collection
 // ============================================================================
 
-function collectDefs(svgEl: Element): SvgDefs {
+/** The size user-space percentages refer to (the viewBox, else the SVG's size). */
+interface Viewport {
+  width: number;
+  height: number;
+}
+
+function collectDefs(svgEl: Element, viewport: Viewport): SvgDefs {
   const defs: SvgDefs = {
     gradients: new Map(),
   };
@@ -181,30 +190,58 @@ function collectDefs(svgEl: Element): SvgDefs {
   // Find all <defs> sections and collect gradients from them
   const defsElements = svgEl.querySelectorAll('defs');
   for (const defsEl of defsElements) {
-    collectGradients(defsEl, defs.gradients);
+    collectGradients(defsEl, defs.gradients, viewport);
   }
 
   // Also check for gradients directly under <svg> (some SVGs put them outside <defs>)
-  collectGradients(svgEl, defs.gradients);
+  collectGradients(svgEl, defs.gradients, viewport);
 
   // Resolve gradient href inheritance
   resolveGradientInheritance(defs.gradients);
+  resolveUserSpaceDefaults(defs.gradients, viewport);
 
   return defs;
 }
 
 /**
- * Parse a gradient coordinate. The Quar gradient convention is normalized 0-1
- * (objectBoundingBox), so percentages must be divided by 100 — a bare parseFloat
- * turns "100%" into 100, placing the gradient stop 100x outside the shape.
- * (userSpaceOnUse absolute coordinates are not yet normalized — separate issue.)
+ * Parse a gradient coordinate. In bounding-box units a percentage is a
+ * fraction of the box (a bare parseFloat turns "100%" into 100, placing the
+ * stop 100x outside the shape); in user space it's a share of `length`, the
+ * viewport's size along that axis.
  */
-function parseGradientCoord(v: string): number {
+function parseGradientCoord(v: string, length?: number): number {
   const t = v.trim();
-  return t.endsWith('%') ? parseFloat(t) / 100 : parseFloat(t);
+  if (!t.endsWith('%')) return parseFloat(t);
+  return (parseFloat(t) / 100) * (length ?? 1);
 }
 
-function collectGradients(parent: Element, gradients: Map<string, ParsedGradient>): void {
+/**
+ * Fill in the coordinates a user-space gradient leaves out, which SVG takes
+ * as percentages of the viewport. (Bounding-box defaults are applied when the
+ * gradient is placed on a shape.)
+ */
+function resolveUserSpaceDefaults(gradients: Map<string, ParsedGradient>, viewport: Viewport) {
+  const diagonal = Math.sqrt((viewport.width ** 2 + viewport.height ** 2) / 2);
+  for (const g of gradients.values()) {
+    if (g.gradientUnits !== 'userSpaceOnUse') continue;
+    if (g.type === 'linear') {
+      g.x1 ??= 0;
+      g.y1 ??= 0;
+      g.x2 ??= viewport.width;
+      g.y2 ??= 0;
+    } else {
+      g.cx ??= viewport.width / 2;
+      g.cy ??= viewport.height / 2;
+      g.r ??= diagonal / 2;
+    }
+  }
+}
+
+function collectGradients(
+  parent: Element,
+  gradients: Map<string, ParsedGradient>,
+  viewport: Viewport
+): void {
   for (const el of parent.querySelectorAll('linearGradient, radialGradient')) {
     const id = el.getAttribute('id');
     if (!id) continue;
@@ -219,27 +256,34 @@ function collectGradients(parent: Element, gradients: Map<string, ParsedGradient
       gradientTransform: el.getAttribute('gradientTransform') || undefined,
       spreadMethod: (el.getAttribute('spreadMethod') as 'pad' | 'reflect' | 'repeat') || 'pad',
     };
+    // User-space percentages are shares of the viewport; box ones of the box
+    const userSpace = gradient.gradientUnits === 'userSpaceOnUse';
+    const across = userSpace ? viewport.width : undefined;
+    const down = userSpace ? viewport.height : undefined;
+    const diagonal = userSpace
+      ? Math.sqrt((viewport.width ** 2 + viewport.height ** 2) / 2)
+      : undefined;
 
     if (type === 'linear') {
       const x1 = el.getAttribute('x1');
       const y1 = el.getAttribute('y1');
       const x2 = el.getAttribute('x2');
       const y2 = el.getAttribute('y2');
-      if (x1 !== null) gradient.x1 = parseGradientCoord(x1);
-      if (y1 !== null) gradient.y1 = parseGradientCoord(y1);
-      if (x2 !== null) gradient.x2 = parseGradientCoord(x2);
-      if (y2 !== null) gradient.y2 = parseGradientCoord(y2);
+      if (x1 !== null) gradient.x1 = parseGradientCoord(x1, across);
+      if (y1 !== null) gradient.y1 = parseGradientCoord(y1, down);
+      if (x2 !== null) gradient.x2 = parseGradientCoord(x2, across);
+      if (y2 !== null) gradient.y2 = parseGradientCoord(y2, down);
     } else {
       const cx = el.getAttribute('cx');
       const cy = el.getAttribute('cy');
       const r = el.getAttribute('r');
       const fx = el.getAttribute('fx');
       const fy = el.getAttribute('fy');
-      if (cx !== null) gradient.cx = parseGradientCoord(cx);
-      if (cy !== null) gradient.cy = parseGradientCoord(cy);
-      if (r !== null) gradient.r = parseGradientCoord(r);
-      if (fx !== null) gradient.fx = parseGradientCoord(fx);
-      if (fy !== null) gradient.fy = parseGradientCoord(fy);
+      if (cx !== null) gradient.cx = parseGradientCoord(cx, across);
+      if (cy !== null) gradient.cy = parseGradientCoord(cy, down);
+      if (r !== null) gradient.r = parseGradientCoord(r, diagonal);
+      if (fx !== null) gradient.fx = parseGradientCoord(fx, across);
+      if (fy !== null) gradient.fy = parseGradientCoord(fy, down);
     }
 
     // Store href for later inheritance resolution

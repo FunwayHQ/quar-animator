@@ -186,6 +186,30 @@ describe('fillToSvgAttrs', () => {
     expect(defs[0]).toContain('stop-color="#0000ff"');
   });
 
+  it("turns Quar's upward gradient Y into SVG's downward one", () => {
+    const defs: string[] = [];
+    fillToSvgAttrs(
+      {
+        type: 'gradient',
+        gradient: {
+          type: 'linear',
+          stops: [
+            { offset: 0, color: makeColor(255, 0, 0) },
+            { offset: 1, color: makeColor(0, 0, 255) },
+          ],
+          // Bottom to top
+          start: { x: 0.5, y: 0 },
+          end: { x: 0.5, y: 1 },
+        },
+        opacity: 1,
+        visible: true,
+      },
+      defs
+    );
+    expect(defs[0]).toContain('y1="100%"');
+    expect(defs[0]).toContain('y2="0%"');
+  });
+
   it('generates radial gradient def', () => {
     const defs: string[] = [];
     const fill: Fill = {
@@ -205,6 +229,7 @@ describe('fillToSvgAttrs', () => {
     fillToSvgAttrs(fill, defs);
     expect(defs[0]).toContain('<radialGradient');
     expect(defs[0]).toContain('cx="50%"');
+    expect(defs[0]).toContain('cy="50%"');
   });
 });
 

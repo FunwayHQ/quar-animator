@@ -117,17 +117,18 @@ function gradientStopToSvg(stop: GradientStop): string {
 function gradientToSvgDef(gradient: Gradient, id: string): string {
   const stops = gradient.stops.map(gradientStopToSvg).join('');
 
+  // Quar's normalized gradient Y runs up the shape, SVG's bounding-box Y down
   if (gradient.type === 'linear') {
     const x1 = gradient.start ? fmt(gradient.start.x * 100) + '%' : '0%';
-    const y1 = gradient.start ? fmt(gradient.start.y * 100) + '%' : '0%';
+    const y1 = gradient.start ? fmt((1 - gradient.start.y) * 100) + '%' : '0%';
     const x2 = gradient.end ? fmt(gradient.end.x * 100) + '%' : '100%';
-    const y2 = gradient.end ? fmt(gradient.end.y * 100) + '%' : '0%';
+    const y2 = gradient.end ? fmt((1 - gradient.end.y) * 100) + '%' : '0%';
     return `<linearGradient id="${id}" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}">${stops}</linearGradient>`;
   }
 
   if (gradient.type === 'radial') {
     const cx = gradient.center ? fmt(gradient.center.x * 100) + '%' : '50%';
-    const cy = gradient.center ? fmt(gradient.center.y * 100) + '%' : '50%';
+    const cy = gradient.center ? fmt((1 - gradient.center.y) * 100) + '%' : '50%';
     const r = gradient.radius != null ? fmt(gradient.radius * 100) + '%' : '50%';
     return `<radialGradient id="${id}" cx="${cx}" cy="${cy}" r="${r}">${stops}</radialGradient>`;
   }

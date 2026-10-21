@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { convertSvgToNodes } from '../svgConverter';
 import { parseSvg } from '../svgParser';
-import type { RectangleNode, EllipseNode, PathNode, GroupNode } from '@quar/types';
+import type { RectangleNode, EllipseNode, PathNode, GroupNode, Gradient } from '@quar/types';
 
 let idCounter = 0;
 const generateId = () => `test_${++idCounter}`;
@@ -302,6 +302,173 @@ describe('convertSvgToNodes', () => {
       expect(node.fills[0].gradient).toBeTruthy();
       expect(node.fills[0].gradient!.type).toBe('linear');
       expect(node.fills[0].gradient!.stops).toHaveLength(2);
+    });
+
+    /**
+     * Where a linear gradient's ramp is (0 at its start, 1 at its end) at a
+     * point of the shape's normalized bounds, as the renderer works it out.
+     */
+    function rampAt(gradient: Gradient, q: { x: number; y: number }): number {
+      const { start, end } = gradient as Required<Pick<Gradient, 'start' | 'end'>>;
+      const dx = end.x - start.x;
+      const dy = end.y - start.y;
+      return ((q.x - start.x) * dx + (q.y - start.y) * dy) / (dx * dx + dy * dy);
+    }
+    const TOP_LEFT = { x: 0, y: 1 };
+    const TOP_RIGHT = { x: 1, y: 1 };
+    const BOTTOM_LEFT = { x: 0, y: 0 };
+    const BOTTOM_RIGHT = { x: 1, y: 0 };
+
+    function gradientOf(svg: string): Gradient {
+      return (convert(svg).nodes[0] as RectangleNode).fills[0]!.gradient!;
+    }
+
+    it('places a user-space gradient (Figma exports) across the shape', () => {
+      const gradient = gradientOf(`
+        <svg width="999" height="241" viewBox="0 0 999 241" xmlns="http://www.w3.org/2000/svg">
+          <rect width="999" height="241" rx="23" fill="url(#paint0)"/>
+          <defs>
+            <linearGradient id="paint0" x1="0" y1="120.5" x2="999" y2="120.5" gradientUnits="userSpaceOnUse">
+              <stop stop-color="#058B8C"/>
+              <stop offset="1" stop-color="#6899E8"/>
+            </linearGradient>
+          </defs>
+        </svg>
+      `);
+      expect(rampAt(gradient, BOTTOM_LEFT)).toBeCloseTo(0);
+      expect(rampAt(gradient, TOP_LEFT)).toBeCloseTo(0);
+      expect(rampAt(gradient, { x: 0.5, y: 0.5 })).toBeCloseTo(0.5);
+      expect(rampAt(gradient, TOP_RIGHT)).toBeCloseTo(1);
+    });
+
+    it('measures a user-space gradient from where the shape is', () => {
+      // The ramp covers only the middle half of a rect drawn away from the origin
+      const gradient = gradientOf(`
+        <svg viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg">
+          <rect x="100" y="50" width="200" height="100" fill="url(#g)"/>
+          <linearGradient id="g" x1="150" y1="0" x2="250" y2="0" gradientUnits="userSpaceOnUse">
+            <stop stop-color="red"/><stop offset="1" stop-color="blue"/>
+          </linearGradient>
+        </svg>
+      `);
+      expect(rampAt(gradient, { x: 0.25, y: 0.5 })).toBeCloseTo(0);
+      expect(rampAt(gradient, { x: 0.75, y: 0.5 })).toBeCloseTo(1);
+    });
+
+    it('measures a user-space gradient on a path from the path', () => {
+      const node = convert(`
+        <svg viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg">
+          <path d="M100 100 H300 V200 H100 Z" fill="url(#g)"/>
+          <linearGradient id="g" x1="100" y1="100" x2="100" y2="200" gradientUnits="userSpaceOnUse">
+            <stop stop-color="red"/><stop offset="1" stop-color="blue"/>
+          </linearGradient>
+        </svg>
+      `).nodes[0] as PathNode;
+      const gradient = node.fills[0]!.gradient!;
+      // SVG y=100 is the top of the path
+      expect(rampAt(gradient, TOP_RIGHT)).toBeCloseTo(0);
+      expect(rampAt(gradient, BOTTOM_LEFT)).toBeCloseTo(1);
+    });
+
+    it('keeps a top-to-bottom bounding-box gradient top to bottom', () => {
+      const gradient = gradientOf(`
+        <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+          <rect width="100" height="50" fill="url(#g)"/>
+          <linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
+            <stop stop-color="red"/><stop offset="1" stop-color="blue"/>
+          </linearGradient>
+        </svg>
+      `);
+      expect(rampAt(gradient, TOP_LEFT)).toBeCloseTo(0);
+      expect(rampAt(gradient, BOTTOM_RIGHT)).toBeCloseTo(1);
+    });
+
+    it('keeps a diagonal user-space gradient square to its direction on a wide shape', () => {
+      // From the top-left corner to the bottom-right one of a 200×100 rect, the
+      // top-right corner is 0.8 of the way along (not 0.5 as in its box)
+      const gradient = gradientOf(`
+        <svg viewBox="0 0 200 100" xmlns="http://www.w3.org/2000/svg">
+          <rect width="200" height="100" fill="url(#g)"/>
+          <linearGradient id="g" x1="0" y1="0" x2="200" y2="100" gradientUnits="userSpaceOnUse">
+            <stop stop-color="red"/><stop offset="1" stop-color="blue"/>
+          </linearGradient>
+        </svg>
+      `);
+      expect(rampAt(gradient, TOP_LEFT)).toBeCloseTo(0);
+      expect(rampAt(gradient, BOTTOM_RIGHT)).toBeCloseTo(1);
+      expect(rampAt(gradient, TOP_RIGHT)).toBeCloseTo(0.8);
+    });
+
+    it('applies the gradientTransform', () => {
+      // A left-to-right ramp turned 90° runs top to bottom
+      const gradient = gradientOf(`
+        <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+          <rect width="100" height="100" fill="url(#g)"/>
+          <linearGradient id="g" x1="0" y1="0" x2="1" y2="0" gradientTransform="rotate(90)">
+            <stop stop-color="red"/><stop offset="1" stop-color="blue"/>
+          </linearGradient>
+        </svg>
+      `);
+      expect(rampAt(gradient, TOP_RIGHT)).toBeCloseTo(0);
+      expect(rampAt(gradient, BOTTOM_LEFT)).toBeCloseTo(1);
+    });
+
+    it('reads user-space percentages and missing ends against the viewport', () => {
+      const gradient = gradientOf(`
+        <svg viewBox="0 0 200 100" xmlns="http://www.w3.org/2000/svg">
+          <rect width="200" height="100" fill="url(#g)"/>
+          <linearGradient id="g" x1="50%" gradientUnits="userSpaceOnUse">
+            <stop stop-color="red"/><stop offset="1" stop-color="blue"/>
+          </linearGradient>
+        </svg>
+      `);
+      // From x=100 (50%) to the default x2 of 100%, the right edge
+      expect(rampAt(gradient, { x: 0.5, y: 0.5 })).toBeCloseTo(0);
+      expect(rampAt(gradient, TOP_RIGHT)).toBeCloseTo(1);
+    });
+
+    it('places a user-space radial gradient on the shape', () => {
+      const node = convert(`
+        <svg viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="200" cy="100" r="50" fill="url(#g)"/>
+          <radialGradient id="g" cx="200" cy="75" r="50" gradientUnits="userSpaceOnUse">
+            <stop stop-color="white"/><stop offset="1" stop-color="black"/>
+          </radialGradient>
+        </svg>
+      `).nodes[0] as EllipseNode;
+      const gradient = node.fills[0]!.gradient!;
+      expect(gradient.center!.x).toBeCloseTo(0.5);
+      expect(gradient.center!.y).toBeCloseTo(0.75); // above the middle
+      expect(gradient.radius).toBeCloseTo(0.5);
+    });
+
+    it('paints a gradient with no direction in its last color', () => {
+      const gradient = gradientOf(`
+        <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+          <rect width="100" height="100" fill="url(#g)"/>
+          <linearGradient id="g" x1="10" y1="10" x2="10" y2="10" gradientUnits="userSpaceOnUse">
+            <stop stop-color="red"/><stop offset="1" stop-color="blue"/>
+          </linearGradient>
+        </svg>
+      `);
+      expect(gradient.stops.map((stop) => stop.color)).toEqual([
+        { r: 0, g: 0, b: 255, a: 1 },
+        { r: 0, g: 0, b: 255, a: 1 },
+      ]);
+    });
+
+    it('places a stroke gradient too', () => {
+      const node = convert(`
+        <svg viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg">
+          <rect x="100" y="100" width="200" height="100" stroke="url(#g)" stroke-width="4" fill="none"/>
+          <linearGradient id="g" x1="100" y1="0" x2="300" y2="0" gradientUnits="userSpaceOnUse">
+            <stop stop-color="red"/><stop offset="1" stop-color="blue"/>
+          </linearGradient>
+        </svg>
+      `).nodes[0] as RectangleNode;
+      const gradient = node.strokes[0]!.gradient!;
+      expect(rampAt(gradient, BOTTOM_LEFT)).toBeCloseTo(0);
+      expect(rampAt(gradient, TOP_RIGHT)).toBeCloseTo(1);
     });
   });
 

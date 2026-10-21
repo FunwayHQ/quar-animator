@@ -14,8 +14,10 @@ import type {
   Gradient,
   GradientStop,
   Transform,
+  Vector2,
 } from '@quar/types';
 import { createDefaultTransform } from '../SceneGraph';
+import { getNodeLocalBounds } from '../gradient/gradientUtils';
 import {
   parseSvgTransform,
   parseSvgColor,
@@ -139,9 +141,10 @@ function convertRect(el: SvgRect, ctx: ConvertContext): RectangleNode {
     width: el.width,
     height: el.height,
     cornerRadius: [cr, cr, cr, cr],
-    fills: convertFills(el.style, ctx.defs),
-    strokes: convertStrokes(el.style, ctx.defs),
+    fills: [],
+    strokes: [],
   };
+  paintShape(node, el.style, { x: centerX, y: centerY }, ctx);
 
   ctx.allNodes.push(node);
   return node;
@@ -163,9 +166,10 @@ function convertEllipse(el: SvgEllipse, ctx: ConvertContext): EllipseNode {
     blendMode: 'normal',
     radiusX: el.rx,
     radiusY: el.ry,
-    fills: convertFills(el.style, ctx.defs),
-    strokes: convertStrokes(el.style, ctx.defs),
+    fills: [],
+    strokes: [],
   };
+  paintShape(node, el.style, { x: el.cx, y: el.cy }, ctx);
 
   ctx.allNodes.push(node);
   return node;
@@ -187,9 +191,10 @@ function convertCircle(el: SvgCircle, ctx: ConvertContext): EllipseNode {
     blendMode: 'normal',
     radiusX: el.r,
     radiusY: el.r,
-    fills: convertFills(el.style, ctx.defs),
-    strokes: convertStrokes(el.style, ctx.defs),
+    fills: [],
+    strokes: [],
   };
+  paintShape(node, el.style, { x: el.cx, y: el.cy }, ctx);
 
   ctx.allNodes.push(node);
   return node;
@@ -230,8 +235,9 @@ function convertLine(el: SvgLine, ctx: ConvertContext): PathNode {
     points: centeredPoints,
     closed: false,
     fills: [],
-    strokes: convertStrokes(el.style, ctx.defs),
+    strokes: [],
   };
+  paintShape(node, el.style, flippedOrigin(center, ctx), ctx, false);
 
   ctx.allNodes.push(node);
   return node;
@@ -263,9 +269,10 @@ function convertPolygon(el: SvgPolygon, ctx: ConvertContext): PathNode {
     blendMode: 'normal',
     points: centeredPoints,
     closed: true,
-    fills: convertFills(el.style, ctx.defs),
-    strokes: convertStrokes(el.style, ctx.defs),
+    fills: [],
+    strokes: [],
   };
+  paintShape(node, el.style, flippedOrigin(center, ctx), ctx);
 
   ctx.allNodes.push(node);
   return node;
@@ -298,8 +305,9 @@ function convertPolyline(el: SvgPolyline, ctx: ConvertContext): PathNode {
     points: centeredPoints,
     closed: false,
     fills: [],
-    strokes: convertStrokes(el.style, ctx.defs),
+    strokes: [],
   };
+  paintShape(node, el.style, flippedOrigin(center, ctx), ctx, false);
 
   ctx.allNodes.push(node);
   return node;
@@ -349,9 +357,10 @@ function convertPath(el: SvgPath, ctx: ConvertContext): PathNode[] {
       blendMode: 'normal',
       points: centeredPoints,
       closed: sp.closed,
-      fills: sp.closed ? convertFills(el.style, ctx.defs) : [],
-      strokes: convertStrokes(el.style, ctx.defs),
+      fills: [],
+      strokes: [],
     };
+    paintShape(node, el.style, flippedOrigin(center, ctx), ctx, sp.closed);
 
     ctx.allNodes.push(node);
     nodes.push(node);
@@ -416,9 +425,10 @@ function convertCompoundPath(
     subpaths: subpaths.length > 0 ? subpaths : undefined,
     closed: true,
     fillRule: fillRule ?? 'nonzero',
-    fills: convertFills(el.style, ctx.defs),
-    strokes: convertStrokes(el.style, ctx.defs),
+    fills: [],
+    strokes: [],
   };
+  paintShape(node, el.style, flippedOrigin(center, ctx), ctx);
 
   ctx.allNodes.push(node);
   return node;
@@ -579,7 +589,41 @@ function buildTransform(
 // Fill / Stroke Conversion
 // ============================================================================
 
-function convertFills(style: ResolvedStyle, defs: SvgDefs): Fill[] {
+/**
+ * Where a shape sits in its SVG user space, for placing its gradients: the
+ * user point at the shape's local origin (local Y runs up, SVG Y down), and
+ * its local bounds — what the renderer spreads a gradient over.
+ */
+interface GradientFrame {
+  origin: Vector2;
+  bounds: () => [number, number, number, number];
+}
+
+type ShapeNode = RectangleNode | EllipseNode | PathNode;
+
+/** The user point at the local origin of a path centered on `center` (already Y-flipped). */
+function flippedOrigin(center: Vector2, ctx: ConvertContext): Vector2 {
+  return { x: center.x, y: ctx.viewBoxHeight - center.y };
+}
+
+/** Give a converted shape its fills and strokes, gradients placed on it. */
+function paintShape(
+  node: ShapeNode,
+  style: ResolvedStyle,
+  origin: Vector2,
+  ctx: ConvertContext,
+  filled = true
+): void {
+  let bounds: [number, number, number, number] | null = null;
+  const frame: GradientFrame = {
+    origin,
+    bounds: () => (bounds ??= getNodeLocalBounds(node)),
+  };
+  node.fills = filled ? convertFills(style, ctx.defs, frame) : [];
+  node.strokes = convertStrokes(style, ctx.defs, frame);
+}
+
+function convertFills(style: ResolvedStyle, defs: SvgDefs, frame: GradientFrame): Fill[] {
   if (!style.fill) return [];
 
   // Check for gradient reference
@@ -590,7 +634,7 @@ function convertFills(style: ResolvedStyle, defs: SvgDefs): Fill[] {
       return [
         {
           type: 'gradient',
-          gradient: convertGradient(gradient),
+          gradient: convertGradient(gradient, frame),
           opacity: style.fillOpacity,
           visible: true,
         },
@@ -612,7 +656,7 @@ function convertFills(style: ResolvedStyle, defs: SvgDefs): Fill[] {
   ];
 }
 
-function convertStrokes(style: ResolvedStyle, defs: SvgDefs): Stroke[] {
+function convertStrokes(style: ResolvedStyle, defs: SvgDefs, frame: GradientFrame): Stroke[] {
   if (!style.stroke || style.strokeWidth <= 0) return [];
 
   const color = parseSvgColor(style.stroke) ?? { r: 0, g: 0, b: 0, a: 1 };
@@ -622,7 +666,7 @@ function convertStrokes(style: ResolvedStyle, defs: SvgDefs): Stroke[] {
   const gradRef = parseUrlRef(style.stroke);
   if (gradRef) {
     const g = defs.gradients.get(gradRef);
-    if (g) gradient = convertGradient(g);
+    if (g) gradient = convertGradient(g, frame);
   }
 
   return [
@@ -642,32 +686,105 @@ function convertStrokes(style: ResolvedStyle, defs: SvgDefs): Stroke[] {
   ];
 }
 
-function convertGradient(g: ParsedGradient): Gradient {
-  // TODO: gradientTransform is parsed but not yet applied to gradient coordinates.
-  // Implementing this requires parsing SVG transform matrix strings and applying
-  // the transformation to gradient start/end/center coordinates.
-  if (g.gradientTransform) {
-    console.warn('SVG gradientTransform is not yet supported and will be ignored');
-  }
+type Affine = ReturnType<typeof parseSvgTransformToMatrix>;
 
+function applyAffine(m: Affine, p: Vector2): Vector2 {
+  return { x: m[0] * p.x + m[2] * p.y + m[4], y: m[1] * p.x + m[3] * p.y + m[5] };
+}
+
+/**
+ * The map from a gradient's own coordinates to the shape's normalized bounds
+ * (0–1, Y up), which is where Quar keeps gradient positions. Bounding-box
+ * units are fractions of the shape's box from its top-left; user-space units
+ * are SVG coordinates. The gradientTransform comes first in either case.
+ */
+function gradientToBounds(g: ParsedGradient, frame: GradientFrame): Affine {
+  let toBounds: Affine;
+  if (g.gradientUnits === 'userSpaceOnUse') {
+    const [minX, minY, maxX, maxY] = frame.bounds();
+    const w = maxX - minX || 1;
+    const h = maxY - minY || 1;
+    // local = (x - origin.x, origin.y - y), then normalized by the bounds
+    toBounds = [1 / w, 0, 0, -1 / h, (-frame.origin.x - minX) / w, (frame.origin.y - minY) / h];
+  } else {
+    toBounds = [1, 0, 0, -1, 0, 1];
+  }
+  if (!g.gradientTransform) return toBounds;
+  const t = parseSvgTransformToMatrix(g.gradientTransform);
+  return [
+    toBounds[0] * t[0] + toBounds[2] * t[1],
+    toBounds[1] * t[0] + toBounds[3] * t[1],
+    toBounds[0] * t[2] + toBounds[2] * t[3],
+    toBounds[1] * t[2] + toBounds[3] * t[3],
+    toBounds[0] * t[4] + toBounds[2] * t[5] + toBounds[4],
+    toBounds[1] * t[4] + toBounds[3] * t[5] + toBounds[5],
+  ];
+}
+
+/**
+ * A linear gradient from `start` to `end` (gradient coordinates) as start/end
+ * points in normalized bounds. The ramp is worked out as a function of the
+ * normalized position, so its bands keep their true direction even where the
+ * map stretches one axis more than the other. Null when it has no direction.
+ */
+function linearInBounds(
+  m: Affine,
+  start: Vector2,
+  end: Vector2
+): { start: Vector2; end: Vector2 } | null {
+  const dx = end.x - start.x;
+  const dy = end.y - start.y;
+  const lenSq = dx * dx + dy * dy;
+  const det = m[0] * m[3] - m[1] * m[2];
+  if (lenSq < 1e-12 || Math.abs(det) < 1e-12) return null;
+  // t(q) = g·q + c, from t(p) = (p - start)·d / |d|² with p = m⁻¹(q)
+  const gx = (m[3] * dx - m[1] * dy) / det / lenSq;
+  const gy = (-m[2] * dx + m[0] * dy) / det / lenSq;
+  const c = -(m[4] * gx + m[5] * gy) - (start.x * dx + start.y * dy) / lenSq;
+  const gSq = gx * gx + gy * gy;
+  if (gSq < 1e-12) return null;
+  const s = { x: (-c * gx) / gSq, y: (-c * gy) / gSq };
+  return { start: s, end: { x: s.x + gx / gSq, y: s.y + gy / gSq } };
+}
+
+function convertGradient(g: ParsedGradient, frame: GradientFrame): Gradient {
   const stops: GradientStop[] = g.stops.map((s) => ({
     offset: s.offset,
     color: s.color,
   }));
+  const m = gradientToBounds(g, frame);
 
   if (g.type === 'linear') {
-    return {
-      type: 'linear',
-      stops,
-      start: { x: g.x1 ?? 0, y: g.y1 ?? 0 },
-      end: { x: g.x2 ?? 1, y: g.y2 ?? 0 },
-    };
+    const points = linearInBounds(
+      m,
+      { x: g.x1 ?? 0, y: g.y1 ?? 0 },
+      { x: g.x2 ?? 1, y: g.y2 ?? 0 }
+    );
+    if (!points) {
+      // No direction: SVG paints the whole shape the last stop's color
+      const last = stops[stops.length - 1];
+      return {
+        type: 'linear',
+        stops: last
+          ? [
+              { ...last, offset: 0 },
+              { ...last, offset: 1 },
+            ]
+          : stops,
+        start: { x: 0, y: 0.5 },
+        end: { x: 1, y: 0.5 },
+      };
+    }
+    return { type: 'linear', stops, ...points };
   }
 
+  // Quar's radial gradients are circles in normalized bounds: a circle the
+  // map stretches unevenly keeps its area (the focal point isn't supported)
+  const det = m[0] * m[3] - m[1] * m[2];
   return {
     type: 'radial',
     stops,
-    center: { x: g.cx ?? 0.5, y: g.cy ?? 0.5 },
-    radius: g.r ?? 0.5,
+    center: applyAffine(m, { x: g.cx ?? 0.5, y: g.cy ?? 0.5 }),
+    radius: (g.r ?? 0.5) * Math.sqrt(Math.abs(det)),
   };
 }
