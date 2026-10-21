@@ -1878,6 +1878,11 @@ export function Canvas({
                 onClick: () => useEditorStore.getState().reverseSelectedPaths(sceneGraph),
               },
               {
+                id: 'simplify-path',
+                label: 'Simplify Path',
+                onClick: () => useEditorStore.getState().simplifySelectedPaths(sceneGraph),
+              },
+              {
                 id: 'close-path',
                 label: pathsClosed ? 'Open Path' : 'Close Path',
                 onClick: () =>

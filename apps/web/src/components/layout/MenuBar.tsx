@@ -786,6 +786,14 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                     }}
                   />
                   <MenuItem
+                    label="Simplify Path"
+                    disabled={selectedPathNodes.length === 0}
+                    onClick={() => {
+                      closeMenu();
+                      useEditorStore.getState().simplifySelectedPaths(sceneGraph);
+                    }}
+                  />
+                  <MenuItem
                     label={allPathsClosed ? 'Open Path' : 'Close Path'}
                     disabled={selectedPathNodes.length === 0}
                     onClick={() => {

@@ -6,8 +6,9 @@
  */
 
 import type { Matrix3, PathNode, PathPoint, Vector2 } from '@quar/types';
-import { mat3 } from '../math';
+import { mat3, vec2 } from '../math';
 import { bezier } from './bezier';
+import { schneiderFitCurve, curvesToPathPoints } from './schneider';
 import {
   getAbsoluteControlPoints,
   getAllPoints,
@@ -153,4 +154,110 @@ export function nearestPathPoint(
     }
   });
   return best;
+}
+
+/** Where a path turns more sharply than this (degrees), a point stays when simplifying. */
+const SHARP_TURN = 25;
+
+/** The direction a point is left (out) and reached (in) along, from its handles or neighbours. */
+function tangents(
+  points: PathPoint[],
+  i: number,
+  closed: boolean
+): { into?: Vector2; out?: Vector2 } {
+  const n = points.length;
+  const point = points[i]!;
+  const prev = i > 0 ? points[i - 1] : closed ? points[n - 1] : undefined;
+  const next = i < n - 1 ? points[i + 1] : closed ? points[0] : undefined;
+  const into = prev
+    ? point.handleIn
+      ? vec2.multiply(point.handleIn, -1)
+      : vec2.subtract(
+          point.position,
+          prev.handleOut ? vec2.add(prev.position, prev.handleOut) : prev.position
+        )
+    : undefined;
+  const out = next
+    ? (point.handleOut ??
+      vec2.subtract(
+        next.handleIn ? vec2.add(next.position, next.handleIn) : next.position,
+        point.position
+      ))
+    : undefined;
+  return { into, out };
+}
+
+/** Points along the segment from a to b, evenly in t, a included (b not). */
+function sampleSegment(a: PathPoint, b: PathPoint, spacing: number): Vector2[] {
+  const { cp1, cp2 } = getAbsoluteControlPoints(a, b);
+  const length = bezier.cubicLength(a.position, cp1, cp2, b.position);
+  const steps = Math.min(64, Math.max(4, Math.ceil(length / spacing)));
+  const samples: Vector2[] = [];
+  for (let k = 0; k < steps; k++) {
+    samples.push(bezier.cubicPoint(a.position, cp1, cp2, b.position, k / steps));
+  }
+  return samples;
+}
+
+/**
+ * A contour with fewer points, its shape kept within `tolerance`: points where
+ * it turns sharply (and an open contour's ends) stay where they are, and the
+ * stretches between them are refitted with as few smooth curves as hold the
+ * shape (Schneider's fitting, as for brush strokes). The contour as it was
+ * when that wouldn't remove any points.
+ */
+export function simplifyContour(
+  points: PathPoint[],
+  closed: boolean,
+  tolerance: number
+): PathPoint[] {
+  const n = points.length;
+  if (n < 3) return points;
+
+  // The points that stay: sharp turns, and an open contour's ends
+  const kept: number[] = [];
+  for (let i = 0; i < n; i++) {
+    const { into, out } = tangents(points, i, closed);
+    if (!into || !out) {
+      kept.push(i);
+      continue;
+    }
+    const turn = Math.abs(vec2.angleBetween(into, out)) * (180 / Math.PI);
+    if (turn > SHARP_TURN) kept.push(i);
+  }
+  if (closed && kept.length === 0) kept.push(0);
+
+  // Each stretch from one kept point to the next, refitted
+  const spacing = Math.max(tolerance, 0.01);
+  const runs = closed ? kept.length : kept.length - 1;
+  const result: PathPoint[] = [];
+  for (let r = 0; r < runs; r++) {
+    const from = kept[r]!;
+    const to = kept[(r + 1) % kept.length]!;
+    const samples: Vector2[] = [];
+    for (let i = from; i !== to || samples.length === 0; i = (i + 1) % n) {
+      samples.push(...sampleSegment(points[i]!, points[(i + 1) % n]!, spacing));
+      if ((i + 1) % n === to) break;
+    }
+    samples.push({ ...points[to]!.position });
+    const fitted = curvesToPathPoints(schneiderFitCurve(samples, tolerance * tolerance));
+    if (fitted.length < 2) continue;
+    // The run's first point is the kept point: take its handle out from the fit
+    const start = { ...points[from]!, handleOut: fitted[0]!.handleOut };
+    if (result.length === 0) result.push(start);
+    else
+      result[result.length - 1] = {
+        ...result[result.length - 1]!,
+        handleOut: fitted[0]!.handleOut,
+      };
+    result.push(...fitted.slice(1, -1));
+    const end = fitted[fitted.length - 1]!;
+    result.push({ ...points[to]!, handleIn: end.handleIn, handleOut: points[to]!.handleOut });
+  }
+  if (closed && result.length > 1) {
+    // The loop ends on the point it started from: one point, both handles
+    const last = result.pop()!;
+    result[0] = { ...result[0]!, handleIn: last.handleIn };
+  }
+  return result.length >= 2 && result.length < n ? result : points;
 }

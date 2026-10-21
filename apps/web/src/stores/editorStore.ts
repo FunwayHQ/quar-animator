@@ -72,7 +72,12 @@ import {
 import { flipInParentSpace, flipMatrix, flipPlacement, type FlipAxis } from './flip';
 import { symbolsUsedBy, type ClipboardPayload } from '../services/systemClipboard';
 import { pastedTracks, type RootMove } from './clipboardAnimation';
-import { reversedContours, reversedTracks } from './pathCommands';
+import {
+  hasPointAnimation,
+  reversedContours,
+  reversedTracks,
+  simplifiedContours,
+} from './pathCommands';
 import { shapeTracksToOutline } from './shapeToPathAnimation';
 
 /** The selected layers that are unlocked paths. */
@@ -723,6 +728,8 @@ export interface EditorStore extends SequenceActions {
   ) => void;
   /** Reverse the selected paths' direction (keyframes follow); undoable. */
   reverseSelectedPaths: (sceneGraph: SceneGraphLike) => void;
+  /** Fewer points for the selected paths, their shape kept; undoable. */
+  simplifySelectedPaths: (sceneGraph: SceneGraphLike) => void;
   /** Close or open the selected paths; undoable. */
   setSelectedPathsClosed: (sceneGraph: SceneGraphLike, closed: boolean) => void;
   /** How the selected paths fill where their contours overlap; undoable. */
@@ -2437,6 +2444,28 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       timeline = reversedTracks(timeline, path);
     }
     set({ timeline, isDirty: true });
+  },
+  simplifySelectedPaths: (sceneGraph) => {
+    const paths = selectedPaths(sceneGraph, get().selectedNodeIds);
+    if (paths.length === 0) return;
+    // Simplifying replaces the points, which animated points couldn't follow
+    const animated = paths.filter((path) => hasPointAnimation(get().timeline, path.id));
+    const results = paths
+      .filter((path) => !animated.includes(path))
+      .map((path) => [path, simplifiedContours(path)] as const)
+      .filter(([, simpler]) => simpler !== null);
+    if (animated.length > 0) {
+      toast.info(
+        'Paths whose points are animated are left as they are: simplifying would lose that animation.'
+      );
+    }
+    if (results.length === 0) {
+      if (animated.length === 0) toast.info('Already as simple as it gets.');
+      return;
+    }
+    get().pushUndo(sceneGraph);
+    for (const [path, simpler] of results) sceneGraph.updateNode(path.id, simpler!);
+    set({ isDirty: true });
   },
   setSelectedPathsClosed: (sceneGraph, closed) => {
     const paths = selectedPaths(sceneGraph, get().selectedNodeIds).filter(

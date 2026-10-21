@@ -109,4 +109,35 @@ describe('path commands (store)', () => {
     expect(node().points[0]!.position.x).toBe(0);
     expect(useEditorStore.getState().undoStack).toHaveLength(0);
   });
+
+  describe('Simplify Path', () => {
+    const circle = () =>
+      Array.from({ length: 48 }, (_, i) => {
+        const a = (i / 48) * Math.PI * 2;
+        return {
+          ...pt(Math.cos(a) * 100),
+          position: { x: Math.cos(a) * 100, y: Math.sin(a) * 100 },
+        };
+      });
+
+    it('takes a many-point path down to a few points, undoably', () => {
+      sceneGraph.updateNode('p', { points: circle(), closed: true });
+      useEditorStore.getState().simplifySelectedPaths(sceneGraph);
+      expect(node().points.length).toBeLessThan(12);
+      useEditorStore.getState().undo(sceneGraph);
+      expect(node().points).toHaveLength(48);
+    });
+
+    it('leaves a path whose points are animated as it is', () => {
+      sceneGraph.updateNode('p', { points: circle(), closed: true });
+      useEditorStore.setState({
+        timeline: {
+          ...createTimeline(),
+          tracks: [createTrack('p', 'points.3.position.x', [createKeyframe(0, 1)])],
+        },
+      });
+      useEditorStore.getState().simplifySelectedPaths(sceneGraph);
+      expect(node().points).toHaveLength(48);
+    });
+  });
 });
