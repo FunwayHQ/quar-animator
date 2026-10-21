@@ -1,7 +1,7 @@
 /**
  * Export Dialog for Quar Animator
  *
- * Modal dialog with tabs for PNG Sequence, Sprite Sheet, GIF, MP4, WebM and Lottie JSON export.
+ * Modal dialog with tabs for PNG Sequence, Sprite Sheet, GIF, MP4, WebM, Lottie JSON and SVG export.
  * Follows the PromptDialog imperative + host pattern.
  *
  * Usage (imperative):
@@ -37,7 +37,7 @@ import styles from './ExportDialog.module.css';
 // Types
 // ============================================================================
 
-export type ExportTab = 'png-sequence' | 'sprite-sheet' | 'gif' | 'mp4' | 'webm' | 'lottie';
+export type ExportTab = 'png-sequence' | 'sprite-sheet' | 'gif' | 'mp4' | 'webm' | 'lottie' | 'svg';
 
 interface ExportDialogState {
   tab: ExportTab;
@@ -63,6 +63,8 @@ interface ExportDialogState {
   webmFps: number;
   webmSpeed: number;
   webmTransparent: boolean;
+  // SVG: one frame
+  svgFrame: number;
   /** 0 (best quality) … 100 (smallest file) */
   gifCompression: number;
   // Sprite Sheet
@@ -87,6 +89,7 @@ const TABS: { id: ExportTab; label: string }[] = [
   { id: 'mp4', label: 'MP4' },
   { id: 'webm', label: 'WebM' },
   { id: 'lottie', label: 'Lottie JSON' },
+  { id: 'svg', label: 'SVG' },
 ];
 
 /**
@@ -377,6 +380,10 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
     webmFps: timeline.frameRate,
     webmSpeed: 1,
     webmTransparent: false,
+    svgFrame: Math.min(
+      Math.max(0, timelineDuration - 1),
+      Math.max(0, Math.round(useEditorStore.getState().currentFrame ?? 0))
+    ),
     gifCompression: 0,
     spriteLayout: 'grid',
     spriteColumns: 0, // 0 = auto
@@ -452,6 +459,21 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
     const frameRenderRoots = selectedArtboard ? [selectedArtboard.node] : sceneGraph.getRootNodes();
 
     const lastFrame = Math.max(0, timelineDuration - 1);
+    if (state.tab === 'svg') {
+      if (!Number.isInteger(state.svgFrame) || state.svgFrame < 0 || state.svgFrame > lastFrame) {
+        setState((s) => ({ ...s, error: `Choose a frame between 0 and ${lastFrame}.` }));
+        return;
+      }
+      const { exportSvgFrame } = await import('@quar/export');
+      const svg = exportSvgFrame(sceneGraph, timeline, frameRenderContext.rig, {
+        frame: state.svgFrame,
+        rootIds: selectedArtboard ? [selectedArtboard.node.id] : undefined,
+        symbols: frameRenderContext.symbols,
+      });
+      downloadBlob(new Blob([svg], { type: 'image/svg+xml' }), `frame_${state.svgFrame}.svg`);
+      close();
+      return;
+    }
     if (
       !Number.isInteger(state.startFrame) ||
       !Number.isInteger(state.endFrame) ||
@@ -848,28 +870,30 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
         ) : (
           <div className={styles.body}>
             {/* Common settings */}
-            <div className={styles.formRow}>
-              <span className={styles.label}>Size</span>
-              <input
-                className={styles.inputSmall}
-                type="number"
-                value={state.width}
-                onChange={(e) => update('width', parseInt(e.target.value) || 800)}
-                min={1}
-                max={8192}
-                data-testid="export-width"
-              />
-              <span className={styles.dimSeparator}>x</span>
-              <input
-                className={styles.inputSmall}
-                type="number"
-                value={state.height}
-                onChange={(e) => update('height', parseInt(e.target.value) || 600)}
-                min={1}
-                max={8192}
-                data-testid="export-height"
-              />
-            </div>
+            {state.tab !== 'svg' && (
+              <div className={styles.formRow}>
+                <span className={styles.label}>Size</span>
+                <input
+                  className={styles.inputSmall}
+                  type="number"
+                  value={state.width}
+                  onChange={(e) => update('width', parseInt(e.target.value) || 800)}
+                  min={1}
+                  max={8192}
+                  data-testid="export-width"
+                />
+                <span className={styles.dimSeparator}>x</span>
+                <input
+                  className={styles.inputSmall}
+                  type="number"
+                  value={state.height}
+                  onChange={(e) => update('height', parseInt(e.target.value) || 600)}
+                  min={1}
+                  max={8192}
+                  data-testid="export-height"
+                />
+              </div>
+            )}
 
             {selectedArtboard && (
               <div className={styles.scopeNote} data-testid="export-artboard-scope">
@@ -885,32 +909,58 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
               </div>
             )}
 
-            <div className={styles.formRow}>
-              <span className={styles.label}>Frame Range</span>
-              <input
-                className={styles.inputSmall}
-                type="number"
-                value={state.startFrame}
-                onChange={(e) =>
-                  update('startFrame', e.target.value === '' ? 0 : parseInt(e.target.value))
-                }
-                min={0}
-                max={Math.max(0, timelineDuration - 1)}
-                data-testid="export-start-frame"
-              />
-              <span className={styles.dimSeparator}>to</span>
-              <input
-                className={styles.inputSmall}
-                type="number"
-                value={state.endFrame}
-                onChange={(e) =>
-                  update('endFrame', e.target.value === '' ? 0 : parseInt(e.target.value))
-                }
-                min={0}
-                max={Math.max(0, timelineDuration - 1)}
-                data-testid="export-end-frame"
-              />
-            </div>
+            {state.tab === 'svg' ? (
+              <>
+                <div className={styles.formRow}>
+                  <label className={styles.label} htmlFor="export-svg-frame">
+                    Frame
+                  </label>
+                  <input
+                    id="export-svg-frame"
+                    className={styles.inputSmall}
+                    type="number"
+                    value={state.svgFrame}
+                    onChange={(e) =>
+                      update('svgFrame', e.target.value === '' ? 0 : parseInt(e.target.value))
+                    }
+                    min={0}
+                    max={Math.max(0, timelineDuration - 1)}
+                    data-testid="export-svg-frame"
+                  />
+                </div>
+                <p className={styles.scopeNote} data-testid="export-svg-note">
+                  A still of this frame, as vectors, at the artwork’s own size. Shapes bent by their
+                  bones are written as their bent outlines; images bound to bones aren’t bent.
+                </p>
+              </>
+            ) : (
+              <div className={styles.formRow}>
+                <span className={styles.label}>Frame Range</span>
+                <input
+                  className={styles.inputSmall}
+                  type="number"
+                  value={state.startFrame}
+                  onChange={(e) =>
+                    update('startFrame', e.target.value === '' ? 0 : parseInt(e.target.value))
+                  }
+                  min={0}
+                  max={Math.max(0, timelineDuration - 1)}
+                  data-testid="export-start-frame"
+                />
+                <span className={styles.dimSeparator}>to</span>
+                <input
+                  className={styles.inputSmall}
+                  type="number"
+                  value={state.endFrame}
+                  onChange={(e) =>
+                    update('endFrame', e.target.value === '' ? 0 : parseInt(e.target.value))
+                  }
+                  min={0}
+                  max={Math.max(0, timelineDuration - 1)}
+                  data-testid="export-end-frame"
+                />
+              </div>
+            )}
 
             {/* Tab-specific settings */}
             {state.tab === 'png-sequence' && (

@@ -1275,7 +1275,13 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                       showExportDialog('sprite-sheet');
                     }}
                   />
-                  <MenuItem label="Export as SVG..." disabled onClick={closeMenu} />
+                  <MenuItem
+                    label="Export as SVG..."
+                    onClick={() => {
+                      closeMenu();
+                      showExportDialog('svg');
+                    }}
+                  />
                 </div>
               )}
             </div>

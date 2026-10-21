@@ -9,6 +9,7 @@ import {
   exportGif,
   exportLottieBlob,
   exportMp4,
+  exportSvgFrame,
   exportWebm,
 } from '@quar/export';
 import { downloadBlob } from '../../services/exportService';
@@ -25,6 +26,7 @@ const mockStore = {
     markers: [],
   },
   timelineDuration: 60,
+  currentFrame: 12,
   setExporting: vi.fn(),
   selectedNodeIds: new Set<string>(),
   ikChains: [{ id: 'arm-ik' }],
@@ -50,6 +52,7 @@ vi.mock('@quar/export', async () => {
     exportGif: vi.fn().mockResolvedValue(new Blob(['gif'], { type: 'image/gif' })),
     exportMp4: vi.fn().mockResolvedValue(new Blob(['mp4'], { type: 'video/mp4' })),
     exportWebm: vi.fn().mockResolvedValue(new Blob(['webm'], { type: 'video/webm' })),
+    exportSvgFrame: vi.fn().mockReturnValue('<svg xmlns="http://www.w3.org/2000/svg"></svg>'),
     MAX_GIF_FPS: 50,
     sampleTimeline: (
       o: { frameRate: number; startFrame: number; endFrame: number; fps?: number; speed?: number },
@@ -479,6 +482,33 @@ describe('ExportDialog', () => {
     await waitFor(() =>
       expect(downloadBlob).toHaveBeenCalledWith(expect.any(Blob), 'animation.webm')
     );
+  });
+
+  it('exports a still of the current frame as SVG', async () => {
+    render(<ExportDialogHost />);
+    act(() => showExportDialog('svg'));
+    // One frame, no size or range: vectors at the artwork's own size
+    expect(screen.getByTestId('export-svg-frame')).toHaveValue(12);
+    expect(screen.queryByTestId('export-width')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('export-start-frame')).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByTestId('export-svg-frame'), { target: { value: '20' } });
+    fireEvent.click(screen.getByTestId('export-dialog-export'));
+    await waitFor(() => expect(exportSvgFrame).toHaveBeenCalledOnce());
+    expect(vi.mocked(exportSvgFrame).mock.calls[0]![3]).toMatchObject({ frame: 20 });
+    expect(vi.mocked(exportSvgFrame).mock.calls[0]![2]).toMatchObject({ frameRate: 30 });
+    expect(downloadBlob).toHaveBeenCalledWith(expect.any(Blob), 'frame_20.svg');
+  });
+
+  it('rejects an SVG frame outside the timeline', async () => {
+    render(<ExportDialogHost />);
+    act(() => showExportDialog('svg'));
+    fireEvent.change(screen.getByTestId('export-svg-frame'), { target: { value: '99' } });
+    fireEvent.click(screen.getByTestId('export-dialog-export'));
+    expect(await screen.findByTestId('export-error')).toHaveTextContent(
+      'Choose a frame between 0 and 59.'
+    );
+    expect(exportSvgFrame).not.toHaveBeenCalled();
   });
 
   it('shows unsupported warnings on Lottie tab', () => {
