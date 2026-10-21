@@ -331,6 +331,21 @@ describe('MenuBar', () => {
     });
   });
 
+  it('Help > Report Issues opens the project on GitHub', () => {
+    const open = vi.spyOn(window, 'open').mockReturnValue(null);
+    render(<MenuBar />);
+
+    fireEvent.click(screen.getByTestId('menu-help'));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Report Issues' }));
+
+    expect(open).toHaveBeenCalledWith(
+      'https://github.com/FunwayHQ/quar-animator/issues',
+      '_blank',
+      'noopener'
+    );
+    open.mockRestore();
+  });
+
   describe('Help > Restore Tutorials', () => {
     /** Open Help, then pick Restore Tutorials and let the restore finish. */
     const restore = async () => {

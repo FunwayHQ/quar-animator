@@ -23,6 +23,9 @@ import { restoreTutorials } from '../../tutorials/seedTutorials';
 import { setUiTheme, useUiTheme } from '../../hooks/useUiTheme';
 import styles from './MenuBar.module.css';
 
+/** Where Help > Report Issues goes: the project's GitHub issues. */
+const REPORT_ISSUES_URL = 'https://github.com/FunwayHQ/quar-animator/issues';
+
 // ============================================================================
 // Types
 // ============================================================================
@@ -1242,14 +1245,10 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                     }}
                   />
                   <MenuItem
-                    label="Report Bug"
+                    label="Report Issues"
                     onClick={() => {
                       closeMenu();
-                      window.open(
-                        'https://github.com/niclas-AE/quar-animator/issues',
-                        '_blank',
-                        'noopener'
-                      );
+                      window.open(REPORT_ISSUES_URL, '_blank', 'noopener');
                     }}
                   />
                 </div>
