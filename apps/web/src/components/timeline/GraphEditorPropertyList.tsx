@@ -42,10 +42,12 @@ export function GraphEditorPropertyList({
     // Only show tracks for selected nodes (or all if none selected)
     if (selectedNodeIds.size > 0 && !selectedNodeIds.has(track.nodeId)) continue;
 
-    if (!tracksByNode.has(track.nodeId)) {
-      tracksByNode.set(track.nodeId, []);
+    let nodeTracks = tracksByNode.get(track.nodeId);
+    if (!nodeTracks) {
+      nodeTracks = [];
+      tracksByNode.set(track.nodeId, nodeTracks);
     }
-    tracksByNode.get(track.nodeId)!.push({
+    nodeTracks.push({
       trackId: `${track.nodeId}:${track.property}`,
       property: track.property,
       globalIndex,

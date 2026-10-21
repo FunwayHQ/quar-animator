@@ -16,6 +16,7 @@ import type {
   SymbolDefinition,
   TextNode,
   TextResize,
+  Vector2,
 } from '@quar/types';
 import {
   Lock,
@@ -2953,15 +2954,12 @@ export function PropertiesPanel() {
               keyHandles(n, sp.pointIndex, updated);
             };
 
-            const handleRows =
-              dsPoints.length === 1
-                ? (
-                    [
-                      ['in', 'In', firstPt.handleIn],
-                      ['out', 'Out', firstPt.handleOut],
-                    ] as const
-                  ).filter(([, , offset]) => offset)
-                : [];
+            // The picked point's handles, those it has
+            const handleRows: Array<['in' | 'out', string, Vector2]> = [];
+            if (dsPoints.length === 1) {
+              if (firstPt.handleIn) handleRows.push(['in', 'In', firstPt.handleIn]);
+              if (firstPt.handleOut) handleRows.push(['out', 'Out', firstPt.handleOut]);
+            }
 
             return (
               <div className={styles.section}>
@@ -3091,17 +3089,17 @@ export function PropertiesPanel() {
                             <ScrubLabel
                               onScrubStart={handleScrubStart}
                               label={axis.toUpperCase()}
-                              value={+offset![axis].toFixed(1)}
+                              value={+offset[axis].toFixed(1)}
                               onChange={(v) => handleHandleChange(handle, axis, String(v))}
                               sensitivity={1}
                             />
                             <input
                               className={styles.input}
                               type="text"
-                              value={fmt1(offset![axis])}
+                              value={fmt1(offset[axis])}
                               onChange={(e) => handleHandleChange(handle, axis, e.target.value)}
                               {...numericInputProps(
-                                () => +offset![axis].toFixed(1),
+                                () => +offset[axis].toFixed(1),
                                 (v) => handleHandleChange(handle, axis, v)
                               )}
                               aria-label={`${label} handle ${axis.toUpperCase()}`}

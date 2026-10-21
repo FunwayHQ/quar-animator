@@ -405,7 +405,8 @@ export function createSequenceActions(
         .filter((entry) => entry.start <= first.start)
         .sort((a, b) => b.start - a.start)[0];
       for (const clip of clips) {
-        const step = sequence.steps.find((candidate) => candidate.id === clip.id)!;
+        const step = sequence.steps.find((candidate) => candidate.id === clip.id);
+        if (!step) continue;
         if (clip !== first) {
           step.trigger = 'with';
           step.targetStepId = first.id;
@@ -425,7 +426,7 @@ export function createSequenceActions(
       const clipIds = clips.map((clip) => clip.id);
       sequence.steps = [
         ...sequence.steps.filter((step) => !clipIds.includes(step.id)),
-        ...clipIds.map((id) => sequence.steps.find((step) => step.id === id)!),
+        ...clipIds.flatMap((id) => sequence.steps.filter((step) => step.id === id)),
       ];
 
       get().pushUndo(sceneGraph);

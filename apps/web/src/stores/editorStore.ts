@@ -350,17 +350,22 @@ function cloneResolvedSubtree(
     if (added.has(n.id)) return;
     const isRoot = rootIds.has(n.id);
     // Ensure a same-subtree parent is added before its child.
-    if (!isRoot && n.parent && byOldId.has(n.parent)) {
-      addRecursive(byOldId.get(n.parent)!);
-    }
+    const sameSubtreeParent = n.parent ? byOldId.get(n.parent) : undefined;
+    if (!isRoot && sameSubtreeParent) addRecursive(sameSubtreeParent);
+    const newId = oldToNewId.get(n.id);
+    if (!newId) return;
     const clone = structuredClone(n);
-    clone.id = oldToNewId.get(n.id)!;
+    clone.id = newId;
     if (isRoot && rootTransform) clone.transform = { ...rootTransform };
     if (clone.type === 'group' && clone.maskNodeId) {
       clone.maskNodeId = oldToNewId.get(clone.maskNodeId);
       if (!clone.maskNodeId) clone.maskMode = undefined;
     }
-    const parentForAdd = isRoot ? (newParentId ?? undefined) : oldToNewId.get(n.parent!);
+    const parentForAdd = isRoot
+      ? (newParentId ?? undefined)
+      : n.parent
+        ? oldToNewId.get(n.parent)
+        : undefined;
     // Add with empty children — addNode repopulates the parent link as each
     // child is added below.
     sceneGraph.addNode({ ...clone, children: [] }, parentForAdd ?? undefined);
@@ -2120,13 +2125,16 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     const newNodes: Node[] = [];
     const pastedRoots = new Set<string>();
     for (const [oldId, clone] of oldIdToClone) {
-      if (skipped.has(oldId)) continue;
-      clone.id = oldToNewId.get(oldId)!;
-      clone.children = clone.children
-        .filter((childId: string) => oldToNewId.has(childId) && !skipped.has(childId))
-        .map((childId: string) => oldToNewId.get(childId)!);
-      if (clone.parent && oldToNewId.has(clone.parent)) {
-        clone.parent = oldToNewId.get(clone.parent)!;
+      const newId = oldToNewId.get(oldId);
+      if (skipped.has(oldId) || !newId) continue;
+      clone.id = newId;
+      clone.children = clone.children.flatMap((childId: string) => {
+        const newChildId = skipped.has(childId) ? undefined : oldToNewId.get(childId);
+        return newChildId ? [newChildId] : [];
+      });
+      const newParentId = clone.parent ? oldToNewId.get(clone.parent) : undefined;
+      if (newParentId) {
+        clone.parent = newParentId;
       } else {
         // A copied root goes back under its parent if that's still there
         // (keeping its parent-relative placement); otherwise to the top level,
@@ -2146,7 +2154,8 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         if (!clone.maskNodeId) clone.maskMode = undefined;
       }
       if (clone.type === 'ik-target') {
-        clone.ikChainId = rig.chainIdForTarget.get(oldId)!;
+        // Targets without their chain were skipped above
+        clone.ikChainId = rig.chainIdForTarget.get(oldId) ?? clone.ikChainId;
       }
       const skin = (clone as { skinData?: SkinData }).skinData;
       if (skin) (clone as { skinData?: SkinData }).skinData = remapSkinData(skin, oldToNewId);
@@ -2161,8 +2170,9 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     const rootMoves = new Map<string, RootMove>();
     for (const node of newNodes) {
       if (!pastedRoots.has(node.id)) continue;
-      const oldId = newToOldId.get(node.id)!;
-      const original = clipboard.find((copied) => copied.id === oldId)!;
+      const oldId = newToOldId.get(node.id);
+      const original = clipboard.find((copied) => copied.id === oldId);
+      if (oldId === undefined || !original) continue;
       const root = clipboardExtras?.roots[oldId];
       const skin = (node as { skinData?: SkinData }).skinData;
       const carried =
@@ -2584,8 +2594,10 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     const animated = paths.filter((path) => hasPointAnimation(get().timeline, path.id));
     const results = paths
       .filter((path) => !animated.includes(path))
-      .map((path) => [path, simplifiedContours(path)] as const)
-      .filter(([, simpler]) => simpler !== null);
+      .flatMap((path) => {
+        const simpler = simplifiedContours(path);
+        return simpler ? [[path, simpler] as const] : [];
+      });
     if (animated.length > 0) {
       toast.info(
         'Paths whose points are animated are left as they are: simplifying would lose that animation.'
@@ -2596,7 +2608,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       return;
     }
     get().pushUndo(sceneGraph);
-    for (const [path, simpler] of results) sceneGraph.updateNode(path.id, simpler!);
+    for (const [path, simpler] of results) sceneGraph.updateNode(path.id, simpler);
     set({ isDirty: true });
   },
   setSelectedPathsClosed: (sceneGraph, closed) => {
@@ -2631,7 +2643,8 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     let timeline = state.timeline;
     let restPoses = state.animationSequence.restPoses;
     for (const id of layers) {
-      const node = sceneGraph.getNode(id)!;
+      const node = sceneGraph.getNode(id);
+      if (!node) continue;
       const m = flipInParentSpace(
         flip,
         node.parent ? sceneGraph.getWorldTransform(node.parent) : null
@@ -3484,6 +3497,7 @@ function createBooleanActions(
       }
 
       const groupNode = node;
+      const op = node.booleanOp;
       const children: Node[] = [];
       for (const childId of groupNode.children) {
         const child = sceneGraph.getNode(childId);
@@ -3516,7 +3530,7 @@ function createBooleanActions(
       const resultNode = booleanOperation(
         children,
         worldTransforms,
-        groupNode.booleanOp!,
+        op,
         generateId,
         resolveGroupChildren
       );
@@ -3597,13 +3611,14 @@ function createBooleanActions(
     },
 
     convertSelectionToPaths: (sceneGraph: SceneGraphLike) => {
-      const selected = [...get().selectedNodeIds].map((id) => sceneGraph.getNode(id));
+      const selected = [...get().selectedNodeIds].flatMap((id) => {
+        const node = sceneGraph.getNode(id);
+        return node ? [node] : [];
+      });
       const shapeIds = selected
-        .filter(
-          (n) => n && (n.type === 'rectangle' || n.type === 'ellipse' || n.type === 'polygon')
-        )
-        .map((n) => n!.id);
-      const hasText = selected.some((n) => n?.type === 'text');
+        .filter((n) => n.type === 'rectangle' || n.type === 'ellipse' || n.type === 'polygon')
+        .map((n) => n.id);
+      const hasText = selected.some((n) => n.type === 'text');
       if (shapeIds.length === 0 && !hasText) {
         toast.info('Select text or shapes to convert to paths');
         return;
@@ -3611,7 +3626,7 @@ function createBooleanActions(
       const converted = shapeIds.length > 0 ? get().convertShapesToPaths(sceneGraph, shapeIds) : [];
       if (hasText) {
         // Text is converted from the selection: keep it in (shapes done stay selected too)
-        const textIds = selected.filter((n) => n?.type === 'text').map((n) => n.id);
+        const textIds = selected.filter((n) => n.type === 'text').map((n) => n.id);
         set({ selectedNodeIds: new Set(textIds) });
         get().convertTextToPath(sceneGraph);
         set({ selectedNodeIds: new Set([...get().selectedNodeIds, ...converted]) });
@@ -3839,7 +3854,8 @@ function createHistoryActions(
 
       // Pop and restore from undo stack
       const newUndoStack = [...undoStack];
-      const snapshot = newUndoStack.pop()!;
+      const snapshot = newUndoStack.pop();
+      if (!snapshot) return;
       sceneGraph.fromJSON(structuredClone(snapshot.sceneData));
       // Symbols that step brought in go, and come back on redo
       const added = snapshot.symbolsAdded ?? [];
@@ -3874,7 +3890,8 @@ function createHistoryActions(
 
       // Pop and restore from redo stack
       const newRedoStack = [...redoStack];
-      const snapshot = newRedoStack.pop()!;
+      const snapshot = newRedoStack.pop();
+      if (!snapshot) return;
       sceneGraph.fromJSON(structuredClone(snapshot.sceneData));
       // Symbols the step brought in come back (and go again on undo)
       const added = snapshot.symbolsAdded ?? [];
@@ -4106,7 +4123,7 @@ function createPageActions(
             redoStack: state.redoStack,
           };
         });
-        sourcePage = updatedPages.find((p) => p.id === pageId)!;
+        sourcePage = updatedPages.find((p) => p.id === pageId) ?? sourcePage;
       }
 
       const newPage: PageData = {
@@ -4212,7 +4229,8 @@ function createPageActions(
         }
         const newPages = [...state.pages];
         const [moved] = newPages.splice(fromIndex, 1);
-        newPages.splice(toIndex, 0, moved!);
+        if (!moved) return {};
+        newPages.splice(toIndex, 0, moved);
         return { pages: newPages, isDirty: true };
       });
     },

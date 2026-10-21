@@ -408,7 +408,8 @@ export function Canvas({
 
   // Collect bone nodes and IK target nodes for overlay
   const boneNodes = useMemo(() => {
-    if (!sceneGraphRef.current) return [];
+    const graph = sceneGraphRef.current;
+    if (!graph) return [];
     const bones: import('@quar/types').BoneNode[] = [];
     const collectBones = (nodes: Node[]) => {
       for (const node of nodes) {
@@ -416,9 +417,7 @@ export function Canvas({
           bones.push(node);
         }
         if (node.children.length > 0) {
-          const children = node.children
-            .map((id) => sceneGraphRef.current!.getNode(id))
-            .filter(Boolean) as Node[];
+          const children = node.children.map((id) => graph.getNode(id)).filter(Boolean) as Node[];
           collectBones(children);
         }
       }
@@ -2472,36 +2471,36 @@ export function Canvas({
         </div>
       )}
       {/* Symbol editing banner */}
-      {useEditorStore.getState().editingSymbolId &&
-        (() => {
-          const symId = useEditorStore.getState().editingSymbolId!;
-          const symDef = useEditorStore
-            .getState()
-            .symbols.find((s: { id: string }) => s.id === symId);
-          return (
-            <div
-              data-testid="symbol-editing-banner"
-              style={{
-                position: 'absolute',
-                top: 0,
-                left: '50%',
-                transform: 'translateX(-50%)',
-                zIndex: 1000,
-                background: 'var(--color-primary)',
-                color: '#fff',
-                padding: '4px 16px',
-                borderRadius: '0 0 6px 6px',
-                fontSize: '12px',
-                fontWeight: 600,
-                pointerEvents: 'auto',
-                cursor: 'pointer',
-              }}
-              onClick={() => useEditorStore.getState().exitSymbolEdit(sceneGraph)}
-            >
-              Editing Symbol: {symDef?.name ?? 'Unknown'} — Click or press Escape to exit
-            </div>
-          );
-        })()}
+      {(() => {
+        const symId = useEditorStore.getState().editingSymbolId;
+        if (!symId) return null;
+        const symDef = useEditorStore
+          .getState()
+          .symbols.find((s: { id: string }) => s.id === symId);
+        return (
+          <div
+            data-testid="symbol-editing-banner"
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: '50%',
+              transform: 'translateX(-50%)',
+              zIndex: 1000,
+              background: 'var(--color-primary)',
+              color: '#fff',
+              padding: '4px 16px',
+              borderRadius: '0 0 6px 6px',
+              fontSize: '12px',
+              fontWeight: 600,
+              pointerEvents: 'auto',
+              cursor: 'pointer',
+            }}
+            onClick={() => useEditorStore.getState().exitSymbolEdit(sceneGraph)}
+          >
+            Editing Symbol: {symDef?.name ?? 'Unknown'} — Click or press Escape to exit
+          </div>
+        );
+      })()}
       <canvas
         ref={canvasRef}
         className={styles.canvas}

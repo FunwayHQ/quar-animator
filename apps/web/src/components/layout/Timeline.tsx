@@ -1562,12 +1562,12 @@ export function Timeline({ playback }: TimelineProps = {}) {
                               style={{ left: `${(kf.time / duration) * 100}%` }}
                               onClick={(e) => {
                                 e.stopPropagation();
-                                revealSequenceStep(kf.stepId!);
+                                if (kf.stepId !== undefined) revealSequenceStep(kf.stepId);
                               }}
                               onContextMenu={(e) => {
                                 e.preventDefault();
                                 e.stopPropagation();
-                                revealSequenceStep(kf.stepId!);
+                                if (kf.stepId !== undefined) revealSequenceStep(kf.stepId);
                               }}
                               data-testid={`keyframe-${kf.id}`}
                               title={`${kf.property} @ frame ${kf.time} — Animation Sequence step #${stepNumbers.get(kf.stepId) ?? '?'} (click to edit)`}

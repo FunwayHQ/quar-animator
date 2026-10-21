@@ -364,8 +364,9 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
               }
             }
             // Subpaths
-            for (let s = 0; s < pathNode.subpaths!.length; s++) {
-              const sp = pathNode.subpaths![s]!;
+            const subpaths = pathNode.subpaths ?? [];
+            for (let s = 0; s < subpaths.length; s++) {
+              const sp = subpaths[s]!;
               for (let i = 0; i < sp.length; i++) {
                 const pt = sp[i]!;
                 addKf(nodeId, `subpaths.${s}.${i}.position.x`, frame, pt.position.x);

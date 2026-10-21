@@ -856,7 +856,8 @@ export function LayerPanel() {
         const rect = row.getBoundingClientRect();
         if (clientY < rect.top || clientY > rect.bottom) continue;
 
-        const nodeId = row.getAttribute('data-layer-id')!;
+        const nodeId = row.getAttribute('data-layer-id');
+        if (!nodeId) continue;
         const relY = clientY - rect.top;
         const fraction = relY / rect.height;
 

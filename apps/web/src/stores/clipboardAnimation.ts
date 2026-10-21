@@ -71,15 +71,21 @@ export function pastedTracks(
     moved = remapPlacementTimeline(timeline, oldId, move.base, map).tracks;
   }
 
-  return moved.map((track) => ({
-    ...structuredClone(track),
-    id: newId('track'),
-    nodeId: newIds.get(track.nodeId)!,
-    keyframes: retime(track.keyframes, frameScale).map((keyframe) => ({
-      ...structuredClone(keyframe),
-      id: newId('kf'),
-    })),
-  }));
+  return moved.flatMap((track) => {
+    const nodeId = newIds.get(track.nodeId);
+    if (!nodeId) return [];
+    return [
+      {
+        ...structuredClone(track),
+        id: newId('track'),
+        nodeId,
+        keyframes: retime(track.keyframes, frameScale).map((keyframe) => ({
+          ...structuredClone(keyframe),
+          id: newId('kf'),
+        })),
+      },
+    ];
+  });
 }
 
 /** Keyframes at frame times scaled to another frame rate (one per frame, the last kept). */

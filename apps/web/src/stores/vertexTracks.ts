@@ -220,7 +220,8 @@ function keyInsertedPoint(
   if (times.length === 0) return tracks;
 
   const [contour, local] = fromFlat(lengths, change.segmentIndex);
-  const endFlat = toFlat(lengths, contour, (local + 1) % lengths[contour]!)!;
+  const endFlat = toFlat(lengths, contour, (local + 1) % lengths[contour]!);
+  if (endFlat === null) return tracks;
   const newPrefix = (flat: number) => pointPrefix(...fromFlat(newLengths, flat));
   const startPrefix = newPrefix(change.segmentIndex);
   const pointPrefixNew = newPrefix(change.segmentIndex + 1);
@@ -230,8 +231,12 @@ function keyInsertedPoint(
   const values = new Map<string, Map<number, number | null>>();
   const easings = new Map<number, EasingFunction>();
   const put = (property: string, time: number, value: number | null) => {
-    if (!values.has(property)) values.set(property, new Map());
-    values.get(property)!.set(time, value);
+    let byTime = values.get(property);
+    if (!byTime) {
+      byTime = new Map();
+      values.set(property, byTime);
+    }
+    byTime.set(time, value);
   };
   for (const time of times) {
     const posed = getAllPoints(
