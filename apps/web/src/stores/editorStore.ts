@@ -12,6 +12,7 @@ import type {
   Keyframe,
   Node,
   PathNode,
+  PathPoint,
   RectangleNode,
   EllipseNode,
   PolygonNode,
@@ -73,10 +74,13 @@ import { flipInParentSpace, flipMatrix, flipPlacement, type FlipAxis } from './f
 import { symbolsUsedBy, type ClipboardPayload } from '../services/systemClipboard';
 import { pastedTracks, type RootMove } from './clipboardAnimation';
 import {
+  closedContour,
   hasPointAnimation,
+  joinedContours,
   reversedContours,
   reversedTracks,
   simplifiedContours,
+  tracksForCopy,
 } from './pathCommands';
 import { shapeTracksToOutline } from './shapeToPathAnimation';
 
@@ -98,6 +102,8 @@ import {
   getShapeOutlinePoints,
   invalidateSymbolCache,
   resolveSymbolInstance,
+  cutContour,
+  mat3,
 } from '@quar/core';
 import type { OnionSkinSettings, BooleanOp } from '@quar/core';
 import {
@@ -728,6 +734,13 @@ export interface EditorStore extends SequenceActions {
   ) => void;
   /** Reverse the selected paths' direction (keyframes follow); undoable. */
   reverseSelectedPaths: (sceneGraph: SceneGraphLike) => void;
+  /**
+   * Join (Ctrl+J): one open path closes (its ends one point if they meet);
+   * several join end to end into the first, nearest ends first. Undoable.
+   */
+  joinSelectedPaths: (sceneGraph: SceneGraphLike) => void;
+  /** Cut paths at the points picked with Direct Selection, into separate paths; undoable. */
+  cutPathsAtSelectedPoints: (sceneGraph: SceneGraphLike) => void;
   /** Fewer points for the selected paths, their shape kept; undoable. */
   simplifySelectedPaths: (sceneGraph: SceneGraphLike) => void;
   /** Close or open the selected paths; undoable. */
@@ -2444,6 +2457,125 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       timeline = reversedTracks(timeline, path);
     }
     set({ timeline, isDirty: true });
+  },
+  joinSelectedPaths: (sceneGraph) => {
+    const open = selectedPaths(sceneGraph, get().selectedNodeIds).filter((path) => !path.closed);
+    if (open.length === 0) {
+      toast.info('Select open paths to join');
+      return;
+    }
+    const { timeline } = get();
+
+    if (open.length === 1) {
+      const path = open[0]!;
+      // Ends that meet become one point, unless that would lose point animation
+      const points = hasPointAnimation(timeline, path.id)
+        ? path.points
+        : closedContour(path.points);
+      get().pushUndo(sceneGraph);
+      const fill = path.fills.length === 0 ? { fills: [{ ...get().defaultFill }] } : {};
+      sceneGraph.updateNode(path.id, { points, closed: true, ...fill });
+      set({ directSelectionPoints: [], isDirty: true });
+      return;
+    }
+
+    const animated = open.filter((path) => hasPointAnimation(timeline, path.id));
+    if (animated.length > 0) {
+      toast.info(
+        'Paths whose points are animated are left out: joining would lose that animation.'
+      );
+    }
+    // In layer order: the lowest one takes in the others
+    const joinable = new Set(open.filter((path) => !animated.includes(path)).map((p) => p.id));
+    const ordered: PathNode[] = [];
+    sceneGraph.traverse((node) => {
+      if (joinable.has(node.id) && node.type === 'path') ordered.push(node);
+    });
+    if (ordered.length < 2) return;
+    const [base, ...rest] = ordered as [PathNode, ...PathNode[]];
+    const fromWorld = mat3.invert(sceneGraph.getWorldTransform(base.id));
+    if (!fromWorld) return;
+
+    get().pushUndo(sceneGraph);
+    sceneGraph.updateNode(
+      base.id,
+      joinedContours(
+        base,
+        rest.map((node) => ({
+          node,
+          toBase: mat3.multiply(fromWorld, sceneGraph.getWorldTransform(node.id)),
+        }))
+      )
+    );
+    set(removeLayers(sceneGraph, new Set(rest.map((node) => node.id)), get()));
+    set({ selectedNodeIds: new Set([base.id]), directSelectionPoints: [], isDirty: true });
+  },
+  cutPathsAtSelectedPoints: (sceneGraph) => {
+    const cutsByPath = new Map<string, number[]>();
+    for (const { nodeId, pointIndex } of get().directSelectionPoints) {
+      cutsByPath.set(nodeId, [...(cutsByPath.get(nodeId) ?? []), pointIndex]);
+    }
+    let { timeline } = get();
+    const notes = new Set<string>();
+    const plans: Array<{ node: PathNode; pieces: PathPoint[][] }> = [];
+    for (const [nodeId, cuts] of cutsByPath) {
+      const node = sceneGraph.getNode(nodeId);
+      if (node?.type !== 'path' || node.locked) continue;
+      if (node.subpaths && node.subpaths.length > 0) {
+        notes.add('Paths of several contours (with holes) can’t be cut yet.');
+        continue;
+      }
+      if (hasPointAnimation(timeline, nodeId)) {
+        notes.add(
+          'Paths whose points are animated are left as they are: cutting would lose that animation.'
+        );
+        continue;
+      }
+      const pieces = cutContour(node.points, node.closed, cuts);
+      if (pieces.length > 1 || node.closed) plans.push({ node, pieces });
+    }
+    for (const note of notes) toast.info(note);
+    if (plans.length === 0) {
+      if (notes.size === 0) toast.info('Pick points along a path (not its ends) to cut it there.');
+      return;
+    }
+
+    get().pushUndo(sceneGraph);
+    const selected: string[] = [];
+    for (const { node, pieces } of plans) {
+      // The first piece stays this layer; each other one a copy just above it
+      sceneGraph.updateNode(node.id, { points: pieces[0]!, closed: false });
+      selected.push(node.id);
+      const siblings = node.parent
+        ? (sceneGraph.getNode(node.parent)?.children ?? [])
+        : sceneGraph.getRootNodes().map((n: Node) => n.id);
+      const index = siblings.indexOf(node.id);
+      pieces.slice(1).forEach((piece, k) => {
+        const id = `cut_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+        const copy: PathNode = {
+          ...structuredClone(node),
+          id,
+          name: `${node.name} ${k + 2}`,
+          children: [],
+          points: piece,
+          closed: false,
+        };
+        sceneGraph.addNode(copy, node.parent ?? undefined);
+        if (index >= 0) sceneGraph.moveNode(id, node.parent ?? null, index + 1 + k);
+        // It moves as the layer did
+        timeline = {
+          ...timeline,
+          tracks: [...timeline.tracks, ...tracksForCopy(timeline, node.id, id)],
+        };
+        selected.push(id);
+      });
+    }
+    set({
+      timeline,
+      selectedNodeIds: new Set(selected),
+      directSelectionPoints: [],
+      isDirty: true,
+    });
   },
   simplifySelectedPaths: (sceneGraph) => {
     const paths = selectedPaths(sceneGraph, get().selectedNodeIds);

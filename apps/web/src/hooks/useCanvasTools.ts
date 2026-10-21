@@ -749,6 +749,24 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
     [setIsDrawing, syncPenToolState, syncDirectSelectionState, syncMarqueeState]
   );
 
+  // Points picked by the app (none, after a cut or join) reach Direct Selection
+  useEffect(
+    () =>
+      useEditorStore.subscribe((state, prev) => {
+        if (state.directSelectionPoints === prev.directSelectionPoints) return;
+        const tool = toolManagerRef.current?.getActiveTool();
+        if (tool?.type !== 'direct-selection') return;
+        const dsTool = tool as DirectSelectionTool;
+        const key = (points: Array<{ nodeId: string; pointIndex: number }>) =>
+          points.map((p) => `${p.nodeId}:${p.pointIndex}`).join(',');
+        if (key(dsTool.getSelectedPoints()) === key(state.directSelectionPoints)) return;
+        dsTool.setSelectedPoints(state.directSelectionPoints);
+        selectedNodeIdsRef.current = state.selectedNodeIds;
+        syncDirectSelectionState();
+      }),
+    [syncDirectSelectionState]
+  );
+
   // Weight paint follows the panel: its bone, brush, mode, and the layers selected
   useEffect(
     () =>

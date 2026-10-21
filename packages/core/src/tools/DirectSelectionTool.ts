@@ -1282,6 +1282,11 @@ export class DirectSelectionTool extends BaseTool {
     return [...this.selectedPoints];
   }
 
+  /** Pick these points: the app's, after it changed the paths (a cut, say). */
+  setSelectedPoints(points: SelectedPoint[]): void {
+    this.selectedPoints = points.map((point) => ({ ...point }));
+  }
+
   /**
    * Get current cursor based on hover state
    */

@@ -293,20 +293,26 @@ export function Canvas({
   // Enable tool shortcuts
   useToolShortcuts();
 
-  // Global keyboard shortcuts for group/ungroup (works regardless of focus)
+  // Global keyboard shortcuts for group/ungroup and join (work regardless of focus)
   useEffect(() => {
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
       // The focused canvas handler already ran group/ungroup and called
       // preventDefault; bail so we don't toggle a second time (F009).
       if (e.defaultPrevented) return;
       if (!(e.ctrlKey || e.metaKey)) return;
-      if (e.key !== 'g' && e.key !== 'G') return;
+      const key = e.key.toLowerCase();
+      if (key !== 'g' && key !== 'j') return;
+      if (key === 'j' && (e.shiftKey || e.altKey)) return;
 
       // Skip when input is focused
       const tag = (document.activeElement as HTMLElement)?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
 
       e.preventDefault();
+      if (key === 'j') {
+        useEditorStore.getState().joinSelectedPaths(sceneGraph);
+        return;
+      }
       if (e.shiftKey) {
         ungroupSelection(sceneGraph);
       } else {
@@ -1612,6 +1618,11 @@ export function Canvas({
           // Handled by document-level keydown listener (Clipboard API + fallback)
           return;
         }
+        if ((e.key === 'j' || e.key === 'J') && !e.shiftKey && !e.altKey) {
+          e.preventDefault();
+          useEditorStore.getState().joinSelectedPaths(sceneGraph);
+          return;
+        }
         if (e.key === 'd' && !e.shiftKey) {
           e.preventDefault();
           duplicateSelection(sceneGraph);
@@ -1701,6 +1712,18 @@ export function Canvas({
     if (isDirectSelectionActive && directSelectionPoints.length > 0) {
       const pointCount = directSelectionPoints.length;
       return [
+        {
+          id: 'cut-at-point',
+          label: pointCount === 1 ? 'Cut Path Here' : `Cut Path at ${pointCount} Points`,
+          onClick: () => useEditorStore.getState().cutPathsAtSelectedPoints(sceneGraph),
+        },
+        {
+          id: 'join-path',
+          label: 'Join',
+          shortcut: 'Ctrl+J',
+          onClick: () => useEditorStore.getState().joinSelectedPaths(sceneGraph),
+        },
+        { type: 'separator' },
         {
           id: 'delete-point',
           label: pointCount === 1 ? 'Delete Point' : `Delete ${pointCount} Points`,
@@ -1888,6 +1911,16 @@ export function Canvas({
                 onClick: () =>
                   useEditorStore.getState().setSelectedPathsClosed(sceneGraph, !pathsClosed),
               },
+              ...(pathNodes.some((path) => !path.closed)
+                ? [
+                    {
+                      id: 'join-paths',
+                      label: 'Join',
+                      shortcut: 'Ctrl+J',
+                      onClick: () => useEditorStore.getState().joinSelectedPaths(sceneGraph),
+                    },
+                  ]
+                : []),
             ]
           : []),
         { type: 'separator' },

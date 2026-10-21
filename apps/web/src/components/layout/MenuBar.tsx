@@ -285,6 +285,10 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
   );
   const allPathsClosed =
     selectedPathNodes.length > 0 && selectedPathNodes.every((path) => path.closed);
+  // Cut at Points works on the points picked with Direct Selection
+  const pickedPointCount = useEditorStore((state) =>
+    state.activeTool === 'direct-selection' ? state.directSelectionPoints.length : 0
+  );
 
   const hasBooleanGroupSelected = useMemo(() => {
     return Array.from(selectedNodeIds).some((id) => {
@@ -799,6 +803,23 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                     onClick={() => {
                       closeMenu();
                       useEditorStore.getState().setSelectedPathsClosed(sceneGraph, !allPathsClosed);
+                    }}
+                  />
+                  <MenuItem
+                    label="Join"
+                    shortcut="Ctrl+J"
+                    disabled={!selectedPathNodes.some((path) => !path.closed)}
+                    onClick={() => {
+                      closeMenu();
+                      useEditorStore.getState().joinSelectedPaths(sceneGraph);
+                    }}
+                  />
+                  <MenuItem
+                    label={pickedPointCount > 1 ? 'Cut at Points' : 'Cut at Point'}
+                    disabled={pickedPointCount === 0}
+                    onClick={() => {
+                      closeMenu();
+                      useEditorStore.getState().cutPathsAtSelectedPoints(sceneGraph);
                     }}
                   />
                   <Separator />

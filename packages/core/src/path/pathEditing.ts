@@ -261,3 +261,87 @@ export function simplifyContour(
   }
   return result.length >= 2 && result.length < n ? result : points;
 }
+
+/** A point with no handle on one side: where a cut path now starts or ends. */
+function endPoint(point: PathPoint, side: 'handleIn' | 'handleOut'): PathPoint {
+  return { ...point, [side]: null };
+}
+
+/**
+ * A contour cut at these points (its indices): the open pieces it falls into,
+ * each cut point ending one piece and starting the next. A closed contour cut
+ * at one point opens there; an open one isn't cut at its ends. The contour as
+ * it was (one piece) when nothing is cut.
+ */
+export function cutContour(points: PathPoint[], closed: boolean, cuts: number[]): PathPoint[][] {
+  const n = points.length;
+  const at = [...new Set(cuts)]
+    .filter((i) => i >= 0 && i < n && (closed || (i > 0 && i < n - 1)))
+    .sort((a, b) => a - b);
+  if (at.length === 0) return [points];
+
+  const pieces: PathPoint[][] = [];
+  if (closed) {
+    // From each cut round to the next (the same one, with a single cut)
+    for (let k = 0; k < at.length; k++) {
+      const from = at[k]!;
+      const to = at[(k + 1) % at.length]!;
+      const piece: PathPoint[] = [];
+      let i = from;
+      do {
+        piece.push(points[i]!);
+        i = (i + 1) % n;
+      } while (i !== to);
+      piece.push(points[to]!);
+      pieces.push(piece);
+    }
+  } else {
+    const ends = [0, ...at, n - 1];
+    for (let k = 0; k < ends.length - 1; k++) pieces.push(points.slice(ends[k], ends[k + 1]! + 1));
+  }
+  return pieces.map((piece) =>
+    piece.map((point, i) =>
+      i === 0
+        ? endPoint(point, 'handleIn')
+        : i === piece.length - 1
+          ? endPoint(point, 'handleOut')
+          : point
+    )
+  );
+}
+
+/**
+ * Two open contours joined end to end, the end of `a` meeting the start of
+ * `b`: one point where they meet (within `tolerance`), else a straight
+ * segment between them.
+ */
+export function joinContours(a: PathPoint[], b: PathPoint[], tolerance: number): PathPoint[] {
+  const last = a[a.length - 1];
+  const first = b[0];
+  if (!last || !first) return [...a, ...b];
+  if (vec2.distance(last.position, first.position) <= tolerance) {
+    const meeting: PathPoint = { ...last, handleOut: first.handleOut, type: 'corner' };
+    return [...a.slice(0, -1), meeting, ...b.slice(1)];
+  }
+  return [...endPointsOpen(a, 'end'), ...endPointsOpen(b, 'start')];
+}
+
+/** A contour whose end (or start) gets no handle on its outer side. */
+function endPointsOpen(points: PathPoint[], at: 'start' | 'end'): PathPoint[] {
+  if (points.length === 0) return points;
+  return at === 'end'
+    ? [...points.slice(0, -1), endPoint(points[points.length - 1]!, 'handleOut')]
+    : [endPoint(points[0]!, 'handleIn'), ...points.slice(1)];
+}
+
+/** A contour mapped by a matrix: positions as points, handles as directions. */
+export function transformContour(points: PathPoint[], m: Matrix3): PathPoint[] {
+  const direction = (v: Vector2 | null) =>
+    v ? { x: m.a * v.x + m.c * v.y, y: m.b * v.x + m.d * v.y } : null;
+  return points.map((point) => ({
+    ...point,
+    position: mat3.transformPoint(m, point.position),
+    handleIn: direction(point.handleIn),
+    handleOut: direction(point.handleOut),
+  }));
+}

@@ -140,4 +140,83 @@ describe('path commands (store)', () => {
       expect(node().points).toHaveLength(48);
     });
   });
+
+  describe('Join', () => {
+    it('closes one open path, its ends one point where they meet', () => {
+      sceneGraph.updateNode('p', {
+        points: [pt(0), pt(100), { ...pt(50), position: { x: 50, y: 80 } }, pt(0.2)],
+      });
+      useEditorStore.getState().joinSelectedPaths(sceneGraph);
+      expect(node().closed).toBe(true);
+      expect(node().points).toHaveLength(3);
+    });
+
+    it('joins two paths into the lower one, nearest ends meeting, wherever each sits', () => {
+      sceneGraph.addNode(
+        path([pt(0), pt(50)], {
+          id: 'q',
+          name: 'Other',
+          transform: { ...createDefaultTransform(), position: { x: 250, y: 0 } },
+        })
+      );
+      useEditorStore.setState({ selectedNodeIds: new Set(['p', 'q']) });
+      useEditorStore.getState().joinSelectedPaths(sceneGraph);
+
+      expect(sceneGraph.getNode('q')).toBeUndefined();
+      expect(node().points.map((p) => p.position.x)).toEqual([0, 100, 200, 250, 300]);
+      expect([...useEditorStore.getState().selectedNodeIds]).toEqual(['p']);
+
+      useEditorStore.getState().undo(sceneGraph);
+      expect(sceneGraph.getNode('q')).toBeDefined();
+      expect(node().points).toHaveLength(3);
+    });
+  });
+
+  describe('Cut at Point', () => {
+    it('cuts a path in two at a picked point; the new piece moves as the layer did', () => {
+      useEditorStore.setState({
+        directSelectionPoints: [{ nodeId: 'p', pointIndex: 1 }],
+        timeline: {
+          ...createTimeline(),
+          tracks: [
+            createTrack('p', 'transform.rotation', [createKeyframe(0, 0), createKeyframe(10, 45)]),
+          ],
+        },
+      });
+      useEditorStore.getState().cutPathsAtSelectedPoints(sceneGraph);
+
+      const ids = [...useEditorStore.getState().selectedNodeIds];
+      expect(ids).toHaveLength(2);
+      const piece = sceneGraph.getNode(ids[1]!) as PathNode;
+      expect(node().points.map((p) => p.position.x)).toEqual([0, 100]);
+      expect(piece.points.map((p) => p.position.x)).toEqual([100, 200]);
+      expect(sceneGraph.getRootNodes().map((n) => n.id)).toEqual(['p', piece.id]);
+      const tracks = useEditorStore.getState().timeline.tracks;
+      expect(
+        tracks.filter((t) => t.property === 'transform.rotation').map((t) => t.nodeId)
+      ).toEqual(['p', piece.id]);
+      expect(useEditorStore.getState().directSelectionPoints).toEqual([]);
+    });
+
+    it('opens a closed path at the point', () => {
+      sceneGraph.updateNode('p', { closed: true });
+      useEditorStore.setState({ directSelectionPoints: [{ nodeId: 'p', pointIndex: 1 }] });
+      useEditorStore.getState().cutPathsAtSelectedPoints(sceneGraph);
+      expect(node().closed).toBe(false);
+      expect(node().points.map((p) => p.position.x)).toEqual([100, 200, 0, 100]);
+    });
+
+    it('leaves a path whose points are animated as it is', () => {
+      useEditorStore.setState({
+        directSelectionPoints: [{ nodeId: 'p', pointIndex: 1 }],
+        timeline: {
+          ...createTimeline(),
+          tracks: [createTrack('p', 'points.0.position.x', [createKeyframe(0, 1)])],
+        },
+      });
+      useEditorStore.getState().cutPathsAtSelectedPoints(sceneGraph);
+      expect(node().points).toHaveLength(3);
+      expect(sceneGraph.getRootNodes()).toHaveLength(1);
+    });
+  });
 });

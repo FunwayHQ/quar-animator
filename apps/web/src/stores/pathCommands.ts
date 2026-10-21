@@ -1,11 +1,20 @@
 /**
  * Path Commands for Quar Animator
- * Edits to whole paths from the Edit menu: reversing their direction, and
- * the keyframes that have to follow.
+ * Edits to whole paths from the Edit menu: reversing, simplifying, joining
+ * and cutting them, and the keyframes that have to follow.
  */
 
-import type { PathNode, PathPoint, Timeline } from '@quar/types';
-import { getAllPoints, getPathBounds, reversePath, simplifyContour } from '@quar/core';
+import type { Matrix3, PathNode, PathPoint, PropertyTrack, Timeline } from '@quar/types';
+import {
+  getAllPoints,
+  getPathBounds,
+  joinContours,
+  reversePath,
+  simplifyContour,
+  transformContour,
+  vec2,
+} from '@quar/core';
+import { generateId } from '@quar/animation';
 import { pointPrefix, rewritePointTracks } from './vertexTracks';
 
 /** Each of the path's contours the other way round (its handles swapped). */
@@ -60,4 +69,76 @@ export function simplifiedContours(node: PathNode): Pick<PathNode, 'points' | 's
   const before = getAllPoints(node).length;
   const after = points.length + (subpaths ?? []).reduce((sum, c) => sum + c.length, 0);
   return after < before ? { points, subpaths } : null;
+}
+
+/** Ends closer than this (in the path's units) become one point when joined. */
+export const JOIN_TOLERANCE = 0.5;
+
+/** An open contour closed: its ends become one point if they meet. */
+export function closedContour(points: PathPoint[]): PathPoint[] {
+  const first = points[0];
+  const last = points[points.length - 1];
+  if (points.length < 3 || !first || !last) return points;
+  if (vec2.distance(first.position, last.position) > JOIN_TOLERANCE) return points;
+  return [{ ...first, handleIn: last.handleIn, type: 'corner' }, ...points.slice(1, -1)];
+}
+
+/**
+ * Open paths joined into `base`: each time the nearest pair of ends meets
+ * (contours turned round as needed), the others' points brought into base's
+ * space by `toBase`. Their other contours come along.
+ */
+export function joinedContours(
+  base: PathNode,
+  others: Array<{ node: PathNode; toBase: Matrix3 }>
+): Pick<PathNode, 'points' | 'subpaths'> {
+  let main = base.points;
+  const subpaths = [...(base.subpaths ?? [])];
+  let rest = others.map(({ node, toBase }) => ({
+    points: transformContour(node.points, toBase),
+    subpaths: (node.subpaths ?? []).map((contour) => transformContour(contour, toBase)),
+  }));
+
+  while (rest.length > 0) {
+    let best = { index: 0, flipMain: false, flipOther: false, distance: Infinity };
+    rest.forEach((other, index) => {
+      for (const flipMain of [false, true]) {
+        for (const flipOther of [false, true]) {
+          const end = flipMain ? main[0] : main[main.length - 1];
+          const start = flipOther ? other.points[other.points.length - 1] : other.points[0];
+          if (!end || !start) continue;
+          const distance = vec2.distance(end.position, start.position);
+          if (distance < best.distance) best = { index, flipMain, flipOther, distance };
+        }
+      }
+    });
+    const other = rest[best.index]!;
+    if (best.flipMain) main = reversePath(main);
+    main = joinContours(
+      main,
+      best.flipOther ? reversePath(other.points) : other.points,
+      JOIN_TOLERANCE
+    );
+    subpaths.push(...other.subpaths);
+    rest = rest.filter((_, i) => i !== best.index);
+  }
+  return { points: main, subpaths: subpaths.length > 0 ? subpaths : undefined };
+}
+
+/**
+ * A layer's tracks, for a copy of it (`copyId`): new ids, and keyframes an
+ * Animation Sequence step generated become ordinary ones.
+ */
+export function tracksForCopy(timeline: Timeline, nodeId: string, copyId: string): PropertyTrack[] {
+  return timeline.tracks
+    .filter((track) => track.nodeId === nodeId)
+    .map((track) => ({
+      ...structuredClone(track),
+      id: generateId('track'),
+      nodeId: copyId,
+      keyframes: track.keyframes.map(({ sequenceStepId: _step, ...keyframe }) => ({
+        ...structuredClone(keyframe),
+        id: generateId('kf'),
+      })),
+    }));
 }
