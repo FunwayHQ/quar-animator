@@ -4,7 +4,7 @@
  * and cutting them, and the keyframes that have to follow.
  */
 
-import type { Matrix3, PathNode, PathPoint, PropertyTrack, Timeline } from '@quar/types';
+import type { Matrix3, PathNode, PathPoint, PropertyTrack, Stroke, Timeline } from '@quar/types';
 import {
   getAllPoints,
   getPathBounds,
@@ -23,6 +23,19 @@ export function reversedContours(node: PathNode): Pick<PathNode, 'points' | 'sub
     points: reversePath(node.points),
     subpaths: node.subpaths?.map((contour) => reversePath(contour)),
   };
+}
+
+/**
+ * The strokes an opened path needs to stay visible. Open paths aren't filled,
+ * so one with no visible stroke gets `stroke` in the color of its fill.
+ */
+export function strokeForOpening(
+  node: PathNode,
+  stroke: Stroke
+): Partial<Pick<PathNode, 'strokes'>> {
+  if (node.strokes.some((s) => s.visible && s.width > 0)) return {};
+  const fill = node.fills.find((f) => f.visible && f.type === 'solid' && f.color);
+  return { strokes: [{ ...stroke, color: fill?.color ? { ...fill.color } : { ...stroke.color } }] };
 }
 
 /** handleIn ↔ handleOut, the rest of a point property as it is. */

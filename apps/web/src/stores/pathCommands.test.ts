@@ -98,6 +98,25 @@ describe('path commands (store)', () => {
     expect(useEditorStore.getState().undoStack).toHaveLength(2);
   });
 
+  it('outlines a path it opens that has no stroke, in its fill color', () => {
+    const blue = { r: 100, g: 150, b: 240, a: 1 };
+    sceneGraph.updateNode('p', {
+      closed: true,
+      fills: [{ type: 'solid', color: blue, opacity: 1, visible: true }],
+    });
+    useEditorStore.getState().setSelectedPathsClosed(sceneGraph, false);
+    expect(node().strokes).toHaveLength(1);
+    expect(node().strokes[0]!.color).toEqual(blue);
+    expect(node().strokes[0]!.width).toBe(useEditorStore.getState().defaultStroke.width);
+  });
+
+  it('keeps the strokes of a path it opens that has one', () => {
+    const stroke = { ...useEditorStore.getState().defaultStroke, width: 7 };
+    sceneGraph.updateNode('p', { closed: true, strokes: [stroke] });
+    useEditorStore.getState().setSelectedPathsClosed(sceneGraph, false);
+    expect(node().strokes).toEqual([stroke]);
+  });
+
   it('sets the fill rule', () => {
     useEditorStore.getState().setSelectedPathsFillRule(sceneGraph, 'evenodd');
     expect(node().fillRule).toBe('evenodd');
@@ -204,6 +223,21 @@ describe('path commands (store)', () => {
       useEditorStore.getState().cutPathsAtSelectedPoints(sceneGraph);
       expect(node().closed).toBe(false);
       expect(node().points.map((p) => p.position.x)).toEqual([100, 200, 0, 100]);
+    });
+
+    it('outlines the pieces of a filled path with no stroke', () => {
+      const red = { r: 220, g: 40, b: 40, a: 1 };
+      sceneGraph.updateNode('p', {
+        fills: [{ type: 'solid', color: red, opacity: 1, visible: true }],
+      });
+      useEditorStore.setState({ directSelectionPoints: [{ nodeId: 'p', pointIndex: 1 }] });
+      useEditorStore.getState().cutPathsAtSelectedPoints(sceneGraph);
+      const [first, second] = [...useEditorStore.getState().selectedNodeIds].map(
+        (id) => sceneGraph.getNode(id) as PathNode
+      );
+      expect(first!.strokes.map((s) => s.color)).toEqual([red]);
+      expect(second!.strokes.map((s) => s.color)).toEqual([red]);
+      expect(second!.strokes[0]).not.toBe(first!.strokes[0]);
     });
 
     it('leaves a path whose points are animated as it is', () => {

@@ -80,6 +80,7 @@ import {
   reversedContours,
   reversedTracks,
   simplifiedContours,
+  strokeForOpening,
   tracksForCopy,
 } from './pathCommands';
 import { shapeTracksToOutline } from './shapeToPathAnimation';
@@ -2553,8 +2554,10 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     get().pushUndo(sceneGraph);
     const selected: string[] = [];
     for (const { node, pieces } of plans) {
+      // Open pieces aren't filled: they keep the shape visible as outlines
+      const stroke = strokeForOpening(node, get().defaultStroke);
       // The first piece stays this layer; each other one a copy just above it
-      sceneGraph.updateNode(node.id, { points: pieces[0]!, closed: false });
+      sceneGraph.updateNode(node.id, { points: pieces[0]!, closed: false, ...stroke });
       selected.push(node.id);
       const siblings = node.parent
         ? (sceneGraph.getNode(node.parent)?.children ?? [])
@@ -2569,6 +2572,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
           children: [],
           points: piece,
           closed: false,
+          ...structuredClone(stroke),
         };
         sceneGraph.addNode(copy, node.parent ?? undefined);
         if (index >= 0) sceneGraph.moveNode(id, node.parent ?? null, index + 1 + k);
@@ -2620,7 +2624,9 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     for (const path of paths) {
       // Closed, a path without a fill gets the default one, as when the Pen closes it
       const fill = closed && path.fills.length === 0 ? { fills: [{ ...get().defaultFill }] } : {};
-      sceneGraph.updateNode(path.id, { closed, ...fill });
+      // Open paths aren't filled: one without a stroke is outlined in its fill's color
+      const stroke = closed ? {} : strokeForOpening(path, get().defaultStroke);
+      sceneGraph.updateNode(path.id, { closed, ...fill, ...stroke });
     }
     set({ isDirty: true });
   },
