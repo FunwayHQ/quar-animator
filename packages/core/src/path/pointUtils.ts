@@ -139,3 +139,36 @@ export function updateHandleWithSymmetry(
 
   return result;
 }
+
+/**
+ * A point given a type, as Figma's handle mirroring: a corner's handles move
+ * on their own (they're left as they are); a smooth point's are lined up,
+ * keeping their lengths; a symmetric point's are lined up and evened out. A
+ * point with no handles gets some along its neighbours first.
+ */
+export function setPointType(
+  point: PathPoint,
+  type: PathPoint['type'],
+  prevPosition: Vector2 | null,
+  nextPosition: Vector2 | null
+): PathPoint {
+  if (type === 'corner') return { ...point, type };
+  const base =
+    point.handleIn || point.handleOut
+      ? point
+      : convertPointType({ ...point, type: 'corner' }, prevPosition, nextPosition);
+  const out = base.handleOut ?? vec2.multiply(base.handleIn!, -1);
+  const into = base.handleIn ?? vec2.multiply(base.handleOut!, -1);
+  // The line through the point both handles lean towards
+  const lean = vec2.subtract(vec2.normalize(out), vec2.normalize(into));
+  const direction = vec2.length(lean) > 1e-9 ? vec2.normalize(lean) : vec2.normalize(out);
+  const outLength = vec2.length(out);
+  const inLength = vec2.length(into);
+  const even = (outLength + inLength) / 2;
+  return {
+    ...base,
+    type,
+    handleOut: vec2.multiply(direction, type === 'symmetric' ? even : outLength),
+    handleIn: vec2.multiply(direction, -(type === 'symmetric' ? even : inLength)),
+  };
+}

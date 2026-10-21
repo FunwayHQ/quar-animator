@@ -3,6 +3,7 @@ import type {
   Node,
   EllipseNode,
   PathNode,
+  PathPoint,
   GroupNode,
   BoneNode,
   Color,
@@ -65,6 +66,10 @@ import {
   GOOGLE_FONTS_CATALOG,
   getAllPoints,
   setAllPoints,
+  getSubpathBoundaries,
+  getContourRange,
+  setPointType,
+  updateHandleWithSymmetry,
 } from '@quar/core';
 import { findTrack, getEasingDisplayName } from '@quar/animation';
 import type { SceneGraph } from '@quar/core';
@@ -2877,6 +2882,87 @@ export function PropertiesPanel() {
               }
             };
 
+            // The selected points' type, when they share one
+            const types = new Set(dsPoints.map((sp) => allPts[sp.pointIndex]?.type));
+            const sharedType = types.size === 1 ? [...types][0] : undefined;
+
+            /** Key a point's handles (when auto-keyframing), after they changed. */
+            const keyHandles = (n: PathNode, index: number, point: PathPoint) => {
+              for (const handle of ['handleIn', 'handleOut'] as const) {
+                const value = point[handle];
+                if (!value) continue;
+                for (const axis of ['x', 'y'] as const) {
+                  const property = vertexPropPath(n, index, `${handle}.${axis}`);
+                  if (shouldKeyframe(autoKeyframe, n.id, property)) {
+                    addKeyframeAtFrame(n.id, property, currentFrame, value[axis]);
+                  }
+                }
+              }
+            };
+
+            const handlePointTypeChange = (type: PathPoint['type']) => {
+              pushUndo(sceneGraph);
+              for (const sp of dsPoints) {
+                const n = sceneGraph.getNode(sp.nodeId);
+                if (!n || n.type !== 'path') continue;
+                const pts = getAllPoints(n);
+                const pt = pts[sp.pointIndex];
+                if (!pt) continue;
+                // Its neighbours in its own contour, for handles it doesn't have yet
+                const { start, end } = getContourRange(getSubpathBoundaries(n), sp.pointIndex);
+                const local = sp.pointIndex - start;
+                const length = end - start;
+                const prev =
+                  local > 0 ? pts[sp.pointIndex - 1] : n.closed ? pts[end - 1] : undefined;
+                const next =
+                  local < length - 1 ? pts[sp.pointIndex + 1] : n.closed ? pts[start] : undefined;
+                const updated = setPointType(
+                  pt,
+                  type,
+                  prev && prev !== pt ? prev.position : null,
+                  next && next !== pt ? next.position : null
+                );
+                const newPts = [...pts];
+                newPts[sp.pointIndex] = updated;
+                const split = setAllPoints(n, newPts);
+                sceneGraph.updateNode(sp.nodeId, {
+                  points: split.points,
+                  subpaths: split.subpaths,
+                });
+                keyHandles(n, sp.pointIndex, updated);
+              }
+            };
+
+            /** One handle's offset, typed in: the other turns with it on smooth points. */
+            const handleHandleChange = (handle: 'in' | 'out', axis: 'x' | 'y', value: string) => {
+              const num = parseFloat(value);
+              if (isNaN(num)) return;
+              const sp = dsPoints[0]!;
+              const n = sceneGraph.getNode(sp.nodeId);
+              if (!n || n.type !== 'path') return;
+              const pts = getAllPoints(n);
+              const pt = pts[sp.pointIndex];
+              const current = pt && (handle === 'in' ? pt.handleIn : pt.handleOut);
+              if (!pt || !current) return;
+              pushUndo(sceneGraph);
+              const updated = updateHandleWithSymmetry(pt, handle, { ...current, [axis]: num });
+              const newPts = [...pts];
+              newPts[sp.pointIndex] = updated;
+              const split = setAllPoints(n, newPts);
+              sceneGraph.updateNode(sp.nodeId, { points: split.points, subpaths: split.subpaths });
+              keyHandles(n, sp.pointIndex, updated);
+            };
+
+            const handleRows =
+              dsPoints.length === 1
+                ? (
+                    [
+                      ['in', 'In', firstPt.handleIn],
+                      ['out', 'Out', firstPt.handleOut],
+                    ] as const
+                  ).filter(([, , offset]) => offset)
+                : [];
+
             return (
               <div className={styles.section}>
                 <div className={styles.sectionHeader}>
@@ -2965,6 +3051,67 @@ export function PropertiesPanel() {
                       </div>
                     </div>
                   </div>
+                  <div className={styles.propertyRow}>
+                    <span className={styles.propertyLabel}>Type</span>
+                    <div
+                      className={`${styles.alignToggle} ${styles.pointTypeToggle}`}
+                      role="group"
+                      aria-label="Point type"
+                      data-testid="vertex-type"
+                    >
+                      {(
+                        [
+                          ['corner', 'Corner', 'Handles move on their own'],
+                          ['smooth', 'Smooth', 'Handles stay in line'],
+                          ['symmetric', 'Symmetric', 'Handles stay in line, the same length'],
+                        ] as const
+                      ).map(([type, label, title]) => (
+                        <button
+                          key={type}
+                          className={`${styles.alignOption} ${styles.pointTypeOption} ${sharedType === type ? styles.alignOptionActive : ''}`}
+                          onClick={() => handlePointTypeChange(type)}
+                          title={title}
+                          aria-pressed={sharedType === type}
+                          data-testid={`vertex-type-${type}`}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  {handleRows.map(([handle, label, offset]) => (
+                    <div className={styles.propertyRow} key={handle}>
+                      <span className={styles.propertyLabel}>Handle {label.toLowerCase()}</span>
+                      <div className={styles.twoColumnRow}>
+                        {(['x', 'y'] as const).map((axis) => (
+                          <div
+                            className={`${styles.inputGroup} ${styles.inputGroupFlex}`}
+                            key={axis}
+                          >
+                            <ScrubLabel
+                              onScrubStart={handleScrubStart}
+                              label={axis.toUpperCase()}
+                              value={+offset![axis].toFixed(1)}
+                              onChange={(v) => handleHandleChange(handle, axis, String(v))}
+                              sensitivity={1}
+                            />
+                            <input
+                              className={styles.input}
+                              type="text"
+                              value={fmt1(offset![axis])}
+                              onChange={(e) => handleHandleChange(handle, axis, e.target.value)}
+                              {...numericInputProps(
+                                () => +offset![axis].toFixed(1),
+                                (v) => handleHandleChange(handle, axis, v)
+                              )}
+                              aria-label={`${label} handle ${axis.toUpperCase()}`}
+                              data-testid={`vertex-handle-${handle}-${axis}`}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
                   {allCorner && (
                     <div className={styles.propertyRow}>
                       <div className={`${styles.inputGroup} ${styles.inputGroupFlex}`}>

@@ -1698,4 +1698,86 @@ describe('PropertiesPanel', () => {
       expect(useEditorStore.getState().documentBackground).toEqual({ r: 26, g: 26, b: 26, a: 1 });
     });
   });
+
+  describe('Vertex section: point type and handles', () => {
+    function setup(points: PathNode['points'], picked: number[]) {
+      const sg = renderWithSceneGraph();
+      const pathNode: PathNode = {
+        id: 'p1',
+        name: 'Path',
+        type: 'path',
+        parent: null,
+        children: [],
+        transform: createDefaultTransform(),
+        visible: true,
+        locked: false,
+        opacity: 1,
+        blendMode: 'normal',
+        closed: false,
+        points,
+        fills: [],
+        strokes: [],
+      };
+      act(() => {
+        sg.addNode(pathNode);
+        useEditorStore.getState().setSelection(['p1']);
+        useEditorStore.setState({
+          activeTool: 'direct-selection',
+          directSelectionPoints: picked.map((pointIndex) => ({ nodeId: 'p1', pointIndex })),
+        });
+      });
+      return sg;
+    }
+    const corner = (x: number, y: number) => ({
+      position: { x, y },
+      handleIn: null,
+      handleOut: null,
+      type: 'corner' as const,
+    });
+
+    it("shows the picked points' type, and turns a corner smooth", () => {
+      const sg = setup([corner(0, 0), corner(100, 0), corner(200, 0)], [1]);
+
+      expect(screen.getByTestId('vertex-type-corner')).toHaveAttribute('aria-pressed', 'true');
+      act(() => {
+        fireEvent.click(screen.getByTestId('vertex-type-smooth'));
+      });
+
+      const point = (sg.getNode('p1') as PathNode).points[1]!;
+      expect(point.type).toBe('smooth');
+      expect(point.handleOut!.x).toBeGreaterThan(0);
+      expect(point.handleIn!.x).toBeLessThan(0);
+    });
+
+    it('edits a handle in numbers, the other turning with it on a smooth point', () => {
+      const sg = setup(
+        [
+          corner(0, 0),
+          {
+            ...corner(100, 0),
+            handleIn: { x: -30, y: 0 },
+            handleOut: { x: 30, y: 0 },
+            type: 'smooth',
+          },
+        ],
+        [1]
+      );
+
+      expect(screen.getByTestId('vertex-handle-out-x')).toHaveValue('30.0');
+      act(() => {
+        fireEvent.change(screen.getByTestId('vertex-handle-out-y'), { target: { value: '30' } });
+      });
+
+      const point = (sg.getNode('p1') as PathNode).points[1]!;
+      expect(point.handleOut).toEqual({ x: 30, y: 30 });
+      // Still in line, still 30 long
+      expect(point.handleIn!.x).toBeCloseTo(-30 / Math.SQRT2);
+      expect(point.handleIn!.y).toBeCloseTo(-30 / Math.SQRT2);
+    });
+
+    it('shows no handle fields with several points picked', () => {
+      setup([corner(0, 0), { ...corner(100, 0), handleOut: { x: 30, y: 0 } }], [0, 1]);
+      expect(screen.queryByTestId('vertex-handle-out-x')).toBeNull();
+    });
+  });
 });
