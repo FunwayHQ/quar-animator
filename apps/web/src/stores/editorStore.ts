@@ -1083,11 +1083,17 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       set({ selectedNodeIds: new Set([toId]), lastSelectedNodeId: toId });
       return;
     }
-    // Flatten scene graph in depth-first order
+    // The layers in the order the Layers panel lists them: each stack
+    // topmost first, a group's layers under it
     const flatOrder: string[] = [];
-    sceneGraph.traverse((node) => {
+    const visit = (node: Node) => {
       flatOrder.push(node.id);
-    });
+      for (const childId of [...node.children].reverse()) {
+        const child = sceneGraph.getNode(childId);
+        if (child) visit(child);
+      }
+    };
+    for (const root of [...sceneGraph.getRootNodes()].reverse()) visit(root);
     const fromIndex = flatOrder.indexOf(lastSelectedNodeId);
     const toIndex = flatOrder.indexOf(toId);
     if (fromIndex === -1 || toIndex === -1) {

@@ -1080,9 +1080,9 @@ describe('LayerPanel', () => {
       expect(computeInsertIndex('after', 0, true)).toBe(0);
     });
 
-    it('maps before/after directly for array-order group children', () => {
-      expect(computeInsertIndex('before', 2, false)).toBe(2);
-      expect(computeInsertIndex('after', 2, false)).toBe(3);
+    it('inverts before/after for group children too, listed topmost first', () => {
+      expect(computeInsertIndex('before', 2)).toBe(3);
+      expect(computeInsertIndex('after', 2)).toBe(2);
     });
 
     it('drops into groups and artboards, but keeps artboards at the top level', () => {
@@ -1097,9 +1097,30 @@ describe('LayerPanel', () => {
       expect(dropPositionAt(artboard, 0.5, true)).toBe('after');
     });
 
-    it('drops inside at index 0', () => {
-      expect(computeInsertIndex('inside', 5, true)).toBe(0);
-      expect(computeInsertIndex('inside', 5, false)).toBe(0);
+    it('drops inside on top of what is there', () => {
+      expect(computeInsertIndex('inside', 5, 3)).toBe(3);
+      expect(computeInsertIndex('inside', 0)).toBe(0);
+    });
+
+    it("lists a group's layers topmost first, as the top level is", () => {
+      let sg: SceneGraph | null = null;
+      render(
+        <SceneGraphProvider>
+          <SceneGraphCapture onCapture={(s) => (sg = s)} />
+          <LayerPanel />
+        </SceneGraphProvider>
+      );
+      act(() => {
+        sg!.addNode(createTestRect('bottom', 'Bottom'));
+        sg!.addNode(createTestGroup('group1', 'Group'));
+        // Added in stacking order: 'back' first, 'front' drawn on top
+        sg!.addNode(createTestRect('back', 'Back'), 'group1');
+        sg!.addNode(createTestRect('front', 'Front'), 'group1');
+      });
+      const rows = screen
+        .getAllByTestId(/^layer-row-/)
+        .map((row) => row.getAttribute('data-testid')!.replace('layer-row-', ''));
+      expect(rows).toEqual(['group1', 'front', 'back', 'bottom']);
     });
   });
 });

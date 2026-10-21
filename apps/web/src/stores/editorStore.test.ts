@@ -176,6 +176,38 @@ describe('EditorStore', () => {
   // ==========================================================================
 
   describe('selection operations', () => {
+    it('shift-selects the layers between two, in the order the Layers panel lists them', () => {
+      const sg = new SceneGraph();
+      const layer = (id: string) =>
+        ({
+          id,
+          name: id,
+          type: 'group',
+          parent: null,
+          children: [],
+          transform: createDefaultTransform(),
+          visible: true,
+          locked: false,
+          opacity: 1,
+          blendMode: 'normal',
+        }) as const;
+      // Listed: group, front, back, bottom
+      sg.addNode(layer('bottom'));
+      sg.addNode(layer('group'));
+      sg.addNode(layer('back'), 'group');
+      sg.addNode(layer('front'), 'group');
+      useEditorStore.getState().setSelection(['back']);
+      useEditorStore.getState().selectRange('bottom', sg);
+      expect([...useEditorStore.getState().selectedNodeIds].sort()).toEqual(['back', 'bottom']);
+      useEditorStore.getState().setSelection(['group']);
+      useEditorStore.getState().selectRange('back', sg);
+      expect([...useEditorStore.getState().selectedNodeIds].sort()).toEqual([
+        'back',
+        'front',
+        'group',
+      ]);
+    });
+
     it('should set selection to a single node', () => {
       const { setSelection } = useEditorStore.getState();
       setSelection(['node1']);

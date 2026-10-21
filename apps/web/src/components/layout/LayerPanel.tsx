@@ -29,18 +29,18 @@ import styles from './LayerPanel.module.css';
 
 /**
  * Base array-order insert index for a layer drop, before the same-parent
- * removal shift. Root rows are displayed REVERSED, so a drop 'before' a root row
- * (visually above it) means a HIGHER raw index; group children render in array
- * order, so before/after map directly (F012).
+ * removal shift. Rows show each stack topmost first — array order REVERSED,
+ * at the top level and inside groups alike — so a drop 'before' a row
+ * (visually above it) means a HIGHER raw index (F012). Dropped inside a group
+ * or an artboard (`insideCount` layers in it), a layer goes on top.
  */
 export function computeInsertIndex(
   position: 'before' | 'after' | 'inside',
   targetIndex: number,
-  isRoot: boolean
+  insideCount = 0
 ): number {
-  if (position === 'inside') return 0;
-  if (isRoot) return position === 'before' ? targetIndex + 1 : targetIndex;
-  return position === 'before' ? targetIndex : targetIndex + 1;
+  if (position === 'inside') return insideCount;
+  return position === 'before' ? targetIndex + 1 : targetIndex;
 }
 
 // ============================================================================
@@ -365,23 +365,26 @@ function LayerRow({
       </div>
       {expanded &&
         hasChildren &&
-        node.children.map((childId: string) => (
-          <LayerRowById
-            key={childId}
-            nodeId={childId}
-            depth={depth + 1}
-            onSelect={onSelect}
-            onDoubleClick={onDoubleClick}
-            onToggleVisibility={onToggleVisibility}
-            onToggleLock={onToggleLock}
-            onContextMenu={onContextMenu}
-            isRenaming={false}
-            onRenameCommit={onRenameCommit}
-            onPointerDown={onPointerDown}
-            draggedIds={isDragging ? new Set<string>() : null}
-            dropTarget={dropTarget}
-          />
-        ))}
+        // Topmost first, as the top level is listed
+        [...node.children]
+          .reverse()
+          .map((childId: string) => (
+            <LayerRowById
+              key={childId}
+              nodeId={childId}
+              depth={depth + 1}
+              onSelect={onSelect}
+              onDoubleClick={onDoubleClick}
+              onToggleVisibility={onToggleVisibility}
+              onToggleLock={onToggleLock}
+              onContextMenu={onContextMenu}
+              isRenaming={false}
+              onRenameCommit={onRenameCommit}
+              onPointerDown={onPointerDown}
+              draggedIds={isDragging ? new Set<string>() : null}
+              dropTarget={dropTarget}
+            />
+          ))}
     </>
   );
 }
@@ -918,7 +921,7 @@ export function LayerPanel() {
 
       if (dropTarget.position === 'inside') {
         parentId = dropTarget.nodeId;
-        insertIndex = 0;
+        insertIndex = computeInsertIndex('inside', 0, targetNode.children.length);
       } else {
         parentId = targetNode.parent;
         // Find index of target in parent's children
@@ -927,9 +930,9 @@ export function LayerPanel() {
           ? parentNode.children
           : sceneGraph.getRootNodes().map((n: Node) => n.id);
         const targetIndex = siblings.indexOf(dropTarget.nodeId);
-        // Root rows are DISPLAYED reversed, so visual before/after invert vs raw
-        // array order; group children are shown in array order (F012).
-        insertIndex = computeInsertIndex(dropTarget.position, targetIndex, parentId === null);
+        // Rows are DISPLAYED reversed, so visual before/after invert vs raw
+        // array order (F012)
+        insertIndex = computeInsertIndex(dropTarget.position, targetIndex);
       }
 
       // Keep pending edits to sequenced objects, then record undo
