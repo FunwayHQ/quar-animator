@@ -8,9 +8,16 @@
  *   "fill.color.r"
  */
 
-import type { Node, PathPoint, PropertyTrack, Timeline, Effect } from '@quar/types';
-import { prepareShapeTween, interpolateShapeTween } from '@quar/core';
-import type { ShapeTweenData } from '@quar/core';
+import type { Node, PathPoint, PathShape, PropertyTrack, Timeline, Effect } from '@quar/types';
+import {
+  interpolatePathShapeTween,
+  interpolateShapeTween,
+  isPathShape,
+  preparePathShapeTween,
+  prepareShapeTween,
+  toPathShape,
+} from '@quar/core';
+import type { PathShapeTweenData, ShapeTweenData } from '@quar/core';
 import { interpolateValue, interpolators } from './Timeline';
 
 // ============================================================================
@@ -431,25 +438,34 @@ export function getAnimatablePropertiesForNode(node: Node): AnimatableProperty[]
 // ============================================================================
 
 /**
- * Cached path shape interpolator. Prepares ShapeTweenData once per unique
- * (source, target) pair using a nested WeakMap keyed by array identity.
+ * Cached path shape interpolator. Prepares the tween once per unique
+ * (source, target) pair of Shape keyframe values using a nested WeakMap keyed
+ * by identity. Values are whole PathShapes, or (older files) the main
+ * contour alone, tweened as a closed contour.
  */
-const pathTweenCache = new WeakMap<PathPoint[], WeakMap<PathPoint[], ShapeTweenData>>();
+type ShapeValue = PathPoint[] | PathShape;
+type TweenData = ShapeTweenData | PathShapeTweenData;
+const pathTweenCache = new WeakMap<ShapeValue, WeakMap<ShapeValue, TweenData>>();
 
-function pathInterpolator(a: PathPoint[], b: PathPoint[], t: number): PathPoint[] {
+function pathInterpolator(a: ShapeValue, b: ShapeValue, t: number): ShapeValue {
   let inner = pathTweenCache.get(a);
   if (!inner) {
     inner = new WeakMap();
     pathTweenCache.set(a, inner);
   }
   let data = inner.get(b);
+  if (Array.isArray(a) && Array.isArray(b)) {
+    if (!data) {
+      data = prepareShapeTween(a, b, true, true);
+      inner.set(b, data);
+    }
+    return interpolateShapeTween(data as ShapeTweenData, t);
+  }
   if (!data) {
-    // Assume closed paths for shape tweening (most common case).
-    // Open path tweening works too — correspondence just returns offset 0.
-    data = prepareShapeTween(a, b, true, true);
+    data = preparePathShapeTween(toPathShape(a), toPathShape(b));
     inner.set(b, data);
   }
-  return interpolateShapeTween(data, t);
+  return interpolatePathShapeTween(data as PathShapeTweenData, t);
 }
 
 // ============================================================================
@@ -615,7 +631,11 @@ export function applyAnimatedValues<N extends Node>(
 ): N {
   let result = node;
   for (const [path, value] of animatedValues) {
-    result = setProperty(result, path, value);
+    // A whole Shape keyframe sets every contour
+    result =
+      path === 'points' && isPathShape(value)
+        ? { ...result, points: value.points, subpaths: value.subpaths }
+        : setProperty(result, path, value);
   }
   return result;
 }

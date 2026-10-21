@@ -422,6 +422,30 @@ describe('animated geometry', () => {
     expect(keyframes[0]!.s[0]!.v).toHaveLength(4);
   });
 
+  it('keeps a hole that a shape tween grows, collapsed before it appears', () => {
+    const timeline = createTimeline({ duration: 60, frameRate: 30 });
+    const outer = [corner(0, 0), corner(40, 0), corner(40, 40), corner(0, 40)];
+    const hole = [corner(10, 10), corner(10, 30), corner(30, 30), corner(30, 10)];
+    const track = getOrCreateTrack<unknown>(timeline, 'p1', 'points');
+    addKeyframe(track, 0, { points: outer, closed: true });
+    addKeyframe(track, 2, { points: outer, subpaths: [hole], closed: true });
+
+    const paths = pathToLottieShapes(
+      makePath({ id: 'p1', points: outer, closed: true }),
+      timeline
+    ).filter((item) => item.ty === 'sh') as LottieShapePath[];
+    expect(paths).toHaveLength(2);
+    const frames = paths[1]!.ks.k as Array<{ s: Array<{ v: number[][] }> }>;
+    expect(frames[0]!.s[0]!.v).toEqual([
+      [20, -20],
+      [20, -20],
+      [20, -20],
+      [20, -20],
+    ]);
+    expect(frames[2]!.s[0]!.v).toHaveLength(4);
+    expect(frames[2]!.s[0]!.v[0]).not.toEqual([20, -20]);
+  });
+
   it('animates per-vertex edits', () => {
     const timeline = createTimeline({ duration: 60, frameRate: 30 });
     const x = getOrCreateTrack<number>(timeline, 'p1', 'points.2.position.x');

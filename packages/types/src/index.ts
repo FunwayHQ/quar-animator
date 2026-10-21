@@ -292,6 +292,17 @@ export interface PathNode extends BaseNode {
   skinData?: SkinData;
 }
 
+/**
+ * The value of a "Shape" keyframe (a path's `points` track): every contour
+ * of the path at that time. `closed` says how to tween it. Older files key
+ * the main contour alone, as a PathPoint[], tweened as a closed contour.
+ */
+export interface PathShape {
+  points: PathPoint[];
+  subpaths?: PathPoint[][];
+  closed: boolean;
+}
+
 export interface TextNode extends BaseNode {
   type: 'text';
   content: string;

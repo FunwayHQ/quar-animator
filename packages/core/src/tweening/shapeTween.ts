@@ -5,13 +5,14 @@
  * finding optimal correspondence, and lerping positions/handles.
  */
 
-import type { PathPoint, Vector2 } from '@quar/types';
+import type { PathNode, PathPoint, PathShape, Vector2 } from '@quar/types';
 import { bezier } from '../path/bezier';
 import {
   forEachSegment,
   getAbsoluteControlPoints,
   getSegmentLength,
   clonePathPoint,
+  reversePath,
 } from '../path/pathUtils';
 
 // ============================================================================
@@ -21,6 +22,21 @@ import {
 export interface ShapeTweenData {
   sourceNormalized: PathPoint[];
   targetNormalized: PathPoint[];
+}
+
+/** One contour of a whole-shape tween. */
+interface ContourTween {
+  source: PathPoint[];
+  target: PathPoint[];
+  /** A contour only one shape has grows from (0) or shrinks to (1) a point, gone there */
+  absentAt?: 0 | 1;
+}
+
+/** A tween between two Shape keyframes, every contour matched up. */
+export interface PathShapeTweenData {
+  points: ShapeTweenData;
+  subpaths: ContourTween[];
+  closed: [boolean, boolean];
 }
 
 // ============================================================================
@@ -335,6 +351,18 @@ export function findBestCorrespondence(
   return bestOffset;
 }
 
+/** The sum of squared distances between source (rotated by offset) and target. */
+function correspondenceCost(source: PathPoint[], target: PathPoint[], offset: number): number {
+  const n = source.length;
+  let cost = 0;
+  for (let i = 0; i < n; i++) {
+    const sp = source[(i + offset) % n]!.position;
+    const tp = target[i]!.position;
+    cost += (sp.x - tp.x) ** 2 + (sp.y - tp.y) ** 2;
+  }
+  return cost;
+}
+
 /**
  * Rotate a path's points by an offset (for correspondence matching).
  * Returns a deep-cloned, rotated array.
@@ -447,15 +475,26 @@ export function prepareShapeTween(
   const normalized = normalizePointCount(source, target, closedSource, closedTarget);
 
   // Step 2: Find best correspondence (rotation offset)
-  const offset = findBestCorrespondence(
-    normalized.source,
-    normalized.target,
-    closedSource,
-    closedTarget
-  );
+  let matched = normalized.source;
+  let offset = findBestCorrespondence(matched, normalized.target, closedSource, closedTarget);
+
+  // Closed contours running opposite ways would turn inside out: run the
+  // source the other way when that matches better. Open paths keep the way
+  // they were drawn (their strokes reveal and taper along it)
+  if (closedSource && closedTarget && matched.length > 2) {
+    const reversed = reversePath(matched);
+    const reversedOffset = findBestCorrespondence(reversed, normalized.target, true, true);
+    if (
+      correspondenceCost(reversed, normalized.target, reversedOffset) <
+      correspondenceCost(matched, normalized.target, offset)
+    ) {
+      matched = reversed;
+      offset = reversedOffset;
+    }
+  }
 
   // Step 3: Apply correspondence rotation to source
-  const sourceRotated = applyCorrespondence(normalized.source, offset);
+  const sourceRotated = applyCorrespondence(matched, offset);
 
   return {
     sourceNormalized: sourceRotated,
@@ -468,4 +507,88 @@ export function prepareShapeTween(
  */
 export function interpolateShapeTween(tweenData: ShapeTweenData, t: number): PathPoint[] {
   return interpolatePathPoints(tweenData.sourceNormalized, tweenData.targetNormalized, t);
+}
+
+// ============================================================================
+// Whole Shapes (Shape keyframes)
+// ============================================================================
+
+/** Whether a Shape keyframe's value is a whole PathShape (not an older PathPoint[]). */
+export function isPathShape(value: unknown): value is PathShape {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    !Array.isArray(value) &&
+    Array.isArray((value as Partial<PathShape>).points)
+  );
+}
+
+/** A Shape keyframe's value as a PathShape: an older PathPoint[] is the main contour, closed. */
+export function toPathShape(value: PathPoint[] | PathShape): PathShape {
+  return Array.isArray(value) ? { points: value, closed: true } : value;
+}
+
+/** A path's contours, as a Shape keyframe records them. */
+export function pathShapeOf(node: Pick<PathNode, 'points' | 'subpaths' | 'closed'>): PathShape {
+  const shape: PathShape = { points: node.points.map(clonePathPoint), closed: node.closed };
+  if (node.subpaths && node.subpaths.length > 0) {
+    shape.subpaths = node.subpaths.map((contour) => contour.map(clonePathPoint));
+  }
+  return shape;
+}
+
+/** The contour shrunk to a point at its middle (as many points, no handles). */
+function collapsedContour(points: PathPoint[]): PathPoint[] {
+  const center = {
+    x: points.reduce((sum, p) => sum + p.position.x, 0) / points.length,
+    y: points.reduce((sum, p) => sum + p.position.y, 0) / points.length,
+  };
+  return points.map((p) => ({
+    position: { ...center },
+    handleIn: null,
+    handleOut: null,
+    type: p.type,
+  }));
+}
+
+/**
+ * Prepare a tween between two whole shapes. Main contours tween as
+ * prepareShapeTween does (closed or open as the shapes are); holes and other
+ * contours pair up in order, and one only a shape has grows from (or shrinks
+ * to) its middle.
+ */
+export function preparePathShapeTween(source: PathShape, target: PathShape): PathShapeTweenData {
+  const from = (source.subpaths ?? []).filter((contour) => contour.length > 0);
+  const to = (target.subpaths ?? []).filter((contour) => contour.length > 0);
+  const subpaths: ContourTween[] = [];
+  for (let i = 0; i < Math.max(from.length, to.length); i++) {
+    const a = from[i];
+    const b = to[i];
+    if (a && b) {
+      const tween = prepareShapeTween(a, b, source.closed, target.closed);
+      subpaths.push({ source: tween.sourceNormalized, target: tween.targetNormalized });
+    } else if (a) {
+      subpaths.push({ source: a.map(clonePathPoint), target: collapsedContour(a), absentAt: 1 });
+    } else if (b) {
+      subpaths.push({ source: collapsedContour(b), target: b.map(clonePathPoint), absentAt: 0 });
+    }
+  }
+  return {
+    points: prepareShapeTween(source.points, target.points, source.closed, target.closed),
+    subpaths,
+    closed: [source.closed, target.closed],
+  };
+}
+
+/** Interpolate a prepared whole-shape tween at parameter t (0-1). */
+export function interpolatePathShapeTween(tween: PathShapeTweenData, t: number): PathShape {
+  const subpaths = tween.subpaths
+    .filter((contour) => !(contour.absentAt === 0 && t <= 0) && !(contour.absentAt === 1 && t >= 1))
+    .map((contour) => interpolatePathPoints(contour.source, contour.target, t));
+  const shape: PathShape = {
+    points: interpolateShapeTween(tween.points, t),
+    closed: t < 0.5 ? tween.closed[0] : tween.closed[1],
+  };
+  if (subpaths.length > 0) shape.subpaths = subpaths;
+  return shape;
 }

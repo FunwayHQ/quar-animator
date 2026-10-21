@@ -561,9 +561,11 @@ function geometryPaths(
     );
   }
 
-  const contourCount = Math.min(...frames.map((contours) => contours.length));
+  // A contour some frames lack (a hole growing from or shrinking to a point)
+  // is there collapsed to a point in them, so its shape keeps it
+  const contourCount = Math.max(...frames.map((contours) => contours.length));
   return Array.from({ length: contourCount }, (_, index): LottieShapePath => {
-    const series = frames.map((contours) => contours[index]!);
+    const series = presentThroughout(frames.map((contours) => contours[index]));
     if (series.every((vertices) => JSON.stringify(vertices) === JSON.stringify(series[0]))) {
       return { ty: 'sh', nm: pathName(index), ks: { a: 0, k: series[0]! } };
     }
@@ -575,6 +577,30 @@ function geometryPaths(
       return { t, s: [vertices], e: [next], i: { x: [1], y: [1] }, o: { x: [0], y: [0] } };
     });
     return { ty: 'sh', nm: pathName(index), ks: { a: 1, k: keyframes } };
+  });
+}
+
+/**
+ * A contour's vertices every frame: in frames without it, the nearest frame's
+ * collapsed to their middle (so it tweens to and from there).
+ */
+function presentThroughout(series: Array<LottieShapeVertices | undefined>): LottieShapeVertices[] {
+  return series.map((vertices, frame) => {
+    if (vertices) return vertices;
+    let nearest: LottieShapeVertices | undefined;
+    for (let step = 1; !nearest && step < series.length; step++) {
+      nearest = series[frame - step] ?? series[frame + step];
+    }
+    const points = nearest?.v ?? [];
+    const middle = [0, 1].map(
+      (axis) => points.reduce((sum, point) => sum + point[axis]!, 0) / Math.max(1, points.length)
+    );
+    return {
+      c: nearest?.c ?? true,
+      v: points.map(() => [...middle]),
+      i: points.map(() => [0, 0]),
+      o: points.map(() => [0, 0]),
+    };
   });
 }
 

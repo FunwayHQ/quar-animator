@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import type { PathNode, PathPoint } from '@quar/types';
+import type { PathNode, PathPoint, PathShape } from '@quar/types';
 import {
   getAnimatableProperties,
   detectInterpolationType,
@@ -129,6 +129,58 @@ describe('Shape Tween - PropertyBinding integration', () => {
       const updated = applyAnimatedValues(node, values);
       expect(updated.points[0].position.y).toBe(50);
       expect(updated.points[1].position.y).toBe(50);
+    });
+  });
+
+  describe('whole Shape keyframes', () => {
+    const outer = [corner(0, 0), corner(100, 0), corner(100, 100), corner(0, 100)];
+    const hole = [corner(40, 40), corner(40, 60), corner(60, 60), corner(60, 40)];
+    const ring: PathShape = { points: outer, subpaths: [hole], closed: true };
+
+    it('sets every contour of the path, removing holes the shape lacks', () => {
+      const node = { ...makePathNode(outer), subpaths: [hole] };
+      const solid: PathShape = { points: outer, closed: true };
+      const updated = applyAnimatedValues(node, new Map([['points', solid]]));
+      expect(updated.subpaths).toBeUndefined();
+      const again = applyAnimatedValues(makePathNode(outer), new Map([['points', ring]]));
+      expect(again.subpaths).toEqual([hole]);
+    });
+
+    it('leaves the holes to the path for older keyframes of the main contour alone', () => {
+      const node = { ...makePathNode(outer), subpaths: [hole] };
+      const updated = applyAnimatedValues(node, new Map([['points', outer]]));
+      expect(updated.subpaths).toEqual([hole]);
+    });
+
+    it('tweens between shapes with and without a hole', () => {
+      const track = createTrack('path1', 'points');
+      addKeyframe(track, 0, { points: outer, closed: true });
+      addKeyframe(track, 10, ring);
+      const halfway = evaluateTrack(track, 5) as PathShape;
+      expect(halfway.subpaths).toHaveLength(1);
+      expect(halfway.subpaths![0]![0]!.position.x).toBeCloseTo(45, 5);
+    });
+
+    it('tweens open shapes as open, adding no closing segment', () => {
+      const track = createTrack('path1', 'points');
+      addKeyframe(track, 0, { points: [corner(0, 0), corner(100, 0)], closed: false });
+      addKeyframe(track, 10, {
+        points: [corner(0, 0), corner(50, 80), corner(100, 0)],
+        closed: false,
+      });
+      const halfway = evaluateTrack(track, 5) as PathShape;
+      const last = halfway.points[halfway.points.length - 1]!;
+      expect(last.position.x).toBeCloseTo(100, 5);
+      expect(halfway.points[1]!.position.y).toBeCloseTo(40, 5);
+    });
+
+    it('tweens an older keyframe into a whole shape', () => {
+      const track = createTrack('path1', 'points');
+      addKeyframe(track, 0, outer);
+      addKeyframe(track, 10, ring);
+      const halfway = evaluateTrack(track, 5) as PathShape;
+      expect(halfway.points).toHaveLength(4);
+      expect(halfway.subpaths).toHaveLength(1);
     });
   });
 

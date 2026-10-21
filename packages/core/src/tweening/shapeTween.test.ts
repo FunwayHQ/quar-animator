@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import type { PathPoint } from '@quar/types';
+import type { PathPoint, PathShape } from '@quar/types';
 import {
   computeSegmentArcLengths,
   subdivideSegmentPoints,
@@ -9,6 +9,11 @@ import {
   interpolatePathPoints,
   prepareShapeTween,
   interpolateShapeTween,
+  isPathShape,
+  pathShapeOf,
+  preparePathShapeTween,
+  interpolatePathShapeTween,
+  toPathShape,
 } from './shapeTween';
 
 // ============================================================================
@@ -374,5 +379,120 @@ describe('interpolateShapeTween', () => {
     const result = interpolateShapeTween(data, 0.5);
     expect(result[0].position.y).toBeCloseTo(50);
     expect(result[1].position.y).toBeCloseTo(50);
+  });
+});
+
+// ============================================================================
+// Contour direction
+// ============================================================================
+
+/** Twice the signed area (positive counter-clockwise, Y up). */
+function signedArea(points: PathPoint[]): number {
+  let area = 0;
+  points.forEach((p, i) => {
+    const q = points[(i + 1) % points.length]!;
+    area += p.position.x * q.position.y - q.position.x * p.position.y;
+  });
+  return area;
+}
+
+describe('prepareShapeTween direction', () => {
+  const square = [corner(0, 0), corner(100, 0), corner(100, 100), corner(0, 100)];
+
+  it('runs a closed source the other way when the target does', () => {
+    const backwards = [corner(0, 0), corner(0, 110), corner(110, 110), corner(110, 0)];
+    const tween = prepareShapeTween(square, backwards, true, true);
+    // Never inside out: halfway it still has the target's area, not zero
+    const halfway = interpolateShapeTween(tween, 0.5);
+    expect(Math.sign(signedArea(halfway))).toBe(Math.sign(signedArea(backwards)));
+    expect(Math.abs(signedArea(halfway))).toBeGreaterThan(2 * 100 * 100);
+  });
+
+  it('keeps an open path the way it was drawn', () => {
+    const line = [corner(0, 0), corner(50, 0), corner(100, 0)];
+    const back = [corner(100, 10), corner(50, 10), corner(0, 10)];
+    const tween = prepareShapeTween(line, back, false, false);
+    expect(tween.sourceNormalized.map((p) => p.position.x)).toEqual([0, 50, 100]);
+  });
+
+  it('adds no points between the ends of open paths', () => {
+    const line = [corner(0, 0), corner(100, 0)];
+    const zigzag = [corner(0, 0), corner(30, 40), corner(60, 0), corner(100, 40)];
+    const tween = prepareShapeTween(line, zigzag, false, false);
+    const xs = tween.sourceNormalized.map((p) => p.position.x);
+    expect(xs[0]).toBe(0);
+    expect(xs[xs.length - 1]).toBe(100);
+    expect([...xs].sort((a, b) => a - b)).toEqual(xs);
+  });
+});
+
+// ============================================================================
+// Whole shapes
+// ============================================================================
+
+describe('whole-shape tweens', () => {
+  const outer = [corner(0, 0), corner(100, 0), corner(100, 100), corner(0, 100)];
+  const hole = [corner(40, 40), corner(40, 60), corner(60, 60), corner(60, 40)];
+  const ring: PathShape = { points: outer, subpaths: [hole], closed: true };
+  const solid: PathShape = { points: outer, closed: true };
+
+  it('tells shapes from older point arrays, and reads those as closed main contours', () => {
+    expect(isPathShape(ring)).toBe(true);
+    expect(isPathShape(outer)).toBe(false);
+    expect(isPathShape(null)).toBe(false);
+    expect(toPathShape(outer)).toEqual({ points: outer, closed: true });
+    expect(toPathShape(ring)).toBe(ring);
+  });
+
+  it('records every contour of a path, as copies', () => {
+    const shape = pathShapeOf({ points: outer, subpaths: [hole], closed: false });
+    expect(shape).toEqual({ points: outer, subpaths: [hole], closed: false });
+    expect(shape.points[0]).not.toBe(outer[0]);
+    expect(pathShapeOf({ points: outer, subpaths: [], closed: true })).not.toHaveProperty(
+      'subpaths'
+    );
+  });
+
+  it('tweens holes along with the outline', () => {
+    const bigger = [corner(30, 30), corner(30, 70), corner(70, 70), corner(70, 30)];
+    const tween = preparePathShapeTween(ring, { ...ring, subpaths: [bigger] });
+    const halfway = interpolatePathShapeTween(tween, 0.5);
+    expect(halfway.subpaths).toHaveLength(1);
+    expect(halfway.subpaths![0]!.map((p) => p.position.x).sort()).toEqual([35, 35, 65, 65]);
+  });
+
+  it('grows a hole only the later shape has from its middle', () => {
+    const tween = preparePathShapeTween(solid, ring);
+    expect(interpolatePathShapeTween(tween, 0).subpaths).toBeUndefined();
+    const start = interpolatePathShapeTween(tween, 0.01).subpaths![0]!;
+    for (const p of start) {
+      expect(p.position.x).toBeCloseTo(50, 0);
+      expect(p.position.y).toBeCloseTo(50, 0);
+    }
+    expect(interpolatePathShapeTween(tween, 1).subpaths).toEqual([hole]);
+  });
+
+  it('shrinks a hole only the earlier shape has to its middle, gone at the end', () => {
+    const tween = preparePathShapeTween(ring, solid);
+    expect(interpolatePathShapeTween(tween, 0).subpaths).toEqual([hole]);
+    expect(interpolatePathShapeTween(tween, 0.5).subpaths![0]![0]!.position).toEqual({
+      x: 45,
+      y: 45,
+    });
+    expect(interpolatePathShapeTween(tween, 1).subpaths).toBeUndefined();
+  });
+
+  it('tweens an open shape as open', () => {
+    const open: PathShape = { points: [corner(0, 0), corner(100, 0)], closed: false };
+    const longer: PathShape = {
+      points: [corner(0, 0), corner(50, 50), corner(100, 0)],
+      closed: false,
+    };
+    const tween = preparePathShapeTween(open, longer);
+    const halfway = interpolatePathShapeTween(tween, 0.5);
+    expect(halfway.closed).toBe(false);
+    const xs = halfway.points.map((p) => p.position.x);
+    expect(xs).toHaveLength(3);
+    [0, 50, 100].forEach((x, i) => expect(xs[i]).toBeCloseTo(x, 5));
   });
 });
