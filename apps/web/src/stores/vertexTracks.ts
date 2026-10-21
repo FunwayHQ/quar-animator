@@ -62,6 +62,14 @@ function remapping(
       newLengths: lengths.map((length, c) => (c === contour ? length + 1 : length)),
     };
   }
+  if (change.kind === 'extend') {
+    // Points added to the main contour: at its start every point moves along
+    const added = change.points.length;
+    return {
+      map: (flat) => (change.at === 'start' || flat >= lengths[0]! ? flat + added : flat),
+      newLengths: lengths.map((length, c) => (c === 0 ? length + added : length)),
+    };
+  }
   const deleted = new Set(change.indices);
   const newFlat = new Map<number, number>();
   const newLengths: number[] = [];
@@ -164,6 +172,15 @@ function reshapeShapeKeyframes(
       if (deleted.size === 0) return keyframe;
       changed = true;
       return { ...keyframe, value: points.filter((_point, i) => !deleted.has(i)) };
+    }
+    if (change.kind === 'extend') {
+      // The new points, as drawn, in every shape
+      changed = true;
+      return {
+        ...keyframe,
+        value:
+          change.at === 'start' ? [...change.points, ...points] : [...points, ...change.points],
+      };
     }
     if (change.segmentIndex >= mainLength) return keyframe;
     const end = (change.segmentIndex + 1) % mainLength;

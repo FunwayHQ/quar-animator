@@ -2454,9 +2454,12 @@ export function Canvas({
           (directSelectionPathNodes.length === 0 && directSelectionImageNodes.length === 0)) && (
           <SelectionOverlay
             bounds={screenBounds}
-            handles={isDirectSelectionActive ? [] : transformHandles}
+            // Path tools edit points: no resize/rotate handles in their way
+            handles={isDirectSelectionActive || activeTool === 'pen' ? [] : transformHandles}
             rotation={selectionRotation}
-            onHandlePointerDown={isDirectSelectionActive ? undefined : handleOverlayPointerDown}
+            onHandlePointerDown={
+              isDirectSelectionActive || activeTool === 'pen' ? undefined : handleOverlayPointerDown
+            }
           />
         )}
       {screenMarqueeRect && screenMarqueeRect.width > 0 && screenMarqueeRect.height > 0 && (

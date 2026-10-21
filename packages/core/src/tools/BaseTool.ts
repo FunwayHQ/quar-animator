@@ -12,6 +12,7 @@ import type {
   Vector2,
   SymbolDefinition,
   PathNode,
+  PathPoint,
 } from '@quar/types';
 import type { SceneGraph } from '../SceneGraph';
 import type { Camera } from '../Camera';
@@ -31,7 +32,9 @@ export type PathPointsChange =
   /** A point split into the segment that starts at segmentIndex, t along it */
   | { kind: 'insert'; segmentIndex: number; t: number }
   /** These points deleted (contours left empty go too) */
-  | { kind: 'delete'; indices: number[] };
+  | { kind: 'delete'; indices: number[] }
+  /** An open path continued from one end (its main contour): these points added there */
+  | { kind: 'extend'; at: 'start' | 'end'; points: PathPoint[] };
 
 export interface ToolContext {
   sceneGraph: SceneGraph;

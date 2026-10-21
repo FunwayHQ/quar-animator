@@ -859,6 +859,109 @@ describe('PenTool', () => {
       expect(tool.isCurrentlyDrawing()).toBe(true);
     });
 
+    it('draws on from the end of an open path, into the same path', () => {
+      const onPathPointsChange = vi.fn();
+      context.onPathPointsChange = onPathPointsChange;
+      const path = addPath(
+        [
+          [0, 0],
+          [100, 0],
+        ],
+        false
+      );
+
+      tool.onPointerMove(createMockPointerEvent({ worldPosition: { x: 99, y: 1 }, buttons: 0 }));
+      expect(tool.getCursor()).toMatch(/^url\(/);
+      click(100, 0);
+      click(100, 100);
+      tool.onKeyDown(new KeyboardEvent('keydown', { key: 'Enter' }));
+
+      expect(pointsOf(path.id)).toEqual([
+        { x: 0, y: 0 },
+        { x: 100, y: 0 },
+        { x: 100, y: 100 },
+      ]);
+      expect([...context.getSelectedIds()]).toEqual([path.id]);
+      expect(onPathPointsChange).toHaveBeenCalledWith(path.id, expect.anything(), {
+        kind: 'extend',
+        at: 'end',
+        points: [expect.objectContaining({ position: { x: 100, y: 100 } })],
+      });
+    });
+
+    it('draws on from the start, keeping the path the right way round', () => {
+      const path = addPath(
+        [
+          [0, 0],
+          [100, 0],
+        ],
+        false
+      );
+      click(0, 0);
+      click(-50, 50);
+      tool.onKeyDown(new KeyboardEvent('keydown', { key: 'Enter' }));
+
+      expect(pointsOf(path.id)).toEqual([
+        { x: -50, y: 50 },
+        { x: 0, y: 0 },
+        { x: 100, y: 0 },
+      ]);
+    });
+
+    it('closes the path on a click on its other end, giving it a fill', () => {
+      const path = addPath(
+        [
+          [0, 0],
+          [100, 0],
+        ],
+        false
+      );
+      click(100, 0);
+      click(50, 80);
+      click(0, 0);
+
+      const closed = context.sceneGraph.getNode(path.id) as PathNode;
+      expect(closed.closed).toBe(true);
+      expect(closed.points).toHaveLength(3);
+      expect(closed.fills).toHaveLength(1);
+      expect(tool.isCurrentlyDrawing()).toBe(false);
+    });
+
+    it('leaves the path as it was on Escape', () => {
+      const path = addPath(
+        [
+          [0, 0],
+          [100, 0],
+        ],
+        false
+      );
+      click(100, 0);
+      click(100, 100);
+      tool.onKeyDown(new KeyboardEvent('keydown', { key: 'Escape' }));
+      expect(pointsOf(path.id)).toHaveLength(2);
+    });
+
+    it("works in a moved, scaled path's own space", () => {
+      const path = addPath(
+        [
+          [0, 0],
+          [10, 0],
+        ],
+        false
+      );
+      context.sceneGraph.updateNode(path.id, {
+        transform: { ...path.transform, position: { x: 200, y: 0 }, scale: { x: 2, y: 2 } },
+      });
+      // Its end is at world (220, 0)
+      click(220, 0);
+      click(220, 40);
+      tool.onKeyDown(new KeyboardEvent('keydown', { key: 'Enter' }));
+
+      const added = pointsOf(path.id)[2]!;
+      expect(added.x).toBeCloseTo(10);
+      expect(added.y).toBeCloseTo(20);
+    });
+
     it('leaves paths that are not selected, or locked, alone', () => {
       const unselected = addPath(
         [

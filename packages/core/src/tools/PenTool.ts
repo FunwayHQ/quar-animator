@@ -6,12 +6,12 @@
 import type { CanvasPointerEvent, Node, PathNode, PathPoint, Vector2 } from '@quar/types';
 import { BaseTool, type ToolContext } from './BaseTool';
 import { createDefaultTransform } from '../SceneGraph';
-import { vec2 } from '../math';
+import { vec2, mat3 } from '../math';
 import {
   convertPointType as convertPointTypeUtil,
   updateHandleWithSymmetry,
 } from '../path/pointUtils';
-import { centerPathNodeGeometry, getSubpathBoundaries } from '../path/pathUtils';
+import { centerPathNodeGeometry, getSubpathBoundaries, reversePath } from '../path/pathUtils';
 import {
   deletePathPoints,
   insertPathPoint,
@@ -20,9 +20,10 @@ import {
 } from '../path/pathEditing';
 
 /** A crosshair with a small + or − beside it (the Pen over a selected path). */
-function badgeCursor(sign: 'add' | 'remove'): string {
+function badgeCursor(sign: 'add' | 'remove' | 'continue'): string {
   const cross = 'M8 1v14M1 8h14';
-  const badge = sign === 'add' ? 'M16 19h7M19.5 15.5v7' : 'M16 19h7';
+  const badge =
+    sign === 'add' ? 'M16 19h7M19.5 15.5v7' : sign === 'remove' ? 'M16 19h7' : 'M17 22l5-7';
   const svg =
     `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none">` +
     `<path d="${cross} ${badge}" stroke="#fff" stroke-width="3"/>` +
@@ -32,6 +33,7 @@ function badgeCursor(sign: 'add' | 'remove'): string {
 
 const ADD_POINT_CURSOR = badgeCursor('add');
 const REMOVE_POINT_CURSOR = badgeCursor('remove');
+const CONTINUE_PATH_CURSOR = badgeCursor('continue');
 
 // ============================================================================
 // PenTool Class
@@ -65,8 +67,13 @@ export class PenTool extends BaseTool {
 
   private currentPath: PathPoint[] = [];
   private isDrawing: boolean = false;
-  /** Not drawing: what a click on a selected path under the pointer would do */
-  private hoverEdit: 'add' | 'remove' | null = null;
+  /** Not drawing: what a click on a path under the pointer would do */
+  private hoverEdit: 'add' | 'remove' | 'continue' | null = null;
+  /**
+   * Drawing on from an open path's end: the path as it was, and whether from
+   * its start (the points are drawn reversed, then turned back)
+   */
+  private continuing: { node: PathNode; fromStart: boolean } | null = null;
   private isDraggingHandle: boolean = false;
   private previewNode: PathNode | null = null;
 
@@ -97,6 +104,15 @@ export class PenTool extends BaseTool {
 
     // On a selected path: a click on a segment adds a point, on a point removes it
     if (!this.isDrawing && this.editSelectedPath(event.worldPosition)) return;
+
+    // On an open path's end: draw on from there
+    if (!this.isDrawing) {
+      const end = this.openPathEndAt(event.worldPosition);
+      if (end) {
+        this.startContinuing(end.node, end.fromStart);
+        return;
+      }
+    }
 
     if (!this.isDrawing) {
       // Start new path
@@ -137,7 +153,9 @@ export class PenTool extends BaseTool {
 
   onPointerMove(event: CanvasPointerEvent): void {
     if (!this.isDrawing) {
-      this.hoverEdit = this.selectedPathTarget(event.worldPosition)?.edit ?? null;
+      this.hoverEdit =
+        this.selectedPathTarget(event.worldPosition)?.edit ??
+        (this.openPathEndAt(event.worldPosition) ? 'continue' : null);
       return;
     }
 
@@ -226,8 +244,10 @@ export class PenTool extends BaseTool {
 
       case 'Backspace':
       case 'Delete':
-        // Remove last point
-        if (this.currentPath.length > 0) {
+        // Remove last point (back to the path being continued: leave it as it was)
+        if (this.continuing && this.currentPath.length <= this.continuing.node.points.length) {
+          this.cancelPath();
+        } else if (this.currentPath.length > 0) {
           this.currentPath.pop();
           if (this.currentPath.length === 0) {
             this.cancelPath();
@@ -340,6 +360,7 @@ export class PenTool extends BaseTool {
   getCursor(): string {
     if (this.hoverEdit === 'add') return ADD_POINT_CURSOR;
     if (this.hoverEdit === 'remove') return REMOVE_POINT_CURSOR;
+    if (this.hoverEdit === 'continue') return CONTINUE_PATH_CURSOR;
     return this.cursor;
   }
 
@@ -393,6 +414,85 @@ export class PenTool extends BaseTool {
     return false;
   }
 
+  /**
+   * The end of an open path (one contour, unlocked) under the pointer, the
+   * topmost such path winning.
+   */
+  private openPathEndAt(worldPos: Vector2): { node: PathNode; fromStart: boolean } | null {
+    const reach = 10 / this.context.camera.zoom;
+    let found: { node: PathNode; fromStart: boolean } | null = null;
+    this.context.sceneGraph.traverseVisible((node: Node) => {
+      if (node.type !== 'path' || node.closed || (node.subpaths?.length ?? 0) > 0) return;
+      if (node.points.length < 2 || this.isLockedInScene(node)) return;
+      const toWorld = this.context.sceneGraph.getWorldTransform(node.id);
+      const near = (point: PathPoint) =>
+        vec2.distance(mat3.transformPoint(toWorld, point.position), worldPos) < reach;
+      if (near(node.points[node.points.length - 1]!)) found = { node, fromStart: false };
+      else if (near(node.points[0]!)) found = { node, fromStart: true };
+    });
+    return found;
+  }
+
+  /** Pick up drawing an open path from one end: its points, in world space, become the path drawn. */
+  private startContinuing(node: PathNode, fromStart: boolean): void {
+    const m = this.context.sceneGraph.getWorldTransform(node.id);
+    const linear = { ...m, tx: 0, ty: 0 };
+    const world = node.points.map((point) => ({
+      ...point,
+      position: mat3.transformPoint(m, point.position),
+      handleIn: point.handleIn ? mat3.transformPoint(linear, point.handleIn) : null,
+      handleOut: point.handleOut ? mat3.transformPoint(linear, point.handleOut) : null,
+    }));
+    this.currentPath = fromStart ? reversePath(world) : world;
+    this.continuing = { node: structuredClone(node), fromStart };
+    this.isDrawing = true;
+    this.isDraggingHandle = false;
+    // The path itself shows what's there; the overlay draws the rest
+    this.previewNode = null;
+    this.hoverEdit = null;
+  }
+
+  /**
+   * Put the points drawn on back into the path continued (in its own space,
+   * the right way round), closing it when asked; undoable, its keyframes kept.
+   */
+  private finishContinuing(closed: boolean): void {
+    const { node, fromStart } = this.continuing!;
+    const added = this.currentPath.length - node.points.length;
+    const inverse = mat3.invert(this.context.sceneGraph.getWorldTransform(node.id));
+    if ((added <= 0 && !closed) || !inverse || !this.context.sceneGraph.getNode(node.id)) {
+      this.cancelPath();
+      return;
+    }
+    const linear = { ...inverse, tx: 0, ty: 0 };
+    const drawn = this.currentPath.map((point) => ({
+      ...point,
+      position: mat3.transformPoint(inverse, point.position),
+      handleIn: point.handleIn ? mat3.transformPoint(linear, point.handleIn) : null,
+      handleOut: point.handleOut ? mat3.transformPoint(linear, point.handleOut) : null,
+    }));
+    const points = fromStart ? reversePath(drawn) : drawn;
+    const newPoints = fromStart ? points.slice(0, added) : points.slice(points.length - added);
+
+    this.context.onTransformStart?.();
+    this.context.sceneGraph.updateNode(node.id, {
+      points,
+      closed,
+      // Closed, it can take a fill: the Pen's own, if it had none
+      ...(closed && node.fills.length === 0 ? { fills: [this.context.defaultFill] } : {}),
+    });
+    if (added > 0) {
+      this.context.onPathPointsChange?.(node.id, node, {
+        kind: 'extend',
+        at: fromStart ? 'start' : 'end',
+        points: newPoints,
+      });
+    }
+    this.resetPenState();
+    this.context.setSelectedIds([node.id]);
+    this.context.setActiveTool('selection');
+  }
+
   /** Add or remove a point of a selected path under the pointer; true when it did. */
   private editSelectedPath(worldPos: Vector2): boolean {
     const target = this.selectedPathTarget(worldPos);
@@ -426,6 +526,10 @@ export class PenTool extends BaseTool {
   }
 
   private finalizePath(closed: boolean): void {
+    if (this.continuing) {
+      this.finishContinuing(closed);
+      return;
+    }
     if (this.currentPath.length < 2) {
       this.cancelPath();
       return;
@@ -473,6 +577,7 @@ export class PenTool extends BaseTool {
 
   private resetPenState(): void {
     this.currentPath = [];
+    this.continuing = null;
     this.isDrawing = false;
     this.isDraggingHandle = false;
     this.previewNode = null;

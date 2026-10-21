@@ -206,4 +206,34 @@ describe('remapVertexTracks', () => {
     ]);
     expect(second![1]!.position).toEqual({ x: 50, y: 50 });
   });
+
+  it('moves the keyframes along when a path is drawn on from its start', () => {
+    const before = path([point(0, 0), point(100, 0)]);
+    const timeline = timelineWith(
+      track('points.0.position.y', [[0, 0]]),
+      track('points.1.position.y', [[0, 5]]),
+      track('points', [[0, [point(0, 0), point(100, 0)]]])
+    );
+
+    const next = remapVertexTracks(timeline, 'p', before, {
+      kind: 'extend',
+      at: 'start',
+      points: [point(-50, 0), point(-25, 0)],
+    });
+
+    expect(properties(next)).toEqual(['points', 'points.2.position.y', 'points.3.position.y']);
+    const shape = find(next, 'points').keyframes[0]!.value as PathPoint[];
+    expect(shape.map((p) => p.position.x)).toEqual([-50, -25, 0, 100]);
+  });
+
+  it('leaves keyframes where they are when a path is drawn on from its end', () => {
+    const before = path([point(0, 0), point(100, 0)]);
+    const timeline = timelineWith(track('points.1.position.y', [[0, 5]]));
+    const next = remapVertexTracks(timeline, 'p', before, {
+      kind: 'extend',
+      at: 'end',
+      points: [point(200, 0)],
+    });
+    expect(properties(next)).toEqual(['points.1.position.y']);
+  });
 });
