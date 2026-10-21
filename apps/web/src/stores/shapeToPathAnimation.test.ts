@@ -83,6 +83,23 @@ describe('convertShapesToPaths', () => {
     expect(Math.max(...xs(node.points))).toBeCloseTo(100);
   });
 
+  it('keeps its binding to bones and its export settings', () => {
+    const skinData = {
+      vertices: [],
+      inverseBindMatrices: { bone: [1, 0, 0, 1, 0, 0] },
+      meshBindMatrix: [1, 0, 0, 1, 0, 0],
+    } as unknown as NonNullable<RectangleNode['skinData']>;
+    const exports = [{ format: 'png', scale: 2, suffix: '@2x' }] as unknown as NonNullable<
+      RectangleNode['exports']
+    >;
+    sceneGraph.addNode({ ...rect(), skinData, exports });
+    useEditorStore.getState().convertShapesToPaths(sceneGraph, ['r']);
+    const node = sceneGraph.getNode('r') as PathNode;
+    expect(node.skinData).toEqual(skinData);
+    expect(node.skinData).not.toBe(skinData);
+    expect(node.exports).toEqual(exports);
+  });
+
   it('can be undone', () => {
     sceneGraph.addNode(rect());
     useEditorStore.getState().convertShapesToPaths(sceneGraph, ['r']);

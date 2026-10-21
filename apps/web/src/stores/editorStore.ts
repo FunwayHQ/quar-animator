@@ -3736,6 +3736,9 @@ function createBooleanActions(
           closed: outline.closed,
           fills: structuredClone(node.fills ?? []),
           strokes: structuredClone(node.strokes ?? []),
+          ...(node.exports ? { exports: structuredClone(node.exports) } : {}),
+          // Still bound to its bones (the weights refit to the path's mesh)
+          ...(node.skinData ? { skinData: structuredClone(node.skinData) } : {}),
         };
         const siblings = node.parent
           ? (sceneGraph.getNode(node.parent)?.children ?? [])
