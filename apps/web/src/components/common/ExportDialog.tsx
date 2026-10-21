@@ -22,14 +22,15 @@ import { useEditorStore } from '../../stores/editorStore';
 import {
   exportLottieBlob,
   analyzeLottieExport,
+  getAnimatedArtworkBounds,
   gifCompressionSettings,
   gifTiming,
   MAX_GIF_FPS,
+  sampleFrames,
   sampleTimeline,
 } from '@quar/export';
-import type { ExportProgress } from '@quar/export';
+import type { ExportProgress, FrameRig } from '@quar/export';
 import { downloadBlob } from '../../services/exportService';
-import { getAnimatedArtworkBounds, sampleFrames } from '../../services/sceneExtent';
 import styles from './ExportDialog.module.css';
 
 // ============================================================================
@@ -314,6 +315,18 @@ function getLottieExportScene(
   return { nodes, timeline: { ...timeline, tracks } };
 }
 
+/** The page's rig, as exports pose it on top of the keyframes. */
+function exportRig(timeline: Timeline): FrameRig {
+  const state = useEditorStore.getState();
+  return {
+    ikChains: state.ikChains,
+    dynamicChains: state.dynamicChains,
+    smartBoneActions: state.smartBoneActions,
+    wind: state.globalWind,
+    frameRate: timeline.frameRate,
+  };
+}
+
 // ============================================================================
 // Component
 // ============================================================================
@@ -326,7 +339,8 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
   // What shows behind the art in formats without transparency (or with it off)
   const documentBackground = useEditorStore((s) => s.documentBackground);
   const selectedArtboard = getArtboardScope(sceneGraph, selectedNodeIds);
-  // With no artboard chosen, the export frames all the artwork, wherever it moves
+  // With no artboard chosen, the export frames all the artwork, wherever it
+  // moves — the rig's motion (IK, physics, bent shapes) included
   const [sceneScope] = useState(() =>
     selectedArtboard
       ? null
@@ -334,7 +348,8 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
           sceneGraph,
           timeline,
           useEditorStore.getState().symbols,
-          sampleFrames(0, Math.max(0, timelineDuration - 1))
+          sampleFrames(0, Math.max(0, timelineDuration - 1)),
+          exportRig(timeline)
         )
   );
   const defaultSize = defaultExportSize(selectedArtboard?.bounds ?? sceneScope);
@@ -409,20 +424,13 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
   const handleExport = useCallback(async () => {
     if (!sceneGraph || !timeline) return;
 
-    const rigState = useEditorStore.getState();
     const frameRenderContext = {
       sceneGraph,
       timeline,
       // Pose rigs like the editor: IK, physics chains and Smart Bone morphs
-      rig: {
-        ikChains: rigState.ikChains,
-        dynamicChains: rigState.dynamicChains,
-        smartBoneActions: rigState.smartBoneActions,
-        wind: rigState.globalWind,
-        frameRate: timeline.frameRate,
-      },
+      rig: exportRig(timeline),
       // Symbol instances are drawn from their definitions
-      symbols: rigState.symbols,
+      symbols: useEditorStore.getState().symbols,
       ...(selectedArtboard
         ? {
             exportRootIds: [selectedArtboard.node.id],

@@ -7,6 +7,7 @@ import type { Node } from '@quar/types';
 import { SceneGraph, createDefaultTransform } from '@quar/core';
 import { addKeyframe, createTimeline, getOrCreateTrack } from '@quar/animation';
 import { getAnimatedArtworkBounds, sampleFrames } from './sceneExtent';
+import { riggedArm } from './__fixtures__/riggedArm';
 
 function square(id: string, x: number): Node {
   return {
@@ -62,5 +63,20 @@ describe('getAnimatedArtworkBounds', () => {
       height: 20,
     });
     expect(getAnimatedArtworkBounds(new SceneGraph(), createTimeline(), [], [0])).toBeNull();
+  });
+});
+
+describe('getAnimatedArtworkBounds with a rig', () => {
+  it('covers a bound shape where its bones bend it, not where it is at rest', () => {
+    const { sg, timeline } = riggedArm();
+    const atRest = getAnimatedArtworkBounds(sg, timeline, [], [0])!;
+    expect(atRest.y + atRest.height).toBeCloseTo(20, 0);
+
+    const bent = getAnimatedArtworkBounds(sg, timeline, [], sampleFrames(0, 10), {
+      frameRate: 30,
+    })!;
+    // The forearm swings up past y = 60 (the shape at rest only reaches 20)
+    expect(bent.y + bent.height).toBeGreaterThan(60);
+    expect(bent.x).toBeCloseTo(atRest.x, 0);
   });
 });

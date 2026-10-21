@@ -77,6 +77,8 @@ export {
 
 export { createScenePoser, rigHasPhysics, type PosedOutline, type ScenePoser } from './scenePosing';
 
+export { getAnimatedArtworkBounds, sampleFrames } from './sceneExtent';
+
 // ============================================================================
 // PNG Sequence
 // ============================================================================

@@ -34,44 +34,49 @@ vi.mock('../../stores/editorStore', () => ({
   ),
 }));
 
-// Mock export functions
-vi.mock('@quar/export', () => ({
-  exportLottieBlob: vi.fn().mockReturnValue(new Blob(['{}'], { type: 'application/json' })),
-  exportGif: vi.fn().mockResolvedValue(new Blob(['gif'], { type: 'image/gif' })),
-  exportMp4: vi.fn().mockResolvedValue(new Blob(['mp4'], { type: 'video/mp4' })),
-  MAX_GIF_FPS: 50,
-  sampleTimeline: (
-    o: { frameRate: number; startFrame: number; endFrame: number; fps?: number; speed?: number },
-    maxFps = Infinity
-  ) => {
-    const fps = Math.min(maxFps, o.fps ?? o.frameRate);
-    const seconds = (o.endFrame - o.startFrame + 1) / o.frameRate / (o.speed ?? 1);
-    return { fps, frames: new Array(Math.round(seconds * fps)).fill(0) };
-  },
-  // Frame count and length for a range, at a frame rate and speed
-  gifTiming: (o: {
-    frameRate: number;
-    startFrame: number;
-    endFrame: number;
-    fps?: number;
-    speed?: number;
-  }) => {
-    const fps = o.fps ?? o.frameRate;
-    const seconds = (o.endFrame - o.startFrame + 1) / o.frameRate / (o.speed ?? 1);
-    const count = Math.round(seconds * fps);
-    return { frames: new Array(count).fill(0), delays: [Math.round(seconds * 100)] };
-  },
-  gifCompressionSettings: (compression: number) => ({
-    colors: Math.max(16, Math.round(256 * 2 ** (-compression / 25))),
-    tolerance: (compression / 100) * 24,
-  }),
-  analyzeLottieExport: vi.fn().mockReturnValue({
-    supportedCount: 2,
-    unsupportedCount: 1,
-    unsupportedTypes: ['text'],
-    animatedTrackCount: 0,
-  }),
-}));
+// Mock export functions (the scene's extent is the real thing: it decides the framing)
+vi.mock('@quar/export', async () => {
+  const actual = await vi.importActual<typeof import('@quar/export')>('@quar/export');
+  return {
+    getAnimatedArtworkBounds: actual.getAnimatedArtworkBounds,
+    sampleFrames: actual.sampleFrames,
+    exportLottieBlob: vi.fn().mockReturnValue(new Blob(['{}'], { type: 'application/json' })),
+    exportGif: vi.fn().mockResolvedValue(new Blob(['gif'], { type: 'image/gif' })),
+    exportMp4: vi.fn().mockResolvedValue(new Blob(['mp4'], { type: 'video/mp4' })),
+    MAX_GIF_FPS: 50,
+    sampleTimeline: (
+      o: { frameRate: number; startFrame: number; endFrame: number; fps?: number; speed?: number },
+      maxFps = Infinity
+    ) => {
+      const fps = Math.min(maxFps, o.fps ?? o.frameRate);
+      const seconds = (o.endFrame - o.startFrame + 1) / o.frameRate / (o.speed ?? 1);
+      return { fps, frames: new Array(Math.round(seconds * fps)).fill(0) };
+    },
+    // Frame count and length for a range, at a frame rate and speed
+    gifTiming: (o: {
+      frameRate: number;
+      startFrame: number;
+      endFrame: number;
+      fps?: number;
+      speed?: number;
+    }) => {
+      const fps = o.fps ?? o.frameRate;
+      const seconds = (o.endFrame - o.startFrame + 1) / o.frameRate / (o.speed ?? 1);
+      const count = Math.round(seconds * fps);
+      return { frames: new Array(count).fill(0), delays: [Math.round(seconds * 100)] };
+    },
+    gifCompressionSettings: (compression: number) => ({
+      colors: Math.max(16, Math.round(256 * 2 ** (-compression / 25))),
+      tolerance: (compression / 100) * 24,
+    }),
+    analyzeLottieExport: vi.fn().mockReturnValue({
+      supportedCount: 2,
+      unsupportedCount: 1,
+      unsupportedTypes: ['text'],
+      animatedTrackCount: 0,
+    }),
+  };
+});
 
 // Mock download
 vi.mock('../../services/exportService', () => ({

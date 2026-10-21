@@ -25,7 +25,9 @@ export interface ArtworkBounds {
  */
 export function getArtworkBounds(
   sceneGraph: SceneGraph,
-  symbols: SymbolDefinition[] = []
+  symbols: SymbolDefinition[] = [],
+  /** Layers measured some other way (bound shapes, where their bones have them) */
+  exclude: ReadonlySet<string> = new Set()
 ): ArtworkBounds | null {
   const selection = new SelectionManager();
   selection.setSymbolDefinitions(symbols);
@@ -36,7 +38,7 @@ export function getArtworkBounds(
   sceneGraph.traverseVisible((node) => {
     // Faded out entirely, so nothing below it shows either
     if (node.opacity <= 0) return false;
-    if (node.type === 'group' || RIG_HELPERS.has(node.type)) return true;
+    if (node.type === 'group' || RIG_HELPERS.has(node.type) || exclude.has(node.id)) return true;
     artworkIds.add(node.id);
     if ('strokes' in node && Array.isArray(node.strokes)) {
       for (const stroke of node.strokes) {
