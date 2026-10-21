@@ -68,6 +68,7 @@ import {
 } from './reparent';
 import { flipInParentSpace, flipMatrix, flipPlacement, type FlipAxis } from './flip';
 import { symbolsUsedBy, type ClipboardPayload } from '../services/systemClipboard';
+import { pastedTracks, type RootMove } from './clipboardAnimation';
 import {
   DEFAULT_ONION_SKIN_SETTINGS,
   DEFAULT_DOCUMENT_BACKGROUND,
@@ -2103,19 +2104,44 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
     // Offset the pasted roots — except a bound mesh pasted with its bones,
     // which they carry
+    const PASTE_OFFSET = { x: 20, y: -20 };
     const pastedIds = new Set(newNodes.map((node) => node.id));
+    const newToOldId = new Map([...oldToNewId].map(([oldId, newId]) => [newId, oldId]));
+    const rootMoves = new Map<string, RootMove>();
     for (const node of newNodes) {
       if (!pastedRoots.has(node.id)) continue;
+      const oldId = newToOldId.get(node.id)!;
+      const original = clipboard.find((copied) => copied.id === oldId)!;
+      const root = clipboardExtras?.roots[oldId];
       const skin = (node as { skinData?: SkinData }).skinData;
-      if (skin && Object.keys(skin.inverseBindMatrices).some((id) => pastedIds.has(id))) continue;
+      const carried =
+        !!skin && Object.keys(skin.inverseBindMatrices).some((id) => pastedIds.has(id));
+      // Its keyframes go where the layer went: to the top level, and offset
+      rootMoves.set(oldId, {
+        base: placementOf(original.transform),
+        toTopLevel: node.parent === null ? root?.toTopLevel : null,
+        offset: carried ? undefined : PASTE_OFFSET,
+      });
+      if (carried) continue;
       node.transform = {
         ...node.transform,
         position: {
-          x: node.transform.position.x + 20,
-          y: node.transform.position.y - 20,
+          x: node.transform.position.x + PASTE_OFFSET.x,
+          y: node.transform.position.y + PASTE_OFFSET.y,
         },
       };
     }
+
+    // The copied animation, for the pasted layers (timed for this project's frame rate)
+    const tracks = clipboardExtras?.tracks?.length
+      ? pastedTracks(
+          clipboardExtras.tracks,
+          new Map([...oldToNewId].filter(([oldId]) => !skipped.has(oldId))),
+          rootMoves,
+          get().frameRate / (clipboardExtras.frameRate ?? get().frameRate),
+          nextId
+        )
+      : [];
 
     // Add nodes in parent-first order (roots first, then children)
     const byId = new Map(newNodes.map((node) => [node.id, node]));
@@ -2138,8 +2164,14 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       ikChains: [...get().ikChains, ...rig.ikChains],
       dynamicChains: [...get().dynamicChains, ...rig.dynamicChains],
       smartBoneActions: [...get().smartBoneActions, ...rig.smartBoneActions],
+      ...(tracks.length > 0
+        ? { timeline: { ...get().timeline, tracks: [...get().timeline.tracks, ...tracks] } }
+        : {}),
       isDirty: true,
     });
+    // A longer animation than this timeline holds: the timeline grows to fit it
+    const lastFrame = Math.max(0, ...tracks.flatMap((t) => t.keyframes.map((k) => k.time)));
+    if (lastFrame >= get().timelineDuration) get().setTimelineDuration(lastFrame + 1);
   },
   clipboardPayload: () => {
     const { clipboard, clipboardExtras, symbols } = get();

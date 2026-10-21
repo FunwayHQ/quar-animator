@@ -13,19 +13,31 @@ import type {
   IKChain,
   Matrix3,
   Node,
+  PropertyTrack,
   SkinData,
   SmartBoneAction,
+  Timeline,
   Transform,
   VitruvianController,
 } from '@quar/types';
 import { applyPlacement, mapPlacement, placementOf, reparentMatrix } from './reparent';
+import { captureTracks } from './clipboardAnimation';
 
 export interface ClipboardExtras {
-  /** For each copied root: its parent when copied, and its placement at the top level. */
-  roots: Record<string, { parentId: string | null; rootTransform: Transform }>;
+  /**
+   * For each copied root: its parent when copied, its placement at the top
+   * level, and the map there from its parent's space (none when the same).
+   */
+  roots: Record<
+    string,
+    { parentId: string | null; rootTransform: Transform; toTopLevel?: Matrix3 | null }
+  >;
   ikChains: IKChain[];
   dynamicChains: DynamicChain[];
   smartBoneActions: SmartBoneAction[];
+  /** The copied layers' animation, and the frame rate it was made at. */
+  tracks?: PropertyTrack[];
+  frameRate?: number;
 }
 
 interface Rigging {
@@ -44,7 +56,7 @@ export function captureClipboardExtras(
   sceneGraph: GraphLike,
   clones: Node[],
   copied: Set<string>,
-  rigging: Rigging
+  rigging: Rigging & { timeline?: Timeline; frameRate?: number }
 ): ClipboardExtras {
   const roots: ClipboardExtras['roots'] = {};
   for (const clone of clones) {
@@ -55,10 +67,13 @@ export function captureClipboardExtras(
       rootTransform: m
         ? applyPlacement(clone.transform, mapPlacement(placementOf(clone.transform), m))
         : structuredClone(clone.transform),
+      toTopLevel: m,
     };
   }
   return {
     roots,
+    tracks: rigging.timeline ? captureTracks(rigging.timeline, copied) : [],
+    frameRate: rigging.frameRate,
     ikChains: structuredClone(
       rigging.ikChains.filter(
         (chain) =>
