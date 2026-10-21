@@ -7,21 +7,11 @@
  * can't warp images, so bound images are only reported.
  */
 
-import { SceneGraph, boundOutline, mat3 } from '@quar/core';
-import { applyAnimatedValues, evaluateNodeAtFrame, getAnimatedNodes } from '@quar/animation';
-import {
-  deformVertices,
-  evaluateDynamicChainsAtFrame,
-  evaluateIKChains,
-  evaluateSmartBones,
-  fitSkinToVertices,
-  placeSkinData,
-  type AffineTransform2D,
-  type DynamicChainClock,
-  type DynamicChainSceneGraph,
-} from '@quar/rigging';
-import type { DynamicChainState, Node, SkinData, Timeline } from '@quar/types';
+import type { SceneGraph } from '@quar/core';
+import { boundOutline, mat3 } from '@quar/core';
+import type { Node, SkinData, Timeline } from '@quar/types';
 import type { FrameRig } from '../frameRenderer';
+import { createScenePoser } from '../scenePosing';
 import type { LottieShapeKeyframe, LottieShapePath, LottieShapeVertices } from './lottieTypes';
 
 export interface SkinnedLottie {
@@ -32,20 +22,6 @@ export interface SkinnedLottie {
 }
 
 const round = (v: number) => Math.round(v * 100) / 100;
-
-/** A copy of the scene to pose without touching it. */
-function copyScene(scene: SceneGraph): SceneGraph {
-  const data = scene.toJSON();
-  const copy = new SceneGraph();
-  copy.fromJSON({
-    nodes: data.nodes.map(
-      (node) =>
-        ({ ...node, children: [...node.children], transform: { ...node.transform } }) as Node
-    ),
-    rootNodeIds: [...data.rootNodeIds],
-  });
-  return copy;
-}
 
 /**
  * Bake every bound shape's outline over frames [first, last], posed as the
@@ -60,7 +36,7 @@ export function bakeSkinnedOutlines(
 ): SkinnedLottie {
   const shapeIds: string[] = [];
   const unbentImageIds: string[] = [];
-  scene.traverse((node) => {
+  scene.traverse((node: Node) => {
     if (!(node as { skinData?: SkinData }).skinData) return;
     if (node.type === 'image') unbentImageIds.push(node.id);
     else if (boundOutline(node)) shapeIds.push(node.id);
@@ -68,79 +44,17 @@ export function bakeSkinnedOutlines(
   const paths = new Map<string, LottieShapePath>();
   if (shapeIds.length === 0) return { paths, unbentImageIds };
 
-  const posed = copyScene(scene);
-  const animated = getAnimatedNodes(timeline);
-  const dynamicStates = new Map<string, DynamicChainState>();
-  const clock: DynamicChainClock = { lastFrame: null };
-  const fitted = new Map<string, { outline: Float32Array; skin: SkinData }>();
+  const poser = createScenePoser(scene, timeline, rig);
   const series = new Map<string, LottieShapeVertices[]>(shapeIds.map((id) => [id, []]));
-
   for (let frame = first; frame <= last; frame++) {
-    // The timeline, from each layer as it is in the scene
-    for (const nodeId of animated) {
-      const original = scene.getNode(nodeId);
-      if (!original) continue;
-      const values = evaluateNodeAtFrame(timeline, nodeId, frame);
-      if (values.size > 0) {
-        posed.updateNode(nodeId, applyAnimatedValues(original, values) as Partial<Node>);
-      }
-    }
-    // Then the rig, in the editor's order
-    if (rig?.ikChains?.length) evaluateIKChains(rig.ikChains, posed);
-    if (rig?.dynamicChains?.some((chain) => chain.enabled)) {
-      evaluateDynamicChainsAtFrame(
-        rig.dynamicChains,
-        dynamicStates,
-        posed as unknown as DynamicChainSceneGraph,
-        frame,
-        rig.frameRate,
-        rig.wind,
-        clock
-      );
-    }
-
-    // Each bound shape, posed, with its outline
-    const shapes = shapeIds.flatMap((id) => {
-      const node = posed.getNode(id);
-      const outline = node && boundOutline(node);
-      return node && outline ? [{ nodeId: id, node, outline }] : [];
-    });
-    const morphs = rig?.smartBoneActions?.length
-      ? evaluateSmartBones(
-          rig.smartBoneActions,
-          posed,
-          new Map(shapes.map(({ nodeId, outline }) => [nodeId, outline.vertices.length / 2]))
-        )
-      : undefined;
-
-    for (const { nodeId, node, outline } of shapes) {
-      // Weights for the outline (refitted only when the outline changes)
-      const known = fitted.get(nodeId);
-      const sameOutline =
-        known &&
-        known.outline.length === outline.vertices.length &&
-        known.outline.every((v, i) => v === outline.vertices[i]);
-      const skin = sameOutline
-        ? known.skin
-        : fitSkinToVertices((node as { skinData: SkinData }).skinData, outline.vertices);
-      if (!sameOutline) fitted.set(nodeId, { outline: outline.vertices, skin });
-
-      // The local matrix as the scene graph builds it (geometry applies the anchor)
-      const { position, rotation, scale } = node.transform;
-      const local = mat3.compose(position, rotation, scale);
-      const placed = placeSkinData(skin, [local.a, local.b, local.c, local.d, local.tx, local.ty]);
-      const bones: Record<string, AffineTransform2D> = {};
-      for (const boneId of Object.keys(placed.inverseBindMatrices)) {
-        if (posed.getNode(boneId)) bones[boneId] = posed.getWorldTransform(boneId);
-      }
-      const world = deformVertices(outline.vertices, placed, bones, morphs?.get(nodeId));
-
+    poser.poseAt(frame);
+    for (const [nodeId, outline] of poser.boundOutlines()) {
       // Back into the layer's own space (Lottie y down)
-      const inverse = mat3.invert(posed.getWorldTransform(nodeId));
+      const inverse = mat3.invert(poser.scene.getWorldTransform(nodeId));
       if (!inverse) continue;
       const v: number[][] = [];
-      for (let i = 0; i < world.length; i += 2) {
-        const p = mat3.transformPoint(inverse, { x: world[i]!, y: world[i + 1]! });
+      for (let i = 0; i < outline.world.length; i += 2) {
+        const p = mat3.transformPoint(inverse, { x: outline.world[i]!, y: outline.world[i + 1]! });
         v.push([round(p.x), round(-p.y)]);
       }
       const zero = v.map(() => [0, 0]);

@@ -1,73 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { SceneGraph, createBendMesh, shapeOutline, boundOutline } from '@quar/core';
-import { addKeyframe, createTimeline, getOrCreateTrack } from '@quar/animation';
-import {
-  bindVertexPositions,
-  computeAutoWeights,
-  computeFKChain,
-  createBoneNode,
-  createSkinBinding,
-} from '@quar/rigging';
+import { SceneGraph, boundOutline } from '@quar/core';
+import { createTimeline } from '@quar/animation';
 import type { LottieShapeKeyframe, LottieShapeVertices } from './lottieTypes';
-import type { Node, RectangleNode, SkinData } from '@quar/types';
+import type { Node } from '@quar/types';
 import { bakeSkinnedOutlines } from './lottieSkinning';
 import { nodeToLottieShapes } from './lottieConverter';
 import { analyzeLottieExport } from './lottieExporter';
-
-function rect(): RectangleNode {
-  return {
-    id: 'arm',
-    name: 'Arm',
-    type: 'rectangle',
-    parent: null,
-    children: [],
-    transform: {
-      position: { x: 0, y: 0 },
-      rotation: 0,
-      scale: { x: 1, y: 1 },
-      anchor: { x: 0.5, y: 0.5 },
-      skew: { x: 0, y: 0 },
-    },
-    visible: true,
-    locked: false,
-    opacity: 1,
-    blendMode: 'normal',
-    width: 200,
-    height: 40,
-    cornerRadius: [0, 0, 0, 0],
-    fills: [{ type: 'solid', color: { r: 255, g: 0, b: 0, a: 1 }, opacity: 1, visible: true }],
-    strokes: [],
-  };
-}
-
-/** A 200 × 40 arm bound, with a bending mesh, to two bones; the elbow bends 90° over 10 frames. */
-function riggedArm() {
-  const sg = new SceneGraph();
-  sg.addNode(createBoneNode('upper', 'Upper', { x: -100, y: 0 }, 100));
-  sg.addNode(createBoneNode('lower', 'Lower', { x: 100, y: 0 }, 100), 'upper');
-  sg.addNode(rect());
-  const mesh = createBendMesh(shapeOutline(sg.getNode('arm')!)!.vertices);
-  const skin = createSkinBinding('arm', ['upper', 'lower'], mesh.vertices.length / 2, sg)!;
-  const world = sg.getWorldTransform('arm');
-  const positions = new Float32Array(mesh.vertices.length);
-  for (let i = 0; i < mesh.vertices.length; i += 2) {
-    positions[i] = world.a * mesh.vertices[i]! + world.c * mesh.vertices[i + 1]! + world.tx;
-    positions[i + 1] = world.b * mesh.vertices[i]! + world.d * mesh.vertices[i + 1]! + world.ty;
-  }
-  const weighted = computeAutoWeights(skin, positions, computeFKChain('upper', sg));
-  const skinData: SkinData = {
-    ...weighted,
-    bindVertices: bindVertexPositions(mesh.vertices),
-    bendMesh: true,
-  };
-  sg.updateNode('arm', { skinData } as Partial<Node>);
-
-  const timeline = createTimeline({ duration: 30, frameRate: 30 });
-  const elbow = getOrCreateTrack<number>(timeline, 'lower', 'transform.rotation');
-  addKeyframe(elbow, 0, 0);
-  addKeyframe(elbow, 10, 90);
-  return { sg, timeline, outlineCount: mesh.outlineVertexCount };
-}
+import { armRect as rect, riggedArm } from '../__fixtures__/riggedArm';
 
 describe('Lottie export of shapes bound to bones', () => {
   it('bakes the outline as the bones bend it, frame by frame', () => {

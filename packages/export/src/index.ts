@@ -68,7 +68,14 @@ export {
   type FrameRenderOptions,
   type FrameRenderContext,
   type FrameRendererHandle,
+  type FrameRig,
 } from './frameRenderer';
+
+// ============================================================================
+// Scene Posing (the rig, for exports that can't skin)
+// ============================================================================
+
+export { createScenePoser, rigHasPhysics, type PosedOutline, type ScenePoser } from './scenePosing';
 
 // ============================================================================
 // PNG Sequence
