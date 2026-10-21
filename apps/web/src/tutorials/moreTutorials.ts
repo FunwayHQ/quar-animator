@@ -58,7 +58,7 @@ function penPage(ids: TutorialNodes): TutorialPage {
     ids,
     '1 · Pen',
     'Draw with the pen',
-    'Press P for the Pen tool. Click to place a corner point, or click and drag to pull out a curve. Click the first point again to close the shape, or press Enter to finish an open line. Backspace removes the last point; Escape throws the path away.\n\n' +
+    'Press P for the Pen tool. Click to place a corner point, or click and drag to pull out a curve (Alt breaks the handles, Shift keeps to 45°). Click the first point again to close the shape, or press Enter to finish an open line. Backspace removes the last point; Escape throws the path away. With a path selected, the Pen adds and removes points on it, and carries on from an open end.\n\n' +
       'Try tracing the outline on the right: two points, both dragged. Then give your shape a fill in Properties.'
   );
   return {
@@ -81,8 +81,8 @@ function pointsPage(ids: TutorialNodes): TutorialPage {
     ids,
     '2 · Points',
     'Reshape point by point',
-    'Press A for Direct Selection and click a shape to see its points. Drag a point to move it, Shift+click to pick several, and drag a handle to bend the curve beside it. Alt+click switches a point between corner and smooth; double-click a segment to add one; Delete removes the selected points.\n\n' +
-      'A rectangle, ellipse or polygon clicked with Direct Selection turns into a path you can reshape freely. Try it on the star.'
+    'Press A for Direct Selection and click a shape to see its points. Drag a point to move it; Shift+click, a marquee or Ctrl+A picks several. Drag a handle or a segment to bend the curve (Alt-drag: one handle alone). Alt+click switches corner and smooth; double-click a segment adds a point; Delete removes the picked ones.\n\n' +
+      'Shapes clicked with Direct Selection become paths, keeping their animation. Edit > Path reverses, simplifies, joins (Ctrl+J) and cuts paths. Try it on the star.'
   );
   const wave = path(
     ids,
@@ -558,11 +558,15 @@ function build(
 }
 
 export const MORE_TUTORIALS: Tutorial[] = [
-  build('tutorial-paths-and-shapes', 'Tutorial 3 · Paths & shapes', 't3', (ids) => [
-    penPage(ids),
-    pointsPage(ids),
-    combinePage(ids),
-  ]),
+  {
+    // 2: the Pen and Direct Selection's new keys, Edit > Path
+    ...build('tutorial-paths-and-shapes', 'Tutorial 3 · Paths & shapes', 't3', (ids) => [
+      penPage(ids),
+      pointsPage(ids),
+      combinePage(ids),
+    ]),
+    version: 2,
+  },
   {
     // 2: Figma-style text editing keys, Google Fonts asked for on first pick
     ...build('tutorial-text', 'Tutorial 4 · Text', 't4', (ids) => [
