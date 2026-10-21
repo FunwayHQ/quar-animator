@@ -73,15 +73,9 @@ export class PenTool extends BaseTool {
     }
 
     // Check if clicking near the first point to close the path
-    if (this.currentPath.length > 2) {
-      const firstPoint = this.currentPath[0]!.position;
-      const distance = vec2.distance(worldPos, firstPoint);
-      const closeThreshold = 10 / this.context.camera.zoom; // Screen pixels converted to world units
-
-      if (distance < closeThreshold) {
-        this.finalizePath(true);
-        return;
-      }
+    if (this.isNearFirstPoint(worldPos)) {
+      this.finalizePath(true);
+      return;
     }
 
     // Add new point
@@ -211,6 +205,26 @@ export class PenTool extends BaseTool {
    */
   getCurrentPath(): PathPoint[] {
     return [...this.currentPath];
+  }
+
+  /**
+   * The line to the pointer while drawing (from the last point, curving out
+   * along its handle), and whether a click there would close the path.
+   * Null when not drawing, or while a handle is being dragged out.
+   */
+  getRubberBand(): { to: Vector2; closing: boolean } | null {
+    const to = this.state.currentWorldPos;
+    if (!this.isDrawing || this.isDraggingHandle || this.currentPath.length === 0 || !to) {
+      return null;
+    }
+    return { to: { ...to }, closing: this.isNearFirstPoint(to) };
+  }
+
+  /** Within reach of the first point of a path that a click there would close. */
+  private isNearFirstPoint(pos: Vector2): boolean {
+    if (this.currentPath.length <= 2) return false;
+    const closeThreshold = 10 / this.context.camera.zoom; // Screen pixels converted to world units
+    return vec2.distance(pos, this.currentPath[0]!.position) < closeThreshold;
   }
 
   /**

@@ -673,4 +673,40 @@ describe('PenTool', () => {
       expect(tool.isCurrentlyDrawing()).toBe(false);
     });
   });
+
+  describe('rubber band', () => {
+    const click = (x: number, y: number) => {
+      tool.onPointerDown(createMockPointerEvent({ worldPosition: { x, y }, button: 0 }));
+      tool.onPointerUp(createMockPointerEvent({ worldPosition: { x, y }, buttons: 0 }));
+    };
+    const hover = (x: number, y: number) =>
+      tool.onPointerMove(createMockPointerEvent({ worldPosition: { x, y }, buttons: 0 }));
+
+    it('is there only while drawing', () => {
+      hover(10, 10);
+      expect(tool.getRubberBand()).toBeNull();
+    });
+
+    it('runs from the last point to the pointer', () => {
+      click(0, 0);
+      hover(50, 20);
+      expect(tool.getRubberBand()).toEqual({ to: { x: 50, y: 20 }, closing: false });
+    });
+
+    it('says when a click would close the path', () => {
+      click(0, 0);
+      click(100, 0);
+      click(50, 80);
+      hover(3, 2);
+      expect(tool.getRubberBand()?.closing).toBe(true);
+      hover(30, 30);
+      expect(tool.getRubberBand()?.closing).toBe(false);
+    });
+
+    it('is hidden while a handle is being dragged out', () => {
+      tool.onPointerDown(createMockPointerEvent({ worldPosition: { x: 0, y: 0 }, button: 0 }));
+      tool.onPointerMove(createMockPointerEvent({ worldPosition: { x: 30, y: 0 }, buttons: 1 }));
+      expect(tool.getRubberBand()).toBeNull();
+    });
+  });
 });

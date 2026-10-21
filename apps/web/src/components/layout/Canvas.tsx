@@ -199,6 +199,7 @@ export function Canvas({
     previewNode,
     cursor: toolCursor,
     penToolPath,
+    penRubberBand,
     isPenToolDrawing,
     startPenHandleDrag,
     startPenPointDrag,
@@ -2554,7 +2555,9 @@ export function Canvas({
       {isPenToolDrawing && (
         <PenToolOverlay
           points={penToolPath}
+          rubberBand={penRubberBand}
           camera={cameraRef.current}
+          onPointerMove={handleMouseMove}
           onHandlePointerDown={handlePenHandlePointerDown}
           onPointPointerDown={handlePenPointPointerDown}
         />

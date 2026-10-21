@@ -72,6 +72,8 @@ export interface UseCanvasToolsReturn {
   cursor: string;
   /** Current path points when using PenTool */
   penToolPath: PathPoint[];
+  /** The Pen's line to the pointer, and whether a click would close the path */
+  penRubberBand: { to: Vector2; closing: boolean } | null;
   /** Dynamic alignment and spacing guides shown while moving a selection */
   smartGuides: SmartGuide[];
   /** Whether PenTool is currently drawing */
@@ -173,6 +175,9 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
 
   // Track PenTool state for overlay
   const [penToolPath, setPenToolPath] = useState<PathPoint[]>([]);
+  const [penRubberBand, setPenRubberBand] = useState<{ to: Vector2; closing: boolean } | null>(
+    null
+  );
   const [isPenToolDrawing, setIsPenToolDrawing] = useState(false);
 
   // Track marquee selection rect for overlay
@@ -519,9 +524,11 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
       const penTool = tool as PenTool;
       setPenToolPath(penTool.getCurrentPath());
       setIsPenToolDrawing(penTool.isCurrentlyDrawing());
+      setPenRubberBand(penTool.getRubberBand());
     } else {
       setPenToolPath([]);
       setIsPenToolDrawing(false);
+      setPenRubberBand(null);
     }
   }, []);
 
@@ -833,6 +840,7 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
     previewNode,
     cursor,
     penToolPath,
+    penRubberBand,
     smartGuides,
     isPenToolDrawing,
     startPenHandleDrag,

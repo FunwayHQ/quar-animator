@@ -42,3 +42,26 @@
 .point:hover {
   fill: var(--color-accent-primary, #a855f7);
 }
+
+/* The path drawn so far, and its line on to the pointer */
+.pathPreview {
+  fill: none;
+  stroke: var(--color-accent-primary, #a855f7);
+  stroke-width: 1.5;
+  pointer-events: none;
+}
+
+.rubberBand {
+  fill: none;
+  stroke: var(--color-accent-primary, #a855f7);
+  stroke-width: 1;
+  stroke-opacity: 0.7;
+  stroke-dasharray: 4 3;
+  pointer-events: none;
+}
+
+/* A click on the first point now closes the path */
+.pointClosing {
+  fill: var(--color-accent-primary, #a855f7);
+  stroke-width: 2.5;
+}
