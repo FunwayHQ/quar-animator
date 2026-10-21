@@ -484,16 +484,11 @@ export function LayerPanel() {
 
   useEffect(() => {
     const increment = () => setVersion((v) => v + 1);
-    const unsub1 = sceneGraph.on('nodeAdded', increment);
-    const unsub2 = sceneGraph.on('nodeRemoved', increment);
-    const unsub3 = sceneGraph.on('nodeChanged', increment);
-    const unsub4 = sceneGraph.on('nodeMoved', increment);
-    return () => {
-      unsub1();
-      unsub2();
-      unsub3();
-      unsub4();
-    };
+    // A loaded project replaces the whole graph at once (graphReplaced)
+    const off = (
+      ['nodeAdded', 'nodeRemoved', 'nodeChanged', 'nodeMoved', 'graphReplaced'] as const
+    ).map((type) => sceneGraph.on(type, increment));
+    return () => off.forEach((unsubscribe) => unsubscribe());
   }, [sceneGraph]);
 
   const rootNodes = [...sceneGraph.getRootNodes()].reverse();

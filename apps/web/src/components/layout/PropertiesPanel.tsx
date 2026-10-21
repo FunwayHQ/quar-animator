@@ -565,14 +565,11 @@ export function PropertiesPanel() {
   const [, setVersion] = useState(0);
   useEffect(() => {
     const increment = () => setVersion((v) => v + 1);
-    const unsub1 = sceneGraph.on('nodeChanged', increment);
-    const unsub2 = sceneGraph.on('nodeAdded', increment);
-    const unsub3 = sceneGraph.on('nodeRemoved', increment);
-    return () => {
-      unsub1();
-      unsub2();
-      unsub3();
-    };
+    // A loaded project replaces the whole graph at once (graphReplaced)
+    const off = (['nodeChanged', 'nodeAdded', 'nodeRemoved', 'graphReplaced'] as const).map(
+      (type) => sceneGraph.on(type, increment)
+    );
+    return () => off.forEach((unsubscribe) => unsubscribe());
   }, [sceneGraph]);
 
   // Get the first selected node (single-selection for properties)

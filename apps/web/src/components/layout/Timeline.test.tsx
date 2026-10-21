@@ -190,6 +190,27 @@ describe('Timeline', () => {
     expect(screen.getByTestId(`keyframe-${keyframe.id}`)).toBeInTheDocument();
   });
 
+  it('lists the layers of a project as it loads (the whole graph replaced at once)', () => {
+    let graph: SceneGraph | undefined;
+    function CaptureGraph() {
+      graph = useSceneGraph();
+      return null;
+    }
+    render(
+      <SceneGraphProvider>
+        <CaptureGraph />
+        <Timeline />
+      </SceneGraphProvider>
+    );
+    act(() => {
+      graph!.fromJSON({
+        nodes: [{ id: 'loaded', name: 'Loaded Layer', children: [] } as unknown as Node],
+        rootNodeIds: ['loaded'],
+      });
+    });
+    expect(screen.getByText('Loaded Layer')).toBeInTheDocument();
+  });
+
   it('shows sequence keyframes as read-only and opens their step when clicked', () => {
     let graph: SceneGraph | undefined;
     function CaptureGraph() {

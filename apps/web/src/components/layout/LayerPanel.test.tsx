@@ -137,6 +137,26 @@ describe('LayerPanel', () => {
     expect(screen.getByText('Ellipse 1')).toBeInTheDocument();
   });
 
+  it('shows the layers of a project as it loads (the whole graph replaced at once)', () => {
+    let sg: SceneGraph | null = null;
+    render(
+      <SceneGraphProvider>
+        <SceneGraphCapture onCapture={(s) => (sg = s)} />
+        <LayerPanel />
+      </SceneGraphProvider>
+    );
+    expect(screen.getByTestId('layer-empty')).toBeInTheDocument();
+
+    act(() => {
+      sg!.fromJSON({
+        nodes: [createTestRect('rect1', 'Loaded Rectangle')],
+        rootNodeIds: ['rect1'],
+      });
+    });
+
+    expect(screen.getByText('Loaded Rectangle')).toBeInTheDocument();
+  });
+
   it('updates when nodes are added or removed', () => {
     let sg: SceneGraph | null = null;
 

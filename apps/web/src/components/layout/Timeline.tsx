@@ -389,16 +389,11 @@ export function Timeline({ playback }: TimelineProps = {}) {
       setNodes(rows);
     };
     update();
-    const unsub = sceneGraph.on('nodeAdded', update);
-    const unsub2 = sceneGraph.on('nodeRemoved', update);
-    const unsub3 = sceneGraph.on('nodeMoved', update);
-    const unsub4 = sceneGraph.on('nodeChanged', update);
-    return () => {
-      unsub();
-      unsub2();
-      unsub3();
-      unsub4();
-    };
+    // A loaded project replaces the whole graph at once (graphReplaced)
+    const off = (
+      ['nodeAdded', 'nodeRemoved', 'nodeMoved', 'nodeChanged', 'graphReplaced'] as const
+    ).map((type) => sceneGraph.on(type, update));
+    return () => off.forEach((unsubscribe) => unsubscribe());
   }, [sceneGraph]);
 
   // Build a lookup from keyframe ID -> { nodeId, property } for store operations

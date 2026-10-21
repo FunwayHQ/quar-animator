@@ -426,6 +426,8 @@ export function AnimationSequenceWindow() {
       sceneGraph.on('nodeAdded', read),
       sceneGraph.on('nodeRemoved', read),
       sceneGraph.on('nodeChanged', read),
+      // A loaded project replaces the whole graph at once
+      sceneGraph.on('graphReplaced', read),
     ];
     return () => unsubs.forEach((unsub) => unsub());
   }, [sceneGraph, sequence]);
