@@ -174,7 +174,9 @@ export function getAbsoluteControlPoints(
  * (de Casteljau): the outer handles shorten and the new point gets the
  * handles between them. A straight segment stays straight, its new point a
  * corner. A symmetric end point becomes smooth, since its two handles no
- * longer match in length.
+ * longer match in length. t is the cubic's parameter (a missing handle is a
+ * control point on its end), as bezier.nearestPoint finds it — on a straight
+ * segment that's not the share of its length.
  */
 export function splitSegment(
   p0: PathPoint,
@@ -185,7 +187,7 @@ export function splitSegment(
     return {
       start: p0,
       point: {
-        position: vec2.lerp(p0.position, p1.position, t),
+        position: bezier.cubicPoint(p0.position, p0.position, p1.position, p1.position, t),
         handleIn: null,
         handleOut: null,
         type: 'corner',

@@ -1061,13 +1061,15 @@ describe('splitSegment', () => {
   it('puts a corner on a straight segment, leaving its ends alone', () => {
     const a = corner(0, 0);
     const b = corner(100, 50);
-    const { start, point, end } = splitSegment(a, b, 0.25);
+    const { start, point, end } = splitSegment(a, b, 0.5);
     expect(point).toEqual({
-      position: { x: 25, y: 12.5 },
+      position: { x: 50, y: 25 },
       handleIn: null,
       handleOut: null,
       type: 'corner',
     });
+    // t is the cubic's parameter: a quarter of the way is under a sixth of the length
+    expect(splitSegment(a, b, 0.25).point.position.x).toBeCloseTo(15.625);
     expect(start).toBe(a);
     expect(end).toBe(b);
   });
