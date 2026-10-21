@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
-import { PenTool } from './PenTool';
+import { PenTool, constrainTo45 } from './PenTool';
 import type { ToolContext } from './BaseTool';
 import { createMockToolContext, createMockPointerEvent } from '../test/setup';
 
@@ -707,6 +707,51 @@ describe('PenTool', () => {
       tool.onPointerDown(createMockPointerEvent({ worldPosition: { x: 0, y: 0 }, button: 0 }));
       tool.onPointerMove(createMockPointerEvent({ worldPosition: { x: 30, y: 0 }, buttons: 1 }));
       expect(tool.getRubberBand()).toBeNull();
+    });
+  });
+
+  describe('Shift and Alt', () => {
+    it('constrainTo45 keeps how far along the nearest 45° line the pointer is', () => {
+      expect(constrainTo45({ x: 0, y: 0 }, { x: 100, y: 8 })).toEqual({ x: 100, y: 0 });
+      const diagonal = constrainTo45({ x: 0, y: 0 }, { x: 50, y: 60 });
+      expect(diagonal.x).toBeCloseTo(diagonal.y);
+      expect(diagonal.x).toBeCloseTo(55);
+    });
+
+    it('Shift-click places the point on a 45° line from the last, and so does the line to it', () => {
+      tool.onPointerDown(createMockPointerEvent({ worldPosition: { x: 0, y: 0 }, button: 0 }));
+      tool.onPointerUp(createMockPointerEvent({ worldPosition: { x: 0, y: 0 }, buttons: 0 }));
+
+      tool.onPointerMove(
+        createMockPointerEvent({ worldPosition: { x: 97, y: 6 }, buttons: 0, shiftKey: true })
+      );
+      expect(tool.getRubberBand()?.to).toEqual({ x: 97, y: 0 });
+
+      tool.onPointerDown(
+        createMockPointerEvent({ worldPosition: { x: 97, y: 6 }, button: 0, shiftKey: true })
+      );
+      expect(tool.getCurrentPath()[1]!.position).toEqual({ x: 97, y: 0 });
+    });
+
+    it('Shift holds a handle being dragged out to 45°', () => {
+      tool.onPointerDown(createMockPointerEvent({ worldPosition: { x: 0, y: 0 }, button: 0 }));
+      tool.onPointerMove(
+        createMockPointerEvent({ worldPosition: { x: 40, y: 3 }, buttons: 1, shiftKey: true })
+      );
+      expect(tool.getCurrentPath()[0]!.handleOut).toEqual({ x: 40, y: 0 });
+    });
+
+    it('Alt-dragging out a handle leaves the incoming one where it was', () => {
+      tool.onPointerDown(createMockPointerEvent({ worldPosition: { x: 0, y: 0 }, button: 0 }));
+      tool.onPointerMove(createMockPointerEvent({ worldPosition: { x: 40, y: 0 }, buttons: 1 }));
+      tool.onPointerMove(
+        createMockPointerEvent({ worldPosition: { x: 0, y: 40 }, buttons: 1, altKey: true })
+      );
+
+      const point = tool.getCurrentPath()[0]!;
+      expect(point.handleOut).toEqual({ x: 0, y: 40 });
+      expect(point.handleIn).toEqual({ x: -40, y: -0 });
+      expect(point.type).toBe('corner');
     });
   });
 });

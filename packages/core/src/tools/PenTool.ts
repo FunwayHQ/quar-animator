@@ -20,6 +20,19 @@ import { centerPathNodeGeometry } from '../path/pathUtils';
 // Handle drag mode types
 type HandleDragMode = 'none' | 'new-point' | 'existing-handle';
 
+/**
+ * `to` held to the nearest 45° direction from `from`, as far along it as the
+ * pointer is (Shift with the Pen, as in Illustrator).
+ */
+export function constrainTo45(from: Vector2, to: Vector2): Vector2 {
+  const offset = vec2.subtract(to, from);
+  const step = Math.PI / 4;
+  const angle = Math.round(Math.atan2(offset.y, offset.x) / step) * step;
+  const direction = { x: Math.cos(angle), y: Math.sin(angle) };
+  const length = vec2.dot(offset, direction);
+  return vec2.add(from, vec2.multiply(direction, length));
+}
+
 interface HandleDragState {
   mode: HandleDragMode;
   pointIndex: number;
@@ -54,7 +67,11 @@ export class PenTool extends BaseTool {
     // Only handle left mouse button
     if (event.button !== 0) return;
 
-    const worldPos = { ...event.worldPosition };
+    const last = this.isDrawing ? this.currentPath[this.currentPath.length - 1] : undefined;
+    const worldPos =
+      event.shiftKey && last
+        ? constrainTo45(last.position, event.worldPosition)
+        : { ...event.worldPosition };
 
     if (!this.isDrawing) {
       // Start new path
@@ -96,7 +113,12 @@ export class PenTool extends BaseTool {
   onPointerMove(event: CanvasPointerEvent): void {
     if (!this.isDrawing) return;
 
-    const worldPos = { ...event.worldPosition };
+    const last = this.currentPath[this.currentPath.length - 1];
+    // Shift holds the next segment (or, while dragging one out, the handle) to 45°
+    const worldPos =
+      event.shiftKey && last && !this.isDraggingHandle
+        ? constrainTo45(last.position, event.worldPosition)
+        : { ...event.worldPosition };
     this.state.currentWorldPos = worldPos;
 
     // If mouse button was released (e.g. mouseUp on overlay element), stop dragging
@@ -112,13 +134,21 @@ export class PenTool extends BaseTool {
       } else {
         // Creating a new point - update handle of the last point
         const lastPoint = this.currentPath[this.currentPath.length - 1]!;
-        const handleOut = vec2.subtract(worldPos, lastPoint.position);
+        const target = event.shiftKey
+          ? constrainTo45(lastPoint.position, event.worldPosition)
+          : worldPos;
+        const handleOut = vec2.subtract(target, lastPoint.position);
 
         // Check if the handle has significant length
         if (vec2.length(handleOut) > 1) {
           lastPoint.handleOut = handleOut;
-          lastPoint.handleIn = { x: -handleOut.x, y: -handleOut.y };
-          lastPoint.type = 'smooth';
+          if (event.altKey) {
+            // Alt breaks the pair: the incoming handle stays where it is
+            lastPoint.type = 'corner';
+          } else {
+            lastPoint.handleIn = { x: -handleOut.x, y: -handleOut.y };
+            lastPoint.type = 'smooth';
+          }
         }
       }
 
