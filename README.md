@@ -7,7 +7,7 @@
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.3-blue)
 ![React](https://img.shields.io/badge/React-18-61dafb)
 ![WebGL](https://img.shields.io/badge/WebGL-2.0-red)
-![Tests](https://img.shields.io/badge/tests-4397%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-4416%20passing-brightgreen)
 
 **Free, open-source, web-native 2D animation platform**
 
@@ -165,7 +165,7 @@ Vector Path (Bezier) → Earcut Tessellation → WebGL Vertex Buffers → GPU Re
 | 6      | Path Editing (Direct Selection)         | 36    |
 | 7      | Brush & Eraser Tools                    | 77    |
 
-**Total Test Coverage: 4397 tests** (1910 core, 1296 web, 518 animation, 311 export, 271 rigging, 91 UI)
+**Total Test Coverage: 4416 tests** (1914 core, 1298 web, 518 animation, 324 export, 271 rigging, 91 UI)
 
 ### Roadmap
 
@@ -189,24 +189,21 @@ Native format is `.quar` based on **glTF 2.0** with custom extensions:
 
 ### Export Formats
 
-**Priority 0 (Core)**
+**Available**
 
-- Lottie JSON / dotLottie
-- GIF
-- PNG Sequence
+- Lottie JSON (rigs baked: IK, physics and shapes bent by bones)
+- GIF (frame rate up to 50 fps, palette and compression controls)
+- MP4 (H.264) and WebM (VP9, optionally with a transparent background)
+- PNG Sequence and Sprite Sheet
+- SVG — a still of any frame, posed as the canvas shows it
 
-**Priority 1 (Standard)**
+**Planned**
 
-- Sprite Sheet
-- MP4 / WebM
-- SVG+SMIL
-
-**Priority 2 (Extended)**
-
-- Spine JSON
+- dotLottie
+- Animated SVG (SMIL)
 - APNG
+- Spine JSON, DragonBones
 - glTF/GLB
-- DragonBones
 
 ---
 
