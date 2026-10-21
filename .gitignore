@@ -66,3 +66,5 @@ storybook-static/
 marketing/*.mp4
 marketing/*.jpg
 marketing/source/out/
+# Blog post drafts, published on funwayinteractive.com rather than from here
+marketing/blog.md
