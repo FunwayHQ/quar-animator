@@ -134,7 +134,7 @@ interface SelectedPoint {
   pointIndex: number;
 }
 
-type DragMode = 'idle' | 'dragging-point' | 'dragging-handle';
+type DragMode = 'idle' | 'dragging-point' | 'dragging-handle' | 'marquee';
 
 // ============================================================================
 // DirectSelectionTool Class
@@ -156,6 +156,10 @@ export class DirectSelectionTool extends BaseTool {
   private dragHandle: HandleHit | null = null;
   private initialPointPositions: Map<string, Vector2> = new Map();
   private hasDragged: boolean = false;
+
+  // Marquee: a drag from off the path's points picks the points inside
+  private marqueeRect: Rect | null = null;
+  private marqueeAdditive = false;
 
   // Arrow-key nudges: one undo step per run of presses
   private nudgeUndoPushed = false;
@@ -270,6 +274,16 @@ export class DirectSelectionTool extends BaseTool {
       return;
     }
 
+    // Nothing of a path here: a drag draws a marquee to pick points, and a
+    // click picks a layer (handled on release, once it's clearly a click)
+    this.dragMode = 'marquee';
+    this.marqueeRect = null;
+    this.marqueeAdditive = event.shiftKey;
+    this.state.isDragging = true;
+  }
+
+  /** A click off any point or handle: select, enter or convert the layer there. */
+  private handleNodeClick(worldPos: Vector2, shiftKey: boolean): void {
     // No path point/handle hit — try node-level hit testing (groups, other shapes)
     const rawHit = this.hitTestNode(worldPos);
     const enteredGroupId = this.context.getEnteredGroupId?.() ?? null;
@@ -286,7 +300,7 @@ export class DirectSelectionTool extends BaseTool {
       } else {
         // Not selected → select the group
         this.clearPointSelection();
-        if (event.shiftKey) {
+        if (shiftKey) {
           this.context.addToSelection(hitNode.id);
         } else {
           this.context.setSelectedIds([hitNode.id]);
@@ -319,7 +333,7 @@ export class DirectSelectionTool extends BaseTool {
     // Click on a non-path node → select it
     if (hitNode && hitNode.type !== 'path') {
       this.clearPointSelection();
-      if (event.shiftKey) {
+      if (shiftKey) {
         this.context.addToSelection(hitNode.id);
       } else {
         this.context.setSelectedIds([hitNode.id]);
@@ -330,7 +344,7 @@ export class DirectSelectionTool extends BaseTool {
     // Click on a path (node-level, not on a specific point) → select the path
     if (hitNode && hitNode.type === 'path') {
       this.clearPointSelection();
-      if (event.shiftKey) {
+      if (shiftKey) {
         this.context.addToSelection(hitNode.id);
       } else {
         this.context.setSelectedIds([hitNode.id]);
@@ -353,7 +367,7 @@ export class DirectSelectionTool extends BaseTool {
     }
 
     // Clicked on empty space - clear both point and node selection
-    if (!event.shiftKey) {
+    if (!shiftKey) {
       if (enteredGroupId) {
         this.context.setEnteredGroupId?.(null);
       }
@@ -373,6 +387,17 @@ export class DirectSelectionTool extends BaseTool {
     }
 
     if (!this.dragStartPoint) return;
+
+    if (this.dragMode === 'marquee') {
+      // A few pixels of movement before it's a marquee rather than a click
+      if (
+        this.marqueeRect ||
+        vec2.distance(worldPos, this.dragStartPoint) > 3 / this.context.camera.zoom
+      ) {
+        this.marqueeRect = rect.fromPoints(this.dragStartPoint, worldPos);
+      }
+      return;
+    }
 
     if (this.dragMode === 'dragging-point') {
       this.hasDragged = true;
@@ -469,6 +494,12 @@ export class DirectSelectionTool extends BaseTool {
   }
 
   onPointerUp(_event: CanvasPointerEvent): void {
+    if (this.dragMode === 'marquee' && this.dragStartPoint) {
+      if (this.marqueeRect) this.selectPointsInRect(this.marqueeRect, this.marqueeAdditive);
+      else this.handleNodeClick(this.dragStartPoint, this.marqueeAdditive);
+      this.marqueeRect = null;
+    }
+
     // Notify about vertex transform completion (for auto-keyframe)
     if (
       this.hasDragged &&
@@ -746,6 +777,37 @@ export class DirectSelectionTool extends BaseTool {
 
   private clearPointSelection(): void {
     this.selectedPoints = [];
+  }
+
+  /**
+   * Pick the points (of the paths and images in reach) inside a world-space
+   * rectangle, adding to the picked ones with Shift; their layers become the
+   * selection, so their points show.
+   */
+  private selectPointsInRect(area: Rect, additive: boolean): void {
+    const picked: SelectedPoint[] = additive ? [...this.selectedPoints] : [];
+    const layers = [...this.getPathNodes(), ...this.getImageNodes()];
+    for (const node of layers) {
+      const points = node.type === 'image' ? getImagePoints(node) : getAllPoints(node);
+      points.forEach((point, pointIndex) => {
+        const world = this.getPointWorldPosition(node, point);
+        if (
+          rect.contains(area, world) &&
+          !picked.some((p) => p.nodeId === node.id && p.pointIndex === pointIndex)
+        ) {
+          picked.push({ nodeId: node.id, pointIndex });
+        }
+      });
+    }
+    this.selectedPoints = picked;
+    const nodeIds = [...new Set(picked.map((p) => p.nodeId))];
+    if (additive) nodeIds.forEach((id) => this.context.addToSelection(id));
+    else if (nodeIds.length > 0) this.context.setSelectedIds(nodeIds);
+  }
+
+  /** The marquee being dragged, in world space (null when there isn't one). */
+  getMarqueeRect(): Rect | null {
+    return this.marqueeRect;
   }
 
   private selectAllPointsInSelectedPaths(): void {
@@ -1199,6 +1261,7 @@ export class DirectSelectionTool extends BaseTool {
     this.dragStartPoint = null;
     this.dragHandle = null;
     this.initialPointPositions.clear();
+    this.marqueeRect = null;
     this.lastClickTime = 0;
     this.lastClickPosition = null;
     this.currentHover = null;

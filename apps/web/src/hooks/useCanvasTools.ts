@@ -503,6 +503,8 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
     const tool = toolManagerRef.current.getActiveTool();
     if (tool?.type === 'selection') {
       setMarqueeRect((tool as SelectionTool).getMarqueeRect());
+    } else if (tool?.type === 'direct-selection') {
+      setMarqueeRect((tool as DirectSelectionTool).getMarqueeRect());
     } else {
       setMarqueeRect(null);
     }

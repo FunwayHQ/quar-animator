@@ -2324,4 +2324,68 @@ describe('DirectSelectionTool', () => {
       });
     });
   });
+
+  describe('marquee point selection', () => {
+    const drag = (
+      from: { x: number; y: number },
+      to: { x: number; y: number },
+      shiftKey = false
+    ) => {
+      tool.onPointerDown(createMockPointerEvent({ worldPosition: from, button: 0, shiftKey }));
+      tool.onPointerMove(createMockPointerEvent({ worldPosition: to, shiftKey }));
+      expect(tool.getMarqueeRect()).not.toBeNull();
+      tool.onPointerUp(createMockPointerEvent({ worldPosition: to, shiftKey }));
+    };
+
+    it('picks the points inside the box, from empty canvas', () => {
+      const path = createTestPath(context, [
+        createPoint(0, 0),
+        createPoint(100, 0),
+        createPoint(200, 0),
+      ]);
+
+      drag({ x: -20, y: -20 }, { x: 120, y: 20 });
+
+      expect(tool.getSelectedPoints()).toEqual([
+        { nodeId: path.id, pointIndex: 0 },
+        { nodeId: path.id, pointIndex: 1 },
+      ]);
+      expect(context.getSelectedIds().has(path.id)).toBe(true);
+      expect(tool.getMarqueeRect()).toBeNull();
+    });
+
+    it('adds to the picked points with Shift, across paths', () => {
+      const a = createTestPath(context, [createPoint(0, 0), createPoint(100, 0)]);
+      const b = createTestPath(context, [createPoint(0, 300), createPoint(100, 300)]);
+
+      drag({ x: -20, y: -20 }, { x: 20, y: 20 });
+      drag({ x: 80, y: 280 }, { x: 120, y: 320 }, true);
+
+      expect(tool.getSelectedPoints()).toEqual([
+        { nodeId: a.id, pointIndex: 0 },
+        { nodeId: b.id, pointIndex: 1 },
+      ]);
+    });
+
+    it('a click without dragging still selects the layer under it', () => {
+      const path = createTestPath(context, [createPoint(0, 0), createPoint(100, 100)], true);
+
+      tool.onPointerDown(createMockPointerEvent({ worldPosition: { x: 60, y: 40 }, button: 0 }));
+      tool.onPointerUp(createMockPointerEvent({ worldPosition: { x: 60, y: 40 } }));
+
+      expect(context.getSelectedIds().has(path.id)).toBe(true);
+    });
+
+    it('a click on empty canvas clears the picked points', () => {
+      createTestPath(context, [createPoint(0, 0), createPoint(100, 0)]);
+      tool.onPointerDown(createMockPointerEvent({ worldPosition: { x: 0, y: 0 }, button: 0 }));
+      tool.onPointerUp(createMockPointerEvent({ worldPosition: { x: 0, y: 0 } }));
+      expect(tool.getSelectedPoints()).toHaveLength(1);
+
+      tool.onPointerDown(createMockPointerEvent({ worldPosition: { x: 500, y: 500 }, button: 0 }));
+      tool.onPointerUp(createMockPointerEvent({ worldPosition: { x: 500, y: 500 } }));
+
+      expect(tool.getSelectedPoints()).toEqual([]);
+    });
+  });
 });
