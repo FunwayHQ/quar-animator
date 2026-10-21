@@ -19,6 +19,7 @@ import { useProjectShortcuts } from '../hooks/useProjectShortcuts';
 import { useUndoShortcuts } from '../hooks/useUndoShortcuts';
 import { useFlipShortcuts } from '../hooks/useFlipShortcuts';
 import { useSystemClipboard } from '../hooks/useSystemClipboard';
+import { useViewShortcuts } from '../hooks/useViewShortcuts';
 import { useEditorStore } from '../stores/editorStore';
 import { useSceneGraph } from '../contexts/SceneGraphContext';
 import { useDirtyTracking } from '../hooks/useDirtyTracking';
@@ -33,6 +34,8 @@ function EditorInner() {
   useFlipShortcuts(sceneGraph);
   // Copy/cut onto the system clipboard, for pasting into other windows and browsers
   useSystemClipboard(sceneGraph);
+  // Fit, 100% and zoom keys work wherever focus is
+  useViewShortcuts();
   // Unsaved changes: any scene edit, but not an export posing frames
   useDirtyTracking(sceneGraph);
 
