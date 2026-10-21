@@ -40,6 +40,7 @@ import { BoneOverlay } from '../canvas/BoneOverlay';
 import { GhostSceneCache, poseSceneAtFrame } from '../canvas/onionSkinScenes';
 import { poseScene } from '../../stores/scenePosing';
 import { fitViewToArtwork } from '../canvas/fitView';
+import { deleteKeyTarget } from '../canvas/deleteKeyTarget';
 import { bindLayersToBones } from '../canvas/bindToBones';
 import { ArtboardOverlay } from '../canvas/ArtboardOverlay';
 import { SequenceBadgesOverlay } from '../canvas/SequenceBadgesOverlay';
@@ -1615,11 +1616,15 @@ export function Canvas({
         }
       }
 
-      // Delete/Backspace: delete selection (skip if input)
-      // When Direct Selection Tool has selected points, let the tool handle deletion
+      // Delete/Backspace: delete selection (skip if input), unless the tool has
+      // something of its own to remove (a Pen point, Direct Selection points)
       if (!isInput && (e.key === 'Delete' || e.key === 'Backspace')) {
-        if (isDirectSelectionActive && directSelectionPoints.length > 0) {
-          // Let tool system handle point deletion
+        const target = deleteKeyTarget({
+          penDrawing: isPenToolDrawing,
+          directSelectionActive: isDirectSelectionActive,
+          directSelectionPointCount: directSelectionPoints.length,
+        });
+        if (target === 'tool') {
           toolKeyDown(e);
           return;
         }
@@ -1646,6 +1651,7 @@ export function Canvas({
       bringToFront,
       sendToBack,
       cutSelection,
+      isPenToolDrawing,
       isDirectSelectionActive,
       directSelectionPoints,
     ]
