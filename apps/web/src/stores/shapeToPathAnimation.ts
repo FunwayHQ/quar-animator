@@ -5,7 +5,7 @@
  * and the path morphs as the shape did.
  */
 
-import type { EasingFunction, Node, PathPoint, Timeline } from '@quar/types';
+import type { EasingFunction, Node, PathShape, Timeline } from '@quar/types';
 import { getShapeOutlinePoints } from '@quar/core';
 import {
   addKeyframe,
@@ -26,7 +26,7 @@ export function shapeTracksToOutline(timeline: Timeline, node: Node): Timeline {
   const times = [
     ...new Set(shapeTracks.flatMap((track) => track.keyframes.map((kf) => kf.time))),
   ].sort((a, b) => a - b);
-  const outline = createTrack<PathPoint[]>(node.id, 'points');
+  const outline = createTrack<PathShape>(node.id, 'points');
   for (const time of times) {
     const posed = applyAnimatedValues(node, evaluateNodeAtFrame(timeline, node.id, time));
     const points = getShapeOutlinePoints(posed)?.points;
@@ -34,7 +34,7 @@ export function shapeTracksToOutline(timeline: Timeline, node: Node): Timeline {
     const easing: EasingFunction =
       shapeTracks.flatMap((track) => track.keyframes).find((kf) => kf.time === time)?.easing ??
       'linear';
-    addKeyframe(outline, time, points, easing);
+    addKeyframe(outline, time, { points, closed: true }, easing);
   }
 
   return {

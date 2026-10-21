@@ -4,10 +4,19 @@
  * and cutting them, and the keyframes that have to follow.
  */
 
-import type { Matrix3, PathNode, PathPoint, PropertyTrack, Stroke, Timeline } from '@quar/types';
+import type {
+  Matrix3,
+  PathNode,
+  PathPoint,
+  PathShape,
+  PropertyTrack,
+  Stroke,
+  Timeline,
+} from '@quar/types';
 import {
   getAllPoints,
   getPathBounds,
+  isPathShape,
   joinContours,
   reversePath,
   simplifyContour,
@@ -55,8 +64,34 @@ export function reversedTracks(timeline: Timeline, node: PathNode): Timeline {
       contour < lengths.length && index < lengths[contour]!
         ? `${pointPrefix(contour, lengths[contour]! - 1 - index)}.${swapHandle(rest)}`
         : null,
-    (points: PathPoint[]) => reversePath(points)
+    (contours) => contours.map((contour) => reversePath(contour))
   );
+}
+
+/**
+ * The path's Shape keyframes once it's opened or closed: each records it, so
+ * it tweens as the path now is. An older keyframe of the main contour
+ * becomes the whole shape, with the path's holes.
+ */
+export function closedShapeTracks(timeline: Timeline, node: PathNode, closed: boolean): Timeline {
+  let changed = false;
+  const tracks = timeline.tracks.map((track) => {
+    if (track.nodeId !== node.id || track.property !== 'points') return track;
+    changed = true;
+    return {
+      ...track,
+      keyframes: track.keyframes.map((keyframe) => {
+        if (isPathShape(keyframe.value))
+          return { ...keyframe, value: { ...keyframe.value, closed } };
+        if (!Array.isArray(keyframe.value)) return keyframe;
+        const shape: PathShape = { points: keyframe.value as PathPoint[], closed };
+        if (node.subpaths && node.subpaths.length > 0)
+          shape.subpaths = structuredClone(node.subpaths);
+        return { ...keyframe, value: shape };
+      }),
+    };
+  });
+  return changed ? { ...timeline, tracks } : timeline;
 }
 
 /** Whether any of the path's points are animated (per point, or as a whole shape). */

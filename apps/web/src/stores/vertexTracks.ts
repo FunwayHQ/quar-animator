@@ -8,8 +8,15 @@
  * then, so the animation keeps its shape.
  */
 
-import type { EasingFunction, PathNode, PathPoint, PropertyTrack, Timeline } from '@quar/types';
-import { getAllPoints, splitSegment, type PathPointsChange } from '@quar/core';
+import type {
+  EasingFunction,
+  PathNode,
+  PathPoint,
+  PathShape,
+  PropertyTrack,
+  Timeline,
+} from '@quar/types';
+import { getAllPoints, isPathShape, splitSegment, type PathPointsChange } from '@quar/core';
 import {
   applyAnimatedValues,
   createKeyframe,
@@ -154,43 +161,93 @@ export function remapVertexTracks(
 }
 
 /**
- * Whole-shape keyframes (the "Shape" diamond keys the main contour): the
- * same point added or removed in each, when it has the same points.
+ * A Shape keyframe's contours, main contour first (an older keyframe holds
+ * the main contour alone), or null when it isn't a shape.
+ */
+export function shapeContours(value: unknown): PathPoint[][] | null {
+  if (Array.isArray(value)) return [value as PathPoint[]];
+  if (isPathShape(value)) return [value.points, ...(value.subpaths ?? [])];
+  return null;
+}
+
+/** The Shape keyframe's value with these contours, in the format it had. */
+export function withContours(
+  value: PathPoint[] | PathShape,
+  contours: PathPoint[][]
+): PathPoint[] | PathShape {
+  const [points = [], ...subpaths] = contours;
+  if (Array.isArray(value)) return points;
+  const shape: PathShape = { ...value, points };
+  if (subpaths.length > 0) shape.subpaths = subpaths;
+  else delete shape.subpaths;
+  return shape;
+}
+
+/** The contours after `change` (flat indices over `lengths`), or null when it misses them. */
+function reshapedContours(
+  contours: PathPoint[][],
+  lengths: number[],
+  change: PathPointsChange
+): PathPoint[][] | null {
+  if (change.kind === 'extend') {
+    // The new points, as drawn, in every shape
+    const main = contours[0]!;
+    const points =
+      change.at === 'start' ? [...change.points, ...main] : [...main, ...change.points];
+    return [points, ...contours.slice(1)];
+  }
+  if (change.kind === 'delete') {
+    const deleted = new Set(change.indices);
+    let offset = 0;
+    let hit = false;
+    const kept = contours.map((contour) => {
+      const start = offset;
+      offset += contour.length;
+      return contour.filter((_point, i) => {
+        const gone = deleted.has(start + i);
+        hit ||= gone;
+        return !gone;
+      });
+    });
+    // A contour left empty goes, as it does from the path
+    return hit ? kept.filter((contour) => contour.length > 0) : null;
+  }
+  const [contourIndex, segment] = fromFlat(lengths, change.segmentIndex);
+  const contour = contours[contourIndex];
+  if (!contour) return null;
+  const end = (segment + 1) % contour.length;
+  const split = splitSegment(contour[segment]!, contour[end]!, change.t);
+  const points = [...contour];
+  points[segment] = split.start;
+  points[end] = split.end;
+  points.splice(segment + 1, 0, split.point);
+  return contours.map((c, i) => (i === contourIndex ? points : c));
+}
+
+/**
+ * Whole-shape keyframes (the "Shape" diamond): the same points added or
+ * removed in each, when it has the same points.
  */
 function reshapeShapeKeyframes(
   track: PropertyTrack,
   lengths: number[],
   change: PathPointsChange
 ): PropertyTrack {
-  const mainLength = lengths[0]!;
   let changed = false;
   const keyframes = track.keyframes.map((keyframe) => {
-    const points = keyframe.value as PathPoint[];
-    if (!Array.isArray(points) || points.length !== mainLength) return keyframe;
-    if (change.kind === 'delete') {
-      const deleted = new Set(change.indices.filter((flat) => flat < mainLength));
-      if (deleted.size === 0) return keyframe;
-      changed = true;
-      return { ...keyframe, value: points.filter((_point, i) => !deleted.has(i)) };
-    }
-    if (change.kind === 'extend') {
-      // The new points, as drawn, in every shape
-      changed = true;
-      return {
-        ...keyframe,
-        value:
-          change.at === 'start' ? [...change.points, ...points] : [...points, ...change.points],
-      };
-    }
-    if (change.segmentIndex >= mainLength) return keyframe;
-    const end = (change.segmentIndex + 1) % mainLength;
-    const split = splitSegment(points[change.segmentIndex]!, points[end]!, change.t);
-    const value = [...points];
-    value[change.segmentIndex] = split.start;
-    value[end] = split.end;
-    value.splice(change.segmentIndex + 1, 0, split.point);
+    const contours = shapeContours(keyframe.value);
+    if (!contours) return keyframe;
+    const sameTopology =
+      (Array.isArray(keyframe.value) || contours.length === lengths.length) &&
+      contours.every((contour, i) => contour.length === lengths[i]);
+    if (!sameTopology) return keyframe;
+    const reshaped = reshapedContours(contours, lengths, change);
+    if (!reshaped) return keyframe;
     changed = true;
-    return { ...keyframe, value };
+    return {
+      ...keyframe,
+      value: withContours(keyframe.value as PathPoint[] | PathShape, reshaped),
+    };
   });
   return changed ? { ...track, keyframes } : track;
 }
@@ -302,7 +359,7 @@ export function rewritePointTracks(
   timeline: Timeline,
   nodeId: string,
   rename: (contour: number, index: number, rest: string) => string | null,
-  reshape?: (points: PathPoint[]) => PathPoint[]
+  reshape?: (contours: PathPoint[][]) => PathPoint[][]
 ): Timeline {
   let changed = false;
   const tracks: PropertyTrack[] = [];
@@ -315,11 +372,12 @@ export function rewritePointTracks(
       changed = true;
       tracks.push({
         ...track,
-        keyframes: track.keyframes.map((keyframe) =>
-          Array.isArray(keyframe.value)
-            ? { ...keyframe, value: reshape(keyframe.value as PathPoint[]) }
-            : keyframe
-        ),
+        keyframes: track.keyframes.map((keyframe) => {
+          const contours = shapeContours(keyframe.value);
+          if (!contours) return keyframe;
+          const value = keyframe.value as PathPoint[] | PathShape;
+          return { ...keyframe, value: withContours(value, reshape(contours)) };
+        }),
       });
       continue;
     }

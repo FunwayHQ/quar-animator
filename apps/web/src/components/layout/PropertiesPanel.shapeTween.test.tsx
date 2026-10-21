@@ -149,9 +149,10 @@ describe('PropertiesPanel - Shape Tween', () => {
     expect(track).toBeDefined();
     expect(track!.keyframes.length).toBe(1);
     expect(track!.keyframes[0].time).toBe(0);
-    // Value should be the PathPoint array
-    const points = track!.keyframes[0].value as unknown[];
-    expect(points).toHaveLength(3);
+    // Value should be the whole shape
+    const shape = track!.keyframes[0].value as { points: unknown[]; closed: boolean };
+    expect(shape.points).toHaveLength(3);
+    expect(shape.closed).toBe(createTestPath().closed);
   });
 
   it('KeyframeIndicator shows active state at keyframed frame', () => {

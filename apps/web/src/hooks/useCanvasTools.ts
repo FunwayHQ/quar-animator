@@ -14,6 +14,7 @@ import {
   WeightPaintTool,
   PointMagnetTool,
   getAllPoints,
+  pathShapeOf,
   type SmartGuide,
 } from '@quar/core';
 import type { TransformType, PathPointsChange } from '@quar/core';
@@ -322,11 +323,20 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
         if (shouldKf(nodeId, 'transform.rotation'))
           addKf(nodeId, 'transform.rotation', frame, node.transform.rotation);
       } else if (type === 'vertex-move') {
+        // A path whose Shape is keyed: the edit keys its whole shape here
+        const shapeKeyed =
+          node.type === 'path' &&
+          timeline != null &&
+          timeline.tracks.some(
+            (t) => t.nodeId === nodeId && t.property === 'points' && t.keyframes.length > 0
+          );
+        if (shapeKeyed) addKf(nodeId, 'points', frame, pathShapeOf(node));
+
         // Keyframe ALL vertex positions/handles/cornerRadius for the affected path node
         // to prevent un-keyframed vertices from snapping to base state during interpolation.
         // Check if auto-keyframe is on OR any vertex property already has keyframes.
         const hasVertexTracks =
-          autoKf ||
+          (autoKf && !shapeKeyed) ||
           (timeline != null &&
             timeline.tracks.some(
               (t) =>

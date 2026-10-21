@@ -75,6 +75,7 @@ import { symbolsUsedBy, type ClipboardPayload } from '../services/systemClipboar
 import { pastedTracks, type RootMove } from './clipboardAnimation';
 import {
   closedContour,
+  closedShapeTracks,
   hasPointAnimation,
   joinedContours,
   reversedContours,
@@ -2621,14 +2622,16 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     );
     if (paths.length === 0) return;
     get().pushUndo(sceneGraph);
+    let timeline = get().timeline;
     for (const path of paths) {
+      timeline = closedShapeTracks(timeline, path, closed);
       // Closed, a path without a fill gets the default one, as when the Pen closes it
       const fill = closed && path.fills.length === 0 ? { fills: [{ ...get().defaultFill }] } : {};
       // Open paths aren't filled: one without a stroke is outlined in its fill's color
       const stroke = closed ? {} : strokeForOpening(path, get().defaultStroke);
       sceneGraph.updateNode(path.id, { closed, ...fill, ...stroke });
     }
-    set({ isDirty: true });
+    set({ timeline, isDirty: true });
   },
   setSelectedPathsFillRule: (sceneGraph, rule) => {
     const paths = selectedPaths(sceneGraph, get().selectedNodeIds).filter(

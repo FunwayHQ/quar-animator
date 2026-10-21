@@ -70,6 +70,7 @@ import {
   getSubpathBoundaries,
   getContourRange,
   setPointType,
+  pathShapeOf,
   updateHandleWithSymmetry,
 } from '@quar/core';
 import { findTrack, getEasingDisplayName } from '@quar/animation';
@@ -2730,7 +2731,7 @@ export function PropertiesPanel() {
                   <span className={styles.propertyLabel}>Shape</span>
                   <KeyframeIndicator
                     state={getKeyframeState(timeline, nodeId, 'points', currentFrame)}
-                    onToggle={() => toggleKeyframe('points', structuredClone(node.points))}
+                    onToggle={() => toggleKeyframe('points', pathShapeOf(node))}
                   />
                 </div>
                 <div className={styles.propertyInputs}>

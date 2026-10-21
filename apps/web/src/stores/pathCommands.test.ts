@@ -5,7 +5,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { SceneGraph, createDefaultTransform } from '@quar/core';
 import { createKeyframe, createTimeline, createTrack } from '@quar/animation';
-import type { PathNode, PathPoint } from '@quar/types';
+import type { PathNode, PathPoint, PathShape } from '@quar/types';
 import { reversedContours, reversedTracks } from './pathCommands';
 import { useEditorStore } from './editorStore';
 
@@ -66,6 +66,19 @@ describe('reversing a path', () => {
     const shape = next.tracks[2]!.keyframes[0]!.value as PathPoint[];
     expect(shape.map((p) => p.position.x)).toEqual([200, 100, 0]);
   });
+
+  it('reverses every contour of a whole Shape keyframe', () => {
+    const node = path([pt(0), pt(100), pt(200)], { subpaths: [[pt(5), pt(6)]] });
+    const whole: PathShape = { points: node.points, subpaths: node.subpaths, closed: true };
+    const timeline = {
+      ...createTimeline(),
+      tracks: [createTrack('p', 'points', [createKeyframe(0, whole)])],
+    };
+    const shape = reversedTracks(timeline, node).tracks[0]!.keyframes[0]!.value as PathShape;
+    expect(shape.points.map((p) => p.position.x)).toEqual([200, 100, 0]);
+    expect(shape.subpaths![0]!.map((p) => p.position.x)).toEqual([6, 5]);
+    expect(shape.closed).toBe(true);
+  });
 });
 
 describe('path commands (store)', () => {
@@ -115,6 +128,29 @@ describe('path commands (store)', () => {
     sceneGraph.updateNode('p', { closed: true, strokes: [stroke] });
     useEditorStore.getState().setSelectedPathsClosed(sceneGraph, false);
     expect(node().strokes).toEqual([stroke]);
+  });
+
+  it('keeps Shape keyframes in step when it opens or closes a path', () => {
+    const hole = [pt(10), pt(20), pt(30)];
+    sceneGraph.updateNode('p', { subpaths: [hole] });
+    const whole: PathShape = { points: node().points, closed: false };
+    useEditorStore.setState({
+      timeline: {
+        ...createTimeline(),
+        tracks: [
+          createTrack('p', 'points', [createKeyframe(0, node().points), createKeyframe(10, whole)]),
+        ],
+      },
+    });
+    useEditorStore.getState().setSelectedPathsClosed(sceneGraph, true);
+    const values = useEditorStore
+      .getState()
+      .timeline.tracks[0]!.keyframes.map((k) => k.value as PathShape);
+    // An older keyframe of the main contour becomes the whole shape, holes and all
+    expect(values[0]).toEqual({ points: node().points, subpaths: [hole], closed: true });
+    expect(values[1]!.closed).toBe(true);
+    useEditorStore.getState().undo(sceneGraph);
+    expect(useEditorStore.getState().timeline.tracks[0]!.keyframes[1]!.value).toEqual(whole);
   });
 
   it('sets the fill rule', () => {

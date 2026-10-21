@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import type { PathNode, PathPoint, PropertyTrack, Timeline } from '@quar/types';
+import type { PathNode, PathPoint, PathShape, PropertyTrack, Timeline } from '@quar/types';
 import { createDefaultTransform } from '@quar/core';
 import { createKeyframe, createTimeline, createTrack, evaluateTrack } from '@quar/animation';
 import { remapVertexTracks } from './vertexTracks';
@@ -205,6 +205,59 @@ describe('remapVertexTracks', () => {
       { x: 100, y: 0 },
     ]);
     expect(second![1]!.position).toEqual({ x: 50, y: 50 });
+  });
+
+  describe('whole shapes with holes', () => {
+    const outer = [point(0, 0), point(100, 0), point(100, 100)];
+    const hole = [point(40, 40), point(60, 40), point(50, 60)];
+    const shape = (dx: number): PathShape => ({
+      points: outer.map((p) => point(p.position.x + dx, p.position.y)),
+      subpaths: [hole.map((p) => point(p.position.x + dx, p.position.y))],
+      closed: true,
+    });
+    const before = { ...path(outer, [hole]), closed: true };
+    const keyed = () =>
+      timelineWith(
+        track('points', [
+          [0, shape(0)],
+          [10, shape(10)],
+        ])
+      );
+    const shapes = (timeline: Timeline) =>
+      find(timeline, 'points').keyframes.map((kf) => kf.value as PathShape);
+
+    it('splits a segment of a hole in each shape', () => {
+      // Flat index 4 is the hole's second point: its segment to the third
+      const next = remapVertexTracks(keyed(), 'p', before, {
+        kind: 'insert',
+        segmentIndex: 4,
+        t: 0.5,
+      });
+      const [first, second] = shapes(next);
+      expect(first!.points).toHaveLength(3);
+      expect(first!.subpaths![0]!.map((p) => p.position)).toEqual([
+        { x: 40, y: 40 },
+        { x: 60, y: 40 },
+        { x: 55, y: 50 },
+        { x: 50, y: 60 },
+      ]);
+      expect(second!.subpaths![0]![2]!.position).toEqual({ x: 65, y: 50 });
+    });
+
+    it('deletes points of a hole in each shape, and the hole once it has none', () => {
+      const one = remapVertexTracks(keyed(), 'p', before, { kind: 'delete', indices: [3] });
+      expect(shapes(one)[1]!.subpaths![0]!.map((p) => p.position.x)).toEqual([70, 60]);
+      const all = remapVertexTracks(keyed(), 'p', before, { kind: 'delete', indices: [3, 4, 5] });
+      expect(shapes(all)[0]).not.toHaveProperty('subpaths');
+      expect(shapes(all)[0]!.closed).toBe(true);
+    });
+
+    it('leaves shapes with other points alone', () => {
+      const other: PathShape = { points: outer, closed: true };
+      const timeline = timelineWith(track('points', [[0, other]]));
+      const next = remapVertexTracks(timeline, 'p', before, { kind: 'delete', indices: [0] });
+      expect(shapes(next)[0]).toBe(other);
+    });
   });
 
   it('moves the keyframes along when a path is drawn on from its start', () => {

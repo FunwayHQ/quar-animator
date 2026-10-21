@@ -5,7 +5,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { SceneGraph, createDefaultTransform } from '@quar/core';
 import { createKeyframe, createTimeline, createTrack, evaluateTrack } from '@quar/animation';
-import type { PathNode, PathPoint, RectangleNode } from '@quar/types';
+import type { PathNode, PathPoint, PathShape, RectangleNode } from '@quar/types';
 import { useEditorStore } from './editorStore';
 
 function rect(extra: Partial<RectangleNode> = {}): RectangleNode {
@@ -67,7 +67,9 @@ describe('convertShapesToPaths', () => {
     const outline = tracks.find((t) => t.property === 'points')!;
     expect(outline.keyframes.map((k) => k.time)).toEqual([0, 10]);
     expect(outline.keyframes[0]!.easing).toBe('easeOutCubic');
-    expect(Math.max(...xs(outline.keyframes[1]!.value as PathPoint[]))).toBeCloseTo(100);
+    const shape = outline.keyframes[1]!.value as PathShape;
+    expect(shape.closed).toBe(true);
+    expect(Math.max(...xs(shape.points))).toBeCloseTo(100);
     expect(evaluateTrack(tracks.find((t) => t.property === 'transform.rotation')!, 10)).toBe(90);
   });
 
