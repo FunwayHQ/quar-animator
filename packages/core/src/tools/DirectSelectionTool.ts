@@ -157,6 +157,9 @@ export class DirectSelectionTool extends BaseTool {
   private initialPointPositions: Map<string, Vector2> = new Map();
   private hasDragged: boolean = false;
 
+  // Arrow-key nudges: one undo step per run of presses
+  private nudgeUndoPushed = false;
+
   // Double-click detection
   private lastClickTime: number = 0;
   private lastClickPosition: Vector2 | null = null;
@@ -515,6 +518,70 @@ export class DirectSelectionTool extends BaseTool {
           this.selectAllPointsInSelectedPaths();
         }
         break;
+
+      case 'ArrowUp':
+      case 'ArrowDown':
+      case 'ArrowLeft':
+      case 'ArrowRight': {
+        if (this.selectedPoints.length === 0) break;
+        event.preventDefault();
+        if (!this.nudgeUndoPushed) {
+          this.context.onTransformStart?.();
+          this.nudgeUndoPushed = true;
+        }
+        // As the Selection tool nudges layers: a grid step when snapping, else 1 (Shift: 10)
+        const amount = this.context.getSnapToGrid?.()
+          ? (this.context.getGridSize?.() ?? 20)
+          : event.shiftKey
+            ? 10
+            : 1;
+        const delta = {
+          x: event.key === 'ArrowLeft' ? -amount : event.key === 'ArrowRight' ? amount : 0,
+          // World Y runs up
+          y: event.key === 'ArrowUp' ? amount : event.key === 'ArrowDown' ? -amount : 0,
+        };
+        this.nudgeSelectedPoints(delta);
+        break;
+      }
+    }
+  }
+
+  onKeyUp(event: KeyboardEvent): void {
+    if (!event.key.startsWith('Arrow') || !this.nudgeUndoPushed) return;
+    this.nudgeUndoPushed = false;
+    // Keyed like a drag when auto-keyframe is on
+    const nodeIds = new Set(this.selectedPoints.map((sp) => sp.nodeId));
+    this.context.onTransformComplete?.(nodeIds, 'vertex-move');
+  }
+
+  /** Move the selected points by a world-space delta (each path in its own space). */
+  private nudgeSelectedPoints(worldDelta: Vector2): void {
+    const byNode = new Map<string, number[]>();
+    for (const sel of this.selectedPoints) {
+      byNode.set(sel.nodeId, [...(byNode.get(sel.nodeId) ?? []), sel.pointIndex]);
+    }
+    for (const [nodeId, indices] of byNode) {
+      const node = this.context.sceneGraph.getNode(nodeId);
+      if (!node || (node.type !== 'path' && node.type !== 'image')) continue;
+      const invLinear = mat3.invert(this.getNodeLinearMatrix(node));
+      const localDelta = invLinear ? mat3.transformPoint(invLinear, worldDelta) : worldDelta;
+      const points = node.type === 'image' ? getImagePoints(node) : [...getAllPoints(node)];
+      for (const index of indices) {
+        const point = points[index];
+        if (point) points[index] = { ...point, position: vec2.add(point.position, localDelta) };
+      }
+      if (node.type === 'image') {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-explicit-any
+        this.context.sceneGraph.updateNode(nodeId, {
+          vertexOffsets: imagePointsToOffsets(node, points),
+        } as any);
+      } else {
+        const split = setAllPoints(node, points);
+        this.context.sceneGraph.updateNode(nodeId, {
+          points: split.points,
+          subpaths: split.subpaths,
+        });
+      }
     }
   }
 

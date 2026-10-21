@@ -1612,7 +1612,14 @@ export function Canvas({
         }
         if (e.key === 'a') {
           e.preventDefault();
-          selectAll(sceneGraph);
+          // Editing a path's points: all its points, not all layers
+          const editingPath =
+            isDirectSelectionActive &&
+            [...useEditorStore.getState().selectedNodeIds].some(
+              (id) => sceneGraph.getNode(id)?.type === 'path'
+            );
+          if (editingPath) toolKeyDown(e);
+          else selectAll(sceneGraph);
           return;
         }
       }

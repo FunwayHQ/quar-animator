@@ -2263,4 +2263,65 @@ describe('DirectSelectionTool', () => {
       expect(tool.getSelectedPoints()).toEqual([]);
     });
   });
+
+  describe('arrow-key nudge', () => {
+    const key = (k: string, shiftKey = false) =>
+      new KeyboardEvent('keydown', { key: k, shiftKey, cancelable: true });
+
+    it('moves the selected points 1 unit, 10 with Shift, up meaning up', () => {
+      const path = createTestPath(context, [createPoint(0, 0), createPoint(100, 0)]);
+      tool.onPointerDown(createMockPointerEvent({ worldPosition: { x: 0, y: 0 }, button: 0 }));
+      tool.onPointerUp(createMockPointerEvent({ worldPosition: { x: 0, y: 0 } }));
+
+      tool.onKeyDown(key('ArrowRight'));
+      tool.onKeyDown(key('ArrowUp', true));
+
+      const points = (context.sceneGraph.getNode(path.id) as PathNode).points;
+      expect(points[0]!.position).toEqual({ x: 1, y: 10 });
+      expect(points[1]!.position).toEqual({ x: 100, y: 0 });
+    });
+
+    it('moves in screen directions on a rotated path', () => {
+      const path = createTestPath(context, [createPoint(0, 0), createPoint(100, 0)]);
+      context.sceneGraph.updateNode(path.id, {
+        transform: { ...path.transform, rotation: 90 },
+      });
+      tool.onPointerDown(createMockPointerEvent({ worldPosition: { x: 0, y: 0 }, button: 0 }));
+      tool.onPointerUp(createMockPointerEvent({ worldPosition: { x: 0, y: 0 } }));
+
+      tool.onKeyDown(key('ArrowRight', true));
+
+      // Turned 90°, the path's local -Y points right on screen
+      const point = (context.sceneGraph.getNode(path.id) as PathNode).points[0]!;
+      expect(point.position.x).toBeCloseTo(0);
+      expect(point.position.y).toBeCloseTo(-10);
+    });
+
+    it('takes one undo step for a run of presses, keyed when the key is let go', () => {
+      const onTransformStart = vi.fn();
+      const onTransformComplete = vi.fn();
+      context.onTransformStart = onTransformStart;
+      context.onTransformComplete = onTransformComplete;
+      const path = createTestPath(context, [createPoint(0, 0), createPoint(100, 0)]);
+      tool.onPointerDown(createMockPointerEvent({ worldPosition: { x: 0, y: 0 }, button: 0 }));
+      tool.onPointerUp(createMockPointerEvent({ worldPosition: { x: 0, y: 0 } }));
+      onTransformStart.mockClear();
+
+      tool.onKeyDown(key('ArrowLeft'));
+      tool.onKeyDown(key('ArrowLeft'));
+      tool.onKeyUp!(new KeyboardEvent('keyup', { key: 'ArrowLeft' }));
+
+      expect(onTransformStart).toHaveBeenCalledTimes(1);
+      expect(onTransformComplete).toHaveBeenCalledWith(new Set([path.id]), 'vertex-move');
+    });
+
+    it('does nothing with no points picked', () => {
+      const path = createTestPath(context, [createPoint(0, 0), createPoint(100, 0)]);
+      tool.onKeyDown(key('ArrowRight'));
+      expect((context.sceneGraph.getNode(path.id) as PathNode).points[0]!.position).toEqual({
+        x: 0,
+        y: 0,
+      });
+    });
+  });
 });
