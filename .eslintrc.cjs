@@ -45,7 +45,8 @@ module.exports = {
   plugins: ['@typescript-eslint', 'react', 'react-hooks', 'jsx-a11y'],
   settings: {
     react: {
-      version: 'detect',
+      // 'detect' looks for React from the root, which has none
+      version: '18.3',
     },
   },
   rules: {

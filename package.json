@@ -20,7 +20,7 @@
   "scripts": {
     "dev": "pnpm --filter @quar/web dev",
     "build": "pnpm -r build",
-    "lint": "eslint . --ext .ts,.tsx",
+    "lint": "eslint . --ext .ts,.tsx --max-warnings 0",
     "lint:fix": "eslint . --ext .ts,.tsx --fix",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md,css}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md,css}\"",
@@ -52,14 +52,5 @@
   "engines": {
     "node": ">=18.0.0",
     "pnpm": ">=9.0.0"
-  },
-  "lint-staged": {
-    "*.{ts,tsx}": [
-      "eslint --fix",
-      "prettier --write"
-    ],
-    "*.{js,jsx,json,md,css}": [
-      "prettier --write"
-    ]
   }
 }
