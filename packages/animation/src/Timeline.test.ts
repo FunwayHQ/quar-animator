@@ -18,6 +18,7 @@ import {
   addMarker,
   removeMarker,
   getTracksByNode,
+  tracksAfterListItemRemoved,
   getKeyframeCount,
   getAnimatedNodes,
   frameToTime,
@@ -596,5 +597,53 @@ describe('rotation interpolation', () => {
     expect(rotationAt(0, 270, 5)).toBeCloseTo(135); // not −45 the short way
     expect(rotationAt(0, -720, 5)).toBeCloseTo(-360);
     expect(rotationAt(170, -170, 5)).toBeCloseTo(0); // back through 0, as authored
+  });
+});
+
+describe('tracksAfterListItemRemoved (F081)', () => {
+  const properties = (tracks: PropertyTrack[]) => tracks.map((t) => `${t.nodeId}:${t.property}`);
+
+  it('drops the removed item’s tracks and moves the later ones down a place', () => {
+    const tracks = [
+      createTrack('a', 'fills.0.color'),
+      createTrack('a', 'fills.1.color'),
+      createTrack('a', 'fills.1.gradient.stops.0.color'),
+      createTrack('a', 'fills.2.color'),
+      createTrack('a', 'fills.12.opacity'),
+      createTrack('a', 'strokes.2.width'),
+      createTrack('a', 'opacity'),
+      createTrack('b', 'fills.2.color'),
+    ];
+    const moved = tracks[3]!;
+
+    const result = tracksAfterListItemRemoved(tracks, 'a', 'fills', 1);
+
+    expect(properties(result)).toEqual([
+      'a:fills.0.color',
+      'a:fills.1.color',
+      'a:fills.11.opacity',
+      'a:strokes.2.width',
+      'a:opacity',
+      'b:fills.2.color',
+    ]);
+    // The moved track keeps its id and keyframes; the input is left as it was
+    expect(result[1]).toMatchObject({ id: moved.id, keyframes: moved.keyframes });
+    expect(moved.property).toBe('fills.2.color');
+  });
+
+  it('takes a list name as a whole path part', () => {
+    const tracks = [createTrack('a', 'fillsExtra.1.color'), createTrack('a', 'effects.1')];
+    expect(properties(tracksAfterListItemRemoved(tracks, 'a', 'fills', 0))).toEqual([
+      'a:fillsExtra.1.color',
+      'a:effects.1',
+    ]);
+    expect(properties(tracksAfterListItemRemoved(tracks, 'a', 'effects', 1))).toEqual([
+      'a:fillsExtra.1.color',
+    ]);
+  });
+
+  it('returns the same tracks when none are affected', () => {
+    const tracks = [createTrack('a', 'fills.0.color'), createTrack('b', 'fills.1.color')];
+    expect(tracksAfterListItemRemoved(tracks, 'a', 'fills', 1)).toBe(tracks);
   });
 });

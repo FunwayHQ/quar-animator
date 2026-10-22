@@ -318,6 +318,40 @@ export function getTracksByNode(timeline: Timeline, nodeId: string): PropertyTra
   return timeline.tracks.filter((t: PropertyTrack) => t.nodeId === nodeId);
 }
 
+/**
+ * The tracks once item `removedIndex` of one of a node's lists (`fills`,
+ * `strokes`, `effects`) is removed. Tracks address list items by position
+ * (`fills.2.color`), so the removed item's tracks go and the tracks of the
+ * items after it move down one place with them. Returns `tracks` itself when
+ * nothing changes.
+ */
+export function tracksAfterListItemRemoved(
+  tracks: PropertyTrack[],
+  nodeId: string,
+  list: string,
+  removedIndex: number
+): PropertyTrack[] {
+  const prefix = `${list}.`;
+  let changed = false;
+  const result: PropertyTrack[] = [];
+  for (const track of tracks) {
+    const match =
+      track.nodeId === nodeId && track.property.startsWith(prefix)
+        ? /^(\d+)(\..*)?$/.exec(track.property.slice(prefix.length))
+        : null;
+    const index = match ? Number(match[1]) : -1;
+    if (index === removedIndex) {
+      changed = true;
+    } else if (index > removedIndex) {
+      changed = true;
+      result.push({ ...track, property: `${prefix}${index - 1}${match?.[2] ?? ''}` });
+    } else {
+      result.push(track);
+    }
+  }
+  return changed ? result : tracks;
+}
+
 export function getKeyframeCount(timeline: Timeline): number {
   return timeline.tracks.reduce(
     (sum: number, track: PropertyTrack) => sum + track.keyframes.length,

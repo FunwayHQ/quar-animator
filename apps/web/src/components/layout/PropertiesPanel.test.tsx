@@ -3,7 +3,7 @@ import { render, screen, act, fireEvent } from '../../test/utils';
 import userEvent from '@testing-library/user-event';
 import { SceneGraphProvider, useSceneGraph } from '../../contexts/SceneGraphContext';
 import { createDefaultTransform, getTextLocalBounds, getTextNodeBounds } from '@quar/core';
-import { createTimeline } from '@quar/animation';
+import { applyAnimatedValues, createTimeline, evaluateNodeAtFrame } from '@quar/animation';
 import type { SceneGraph } from '@quar/core';
 import type {
   RectangleNode,
@@ -12,6 +12,7 @@ import type {
   PathNode,
   TextNode,
   ArtboardNode,
+  Node,
 } from '@quar/types';
 import { PropertiesPanel, textSizeUpdate } from './PropertiesPanel';
 import { useEditorStore } from '../../stores/editorStore';
@@ -1421,6 +1422,127 @@ describe('PropertiesPanel', () => {
 
       const { timeline } = useEditorStore.getState();
       expect(timeline.tracks.length).toBe(0);
+    });
+  });
+
+  // ==========================================================================
+  // Removing a fill, stroke or effect keeps the keyframes on the right one (F081)
+  // ==========================================================================
+
+  describe('removing a fill, stroke or effect', () => {
+    const solid = (r: number) => ({
+      type: 'solid' as const,
+      color: { r, g: 0, b: 0, a: 1 },
+      opacity: 1,
+      visible: true,
+    });
+    const fillsOf = (node: Node | undefined) => (node && 'fills' in node ? node.fills : []);
+    const tracksOf = (nodeId: string) =>
+      useEditorStore
+        .getState()
+        .timeline.tracks.filter((track) => track.nodeId === nodeId)
+        .map((track) => track.property)
+        .sort();
+
+    beforeEach(() => {
+      useEditorStore.setState({
+        timeline: createTimeline({ duration: 300, frameRate: 30 }),
+        currentFrame: 0,
+        autoKeyframe: false,
+        selectedKeyframeIds: new Set<string>(),
+      });
+      useEditorStore.getState().clearHistory();
+    });
+
+    it('drops the removed fill’s keyframes and moves the later fills’ down with them', () => {
+      const sg = renderWithSceneGraph();
+      act(() => {
+        sg.addNode({
+          ...createTestRect('rect1', 'Rect'),
+          fills: [solid(10), solid(20), solid(30)],
+        });
+        useEditorStore.getState().setSelection(['rect1']);
+        const { addKeyframeAtFrame } = useEditorStore.getState();
+        addKeyframeAtFrame('rect1', 'fills.1.opacity', 0, 0.5);
+        addKeyframeAtFrame('rect1', 'fills.2.color', 0, { r: 30, g: 0, b: 0, a: 1 });
+        addKeyframeAtFrame('rect1', 'fills.2.color', 10, { r: 30, g: 200, b: 0, a: 1 });
+      });
+
+      act(() => {
+        fireEvent.click(screen.getByTestId('fill-remove-1'));
+      });
+
+      expect(tracksOf('rect1')).toEqual(['fills.1.color']);
+      // Showing a frame animates the fill that was third, now second — and
+      // makes no new one
+      const node = sg.getNode('rect1')!;
+      const shown = applyAnimatedValues(
+        node,
+        evaluateNodeAtFrame(useEditorStore.getState().timeline, 'rect1', 5)
+      );
+      expect(fillsOf(shown)).toEqual([
+        solid(10),
+        { ...solid(30), color: { r: 30, g: 100, b: 0, a: 1 } },
+      ]);
+
+      // One undo brings back the fill and its keyframes
+      act(() => {
+        useEditorStore.getState().undo(sg);
+      });
+      expect(fillsOf(sg.getNode('rect1'))).toHaveLength(3);
+      expect(tracksOf('rect1')).toEqual(['fills.1.opacity', 'fills.2.color']);
+    });
+
+    it('moves the later strokes’ keyframes down when a stroke is removed', () => {
+      const sg = renderWithSceneGraph();
+      const stroke = createTestRect('x', 'x').strokes[0]!;
+      act(() => {
+        sg.addNode({
+          ...createTestRect('rect1', 'Rect'),
+          strokes: [stroke, { ...stroke, width: 6 }],
+        });
+        useEditorStore.getState().setSelection(['rect1']);
+        useEditorStore.getState().addKeyframeAtFrame('rect1', 'strokes.0.width', 0, 2);
+        useEditorStore.getState().addKeyframeAtFrame('rect1', 'strokes.1.width', 0, 6);
+      });
+
+      act(() => {
+        fireEvent.click(screen.getByTestId('stroke-remove-0'));
+      });
+
+      expect(tracksOf('rect1')).toEqual(['strokes.0.width']);
+      const track = useEditorStore.getState().timeline.tracks[0]!;
+      expect(track.keyframes[0]?.value).toBe(6);
+    });
+
+    it('moves the later effects’ keyframes down when an effect is removed', () => {
+      const sg = renderWithSceneGraph();
+      const shadow = {
+        id: 'fx1',
+        type: 'drop-shadow' as const,
+        visible: true,
+        color: { r: 0, g: 0, b: 0, a: 1 },
+        offsetX: 4,
+        offsetY: 4,
+        blur: 8,
+        spread: 0,
+        opacity: 0.5,
+      };
+      act(() => {
+        sg.addNode({
+          ...createTestRect('rect1', 'Rect'),
+          effects: [shadow, { ...shadow, id: 'fx2', blur: 20 }],
+        });
+        const { addKeyframeAtFrame } = useEditorStore.getState();
+        addKeyframeAtFrame('rect1', 'effects.0.opacity', 0, 0.5);
+        addKeyframeAtFrame('rect1', 'effects.1.blur', 0, 20);
+      });
+
+      act(() => {
+        useEditorStore.getState().removeEffect(sg, 'rect1', 0);
+      });
+
+      expect(tracksOf('rect1')).toEqual(['effects.0.blur']);
     });
   });
 

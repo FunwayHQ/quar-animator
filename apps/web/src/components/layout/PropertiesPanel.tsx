@@ -529,6 +529,7 @@ export function PropertiesPanel() {
   const releaseBooleanGroup = useEditorStore((state) => state.releaseBooleanGroup);
   const addEffect = useEditorStore((state) => state.addEffect);
   const removeEffect = useEditorStore((state) => state.removeEffect);
+  const removeListItemTracks = useEditorStore((state) => state.removeListItemTracks);
   const updateEffect = useEditorStore((state) => state.updateEffect);
   const toggleEffectVisibility = useEditorStore((state) => state.toggleEffectVisibility);
   const setBlendMode = useEditorStore((state) => state.setBlendMode);
@@ -923,14 +924,17 @@ export function PropertiesPanel() {
     });
   }, [applyFillToAll, sceneGraph]);
 
+  // The fill's keyframes go with it, and the later fills keep theirs (F081)
   const handleRemoveFill = useCallback(
     (index: number) => {
+      pushUndo(sceneGraph);
       applyFillToAll((nodeId, currentNode) => {
         const fills = getNodeFills(currentNode).filter((_, i) => i !== index);
         sceneGraph.updateNode(nodeId, { fills } as Partial<Node>);
+        removeListItemTracks(nodeId, 'fills', index);
       });
     },
-    [applyFillToAll, sceneGraph]
+    [applyFillToAll, sceneGraph, pushUndo, removeListItemTracks]
   );
 
   const handleFillTypeChange = useCallback(
@@ -1103,14 +1107,17 @@ export function PropertiesPanel() {
     });
   }, [applyStrokeToAll, sceneGraph]);
 
+  // The stroke's keyframes go with it, and the later strokes keep theirs (F081)
   const handleRemoveStroke = useCallback(
     (index: number) => {
+      pushUndo(sceneGraph);
       applyStrokeToAll((nodeId, currentNode) => {
         const strokes = getNodeStrokes(currentNode).filter((_, i) => i !== index);
         sceneGraph.updateNode(nodeId, { strokes } as Partial<Node>);
+        removeListItemTracks(nodeId, 'strokes', index);
       });
     },
-    [applyStrokeToAll, sceneGraph]
+    [applyStrokeToAll, sceneGraph, pushUndo, removeListItemTracks]
   );
 
   const handleStrokeTypeChange = useCallback(

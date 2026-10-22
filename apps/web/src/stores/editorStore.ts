@@ -44,6 +44,7 @@ import {
   createTimeline,
   KeyframeManager,
   tangentsToEasing,
+  tracksAfterListItemRemoved,
 } from '@quar/animation';
 import {
   applySequence,
@@ -839,6 +840,15 @@ export interface EditorStore extends SequenceActions {
     deltaFrames: number
   ) => void;
   removeKeyframeAtFrame: (nodeId: string, property: string, frame: number) => void;
+  /**
+   * Keep a node's keyframe tracks on their fills, strokes or effects when one
+   * is removed: its tracks go, the later ones' tracks move down a place.
+   */
+  removeListItemTracks: (
+    nodeId: string,
+    list: 'fills' | 'strokes' | 'effects',
+    removedIndex: number
+  ) => void;
 
   // Work area (loop region)
   workAreaEnabled: boolean;
@@ -3010,6 +3020,17 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     mgr.removeKeyframe(nodeId, property, kf.id);
     set({ timeline: { ...timeline }, isDirty: true });
   },
+  removeListItemTracks: (nodeId, list, removedIndex) => {
+    const { timeline, selectedKeyframeIds } = get();
+    const tracks = tracksAfterListItemRemoved(timeline.tracks, nodeId, list, removedIndex);
+    if (tracks === timeline.tracks) return;
+    const kept = new Set(tracks.flatMap((track) => track.keyframes.map((kf) => kf.id)));
+    set({
+      timeline: { ...timeline, tracks },
+      selectedKeyframeIds: new Set([...selectedKeyframeIds].filter((id) => kept.has(id))),
+      isDirty: true,
+    });
+  },
 
   // Snap-to-grid
   snapToGrid: false,
@@ -3164,6 +3185,7 @@ function createEffectActions(
       sceneGraph.updateNode(nodeId, {
         effects: effects.length > 0 ? effects : undefined,
       } as Partial<Node>);
+      get().removeListItemTracks(nodeId, 'effects', effectIndex);
       set({ isDirty: true });
     },
 
