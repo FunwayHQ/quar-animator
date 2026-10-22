@@ -36,6 +36,7 @@ import { DirectSelectionOverlay } from '../canvas/DirectSelectionOverlay';
 import { GradientHandleOverlay } from '../canvas/GradientHandleOverlay';
 import { CanvasRuler, RULER_SIZE } from '../canvas/CanvasRuler';
 import { createSmartBoneMorphCache } from '../canvas/smartBoneMorphs';
+import { DeformedBoundsCache, selectedDeformedBounds } from '../canvas/deformedBounds';
 import { TextEditOverlay } from '../canvas/TextEditOverlay';
 import { BoneOverlay } from '../canvas/BoneOverlay';
 import { GhostSceneCache, poseSceneAtFrame } from '../canvas/onionSkinScenes';
@@ -648,6 +649,8 @@ export function Canvas({
       let gridBackground: Color | null = null;
       // Smart Bone morphs, kept while their driver bones don't move
       const smartBoneMorphs = createSmartBoneMorphCache();
+      // The selection's bounds as bones bend it, kept while nothing changes
+      const deformedBoundsCache = new DeformedBoundsCache();
 
       // Initialize shape renderer (let: rebuilt on WebGL context restore)
       let shapeRenderer = new ShapeRenderer(renderer);
@@ -862,44 +865,16 @@ export function Canvas({
             morphOffsetsMap
           );
 
-          // Update deformed bounds for selected skinned nodes (post IK + render)
+          // Update deformed bounds for selected skinned nodes (post IK + render),
+          // measured again only when the scene or the selection changed
           const selIds = selectedNodeIdsRef.current;
           if (selIds.size > 0) {
-            const newBounds = new Map<
-              string,
-              { x: number; y: number; width: number; height: number }
-            >();
-            for (const sid of selIds) {
-              const sNode = sceneGraphRef.current.getNode(sid);
-              if (!sNode) continue;
-              if ((sNode as any).skinData) {
-                const dr = shapeRenderer.getDeformedBounds(sNode, sceneGraphRef.current);
-                if (dr) newBounds.set(sid, dr);
-              } else if (sNode.type === 'group') {
-                // Group with skinned children
-                const children = sceneGraphRef.current.getChildren(sNode.id);
-                let minX = Infinity,
-                  minY = Infinity,
-                  maxX = -Infinity,
-                  maxY = -Infinity;
-                let hasSkin = false;
-                for (const child of children) {
-                  if ((child as any).skinData) {
-                    const cr = shapeRenderer.getDeformedBounds(child, sceneGraphRef.current);
-                    if (cr) {
-                      hasSkin = true;
-                      if (cr.x < minX) minX = cr.x;
-                      if (cr.y < minY) minY = cr.y;
-                      if (cr.x + cr.width > maxX) maxX = cr.x + cr.width;
-                      if (cr.y + cr.height > maxY) maxY = cr.y + cr.height;
-                    }
-                  }
-                }
-                if (hasSkin) {
-                  newBounds.set(sid, { x: minX, y: minY, width: maxX - minX, height: maxY - minY });
-                }
-              }
-            }
+            const sg = sceneGraphRef.current;
+            const newBounds = deformedBoundsCache.get(sceneVersionRef.current, selIds, () =>
+              selectedDeformedBounds(selIds, sg, (node) =>
+                shapeRenderer.getDeformedBounds(node, sg)
+              )
+            );
             // Only bump version if bounds actually changed
             if (newBounds.size > 0) {
               const prev = deformedBoundsRef.current;
