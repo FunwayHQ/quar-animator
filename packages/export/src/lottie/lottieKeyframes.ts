@@ -209,45 +209,76 @@ export function positionTracksToLottie(
 
   // Collect all unique times from both tracks
   const times = collectUniqueTimes(trackX, trackY);
+  const sample = (frame: number): [number, number] => [
+    transformX(sampleTrackAt(trackX, frame, defaultX)),
+    transformY(sampleTrackAt(trackY, frame, defaultY)),
+  ];
 
+  // Each dimension eases by its own keyframes. When one can't be a single
+  // curve between these times (bounce/elastic, or an eased stretch the other
+  // dimension's keyframes cut in two), both are baked to a keyframe per frame.
   const keyframes: LottieMultiKeyframe[] = [];
   for (let i = 0; i < times.length; i++) {
     const t = times[i]!;
     const nextT = times[i + 1];
-
-    const xVal = sampleTrackAt(trackX, t, defaultX);
-    const yVal = sampleTrackAt(trackY, t, defaultY);
-
-    const result: LottieMultiKeyframe = {
-      t,
-      s: [transformX(xVal), transformY(yVal)],
-    };
+    const result: LottieMultiKeyframe = { t, s: sample(t) };
 
     if (nextT !== undefined) {
-      const nextXVal = sampleTrackAt(trackX, nextT, defaultX);
-      const nextYVal = sampleTrackAt(trackY, nextT, defaultY);
-      result.e = [transformX(nextXVal), transformY(nextYVal)];
-
-      // Use easing from the X track's next keyframe (or linear)
-      const nextKfX = trackX?.keyframes.find((kf) => kf.time === nextT);
-      const easing = nextKfX?.easing ?? 'linear';
-      const tangents = quarEasingToLottieTangents(easing);
-      if (tangents) {
-        result.i = {
-          x: [tangents.i.x[0]!, tangents.i.x[0]!],
-          y: [tangents.i.y[0]!, tangents.i.y[0]!],
-        };
-        result.o = {
-          x: [tangents.o.x[0]!, tangents.o.x[0]!],
-          y: [tangents.o.y[0]!, tangents.o.y[0]!],
-        };
-      }
+      const tx = segmentTangents(trackX, t, nextT);
+      const ty = segmentTangents(trackY, t, nextT);
+      if (!tx || !ty) return { a: 1, k: bakeMultiToLinearKeyframes(times, sample) };
+      result.e = sample(nextT);
+      result.i = { x: [tx.i.x[0]!, ty.i.x[0]!], y: [tx.i.y[0]!, ty.i.y[0]!] };
+      result.o = { x: [tx.o.x[0]!, ty.o.x[0]!], y: [tx.o.y[0]!, ty.o.y[0]!] };
     }
 
     keyframes.push(result);
   }
 
   return { a: 1, k: keyframes };
+}
+
+const LINEAR_TANGENTS: LottieTangents = { o: { x: [0], y: [0] }, i: { x: [1], y: [1] } };
+
+/**
+ * How one track eases from `t` to `next` (times with no keyframe of its own
+ * between them), or null when no single curve can say it: an easing with
+ * no curve (bounce, elastic), or part of an eased stretch between keyframes
+ * outside `t`..`next`.
+ */
+function segmentTangents(
+  track: PropertyTrack<number> | undefined,
+  t: number,
+  next: number
+): LottieTangents | null {
+  const kfs = track?.keyframes ?? [];
+  let before: Keyframe<number> | undefined;
+  for (const kf of kfs) if (kf.time <= t) before = kf;
+  const after = kfs.find((kf) => kf.time >= next);
+  // Before its first keyframe or after its last, it holds still
+  if (!before || !after) return LINEAR_TANGENTS;
+  if (before.time === t && after.time === next) return quarEasingToLottieTangents(after.easing);
+  return after.easing === 'linear' ? LINEAR_TANGENTS : null;
+}
+
+/** Two-dimensional values sampled at every frame across `times`, linear between. */
+function bakeMultiToLinearKeyframes(
+  times: number[],
+  sample: (frame: number) => [number, number]
+): LottieMultiKeyframe[] {
+  const first = Math.floor(times[0]!);
+  const last = Math.ceil(times[times.length - 1]!);
+  const keyframes: LottieMultiKeyframe[] = [];
+  for (let frame = first; frame <= last; frame++) {
+    const kf: LottieMultiKeyframe = { t: frame, s: sample(frame) };
+    if (frame < last) {
+      kf.e = sample(frame + 1);
+      kf.i = { x: [1, 1], y: [1, 1] };
+      kf.o = { x: [0, 0], y: [0, 0] };
+    }
+    keyframes.push(kf);
+  }
+  return keyframes;
 }
 
 /**

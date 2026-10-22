@@ -235,6 +235,57 @@ describe('quarKeyframeToLottie', () => {
 // ============================================================================
 
 describe('positionTracksToLottie', () => {
+  type Multi = {
+    t: number;
+    s: number[];
+    i?: { x: number[]; y: number[] };
+    o?: { x: number[]; y: number[] };
+  };
+
+  it('keeps the easing of a Y-only animation', () => {
+    const trackY = makeTrack([
+      { time: 0, value: 0 },
+      { time: 30, value: 200, easing: { type: 'cubicBezier', points: [0.42, 0, 0.58, 1] } },
+    ]);
+    const kfs = positionTracksToLottie(undefined, trackY, 5, 0).k as Multi[];
+    expect(kfs).toHaveLength(2);
+    // Y eases in-out; X (still) is linear
+    expect(kfs[0]!.o).toEqual({ x: [0, 0.42], y: [0, 0] });
+    expect(kfs[0]!.i).toEqual({ x: [1, 0.58], y: [1, 1] });
+  });
+
+  it('gives each dimension its own easing', () => {
+    const trackX = makeTrack([
+      { time: 0, value: 0 },
+      { time: 20, value: 100, easing: { type: 'cubicBezier', points: [0.42, 0, 1, 1] } },
+    ]);
+    const trackY = makeTrack([
+      { time: 0, value: 0 },
+      { time: 20, value: 50, easing: { type: 'cubicBezier', points: [0, 0, 0.58, 1] } },
+    ]);
+    const kfs = positionTracksToLottie(trackX, trackY, 0, 0).k as Multi[];
+    expect(kfs[0]!.o).toEqual({ x: [0.42, 0], y: [0, 0] });
+    expect(kfs[0]!.i).toEqual({ x: [1, 0.58], y: [1, 1] });
+  });
+
+  it('bakes when one dimension’s eased stretch is cut by the other’s keyframes', () => {
+    // X eases from 0 to 20; Y has a keyframe at 10, in the middle of it
+    const trackX = makeTrack([
+      { time: 0, value: 0 },
+      { time: 20, value: 100, easing: 'easeInQuad' },
+    ]);
+    const trackY = makeTrack([
+      { time: 0, value: 0 },
+      { time: 10, value: 50 },
+      { time: 20, value: 0 },
+    ]);
+    const kfs = positionTracksToLottie(trackX, trackY, 0, 0).k as Multi[];
+    expect(kfs).toHaveLength(21); // a keyframe per frame
+    // On X's ease (easeInQuad: a quarter of the way at half time)
+    expect(kfs[10]!.s[0]).toBeCloseTo(25);
+    expect(kfs[10]!.s[1]).toBeCloseTo(50);
+  });
+
   it('returns static value when no tracks', () => {
     const result = positionTracksToLottie(undefined, undefined, 100, 200);
     expect(result).toEqual({ a: 0, k: [100, 200] });
