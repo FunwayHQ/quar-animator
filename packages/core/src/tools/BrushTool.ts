@@ -48,6 +48,9 @@ const SCHNEIDER_ERROR = 4.0;
 /** Minimum number of floating points before committing a batch */
 const COMMIT_THRESHOLD = 12;
 
+/** Points kept floating after a commit (the first is shared with the committed curves) */
+const COMMIT_OVERLAP = 3;
+
 // ============================================================================
 // BrushTool Class
 // ============================================================================
@@ -71,7 +74,6 @@ export class BrushTool extends BaseTool {
   private kalman: KalmanFilter2D | null = null;
   private lastTimestamp: number = 0;
   private committedCurves: CubicSegment[] = [];
-  private committedWidths: number[] = [];
   private floatingPoints: BrushPoint[] = [];
   private allPoints: BrushPoint[] = [];
 
@@ -117,7 +119,6 @@ export class BrushTool extends BaseTool {
 
     // Reset pipeline
     this.committedCurves = [];
-    this.committedWidths = [];
     this.floatingPoints = [];
     this.allPoints = [];
 
@@ -213,26 +214,22 @@ export class BrushTool extends BaseTool {
   }
 
   /**
-   * Commit the front portion of floating points via Schneider fit,
-   * keeping the last few for overlap.
+   * Fit the front portion of the floating points once and keep the curves,
+   * so the preview only refits the few points drawn since.
    */
   private commitFloatingPoints(): void {
-    if (this.floatingPoints.length < 4) return;
+    if (this.floatingPoints.length <= COMMIT_OVERLAP) return;
 
-    // Keep last 3 points for overlap with next batch
-    const toCommit = this.floatingPoints.slice(0, -3);
-    const positions = toCommit.map((p) => p.position);
-
-    const curves = schneiderFitCurve(positions, SCHNEIDER_ERROR);
+    // The committed curves end on the first point that stays floating, so the
+    // next fit starts where they stop
+    const toCommit = this.floatingPoints.slice(0, -(COMMIT_OVERLAP - 1));
+    const curves = schneiderFitCurve(
+      toCommit.map((p) => p.position),
+      SCHNEIDER_ERROR
+    );
     this.committedCurves.push(...curves);
 
-    // Accumulate widths for committed points
-    for (const p of toCommit) {
-      this.committedWidths.push(p.width);
-    }
-
-    // Keep overlap
-    this.floatingPoints = this.floatingPoints.slice(-3);
+    this.floatingPoints = this.floatingPoints.slice(-COMMIT_OVERLAP);
   }
 
   private updatePreviewNode(): void {
@@ -241,10 +238,18 @@ export class BrushTool extends BaseTool {
       return;
     }
 
-    // For preview: fit all current points
-    const positions = this.allPoints.map((p) => p.position);
+    // For preview: the committed curves plus a fit of the points drawn since
+    // (before the first commit that is every point). Refitting the whole
+    // stroke on every move made long strokes slow down as they grew.
+    const pending = this.committedCurves.length > 0 ? this.floatingPoints : this.allPoints;
     const widths = this.allPoints.map((p) => p.width);
-    const curves = schneiderFitCurve(positions, SCHNEIDER_ERROR * 2); // looser for preview
+    const curves = [
+      ...this.committedCurves,
+      ...schneiderFitCurve(
+        pending.map((p) => p.position),
+        SCHNEIDER_ERROR * 2 // looser for preview
+      ),
+    ];
     const pathPoints = curvesToPathPoints(curves);
 
     if (pathPoints.length < 2) {
@@ -307,7 +312,6 @@ export class BrushTool extends BaseTool {
     this.previewNode = null;
     this.kalman = null;
     this.committedCurves = [];
-    this.committedWidths = [];
     this.floatingPoints = [];
     this.allPoints = [];
     this.resetState();

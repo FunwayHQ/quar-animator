@@ -6,6 +6,13 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { BrushTool } from './BrushTool';
 import type { ToolContext } from './BaseTool';
 import { createMockToolContext, createMockPointerEvent } from '../test/setup';
+import { schneiderFitCurve } from '../path/schneider';
+
+// Count the curve fits (the real fit still runs)
+vi.mock('../path/schneider', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../path/schneider')>();
+  return { ...actual, schneiderFitCurve: vi.fn(actual.schneiderFitCurve) };
+});
 
 describe('BrushTool', () => {
   let context: ToolContext;
@@ -1325,6 +1332,40 @@ describe('BrushTool', () => {
       expect(path.closed).toBe(true);
       expect(path.fills.length).toBeGreaterThan(0);
       expect(path.strokes).toHaveLength(0);
+    });
+
+    it('should refit only the points drawn since the last commit while drawing', () => {
+      tool.setSmoothing(0);
+      tool.setOptions({ pressureEnabled: false });
+      const at = (i: number) => ({ x: i * 10, y: Math.sin(i * 0.2) * 30 });
+
+      tool.onPointerDown(
+        createMockPointerEvent({ worldPosition: at(0), button: 0, timestamp: 1000 })
+      );
+      vi.mocked(schneiderFitCurve).mockClear();
+      for (let i = 1; i <= 60; i++) {
+        tool.onPointerMove(
+          createMockPointerEvent({ worldPosition: at(i), timestamp: 1000 + i * 16 })
+        );
+      }
+
+      // No fit while drawing sees more than one batch of points
+      const fitSizes = vi.mocked(schneiderFitCurve).mock.calls.map(([points]) => points.length);
+      expect(fitSizes.length).toBeGreaterThan(0);
+      expect(Math.max(...fitSizes)).toBeLessThanOrEqual(12);
+
+      // The preview still runs the whole stroke, end to end
+      const spine = tool.getPreviewNode()!.brushData!.spine;
+      expect(spine[0]!.position.x).toBeCloseTo(0, 0);
+      expect(spine[spine.length - 1]!.position.x).toBeCloseTo(600, 0);
+      const ys = spine.map((p) => p.position.y);
+      expect(Math.max(...ys)).toBeGreaterThan(27);
+      expect(Math.min(...ys)).toBeLessThan(-27);
+
+      tool.onPointerUp(
+        createMockPointerEvent({ worldPosition: at(60), button: 0, timestamp: 1000 + 61 * 16 })
+      );
+      expect(Array.from(context.sceneGraph.getNodes())).toHaveLength(1);
     });
   });
 
