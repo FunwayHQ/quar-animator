@@ -7,7 +7,7 @@
  */
 
 import type { SceneGraph } from '@quar/core';
-import { exportNodesToSvg, mat3 } from '@quar/core';
+import { exportNodesToSvg, mat3, type SvgExportFrame } from '@quar/core';
 import type { Node, PathNode, PathPoint, SymbolDefinition, Timeline } from '@quar/types';
 import type { FrameRig } from './frameRenderer';
 import { createScenePoser, rigHasPhysics, type PosedOutline } from './scenePosing';
@@ -18,6 +18,10 @@ export interface SvgFrameOptions {
   rootIds?: string[];
   /** Definitions symbol instances are drawn from */
   symbols?: SymbolDefinition[];
+  /** The page rectangle to show (Y up), in place of the posed art's own bounds */
+  viewport?: SvgExportFrame['viewport'];
+  /** A color behind everything (the document background) */
+  background?: SvgExportFrame['background'];
 }
 
 /** The bound shape as a path of its outline where its bones have it, in its own space. */
@@ -86,5 +90,8 @@ export function exportSvgFrame(
   const roots = options.rootIds
     ? options.rootIds.flatMap((id) => posed.getNode(id) ?? [])
     : posed.getRootNodes();
-  return exportNodesToSvg(roots, posed, options.symbols);
+  return exportNodesToSvg(roots, posed, options.symbols, {
+    viewport: options.viewport,
+    background: options.background,
+  });
 }

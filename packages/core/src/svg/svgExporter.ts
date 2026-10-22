@@ -855,10 +855,22 @@ function resolvedNodeElement(
  * Computes bounding box, applies Y-flip so the SVG renders correctly
  * (Quar uses Y-up, SVG uses Y-down).
  */
+/** How an SVG export is framed. */
+export interface SvgExportFrame {
+  /**
+   * The page rectangle (Y up: x, y is its bottom-left) the SVG shows, in place
+   * of the nodes' own bounds — to keep the frame still across an animation.
+   */
+  viewport?: { x: number; y: number; width: number; height: number };
+  /** A color behind everything (the document background), viewport-sized. */
+  background?: Color;
+}
+
 export function exportNodesToSvg(
   nodes: Node[],
   sceneGraph: SceneGraph,
-  symbolDefinitions?: import('@quar/types').SymbolDefinition[]
+  symbolDefinitions?: import('@quar/types').SymbolDefinition[],
+  frame: SvgExportFrame = {}
 ): string {
   resetDefsCounter();
 
@@ -869,8 +881,17 @@ export function exportNodesToSvg(
     for (const s of symbolDefinitions) symbolDefs.set(s.id, s);
   }
 
-  // Compute combined bounds of all nodes
-  const bounds = computeExportBounds(nodes, sceneGraph, symbolDefs);
+  // The viewport asked for, or the nodes' combined bounds
+  const viewport = frame.viewport;
+  const bounds =
+    viewport && viewport.width > 0 && viewport.height > 0
+      ? {
+          minX: viewport.x,
+          minY: viewport.y,
+          maxX: viewport.x + viewport.width,
+          maxY: viewport.y + viewport.height,
+        }
+      : computeExportBounds(nodes, sceneGraph, symbolDefs);
   if (!bounds) return '<svg xmlns="http://www.w3.org/2000/svg"></svg>';
 
   const { minX, minY, maxX, maxY } = bounds;
@@ -879,6 +900,12 @@ export function exportNodesToSvg(
 
   const defs: string[] = [];
   const elements: string[] = [];
+  if (frame.background && (frame.background.a ?? 1) > 0) {
+    const alpha = frame.background.a ?? 1;
+    elements.push(
+      `<rect x="${fmt(minX)}" y="${fmt(minY)}" width="${fmt(width)}" height="${fmt(height)}" fill="${colorToHex(frame.background)}"${alpha < 1 ? ` fill-opacity="${fmt(alpha)}"` : ''}/>`
+    );
+  }
 
   for (const node of nodes) {
     if (!node.visible) continue;

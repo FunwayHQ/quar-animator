@@ -22,4 +22,5 @@ export {
   strokeToSvgAttrs,
   transformToSvgAttr,
   nodeToSvgElement,
+  type SvgExportFrame,
 } from './svgExporter';

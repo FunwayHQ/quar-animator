@@ -47,4 +47,24 @@ describe('exportSvgFrame', () => {
     const svg = exportSvgFrame(sg, timeline, undefined, { frame: 0, rootIds: ['missing'] });
     expect(svg).toBe('<svg xmlns="http://www.w3.org/2000/svg"></svg>');
   });
+
+  it('frames a given page rectangle over a background, the same at every frame', () => {
+    const { sg } = riggedArm();
+    const timeline = createTimeline({ duration: 30, frameRate: 30 });
+    const x = getOrCreateTrack<number>(timeline, 'arm', 'transform.position.x');
+    addKeyframe(x, 0, 0);
+    addKeyframe(x, 10, 500);
+    const options = {
+      viewport: { x: -100, y: -50, width: 400, height: 200 },
+      background: { r: 26, g: 26, b: 26, a: 1 },
+    };
+    const first = exportSvgFrame(sg, timeline, undefined, { ...options, frame: 0 });
+    const later = exportSvgFrame(sg, timeline, undefined, { ...options, frame: 10 });
+    for (const svg of [first, later]) {
+      expect(svg).toContain('viewBox="0 0 400 200"');
+      // Page Y runs up: the top edge (y = 150) is the SVG's top
+      expect(svg).toContain('translate(100,-150)');
+      expect(svg).toContain('<rect x="-100" y="-50" width="400" height="200" fill="#1a1a1a"/>');
+    }
+  });
 });
