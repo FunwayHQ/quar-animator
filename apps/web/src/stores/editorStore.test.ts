@@ -1022,6 +1022,20 @@ describe('EditorStore', () => {
       expect(after.keyframes[0].value).toBe(0.1);
     });
 
+    it('updateKeyframeTimeAndValue replaces an occupied destination frame (F102)', () => {
+      const { addKeyframeAtFrame } = useEditorStore.getState();
+      addKeyframeAtFrame('node1', 'opacity', 10, 0.1);
+      addKeyframeAtFrame('node1', 'opacity', 20, 0.9);
+
+      // Move the frame-20 keyframe onto the occupied frame 10.
+      useEditorStore.getState().updateKeyframeTimeAndValue('node1', 'opacity', 20, 10, 0.5);
+
+      const after = useEditorStore
+        .getState()
+        .timeline.tracks.find((t) => t.nodeId === 'node1' && t.property === 'opacity')!;
+      expect(after.keyframes.map((k) => [k.time, k.value])).toEqual([[10, 0.5]]);
+    });
+
     it('should remove selected keyframes', () => {
       const { addKeyframeAtFrame, removeSelectedKeyframes } = useEditorStore.getState();
       addKeyframeAtFrame('node1', 'opacity', 0, 1);

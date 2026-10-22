@@ -2768,26 +2768,13 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     newTime: number,
     newValue: number
   ) => {
-    const { timeline } = get();
-    const roundedTime = Math.max(0, Math.round(newTime));
-    if (
-      isManagedAt(timeline, nodeId, property, oldTime) ||
-      isManagedAt(timeline, nodeId, property, roundedTime)
-    ) {
-      return;
-    }
-    const track = timeline.tracks.find((t) => t.nodeId === nodeId && t.property === property);
-    if (!track) return;
-    const kfIndex = track.keyframes.findIndex((kf) => kf.time === oldTime);
-    if (kfIndex === -1) return;
-    const newKeyframes = [...track.keyframes];
-    newKeyframes[kfIndex] = { ...newKeyframes[kfIndex]!, time: roundedTime, value: newValue };
-    // Sort by time after moving
-    newKeyframes.sort((a, b) => a.time - b.time);
-    const newTracks = timeline.tracks.map((t) =>
-      t.id === track.id ? { ...t, keyframes: newKeyframes } : t
+    // Move the keyframe on oldTime the id-based way, so one already on the
+    // destination frame is replaced rather than stacked under it (F102)
+    const keyframe = trackKeyframes(get().timeline, nodeId, property).find(
+      (kf) => kf.time === oldTime
     );
-    set({ timeline: { ...timeline, tracks: newTracks }, isDirty: true });
+    if (!keyframe) return;
+    get().updateKeyframeTimeAndValueById(nodeId, property, keyframe.id, newTime, newValue);
   },
   updateKeyframeTimeAndValueById: (nodeId, property, keyframeId, newTime, newValue) => {
     const { timeline } = get();
