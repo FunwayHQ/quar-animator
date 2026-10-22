@@ -14,6 +14,8 @@ function createEffectRenderer() {
     uniform2f: ReturnType<typeof vi.fn>;
     uniform4f: ReturnType<typeof vi.fn>;
     blitFramebuffer: ReturnType<typeof vi.fn>;
+    copyTexSubImage2D: ReturnType<typeof vi.fn>;
+    getContextAttributes: ReturnType<typeof vi.fn>;
     SCISSOR_TEST: number;
     TEXTURE0: number;
     TEXTURE1: number;
@@ -37,6 +39,9 @@ function createEffectRenderer() {
   gl.uniform2f = vi.fn();
   gl.uniform4f = vi.fn();
   gl.blitFramebuffer = vi.fn();
+  gl.copyTexSubImage2D = vi.fn();
+  gl.getContextAttributes = vi.fn().mockReturnValue({ alpha: true });
+  Object.assign(gl, { RGB8: 0x8051, RGB: 0x1907 });
 
   const renderer = {
     context: gl,
@@ -91,6 +96,8 @@ describe('EffectRenderer', () => {
     uniform2f: ReturnType<typeof vi.fn>;
     uniform4f: ReturnType<typeof vi.fn>;
     blitFramebuffer: ReturnType<typeof vi.fn>;
+    copyTexSubImage2D: ReturnType<typeof vi.fn>;
+    getContextAttributes: ReturnType<typeof vi.fn>;
     SCISSOR_TEST: number;
     TEXTURE0: number;
     TEXTURE1: number;
@@ -157,29 +164,39 @@ describe('EffectRenderer', () => {
     );
 
     expect((effectRenderer as any).renderDropShadow).not.toHaveBeenCalled();
-    expect(gl.readPixels).toHaveBeenCalledWith(
-      0,
-      0,
-      100,
-      80,
-      gl.RGBA,
-      gl.UNSIGNED_BYTE,
-      expect.any(Uint8Array)
-    );
-    expect(gl.texSubImage2D).toHaveBeenCalledWith(
-      gl.TEXTURE_2D,
-      0,
-      0,
-      0,
-      100,
-      80,
-      gl.RGBA,
-      gl.UNSIGNED_BYTE,
-      expect.any(Uint8Array)
-    );
+    // What's underneath is copied on the GPU, never read back through the CPU
+    expect(gl.readPixels).not.toHaveBeenCalled();
+    expect(gl.copyTexSubImage2D).toHaveBeenCalledWith(gl.TEXTURE_2D, 0, 0, 0, 0, 0, 100, 80);
     expect(gl.uniform1i).toHaveBeenCalledWith(null, 1);
     expect(screenComposite).not.toHaveBeenCalled();
     expect(renderer.bindVAO).toHaveBeenCalledWith(null);
+  });
+
+  it('keeps one backdrop texture across blended layers and frames', () => {
+    const composite = () =>
+      effectRenderer.renderNodeWithEffects(undefined, 'screen', () => undefined, 100, 80);
+    composite();
+    const created = vi.mocked(gl.createTexture).mock.calls.length;
+    composite();
+    composite();
+    expect(vi.mocked(gl.createTexture).mock.calls.length).toBe(created);
+    expect(gl.copyTexSubImage2D).toHaveBeenCalledTimes(3);
+  });
+
+  it('copies an opaque canvas into an RGB texture (WebKit refuses RGBA)', () => {
+    gl.getContextAttributes.mockReturnValue({ alpha: false });
+    effectRenderer.renderNodeWithEffects(undefined, 'multiply', () => undefined, 100, 80);
+    expect(gl.texImage2D).toHaveBeenCalledWith(
+      gl.TEXTURE_2D,
+      0,
+      gl.RGB8,
+      100,
+      80,
+      0,
+      gl.RGB,
+      gl.UNSIGNED_BYTE,
+      null
+    );
   });
 
   it('disables and restores scissor while clearing effect framebuffers', () => {

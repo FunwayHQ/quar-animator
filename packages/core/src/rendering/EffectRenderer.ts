@@ -27,10 +27,13 @@ export class EffectRenderer {
   private renderer: WebGLRenderer;
   private fbManager: FramebufferManager;
   private programs: PostProcessPrograms;
-  // Reusable pixel buffer for reading the default framebuffer content.
-  // Used by compositeWithBlendMode to avoid blitFramebuffer from a
-  // multisampled default FB (which fails on Chrome/ANGLE).
-  private resolvePixelBuffer: Uint8Array | null = null;
+  /** What's under a blended layer, copied from the target (see copyBackdrop) */
+  private backdrop: {
+    texture: WebGLTexture;
+    width: number;
+    height: number;
+    opaque: boolean;
+  } | null = null;
   /**
    * Where the current pass composites: the framebuffer bound as it began —
    * the canvas, or an off-screen pass such as an onion-skin ghost.
@@ -161,38 +164,9 @@ export class EffectRenderer {
     // Composites onto what's bound now (the canvas, or an off-screen pass)
     this.target = gl.getParameter(gl.FRAMEBUFFER_BINDING) as WebGLFramebuffer | null;
 
-    // Capture the current canvas content into a destination FBO texture.
-    // We use readPixels + texSubImage2D instead of blitFramebuffer because
-    // the default framebuffer may be multisampled (antialias:true) and
-    // blitFramebuffer from a multisampled FB to a non-multisampled texture
-    // FBO fails on Chrome/ANGLE with GL_INVALID_OPERATION.
-    const dstFBO = this.fbManager.acquire(canvasWidth, canvasHeight);
-    const bufferSize = canvasWidth * canvasHeight * 4;
-    if (!this.resolvePixelBuffer || this.resolvePixelBuffer.length < bufferSize) {
-      this.resolvePixelBuffer = new Uint8Array(bufferSize);
-    }
-    gl.bindFramebuffer(gl.FRAMEBUFFER, this.target);
-    gl.readPixels(
-      0,
-      0,
-      canvasWidth,
-      canvasHeight,
-      gl.RGBA,
-      gl.UNSIGNED_BYTE,
-      this.resolvePixelBuffer
-    );
-    gl.bindTexture(gl.TEXTURE_2D, dstFBO.texture);
-    gl.texSubImage2D(
-      gl.TEXTURE_2D,
-      0,
-      0,
-      0,
-      canvasWidth,
-      canvasHeight,
-      gl.RGBA,
-      gl.UNSIGNED_BYTE,
-      this.resolvePixelBuffer
-    );
+    // What the layer blends with: the target's pixels, copied on the GPU
+    const backdrop = this.copyBackdrop(canvasWidth, canvasHeight);
+    if (!backdrop) return;
 
     // Now composite src over dst using blend mode shader
     gl.bindFramebuffer(gl.FRAMEBUFFER, this.target);
@@ -208,7 +182,7 @@ export class EffectRenderer {
     gl.uniform1i(blend.uniforms.u_srcTexture ?? null, 0);
 
     gl.activeTexture(gl.TEXTURE1);
-    gl.bindTexture(gl.TEXTURE_2D, dstFBO.texture);
+    gl.bindTexture(gl.TEXTURE_2D, backdrop);
     gl.uniform1i(blend.uniforms.u_dstTexture ?? null, 1);
 
     gl.uniform1i(blend.uniforms.u_blendMode ?? null, getBlendModeIndex(blendMode));
@@ -223,8 +197,53 @@ export class EffectRenderer {
     gl.activeTexture(gl.TEXTURE1);
     gl.bindTexture(gl.TEXTURE_2D, null);
     gl.activeTexture(gl.TEXTURE0);
+  }
 
-    this.fbManager.release(dstFBO);
+  /**
+   * Copy the target's pixels into the backdrop texture, on the GPU.
+   * copyTexSubImage2D resolves a multisampled canvas (antialias: true) as it
+   * copies — where blitFramebuffer into a texture fails on Chrome/ANGLE —
+   * and unlike readPixels it doesn't stall the GPU to bring every pixel
+   * through the CPU, once per blended layer per frame. An opaque canvas
+   * (alpha: false) is copied into an RGB texture: WebKit won't copy it into
+   * an RGBA one, and sampled it reads as opaque, as the canvas shows.
+   */
+  private copyBackdrop(width: number, height: number): WebGLTexture | null {
+    const gl = this.gl;
+    const opaque = this.target === null && gl.getContextAttributes()?.alpha === false;
+    let backdrop = this.backdrop;
+    if (
+      !backdrop ||
+      backdrop.width !== width ||
+      backdrop.height !== height ||
+      backdrop.opaque !== opaque
+    ) {
+      if (backdrop) gl.deleteTexture(backdrop.texture);
+      const texture = gl.createTexture();
+      if (!texture) return null;
+      gl.bindTexture(gl.TEXTURE_2D, texture);
+      const format = opaque ? gl.RGB : gl.RGBA;
+      gl.texImage2D(
+        gl.TEXTURE_2D,
+        0,
+        opaque ? gl.RGB8 : gl.RGBA8,
+        width,
+        height,
+        0,
+        format,
+        gl.UNSIGNED_BYTE,
+        null
+      );
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      backdrop = this.backdrop = { texture, width, height, opaque };
+    }
+    gl.bindFramebuffer(gl.FRAMEBUFFER, this.target);
+    gl.bindTexture(gl.TEXTURE_2D, backdrop.texture);
+    gl.copyTexSubImage2D(gl.TEXTURE_2D, 0, 0, 0, 0, 0, width, height);
+    return backdrop.texture;
   }
 
   private renderDropShadow(
@@ -411,6 +430,7 @@ export class EffectRenderer {
   dispose(): void {
     disposePostProcessPrograms(this.gl, this.programs);
     this.fbManager.dispose();
-    this.resolvePixelBuffer = null;
+    if (this.backdrop) this.gl.deleteTexture(this.backdrop.texture);
+    this.backdrop = null;
   }
 }
