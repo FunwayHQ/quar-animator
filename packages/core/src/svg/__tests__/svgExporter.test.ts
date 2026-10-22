@@ -364,6 +364,16 @@ describe('effects and blend modes', () => {
     expect(nodeToSvgElement(rect({}), new SceneGraph(), defs)).toMatch(/^<rect /);
     expect(defs).toHaveLength(0);
   });
+
+  it('writes only blend modes SVG knows, never markup from a crafted file', () => {
+    const svg = nodeToSvgElement(
+      rect({ blendMode: 'multiply"><script>alert(1)</script>' }),
+      new SceneGraph(),
+      []
+    );
+    expect(svg).not.toContain('<script');
+    expect(svg).toMatch(/^<rect /);
+  });
 });
 
 // ============================================================================
@@ -398,6 +408,16 @@ describe('strokeToSvgAttrs', () => {
     const result = strokeToSvgAttrs(stroke, defs);
     expect(result).toContain('stroke-linecap="round"');
     expect(result).toContain('stroke-linejoin="bevel"');
+  });
+
+  it('writes only line caps and joins SVG knows, never markup from a crafted file', () => {
+    const payload = 'round"/><script>alert(1)</script>';
+    const stroke = { ...makeStroke(), cap: payload, join: payload } as unknown as Stroke;
+    const result = strokeToSvgAttrs(stroke, []);
+    expect(result).not.toContain('<script');
+    expect(result).not.toContain('"/>');
+    expect(result).not.toContain('stroke-linecap');
+    expect(result).not.toContain('stroke-linejoin');
   });
 
   it('includes dash array when present', () => {
@@ -721,6 +741,48 @@ describe('nodeToSvgElement', () => {
     const svg = nodeToSvgElement(node, sceneGraph, defs);
     expect(svg).not.toContain('<script>');
     expect(svg).toContain('&lt;script&gt;');
+  });
+
+  it('writes only font values SVG knows, never markup from a crafted file', () => {
+    const node = {
+      ...makeBaseNodeFields('t3', 'text'),
+      type: 'text',
+      content: 'Hi',
+      fontFamily: 'Arial',
+      fontSize: '16"><script>alert(1)</script>',
+      fontWeight: '700"><script>alert(2)</script>',
+      fontStyle: 'italic"><script>alert(3)</script>',
+      textAlign: 'left',
+      lineHeight: 1.2,
+      letterSpacing: 0,
+      fills: [makeSolidFill()],
+      strokes: [],
+    } as unknown as TextNode;
+    sceneGraph.addNode(node);
+    const svg = nodeToSvgElement(node, sceneGraph, []);
+    expect(svg).not.toContain('<script');
+    expect(svg).not.toContain('font-style');
+
+    // Values it knows still come through
+    const italic: TextNode = {
+      ...makeBaseNodeFields('t4', 'text'),
+      type: 'text',
+      content: 'Hi',
+      fontFamily: 'Arial',
+      fontSize: 16,
+      fontWeight: 300,
+      fontStyle: 'italic',
+      textAlign: 'left',
+      lineHeight: 1.2,
+      letterSpacing: 0,
+      fills: [makeSolidFill()],
+      strokes: [],
+    };
+    sceneGraph.addNode(italic);
+    const written = nodeToSvgElement(italic, sceneGraph, []);
+    expect(written).toContain('font-size="16"');
+    expect(written).toContain('font-weight="300"');
+    expect(written).toContain('font-style="italic"');
   });
 
   // --------------------------------------------------------------------------

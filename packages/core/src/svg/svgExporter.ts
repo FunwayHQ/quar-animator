@@ -4,6 +4,7 @@
  */
 
 import type {
+  BlendMode,
   Node,
   PathNode,
   RectangleNode,
@@ -192,11 +193,13 @@ export function strokeToSvgAttrs(stroke: Stroke | undefined, defs: string[]): st
     parts.push(`stroke-opacity="${fmt(opacity)}"`);
   }
 
-  if (stroke.cap && stroke.cap !== 'butt') {
+  // Only names SVG knows: a crafted file can hold any string here, and one
+  // written as is could close the attribute and add markup of its own
+  if (stroke.cap === 'round' || stroke.cap === 'square') {
     parts.push(`stroke-linecap="${stroke.cap}"`);
   }
 
-  if (stroke.join && stroke.join !== 'miter') {
+  if (stroke.join === 'round' || stroke.join === 'bevel') {
     parts.push(`stroke-linejoin="${stroke.join}"`);
   }
 
@@ -297,6 +300,29 @@ function nodeElement(
 // ============================================================================
 
 /**
+ * The blend modes written, all but normal. Only these: a crafted file can
+ * hold any string as a blend mode, and one written as is could close the
+ * style attribute and add markup of its own.
+ */
+const BLEND_MODES: ReadonlySet<string> = new Set<BlendMode>([
+  'multiply',
+  'screen',
+  'overlay',
+  'darken',
+  'lighten',
+  'color-dodge',
+  'color-burn',
+  'hard-light',
+  'soft-light',
+  'difference',
+  'exclusion',
+  'hue',
+  'saturation',
+  'color',
+  'luminosity',
+]);
+
+/**
  * A node's drop shadows and layer blur as an SVG filter, and its blend mode,
  * on a group around it — drawn as the canvas draws them: blurs with
  * sigma = radius / 3 (the canvas's Gaussian), offsets in the node's parent
@@ -309,7 +335,7 @@ function withEffects(node: Node, element: string, defs: string[]): string {
   const effects = (node.effects ?? []).filter(
     (e): e is Effect => e.visible && (e.type === 'drop-shadow' || e.type === 'layer-blur')
   );
-  const blend = node.blendMode && node.blendMode !== 'normal' ? node.blendMode : null;
+  const blend = BLEND_MODES.has(node.blendMode) ? node.blendMode : null;
   if (effects.length === 0 && !blend) return element;
 
   let filterAttr = '';
@@ -484,9 +510,14 @@ function textToSvg(node: TextNode, defs: string[]): string {
   const tfAttr = ` transform="${parts ? parts + ' ' : ''}scale(1,-1)"`;
   const opacityAttr = node.opacity < 1 ? ` opacity="${fmt(node.opacity)}"` : '';
 
-  const fontAttrs = [`font-family="${escapeXml(node.fontFamily)}"`, `font-size="${node.fontSize}"`];
-  if (node.fontWeight !== 400) fontAttrs.push(`font-weight="${node.fontWeight}"`);
-  if (node.fontStyle !== 'normal') fontAttrs.push(`font-style="${node.fontStyle}"`);
+  // Numbers and names SVG knows only: a crafted file can hold any string here
+  const weight = Number(node.fontWeight);
+  const fontAttrs = [
+    `font-family="${escapeXml(node.fontFamily)}"`,
+    `font-size="${fmt(Number(node.fontSize))}"`,
+  ];
+  if (weight !== 400) fontAttrs.push(`font-weight="${fmt(weight)}"`);
+  if (node.fontStyle === 'italic') fontAttrs.push('font-style="italic"');
   if (node.textAlign !== 'left')
     fontAttrs.push(`text-anchor="${textAlignToAnchor(node.textAlign)}"`);
   if (node.letterSpacing !== 0) fontAttrs.push(`letter-spacing="${fmt(node.letterSpacing)}"`);
