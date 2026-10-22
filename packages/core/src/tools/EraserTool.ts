@@ -488,9 +488,24 @@ export class EraserTool extends BaseTool {
       const fills: Fill[] = 'fills' in node ? (node as { fills: Fill[] }).fills : [];
       const strokes: Stroke[] = 'strokes' in node ? (node as { strokes: Stroke[] }).strokes : [];
 
+      // The result is in world space; inside a group it goes back into the
+      // group's space, so a rotated or scaled group doesn't turn it twice
+      let localContours = contours;
+      if (parentId) {
+        const invParent = mat3.invert(this.context.sceneGraph.getWorldTransform(parentId));
+        if (invParent) {
+          localContours = contours.map((contour) =>
+            contour.map((pt) => ({
+              ...pt,
+              position: mat3.transformPoint(invParent, pt.position),
+            }))
+          );
+        }
+      }
+
       // Create result node
       const resultNode = createBooleanResultNode(
-        contours,
+        localContours,
         fills,
         strokes,
         node.name,
@@ -505,16 +520,6 @@ export class EraserTool extends BaseTool {
       // Copy opacity and blendMode from original
       resultNode.opacity = node.opacity;
       resultNode.blendMode = node.blendMode ?? 'normal';
-
-      // If node had a parent, convert world-space position to parent-local
-      if (parentId) {
-        const parentWorld = this.context.sceneGraph.getWorldTransform(parentId);
-        const invParent = mat3.invert(parentWorld);
-        if (invParent) {
-          const localPos = mat3.transformPoint(invParent, resultNode.transform.position);
-          resultNode.transform.position = localPos;
-        }
-      }
 
       this.ensureUndo();
 

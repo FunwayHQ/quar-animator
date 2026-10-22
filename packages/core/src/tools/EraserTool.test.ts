@@ -16,6 +16,8 @@ import type {
 } from '@quar/types';
 import { createMockToolContext, createMockPointerEvent } from '../test/setup';
 import { createDefaultTransform } from '../SceneGraph';
+import { nodeToPolygon } from '../boolean/booleanOps';
+import { mat3 } from '../math';
 
 describe('EraserTool', () => {
   let context: ToolContext;
@@ -581,6 +583,72 @@ describe('EraserTool', () => {
       const child = context.sceneGraph.getNode(childId)!;
       expect(child.type).toBe('path');
       expect(child.parent).toBe(group.id);
+    });
+
+    /** A world-space box around a list of world points. */
+    function boxOf(points: { x: number; y: number }[]) {
+      const xs = points.map((p) => p.x);
+      const ys = points.map((p) => p.y);
+      return {
+        minX: Math.min(...xs),
+        maxX: Math.max(...xs),
+        minY: Math.min(...ys),
+        maxY: Math.max(...ys),
+      };
+    }
+
+    /** Cut a band across a shape in a transformed group; its world box must stay put. */
+    function expectCutKeepsWorldBox(groupTransform: {
+      position: { x: number; y: number };
+      rotation: number;
+      scale: { x: number; y: number };
+    }) {
+      const group: GroupNode = {
+        id: context.generateId(),
+        name: 'Transformed Group',
+        type: 'group',
+        parent: null,
+        children: [],
+        transform: { ...createDefaultTransform(), ...groupTransform },
+        visible: true,
+        locked: false,
+        opacity: 1,
+        blendMode: 'normal',
+      };
+      context.sceneGraph.addNode(group);
+      const rect = createTestRectangle(0, 0, 100, 200);
+      context.sceneGraph.addNode(rect, group.id);
+
+      const before = boxOf(
+        nodeToPolygon(rect, context.sceneGraph.getWorldTransform(rect.id))!.flatMap((polygon) =>
+          polygon.flatMap((ring) => ring.map(([x, y]) => ({ x, y })))
+        )
+      );
+      const midY = (before.minY + before.maxY) / 2;
+      performStrokeErase({ x: before.minX - 50, y: midY }, { x: before.maxX + 50, y: midY });
+
+      const resultId = context.sceneGraph.getNode(group.id)!.children[0]!;
+      const result = context.sceneGraph.getNode<PathNode>(resultId)!;
+      expect(result.type).toBe('path');
+      expect(result.subpaths).toHaveLength(1); // cut in two
+      const world = context.sceneGraph.getWorldTransform(resultId);
+      const after = boxOf(
+        [...result.points, ...result.subpaths!.flat()].map((p) =>
+          mat3.transformPoint(world, p.position)
+        )
+      );
+      expect(after.minX).toBeCloseTo(before.minX, 3);
+      expect(after.maxX).toBeCloseTo(before.maxX, 3);
+      expect(after.minY).toBeCloseTo(before.minY, 3);
+      expect(after.maxY).toBeCloseTo(before.maxY, 3);
+    }
+
+    it('keeps the cut shape where it was inside a scaled group', () => {
+      expectCutKeepsWorldBox({ position: { x: 40, y: -30 }, rotation: 0, scale: { x: 2, y: 2 } });
+    });
+
+    it('keeps the cut shape where it was inside a rotated group', () => {
+      expectCutKeepsWorldBox({ position: { x: 40, y: -30 }, rotation: 90, scale: { x: 1, y: 1 } });
     });
   });
 
