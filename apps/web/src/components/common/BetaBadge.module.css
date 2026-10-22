@@ -1,0 +1,291 @@
+/* ============================================================================
+   BETA tag and its notice — a revision label beside the logo, and a glass
+   callout hanging from it
+   ============================================================================ */
+
+.anchor {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+/* ---- The tag ---- */
+
+.badge {
+  --beta-ink: var(--color-accent-primary-hover);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 18px;
+  padding: 0 7px 0 6px;
+  border-radius: 4px;
+  border: 1px solid rgba(168, 85, 247, 0.38);
+  background:
+    linear-gradient(180deg, rgba(168, 85, 247, 0.16), rgba(168, 85, 247, 0.07)),
+    var(--color-bg-secondary);
+  color: var(--beta-ink);
+  font-family: var(--font-family-mono);
+  font-size: 9.5px;
+  font-weight: 500;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  transition:
+    border-color var(--duration-fast),
+    background-color var(--duration-fast),
+    color var(--duration-fast),
+    box-shadow var(--duration-fast);
+}
+
+.badge:hover {
+  border-color: rgba(168, 85, 247, 0.7);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 0 12px rgba(168, 85, 247, 0.22);
+}
+
+.badge:focus-visible {
+  outline: 2px solid var(--color-accent-primary);
+  outline-offset: 2px;
+}
+
+.badge[aria-expanded='true'] {
+  border-color: var(--color-accent-primary);
+  color: var(--color-text-primary);
+}
+
+/* A small, slow signal: something live and still moving */
+.signal {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--color-accent-primary);
+  box-shadow: 0 0 6px var(--color-accent-primary-glow);
+  animation: betaPulse 2.4s ease-in-out infinite;
+}
+
+@keyframes betaPulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+/* ---- The notice ---- */
+
+.card {
+  position: absolute;
+  top: calc(100% + 12px);
+  left: -10px;
+  z-index: var(--z-popover);
+  width: min(340px, calc(100vw - 24px));
+  padding: 14px 16px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--color-border-strong);
+  background:
+    radial-gradient(260px 140px at 0% 0%, rgba(168, 85, 247, 0.14), transparent 70%),
+    radial-gradient(220px 120px at 100% 100%, rgba(159, 18, 57, 0.12), transparent 70%),
+    var(--color-glass);
+  backdrop-filter: blur(16px) saturate(150%);
+  -webkit-backdrop-filter: blur(16px) saturate(150%);
+  box-shadow: var(--shadow-xl), var(--shadow-inset);
+  color: var(--color-text-secondary);
+  font-family: var(--font-family-ui);
+  text-align: left;
+  transform-origin: 24px -8px;
+  animation: betaIn 260ms cubic-bezier(0.34, 1.4, 0.64, 1) both;
+}
+
+/* The caret, pointing at the tag */
+.card::before {
+  content: '';
+  position: absolute;
+  top: -6px;
+  left: 22px;
+  width: 10px;
+  height: 10px;
+  transform: rotate(45deg);
+  border-top: 1px solid var(--color-border-strong);
+  border-left: 1px solid var(--color-border-strong);
+  background: var(--color-bg-secondary);
+}
+
+@keyframes betaIn {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.97);
+  }
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.eyebrow {
+  font-family: var(--font-family-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--color-accent-primary-hover);
+}
+
+.close {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  margin: -4px -6px 0 0;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--color-text-tertiary);
+  cursor: pointer;
+  transition:
+    background-color var(--duration-fast),
+    color var(--duration-fast);
+}
+
+.close:hover {
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
+}
+
+.close:focus-visible {
+  outline: 2px solid var(--color-accent-primary);
+  outline-offset: 1px;
+}
+
+.title {
+  margin: 0 0 6px;
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: -0.01em;
+  color: var(--color-text-primary);
+}
+
+.lead {
+  margin: 0 0 12px;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.points {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0 0 14px;
+  padding: 12px 0 0;
+  list-style: none;
+  border-top: 1px solid var(--color-border-default);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.points li {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.pointIcon {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  border: 1px solid var(--color-border-default);
+  background: var(--color-bg-tertiary);
+  color: var(--color-accent-primary-hover);
+}
+
+.path {
+  font-family: var(--font-family-mono);
+  font-size: 11px;
+  color: var(--color-text-primary);
+  white-space: nowrap;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.report,
+.done {
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  padding: 0 12px;
+  border-radius: var(--radius-md);
+  font-family: var(--font-family-ui);
+  font-size: 12px;
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+  text-decoration: none;
+  transition:
+    background-color var(--duration-fast),
+    border-color var(--duration-fast),
+    color var(--duration-fast);
+}
+
+.report {
+  border: 1px solid var(--color-border-strong);
+  background: transparent;
+  color: var(--color-text-primary);
+}
+
+.report:hover {
+  border-color: var(--color-accent-primary);
+  background: var(--color-bg-hover);
+}
+
+.done {
+  border: 1px solid transparent;
+  background: var(--color-accent-primary);
+  color: #fff;
+}
+
+.done:hover {
+  background: var(--color-accent-primary-hover);
+}
+
+.report:focus-visible,
+.done:focus-visible {
+  outline: 2px solid var(--color-accent-primary);
+  outline-offset: 2px;
+}
+
+/* ---- Light appearance ---- */
+
+:global(:root[data-theme='light']) .badge {
+  --beta-ink: var(--color-accent-primary-active);
+  border-color: rgba(147, 51, 234, 0.35);
+  background:
+    linear-gradient(180deg, rgba(168, 85, 247, 0.12), rgba(168, 85, 247, 0.05)),
+    var(--color-bg-secondary);
+  box-shadow: none;
+}
+
+:global(:root[data-theme='light']) .eyebrow,
+:global(:root[data-theme='light']) .pointIcon {
+  color: var(--color-accent-primary-active);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .signal,
+  .card {
+    animation: none;
+  }
+}

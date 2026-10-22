@@ -22,6 +22,7 @@ import { seedTutorials } from '../tutorials/seedTutorials';
 import { isTutorialId, tutorialOrder } from '../tutorials/tutorials';
 import type { ThumbnailView } from '../hooks/useProjectThumbnails';
 import type { ProjectListItem } from '../services/projectStorage';
+import { BetaBadge } from '../components/common/BetaBadge';
 import styles from './Projects.module.css';
 
 // ============================================================================
@@ -289,6 +290,7 @@ export function Projects() {
             alt="Quar Animator"
             className={styles.logoImage}
           />
+          <BetaBadge />
         </div>
         <div className={styles.headerActions}>
           <button
