@@ -7,7 +7,7 @@
  */
 
 import { SceneGraph } from '@quar/core';
-import { applyAnimatedValues, evaluateNodeAtFrame, getAnimatedNodes } from '@quar/animation';
+import { applyAnimatedValues, evaluateTimelineAtFrame } from '@quar/animation';
 import { evaluateIKChains } from '@quar/rigging';
 import type { IKChain, Node, Timeline } from '@quar/types';
 
@@ -34,12 +34,9 @@ export function poseSceneAtFrame(
     ),
     rootNodeIds: [...data.rootNodeIds],
   });
-  for (const nodeId of getAnimatedNodes(timeline)) {
+  for (const [nodeId, values] of evaluateTimelineAtFrame(timeline, frame)) {
     const node = ghost.getNode(nodeId);
-    if (!node) continue;
-    const values = evaluateNodeAtFrame(timeline, nodeId, frame);
-    if (values.size > 0)
-      ghost.updateNode(nodeId, applyAnimatedValues(node, values) as Partial<Node>);
+    if (node) ghost.updateNode(nodeId, applyAnimatedValues(node, values) as Partial<Node>);
   }
   if (ikChains.some((chain) => chain.enabled)) evaluateIKChains(ikChains, ghost);
   return ghost;

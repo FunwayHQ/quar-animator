@@ -10,7 +10,7 @@ const mocks = vi.hoisted(() => ({
   shapeRendererDispose: vi.fn(),
   render: vi.fn(),
   preloadTextures: vi.fn(),
-  evaluateNodeAtFrame: vi.fn(),
+  evaluateTimelineAtFrame: vi.fn(),
   applyAnimatedValues: vi.fn(),
   mat3Create: vi.fn((...values: number[]) => values),
   mat3Multiply: vi.fn(() => new Float32Array([1, 0, 0, 1, 0, 0])),
@@ -47,7 +47,7 @@ vi.mock('@quar/core', () => ({
 }));
 
 vi.mock('@quar/animation', () => ({
-  evaluateNodeAtFrame: mocks.evaluateNodeAtFrame,
+  evaluateTimelineAtFrame: mocks.evaluateTimelineAtFrame,
   applyAnimatedValues: mocks.applyAnimatedValues,
 }));
 
@@ -81,7 +81,11 @@ describe('createFrameRenderer', () => {
       clear: vi.fn(),
       getExtension: vi.fn(() => ({ loseContext: mocks.loseContext })),
     };
-    mocks.evaluateNodeAtFrame.mockReturnValue(new Map([['opacity', 0.25]]));
+    // Every node a track animates gets opacity 0.25
+    mocks.evaluateTimelineAtFrame.mockImplementation(
+      (timeline: { tracks: Array<{ nodeId: string }> }) =>
+        new Map(timeline.tracks.map((track) => [track.nodeId, new Map([['opacity', 0.25]])]))
+    );
     mocks.applyAnimatedValues.mockImplementation((node: Record<string, unknown>) => ({
       ...node,
       opacity: 0.25,
@@ -105,7 +109,7 @@ describe('createFrameRenderer', () => {
     expect(canvas.width).toBe(152);
     expect(canvas.height).toBe(74);
     expect(mocks.rendererOptions[0]).toMatchObject({ preserveDrawingBuffer: true, alpha: true });
-    expect(mocks.evaluateNodeAtFrame).toHaveBeenCalledWith(timeline, 'shape-1', 12);
+    expect(mocks.evaluateTimelineAtFrame).toHaveBeenCalledWith(timeline, 12);
     expect(mocks.gl.viewport).toHaveBeenCalledWith(0, 0, 152, 74);
     expect(mocks.gl.clearColor).toHaveBeenCalledWith(12 / 255, 34 / 255, 56 / 255, 0.75);
     expect(mocks.render).toHaveBeenCalledWith(

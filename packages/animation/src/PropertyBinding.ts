@@ -597,16 +597,57 @@ export function detectInterpolationType(path: string): InterpolationType {
 // Evaluate animated values
 // ============================================================================
 
+type Interpolate = (a: unknown, b: unknown, t: number) => unknown;
+
+/** Each property path's interpolator, worked out once (it depends on the path alone). */
+const pathInterpolators = new Map<string, Interpolate>();
+const MAX_PATH_INTERPOLATORS = 4096;
+
+function interpolatorFor(property: string): Interpolate {
+  let interp = pathInterpolators.get(property);
+  if (!interp) {
+    interp = getInterpolator(detectInterpolationType(property)) as Interpolate;
+    pathInterpolators.set(property, interp);
+    if (pathInterpolators.size > MAX_PATH_INTERPOLATORS) {
+      const oldest = pathInterpolators.keys().next().value;
+      if (oldest !== undefined) pathInterpolators.delete(oldest);
+    }
+  }
+  return interp;
+}
+
 /**
  * Evaluate a single animated property track at a given frame.
  * Returns the interpolated value, or undefined if no keyframes.
  */
 export function evaluateTrack(track: PropertyTrack, frame: number): unknown {
   if (track.keyframes.length === 0) return undefined;
+  return interpolateValue(track, frame, interpolatorFor(track.property));
+}
 
-  const type = detectInterpolationType(track.property);
-  const interp = getInterpolator(type);
-  return interpolateValue(track, frame, interp as (a: unknown, b: unknown, t: number) => unknown);
+/**
+ * Every animated node's values at a frame, in one pass over the tracks:
+ * node id -> (property path -> value). Showing a frame of a whole scene
+ * with this costs one look at each track (evaluateNodeAtFrame, once per
+ * node, looks at every track each time).
+ */
+export function evaluateTimelineAtFrame(
+  timeline: Timeline,
+  frame: number
+): Map<string, Map<string, unknown>> {
+  const byNode = new Map<string, Map<string, unknown>>();
+  for (const track of timeline.tracks) {
+    if (track.keyframes.length === 0) continue;
+    const value = evaluateTrack(track, frame);
+    if (value === undefined) continue;
+    let values = byNode.get(track.nodeId);
+    if (!values) {
+      values = new Map();
+      byNode.set(track.nodeId, values);
+    }
+    values.set(track.property, value);
+  }
+  return byNode;
 }
 
 /**

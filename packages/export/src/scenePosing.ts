@@ -8,7 +8,7 @@
  */
 
 import { SceneGraph, boundOutline, mat3 } from '@quar/core';
-import { applyAnimatedValues, evaluateNodeAtFrame, getAnimatedNodes } from '@quar/animation';
+import { applyAnimatedValues, evaluateTimelineAtFrame } from '@quar/animation';
 import {
   deformVertices,
   evaluateDynamicChainsAtFrame,
@@ -64,7 +64,6 @@ export function createScenePoser(
   rig: FrameRig | undefined
 ): ScenePoser {
   const posed = copyScene(scene);
-  const animated = getAnimatedNodes(timeline);
   const dynamicStates = new Map<string, DynamicChainState>();
   const clock: DynamicChainClock = { lastFrame: null };
   const fitted = new Map<string, { outline: Float32Array; skin: SkinData }>();
@@ -80,13 +79,10 @@ export function createScenePoser(
 
     poseAt(frame) {
       // The timeline, from each layer as it is in the scene
-      for (const nodeId of animated) {
+      for (const [nodeId, values] of evaluateTimelineAtFrame(timeline, frame)) {
         const original = scene.getNode(nodeId);
         if (!original) continue;
-        const values = evaluateNodeAtFrame(timeline, nodeId, frame);
-        if (values.size > 0) {
-          posed.updateNode(nodeId, applyAnimatedValues(original, values) as Partial<Node>);
-        }
+        posed.updateNode(nodeId, applyAnimatedValues(original, values) as Partial<Node>);
       }
       // Then the rig, in the editor's order
       if (rig?.ikChains?.length) evaluateIKChains(rig.ikChains, posed);

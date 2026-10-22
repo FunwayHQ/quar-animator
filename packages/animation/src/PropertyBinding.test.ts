@@ -8,6 +8,7 @@ import {
   getInterpolator,
   evaluateTrack,
   evaluateNodeAtFrame,
+  evaluateTimelineAtFrame,
   applyAnimatedValues,
 } from './PropertyBinding';
 import { createTimeline, createTrack, addKeyframe } from './Timeline';
@@ -289,6 +290,51 @@ describe('evaluateTrack', () => {
 // ============================================================================
 // evaluateNodeAtFrame
 // ============================================================================
+
+describe('evaluateTimelineAtFrame', () => {
+  function sceneTimeline() {
+    const timeline = createTimeline();
+    for (let n = 0; n < 20; n++) {
+      const x = createTrack<number>(`node${n}`, 'transform.position.x');
+      addKeyframe(x, 0, n);
+      addKeyframe(x, 10, n + 100);
+      const fill = createTrack('node' + n, 'fills.0.color');
+      addKeyframe(fill, 0, { r: 0, g: 0, b: 0, a: 1 });
+      addKeyframe(fill, 10, { r: 200, g: 100, b: 50, a: 1 });
+      timeline.tracks.push(x as any, fill as any);
+    }
+    // A track with no keyframes, and one for a node nothing else animates
+    timeline.tracks.push(createTrack<number>('empty', 'opacity') as any);
+    return timeline;
+  }
+
+  it('gives every animated node the values evaluateNodeAtFrame gives it', () => {
+    const timeline = sceneTimeline();
+    for (const frame of [0, 3, 5.5, 10, 14]) {
+      const all = evaluateTimelineAtFrame(timeline, frame);
+      expect(all.size).toBe(20);
+      for (let n = 0; n < 20; n++) {
+        expect(all.get(`node${n}`)).toEqual(evaluateNodeAtFrame(timeline, `node${n}`, frame));
+      }
+    }
+  });
+
+  it('leaves out nodes with no keyframes', () => {
+    const all = evaluateTimelineAtFrame(sceneTimeline(), 5);
+    expect(all.has('empty')).toBe(false);
+    expect(evaluateTimelineAtFrame(createTimeline(), 5).size).toBe(0);
+  });
+
+  it('sees tracks added to the same timeline later (nothing about it is kept)', () => {
+    const timeline = sceneTimeline();
+    evaluateTimelineAtFrame(timeline, 5);
+    const late = createTrack<number>('late', 'opacity');
+    addKeyframe(late, 0, 0);
+    addKeyframe(late, 10, 1);
+    timeline.tracks.push(late as any);
+    expect(evaluateTimelineAtFrame(timeline, 5).get('late')?.get('opacity')).toBeCloseTo(0.5);
+  });
+});
 
 describe('evaluateNodeAtFrame', () => {
   it('returns empty map for node with no tracks', () => {

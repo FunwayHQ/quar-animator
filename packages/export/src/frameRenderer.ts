@@ -18,7 +18,7 @@ import type {
 } from '@quar/types';
 import type { SceneGraph } from '@quar/core';
 import { WebGLRenderer, ShapeRenderer, mat3 } from '@quar/core';
-import { evaluateNodeAtFrame, applyAnimatedValues } from '@quar/animation';
+import { evaluateTimelineAtFrame, applyAnimatedValues } from '@quar/animation';
 import {
   evaluateDynamicChainsAtFrame,
   evaluateIKChains,
@@ -150,16 +150,12 @@ export function createFrameRenderer(options: FrameRenderOptions): FrameRendererH
     }
 
     try {
-      // Apply animation at the given frame to all animated nodes
-      for (const track of timeline.tracks) {
-        const node = sceneGraph.getNode(track.nodeId);
+      // Apply animation at the given frame to all animated nodes (one pass
+      // over the tracks; each node updated once)
+      for (const [nodeId, animatedValues] of evaluateTimelineAtFrame(timeline, frame)) {
+        const node = sceneGraph.getNode(nodeId);
         if (!node) continue;
-
-        const animatedValues = evaluateNodeAtFrame(timeline, track.nodeId, frame);
-        if (animatedValues.size > 0) {
-          const updatedNode = applyAnimatedValues(node, animatedValues);
-          sceneGraph.updateNode(track.nodeId, updatedNode as Partial<Node>);
-        }
+        sceneGraph.updateNode(nodeId, applyAnimatedValues(node, animatedValues) as Partial<Node>);
       }
 
       const morphOffsets = rig ? poseRig(sceneGraph, rig, frame) : undefined;

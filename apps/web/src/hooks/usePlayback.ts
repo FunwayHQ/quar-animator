@@ -4,12 +4,7 @@
  */
 
 import { useEffect, useRef, useCallback } from 'react';
-import {
-  PlaybackController,
-  evaluateNodeAtFrame,
-  applyAnimatedValues,
-  getAnimatedNodes,
-} from '@quar/animation';
+import { PlaybackController, evaluateTimelineAtFrame, applyAnimatedValues } from '@quar/animation';
 import { evaluateIKChains } from '@quar/rigging';
 import { useEditorStore } from '../stores/editorStore';
 import { noteSequenceShown } from '../stores/sequenceActions';
@@ -50,17 +45,13 @@ function applyFrame(
     }
     return;
   }
-  // Get all unique animated node IDs from timeline tracks
-  const animatedNodeIds = getAnimatedNodes(timeline);
-  for (const nodeId of animatedNodeIds) {
+  // Every animated node's values, from one pass over the tracks
+  for (const [nodeId, values] of evaluateTimelineAtFrame(timeline, frame)) {
     const node = sg.getNode(nodeId);
     if (!node) continue;
-    const values = evaluateNodeAtFrame(timeline, nodeId, frame);
-    if (values.size > 0) {
-      const updated = applyAnimatedValues(node, values);
-      if (updated !== node) {
-        sg.updateNode(nodeId, updated);
-      }
+    const updated = applyAnimatedValues(node, values);
+    if (updated !== node) {
+      sg.updateNode(nodeId, updated);
     }
   }
 
