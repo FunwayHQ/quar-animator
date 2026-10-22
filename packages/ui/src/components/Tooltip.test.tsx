@@ -146,4 +146,104 @@ describe('Tooltip', () => {
       unmount();
     }
   });
+
+  describe('placement on screen', () => {
+    // jsdom has no layout, so the trigger and tooltip boxes are mocked; the
+    // window is jsdom's 1024 x 768.
+    const TIP_WIDTH = 200;
+    const TIP_HEIGHT = 40;
+    let triggerRect: DOMRect;
+
+    function rect(left: number, top: number, width: number, height: number): DOMRect {
+      return {
+        left,
+        top,
+        width,
+        height,
+        x: left,
+        y: top,
+        right: left + width,
+        bottom: top + height,
+        toJSON: () => ({}),
+      };
+    }
+
+    function showTooltip(position: 'top' | 'right' | 'bottom' | 'left'): HTMLElement {
+      render(
+        <Tooltip content="Tip" position={position} delay={0}>
+          <button>Button</button>
+        </Tooltip>
+      );
+      const wrapper = screen.getByRole('button').parentElement;
+      vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
+        this: HTMLElement
+      ) {
+        return this === wrapper ? triggerRect : rect(0, 0, TIP_WIDTH, TIP_HEIGHT);
+      });
+
+      fireEvent.mouseEnter(screen.getByRole('button'));
+      act(() => {
+        vi.advanceTimersByTime(0);
+      });
+      return screen.getByText('Tip');
+    }
+
+    /** The tooltip's box on screen, from the corner it is placed at. */
+    function boxOf(tooltip: HTMLElement) {
+      const left = parseFloat(tooltip.style.left);
+      const top = parseFloat(tooltip.style.top);
+      return { left, top, right: left + TIP_WIDTH, bottom: top + TIP_HEIGHT };
+    }
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it('keeps the side asked for when there is room', () => {
+      triggerRect = rect(400, 300, 80, 24);
+      const box = boxOf(showTooltip('top'));
+
+      expect(box.bottom).toBeLessThanOrEqual(triggerRect.top);
+      expect(box.left + TIP_WIDTH / 2).toBe(440);
+    });
+
+    it('opens below when there is no room above', () => {
+      triggerRect = rect(400, 2, 80, 24);
+      const box = boxOf(showTooltip('top'));
+
+      expect(box.top).toBeGreaterThanOrEqual(triggerRect.bottom);
+    });
+
+    it('opens on the left when there is no room on the right', () => {
+      triggerRect = rect(window.innerWidth - 30, 300, 24, 24);
+      const box = boxOf(showTooltip('right'));
+
+      expect(box.right).toBeLessThanOrEqual(triggerRect.left);
+      expect(box.left).toBeGreaterThanOrEqual(0);
+    });
+
+    it('stays inside the window next to a corner', () => {
+      triggerRect = rect(window.innerWidth - 20, window.innerHeight - 20, 16, 16);
+      const box = boxOf(showTooltip('bottom'));
+
+      expect(box.bottom).toBeLessThanOrEqual(triggerRect.top);
+      expect(box.left).toBeGreaterThanOrEqual(0);
+      expect(box.right).toBeLessThanOrEqual(window.innerWidth);
+      expect(box.top).toBeGreaterThanOrEqual(0);
+    });
+
+    it('follows its trigger when the page scrolls or the window resizes', () => {
+      triggerRect = rect(400, 300, 80, 24);
+      const tooltip = showTooltip('bottom');
+
+      triggerRect = rect(400, 100, 80, 24);
+      fireEvent.scroll(window);
+      expect(boxOf(tooltip).top).toBeGreaterThanOrEqual(124);
+      expect(boxOf(tooltip).top).toBeLessThan(300);
+
+      triggerRect = rect(100, 100, 80, 24);
+      fireEvent(window, new Event('resize'));
+      expect(boxOf(tooltip).left + TIP_WIDTH / 2).toBe(140);
+    });
+  });
 });

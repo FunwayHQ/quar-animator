@@ -2,7 +2,14 @@
  * Tooltip component for Quar Animator
  */
 
-import React, { type ReactNode, useRef, useState, useEffect } from 'react';
+import React, {
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react';
 
 // ============================================================================
 // Types
@@ -23,6 +30,11 @@ export interface TooltipProps {
 // Styles
 // ============================================================================
 
+/** Space between the trigger and the tooltip. */
+const TOOLTIP_GAP = 8;
+/** The closest the tooltip comes to the window's edges. */
+const VIEWPORT_MARGIN = 4;
+
 const tooltipStyles: React.CSSProperties = {
   position: 'fixed',
   zIndex: 'var(--z-tooltip)' as unknown as number,
@@ -34,7 +46,10 @@ const tooltipStyles: React.CSSProperties = {
   borderRadius: 'var(--radius-md)',
   boxShadow: 'var(--shadow-lg)',
   border: '1px solid var(--color-border-default)',
-  whiteSpace: 'nowrap',
+  // As wide as its text, up to a width that fits the window; longer text
+  // wraps instead of running off screen.
+  width: 'max-content',
+  maxWidth: `min(320px, calc(100vw - ${2 * VIEWPORT_MARGIN}px))`,
   pointerEvents: 'none',
   animation: 'fadeIn var(--duration-fast) var(--easing-default)',
 };
@@ -47,6 +62,7 @@ const shortcutStyles: React.CSSProperties = {
   fontSize: 'var(--font-size-xs)',
   fontFamily: 'var(--font-family-mono)',
   color: 'var(--color-text-secondary)',
+  whiteSpace: 'nowrap',
 };
 
 const wrapperStyles: React.CSSProperties = {
@@ -68,6 +84,7 @@ export function Tooltip({
   const [isVisible, setIsVisible] = useState(false);
   const [tooltipPosition, setTooltipPosition] = useState({ top: 0, left: 0 });
   const triggerRef = useRef<HTMLDivElement>(null);
+  const tooltipRef = useRef<HTMLDivElement>(null);
   const timeoutRef = useRef<number | null>(null);
 
   const showTooltip = () => {
@@ -81,7 +98,6 @@ export function Tooltip({
     timeoutRef.current = window.setTimeout(() => {
       timeoutRef.current = null;
       setIsVisible(true);
-      updatePosition();
     }, delay);
   };
 
@@ -93,36 +109,32 @@ export function Tooltip({
     setIsVisible(false);
   };
 
-  const updatePosition = () => {
-    if (!triggerRef.current) return;
+  // The tooltip's size is known once it is on the page, so it is placed
+  // then (before it is painted) and again when anything scrolls or the
+  // window resizes, so it stays next to its trigger.
+  const updatePosition = useCallback(() => {
+    const trigger = triggerRef.current;
+    const tooltip = tooltipRef.current;
+    if (!trigger || !tooltip) return;
 
-    const rect = triggerRef.current.getBoundingClientRect();
-    const offset = 8;
+    const { width, height } = tooltip.getBoundingClientRect();
+    setTooltipPosition(
+      placeTooltip(trigger.getBoundingClientRect(), width, height, position, getViewportSize())
+    );
+  }, [position]);
 
-    let top = 0;
-    let left = 0;
+  useLayoutEffect(() => {
+    if (!isVisible) return;
 
-    switch (position) {
-      case 'top':
-        top = rect.top - offset;
-        left = rect.left + rect.width / 2;
-        break;
-      case 'bottom':
-        top = rect.bottom + offset;
-        left = rect.left + rect.width / 2;
-        break;
-      case 'left':
-        top = rect.top + rect.height / 2;
-        left = rect.left - offset;
-        break;
-      case 'right':
-        top = rect.top + rect.height / 2;
-        left = rect.right + offset;
-        break;
-    }
-
-    setTooltipPosition({ top, left });
-  };
+    updatePosition();
+    // Capturing catches scrolling inside any panel, not just the page.
+    window.addEventListener('scroll', updatePosition, true);
+    window.addEventListener('resize', updatePosition);
+    return () => {
+      window.removeEventListener('scroll', updatePosition, true);
+      window.removeEventListener('resize', updatePosition);
+    };
+  }, [isVisible, updatePosition]);
 
   useEffect(() => {
     return () => {
@@ -131,19 +143,6 @@ export function Tooltip({
       }
     };
   }, []);
-
-  const getTransform = (): string => {
-    switch (position) {
-      case 'top':
-        return 'translate(-50%, -100%)';
-      case 'bottom':
-        return 'translate(-50%, 0)';
-      case 'left':
-        return 'translate(-100%, -50%)';
-      case 'right':
-        return 'translate(0, -50%)';
-    }
-  };
 
   return (
     <>
@@ -159,11 +158,11 @@ export function Tooltip({
       </div>
       {isVisible && (
         <div
+          ref={tooltipRef}
           style={{
             ...tooltipStyles,
             top: tooltipPosition.top,
             left: tooltipPosition.left,
-            transform: getTransform(),
           }}
         >
           {content}
@@ -172,6 +171,69 @@ export function Tooltip({
       )}
     </>
   );
+}
+
+// ============================================================================
+// Placement
+// ============================================================================
+
+const OPPOSITE_SIDE: Record<TooltipPosition, TooltipPosition> = {
+  top: 'bottom',
+  bottom: 'top',
+  left: 'right',
+  right: 'left',
+};
+
+/** The window's size, without its scrollbars. */
+function getViewportSize(): { width: number; height: number } {
+  const root = document.documentElement;
+  return {
+    width: root.clientWidth || window.innerWidth,
+    height: root.clientHeight || window.innerHeight,
+  };
+}
+
+/**
+ * Where to put the top-left corner of a tooltip of the given size: beside
+ * its trigger on the side asked for, or on the opposite side when only that
+ * one has room, then moved along so it stays inside the window.
+ */
+function placeTooltip(
+  trigger: DOMRect,
+  width: number,
+  height: number,
+  side: TooltipPosition,
+  viewport: { width: number; height: number }
+): { top: number; left: number } {
+  const centeredLeft = trigger.left + trigger.width / 2 - width / 2;
+  const centeredTop = trigger.top + trigger.height / 2 - height / 2;
+  const corners: Record<TooltipPosition, { top: number; left: number }> = {
+    top: { top: trigger.top - TOOLTIP_GAP - height, left: centeredLeft },
+    bottom: { top: trigger.bottom + TOOLTIP_GAP, left: centeredLeft },
+    left: { top: centeredTop, left: trigger.left - TOOLTIP_GAP - width },
+    right: { top: centeredTop, left: trigger.right + TOOLTIP_GAP },
+  };
+  const hasRoom: Record<TooltipPosition, boolean> = {
+    top: corners.top.top >= VIEWPORT_MARGIN,
+    bottom: corners.bottom.top + height <= viewport.height - VIEWPORT_MARGIN,
+    left: corners.left.left >= VIEWPORT_MARGIN,
+    right: corners.right.left + width <= viewport.width - VIEWPORT_MARGIN,
+  };
+
+  const opposite = OPPOSITE_SIDE[side];
+  const corner = corners[hasRoom[side] || !hasRoom[opposite] ? side : opposite];
+  return {
+    top: keepInside(corner.top, height, viewport.height),
+    left: keepInside(corner.left, width, viewport.width),
+  };
+}
+
+/**
+ * Moves a start coordinate so a span of the given size stays inside
+ * [0, limit] with the margin; a span too big to fit starts at the margin.
+ */
+function keepInside(start: number, size: number, limit: number): number {
+  return Math.max(VIEWPORT_MARGIN, Math.min(start, limit - size - VIEWPORT_MARGIN));
 }
 
 export default Tooltip;
