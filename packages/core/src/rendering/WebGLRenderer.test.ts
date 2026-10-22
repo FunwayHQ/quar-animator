@@ -321,6 +321,61 @@ describe('WebGLRenderer', () => {
         renderer.createShaderProgram('fail', vertexShader, fragmentShader, [], [])
       ).toThrow('Shader program link error');
     });
+
+    describe('leaves no shaders or program behind when it fails (F185)', () => {
+      const vs = { shader: 'vertex' } as unknown as WebGLShader;
+      const fs = { shader: 'fragment' } as unknown as WebGLShader;
+      const linked = { program: 'linked' } as unknown as WebGLProgram;
+
+      function rendererWithShaders() {
+        const renderer = new WebGLRenderer({ canvas });
+        (mockGL.createShader as ReturnType<typeof vi.fn>)
+          .mockReturnValueOnce(vs)
+          .mockReturnValueOnce(fs);
+        (mockGL.createProgram as ReturnType<typeof vi.fn>).mockReturnValueOnce(linked);
+        return renderer;
+      }
+
+      it('deletes the vertex shader when the fragment shader fails to compile', () => {
+        const renderer = rendererWithShaders();
+        (mockGL.getShaderParameter as ReturnType<typeof vi.fn>)
+          .mockReturnValueOnce(true)
+          .mockReturnValueOnce(false);
+
+        expect(() =>
+          renderer.createShaderProgram('fail', vertexShader, fragmentShader, [], [])
+        ).toThrow('Shader compile error');
+        expect(mockGL.deleteShader).toHaveBeenCalledWith(vs);
+        expect(mockGL.deleteShader).toHaveBeenCalledWith(fs);
+      });
+
+      it('deletes the program and both shaders when linking fails', () => {
+        const renderer = rendererWithShaders();
+        (mockGL.getProgramParameter as ReturnType<typeof vi.fn>).mockReturnValueOnce(false);
+
+        expect(() =>
+          renderer.createShaderProgram('fail', vertexShader, fragmentShader, [], [])
+        ).toThrow('Shader program link error');
+        expect(mockGL.deleteProgram).toHaveBeenCalledWith(linked);
+        expect(mockGL.deleteShader).toHaveBeenCalledWith(vs);
+        expect(mockGL.deleteShader).toHaveBeenCalledWith(fs);
+        expect(renderer.getProgram('fail')).toBeUndefined();
+      });
+
+      it('deletes both shaders when no program can be created', () => {
+        const renderer = new WebGLRenderer({ canvas });
+        (mockGL.createShader as ReturnType<typeof vi.fn>)
+          .mockReturnValueOnce(vs)
+          .mockReturnValueOnce(fs);
+        (mockGL.createProgram as ReturnType<typeof vi.fn>).mockReturnValueOnce(null);
+
+        expect(() =>
+          renderer.createShaderProgram('fail', vertexShader, fragmentShader, [], [])
+        ).toThrow('Failed to create shader program');
+        expect(mockGL.deleteShader).toHaveBeenCalledWith(vs);
+        expect(mockGL.deleteShader).toHaveBeenCalledWith(fs);
+      });
+    });
   });
 
   describe('getProgram', () => {

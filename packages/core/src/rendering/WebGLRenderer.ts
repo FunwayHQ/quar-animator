@@ -209,28 +209,35 @@ export class WebGLRenderer {
   ): ShaderProgram {
     const { gl } = this;
 
-    // Compile shaders
+    // Compile shaders (a shader that fails to compile deletes itself)
     const vertexShader = this.compileShader(gl.VERTEX_SHADER, vertexSource);
-    const fragmentShader = this.compileShader(gl.FRAGMENT_SHADER, fragmentSource);
+    let fragmentShader: WebGLShader;
+    try {
+      fragmentShader = this.compileShader(gl.FRAGMENT_SHADER, fragmentSource);
+    } catch (error) {
+      gl.deleteShader(vertexShader);
+      throw error;
+    }
 
-    // Link program
+    // Link program. The shaders aren't needed once it's linked, nor when that
+    // fails, so nothing is left behind on any error.
     const program = gl.createProgram();
+    if (program) {
+      gl.attachShader(program, vertexShader);
+      gl.attachShader(program, fragmentShader);
+      gl.linkProgram(program);
+    }
+    gl.deleteShader(vertexShader);
+    gl.deleteShader(fragmentShader);
+
     if (!program) {
       throw new Error('Failed to create shader program');
     }
-
-    gl.attachShader(program, vertexShader);
-    gl.attachShader(program, fragmentShader);
-    gl.linkProgram(program);
-
     if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
       const error = gl.getProgramInfoLog(program);
+      gl.deleteProgram(program);
       throw new Error(`Shader program link error: ${error}`);
     }
-
-    // Clean up individual shaders
-    gl.deleteShader(vertexShader);
-    gl.deleteShader(fragmentShader);
 
     // Get attribute locations
     const attributes: Record<string, number> = {};
