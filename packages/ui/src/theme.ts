@@ -1,5 +1,10 @@
 /**
  * Design tokens and theme for Quar Animator
+ *
+ * These mirror the custom properties the editor itself uses, in
+ * apps/web/src/styles/globals.css (the source of truth): the dark theme in
+ * `:root`, and the light theme's overrides in `:root[data-theme='light']`.
+ * theme.test.ts checks that they stay the same.
  */
 
 // ============================================================================
@@ -7,53 +12,153 @@
 // ============================================================================
 
 export const colors = {
-  // Background colors
+  // Background colors (warm charcoal blacks)
   bg: {
-    primary: '#0D0D0D',
-    secondary: '#1A1A1A',
-    tertiary: '#262626',
-    elevated: '#2D2D2D',
-    hover: '#333333',
-    active: '#404040',
+    primary: '#0a0a0b',
+    secondary: '#111113',
+    tertiary: '#18181b',
+    elevated: '#1f1f23',
+    hover: 'rgba(255, 255, 255, 0.04)',
+    active: 'rgba(255, 255, 255, 0.08)',
+    canvas: '#09090a',
   },
 
-  // Text colors
+  // Panel and surface finishes
+  surface: {
+    panelGradientEnd: 'rgba(17, 17, 19, 0.98)',
+    highlight: 'rgba(255, 255, 255, 0.04)',
+    sheen: 'rgba(255, 255, 255, 0.03)',
+    canvasVignette: 'rgba(0, 0, 0, 0.15)',
+    scrollbarThumb: 'rgba(255, 255, 255, 0.1)',
+    scrollbarThumbHover: 'rgba(255, 255, 255, 0.2)',
+  },
+
+  // Glass effect backgrounds
+  glass: {
+    background: 'rgba(17, 17, 19, 0.85)',
+    border: 'rgba(255, 255, 255, 0.06)',
+    highlight: 'rgba(255, 255, 255, 0.03)',
+  },
+
+  // Text colors (warmer whites)
   text: {
-    primary: '#FFFFFF',
-    secondary: '#A3A3A3',
-    tertiary: '#737373',
-    disabled: '#525252',
-    inverse: '#0D0D0D',
+    primary: '#fafaf9',
+    secondary: '#a1a1aa',
+    tertiary: '#71717a',
+    disabled: '#3f3f46',
+    inverse: '#0a0a0b',
   },
 
   // Border colors
   border: {
-    default: '#333333',
-    subtle: '#262626',
-    strong: '#404040',
-    focus: '#3B82F6',
+    default: 'rgba(255, 255, 255, 0.08)',
+    subtle: 'rgba(255, 255, 255, 0.04)',
+    strong: 'rgba(255, 255, 255, 0.12)',
+    focus: '#e89b47',
   },
 
-  // Accent colors
+  // Accent colors (violet and bordeaux)
   accent: {
-    primary: '#3B82F6', // Blue
-    primaryHover: '#2563EB',
-    primaryActive: '#1D4ED8',
-    secondary: '#8B5CF6', // Purple
-    success: '#22C55E',
-    warning: '#F59E0B',
-    error: '#EF4444',
+    primary: '#a855f7',
+    primaryHover: '#c084fc',
+    primaryActive: '#9333ea',
+    primaryGlow: 'rgba(168, 85, 247, 0.3)',
+    secondary: '#9f1239',
+    secondaryGlow: 'rgba(159, 18, 57, 0.3)',
+    success: '#34d399',
+    warning: '#fbbf24',
+    error: '#fb7185',
   },
 
   // Timeline colors
   timeline: {
-    playhead: '#EF4444',
-    keyframe: '#F59E0B',
-    keyframeSelected: '#FBBF24',
-    onionBefore: '#FF6B6B',
-    onionAfter: '#4ECDC4',
+    playhead: '#fb7185',
+    keyframe: '#a855f7',
+    keyframeSelected: '#c084fc',
+    keyframeGlow: 'rgba(168, 85, 247, 0.4)',
+    onionBefore: 'rgba(251, 113, 133, 0.6)',
+    onionAfter: 'rgba(52, 211, 153, 0.6)',
+    workArea: 'rgba(168, 85, 247, 0.15)',
+    workAreaBorder: 'rgba(168, 85, 247, 0.6)',
+    workAreaBar: 'rgba(168, 85, 247, 0.35)',
+  },
+
+  // Keyframe indicators in the properties panel
+  keyframe: {
+    active: '#f5a623',
   },
 } as const;
+
+/** A full set of colors, shaped like `colors`, for another theme. */
+export type ColorTokens = {
+  readonly [Group in keyof typeof colors]: {
+    readonly [Name in keyof (typeof colors)[Group]]: string;
+  };
+};
+
+/** The light theme's colors. */
+export const lightColors: ColorTokens = {
+  bg: {
+    primary: '#f3f4f6',
+    secondary: '#fafafa',
+    tertiary: '#f0f1f4',
+    elevated: '#ffffff',
+    hover: 'rgba(24, 24, 27, 0.045)',
+    active: 'rgba(24, 24, 27, 0.08)',
+    canvas: '#e4e7ec',
+  },
+  surface: {
+    panelGradientEnd: 'rgba(250, 250, 250, 0.98)',
+    highlight: 'rgba(24, 24, 27, 0.045)',
+    sheen: 'rgba(24, 24, 27, 0.025)',
+    canvasVignette: 'rgba(24, 24, 27, 0.08)',
+    scrollbarThumb: 'rgba(24, 24, 27, 0.16)',
+    scrollbarThumbHover: 'rgba(24, 24, 27, 0.28)',
+  },
+  glass: {
+    background: 'rgba(250, 250, 250, 0.9)',
+    border: 'rgba(24, 24, 27, 0.1)',
+    highlight: 'rgba(255, 255, 255, 0.82)',
+  },
+  text: {
+    primary: '#18181b',
+    secondary: '#52525b',
+    tertiary: '#71717a',
+    disabled: '#a1a1aa',
+    inverse: '#ffffff',
+  },
+  border: {
+    default: 'rgba(24, 24, 27, 0.1)',
+    subtle: 'rgba(24, 24, 27, 0.065)',
+    strong: 'rgba(24, 24, 27, 0.16)',
+    focus: '#b45309',
+  },
+  accent: {
+    primary: '#7c3aed',
+    primaryHover: '#6d28d9',
+    primaryActive: '#5b21b6',
+    primaryGlow: 'rgba(124, 58, 237, 0.2)',
+    secondary: '#be123c',
+    secondaryGlow: 'rgba(190, 18, 60, 0.18)',
+    success: '#059669',
+    warning: '#b45309',
+    error: '#e11d48',
+  },
+  timeline: {
+    playhead: '#e11d48',
+    keyframe: '#7c3aed',
+    keyframeSelected: '#6d28d9',
+    keyframeGlow: 'rgba(124, 58, 237, 0.26)',
+    onionBefore: 'rgba(225, 29, 72, 0.55)',
+    onionAfter: 'rgba(5, 150, 105, 0.55)',
+    workArea: 'rgba(124, 58, 237, 0.12)',
+    workAreaBorder: 'rgba(124, 58, 237, 0.55)',
+    workAreaBar: 'rgba(124, 58, 237, 0.32)',
+  },
+  keyframe: {
+    active: '#b45309',
+  },
+};
 
 // ============================================================================
 // Spacing Tokens
@@ -62,11 +167,11 @@ export const colors = {
 export const spacing = {
   xs: 4,
   sm: 8,
-  md: 16,
-  lg: 24,
-  xl: 32,
-  '2xl': 48,
-  '3xl': 64,
+  md: 12,
+  lg: 16,
+  xl: 24,
+  '2xl': 32,
+  '3xl': 48,
 } as const;
 
 // ============================================================================
@@ -75,14 +180,15 @@ export const spacing = {
 
 export const typography = {
   fontFamily: {
-    ui: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
-    mono: "'JetBrains Mono', 'Fira Code', 'Consolas', monospace",
+    ui: "'DM Sans', -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+    mono: "'IBM Plex Mono', 'SF Mono', 'Consolas', monospace",
   },
   fontSize: {
+    '2xs': 9,
     xs: 10,
-    sm: 12,
-    md: 14,
-    lg: 16,
+    sm: 11,
+    md: 13,
+    lg: 15,
     xl: 18,
     '2xl': 24,
   },
@@ -90,8 +196,8 @@ export const typography = {
     normal: 400,
     medium: 500,
     semibold: 600,
-    bold: 700,
   },
+  // Not a custom property in the app: its body text uses 1.5.
   lineHeight: {
     tight: 1.2,
     normal: 1.5,
@@ -105,10 +211,11 @@ export const typography = {
 
 export const borderRadius = {
   none: 0,
-  sm: 4,
-  md: 6,
-  lg: 8,
-  xl: 12,
+  xs: 3,
+  sm: 5,
+  md: 8,
+  lg: 10,
+  xl: 14,
   full: 9999,
 } as const;
 
@@ -117,11 +224,24 @@ export const borderRadius = {
 // ============================================================================
 
 export const shadows = {
-  sm: '0 1px 2px 0 rgba(0, 0, 0, 0.5)',
-  md: '0 4px 6px -1px rgba(0, 0, 0, 0.5), 0 2px 4px -2px rgba(0, 0, 0, 0.5)',
-  lg: '0 10px 15px -3px rgba(0, 0, 0, 0.5), 0 4px 6px -4px rgba(0, 0, 0, 0.5)',
-  xl: '0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.5)',
+  sm: '0 1px 2px rgba(0, 0, 0, 0.4)',
+  md: '0 4px 12px rgba(0, 0, 0, 0.35), 0 1px 3px rgba(0, 0, 0, 0.25)',
+  lg: '0 8px 24px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(0, 0, 0, 0.3)',
+  xl: '0 16px 48px rgba(0, 0, 0, 0.45), 0 4px 16px rgba(0, 0, 0, 0.35)',
+  glow: '0 0 20px var(--color-accent-primary-glow)',
+  inset: 'inset 0 1px 0 var(--color-glass-highlight)',
 } as const;
+
+/**
+ * The light theme's drop shadows. The glow and inset follow the light
+ * colors through the custom properties they use.
+ */
+export const lightShadows: Record<'sm' | 'md' | 'lg' | 'xl', string> = {
+  sm: '0 1px 2px rgba(24, 24, 27, 0.08)',
+  md: '0 4px 12px rgba(24, 24, 27, 0.1), 0 1px 3px rgba(24, 24, 27, 0.06)',
+  lg: '0 8px 24px rgba(24, 24, 27, 0.12), 0 2px 8px rgba(24, 24, 27, 0.06)',
+  xl: '0 16px 48px rgba(24, 24, 27, 0.16), 0 4px 16px rgba(24, 24, 27, 0.08)',
+};
 
 // ============================================================================
 // Animation Tokens
@@ -129,12 +249,15 @@ export const shadows = {
 
 export const animation = {
   duration: {
-    fast: 100,
+    instant: 50,
+    fast: 120,
     normal: 200,
-    slow: 300,
+    slow: 350,
+    slower: 500,
   },
   easing: {
-    default: 'cubic-bezier(0.4, 0, 0.2, 1)',
+    default: 'cubic-bezier(0.2, 0, 0, 1)',
+    spring: 'cubic-bezier(0.34, 1.56, 0.64, 1)',
     in: 'cubic-bezier(0.4, 0, 1, 1)',
     out: 'cubic-bezier(0, 0, 0.2, 1)',
     inOut: 'cubic-bezier(0.4, 0, 0.2, 1)',
@@ -145,58 +268,102 @@ export const animation = {
 // Z-Index Tokens
 // ============================================================================
 
+/** Stacking order, lowest first: tooltips sit above everything else. */
 export const zIndex = {
   base: 0,
   dropdown: 100,
   sticky: 200,
-  modal: 300,
-  popover: 400,
-  tooltip: 500,
+  overlay: 1000,
+  contextMenu: 1010,
+  popover: 1020,
+  modal: 1030,
+  colorPicker: 1040,
+  tooltip: 1050,
 } as const;
+
+// ============================================================================
+// Effect Tokens
+// ============================================================================
+
+/** How strongly the film-grain noise shows over the editor. */
+export const noiseOpacity = { dark: 0.015, light: 0.006 } as const;
 
 // ============================================================================
 // CSS Variables Generator
 // ============================================================================
 
+/** The custom properties for one theme's colors. */
+function colorVariables(c: ColorTokens): string {
+  return `
+  /* Colors - Background */
+  --color-bg-primary: ${c.bg.primary};
+  --color-bg-secondary: ${c.bg.secondary};
+  --color-bg-tertiary: ${c.bg.tertiary};
+  --color-bg-elevated: ${c.bg.elevated};
+  --color-bg-hover: ${c.bg.hover};
+  --color-bg-active: ${c.bg.active};
+  --color-bg-canvas: ${c.bg.canvas};
+  --color-panel-gradient-end: ${c.surface.panelGradientEnd};
+  --color-surface-highlight: ${c.surface.highlight};
+  --color-surface-sheen: ${c.surface.sheen};
+  --color-canvas-vignette: ${c.surface.canvasVignette};
+  --color-scrollbar-thumb: ${c.surface.scrollbarThumb};
+  --color-scrollbar-thumb-hover: ${c.surface.scrollbarThumbHover};
+
+  /* Glass effect backgrounds */
+  --color-glass: ${c.glass.background};
+  --color-glass-border: ${c.glass.border};
+  --color-glass-highlight: ${c.glass.highlight};
+
+  /* Colors - Text */
+  --color-text-primary: ${c.text.primary};
+  --color-text-secondary: ${c.text.secondary};
+  --color-text-tertiary: ${c.text.tertiary};
+  --color-text-disabled: ${c.text.disabled};
+  --color-text-inverse: ${c.text.inverse};
+
+  /* Colors - Border */
+  --color-border-default: ${c.border.default};
+  --color-border-subtle: ${c.border.subtle};
+  --color-border-strong: ${c.border.strong};
+  --color-border-focus: ${c.border.focus};
+
+  /* Colors - Accent */
+  --color-accent-primary: ${c.accent.primary};
+  --color-accent-primary-hover: ${c.accent.primaryHover};
+  --color-accent-primary-active: ${c.accent.primaryActive};
+  --color-accent-primary-glow: ${c.accent.primaryGlow};
+  --color-accent-secondary: ${c.accent.secondary};
+  --color-accent-secondary-glow: ${c.accent.secondaryGlow};
+  --color-accent-success: ${c.accent.success};
+  --color-accent-warning: ${c.accent.warning};
+  --color-accent-error: ${c.accent.error};
+
+  /* Colors - Timeline */
+  --color-timeline-playhead: ${c.timeline.playhead};
+  --color-timeline-keyframe: ${c.timeline.keyframe};
+  --color-timeline-keyframe-selected: ${c.timeline.keyframeSelected};
+  --color-timeline-keyframe-glow: ${c.timeline.keyframeGlow};
+  --color-timeline-onion-before: ${c.timeline.onionBefore};
+  --color-timeline-onion-after: ${c.timeline.onionAfter};
+  --color-timeline-work-area: ${c.timeline.workArea};
+  --color-timeline-work-area-border: ${c.timeline.workAreaBorder};
+  --color-timeline-work-area-bar: ${c.timeline.workAreaBar};
+
+  /* Colors - Keyframe indicators */
+  --color-keyframe-active: ${c.keyframe.active};`;
+}
+
+/**
+ * The design tokens as CSS custom properties: the dark theme on `:root`
+ * and the light theme's overrides on `:root[data-theme='light']`, as the
+ * editor's own stylesheet has them.
+ */
 export function generateCSSVariables(): string {
   return `
 :root {
-  /* Colors - Background */
-  --color-bg-primary: ${colors.bg.primary};
-  --color-bg-secondary: ${colors.bg.secondary};
-  --color-bg-tertiary: ${colors.bg.tertiary};
-  --color-bg-elevated: ${colors.bg.elevated};
-  --color-bg-hover: ${colors.bg.hover};
-  --color-bg-active: ${colors.bg.active};
-
-  /* Colors - Text */
-  --color-text-primary: ${colors.text.primary};
-  --color-text-secondary: ${colors.text.secondary};
-  --color-text-tertiary: ${colors.text.tertiary};
-  --color-text-disabled: ${colors.text.disabled};
-  --color-text-inverse: ${colors.text.inverse};
-
-  /* Colors - Border */
-  --color-border-default: ${colors.border.default};
-  --color-border-subtle: ${colors.border.subtle};
-  --color-border-strong: ${colors.border.strong};
-  --color-border-focus: ${colors.border.focus};
-
-  /* Colors - Accent */
-  --color-accent-primary: ${colors.accent.primary};
-  --color-accent-primary-hover: ${colors.accent.primaryHover};
-  --color-accent-primary-active: ${colors.accent.primaryActive};
-  --color-accent-secondary: ${colors.accent.secondary};
-  --color-accent-success: ${colors.accent.success};
-  --color-accent-warning: ${colors.accent.warning};
-  --color-accent-error: ${colors.accent.error};
-
-  /* Colors - Timeline */
-  --color-timeline-playhead: ${colors.timeline.playhead};
-  --color-timeline-keyframe: ${colors.timeline.keyframe};
-  --color-timeline-keyframe-selected: ${colors.timeline.keyframeSelected};
-  --color-timeline-onion-before: ${colors.timeline.onionBefore};
-  --color-timeline-onion-after: ${colors.timeline.onionAfter};
+  color-scheme: dark;
+${colorVariables(colors)}
 
   /* Spacing */
   --space-xs: ${spacing.xs}px;
@@ -210,15 +377,20 @@ export function generateCSSVariables(): string {
   /* Typography */
   --font-family-ui: ${typography.fontFamily.ui};
   --font-family-mono: ${typography.fontFamily.mono};
+  --font-size-2xs: ${typography.fontSize['2xs']}px;
   --font-size-xs: ${typography.fontSize.xs}px;
   --font-size-sm: ${typography.fontSize.sm}px;
   --font-size-md: ${typography.fontSize.md}px;
   --font-size-lg: ${typography.fontSize.lg}px;
   --font-size-xl: ${typography.fontSize.xl}px;
   --font-size-2xl: ${typography.fontSize['2xl']}px;
+  --font-weight-normal: ${typography.fontWeight.normal};
+  --font-weight-medium: ${typography.fontWeight.medium};
+  --font-weight-semibold: ${typography.fontWeight.semibold};
 
   /* Border Radius */
   --radius-none: ${borderRadius.none}px;
+  --radius-xs: ${borderRadius.xs}px;
   --radius-sm: ${borderRadius.sm}px;
   --radius-md: ${borderRadius.md}px;
   --radius-lg: ${borderRadius.lg}px;
@@ -230,12 +402,17 @@ export function generateCSSVariables(): string {
   --shadow-md: ${shadows.md};
   --shadow-lg: ${shadows.lg};
   --shadow-xl: ${shadows.xl};
+  --shadow-glow: ${shadows.glow};
+  --shadow-inset: ${shadows.inset};
 
   /* Animation */
+  --duration-instant: ${animation.duration.instant}ms;
   --duration-fast: ${animation.duration.fast}ms;
   --duration-normal: ${animation.duration.normal}ms;
   --duration-slow: ${animation.duration.slow}ms;
+  --duration-slower: ${animation.duration.slower}ms;
   --easing-default: ${animation.easing.default};
+  --easing-spring: ${animation.easing.spring};
   --easing-in: ${animation.easing.in};
   --easing-out: ${animation.easing.out};
   --easing-in-out: ${animation.easing.inOut};
@@ -244,9 +421,29 @@ export function generateCSSVariables(): string {
   --z-base: ${zIndex.base};
   --z-dropdown: ${zIndex.dropdown};
   --z-sticky: ${zIndex.sticky};
-  --z-modal: ${zIndex.modal};
+  --z-overlay: ${zIndex.overlay};
+  --z-context-menu: ${zIndex.contextMenu};
   --z-popover: ${zIndex.popover};
+  --z-modal: ${zIndex.modal};
+  --z-color-picker: ${zIndex.colorPicker};
   --z-tooltip: ${zIndex.tooltip};
+
+  /* Noise texture overlay */
+  --noise-opacity: ${noiseOpacity.dark};
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+${colorVariables(lightColors)}
+
+  /* Shadows */
+  --shadow-sm: ${lightShadows.sm};
+  --shadow-md: ${lightShadows.md};
+  --shadow-lg: ${lightShadows.lg};
+  --shadow-xl: ${lightShadows.xl};
+
+  /* Noise texture overlay */
+  --noise-opacity: ${noiseOpacity.light};
 }
 `.trim();
 }
@@ -257,22 +454,28 @@ export function generateCSSVariables(): string {
 
 export interface Theme {
   colors: typeof colors;
+  lightColors: ColorTokens;
   spacing: typeof spacing;
   typography: typeof typography;
   borderRadius: typeof borderRadius;
   shadows: typeof shadows;
+  lightShadows: typeof lightShadows;
   animation: typeof animation;
   zIndex: typeof zIndex;
+  noiseOpacity: typeof noiseOpacity;
 }
 
 export const theme: Theme = {
   colors,
+  lightColors,
   spacing,
   typography,
   borderRadius,
   shadows,
+  lightShadows,
   animation,
   zIndex,
+  noiseOpacity,
 };
 
 export default theme;

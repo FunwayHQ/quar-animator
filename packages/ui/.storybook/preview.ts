@@ -1,98 +1,15 @@
 import type { Preview } from '@storybook/react';
+import { generateCSSVariables } from '../src/theme';
 
-// Global styles - matches globals.css
+// The design tokens come from theme.ts, which mirrors the editor's own
+// stylesheet; these are the page styles and the animations the components
+// use.
 const globalStyles = `
-:root {
-  /* Colors - Background */
-  --color-bg-primary: #0D0D0D;
-  --color-bg-secondary: #1A1A1A;
-  --color-bg-tertiary: #262626;
-  --color-bg-elevated: #2D2D2D;
-  --color-bg-hover: #333333;
-  --color-bg-active: #404040;
-
-  /* Colors - Text */
-  --color-text-primary: #FFFFFF;
-  --color-text-secondary: #A3A3A3;
-  --color-text-tertiary: #737373;
-  --color-text-disabled: #525252;
-  --color-text-inverse: #0D0D0D;
-
-  /* Colors - Border */
-  --color-border-default: #333333;
-  --color-border-subtle: #262626;
-  --color-border-strong: #404040;
-  --color-border-focus: #3B82F6;
-
-  /* Colors - Accent */
-  --color-accent-primary: #3B82F6;
-  --color-accent-primary-hover: #2563EB;
-  --color-accent-primary-active: #1D4ED8;
-  --color-accent-secondary: #8B5CF6;
-  --color-accent-success: #22C55E;
-  --color-accent-warning: #F59E0B;
-  --color-accent-error: #EF4444;
-
-  /* Colors - Timeline */
-  --color-timeline-playhead: #EF4444;
-  --color-timeline-keyframe: #F59E0B;
-  --color-timeline-keyframe-selected: #FBBF24;
-  --color-timeline-onion-before: #FF6B6B;
-  --color-timeline-onion-after: #4ECDC4;
-
-  /* Spacing */
-  --space-xs: 4px;
-  --space-sm: 8px;
-  --space-md: 16px;
-  --space-lg: 24px;
-  --space-xl: 32px;
-  --space-2xl: 48px;
-  --space-3xl: 64px;
-
-  /* Typography */
-  --font-family-ui: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  --font-family-mono: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
-  --font-size-xs: 10px;
-  --font-size-sm: 12px;
-  --font-size-md: 14px;
-  --font-size-lg: 16px;
-  --font-size-xl: 18px;
-  --font-size-2xl: 24px;
-
-  /* Border Radius */
-  --radius-none: 0px;
-  --radius-sm: 4px;
-  --radius-md: 6px;
-  --radius-lg: 8px;
-  --radius-xl: 12px;
-  --radius-full: 9999px;
-
-  /* Shadows */
-  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.5);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.5), 0 2px 4px -2px rgba(0, 0, 0, 0.5);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5), 0 4px 6px -4px rgba(0, 0, 0, 0.5);
-  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.5);
-
-  /* Animation */
-  --duration-fast: 100ms;
-  --duration-normal: 200ms;
-  --duration-slow: 300ms;
-  --easing-default: cubic-bezier(0.4, 0, 0.2, 1);
-  --easing-in: cubic-bezier(0.4, 0, 1, 1);
-  --easing-out: cubic-bezier(0, 0, 0.2, 1);
-  --easing-in-out: cubic-bezier(0.4, 0, 0.2, 1);
-
-  /* Z-Index */
-  --z-base: 0;
-  --z-dropdown: 100;
-  --z-sticky: 200;
-  --z-modal: 300;
-  --z-popover: 400;
-  --z-tooltip: 500;
-}
+${generateCSSVariables()}
 
 body {
   font-family: var(--font-family-ui);
+  font-size: var(--font-size-md);
   background-color: var(--color-bg-primary);
   color: var(--color-text-primary);
   -webkit-font-smoothing: antialiased;
@@ -122,6 +39,21 @@ body {
 `;
 
 const preview: Preview = {
+  globalTypes: {
+    theme: {
+      description: 'Editor theme',
+      defaultValue: 'dark',
+      toolbar: {
+        title: 'Theme',
+        icon: 'circlehollow',
+        items: [
+          { value: 'dark', title: 'Dark' },
+          { value: 'light', title: 'Light' },
+        ],
+        dynamicTitle: true,
+      },
+    },
+  },
   parameters: {
     actions: { argTypesRegex: '^on[A-Z].*' },
     controls: {
@@ -130,17 +62,12 @@ const preview: Preview = {
         date: /Date$/i,
       },
     },
-    backgrounds: {
-      default: 'dark',
-      values: [
-        { name: 'dark', value: '#0D0D0D' },
-        { name: 'light', value: '#FFFFFF' },
-      ],
-    },
+    // The page background follows the theme, as in the editor.
+    backgrounds: { disable: true },
     docs: {},
   },
   decorators: [
-    (Story) => {
+    (Story, context) => {
       // Inject global styles
       const styleId = 'quar-global-styles';
       if (!document.getElementById(styleId)) {
@@ -149,6 +76,8 @@ const preview: Preview = {
         style.textContent = globalStyles;
         document.head.appendChild(style);
       }
+      // The editor switches themes the same way: data-theme on <html>.
+      document.documentElement.dataset.theme = context.globals.theme === 'light' ? 'light' : 'dark';
       return Story();
     },
   ],
