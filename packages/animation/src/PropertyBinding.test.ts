@@ -101,6 +101,27 @@ describe('setProperty', () => {
     expect(updated).not.toBe(node);
   });
 
+  it('makes a missing indexed field an array, not an object', () => {
+    const image = makeImageNode(); // no vertexOffsets
+    const moved = setProperty(image, 'vertexOffsets.0.x', 5);
+    expect(Array.isArray(moved.vertexOffsets)).toBe(true);
+    expect(moved.vertexOffsets?.[0]?.x).toBe(5);
+    const bare = { ...makeRectNode(), fills: undefined } as unknown as RectangleNode;
+    const filled = setProperty(bare, 'fills.0.color', { r: 1, g: 2, b: 3, a: 1 });
+    expect(Array.isArray(filled.fills)).toBe(true);
+  });
+
+  it('never leaves holes in an array: a write past its end changes nothing', () => {
+    const node = makeRectNode();
+    const fills = node.fills.length;
+    const updated = setProperty(node, 'fills.3.color', { r: 0, g: 0, b: 0, a: 1 });
+    expect(updated.fills).toHaveLength(fills);
+    for (const fill of updated.fills) expect(fill).toBeDefined();
+    // In range still works
+    const recoloured = setProperty(node, 'fills.0.color', { r: 9, g: 9, b: 9, a: 1 });
+    expect(recoloured.fills[0]?.type === 'solid' && recoloured.fills[0].color.r).toBe(9);
+  });
+
   it('sets nested property immutably', () => {
     const node = makeRectNode();
     const updated = setProperty(node, 'transform.position.x', 300);

@@ -50,22 +50,33 @@ export function setProperty<N extends Node>(node: N, path: string, value: unknow
     return { ...node, [parts[0]!]: value };
   }
 
-  // Multi-level: clone each level on the path
+  // Multi-level: clone each level on the path. A missing level is made an
+  // array when the next part is an index (`fills.0.color`), and an array is
+  // never grown with holes: a write past its end changes nothing (playback
+  // iterates fills, strokes and effects, and a hole would break it).
+  const isIndex = (part: string | undefined) => part !== undefined && /^\d+$/.test(part);
+  const pastTheEnd = (container: unknown, part: string) =>
+    Array.isArray(container) && isIndex(part) && Number(part) > container.length;
   const root = { ...node } as Record<string, unknown>;
   let current = root;
   for (let i = 0; i < parts.length - 1; i++) {
     const key = parts[i]!;
+    if (pastTheEnd(current, key)) return node;
     const existing = current[key];
     const cloned =
       typeof existing === 'object' && existing !== null
         ? Array.isArray(existing)
           ? [...existing]
           : { ...(existing as Record<string, unknown>) }
-        : {};
+        : isIndex(parts[i + 1])
+          ? []
+          : {};
     current[key] = cloned;
     current = cloned as Record<string, unknown>;
   }
-  current[parts[parts.length - 1]!] = value;
+  const leaf = parts[parts.length - 1]!;
+  if (pastTheEnd(current, leaf)) return node;
+  current[leaf] = value;
 
   return root as N;
 }
