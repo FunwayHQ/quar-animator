@@ -176,15 +176,69 @@ describe('convertSvgToNodes', () => {
       expect(node.fills).toHaveLength(1);
     });
 
-    it('open paths have no fills', () => {
+    it('fills an open path as SVG does, closing it', () => {
       const { nodes } = convert(`
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
-          <path d="M 0 0 L 100 0 L 100 100" fill="red" stroke="black" />
+          <path d="M 0 0 L 100 0 L 100 100" fill="red" />
+        </svg>
+      `);
+      expect(nodes).toHaveLength(1);
+      const node = nodes[0] as PathNode;
+      expect(node.closed).toBe(true);
+      expect(node.points).toHaveLength(3);
+      expect(node.fills).toHaveLength(1);
+      expect(node.fills[0].color).toEqual({ r: 255, g: 0, b: 0, a: 1 });
+    });
+
+    it('keeps the stroke of a filled open path open, over a closed fill', () => {
+      const { nodes, rootIds } = convert(`
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+          <path id="wave" d="M 0 0 L 100 0 L 100 100" fill="red" stroke="black" />
+        </svg>
+      `);
+      expect(nodes).toHaveLength(2);
+      // The fill is drawn first, under the stroke
+      const [fill, stroke] = rootIds.map((id) => nodes.find((n) => n.id === id) as PathNode);
+      expect(fill.name).toBe('wave Fill');
+      expect(fill.closed).toBe(true);
+      expect(fill.fills).toHaveLength(1);
+      expect(fill.strokes).toHaveLength(0);
+      expect(stroke.name).toBe('wave');
+      expect(stroke.closed).toBe(false);
+      expect(stroke.fills).toHaveLength(0);
+      expect(stroke.strokes).toHaveLength(1);
+      // Same outline in the same place, and not shared
+      expect(fill.points).toEqual(stroke.points);
+      expect(fill.points).not.toBe(stroke.points);
+      expect(fill.transform).toEqual(stroke.transform);
+      expect(fill.transform).not.toBe(stroke.transform);
+    });
+
+    it('fills an open curve, whose closing edge encloses area', () => {
+      const { nodes } = convert(`
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+          <path d="M 0 50 C 0 0 100 0 100 50" />
         </svg>
       `);
       const node = nodes[0] as PathNode;
-      expect(node.closed).toBe(false);
-      expect(node.fills).toHaveLength(0);
+      expect(node.closed).toBe(true);
+      expect(node.fills).toHaveLength(1);
+    });
+
+    it('leaves an open path unfilled when its fill is none, or would enclose nothing', () => {
+      const { nodes } = convert(`
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+          <path d="M 0 0 L 100 0 L 100 100" fill="none" stroke="black" />
+          <path d="M 0 0 L 50 50 L 100 100" stroke="black" />
+          <path d="M 0 0 L 100 0 L 100 100" fill="transparent" stroke="black" />
+        </svg>
+      `);
+      expect(nodes).toHaveLength(3);
+      for (const node of nodes as PathNode[]) {
+        expect(node.closed).toBe(false);
+        expect(node.fills).toHaveLength(0);
+        expect(node.strokes).toHaveLength(1);
+      }
     });
 
     it('creates multiple PathNodes for multiple subpaths', () => {
@@ -241,6 +295,24 @@ describe('convertSvgToNodes', () => {
       const node = nodes[0] as PathNode;
       expect(node.type).toBe('path');
       expect(node.closed).toBe(false);
+      expect(node.fills).toHaveLength(0);
+    });
+
+    it('fills a polyline as SVG does', () => {
+      const { nodes } = convert(`
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+          <polyline points="0,0 100,0 100,100" fill="green" />
+          <polyline points="0,0 50,50 100,100" fill="green" stroke="red" />
+        </svg>
+      `);
+      expect(nodes).toHaveLength(2);
+      const filled = nodes[0] as PathNode;
+      expect(filled.closed).toBe(true);
+      expect(filled.fills).toHaveLength(1);
+      // A straight polyline encloses nothing: just its stroke
+      const straight = nodes[1] as PathNode;
+      expect(straight.closed).toBe(false);
+      expect(straight.fills).toHaveLength(0);
     });
   });
 

@@ -9,6 +9,7 @@ import type {
   RectangleNode,
   EllipseNode,
   PathNode,
+  PathPoint,
   Fill,
   Stroke,
   Gradient,
@@ -18,6 +19,7 @@ import type {
 } from '@quar/types';
 import { createDefaultTransform } from '../SceneGraph';
 import { getNodeLocalBounds } from '../gradient/gradientUtils';
+import { clonePathPoint } from '../path/pathUtils';
 import {
   parseSvgTransform,
   parseSvgColor,
@@ -100,7 +102,7 @@ function convertElement(element: SvgElement, ctx: ConvertContext): Node[] {
     case 'polygon':
       return [convertPolygon(element, ctx)];
     case 'polyline':
-      return [convertPolyline(element, ctx)];
+      return convertPolyline(element, ctx);
     case 'path':
       return convertPath(element, ctx);
     case 'g':
@@ -278,7 +280,7 @@ function convertPolygon(el: SvgPolygon, ctx: ConvertContext): PathNode {
   return node;
 }
 
-function convertPolyline(el: SvgPolyline, ctx: ConvertContext): PathNode {
+function convertPolyline(el: SvgPolyline, ctx: ConvertContext): PathNode[] {
   const rawPoints = el.points.map((p) => ({
     position: { x: p.x, y: ctx.viewBoxHeight - p.y },
     handleIn: null,
@@ -286,31 +288,7 @@ function convertPolyline(el: SvgPolyline, ctx: ConvertContext): PathNode {
     type: 'corner' as const,
   }));
 
-  // Center the path so rotation/scale works correctly
-  const { centeredPoints, center } = centerPathPoints(rawPoints);
-
-  const transform = buildCenteredPathTransform(center, el.transform, ctx.viewBoxHeight);
-
-  const node: PathNode = {
-    id: ctx.generateId(),
-    name: el.id || 'Polyline',
-    type: 'path',
-    parent: null,
-    children: [],
-    transform,
-    visible: true,
-    locked: false,
-    opacity: el.style.opacity,
-    blendMode: 'normal',
-    points: centeredPoints,
-    closed: false,
-    fills: [],
-    strokes: [],
-  };
-  paintShape(node, el.style, flippedOrigin(center, ctx), ctx, false);
-
-  ctx.allNodes.push(node);
-  return node;
+  return convertContour(el, rawPoints, false, el.id || 'Polyline', ctx);
 }
 
 function convertPath(el: SvgPath, ctx: ConvertContext): PathNode[] {
@@ -339,34 +317,100 @@ function convertPath(el: SvgPath, ctx: ConvertContext): PathNode[] {
   }
 
   // Simple path(s): one node per subpath, centered
-  const nodes: PathNode[] = [];
-  for (const sp of flippedSubpaths) {
-    const { centeredPoints, center } = centerPathPoints(sp.points);
-    const transform = buildCenteredPathTransform(center, el.transform, ctx.viewBoxHeight);
+  return flippedSubpaths.flatMap((sp) =>
+    convertContour(el, sp.points, sp.closed, el.id || 'Path', ctx)
+  );
+}
 
+/**
+ * The nodes for one contour of a <path> or <polyline> (points Y-flipped).
+ * SVG fills an open contour as if it were closed, but Quar fills only closed
+ * paths: so an open contour whose fill shows comes in closed, and when it's
+ * stroked too, the stroke stays on an open copy drawn over that fill
+ * (closing the stroked one would stroke an edge the SVG doesn't draw).
+ */
+function convertContour(
+  el: SvgPath | SvgPolyline,
+  points: PathPoint[],
+  closed: boolean,
+  name: string,
+  ctx: ConvertContext
+): PathNode[] {
+  // Center the path so rotation/scale works correctly
+  const { centeredPoints, center } = centerPathPoints(points);
+  const pathNode = (nodeName: string, nodeClosed: boolean): PathNode => {
     const node: PathNode = {
       id: ctx.generateId(),
-      name: el.id || 'Path',
+      name: nodeName,
       type: 'path',
       parent: null,
       children: [],
-      transform,
+      transform: buildCenteredPathTransform(center, el.transform, ctx.viewBoxHeight),
       visible: true,
       locked: false,
       opacity: el.style.opacity,
       blendMode: 'normal',
-      points: centeredPoints,
-      closed: sp.closed,
+      points: centeredPoints.map(clonePathPoint),
+      closed: nodeClosed,
       fills: [],
       strokes: [],
     };
-    paintShape(node, el.style, flippedOrigin(center, ctx), ctx, sp.closed);
+    paintShape(node, el.style, flippedOrigin(center, ctx), ctx);
+    return node;
+  };
 
-    ctx.allNodes.push(node);
-    nodes.push(node);
+  const node = pathNode(name, closed);
+  const nodes = [node];
+  if (!closed) {
+    if (!fillShows(node.fills) || !enclosesArea(points)) {
+      node.fills = [];
+    } else if (node.strokes.length === 0) {
+      node.closed = true;
+    } else {
+      const fill = pathNode(`${name} Fill`, true);
+      fill.strokes = [];
+      node.fills = [];
+      nodes.unshift(fill);
+    }
   }
 
+  ctx.allNodes.push(...nodes);
   return nodes;
+}
+
+/** Whether any of these fills would show. */
+function fillShows(fills: Fill[]): boolean {
+  return fills.some((f) => f.opacity > 0 && (f.color?.a ?? 1) > 0);
+}
+
+/**
+ * Whether closing a contour would enclose any area: not when its points and
+ * handles all lie on one line, as a straight run's do.
+ */
+function enclosesArea(points: PathPoint[]): boolean {
+  const spots: Vector2[] = [];
+  for (const { position: p, handleIn, handleOut } of points) {
+    spots.push(p);
+    if (handleIn) spots.push({ x: p.x + handleIn.x, y: p.y + handleIn.y });
+    if (handleOut) spots.push({ x: p.x + handleOut.x, y: p.y + handleOut.y });
+  }
+  const first = spots[0];
+  if (!first) return false;
+  // The line through the first spot and the one farthest from it
+  let far = first;
+  let farSq = 0;
+  for (const s of spots) {
+    const dSq = (s.x - first.x) ** 2 + (s.y - first.y) ** 2;
+    if (dSq > farSq) {
+      farSq = dSq;
+      far = s;
+    }
+  }
+  if (farSq === 0) return false;
+  const length = Math.sqrt(farSq);
+  const ux = (far.x - first.x) / length;
+  const uy = (far.y - first.y) / length;
+  return spots.some((s) => Math.abs((s.x - first.x) * uy - (s.y - first.y) * ux) > length * 1e-6);
 }
 
 /**
