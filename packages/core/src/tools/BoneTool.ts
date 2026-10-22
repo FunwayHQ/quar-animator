@@ -7,7 +7,7 @@ import type { CanvasPointerEvent, BoneNode, Vector2 } from '@quar/types';
 import { BaseTool, type ToolContext } from './BaseTool';
 import { mat3 } from '../math';
 
-// Minimum drag distance (pixels) to create a bone
+// Minimum drag distance (screen pixels) to create a bone
 const MIN_BONE_LENGTH = 5;
 
 // Screen distance to snap to an existing bone tip
@@ -107,7 +107,9 @@ export class BoneTool extends BaseTool {
     const dy = event.worldPosition.y - this.startPoint.y;
     const length = Math.sqrt(dx * dx + dy * dy);
 
-    if (length >= MIN_BONE_LENGTH) {
+    // The minimum is on screen, so a short drag zoomed in still makes a bone
+    // and a click zoomed out doesn't
+    if (length >= MIN_BONE_LENGTH / this.context.camera.zoom) {
       const rotation = Math.atan2(dy, dx) * (180 / Math.PI);
 
       // Undo snapshot

@@ -92,6 +92,28 @@ describe('BoneTool', () => {
       expect(nodes).toHaveLength(0);
     });
 
+    it('creates a short bone drawn zoomed in (the minimum is on screen)', () => {
+      context.camera.zoom = 8;
+      // 4 world units = 32 screen pixels at 8x
+      tool.onPointerDown(createPointerEvent(0, 0));
+      tool.onPointerMove(createPointerEvent(4, 0));
+      tool.onPointerUp(createPointerEvent(4, 0));
+
+      const nodes = context.sceneGraph.getRootNodes();
+      expect(nodes).toHaveLength(1);
+      expect((nodes[0]! as BoneNode).length).toBeCloseTo(4, 5);
+    });
+
+    it('does not create a bone from a click zoomed out', () => {
+      context.camera.zoom = 0.1;
+      // 20 world units = 2 screen pixels at 10%
+      tool.onPointerDown(createPointerEvent(0, 0));
+      tool.onPointerMove(createPointerEvent(20, 0));
+      tool.onPointerUp(createPointerEvent(20, 0));
+
+      expect(context.sceneGraph.getRootNodes()).toHaveLength(0);
+    });
+
     it('selects created bone after creation', () => {
       tool.onPointerDown(createPointerEvent(0, 0));
       tool.onPointerMove(createPointerEvent(100, 0));
