@@ -476,6 +476,20 @@ interface TessellationCacheEntry {
   fittedSkin?: { source: SkinData; skin: SkinData };
 }
 
+/**
+ * Index arrays as the GPU takes them, converted once per array: cached
+ * geometry keeps its index array, so drawing it again needs no new copy.
+ */
+const indexArrays = new WeakMap<readonly number[], Uint32Array>();
+function indexData(indices: readonly number[]): Uint32Array {
+  let data = indexArrays.get(indices);
+  if (!data) {
+    data = new Uint32Array(indices);
+    indexArrays.set(indices, data);
+  }
+  return data;
+}
+
 /** Build a cache key string from node geometry properties */
 function buildGeometryKey(node: Node): string {
   switch (node.type) {
@@ -2828,7 +2842,7 @@ export class ShapeRenderer {
     }
 
     // Upload cached indices
-    const indicesArray = new Uint32Array(fillIndices);
+    const indicesArray = indexData(fillIndices);
     this.uploadToBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indexBuffer, indicesArray);
 
     // Draw using indexed triangles
@@ -3002,7 +3016,7 @@ export class ShapeRenderer {
       if (cachedIndices.length === 0) {
         gl.drawArrays(gl.TRIANGLE_FAN, 0, numVertices);
       } else {
-        const indicesArray = new Uint32Array(cachedIndices);
+        const indicesArray = indexData(cachedIndices);
         this.uploadToBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indexBuffer, indicesArray);
         gl.drawElements(gl.TRIANGLES, cachedIndices.length, gl.UNSIGNED_INT, 0);
       }
@@ -3382,7 +3396,7 @@ export class ShapeRenderer {
 
         // Upload fill indices and draw
         if (fillIndices.length > 0) {
-          const indexArray = new Uint32Array(fillIndices);
+          const indexArray = indexData(fillIndices);
           this.uploadToBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indexBuffer, indexArray);
           gl.drawElements(gl.TRIANGLES, fillIndices.length, gl.UNSIGNED_INT, 0);
         }
@@ -3396,7 +3410,7 @@ export class ShapeRenderer {
 
         // Upload fill indices and draw
         if (fillIndices.length > 0) {
-          const indexArray = new Uint32Array(fillIndices);
+          const indexArray = indexData(fillIndices);
           this.uploadToBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indexBuffer, indexArray);
           gl.drawElements(gl.TRIANGLES, fillIndices.length, gl.UNSIGNED_INT, 0);
         }
@@ -3794,7 +3808,7 @@ export class ShapeRenderer {
     gl.bufferData(gl.ARRAY_BUFFER, meshData, gl.DYNAMIC_DRAW);
     if (!this.imageMeshIndexBuffer) this.imageMeshIndexBuffer = gl.createBuffer();
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.imageMeshIndexBuffer);
-    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint32Array(cached.fillIndices), gl.DYNAMIC_DRAW);
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indexData(cached.fillIndices), gl.DYNAMIC_DRAW);
 
     // Bind texture
     gl.activeTexture(gl.TEXTURE0);
@@ -4015,8 +4029,8 @@ export class ShapeRenderer {
 
     // Draw using fill indices
     if (fillIndices.length > 0) {
-      const indexData = new Uint32Array(fillIndices);
-      this.uploadToBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indexBuffer, indexData);
+      const indexArray = indexData(fillIndices);
+      this.uploadToBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indexBuffer, indexArray);
       gl.drawElements(gl.TRIANGLES, fillIndices.length, gl.UNSIGNED_INT, 0);
     }
 
@@ -4545,7 +4559,7 @@ export class ShapeRenderer {
       gl.drawArrays(gl.TRIANGLE_FAN, 0, numVertices);
       return;
     }
-    const indicesArray = new Uint32Array(cachedIndices);
+    const indicesArray = indexData(cachedIndices);
     this.uploadToBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indexBuffer, indicesArray);
     gl.drawElements(gl.TRIANGLES, cachedIndices.length, gl.UNSIGNED_INT, 0);
   }

@@ -70,10 +70,12 @@ function compoundPath(strokes: Stroke[]): PathNode {
 describe('ShapeRenderer caches', () => {
   let shapeRenderer: InstanceType<typeof ShapeRenderer>;
   let sceneGraph: InstanceType<typeof SceneGraph>;
+  let gl: ReturnType<typeof createMockWebGL2Context>;
 
   beforeEach(() => {
     const canvas = document.createElement('canvas');
-    canvas.getContext = vi.fn().mockReturnValue(createMockWebGL2Context());
+    gl = createMockWebGL2Context();
+    canvas.getContext = vi.fn().mockReturnValue(gl);
     shapeRenderer = new ShapeRenderer(new WebGLRenderer({ canvas }));
     sceneGraph = new SceneGraph();
     counts.tessellate = 0;
@@ -113,6 +115,23 @@ describe('ShapeRenderer caches', () => {
     } as Partial<PathNode>);
     frames(3);
     expect(counts.corners).toBe(2);
+  });
+
+  it('uploads a cached fill’s indices without copying them again each frame', () => {
+    sceneGraph.addNode({ ...compoundPath([]), subpaths: undefined });
+    const indexUploads = () =>
+      vi
+        .mocked(gl.bufferSubData)
+        .mock.calls.filter(([target]) => target === gl.ELEMENT_ARRAY_BUFFER)
+        .map(([, , data]) => data);
+    frames(1);
+    const first = indexUploads();
+    vi.mocked(gl.bufferSubData).mockClear();
+    frames(1);
+    const second = indexUploads();
+    expect(second.length).toBe(first.length);
+    expect(second.length).toBeGreaterThan(0);
+    second.forEach((data, i) => expect(data).toBe(first[i]));
   });
 
   it('outlines again when the stroke changes, and only then', () => {
