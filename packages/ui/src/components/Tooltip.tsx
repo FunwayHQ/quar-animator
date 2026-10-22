@@ -73,7 +73,13 @@ export function Tooltip({
   const showTooltip = () => {
     if (disabled) return;
 
+    // Hover and focus both arm the delay; keep only one pending, so leaving
+    // cancels it and no earlier one shows the tooltip later.
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+    }
     timeoutRef.current = window.setTimeout(() => {
+      timeoutRef.current = null;
       setIsVisible(true);
       updatePosition();
     }, delay);

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Tooltip } from './Tooltip';
 
@@ -70,6 +70,27 @@ describe('Tooltip', () => {
     await waitFor(() => {
       expect(screen.queryByText('Tooltip')).not.toBeInTheDocument();
     });
+  });
+
+  it('stays hidden after the pointer leaves when focus also armed it', () => {
+    // Hovering then clicking the button arms the delay twice (mouseenter and
+    // focus); leaving must cancel both, or the first one shows the tooltip
+    // after the pointer has gone.
+    render(
+      <Tooltip content="Late tooltip" delay={300}>
+        <button>Button</button>
+      </Tooltip>
+    );
+    const button = screen.getByRole('button');
+
+    fireEvent.mouseEnter(button);
+    fireEvent.focus(button);
+    fireEvent.mouseLeave(button);
+    act(() => {
+      vi.advanceTimersByTime(300);
+    });
+
+    expect(screen.queryByText('Late tooltip')).not.toBeInTheDocument();
   });
 
   it('shows keyboard shortcut when provided', async () => {
