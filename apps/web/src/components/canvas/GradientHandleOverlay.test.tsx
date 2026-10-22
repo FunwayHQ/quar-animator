@@ -42,7 +42,7 @@ function setup(gradient: Partial<Gradient> = {}) {
   };
   sceneGraph.addNode(node);
   const camera = new Camera();
-  render(
+  const { unmount } = render(
     <>
       <canvas />
       <GradientHandleOverlay
@@ -63,8 +63,34 @@ function setup(gradient: Partial<Gradient> = {}) {
     fireEvent.pointerMove(document, { clientX: point.x, clientY: point.y });
     fireEvent.pointerUp(document);
   };
-  return { at, gradientNow, drag };
+  return { at, gradientNow, drag, unmount };
 }
+
+describe('GradientHandleOverlay drag', () => {
+  it('stops dragging once the handles are put away mid-drag (F066)', () => {
+    const { at, gradientNow, unmount } = setup();
+    fireEvent.pointerDown(screen.getByTestId('gradient-handle-center'));
+    // Escape (or anything else) puts the handles away with the button still down
+    unmount();
+
+    const point = at({ x: 0.2, y: 0.3 });
+    fireEvent.pointerMove(document, { clientX: point.x, clientY: point.y });
+    fireEvent.pointerUp(document);
+
+    expect(gradientNow().center).toEqual({ x: 0.5, y: 0.5 });
+  });
+
+  it('Escape ends a drag in progress (F066)', () => {
+    const { at, gradientNow } = setup();
+    fireEvent.pointerDown(screen.getByTestId('gradient-handle-center'));
+    fireEvent.keyDown(document, { key: 'Escape' });
+
+    const point = at({ x: 0.2, y: 0.3 });
+    fireEvent.pointerMove(document, { clientX: point.x, clientY: point.y });
+
+    expect(gradientNow().center).toEqual({ x: 0.5, y: 0.5 });
+  });
+});
 
 describe('GradientHandleOverlay focal point', () => {
   it('shows no focal handle until there is a focal point', () => {

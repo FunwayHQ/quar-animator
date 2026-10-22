@@ -75,6 +75,8 @@ export function GradientHandleOverlay({
 }: GradientHandleOverlayProps) {
   const draggingRef = useRef<DraggingHandle>(null);
   const canvasRectRef = useRef<DOMRect | null>(null);
+  // Ends the drag in progress: its document listeners go too
+  const endDragRef = useRef<(() => void) | null>(null);
 
   const gradient = getGradient(node, fillIndex, source);
 
@@ -89,6 +91,7 @@ export function GradientHandleOverlay({
       if (!camera) return;
       e.stopPropagation();
       e.preventDefault();
+      endDragRef.current?.();
       draggingRef.current = handle;
       let undoPushed = false;
 
@@ -197,19 +200,26 @@ export function GradientHandleOverlay({
         draggingRef.current = null;
         document.removeEventListener('pointermove', onPointerMove);
         document.removeEventListener('pointerup', onPointerUp);
+        if (endDragRef.current === onPointerUp) endDragRef.current = null;
       };
 
       document.addEventListener('pointermove', onPointerMove);
       document.addEventListener('pointerup', onPointerUp);
+      endDragRef.current = onPointerUp;
     },
     [camera, worldMatrix, localBounds, sceneGraph, node.id, fillIndex, source]
   );
+
+  // A drag still going when the handles go away (Escape) ends with them,
+  // instead of moving the gradient unseen until the button is let go
+  useEffect(() => () => endDragRef.current?.(), []);
 
   // ---- Escape key to dismiss ----
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
+        endDragRef.current?.();
         useEditorStore.getState().clearEditingGradient();
       }
     };
