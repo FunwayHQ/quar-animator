@@ -171,13 +171,13 @@ export function ColorPicker({
       const rect = el.getBoundingClientRect();
       const s = clamp((clientX - rect.left) / rect.width, 0, 1);
       const v = clamp(1 - (clientY - rect.top) / rect.height, 0, 1);
-      setHsv((prev) => {
-        const next = { ...prev, s, v };
-        emitColor(next.h, next.s, next.v, alpha);
-        return next;
-      });
+      // Set, then told: never from inside a state updater (React may run
+      // one twice), as updateAlpha does
+      const next = { ...hsv, s, v };
+      setHsv(next);
+      emitColor(next.h, next.s, next.v, alpha);
     },
-    [alpha, emitColor]
+    [hsv, alpha, emitColor]
   );
 
   const handleSVPointerDown = useCallback(
@@ -199,13 +199,11 @@ export function ColorPicker({
       if (!el) return;
       const rect = el.getBoundingClientRect();
       const h = clamp((clientX - rect.left) / rect.width, 0, 1) * 360;
-      setHsv((prev) => {
-        const next = { ...prev, h };
-        emitColor(next.h, next.s, next.v, alpha);
-        return next;
-      });
+      const next = { ...hsv, h };
+      setHsv(next);
+      emitColor(next.h, next.s, next.v, alpha);
     },
-    [alpha, emitColor]
+    [hsv, alpha, emitColor]
   );
 
   const handleHuePointerDown = useCallback(

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
+import { StrictMode } from 'react';
 import { ColorPicker } from './ColorPicker';
 import type { Color } from '@quar/types';
 
@@ -28,6 +29,32 @@ describe('ColorPicker', () => {
       />
     );
   }
+
+  it('tells its owner of each pick once, even where React runs state updates twice', () => {
+    render(
+      <StrictMode>
+        <ColorPicker
+          color={makeColor()}
+          onChange={onChange}
+          anchorX={100}
+          anchorY={200}
+          onClose={onClose}
+        />
+      </StrictMode>
+    );
+    for (const id of ['sv-area', 'hue-slider']) {
+      const el = screen.getByTestId(id);
+      el.getBoundingClientRect = () => ({ left: 0, top: 0, width: 100, height: 100 }) as DOMRect;
+    }
+    fireEvent.pointerDown(screen.getByTestId('sv-area'), {
+      clientX: 50,
+      clientY: 50,
+      pointerId: 1,
+    });
+    expect(onChange).toHaveBeenCalledTimes(1);
+    fireEvent.pointerDown(screen.getByTestId('hue-slider'), { clientX: 30, pointerId: 1 });
+    expect(onChange).toHaveBeenCalledTimes(2);
+  });
 
   it('renders all core elements', () => {
     renderPicker();
