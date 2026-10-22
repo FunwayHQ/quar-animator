@@ -130,6 +130,14 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
     ref
   ) => {
     const [isHovered, setIsHovered] = React.useState(false);
+    // A loading button can't be pressed either, so it looks and acts disabled.
+    const isDisabled = Boolean(disabled || loading);
+
+    // A disabled button gets no mouseleave, so drop the hover look when it
+    // becomes disabled, or it would come back hovered after the pointer left.
+    React.useEffect(() => {
+      if (isDisabled) setIsHovered(false);
+    }, [isDisabled]);
 
     const handleMouseEnter = (e: React.MouseEvent<HTMLButtonElement>) => {
       setIsHovered(true);
@@ -146,15 +154,15 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       ...variantStyles[variant],
       ...(iconOnly ? iconOnlySizeStyles[size] : sizeStyles[size]),
       ...(fullWidth && { width: '100%' }),
-      ...(disabled && disabledStyles),
-      ...(isHovered && !disabled && getHoverStyles(variant)),
+      ...(isDisabled && disabledStyles),
+      ...(isHovered && !isDisabled && getHoverStyles(variant)),
       ...style,
     };
 
     return (
       <button
         ref={ref}
-        disabled={disabled || loading}
+        disabled={isDisabled}
         style={computedStyles}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}

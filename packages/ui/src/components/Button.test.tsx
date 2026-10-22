@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Button } from './Button';
 
@@ -52,7 +52,11 @@ describe('Button', () => {
   it('does not fire click when disabled', () => {
     const onClick = vi.fn();
 
-    render(<Button disabled onClick={onClick}>Disabled</Button>);
+    render(
+      <Button disabled onClick={onClick}>
+        Disabled
+      </Button>
+    );
 
     // Button has pointer-events: none when disabled, preventing clicks
     const button = screen.getByRole('button');
@@ -65,6 +69,35 @@ describe('Button', () => {
     expect(screen.getByRole('button')).toBeDisabled();
     // Loading shows spinner, not text
     expect(screen.queryByText('Loading')).not.toBeInTheDocument();
+  });
+
+  it('looks disabled while loading', () => {
+    render(<Button loading>Save</Button>);
+    expect(screen.getByRole('button')).toHaveStyle({ cursor: 'not-allowed', opacity: '0.5' });
+  });
+
+  it('drops the hover look when it starts loading under the pointer', () => {
+    const { rerender } = render(<Button>Save</Button>);
+    const button = screen.getByRole('button');
+
+    fireEvent.mouseEnter(button);
+    expect(button).toHaveStyle({ backgroundColor: 'var(--color-bg-hover)' });
+
+    rerender(<Button loading>Save</Button>);
+    expect(button).toHaveStyle({ backgroundColor: 'var(--color-bg-tertiary)' });
+  });
+
+  it('does not come back hovered after being disabled under the pointer', () => {
+    // A disabled button gets no mouseleave, so the hover has to be dropped
+    // when it is disabled, not when the pointer leaves.
+    const { rerender } = render(<Button>Save</Button>);
+    const button = screen.getByRole('button');
+
+    fireEvent.mouseEnter(button);
+    rerender(<Button disabled>Save</Button>);
+    rerender(<Button>Save</Button>);
+
+    expect(button).toHaveStyle({ backgroundColor: 'var(--color-bg-tertiary)' });
   });
 
   it('renders with left icon', () => {
@@ -80,7 +113,11 @@ describe('Button', () => {
   });
 
   it('renders icon only mode', () => {
-    render(<Button iconOnly iconLeft={<span data-testid="icon">★</span>}>Hidden text</Button>);
+    render(
+      <Button iconOnly iconLeft={<span data-testid="icon">★</span>}>
+        Hidden text
+      </Button>
+    );
     expect(screen.getByTestId('icon')).toBeInTheDocument();
     expect(screen.queryByText('Hidden text')).not.toBeInTheDocument();
   });
