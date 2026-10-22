@@ -286,7 +286,7 @@ function nodeElement(
     case 'artboard':
       return artboardToSvg(node, sceneGraph, defs, symbolDefs);
     case 'symbol-instance':
-      return symbolInstanceToSvg(node, sceneGraph, defs, symbolDefs);
+      return symbolInstanceToSvg(node, defs, symbolDefs);
     case 'bone':
     case 'ik-target':
       return ''; // Non-visual nodes
@@ -793,13 +793,18 @@ function artboardToSvg(
   return `<g${tfAttr}${opacityAttr}>${elements.join('')}</g>`;
 }
 
+/**
+ * A symbol instance as the artwork of its symbol. `within` lists the symbols
+ * it is already drawn inside of: an instance of one of those (a symbol placed
+ * in itself) draws nothing, rather than forever.
+ */
 function symbolInstanceToSvg(
   node: SymbolInstanceNode,
-  _sceneGraph: SceneGraph,
   defs: string[],
-  symbolDefs?: Map<string, SymbolDefinition>
+  symbolDefs?: Map<string, SymbolDefinition>,
+  within: ReadonlySet<string> = new Set()
 ): string {
-  if (!symbolDefs) return '';
+  if (!symbolDefs || within.has(node.symbolId)) return '';
   const definition = symbolDefs.get(node.symbolId);
   if (!definition) return '';
 
@@ -814,11 +819,12 @@ function symbolInstanceToSvg(
   const nodeMap = new Map<string, Node>();
   for (const rn of resolvedNodes) nodeMap.set(rn.id, rn);
 
+  const inside = new Set(within).add(node.symbolId);
   const childElements: string[] = [];
   for (const child of rootNodes) {
     if (!child.visible) continue;
     // Render resolved children using a temporary inline traversal
-    childElements.push(renderResolvedNodeToSvg(child, nodeMap, defs, symbolDefs));
+    childElements.push(renderResolvedNodeToSvg(child, nodeMap, defs, symbolDefs, inside));
   }
 
   return `<g${tfAttr}${opacityAttr}>${childElements.join('')}</g>`;
@@ -827,21 +833,24 @@ function symbolInstanceToSvg(
 /**
  * Render a resolved (flattened) symbol node to SVG.
  * Uses the nodeMap from symbol resolution instead of the scene graph.
+ * `within` lists the symbols the node is drawn inside of.
  */
 function renderResolvedNodeToSvg(
   node: Node,
   nodeMap: Map<string, Node>,
   defs: string[],
-  symbolDefs?: Map<string, SymbolDefinition>
+  symbolDefs: Map<string, SymbolDefinition> | undefined,
+  within: ReadonlySet<string>
 ): string {
-  return withEffects(node, resolvedNodeElement(node, nodeMap, defs, symbolDefs), defs);
+  return withEffects(node, resolvedNodeElement(node, nodeMap, defs, symbolDefs, within), defs);
 }
 
 function resolvedNodeElement(
   node: Node,
   nodeMap: Map<string, Node>,
   defs: string[],
-  symbolDefs?: Map<string, SymbolDefinition>
+  symbolDefs: Map<string, SymbolDefinition> | undefined,
+  within: ReadonlySet<string>
 ): string {
   // For leaf types, render directly
   switch (node.type) {
@@ -864,11 +873,14 @@ function resolvedNodeElement(
       for (const childId of node.children) {
         const child = nodeMap.get(childId);
         if (child && child.visible) {
-          childElements.push(renderResolvedNodeToSvg(child, nodeMap, defs, symbolDefs));
+          childElements.push(renderResolvedNodeToSvg(child, nodeMap, defs, symbolDefs, within));
         }
       }
       return `<g${tfAttr}${opacityAttr}>${childElements.join('')}</g>`;
     }
+    case 'symbol-instance':
+      // A symbol placed inside this one draws its own artwork here
+      return symbolInstanceToSvg(node, defs, symbolDefs, within);
     case 'bone':
     case 'ik-target':
       return '';
@@ -996,12 +1008,14 @@ function computeExportBounds(
   return found ? { minX, minY, maxX, maxY } : null;
 }
 
+/** `within`: the symbols the node is drawn inside of (none at the top level) */
 function getNodeWorldBounds(
   node: Node,
   sceneGraph: SceneGraph,
-  symbolDefs?: Map<string, SymbolDefinition>
+  symbolDefs?: Map<string, SymbolDefinition>,
+  within: ReadonlySet<string> = new Set()
 ): ExportBounds | null {
-  const local = getLocalExtent(node, sceneGraph, symbolDefs);
+  const local = getLocalExtent(node, sceneGraph, symbolDefs, within);
   if (!local) return null;
 
   const wt = sceneGraph.getWorldTransform(node.id);
@@ -1033,7 +1047,8 @@ function getNodeWorldBounds(
 function getLocalExtent(
   node: Node,
   sceneGraph: SceneGraph,
-  symbolDefs?: Map<string, SymbolDefinition>
+  symbolDefs: Map<string, SymbolDefinition> | undefined,
+  within: ReadonlySet<string>
 ): ExportBounds | null {
   let bounds: ExportBounds | null;
   switch (node.type) {
@@ -1079,16 +1094,19 @@ function getLocalExtent(
       // A clipping artboard shows nothing past its edges
       bounds = node.clipContent
         ? artboardBounds
-        : containerLocalBounds(node, sceneGraph, symbolDefs, artboardBounds);
+        : containerLocalBounds(node, sceneGraph, symbolDefs, artboardBounds, within);
       break;
     }
     case 'group': {
-      bounds = containerLocalBounds(node, sceneGraph, symbolDefs, null);
+      bounds = containerLocalBounds(node, sceneGraph, symbolDefs, null, within);
       break;
     }
     case 'symbol-instance': {
+      // A symbol placed inside one it's already drawn in draws nothing (see symbolInstanceToSvg)
+      if (within.has(node.symbolId)) return null;
       const definition = symbolDefs?.get(node.symbolId);
       if (!definition) return null;
+      const inside = new Set(within).add(node.symbolId);
       const resolvedNodes = resolveSymbolInstance(node, definition);
       const resolvedGraph = new SceneGraph();
       resolvedGraph.fromJSON({
@@ -1098,7 +1116,10 @@ function getLocalExtent(
       let localBounds: ExportBounds | null = null;
       for (const root of getResolvedRootNodes(resolvedNodes, definition)) {
         if (!root.visible) continue;
-        localBounds = unionBounds(localBounds, getNodeWorldBounds(root, resolvedGraph, symbolDefs));
+        localBounds = unionBounds(
+          localBounds,
+          getNodeWorldBounds(root, resolvedGraph, symbolDefs, inside)
+        );
       }
       bounds = localBounds;
       break;
@@ -1123,14 +1144,18 @@ function containerLocalBounds(
   node: GroupNode | ArtboardNode,
   sceneGraph: SceneGraph,
   symbolDefs: Map<string, SymbolDefinition> | undefined,
-  ownLocalBounds: ExportBounds | null
+  ownLocalBounds: ExportBounds | null,
+  within: ReadonlySet<string>
 ): ExportBounds | null {
   const worldTransform = sceneGraph.getWorldTransform(node.id);
   let worldBounds = ownLocalBounds ? transformBounds(ownLocalBounds, worldTransform) : null;
   for (const childId of node.children) {
     const child = sceneGraph.getNode(childId);
     if (!child || !child.visible) continue;
-    worldBounds = unionBounds(worldBounds, getNodeWorldBounds(child, sceneGraph, symbolDefs));
+    worldBounds = unionBounds(
+      worldBounds,
+      getNodeWorldBounds(child, sceneGraph, symbolDefs, within)
+    );
   }
   return worldBounds ? inverseTransformBounds(worldBounds, worldTransform) : null;
 }

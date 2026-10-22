@@ -1007,6 +1007,85 @@ describe('exportNodesToSvg', () => {
     expect(svg).toContain('<rect');
   });
 
+  // F132: a symbol placed inside another symbol
+  describe('nested symbols', () => {
+    function makeSymbolRect(id: string, color: Color, x = 0): RectangleNode {
+      return {
+        ...makeBaseNodeFields(id, 'rectangle', {
+          transform: makeTransform({ position: { x, y: 0 } }),
+        }),
+        type: 'rectangle',
+        width: 10,
+        height: 10,
+        cornerRadius: [0, 0, 0, 0],
+        fills: [makeSolidFill(color)],
+        strokes: [],
+      };
+    }
+
+    function makeSymbolInstance(id: string, symbolId: string, x = 0): SymbolInstanceNode {
+      return {
+        ...makeBaseNodeFields(id, 'symbol-instance', {
+          transform: makeTransform({ position: { x, y: 0 } }),
+        }),
+        type: 'symbol-instance',
+        symbolId,
+        overrides: [],
+      };
+    }
+
+    it('exports the artwork of a symbol placed inside another', () => {
+      const inner: SymbolDefinition = {
+        id: 'inner',
+        name: 'Inner',
+        sceneGraphJSON: {
+          nodes: [makeSymbolRect('inner-rect', makeColor(0, 255, 0))],
+          rootNodeIds: ['inner-rect'],
+        },
+      };
+      const outer: SymbolDefinition = {
+        id: 'outer',
+        name: 'Outer',
+        sceneGraphJSON: {
+          nodes: [
+            makeSymbolRect('outer-rect', makeColor(0, 0, 255)),
+            makeSymbolInstance('nested', 'inner', 30),
+          ],
+          rootNodeIds: ['outer-rect', 'nested'],
+        },
+      };
+      const instance = makeSymbolInstance('instance', 'outer');
+      sceneGraph.addNode(instance);
+
+      const svg = exportNodesToSvg([instance], sceneGraph, [inner, outer]);
+      expect(svg).toContain('fill="#0000ff"');
+      // The inner symbol's square, moved where the nested instance sits
+      expect(svg).toContain('<g transform="translate(30,0)"><rect');
+      expect(svg).toContain('fill="#00ff00"');
+      expect(svg).toContain('viewBox="0 0 40 10"');
+    });
+
+    it('exports a symbol placed inside itself once', () => {
+      const loop: SymbolDefinition = {
+        id: 'loop',
+        name: 'Loop',
+        sceneGraphJSON: {
+          nodes: [
+            makeSymbolRect('loop-rect', makeColor(0, 255, 0)),
+            makeSymbolInstance('loop-nested', 'loop', 30),
+          ],
+          rootNodeIds: ['loop-rect', 'loop-nested'],
+        },
+      };
+      const instance = makeSymbolInstance('instance', 'loop');
+      sceneGraph.addNode(instance);
+
+      const svg = exportNodesToSvg([instance], sceneGraph, [loop]);
+      expect(svg.match(/fill="#00ff00"/g)).toHaveLength(1);
+      expect(svg).toContain('viewBox="0 0 10 10"');
+    });
+  });
+
   it('includes stroke expansion in exported bounds', () => {
     const node: RectangleNode = {
       ...makeBaseNodeFields('stroked-bounds', 'rectangle'),

@@ -704,5 +704,22 @@ describe('SelectionManager', () => {
       const bounds = manager.getSelectionBounds(new Set(['group']), sceneGraph);
       expect(bounds?.rect).toEqual({ x: 80, y: 140, width: 40, height: 20 });
     });
+
+    // F132: a symbol whose artwork is another symbol placed inside it
+    it('measures an instance by the symbols placed inside its own', () => {
+      const frame: SymbolDefinition = {
+        id: 'frame',
+        name: 'Frame',
+        sceneGraphJSON: {
+          nodes: [createTestInstance('framed-badge', 50, 0)],
+          rootNodeIds: ['framed-badge'],
+        },
+      };
+      manager.setSymbolDefinitions([definition, frame]);
+      sceneGraph.addNode({ ...createTestInstance('inst', 0, 0), symbolId: 'frame' });
+
+      const bounds = manager.getSelectionBounds(new Set(['inst']), sceneGraph);
+      expect(bounds?.rect).toEqual({ x: 30, y: -10, width: 40, height: 20 });
+    });
   });
 });

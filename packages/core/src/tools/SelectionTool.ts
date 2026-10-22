@@ -927,7 +927,7 @@ export class SelectionTool extends BaseTool {
         const symNode = node;
         const def = defs.find((d) => d.id === symNode.symbolId);
         if (def && def.sceneGraphJSON.nodes.length > 0) {
-          const symBounds = getSymbolBounds(def.sceneGraphJSON.nodes);
+          const symBounds = getSymbolBounds(def.sceneGraphJSON.nodes, defs, new Set([def.id]));
           if (symBounds.width > 0 && symBounds.height > 0) {
             localBounds = {
               x: symBounds.x,

@@ -9,7 +9,15 @@ import { WebGLRenderer } from './WebGLRenderer';
 import { SceneGraph, createDefaultTransform, createGroupNode } from '../SceneGraph';
 import { mat3 } from '../math';
 import { createMockWebGL2Context } from '../test/setup';
-import type { RectangleNode, EllipseNode, PolygonNode, PathNode, Fill, Stroke } from '@quar/types';
+import type {
+  RectangleNode,
+  EllipseNode,
+  PolygonNode,
+  PathNode,
+  SymbolInstanceNode,
+  Fill,
+  Stroke,
+} from '@quar/types';
 
 // ============================================================================
 // Test Setup
@@ -334,6 +342,95 @@ describe('ShapeRenderer', () => {
 
       expect(gl.bindFramebuffer).toHaveBeenCalledWith(gl.FRAMEBUFFER, expect.anything());
       expect(gl.drawElements).toHaveBeenCalled();
+    });
+
+    // F132: a symbol placed inside another symbol
+    describe('nested symbols', () => {
+      function createInstance(id: string, symbolId: string, x: number): SymbolInstanceNode {
+        const transform = createDefaultTransform();
+        transform.position = { x, y: 0 };
+        return {
+          id,
+          name: id,
+          type: 'symbol-instance',
+          parent: null,
+          children: [],
+          transform,
+          visible: true,
+          locked: false,
+          opacity: 1,
+          blendMode: 'normal',
+          symbolId,
+          overrides: [],
+        };
+      }
+
+      function placedRectangles(): [string, number][] {
+        const drawn = vi.spyOn(shapeRenderer, 'renderRectangle');
+        shapeRenderer.render(sceneGraph, mat3.identity());
+        return drawn.mock.calls.map(([node, matrix]) => [node.id, matrix.tx]);
+      }
+
+      it('draws a symbol placed inside another, where the nested instance sits', () => {
+        const innerRect = createRectangleNode('inner-rect', 10, 10);
+        innerRect.transform.position = { x: 5, y: 0 };
+        shapeRenderer.setSymbolDefinitions(
+          new Map([
+            [
+              'inner',
+              {
+                id: 'inner',
+                name: 'Inner',
+                sceneGraphJSON: { nodes: [innerRect], rootNodeIds: ['inner-rect'] },
+              },
+            ],
+            [
+              'outer',
+              {
+                id: 'outer',
+                name: 'Outer',
+                sceneGraphJSON: {
+                  nodes: [
+                    createRectangleNode('outer-rect', 20, 20),
+                    createInstance('nested', 'inner', 100),
+                  ],
+                  rootNodeIds: ['outer-rect', 'nested'],
+                },
+              },
+            ],
+          ])
+        );
+        sceneGraph.addNode(createInstance('inst', 'outer', 1000));
+
+        expect(placedRectangles()).toEqual([
+          ['outer-rect', 1000],
+          ['inner-rect', 1105],
+        ]);
+      });
+
+      it('draws a symbol placed inside itself once', () => {
+        shapeRenderer.setSymbolDefinitions(
+          new Map([
+            [
+              'loop',
+              {
+                id: 'loop',
+                name: 'Loop',
+                sceneGraphJSON: {
+                  nodes: [
+                    createRectangleNode('loop-rect', 20, 20),
+                    createInstance('loop-nested', 'loop', 100),
+                  ],
+                  rootNodeIds: ['loop-rect', 'loop-nested'],
+                },
+              },
+            ],
+          ])
+        );
+        sceneGraph.addNode(createInstance('inst', 'loop', 0));
+
+        expect(placedRectangles()).toEqual([['loop-rect', 0]]);
+      });
     });
   });
 

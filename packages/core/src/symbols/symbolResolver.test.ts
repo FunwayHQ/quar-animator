@@ -360,6 +360,46 @@ describe('symbolResolver', () => {
       hidden.visible = false;
       expect(getSymbolBounds([shown, hidden])).toEqual({ x: -10, y: -5, width: 20, height: 10 });
     });
+
+    // F132: a symbol placed inside another symbol
+    function makeNested(id: string, symbolId: string, x: number, scale = 1): SymbolInstanceNode {
+      const instance = makeInstance(symbolId);
+      return {
+        ...instance,
+        id,
+        transform: { ...instance.transform, position: { x, y: 0 }, scale: { x: scale, y: scale } },
+      };
+    }
+
+    it('takes in the artwork of a symbol placed inside, where the instance puts it', () => {
+      const inner = makeDefinition('inner', [makeRect('inner-rect', 0, 0, 20, 10)]);
+      const outer = makeDefinition('outer', [
+        makeRect('outer-rect', 0, 0, 20, 10),
+        makeNested('nested', 'inner', 100, 2),
+      ]);
+
+      const bounds = getSymbolBounds(
+        outer.sceneGraphJSON.nodes,
+        [inner, outer],
+        new Set(['outer'])
+      );
+      // The outer square spans x −10–10; the inner one, doubled, 80–120
+      expect(bounds).toEqual({ x: -10, y: -10, width: 130, height: 20 });
+    });
+
+    it('measures a symbol placed inside itself once', () => {
+      const loop = makeDefinition('loop', [
+        makeRect('loop-rect', 0, 0, 20, 10),
+        makeNested('loop-nested', 'loop', 100),
+      ]);
+
+      expect(getSymbolBounds(loop.sceneGraphJSON.nodes, [loop], new Set(['loop']))).toEqual({
+        x: -10,
+        y: -5,
+        width: 20,
+        height: 10,
+      });
+    });
   });
 
   describe('getResolvedRootNodes', () => {

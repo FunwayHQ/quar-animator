@@ -15,6 +15,7 @@ import type {
   BoneNode,
   ArtboardNode,
   SymbolDefinition,
+  SymbolInstanceNode,
   Node,
   MaskMode,
   Fill,
@@ -1570,19 +1571,9 @@ export class ShapeRenderer {
         // Symbol instance: resolve and render master's children
         if (node.type === 'symbol-instance') {
           const inst = node;
-          const definition = this.symbolDefinitions.get(inst.symbolId);
-          if (!definition) return false; // skip if definition missing
+          if (!this.symbolDefinitions.has(inst.symbolId)) return false; // skip if definition missing
 
-          const resolvedNodes = resolveSymbolInstance(inst, definition);
-          const rootNodes = getResolvedRootNodes(resolvedNodes, definition);
-          const nodeMap = new Map<string, Node>();
-          for (const rn of resolvedNodes) nodeMap.set(rn.id, rn);
-
-          const renderSymbolChildren = () => {
-            for (const child of rootNodes) {
-              this.renderResolvedNode(child, worldTransform, nodeMap);
-            }
-          };
+          const renderSymbolChildren = () => this.renderSymbolContent(inst, worldTransform);
 
           if (this.effectRenderer.needsMultiPass(node.effects, node.blendMode)) {
             this.effectRenderer.renderNodeWithEffects(
@@ -1844,13 +1835,40 @@ export class ShapeRenderer {
   }
 
   /**
+   * Render what a symbol instance draws — its symbol's nodes with the
+   * instance's overrides — under the instance's world transform. `within`
+   * lists the symbols this one is already drawn inside of: an instance of one
+   * of those (a symbol placed in itself) draws nothing, rather than forever.
+   */
+  private renderSymbolContent(
+    inst: SymbolInstanceNode,
+    worldTransform: Matrix3,
+    within: ReadonlySet<string> = new Set()
+  ): void {
+    if (within.has(inst.symbolId)) return;
+    const definition = this.symbolDefinitions.get(inst.symbolId);
+    if (!definition) return;
+
+    const resolvedNodes = resolveSymbolInstance(inst, definition);
+    const nodeMap = new Map<string, Node>();
+    for (const rn of resolvedNodes) nodeMap.set(rn.id, rn);
+
+    const inside = new Set(within).add(inst.symbolId);
+    for (const child of getResolvedRootNodes(resolvedNodes, definition)) {
+      this.renderResolvedNode(child, worldTransform, nodeMap, inside);
+    }
+  }
+
+  /**
    * Render a resolved node from a symbol definition, with a parent transform.
-   * Dispatches to existing render methods based on node type.
+   * Dispatches to existing render methods based on node type. `within` lists
+   * the symbols the node is drawn inside of.
    */
   private renderResolvedNode(
     node: Node,
     parentTransform: Matrix3,
-    nodeMap: Map<string, Node>
+    nodeMap: Map<string, Node>,
+    within: ReadonlySet<string>
   ): void {
     if (!node.visible) return;
     if (node.type === 'ik-target' || node.type === 'vitruvian') return;
@@ -1891,6 +1909,10 @@ export class ShapeRenderer {
       case 'artboard':
         this.renderArtboardBackground(node, worldTransform);
         break;
+      case 'symbol-instance':
+        // A symbol placed inside this one draws its own artwork here
+        this.renderSymbolContent(node, worldTransform, within);
+        break;
     }
 
     // Render children if this is a group
@@ -1901,14 +1923,14 @@ export class ShapeRenderer {
         this.pushMask(node.id, maskSource.id, node.maskMode, () => {
           // renderResolvedNode multiplies in the source's own opacity.
           this.currentEffectiveOpacity = 1;
-          this.renderResolvedNode(maskSource, worldTransform, nodeMap);
+          this.renderResolvedNode(maskSource, worldTransform, nodeMap, within);
         });
       }
       for (const childId of node.children) {
         if (childId === maskSource?.id) continue;
         const child = nodeMap.get(childId);
         if (child) {
-          this.renderResolvedNode(child, worldTransform, nodeMap);
+          this.renderResolvedNode(child, worldTransform, nodeMap, within);
         }
       }
       if (maskSource) this.popMask(node.id);

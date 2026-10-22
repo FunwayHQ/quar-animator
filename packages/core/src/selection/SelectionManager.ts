@@ -224,7 +224,11 @@ export class SelectionManager {
   ): void {
     const def = this.symbolDefinitions.find((d) => d.id === inst.symbolId);
     if (!def || def.sceneGraphJSON.nodes.length === 0) return;
-    const symBounds = getSymbolBounds(def.sceneGraphJSON.nodes);
+    const symBounds = getSymbolBounds(
+      def.sceneGraphJSON.nodes,
+      this.symbolDefinitions,
+      new Set([def.id])
+    );
     if (symBounds.width > 0 && symBounds.height > 0) {
       const worldMatrix = inst.parent
         ? sceneGraph.getWorldTransform(inst.id)

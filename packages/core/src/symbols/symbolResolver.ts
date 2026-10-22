@@ -103,51 +103,31 @@ export function resolveSymbolInstance(
   return resolved;
 }
 
+/** The box measured so far, grown as nodes are added to it */
+interface Extent {
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+}
+
 /**
  * Compute AABB bounds from a set of resolved nodes, in the symbol's own space:
  * each node's own geometry (paths and text included), placed through its
  * groups' transforms the way it is drawn. Hidden layers are left out.
+ * Symbols placed inside count with their artwork when their definitions are
+ * among `symbols`; `within` lists the symbols these nodes are already inside
+ * of (pass the measured symbol's own id), whose instances here draw nothing.
  */
-export function getSymbolBounds(resolvedNodes: Node[]): Rect {
-  const byId = new Map<string, Node>();
-  for (const node of resolvedNodes) byId.set(node.id, node);
+export function getSymbolBounds(
+  resolvedNodes: Node[],
+  symbols: readonly SymbolDefinition[] = [],
+  within: ReadonlySet<string> = new Set()
+): Rect {
+  const extent: Extent = { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity };
+  measureSymbolNodes(resolvedNodes, mat3.identity(), symbols, within, extent);
 
-  let minX = Infinity;
-  let minY = Infinity;
-  let maxX = -Infinity;
-  let maxY = -Infinity;
-
-  const measured = new Set<string>();
-  const measure = (node: Node, parentMatrix: Matrix3): void => {
-    // A node listed under two parents (or under itself) counts once
-    if (measured.has(node.id)) return;
-    measured.add(node.id);
-    if (!node.visible || !node.transform) return;
-
-    const { position, rotation, scale } = node.transform;
-    const matrix = mat3.multiply(parentMatrix, mat3.compose(position, rotation, scale));
-    const local = getNodeLocalBounds(node);
-    if (local) {
-      const box = transformBoundsToWorld(local, matrix);
-      // A node with broken numbers (from a damaged file) mustn't spoil the rest
-      if ([box.x, box.y, box.width, box.height].every(Number.isFinite)) {
-        minX = Math.min(minX, box.x);
-        minY = Math.min(minY, box.y);
-        maxX = Math.max(maxX, box.x + box.width);
-        maxY = Math.max(maxY, box.y + box.height);
-      }
-    }
-    for (const childId of node.children) {
-      const child = byId.get(childId);
-      if (child) measure(child, matrix);
-    }
-  };
-
-  // Start from the top-level nodes: those whose parent isn't among them
-  for (const node of resolvedNodes) {
-    if (!node.parent || !byId.has(node.parent)) measure(node, mat3.identity());
-  }
-
+  const { minX, minY, maxX, maxY } = extent;
   if (!isFinite(minX)) {
     return { x: 0, y: 0, width: 0, height: 0 };
   }
@@ -158,6 +138,59 @@ export function getSymbolBounds(resolvedNodes: Node[]): Rect {
     width: maxX - minX,
     height: maxY - minY,
   };
+}
+
+/** Grow `extent` by a symbol's nodes, placed through `parentMatrix`. */
+function measureSymbolNodes(
+  nodes: Node[],
+  parentMatrix: Matrix3,
+  symbols: readonly SymbolDefinition[],
+  within: ReadonlySet<string>,
+  extent: Extent
+): void {
+  const byId = new Map<string, Node>();
+  for (const node of nodes) byId.set(node.id, node);
+
+  const measured = new Set<string>();
+  const measure = (node: Node, outerMatrix: Matrix3): void => {
+    // A node listed under two parents (or under itself) counts once
+    if (measured.has(node.id)) return;
+    measured.add(node.id);
+    if (!node.visible || !node.transform) return;
+
+    const { position, rotation, scale } = node.transform;
+    const matrix = mat3.multiply(outerMatrix, mat3.compose(position, rotation, scale));
+    const local = getNodeLocalBounds(node);
+    if (local) {
+      const box = transformBoundsToWorld(local, matrix);
+      // A node with broken numbers (from a damaged file) mustn't spoil the rest
+      if ([box.x, box.y, box.width, box.height].every(Number.isFinite)) {
+        extent.minX = Math.min(extent.minX, box.x);
+        extent.minY = Math.min(extent.minY, box.y);
+        extent.maxX = Math.max(extent.maxX, box.x + box.width);
+        extent.maxY = Math.max(extent.maxY, box.y + box.height);
+      }
+    }
+    // A symbol placed inside this one adds its own artwork. One it is already
+    // inside of draws nothing: a symbol placed in itself would never end.
+    if (node.type === 'symbol-instance' && !within.has(node.symbolId)) {
+      const definition = symbols.find((d) => d.id === node.symbolId);
+      if (definition) {
+        const inside = new Set(within).add(node.symbolId);
+        const nested = resolveSymbolInstance(node, definition);
+        measureSymbolNodes(nested, matrix, symbols, inside, extent);
+      }
+    }
+    for (const childId of node.children) {
+      const child = byId.get(childId);
+      if (child) measure(child, matrix);
+    }
+  };
+
+  // Start from the top-level nodes: those whose parent isn't among them
+  for (const node of nodes) {
+    if (!node.parent || !byId.has(node.parent)) measure(node, parentMatrix);
+  }
 }
 
 /**

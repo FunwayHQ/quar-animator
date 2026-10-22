@@ -202,7 +202,7 @@ function getNodeSize(
       const syms = symbols ?? useEditorStore.getState().symbols;
       const symDef = syms.find((s: { id: string }) => s.id === symInst.symbolId);
       if (symDef && symDef.sceneGraphJSON.nodes.length > 0) {
-        const symBounds = getSymbolBounds(symDef.sceneGraphJSON.nodes);
+        const symBounds = getSymbolBounds(symDef.sceneGraphJSON.nodes, syms, new Set([symDef.id]));
         const ssx = node.transform.scale?.x ?? 1;
         const ssy = node.transform.scale?.y ?? 1;
         return { width: symBounds.width * ssx, height: symBounds.height * ssy };
