@@ -38,6 +38,7 @@ import {
 } from 'lucide-react';
 import { useSceneGraph } from '../../contexts/SceneGraphContext';
 import { useEditorStore, DEFAULT_FILL, DEFAULT_STROKE } from '../../stores/editorStore';
+import { isPosingScene } from '../../stores/scenePosing';
 import { ScrubLabel } from '../common/ScrubLabel';
 import { setBoneLength } from '../../stores/boneLength';
 import { AnimationPresetsPanel } from '../common/AnimationPresetsPanel';
@@ -438,6 +439,11 @@ function isBooleanGroup(node: Node): boolean {
 // PropertiesPanel Component
 // ============================================================================
 
+/** The frame an edit keys at: the current one, even while the panel shows another. */
+function liveFrame(): number {
+  return useEditorStore.getState().currentFrame;
+}
+
 /** With nothing selected: the document's own settings, its background. */
 function DocumentProperties() {
   const background = useEditorStore((s) => s.documentBackground);
@@ -507,7 +513,16 @@ export function PropertiesPanel() {
   const aspectRatioLocked = useEditorStore((state) => state.aspectRatioLocked);
   const toggleAspectRatioLock = useEditorStore((state) => state.toggleAspectRatioLock);
   const autoKeyframe = useEditorStore((state) => state.autoKeyframe);
-  const currentFrame = useEditorStore((state) => state.currentFrame);
+  // The frame the panel shows: the current one, except while the animation
+  // plays — then the one it was on, so the panel isn't redrawn 30–60 times a
+  // second for frames shown in passing. (Edits key at liveFrame(), the real one.)
+  const stillFrame = useRef(useEditorStore.getState().currentFrame);
+  const currentFrame = useEditorStore((state) => {
+    if (!state.isPlaying) stillFrame.current = state.currentFrame;
+    return stillFrame.current;
+  });
+  // Redrawn as playback starts and stops: it then shows the values it stopped on
+  useEditorStore((state) => state.isPlaying);
   const addKeyframeAtFrame = useEditorStore((state) => state.addKeyframeAtFrame);
   const removeKeyframeAtFrame = useEditorStore((state) => state.removeKeyframeAtFrame);
   const timeline = useEditorStore((state) => state.timeline);
@@ -558,7 +573,11 @@ export function PropertiesPanel() {
   // Re-render on SceneGraph changes (any mutation)
   const [, setVersion] = useState(0);
   useEffect(() => {
-    const increment = () => setVersion((v) => v + 1);
+    const increment = () => {
+      // Playback poses the scene every frame: the panel shows where it stops
+      if (isPosingScene() && useEditorStore.getState().isPlaying) return;
+      setVersion((v) => v + 1);
+    };
     // A loaded project replaces the whole graph at once (graphReplaced)
     const off = (['nodeChanged', 'nodeAdded', 'nodeRemoved', 'graphReplaced'] as const).map(
       (type) => sceneGraph.on(type, increment)
@@ -637,10 +656,10 @@ export function PropertiesPanel() {
         },
       });
       if (shouldKeyframe(autoKeyframe, selectedId, `transform.position.${axis}`)) {
-        addKeyframeAtFrame(selectedId, `transform.position.${axis}`, currentFrame, centerValue);
+        addKeyframeAtFrame(selectedId, `transform.position.${axis}`, liveFrame(), centerValue);
       }
     },
-    [selectedId, sceneGraph, autoKeyframe, currentFrame, addKeyframeAtFrame, symbols]
+    [selectedId, sceneGraph, autoKeyframe, addKeyframeAtFrame, symbols]
   );
 
   const handleRotationChange = useCallback(
@@ -655,10 +674,10 @@ export function PropertiesPanel() {
         transform: { ...currentNode.transform, rotation: num },
       });
       if (shouldKeyframe(autoKeyframe, selectedId, 'transform.rotation')) {
-        addKeyframeAtFrame(selectedId, 'transform.rotation', currentFrame, num);
+        addKeyframeAtFrame(selectedId, 'transform.rotation', liveFrame(), num);
       }
     },
-    [selectedId, sceneGraph, autoKeyframe, currentFrame, addKeyframeAtFrame]
+    [selectedId, sceneGraph, autoKeyframe, addKeyframeAtFrame]
   );
 
   const applySize = useCallback(
@@ -671,14 +690,14 @@ export function PropertiesPanel() {
       ) {
         sceneGraph.updateNode(selectedId, { width: w, height: h });
         if (shouldKeyframe(autoKeyframe, selectedId, 'width')) {
-          addKeyframeAtFrame(selectedId, 'width', currentFrame, w);
-          addKeyframeAtFrame(selectedId, 'height', currentFrame, h);
+          addKeyframeAtFrame(selectedId, 'width', liveFrame(), w);
+          addKeyframeAtFrame(selectedId, 'height', liveFrame(), h);
         }
       } else if (nodeToUpdate.type === 'ellipse') {
         sceneGraph.updateNode(selectedId, { radiusX: w / 2, radiusY: h / 2 });
         if (shouldKeyframe(autoKeyframe, selectedId, 'radiusX')) {
-          addKeyframeAtFrame(selectedId, 'radiusX', currentFrame, w / 2);
-          addKeyframeAtFrame(selectedId, 'radiusY', currentFrame, h / 2);
+          addKeyframeAtFrame(selectedId, 'radiusX', liveFrame(), w / 2);
+          addKeyframeAtFrame(selectedId, 'radiusY', liveFrame(), h / 2);
         }
       } else if (nodeToUpdate.type === 'polygon') {
         const polygon = nodeToUpdate;
@@ -692,8 +711,8 @@ export function PropertiesPanel() {
           },
         });
         if (shouldKeyframe(autoKeyframe, selectedId, 'transform.scale.x')) {
-          addKeyframeAtFrame(selectedId, 'transform.scale.x', currentFrame, scaleX);
-          addKeyframeAtFrame(selectedId, 'transform.scale.y', currentFrame, scaleY);
+          addKeyframeAtFrame(selectedId, 'transform.scale.x', liveFrame(), scaleX);
+          addKeyframeAtFrame(selectedId, 'transform.scale.y', liveFrame(), scaleY);
         }
       } else if (nodeToUpdate.type === 'path') {
         const pathNode = nodeToUpdate;
@@ -728,8 +747,8 @@ export function PropertiesPanel() {
             },
           });
           if (shouldKeyframe(autoKeyframe, selectedId, 'transform.scale.x')) {
-            addKeyframeAtFrame(selectedId, 'transform.scale.x', currentFrame, scaleX);
-            addKeyframeAtFrame(selectedId, 'transform.scale.y', currentFrame, scaleY);
+            addKeyframeAtFrame(selectedId, 'transform.scale.x', liveFrame(), scaleX);
+            addKeyframeAtFrame(selectedId, 'transform.scale.y', liveFrame(), scaleY);
           }
         }
       } else if (nodeToUpdate.type === 'group') {
@@ -749,12 +768,12 @@ export function PropertiesPanel() {
           },
         });
         if (shouldKeyframe(autoKeyframe, selectedId, 'transform.scale.x')) {
-          addKeyframeAtFrame(selectedId, 'transform.scale.x', currentFrame, scaleX);
-          addKeyframeAtFrame(selectedId, 'transform.scale.y', currentFrame, scaleY);
+          addKeyframeAtFrame(selectedId, 'transform.scale.x', liveFrame(), scaleX);
+          addKeyframeAtFrame(selectedId, 'transform.scale.y', liveFrame(), scaleY);
         }
       }
     },
-    [selectedId, sceneGraph, autoKeyframe, currentFrame, addKeyframeAtFrame, symbols]
+    [selectedId, sceneGraph, autoKeyframe, addKeyframeAtFrame, symbols]
   );
 
   const handleSizeChange = useCallback(
@@ -808,10 +827,10 @@ export function PropertiesPanel() {
       if (!currentNode || currentNode.type !== 'polygon') return;
       sceneGraph.updateNode(selectedId, { sides: num } as Partial<Node>);
       if (shouldKeyframe(autoKeyframe, selectedId, 'sides')) {
-        addKeyframeAtFrame(selectedId, 'sides', currentFrame, num);
+        addKeyframeAtFrame(selectedId, 'sides', liveFrame(), num);
       }
     },
-    [selectedId, sceneGraph, autoKeyframe, currentFrame, addKeyframeAtFrame]
+    [selectedId, sceneGraph, autoKeyframe, addKeyframeAtFrame]
   );
 
   const handleInnerRadiusChange = useCallback(
@@ -825,10 +844,10 @@ export function PropertiesPanel() {
       const clamped = Math.min(num, poly.radius);
       sceneGraph.updateNode(selectedId, { innerRadius: clamped } as Partial<Node>);
       if (shouldKeyframe(autoKeyframe, selectedId, 'innerRadius')) {
-        addKeyframeAtFrame(selectedId, 'innerRadius', currentFrame, clamped);
+        addKeyframeAtFrame(selectedId, 'innerRadius', liveFrame(), clamped);
       }
     },
-    [selectedId, sceneGraph, autoKeyframe, currentFrame, addKeyframeAtFrame]
+    [selectedId, sceneGraph, autoKeyframe, addKeyframeAtFrame]
   );
 
   // ============================================================================
@@ -874,11 +893,11 @@ export function PropertiesPanel() {
         fills[index] = { ...fill, type: 'solid', color: colorWithAlpha };
         sceneGraph.updateNode(nodeId, { fills } as Partial<Node>);
         if (shouldKeyframe(autoKeyframe, nodeId, `fills.${index}.color`)) {
-          addKeyframeAtFrame(nodeId, `fills.${index}.color`, currentFrame, colorWithAlpha);
+          addKeyframeAtFrame(nodeId, `fills.${index}.color`, liveFrame(), colorWithAlpha);
         }
       });
     },
-    [applyFillToAll, sceneGraph, autoKeyframe, currentFrame, addKeyframeAtFrame]
+    [applyFillToAll, sceneGraph, autoKeyframe, addKeyframeAtFrame]
   );
 
   const handleFillPickerChange = useCallback(
@@ -890,11 +909,11 @@ export function PropertiesPanel() {
         fills[index] = { ...fill, type: 'solid', color };
         sceneGraph.updateNode(nodeId, { fills } as Partial<Node>);
         if (shouldKeyframe(autoKeyframe, nodeId, `fills.${index}.color`)) {
-          addKeyframeAtFrame(nodeId, `fills.${index}.color`, currentFrame, color);
+          addKeyframeAtFrame(nodeId, `fills.${index}.color`, liveFrame(), color);
         }
       });
     },
-    [applyFillToAll, sceneGraph, autoKeyframe, currentFrame, addKeyframeAtFrame]
+    [applyFillToAll, sceneGraph, autoKeyframe, addKeyframeAtFrame]
   );
 
   const handleToggleFillVisibility = useCallback(
@@ -975,11 +994,11 @@ export function PropertiesPanel() {
         fills[index] = { ...fill, opacity: clamped };
         sceneGraph.updateNode(nodeId, { fills } as Partial<Node>);
         if (shouldKeyframe(autoKeyframe, nodeId, `fills.${index}.opacity`)) {
-          addKeyframeAtFrame(nodeId, `fills.${index}.opacity`, currentFrame, clamped);
+          addKeyframeAtFrame(nodeId, `fills.${index}.opacity`, liveFrame(), clamped);
         }
       });
     },
-    [applyFillToAll, sceneGraph, autoKeyframe, currentFrame, addKeyframeAtFrame]
+    [applyFillToAll, sceneGraph, autoKeyframe, addKeyframeAtFrame]
   );
 
   const handleFillGradientChange = useCallback(
@@ -994,13 +1013,13 @@ export function PropertiesPanel() {
           addKeyframeAtFrame(
             nodeId,
             `fills.${index}.gradient.angle`,
-            currentFrame,
+            liveFrame(),
             gradient.angle ?? 0
           );
         }
       });
     },
-    [applyFillToAll, sceneGraph, autoKeyframe, currentFrame, addKeyframeAtFrame]
+    [applyFillToAll, sceneGraph, autoKeyframe, addKeyframeAtFrame]
   );
 
   // ============================================================================
@@ -1020,11 +1039,11 @@ export function PropertiesPanel() {
         strokes[index] = { ...stroke, color: colorWithAlpha };
         sceneGraph.updateNode(nodeId, { strokes } as Partial<Node>);
         if (shouldKeyframe(autoKeyframe, nodeId, `strokes.${index}.color`)) {
-          addKeyframeAtFrame(nodeId, `strokes.${index}.color`, currentFrame, colorWithAlpha);
+          addKeyframeAtFrame(nodeId, `strokes.${index}.color`, liveFrame(), colorWithAlpha);
         }
       });
     },
-    [applyStrokeToAll, sceneGraph, autoKeyframe, currentFrame, addKeyframeAtFrame]
+    [applyStrokeToAll, sceneGraph, autoKeyframe, addKeyframeAtFrame]
   );
 
   const handleStrokePickerChange = useCallback(
@@ -1036,11 +1055,11 @@ export function PropertiesPanel() {
         strokes[index] = { ...stroke, color };
         sceneGraph.updateNode(nodeId, { strokes } as Partial<Node>);
         if (shouldKeyframe(autoKeyframe, nodeId, `strokes.${index}.color`)) {
-          addKeyframeAtFrame(nodeId, `strokes.${index}.color`, currentFrame, color);
+          addKeyframeAtFrame(nodeId, `strokes.${index}.color`, liveFrame(), color);
         }
       });
     },
-    [applyStrokeToAll, sceneGraph, autoKeyframe, currentFrame, addKeyframeAtFrame]
+    [applyStrokeToAll, sceneGraph, autoKeyframe, addKeyframeAtFrame]
   );
 
   const handleStrokeWidthChange = useCallback(
@@ -1053,11 +1072,11 @@ export function PropertiesPanel() {
         strokes[index] = { ...stroke, width: clamped };
         sceneGraph.updateNode(nodeId, { strokes } as Partial<Node>);
         if (shouldKeyframe(autoKeyframe, nodeId, `strokes.${index}.width`)) {
-          addKeyframeAtFrame(nodeId, `strokes.${index}.width`, currentFrame, clamped);
+          addKeyframeAtFrame(nodeId, `strokes.${index}.width`, liveFrame(), clamped);
         }
       });
     },
-    [applyStrokeToAll, sceneGraph, autoKeyframe, currentFrame, addKeyframeAtFrame]
+    [applyStrokeToAll, sceneGraph, autoKeyframe, addKeyframeAtFrame]
   );
 
   const handleStrokeOpacityChange = useCallback(
@@ -1073,11 +1092,11 @@ export function PropertiesPanel() {
         strokes[index] = { ...stroke, opacity: clamped };
         sceneGraph.updateNode(nodeId, { strokes } as Partial<Node>);
         if (shouldKeyframe(autoKeyframe, nodeId, `strokes.${index}.opacity`)) {
-          addKeyframeAtFrame(nodeId, `strokes.${index}.opacity`, currentFrame, clamped);
+          addKeyframeAtFrame(nodeId, `strokes.${index}.opacity`, liveFrame(), clamped);
         }
       });
     },
-    [applyStrokeToAll, sceneGraph, autoKeyframe, currentFrame, addKeyframeAtFrame]
+    [applyStrokeToAll, sceneGraph, autoKeyframe, addKeyframeAtFrame]
   );
 
   const handleToggleStrokeVisibility = useCallback(
@@ -1157,13 +1176,13 @@ export function PropertiesPanel() {
           addKeyframeAtFrame(
             nodeId,
             `strokes.${index}.gradient.angle`,
-            currentFrame,
+            liveFrame(),
             gradient.angle ?? 0
           );
         }
       });
     },
-    [applyStrokeToAll, sceneGraph, autoKeyframe, currentFrame, addKeyframeAtFrame]
+    [applyStrokeToAll, sceneGraph, autoKeyframe, addKeyframeAtFrame]
   );
 
   const handleStrokeAlignChange = useCallback(
@@ -1192,11 +1211,11 @@ export function PropertiesPanel() {
       for (const id of selectedNodeIds) {
         sceneGraph.updateNode(id, { opacity: clamped });
         if (shouldKeyframe(autoKeyframe, id, 'opacity')) {
-          addKeyframeAtFrame(id, 'opacity', currentFrame, clamped);
+          addKeyframeAtFrame(id, 'opacity', liveFrame(), clamped);
         }
       }
     },
-    [selectedNodeIds, sceneGraph, autoKeyframe, currentFrame, addKeyframeAtFrame]
+    [selectedNodeIds, sceneGraph, autoKeyframe, addKeyframeAtFrame]
   );
 
   const handleOpacitySlider = useCallback(
@@ -1207,11 +1226,11 @@ export function PropertiesPanel() {
       for (const id of selectedNodeIds) {
         sceneGraph.updateNode(id, { opacity });
         if (shouldKeyframe(autoKeyframe, id, 'opacity')) {
-          addKeyframeAtFrame(id, 'opacity', currentFrame, opacity);
+          addKeyframeAtFrame(id, 'opacity', liveFrame(), opacity);
         }
       }
     },
-    [selectedNodeIds, sceneGraph, autoKeyframe, currentFrame, addKeyframeAtFrame]
+    [selectedNodeIds, sceneGraph, autoKeyframe, addKeyframeAtFrame]
   );
 
   // ============================================================================
@@ -1227,10 +1246,10 @@ export function PropertiesPanel() {
       const adjustments = { ...(imgNode.adjustments ?? DEFAULT_ADJUSTMENTS), [key]: value };
       sceneGraph.updateNode(selectedId, { adjustments } as Partial<Node>);
       if (shouldKeyframe(autoKeyframe, selectedId, `adjustments.${String(key)}`)) {
-        addKeyframeAtFrame(selectedId, `adjustments.${String(key)}`, currentFrame, value);
+        addKeyframeAtFrame(selectedId, `adjustments.${String(key)}`, liveFrame(), value);
       }
     },
-    [selectedId, sceneGraph, autoKeyframe, currentFrame, addKeyframeAtFrame]
+    [selectedId, sceneGraph, autoKeyframe, addKeyframeAtFrame]
   );
 
   const handleAdjustmentReset = useCallback(
@@ -1271,7 +1290,7 @@ export function PropertiesPanel() {
         for (const i of corner !== undefined ? [corner] : [0, 1, 2, 3]) {
           const property = `cornerRadius.${i}`;
           if (shouldKeyframe(autoKeyframe, nodeId, property)) {
-            addKeyframeAtFrame(nodeId, property, currentFrame, num);
+            addKeyframeAtFrame(nodeId, property, liveFrame(), num);
           }
         }
       };
@@ -1310,11 +1329,11 @@ export function PropertiesPanel() {
       } else if (currentNode.type === 'polygon') {
         sceneGraph.updateNode(selectedId, { cornerRadius: num } as Partial<Node>);
         if (shouldKeyframe(autoKeyframe, selectedId, 'cornerRadius')) {
-          addKeyframeAtFrame(selectedId, 'cornerRadius', currentFrame, num);
+          addKeyframeAtFrame(selectedId, 'cornerRadius', liveFrame(), num);
         }
       }
     },
-    [selectedId, sceneGraph, autoKeyframe, currentFrame, addKeyframeAtFrame]
+    [selectedId, sceneGraph, autoKeyframe, addKeyframeAtFrame]
   );
 
   // Snap toggle: when enabling snap, immediately snap all selected nodes to grid
@@ -1506,11 +1525,11 @@ export function PropertiesPanel() {
   // Helper to toggle a keyframe for a given property
   const toggleKeyframe = (property: string, value: unknown) => {
     if (!selectedId) return;
-    const state = getKeyframeState(timeline, selectedId, property, currentFrame);
+    const state = getKeyframeState(timeline, selectedId, property, liveFrame());
     if (state === 'active') {
-      removeKeyframeAtFrame(selectedId, property, currentFrame);
+      removeKeyframeAtFrame(selectedId, property, liveFrame());
     } else {
-      addKeyframeAtFrame(selectedId, property, currentFrame, value);
+      addKeyframeAtFrame(selectedId, property, liveFrame(), value);
     }
   };
 
@@ -1518,15 +1537,15 @@ export function PropertiesPanel() {
   const toggleKeyframes = (entries: Array<[property: string, value: unknown]>) => {
     if (!selectedId) return;
     const properties = entries.map(([property]) => property);
-    if (getGroupKeyframeState(timeline, selectedId, properties, currentFrame) === 'active') {
+    if (getGroupKeyframeState(timeline, selectedId, properties, liveFrame()) === 'active') {
       for (const property of properties) {
-        if (getKeyframeState(timeline, selectedId, property, currentFrame) === 'active') {
-          removeKeyframeAtFrame(selectedId, property, currentFrame);
+        if (getKeyframeState(timeline, selectedId, property, liveFrame()) === 'active') {
+          removeKeyframeAtFrame(selectedId, property, liveFrame());
         }
       }
     } else {
       for (const [property, value] of entries) {
-        addKeyframeAtFrame(selectedId, property, currentFrame, value);
+        addKeyframeAtFrame(selectedId, property, liveFrame(), value);
       }
     }
   };
@@ -2046,7 +2065,7 @@ export function PropertiesPanel() {
                               const val = Math.max(1, v);
                               setBoneLength(sceneGraph, nodeId, val);
                               if (shouldKeyframe(autoKeyframe, nodeId, 'length'))
-                                addKeyframeAtFrame(nodeId, 'length', currentFrame, val);
+                                addKeyframeAtFrame(nodeId, 'length', liveFrame(), val);
                             }}
                             min={1}
                           />
@@ -2060,7 +2079,7 @@ export function PropertiesPanel() {
                                 pushUndo(sceneGraph);
                                 setBoneLength(sceneGraph, nodeId, val);
                                 if (shouldKeyframe(autoKeyframe, nodeId, 'length'))
-                                  addKeyframeAtFrame(nodeId, 'length', currentFrame, val);
+                                  addKeyframeAtFrame(nodeId, 'length', liveFrame(), val);
                               }
                             }}
                             {...numericInputProps(
@@ -2071,7 +2090,7 @@ export function PropertiesPanel() {
                                   pushUndo(sceneGraph);
                                   setBoneLength(sceneGraph, nodeId, val);
                                   if (shouldKeyframe(autoKeyframe, nodeId, 'length'))
-                                    addKeyframeAtFrame(nodeId, 'length', currentFrame, val);
+                                    addKeyframeAtFrame(nodeId, 'length', liveFrame(), val);
                                 }
                               }
                             )}
@@ -2407,12 +2426,7 @@ export function PropertiesPanel() {
                                     pushUndo(sceneGraph);
                                     setText({ fontFamily: family });
                                     if (shouldKeyframe(autoKeyframe, nodeId, 'fontFamily'))
-                                      addKeyframeAtFrame(
-                                        nodeId,
-                                        'fontFamily',
-                                        currentFrame,
-                                        family
-                                      );
+                                      addKeyframeAtFrame(nodeId, 'fontFamily', liveFrame(), family);
                                   })
                                   .catch(() => {
                                     toast.error(`Failed to load font: ${family}`);
@@ -2423,7 +2437,7 @@ export function PropertiesPanel() {
                             pushUndo(sceneGraph);
                             setText({ fontFamily: family });
                             if (shouldKeyframe(autoKeyframe, nodeId, 'fontFamily'))
-                              addKeyframeAtFrame(nodeId, 'fontFamily', currentFrame, family);
+                              addKeyframeAtFrame(nodeId, 'fontFamily', liveFrame(), family);
                           }}
                         >
                           {allFonts.map((f) => (
@@ -2453,7 +2467,7 @@ export function PropertiesPanel() {
                               const val = Math.max(1, Math.round(v));
                               setText({ fontSize: val });
                               if (shouldKeyframe(autoKeyframe, nodeId, 'fontSize'))
-                                addKeyframeAtFrame(nodeId, 'fontSize', currentFrame, val);
+                                addKeyframeAtFrame(nodeId, 'fontSize', liveFrame(), val);
                             }}
                             min={1}
                             max={999}
@@ -2468,7 +2482,7 @@ export function PropertiesPanel() {
                                 pushUndo(sceneGraph);
                                 setText({ fontSize: val });
                                 if (shouldKeyframe(autoKeyframe, nodeId, 'fontSize'))
-                                  addKeyframeAtFrame(nodeId, 'fontSize', currentFrame, val);
+                                  addKeyframeAtFrame(nodeId, 'fontSize', liveFrame(), val);
                               }
                             }}
                             {...numericInputProps(
@@ -2478,7 +2492,7 @@ export function PropertiesPanel() {
                                 if (!isNaN(val) && val > 0) {
                                   setText({ fontSize: val });
                                   if (shouldKeyframe(autoKeyframe, nodeId, 'fontSize'))
-                                    addKeyframeAtFrame(nodeId, 'fontSize', currentFrame, val);
+                                    addKeyframeAtFrame(nodeId, 'fontSize', liveFrame(), val);
                                 }
                               }
                             )}
@@ -2505,7 +2519,7 @@ export function PropertiesPanel() {
                                     pushUndo(sceneGraph);
                                     setText({ fontWeight: w });
                                     if (shouldKeyframe(autoKeyframe, nodeId, 'fontWeight'))
-                                      addKeyframeAtFrame(nodeId, 'fontWeight', currentFrame, w);
+                                      addKeyframeAtFrame(nodeId, 'fontWeight', liveFrame(), w);
                                   })
                                   .catch(() => {
                                     toast.error(`Failed to load ${family} weight ${w}`);
@@ -2516,7 +2530,7 @@ export function PropertiesPanel() {
                             pushUndo(sceneGraph);
                             setText({ fontWeight: w });
                             if (shouldKeyframe(autoKeyframe, nodeId, 'fontWeight'))
-                              addKeyframeAtFrame(nodeId, 'fontWeight', currentFrame, w);
+                              addKeyframeAtFrame(nodeId, 'fontWeight', liveFrame(), w);
                           }}
                         >
                           {(() => {
@@ -2607,7 +2621,7 @@ export function PropertiesPanel() {
                               const val = Math.max(0.5, +v.toFixed(2));
                               setText({ lineHeight: val });
                               if (shouldKeyframe(autoKeyframe, nodeId, 'lineHeight'))
-                                addKeyframeAtFrame(nodeId, 'lineHeight', currentFrame, val);
+                                addKeyframeAtFrame(nodeId, 'lineHeight', liveFrame(), val);
                             }}
                             sensitivity={0.01}
                             min={0.5}
@@ -2623,7 +2637,7 @@ export function PropertiesPanel() {
                                 pushUndo(sceneGraph);
                                 setText({ lineHeight: val });
                                 if (shouldKeyframe(autoKeyframe, nodeId, 'lineHeight'))
-                                  addKeyframeAtFrame(nodeId, 'lineHeight', currentFrame, val);
+                                  addKeyframeAtFrame(nodeId, 'lineHeight', liveFrame(), val);
                               }
                             }}
                           />
@@ -2650,7 +2664,7 @@ export function PropertiesPanel() {
                                 addKeyframeAtFrame(
                                   nodeId,
                                   'letterSpacing',
-                                  currentFrame,
+                                  liveFrame(),
                                   +v.toFixed(1)
                                 );
                             }}
@@ -2668,7 +2682,7 @@ export function PropertiesPanel() {
                                 pushUndo(sceneGraph);
                                 setText({ letterSpacing: val });
                                 if (shouldKeyframe(autoKeyframe, nodeId, 'letterSpacing'))
-                                  addKeyframeAtFrame(nodeId, 'letterSpacing', currentFrame, val);
+                                  addKeyframeAtFrame(nodeId, 'letterSpacing', liveFrame(), val);
                               }
                             }}
                           />
@@ -2838,7 +2852,7 @@ export function PropertiesPanel() {
                   addKeyframeAtFrame(
                     sp.nodeId,
                     vertexPropPath(n, sp.pointIndex, `position.${axis}`),
-                    currentFrame,
+                    liveFrame(),
                     num
                   );
                 }
@@ -2875,7 +2889,7 @@ export function PropertiesPanel() {
                   addKeyframeAtFrame(
                     sp.nodeId,
                     vertexPropPath(n, sp.pointIndex, 'cornerRadius'),
-                    currentFrame,
+                    liveFrame(),
                     num
                   );
                 }
@@ -2894,7 +2908,7 @@ export function PropertiesPanel() {
                 for (const axis of ['x', 'y'] as const) {
                   const property = vertexPropPath(n, index, `${handle}.${axis}`);
                   if (shouldKeyframe(autoKeyframe, n.id, property)) {
-                    addKeyframeAtFrame(n.id, property, currentFrame, value[axis]);
+                    addKeyframeAtFrame(n.id, property, liveFrame(), value[axis]);
                   }
                 }
               }
@@ -3818,7 +3832,7 @@ export function PropertiesPanel() {
                                       addKeyframeAtFrame(
                                         selectedId,
                                         `effects.${index}.color`,
-                                        currentFrame,
+                                        liveFrame(),
                                         c
                                       );
                                   }
@@ -3853,7 +3867,7 @@ export function PropertiesPanel() {
                                       addKeyframeAtFrame(
                                         selectedId,
                                         `effects.${index}.opacity`,
-                                        currentFrame,
+                                        liveFrame(),
                                         clamped
                                       );
                                   }
@@ -3886,7 +3900,7 @@ export function PropertiesPanel() {
                                       addKeyframeAtFrame(
                                         selectedId,
                                         `effects.${index}.opacity`,
-                                        currentFrame,
+                                        liveFrame(),
                                         clamped
                                       );
                                   }
@@ -3913,7 +3927,7 @@ export function PropertiesPanel() {
                                         addKeyframeAtFrame(
                                           selectedId,
                                           `effects.${index}.opacity`,
-                                          currentFrame,
+                                          liveFrame(),
                                           clamped
                                         );
                                     }
@@ -3946,7 +3960,7 @@ export function PropertiesPanel() {
                                       addKeyframeAtFrame(
                                         selectedId,
                                         `effects.${index}.offsetX`,
-                                        currentFrame,
+                                        liveFrame(),
                                         v
                                       );
                                   }
@@ -3975,7 +3989,7 @@ export function PropertiesPanel() {
                                       addKeyframeAtFrame(
                                         selectedId,
                                         `effects.${index}.offsetX`,
-                                        currentFrame,
+                                        liveFrame(),
                                         v
                                       );
                                   }
@@ -4001,7 +4015,7 @@ export function PropertiesPanel() {
                                         addKeyframeAtFrame(
                                           selectedId,
                                           `effects.${index}.offsetX`,
-                                          currentFrame,
+                                          liveFrame(),
                                           val
                                         );
                                     }
@@ -4032,7 +4046,7 @@ export function PropertiesPanel() {
                                       addKeyframeAtFrame(
                                         selectedId,
                                         `effects.${index}.offsetY`,
-                                        currentFrame,
+                                        liveFrame(),
                                         v
                                       );
                                   }
@@ -4061,7 +4075,7 @@ export function PropertiesPanel() {
                                       addKeyframeAtFrame(
                                         selectedId,
                                         `effects.${index}.offsetY`,
-                                        currentFrame,
+                                        liveFrame(),
                                         v
                                       );
                                   }
@@ -4087,7 +4101,7 @@ export function PropertiesPanel() {
                                         addKeyframeAtFrame(
                                           selectedId,
                                           `effects.${index}.offsetY`,
-                                          currentFrame,
+                                          liveFrame(),
                                           val
                                         );
                                     }
@@ -4121,7 +4135,7 @@ export function PropertiesPanel() {
                                       addKeyframeAtFrame(
                                         selectedId,
                                         `effects.${index}.blur`,
-                                        currentFrame,
+                                        liveFrame(),
                                         clamped
                                       );
                                   }
@@ -4153,7 +4167,7 @@ export function PropertiesPanel() {
                                       addKeyframeAtFrame(
                                         selectedId,
                                         `effects.${index}.blur`,
-                                        currentFrame,
+                                        liveFrame(),
                                         clamped
                                       );
                                   }
@@ -4180,7 +4194,7 @@ export function PropertiesPanel() {
                                         addKeyframeAtFrame(
                                           selectedId,
                                           `effects.${index}.blur`,
-                                          currentFrame,
+                                          liveFrame(),
                                           clamped
                                         );
                                     }
@@ -4212,7 +4226,7 @@ export function PropertiesPanel() {
                                       addKeyframeAtFrame(
                                         selectedId,
                                         `effects.${index}.spread`,
-                                        currentFrame,
+                                        liveFrame(),
                                         clamped
                                       );
                                   }
@@ -4244,7 +4258,7 @@ export function PropertiesPanel() {
                                       addKeyframeAtFrame(
                                         selectedId,
                                         `effects.${index}.spread`,
-                                        currentFrame,
+                                        liveFrame(),
                                         clamped
                                       );
                                   }
@@ -4271,7 +4285,7 @@ export function PropertiesPanel() {
                                         addKeyframeAtFrame(
                                           selectedId,
                                           `effects.${index}.spread`,
-                                          currentFrame,
+                                          liveFrame(),
                                           clamped
                                         );
                                     }
@@ -4312,7 +4326,7 @@ export function PropertiesPanel() {
                                     addKeyframeAtFrame(
                                       selectedId,
                                       `effects.${index}.radius`,
-                                      currentFrame,
+                                      liveFrame(),
                                       clamped
                                     );
                                 }
@@ -4344,7 +4358,7 @@ export function PropertiesPanel() {
                                     addKeyframeAtFrame(
                                       selectedId,
                                       `effects.${index}.radius`,
-                                      currentFrame,
+                                      liveFrame(),
                                       clamped
                                     );
                                 }
@@ -4371,7 +4385,7 @@ export function PropertiesPanel() {
                                       addKeyframeAtFrame(
                                         selectedId,
                                         `effects.${index}.radius`,
-                                        currentFrame,
+                                        liveFrame(),
                                         clamped
                                       );
                                   }

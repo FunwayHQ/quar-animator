@@ -22,7 +22,8 @@ import type {
 } from '@quar/types';
 import { PropertiesPanel, textSizeUpdate } from './PropertiesPanel';
 import { useEditorStore } from '../../stores/editorStore';
-import type { ReactNode } from 'react';
+import { Profiler, type ReactNode } from 'react';
+import { poseScene } from '../../stores/scenePosing';
 
 // ============================================================================
 // Test Helpers
@@ -152,6 +153,48 @@ describe('PropertiesPanel', () => {
   it('shows empty state when nothing is selected', () => {
     renderWithProvider(<PropertiesPanel />);
     expect(screen.getByText('Select an object to view properties')).toBeInTheDocument();
+  });
+
+  it('holds still while the animation plays, then shows where it stopped', () => {
+    let sg: SceneGraph | null = null;
+    let renders = 0;
+    render(
+      <SceneGraphProvider>
+        <SceneGraphCapture onCapture={(s) => (sg = s)} />
+        <Profiler id="properties" onRender={() => renders++}>
+          <PropertiesPanel />
+        </Profiler>
+      </SceneGraphProvider>
+    );
+    act(() => {
+      sg!.addNode(createTestRect('rect1', 'Rectangle 1'));
+      useEditorStore.getState().setSelection(['rect1']);
+      useEditorStore.setState({ currentFrame: 0, timeline: createTimeline() });
+    });
+    act(() => useEditorStore.setState({ isPlaying: true }));
+    const playing = renders;
+    // Ten frames shown, the layer posed on each
+    act(() => {
+      for (let frame = 1; frame <= 10; frame++) {
+        useEditorStore.setState({ currentFrame: frame });
+        poseScene(() => sg!.updateNode('rect1', { opacity: frame / 20 } as Partial<Node>));
+      }
+    });
+    expect(renders).toBe(playing);
+
+    // An edit made meanwhile keys the frame being shown, not the one held
+    act(() => {
+      fireEvent.click(screen.getByRole('button', { name: 'Add opacity keyframe' }));
+    });
+    const track = useEditorStore
+      .getState()
+      .timeline.tracks.find((t) => t.nodeId === 'rect1' && t.property === 'opacity');
+    expect(track?.keyframes.map((kf) => kf.time)).toEqual([10]);
+
+    act(() => useEditorStore.setState({ isPlaying: false }));
+    expect(renders).toBeGreaterThan(playing);
+    expect(screen.getByDisplayValue('50%')).toBeInTheDocument();
+    act(() => useEditorStore.setState({ currentFrame: 0, timeline: createTimeline() }));
   });
 
   it('shows transform section when node is selected', () => {
