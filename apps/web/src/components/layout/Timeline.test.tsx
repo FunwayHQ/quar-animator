@@ -583,6 +583,34 @@ describe('Timeline', () => {
     expect(range()).toEqual([249, 299]);
   });
 
+  it('leaves the playhead alone when a work-area drag ends, and takes the next ruler click', async () => {
+    useEditorStore.setState({
+      workAreaEnabled: true,
+      workAreaStart: 50,
+      workAreaEnd: 100,
+      currentFrame: 10,
+    });
+    renderTimeline();
+    const ruler = screen.getByTestId('timeline-ruler');
+    Object.defineProperty(ruler, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => ({ left: 0, top: 0, width: 300, height: 28 }) as DOMRect,
+    });
+    const bar = screen.getByTestId('work-area-bar');
+    Object.defineProperty(bar, 'setPointerCapture', { value: vi.fn() });
+
+    fireEvent.pointerDown(bar, { button: 0, clientX: 75, pointerId: 1 });
+    fireEvent.pointerMove(bar, { clientX: 95, pointerId: 1 });
+    fireEvent.pointerUp(bar, { clientX: 95, pointerId: 1 });
+    fireEvent.click(bar, { clientX: 95 }); // the click the browser sends after
+    expect(useEditorStore.getState().currentFrame).toBe(10);
+
+    // Later, a click on the ruler moves the playhead as ever
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    fireEvent.click(ruler, { clientX: 200 });
+    expect(useEditorStore.getState().currentFrame).toBe(200);
+  });
+
   it('toggles play state when play button clicked', async () => {
     const user = userEvent.setup();
     renderTimeline();

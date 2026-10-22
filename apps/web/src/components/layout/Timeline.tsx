@@ -758,6 +758,13 @@ export function Timeline({ playback }: TimelineProps = {}) {
 
   const handleWorkAreaPointerUp = useCallback(() => {
     workAreaDragRef.current = null;
+    // The click that ends this press isn't a click on the ruler (which would
+    // move the playhead there and drop the keyframe selection); if no click
+    // follows, the next real one isn't swallowed
+    suppressRulerClickRef.current = true;
+    setTimeout(() => {
+      suppressRulerClickRef.current = false;
+    }, 0);
   }, []);
 
   useEffect(() => {
