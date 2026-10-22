@@ -64,6 +64,8 @@ export function generateSpriteSheetMetadata(
   const frames: Record<string, SpriteFrameData> = {};
 
   for (const rect of packResult.rects) {
+    // A frame the packer couldn't place (at -1, -1) isn't in the image
+    if (rect.x < 0 || rect.y < 0) continue;
     const name = filenames[rect.frameIndex] ?? `frame_${rect.frameIndex}.png`;
     frames[name] = {
       frame: { x: rect.x, y: rect.y, w: rect.width, h: rect.height },

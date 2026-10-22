@@ -25,6 +25,24 @@ vi.mock('./frameRenderer', () => ({
 describe('generateSpriteSheetMetadata', () => {
   const packResult: PackResult = packGrid(4, 64, 64, 2, 0);
 
+  it('leaves out frames the packer couldn’t place (they aren’t in the image)', () => {
+    // Three 300-px frames in a 600 × 300 atlas: the third doesn't fit
+    const packed = packMaxRects(
+      Array.from({ length: 3 }, () => ({ width: 300, height: 300 })),
+      600,
+      300
+    );
+    expect(packed.rects.some((rect) => rect.x < 0)).toBe(true);
+    const meta = generateSpriteSheetMetadata(
+      packed,
+      { startFrame: 0, endFrame: 2, frameWidth: 300, frameHeight: 300 },
+      'sheet.png'
+    );
+    const frames = Object.values(meta.frames);
+    expect(frames).toHaveLength(2);
+    for (const { frame } of frames) expect(frame.x >= 0 && frame.y >= 0).toBe(true);
+  });
+
   it('generates correct structure', () => {
     const meta = generateSpriteSheetMetadata(
       packResult,
