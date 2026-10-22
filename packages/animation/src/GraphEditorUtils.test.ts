@@ -324,6 +324,40 @@ describe('enforceTangentMode', () => {
 // ============================================================================
 
 describe('fitKeyframesToView', () => {
+  it('fits a range bigger than the view in pixels: every keyframe inside the padding', () => {
+    // A Position Y track from 100 to 800 over 2000 frames, in an 800 × 250 view
+    const keyframes = [
+      { time: 0, value: 100 },
+      { time: 1000, value: 800 },
+      { time: 2000, value: 400 },
+    ];
+    const view = fitKeyframesToView(keyframes, 800, 250, 40);
+    expect(view.scaleX).toBeLessThan(1);
+    expect(view.scaleY).toBeLessThan(1);
+    for (const kf of keyframes) {
+      const { x, y } = graphToScreen(kf.time, kf.value, view);
+      expect(x).toBeGreaterThanOrEqual(40 - 1e-6);
+      expect(x).toBeLessThanOrEqual(800 - 40 + 1e-6);
+      expect(y).toBeGreaterThanOrEqual(40 - 1e-6);
+      expect(y).toBeLessThanOrEqual(250 - 40 + 1e-6);
+    }
+  });
+
+  it('stays finite and positive in a view smaller than its padding', () => {
+    const view = fitKeyframesToView(
+      [
+        { time: 0, value: 0 },
+        { time: 10, value: 5 },
+      ],
+      50,
+      50,
+      40
+    );
+    expect(view.scaleX).toBeGreaterThan(0);
+    expect(view.scaleY).toBeGreaterThan(0);
+    expect(Number.isFinite(view.offsetX) && Number.isFinite(view.offsetY)).toBe(true);
+  });
+
   it('returns default for empty keyframes', () => {
     const result = fitKeyframesToView([], 800, 400);
     expect(result.scaleX).toBeGreaterThan(0);

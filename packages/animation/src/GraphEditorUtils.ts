@@ -356,11 +356,15 @@ export function fitKeyframesToView(
   const timeRange = maxTime - minTime || 1;
   const valueRange = maxVal - minVal || 1;
 
-  const usableWidth = viewWidth - padding * 2;
-  const usableHeight = viewHeight - padding * 2;
+  // A view smaller than its padding still has a pixel to fit into
+  const usableWidth = Math.max(1, viewWidth - padding * 2);
+  const usableHeight = Math.max(1, viewHeight - padding * 2);
 
-  const scaleX = Math.max(1, usableWidth / timeRange);
-  const scaleY = Math.max(1, usableHeight / valueRange);
+  // Zoomed out as far as it takes: a range wider than the view has a scale
+  // under 1 px per unit (only kept from reaching zero)
+  const MIN_SCALE = 0.0001;
+  const scaleX = Math.max(MIN_SCALE, usableWidth / timeRange);
+  const scaleY = Math.max(MIN_SCALE, usableHeight / valueRange);
 
   // Center the content
   const midTime = (minTime + maxTime) / 2;
