@@ -260,6 +260,13 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
     setTimeout(onClose, EXIT_MS);
   }, [onClose]);
 
+  // Closing mid-export cancels it, rather than leaving it running unseen to
+  // download its file after the dialog is gone
+  const requestClose = useCallback(() => {
+    if (state.exporting) cancelledRef.current = true;
+    close();
+  }, [state.exporting, close]);
+
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -675,7 +682,11 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
         {/* Header */}
         <div className={styles.header}>
           <h3 className={styles.title}>Export Animation</h3>
-          <button className={styles.closeBtn} onClick={close} data-testid="export-dialog-close">
+          <button
+            className={styles.closeBtn}
+            onClick={requestClose}
+            data-testid="export-dialog-close"
+          >
             <X size={14} />
           </button>
         </div>

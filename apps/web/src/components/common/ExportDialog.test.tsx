@@ -565,6 +565,32 @@ describe('ExportDialog', () => {
     expect(screen.queryByTestId('export-dialog')).not.toBeInTheDocument();
   });
 
+  it('cancels the export when closed from the X while exporting', async () => {
+    let finish: (blob: Blob) => void = () => undefined;
+    vi.mocked(exportGif).mockImplementationOnce(
+      () =>
+        new Promise<Blob>((resolve) => {
+          finish = resolve;
+        })
+    );
+    render(<ExportDialogHost />);
+    act(() => showExportDialog('gif'));
+    fireEvent.click(screen.getByTestId('export-dialog-export'));
+    await waitFor(() => expect(exportGif).toHaveBeenCalledOnce());
+
+    fireEvent.click(screen.getByTestId('export-dialog-close'));
+    // The exporter is told to stop
+    expect(vi.mocked(exportGif).mock.calls[0]![3]?.()).toBe(true);
+    await act(async () => {
+      finish(new Blob(['gif'], { type: 'image/gif' }));
+      await new Promise((r) => setTimeout(r, 150));
+    });
+
+    expect(screen.queryByTestId('export-dialog')).not.toBeInTheDocument();
+    // Nothing downloads after the dialog is gone
+    expect(downloadBlob).not.toHaveBeenCalled();
+  });
+
   it('closes on backdrop click', async () => {
     render(<ExportDialogHost />);
     act(() => showExportDialog('png-sequence'));
