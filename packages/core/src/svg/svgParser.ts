@@ -140,8 +140,8 @@ export function parseSvg(svgString: string): ParsedSvg {
 
   // Parse dimensions
   const viewBox = parseViewBox(svgEl.getAttribute('viewBox'));
-  const width = parseSvgLength(svgEl.getAttribute('width') || '') || viewBox?.width || 300;
-  const height = parseSvgLength(svgEl.getAttribute('height') || '') || viewBox?.height || 150;
+  const width = rootLength(svgEl.getAttribute('width')) || viewBox?.width || 300;
+  const height = rootLength(svgEl.getAttribute('height')) || viewBox?.height || 150;
 
   // Collect defs
   const defs = collectDefs(svgEl, {
@@ -158,6 +158,17 @@ export function parseSvg(svgString: string): ParsedSvg {
 // ============================================================================
 // ViewBox
 // ============================================================================
+
+/**
+ * The root <svg>'s width or height, or 0 when it has none of its own. A
+ * percentage is a share of a page there is no telling the size of here, so
+ * it counts as none (read as a fraction it made the SVG 1 unit across, and
+ * flipped every shape of an SVG without a viewBox about a height of 1).
+ */
+function rootLength(value: string | null): number {
+  if (!value || value.trim().endsWith('%')) return 0;
+  return parseSvgLength(value);
+}
 
 /** An attribute's number, or undefined when it's absent or empty. */
 function optionalNumber(value: string | null): number | undefined {

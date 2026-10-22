@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { parseSvg } from '../svgParser';
+import { convertSvgToNodes } from '../svgConverter';
 
 describe('parseSvg', () => {
   // --------------------------------------------------------------------------
@@ -26,6 +27,27 @@ describe('parseSvg', () => {
     );
     expect(result.width).toBe(400);
     expect(result.height).toBe(300);
+  });
+
+  it('sizes an SVG of percentage width/height by its viewBox', () => {
+    const result = parseSvg(
+      '<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" viewBox="0 0 200 100"></svg>'
+    );
+    expect(result.width).toBe(200);
+    expect(result.height).toBe(100);
+  });
+
+  it('gives an SVG of percentage width/height and no viewBox the default size', () => {
+    const result = parseSvg(
+      `<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%">
+        <rect x="0" y="0" width="10" height="10" />
+      </svg>`
+    );
+    expect(result.width).toBe(300);
+    expect(result.height).toBe(150);
+    // Flipped about the 150 high default, not about a height of 1
+    const { nodes } = convertSvgToNodes(result, () => 'r');
+    expect(nodes[0]!.transform.position.y).toBeCloseTo(145);
   });
 
   it('throws on invalid SVG', () => {
