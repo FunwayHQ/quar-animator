@@ -510,13 +510,14 @@ export function GraphEditor() {
     return () => container.removeEventListener('wheel', handleWheel);
   }, [handleWheel]);
 
-  // Delete selected keyframes
+  // Delete and arrow keys edit the selected keyframes while the graph has
+  // focus (pressing in it gives it focus). Pressed anywhere else they're for
+  // whatever has focus there: on the canvas they delete or nudge layers
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Delete' || e.key === 'Backspace') {
-        const target = e.target as HTMLElement | null;
-        if (target?.tagName === 'INPUT' || target?.tagName === 'TEXTAREA') return;
+      if (!containerRef.current?.contains(document.activeElement)) return;
 
+      if (e.key === 'Delete' || e.key === 'Backspace') {
         const state = useEditorStore.getState();
         if (state.selectedKeyframeIds.size === 0) return;
         if (state.timelineViewMode !== 'graph') return;
@@ -542,9 +543,6 @@ export function GraphEditor() {
         e.key === 'ArrowUp' ||
         e.key === 'ArrowDown'
       ) {
-        const target = e.target as HTMLElement | null;
-        if (target?.tagName === 'INPUT' || target?.tagName === 'TEXTAREA') return;
-
         const state = useEditorStore.getState();
         if (state.selectedKeyframeIds.size === 0) return;
         if (state.timelineViewMode !== 'graph') return;
@@ -633,9 +631,18 @@ export function GraphEditor() {
         nodeNames={nodeNames}
         onToggleTrack={toggleGraphTrackVisibility}
       />
+      {/* Focusable so it can take Delete and the arrow keys. jsx-a11y doesn't
+          count the application role as interactive. */}
+      {/* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions */}
       <div
         ref={containerRef}
         className={styles.graphArea}
+        role="application"
+        aria-label="Animation curves"
+        // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
+        tabIndex={0}
+        // Before the keyframe dots, which keep the press to themselves
+        onMouseDownCapture={() => containerRef.current?.focus({ preventScroll: true })}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}

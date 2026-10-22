@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
+import { fireEvent } from '@testing-library/react';
 import { render, screen } from '../../test/utils';
 import { GraphEditor } from './GraphEditor';
 import { SceneGraphProvider } from '../../contexts/SceneGraphContext';
@@ -106,6 +107,60 @@ describe('GraphEditor', () => {
     expect(useEditorStore.getState().timelineViewMode).toBe('dopeSheet');
     useEditorStore.getState().toggleTimelineViewMode();
     expect(useEditorStore.getState().timelineViewMode).toBe('graph');
+  });
+
+  describe('Delete and arrow keys', () => {
+    function renderWithTwoSelected() {
+      const tl = setupTimelineWithKeyframes();
+      const [first, second] = tl.tracks[0]!.keyframes;
+      useEditorStore.setState({
+        timeline: tl,
+        selectedKeyframeIds: new Set([first!.id, second!.id]),
+      });
+      const view = renderGraphEditor();
+      return { ids: [first!.id, second!.id], view };
+    }
+
+    const xTimes = () =>
+      useEditorStore.getState().timeline.tracks[0]!.keyframes.map((kf) => kf.time);
+
+    it('leave the keyframes alone while something else has focus, like the canvas', () => {
+      renderWithTwoSelected();
+      const canvas = document.createElement('canvas');
+      canvas.tabIndex = 0;
+      document.body.appendChild(canvas);
+      try {
+        canvas.focus();
+        fireEvent.keyDown(canvas, { key: 'ArrowRight' });
+        fireEvent.keyDown(canvas, { key: 'ArrowUp' });
+        fireEvent.keyDown(canvas, { key: 'Delete' });
+        fireEvent.keyDown(document.body, { key: 'Backspace' });
+      } finally {
+        canvas.remove();
+      }
+      expect(xTimes()).toEqual([0, 30, 60]);
+      expect(useEditorStore.getState().timeline.tracks[0]!.keyframes.map((kf) => kf.value)).toEqual(
+        [100, 200, 150]
+      );
+    });
+
+    it('nudge and delete the selected keyframes once a press in the graph gives it focus', () => {
+      const { ids, view } = renderWithTwoSelected();
+      const area = screen.getByTestId('graph-editor-area');
+      // Shift-press a selected dot: the selection stays and the graph takes focus
+      const dot = view.container.querySelector('circle[class*="keyframeDot"]');
+      expect(dot).not.toBeNull();
+      fireEvent.mouseDown(dot!, { button: 0, shiftKey: true });
+      fireEvent.mouseUp(area);
+      expect(document.activeElement).toBe(area);
+      expect(useEditorStore.getState().selectedKeyframeIds).toEqual(new Set(ids));
+
+      fireEvent.keyDown(area, { key: 'ArrowRight' });
+      expect(xTimes()).toEqual([1, 31, 60]);
+
+      fireEvent.keyDown(area, { key: 'Delete' });
+      expect(xTimes()).toEqual([60]);
+    });
   });
 
   it('updates graph view transform', () => {
