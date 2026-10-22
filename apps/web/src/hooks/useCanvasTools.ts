@@ -317,7 +317,8 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
           node.type === 'polygon' ||
           node.type === 'path' ||
           node.type === 'text' ||
-          node.type === 'group'
+          node.type === 'group' ||
+          node.type === 'symbol-instance'
         ) {
           if (shouldKf(nodeId, 'transform.scale.x'))
             addKf(nodeId, 'transform.scale.x', frame, node.transform.scale.x);

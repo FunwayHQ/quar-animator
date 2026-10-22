@@ -1292,7 +1292,7 @@ export class SelectionTool extends BaseTool {
       } else if (node.type === 'image') {
         state.width = node.width;
         state.height = node.height;
-      } else if (node.type === 'group') {
+      } else if (node.type === 'group' || node.type === 'symbol-instance') {
         state.scale = { ...node.transform.scale };
       } else if (node.type === 'artboard') {
         state.width = node.width;
@@ -1487,8 +1487,12 @@ export class SelectionTool extends BaseTool {
           width: newWidth,
           height: newHeight,
         });
-      } else if (node.type === 'group' && initialState.scale !== undefined) {
-        // For groups, apply non-uniform scaling via transform scale
+      } else if (
+        (node.type === 'group' || node.type === 'symbol-instance') &&
+        initialState.scale !== undefined
+      ) {
+        // Groups and symbol instances (whose content lives in the symbol)
+        // resize by their transform scale
         const newScaleX = Math.max(0.01, initialState.scale.x * scaleX);
         const newScaleY = Math.max(0.01, initialState.scale.y * scaleY);
 

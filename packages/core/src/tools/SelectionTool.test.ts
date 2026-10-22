@@ -17,6 +17,7 @@ import type {
   ArtboardNode,
   GroupNode,
   TextNode,
+  SymbolInstanceNode,
 } from '@quar/types';
 
 function createTestGroup(id: string, x: number, y: number): GroupNode {
@@ -837,6 +838,67 @@ describe('SelectionTool', () => {
   // ==========================================================================
 
   describe('resizing nodes', () => {
+    it('resizes a symbol instance by its scale (Escape puts it back)', () => {
+      // A symbol of one 100x100 square, placed at (200, 100)
+      context.getSymbolDefinitions = () => [
+        {
+          id: 'sym',
+          name: 'Square',
+          sceneGraphJSON: {
+            nodes: [createTestRectangle('square', 0, 0, 100, 100)],
+            rootNodeIds: ['square'],
+          },
+        },
+      ];
+      const instance: SymbolInstanceNode = {
+        id: 'inst',
+        name: 'Square 1',
+        type: 'symbol-instance',
+        parent: null,
+        children: [],
+        transform: { ...createDefaultTransform(), position: { x: 200, y: 100 } },
+        visible: true,
+        locked: false,
+        opacity: 1,
+        blendMode: 'normal',
+        symbolId: 'sym',
+        overrides: [],
+      };
+      context.sceneGraph.addNode(instance);
+      context.setSelectedIds(['inst']);
+      const onTransformComplete = vi.fn();
+      context.onTransformComplete = onTransformComplete;
+
+      // Its box runs 150..250 by 50..150: drag the (250, 150) corner out by 50
+      const press = (worldPosition: { x: number; y: number }) => ({
+        worldPosition,
+        screenPosition: context.camera.worldToScreen(worldPosition),
+        button: 0,
+      });
+      tool.onPointerDown(createMockPointerEvent(press({ x: 250, y: 150 })));
+      expect(tool.getMode()).toBe('resizing');
+      tool.onPointerMove(createMockPointerEvent(press({ x: 300, y: 200 })));
+
+      const resized = context.sceneGraph.getNode('inst')!;
+      expect(resized.transform.scale.x).toBeCloseTo(1.5, 5);
+      expect(resized.transform.scale.y).toBeCloseTo(1.5, 5);
+      // The opposite corner stays put
+      expect(resized.transform.position.x).toBeCloseTo(225, 5);
+      expect(resized.transform.position.y).toBeCloseTo(125, 5);
+
+      tool.onKeyDown(new KeyboardEvent('keydown', { key: 'Escape' }));
+      const reverted = context.sceneGraph.getNode('inst')!;
+      expect(reverted.transform.scale).toEqual({ x: 1, y: 1 });
+      expect(reverted.transform.position).toEqual({ x: 200, y: 100 });
+
+      // A finished resize is reported for keyframing
+      tool.onPointerDown(createMockPointerEvent(press({ x: 250, y: 150 })));
+      tool.onPointerMove(createMockPointerEvent(press({ x: 300, y: 200 })));
+      tool.onPointerUp(createMockPointerEvent(press({ x: 300, y: 200 })));
+      expect(context.sceneGraph.getNode('inst')!.transform.scale.x).toBeCloseTo(1.5, 5);
+      expect(onTransformComplete).toHaveBeenCalledWith(new Set(['inst']), 'resize');
+    });
+
     it('should enter resizing mode when clicking on a handle', () => {
       // Create a rectangle centered at (100, 100) with size 100x100
       // Bounds will be: x=50, y=50, width=100, height=100

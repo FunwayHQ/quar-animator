@@ -374,6 +374,84 @@ describe('useCanvasTools', () => {
     });
   });
 
+  describe('resizing a symbol instance', () => {
+    it('keys its scale when auto-keyframe is on', () => {
+      useEditorStore.setState({
+        symbols: [
+          {
+            id: 'sym',
+            name: 'Square',
+            sceneGraphJSON: {
+              nodes: [
+                {
+                  id: 'square',
+                  name: 'square',
+                  type: 'rectangle',
+                  parent: null,
+                  children: [],
+                  transform: {
+                    position: { x: 0, y: 0 },
+                    rotation: 0,
+                    scale: { x: 1, y: 1 },
+                    anchor: { x: 0.5, y: 0.5 },
+                    skew: { x: 0, y: 0 },
+                  },
+                  visible: true,
+                  locked: false,
+                  opacity: 1,
+                  blendMode: 'normal',
+                  width: 100,
+                  height: 100,
+                  cornerRadius: [0, 0, 0, 0],
+                  fills: [],
+                  strokes: [],
+                },
+              ],
+              rootNodeIds: ['square'],
+            },
+          },
+        ],
+        autoKeyframe: true,
+        currentFrame: 0,
+        selectedNodeIds: new Set(['inst']),
+      });
+      sceneGraph.addNode({
+        id: 'inst',
+        name: 'Square 1',
+        type: 'symbol-instance',
+        parent: null,
+        children: [],
+        transform: {
+          position: { x: 200, y: 100 },
+          rotation: 0,
+          scale: { x: 1, y: 1 },
+          anchor: { x: 0.5, y: 0.5 },
+          skew: { x: 0, y: 0 },
+        },
+        visible: true,
+        locked: false,
+        opacity: 1,
+        blendMode: 'normal',
+        symbolId: 'sym',
+        overrides: [],
+      });
+      const { result } = renderHook(() => useCanvasTools({ camera, sceneGraph }));
+
+      // Drag the (250, 150) corner of its 150..250 x 50..150 box out by 50
+      const at = (x: number, y: number) => [camera.worldToScreen({ x, y }), { x, y }] as const;
+      act(() => result.current.handlePointerDown(...at(250, 150), createMockPointerEvent()));
+      act(() => result.current.handlePointerMove(...at(300, 200), createMockPointerEvent()));
+      act(() => result.current.handlePointerUp(...at(300, 200), createMockPointerEvent()));
+
+      const { timeline } = useEditorStore.getState();
+      const scaleX = timeline?.tracks.find(
+        (t) => t.nodeId === 'inst' && t.property === 'transform.scale.x'
+      );
+      expect(scaleX?.keyframes[0]?.value).toBeCloseTo(1.5, 5);
+      useEditorStore.setState({ symbols: [], autoKeyframe: false });
+    });
+  });
+
   describe('weight paint', () => {
     function boundRect(id: string, boneIds: string[]) {
       sceneGraph.addNode({
