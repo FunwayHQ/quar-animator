@@ -438,6 +438,98 @@ describe('textToSubpaths', () => {
     }
   });
 
+  describe('ligatures (F180)', () => {
+    /** A font joining "ffi" and "fi" into one glyph each, as opentype.js does by default. */
+    function createLigatureFont() {
+      const square = (x: number) => ({
+        commands: [
+          { type: 'M', x, y: 0 },
+          { type: 'L', x: x + 500, y: 0 },
+          { type: 'L', x: x + 500, y: 800 },
+          { type: 'L', x, y: 800 },
+          { type: 'Z' },
+        ],
+      });
+      const makeGlyph = (index: number, name: string) => ({
+        index,
+        name,
+        advanceWidth: 500,
+        getPath: (x: number) => (name === 'space' ? { commands: [] } : square(x)),
+      });
+      const own = new Map<string, ReturnType<typeof makeGlyph>>();
+      const charToGlyph = (char: string) => {
+        let glyph = own.get(char);
+        if (!glyph) {
+          glyph = makeGlyph(char.codePointAt(0)!, char === ' ' ? 'space' : char);
+          own.set(char, glyph);
+        }
+        return glyph;
+      };
+      const ligatures = [
+        { text: 'ffi', glyph: makeGlyph(1001, 'f_f_i') },
+        { text: 'fi', glyph: makeGlyph(1002, 'f_i') },
+      ];
+      return {
+        unitsPerEm: 1000,
+        ascender: 800,
+        descender: -200,
+        charToGlyph,
+        stringToGlyphs: (text: string) => {
+          const glyphs = [];
+          for (let i = 0; i < text.length; ) {
+            const ligature = ligatures.find((l) => text.startsWith(l.text, i));
+            glyphs.push(ligature ? ligature.glyph : charToGlyph(text[i]!));
+            i += ligature ? ligature.text.length : 1;
+          }
+          return glyphs;
+        },
+        getKerningValue: () => 0,
+      };
+    }
+
+    const layout = (text: string, options = {}) =>
+      textToSubpaths(text, createLigatureFont() as never, 24, options).glyphs.map((g) => ({
+        char: g.char,
+        charIndex: g.charIndex,
+      }));
+
+    it('names a ligature after the characters it draws and keeps later glyphs on theirs', () => {
+      expect(layout('office')).toEqual([
+        { char: 'o', charIndex: 0 },
+        { char: 'ffi', charIndex: 1 },
+        { char: 'c', charIndex: 4 },
+        { char: 'e', charIndex: 5 },
+      ]);
+    });
+
+    it('pairs glyphs with characters across repeated letters and several ligatures', () => {
+      expect(layout('ffii')).toEqual([
+        { char: 'ffi', charIndex: 0 },
+        { char: 'i', charIndex: 3 },
+      ]);
+      expect(layout('fiii fi')).toEqual([
+        { char: 'fi', charIndex: 0 },
+        { char: 'i', charIndex: 2 },
+        { char: 'i', charIndex: 3 },
+        { char: 'fi', charIndex: 5 },
+      ]);
+      expect(layout('fi\nfi')).toEqual([
+        { char: 'fi', charIndex: 0 },
+        { char: 'fi', charIndex: 3 },
+      ]);
+    });
+
+    it('reveals glyphs after a ligature only once their own characters are visible', () => {
+      // "office" set as o, ffi, c, e: typing out "offi" shows o and ffi, not c or e yet.
+      expect(layout('offi', { alignmentText: 'office' }).map((g) => g.char)).toEqual(['o', 'ffi']);
+      expect(layout('offic', { alignmentText: 'office' }).map((g) => g.char)).toEqual([
+        'o',
+        'ffi',
+        'c',
+      ]);
+    });
+  });
+
   it('aligns a prefix on its own line widths without alignmentText', () => {
     const font = createMockFont();
     const full = textToSubpaths('ABC\nAB', font as never, 24, { textAlign: 'center' });

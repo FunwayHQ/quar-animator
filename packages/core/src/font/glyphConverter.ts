@@ -185,6 +185,7 @@ export interface TextLayoutOptions {
 
 /** Per-glyph grouping of contours for text-to-path group conversion. */
 export interface GlyphSubpathGroup {
+  /** The characters the glyph draws: several for a ligature such as "fi". */
   char: string;
   /** Index of the character in the text (code points, newlines included). */
   charIndex: number;
@@ -196,6 +197,66 @@ export interface TextToSubpathsResult {
   /** Per-glyph contour groupings (same data as subpaths, but grouped by character). */
   glyphs: GlyphSubpathGroup[];
   bounds: Rect;
+}
+
+/**
+ * Longest ligature looked for, which keeps pairing long lines quick (longer
+ * when the glyphs couldn't otherwise cover all the characters).
+ */
+const MAX_LIGATURE_LENGTH = 8;
+
+/**
+ * Index in `chars` of the first character each glyph draws. Fonts join some
+ * letters into one glyph (ligatures such as "fi"), so after the first one,
+ * glyphs and characters no longer pair up by position. Pairs them so that as
+ * many glyphs as possible are the font's own glyph for one character; each of
+ * the others draws the characters up to the next glyph's.
+ */
+function glyphCharStarts(font: opentype.Font, chars: string[], glyphs: opentype.Glyph[]): number[] {
+  const extra = chars.length - glyphs.length;
+  if (extra <= 0 || glyphs.length === 0) return glyphs.map((_, i) => i);
+  const isOwn = (g: number, c: number) => font.charToGlyph(chars[c]!).index === glyphs[g]!.index;
+
+  // Before the first ligature and after the last, glyphs pair up one to one.
+  let head = 0;
+  while (head < glyphs.length && isOwn(head, head)) head++;
+  let tail = 0;
+  while (tail < glyphs.length - head && isOwn(glyphs.length - 1 - tail, chars.length - 1 - tail)) {
+    tail++;
+  }
+  const starts = glyphs.map((_, i) => (i < glyphs.length - tail ? i : i + extra));
+
+  // Between them, the cheapest pairing: best[g * width + d] is the fewest
+  // glyphs that aren't their character's own among the first `g`, when those
+  // draw g + d characters; span[...] is how many the g-th draws to get there.
+  const count = glyphs.length - head - tail;
+  const width = extra + 1;
+  const longest = Math.max(MAX_LIGATURE_LENGTH, Math.ceil(extra / Math.max(count, 1)) + 1);
+  const best = new Array<number>((count + 1) * width).fill(Infinity);
+  const span = new Array<number>((count + 1) * width).fill(1);
+  best[0] = 0;
+  for (let g = 0; g < count; g++) {
+    for (let d = 0; d < width; d++) {
+      const cost = best[g * width + d]!;
+      if (cost === Infinity) continue;
+      for (let k = 1; k <= Math.min(width - d, longest); k++) {
+        const next = cost + (k === 1 && isOwn(head + g, head + g + d) ? 0 : 1);
+        const at = (g + 1) * width + d + k - 1;
+        if (next < best[at]!) {
+          best[at] = next;
+          span[at] = k;
+        }
+      }
+    }
+  }
+  if (count === 0 || best[count * width + extra] === Infinity) return starts;
+
+  let d = extra;
+  for (let g = count; g > 0; g--) {
+    d -= span[g * width + d]! - 1;
+    starts[head + g - 1] = head + g - 1 + d;
+  }
+  return starts;
 }
 
 /**
@@ -245,16 +306,17 @@ export function textToSubpaths(
 
     const glyphs = font.stringToGlyphs(line.text);
     const chars = [...line.text];
+    const starts = glyphCharStarts(font, chars, glyphs);
     let advanceX = xOffset;
 
-    for (let i = 0; i < glyphs.length && line.start + i < visibleLength; i++) {
+    for (let i = 0; i < glyphs.length && line.start + starts[i]! < visibleLength; i++) {
       const glyph = glyphs[i]!;
       const path = glyph.getPath(advanceX / scale, 0, font.unitsPerEm);
       const subpaths = glyphPathToSubpaths(path);
 
       const glyphGroup: GlyphSubpathGroup = {
-        char: chars[i] ?? '',
-        charIndex: line.start + i,
+        char: chars.slice(starts[i], starts[i + 1] ?? chars.length).join(''),
+        charIndex: line.start + starts[i]!,
         subpaths: [],
       };
 

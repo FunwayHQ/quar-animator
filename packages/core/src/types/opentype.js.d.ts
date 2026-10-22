@@ -12,6 +12,7 @@ declare module 'opentype.js' {
   }
 
   export interface Glyph {
+    index: number;
     name: string;
     unicode: number;
     advanceWidth: number;
