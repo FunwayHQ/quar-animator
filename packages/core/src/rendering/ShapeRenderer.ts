@@ -458,9 +458,9 @@ interface TessellationCacheEntry {
   uvs?: Float32Array;
   /** Bending meshes: the first this many vertices are the outline strokes follow */
   outlineVertexCount?: number;
-  /** Cached stroke outline vertices per stroke key (width+align) */
-  strokeCache: Map<string, { outline: Float32Array; indices: number[] }>;
-  /** Original per-contour vertex arrays (for text stroke rendering) */
+  /** Cached stroke outline vertices per stroke key (contour, width, align, profile) */
+  strokeCache: Map<string, Float32Array>;
+  /** Original per-contour vertex arrays (text and compound paths stroke each one) */
   contours?: Float32Array[];
   /** Number of tessellated vertices per contour (for compound path skinned stroke rendering) */
   contourVertexCounts?: number[];
@@ -1359,10 +1359,7 @@ export class ShapeRenderer {
       geoKey,
       vertices,
       fillIndices: Array.from(fillIndices),
-      strokeCache:
-        cached?.geoKey === geoKey
-          ? cached.strokeCache
-          : new Map<string, { outline: Float32Array; indices: number[] }>(),
+      strokeCache: new Map<string, Float32Array>(),
     };
     this.geometryCache.set(nodeId, entry);
 
@@ -1370,21 +1367,23 @@ export class ShapeRenderer {
   }
 
   /**
-   * Get or compute stroke outline + earcut indices for a given stroke configuration.
+   * Get or compute the stroke outline for a stroke configuration, kept in the
+   * node's cache entry (`part` tells a text's or compound path's contours apart).
    */
   private getCachedStrokeOutline(
     nodeId: string,
+    part: string,
     vertices: Float32Array,
     strokeWidth: number,
     closed: boolean,
     align: string,
     widthProfile?: number[]
-  ): { outline: Float32Array; indices: number[] } | null {
+  ): Float32Array | null {
     const numVertices = vertices.length / 2;
     if (numVertices < 2) return null;
 
     const profileKey = widthProfile ? `:wp${widthProfile.join(',')}` : '';
-    const strokeKey = `${strokeWidth}:${align}${profileKey}`;
+    const strokeKey = `${part}|${strokeWidth}:${align}${profileKey}`;
     const cached = this.geometryCache.get(nodeId);
 
     if (cached) {
@@ -1400,17 +1399,13 @@ export class ShapeRenderer {
       align as 'center' | 'inside' | 'outside',
       widthProfile
     );
-    const outlineCount = outline.length / 2;
-    if (outlineCount < 3) return null;
-
-    const indices = Array.from(earcut(outline));
-    const result = { outline, indices };
+    if (outline.length / 2 < 3) return null;
 
     if (cached) {
-      cached.strokeCache.set(strokeKey, result);
+      cached.strokeCache.set(strokeKey, outline);
     }
 
-    return result;
+    return outline;
   }
 
   /**
@@ -2271,7 +2266,10 @@ export class ShapeRenderer {
 
     // Multi-contour path (compound path with holes)
     if (node.subpaths && node.subpaths.length > 0 && node.closed) {
-      const { vertices, fillIndices } = this.getCachedMultiContourTessellation(node.id, node);
+      const { vertices, fillIndices, contours } = this.getCachedMultiContourTessellation(
+        node.id,
+        node
+      );
       const fills = node.fills;
 
       // Render fills with combined vertices+holes
@@ -2285,28 +2283,22 @@ export class ShapeRenderer {
         this.currentEffectiveOpacity
       );
 
-      // Render strokes for each contour independently
-      const allContours = [node.points, ...node.subpaths];
-      for (const contour of allContours) {
-        const processed = applyCornerRadius(contour, true);
-        const contourVerts = tessellatePathToVertices(
-          processed,
-          true,
-          DEFAULT_TESSELLATION_TOLERANCE
-        );
-        // Strokes don't use earcut — render outline per contour
+      // Render strokes for each contour independently, from the cached
+      // tessellation (each contour's outline cached too)
+      contours.forEach((contourVerts, ci) => {
         for (const stroke of node.strokes) {
           if (stroke.visible && stroke.width > 0) {
             this.renderStroke(
-              node.id + '_s',
+              node.id,
               contourVerts,
               stroke,
               true,
-              this.currentEffectiveOpacity
+              this.currentEffectiveOpacity,
+              `c${ci}`
             );
           }
         }
-      }
+      });
       return;
     }
 
@@ -2388,11 +2380,12 @@ export class ShapeRenderer {
           for (const stroke of node.strokes) {
             if (stroke.visible && stroke.width > 0) {
               this.renderStroke(
-                node.id + `_tc${ci}`,
+                node.id,
                 contourVerts,
                 stroke,
                 true,
-                this.currentEffectiveOpacity
+                this.currentEffectiveOpacity,
+                `c${ci}`
               );
             }
           }
@@ -2457,11 +2450,12 @@ export class ShapeRenderer {
       for (const stroke of node.strokes) {
         if (stroke.visible && stroke.width > 0) {
           this.renderStroke(
-            node.id + `_tc${ci}`,
+            node.id,
             contourVerts,
             stroke,
             true,
-            this.currentEffectiveOpacity
+            this.currentEffectiveOpacity,
+            `c${ci}`
           );
         }
       }
@@ -2752,12 +2746,16 @@ export class ShapeRenderer {
   private getCachedMultiContourTessellation(
     nodeId: string,
     node: PathNode
-  ): { vertices: Float32Array; fillIndices: number[] } {
+  ): { vertices: Float32Array; fillIndices: number[]; contours: Float32Array[] } {
     const geoKey = buildGeometryKey(node);
     const cached = this.geometryCache.get(nodeId);
 
-    if (cached && cached.geoKey === geoKey) {
-      return { vertices: cached.vertices, fillIndices: cached.fillIndices };
+    if (cached?.geoKey === geoKey && cached.contours) {
+      return {
+        vertices: cached.vertices,
+        fillIndices: cached.fillIndices,
+        contours: cached.contours,
+      };
     }
 
     // Tessellate each contour
@@ -2781,11 +2779,12 @@ export class ShapeRenderer {
       vertices: combined,
       fillIndices: allFillIndices,
       strokeCache: new Map(),
+      contours: contourArrays,
       contourVertexCounts,
     };
     this.geometryCache.set(nodeId, entry);
 
-    return { vertices: combined, fillIndices: allFillIndices };
+    return { vertices: combined, fillIndices: allFillIndices, contours: contourArrays };
   }
 
   /**
@@ -2844,20 +2843,20 @@ export class ShapeRenderer {
     vertices: Float32Array,
     stroke: Stroke,
     closed: boolean,
-    nodeOpacity: number = 1
+    nodeOpacity: number = 1,
+    part: string = ''
   ): void {
     const align = stroke.align ?? 'center';
-    const cached = this.getCachedStrokeOutline(
+    const outlineVertices = this.getCachedStrokeOutline(
       nodeId,
+      part,
       vertices,
       stroke.width,
       closed,
       align,
       stroke.widthProfile
     );
-    if (!cached) return;
-
-    const { outline: outlineVertices } = cached;
+    if (!outlineVertices) return;
 
     if (stroke.gradient) {
       this.renderStrokeStripGradient(
