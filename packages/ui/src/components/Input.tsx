@@ -114,11 +114,24 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
       style,
       onFocus,
       onBlur,
+      id,
+      'aria-describedby': ariaDescribedBy,
+      'aria-invalid': ariaInvalid,
       ...props
     },
     ref
   ) => {
     const [isFocused, setIsFocused] = React.useState(false);
+
+    // The label names the input through its id, and the helper text or error
+    // message (never both at once) describes it, after any description the
+    // caller gave.
+    const generatedId = React.useId();
+    const inputId = id ?? generatedId;
+    const messageId = `${inputId}-helper`;
+    const message = error ? errorMessage : helperText;
+    const describedBy =
+      [ariaDescribedBy, message ? messageId : undefined].filter(Boolean).join(' ') || undefined;
 
     const handleFocus = (e: React.FocusEvent<HTMLInputElement>) => {
       setIsFocused(true);
@@ -146,15 +159,18 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
 
     return (
       <div style={{ ...containerStyles, ...(fullWidth && { width: '100%' }) }}>
-        {label && <label style={labelStyles}>{label}</label>}
+        {label && (
+          <label htmlFor={inputId} style={labelStyles}>
+            {label}
+          </label>
+        )}
         <div style={inputWrapperStyles}>
-          {iconLeft && (
-            <span style={{ ...iconStyles, left: `${iconPadding}px` }}>
-              {iconLeft}
-            </span>
-          )}
+          {iconLeft && <span style={{ ...iconStyles, left: `${iconPadding}px` }}>{iconLeft}</span>}
           <input
             ref={ref}
+            id={inputId}
+            aria-describedby={describedBy}
+            aria-invalid={error || ariaInvalid}
             disabled={disabled}
             style={computedInputStyles}
             onFocus={handleFocus}
@@ -162,13 +178,19 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
             {...props}
           />
           {iconRight && (
-            <span style={{ ...iconStyles, right: `${iconPadding}px` }}>
-              {iconRight}
-            </span>
+            <span style={{ ...iconStyles, right: `${iconPadding}px` }}>{iconRight}</span>
           )}
         </div>
-        {helperText && !error && <span style={helperTextStyles}>{helperText}</span>}
-        {error && errorMessage && <span style={errorMessageStyles}>{errorMessage}</span>}
+        {helperText && !error && (
+          <span id={messageId} style={helperTextStyles}>
+            {helperText}
+          </span>
+        )}
+        {error && errorMessage && (
+          <span id={messageId} style={errorMessageStyles}>
+            {errorMessage}
+          </span>
+        )}
       </div>
     );
   }

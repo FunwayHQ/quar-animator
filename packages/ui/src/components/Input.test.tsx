@@ -14,6 +14,69 @@ describe('Input', () => {
     expect(screen.getByText('Email')).toBeInTheDocument();
   });
 
+  it('names the input by its label', () => {
+    render(<Input label="Email" placeholder="Enter email" />);
+    expect(screen.getByLabelText('Email')).toBe(screen.getByPlaceholderText('Enter email'));
+    expect(screen.getByRole('textbox', { name: 'Email' })).toBeInTheDocument();
+  });
+
+  it('focuses the input when its label is clicked', async () => {
+    const user = userEvent.setup();
+    render(<Input label="Email" />);
+
+    await user.click(screen.getByText('Email'));
+    expect(screen.getByRole('textbox', { name: 'Email' })).toHaveFocus();
+  });
+
+  it('keeps an id given by the caller', () => {
+    render(<Input id="email-field" label="Email" />);
+    const input = screen.getByLabelText('Email');
+    expect(input).toHaveAttribute('id', 'email-field');
+  });
+
+  it('gives each input its own id', () => {
+    render(
+      <>
+        <Input label="First" />
+        <Input label="Second" />
+      </>
+    );
+    expect(screen.getByLabelText('First')).not.toBe(screen.getByLabelText('Second'));
+  });
+
+  it('describes the input with its helper text', () => {
+    render(<Input label="Email" helperText="We never share it" />);
+    const input = screen.getByLabelText('Email');
+    expect(input).toHaveAccessibleDescription('We never share it');
+    expect(input).not.toHaveAttribute('aria-invalid');
+  });
+
+  it('marks an input with an error invalid and describes it with the message', () => {
+    render(<Input label="Email" helperText="Helper" error errorMessage="Invalid" />);
+    const input = screen.getByLabelText('Email');
+    expect(input).toHaveAttribute('aria-invalid', 'true');
+    expect(input).toHaveAccessibleDescription('Invalid');
+  });
+
+  it('keeps a description given by the caller alongside its own', () => {
+    render(
+      <>
+        <span id="email-hint">Work address</span>
+        <Input label="Email" aria-describedby="email-hint" helperText="We never share it" />
+      </>
+    );
+    expect(screen.getByLabelText('Email')).toHaveAccessibleDescription(
+      'Work address We never share it'
+    );
+  });
+
+  it('has no description without helper text or an error message', () => {
+    render(<Input label="Email" error />);
+    const input = screen.getByLabelText('Email');
+    expect(input).not.toHaveAttribute('aria-describedby');
+    expect(input).toHaveAttribute('aria-invalid', 'true');
+  });
+
   it('renders with helper text', () => {
     render(<Input helperText="This is helpful" />);
     expect(screen.getByText('This is helpful')).toBeInTheDocument();
