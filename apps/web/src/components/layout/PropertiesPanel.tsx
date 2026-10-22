@@ -2624,6 +2624,7 @@ export function PropertiesPanel() {
                                 addKeyframeAtFrame(nodeId, 'lineHeight', liveFrame(), val);
                             }}
                             sensitivity={0.01}
+                            step={0.01}
                             min={0.5}
                             max={5}
                           />

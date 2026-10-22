@@ -8,8 +8,10 @@ export interface ScrubLabelProps {
   value: number;
   /** Called with the new value while scrubbing */
   onChange: (value: number) => void;
-  /** Pixels of mouse movement per unit of value change. Default: 1 */
+  /** Value change per pixel of mouse movement. Default: 1 */
   sensitivity?: number;
+  /** The steps the value moves in (0.01 for a line height). Default: 1 */
+  step?: number;
   /** Minimum allowed value */
   min?: number;
   /** Maximum allowed value */
@@ -23,6 +25,7 @@ export function ScrubLabel({
   value,
   onChange,
   sensitivity = 1,
+  step = 1,
   min = -Infinity,
   max = Infinity,
   onScrubStart,
@@ -48,8 +51,10 @@ export function ScrubLabel({
     const handlePointerMove = (e: PointerEvent) => {
       const dx = e.clientX - startXRef.current;
       const delta = dx * sensitivity;
-      const newValue = Math.round(Math.min(max, Math.max(min, startValueRef.current + delta)));
-      onChange(newValue);
+      const clamped = Math.min(max, Math.max(min, startValueRef.current + delta));
+      // Rounded to a step, then to the step's decimals (no 1.2300000000000002)
+      const decimals = Math.max(0, -Math.floor(Math.log10(step)));
+      onChange(+(Math.round(clamped / step) * step).toFixed(decimals));
     };
 
     const handlePointerUp = () => {
@@ -63,7 +68,7 @@ export function ScrubLabel({
       document.removeEventListener('pointermove', handlePointerMove);
       document.removeEventListener('pointerup', handlePointerUp);
     };
-  }, [isScrubbing, sensitivity, min, max, onChange]);
+  }, [isScrubbing, sensitivity, step, min, max, onChange]);
 
   return (
     <span
