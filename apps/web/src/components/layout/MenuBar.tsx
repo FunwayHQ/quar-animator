@@ -196,8 +196,6 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
   const isPlaying = useEditorStore((state) => state.isPlaying);
   const isLooping = useEditorStore((state) => state.isLooping);
   const autoKeyframe = useEditorStore((state) => state.autoKeyframe);
-  const currentFrame = useEditorStore((state) => state.currentFrame);
-  const timelineDuration = useEditorStore((state) => state.timelineDuration);
   const activeTool = useEditorStore((state) => state.activeTool);
 
   // --- Store actions ---
@@ -295,16 +293,19 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
     });
   }, [selectedNodeIds, sceneGraph]);
 
-  // Compute without useMemo — sceneGraph is a stable ref so useMemo([sceneGraph])
-  // would never recompute after bones are added. Traversal is cheap.
+  // Whether there are bones, for the Rigging menu: looked up each time it opens
+  // (the scene graph is one object for the whole session, so useMemo([sceneGraph])
+  // would never see bones added)
   let hasBoneNodes = false;
-  sceneGraph.traverse((node: { type: string }) => {
-    if (node.type === 'bone') {
-      hasBoneNodes = true;
-      return false; // stop
-    }
-    return true;
-  });
+  if (openMenu === 'rigging') {
+    sceneGraph.traverse((node: { type: string }) => {
+      if (node.type === 'bone') {
+        hasBoneNodes = true;
+        return false; // stop
+      }
+      return true;
+    });
+  }
 
   const hasShapeSelected = useMemo(() => {
     return Array.from(selectedNodeIds).some((id) => {
@@ -1001,6 +1002,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                     disabled={isPlaying}
                     onClick={() => {
                       closeMenu();
+                      const { currentFrame } = useEditorStore.getState();
                       if (currentFrame > 0) setCurrentFrameAction(currentFrame - 1);
                     }}
                   />
@@ -1010,6 +1012,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                     disabled={isPlaying}
                     onClick={() => {
                       closeMenu();
+                      const { currentFrame, timelineDuration } = useEditorStore.getState();
                       if (currentFrame < timelineDuration - 1)
                         setCurrentFrameAction(currentFrame + 1);
                     }}
@@ -1020,6 +1023,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                     disabled={isPlaying}
                     onClick={() => {
                       closeMenu();
+                      const { currentFrame } = useEditorStore.getState();
                       setCurrentFrameAction(Math.max(0, currentFrame - 10));
                     }}
                   />
@@ -1029,6 +1033,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                     disabled={isPlaying}
                     onClick={() => {
                       closeMenu();
+                      const { currentFrame, timelineDuration } = useEditorStore.getState();
                       setCurrentFrameAction(Math.min(timelineDuration - 1, currentFrame + 10));
                     }}
                   />
@@ -1046,7 +1051,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                     shortcut="End"
                     onClick={() => {
                       closeMenu();
-                      setCurrentFrameAction(timelineDuration - 1);
+                      setCurrentFrameAction(useEditorStore.getState().timelineDuration - 1);
                     }}
                   />
                   <Separator />

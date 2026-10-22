@@ -7,12 +7,16 @@ import { render as baseRender, screen, fireEvent, act } from '../../test/utils';
 import { useEditorStore, DEFAULT_FILL, DEFAULT_STROKE } from '../../stores/editorStore';
 import { createTimeline } from '@quar/animation';
 import { DEFAULT_ONION_SKIN_SETTINGS } from '@quar/core';
-import { SceneGraphProvider } from '../../contexts/SceneGraphContext';
+import { SceneGraphProvider, useSceneGraph } from '../../contexts/SceneGraphContext';
 import { MenuBar } from './MenuBar';
 import { ExportDialogHost } from '../common/ExportDialog';
 import { setUiTheme } from '../../hooks/useUiTheme';
 import type { ProjectActions } from '../../hooks/useProjectActions';
+import { Profiler } from 'react';
 import type { ReactElement } from 'react';
+import { createDefaultTransform, type SceneGraph } from '@quar/core';
+import { createBoneNode } from '@quar/rigging';
+import type { Node } from '@quar/types';
 
 const restoreMocks = vi.hoisted(() => ({
   restoreTutorials: vi.fn(),
@@ -295,6 +299,85 @@ describe('MenuBar', () => {
     fireEvent.click(screen.getByText('Save As...'));
     expect(screen.getByTestId('save-as-dialog')).toBeInTheDocument();
     expect(screen.getByTestId('save-as-input')).toBeInTheDocument();
+  });
+
+  describe('during playback (F162)', () => {
+    it("doesn't re-render as the frame changes", () => {
+      const onRender = vi.fn();
+      render(
+        <Profiler id="menubar" onRender={onRender}>
+          <MenuBar />
+        </Profiler>
+      );
+      const renders = onRender.mock.calls.length;
+
+      act(() => useEditorStore.setState({ currentFrame: 1 }));
+      act(() => useEditorStore.setState({ currentFrame: 2 }));
+      expect(onRender).toHaveBeenCalledTimes(renders);
+    });
+
+    it('steps from the frame shown when the menu item is picked', () => {
+      render(<MenuBar />);
+      act(() => useEditorStore.setState({ currentFrame: 7 }));
+
+      fireEvent.click(screen.getByTestId('menu-animation'));
+      fireEvent.click(screen.getByText('Next Frame'));
+      expect(useEditorStore.getState().currentFrame).toBe(8);
+
+      fireEvent.click(screen.getByTestId('menu-animation'));
+      fireEvent.click(screen.getByText('Jump Backward 10'));
+      expect(useEditorStore.getState().currentFrame).toBe(0);
+
+      fireEvent.click(screen.getByTestId('menu-animation'));
+      fireEvent.click(screen.getByText('Go to End'));
+      expect(useEditorStore.getState().currentFrame).toBe(299);
+    });
+
+    it('Bind Selection to Bones needs bones in the scene', () => {
+      let sceneGraph: SceneGraph | null = null;
+      function Grab() {
+        sceneGraph = useSceneGraph();
+        return null;
+      }
+      render(
+        <>
+          <Grab />
+          <MenuBar />
+        </>
+      );
+      const rect = {
+        id: 'rect-1',
+        name: 'Rectangle',
+        type: 'rectangle',
+        parent: null,
+        children: [],
+        transform: createDefaultTransform(),
+        visible: true,
+        locked: false,
+        opacity: 1,
+        blendMode: 'normal',
+        width: 100,
+        height: 50,
+        cornerRadius: [0, 0, 0, 0],
+        fills: [],
+        strokes: [],
+      } as unknown as Node;
+      act(() => {
+        sceneGraph?.addNode(rect);
+        useEditorStore.setState({ selectedNodeIds: new Set(['rect-1']) });
+      });
+      const bindItem = () => screen.getByText('Bind Selection to Bones').closest('button');
+
+      fireEvent.click(screen.getByTestId('menu-rigging'));
+      expect(bindItem()).toBeDisabled();
+      fireEvent.click(screen.getByTestId('menu-rigging'));
+
+      act(() => {
+        sceneGraph?.addNode(createBoneNode('bone-1', 'Bone', { x: 0, y: 0 }, 50));
+      });
+      fireEvent.click(screen.getByTestId('menu-rigging'));
+      expect(bindItem()).not.toBeDisabled();
+    });
   });
 
   it('has correct structure with header and nav', () => {
