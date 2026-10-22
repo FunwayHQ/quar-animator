@@ -1272,6 +1272,16 @@ export function PropertiesPanel() {
       if (isNaN(num) || num < 0) return;
       const currentNode = sceneGraph.getNode(selectedId);
       if (!currentNode) return;
+      // Each corner has its own track: key the corners this edit changed that
+      // are animated (all of them with auto-key on)
+      const keyCorners = (nodeId: string) => {
+        for (const i of corner !== undefined ? [corner] : [0, 1, 2, 3]) {
+          const property = `cornerRadius.${i}`;
+          if (shouldKeyframe(autoKeyframe, nodeId, property)) {
+            addKeyframeAtFrame(nodeId, property, currentFrame, num);
+          }
+        }
+      };
 
       if (currentNode.type === 'rectangle') {
         const rect = currentNode;
@@ -1285,16 +1295,7 @@ export function PropertiesPanel() {
           newRadius[3] = num;
         }
         sceneGraph.updateNode(selectedId, { cornerRadius: newRadius });
-        if (shouldKeyframe(autoKeyframe, selectedId, `cornerRadius.${corner}`)) {
-          if (corner !== undefined) {
-            addKeyframeAtFrame(selectedId, `cornerRadius.${corner}`, currentFrame, num);
-          } else {
-            addKeyframeAtFrame(selectedId, 'cornerRadius.0', currentFrame, num);
-            addKeyframeAtFrame(selectedId, 'cornerRadius.1', currentFrame, num);
-            addKeyframeAtFrame(selectedId, 'cornerRadius.2', currentFrame, num);
-            addKeyframeAtFrame(selectedId, 'cornerRadius.3', currentFrame, num);
-          }
-        }
+        keyCorners(selectedId);
       } else if (currentNode.type === 'image') {
         const img = currentNode;
         const newRadius = [...(img.cornerRadius ?? [0, 0, 0, 0])] as [
@@ -1312,16 +1313,7 @@ export function PropertiesPanel() {
           newRadius[3] = num;
         }
         sceneGraph.updateNode(selectedId, { cornerRadius: newRadius });
-        if (shouldKeyframe(autoKeyframe, selectedId, `cornerRadius.${corner}`)) {
-          if (corner !== undefined) {
-            addKeyframeAtFrame(selectedId, `cornerRadius.${corner}`, currentFrame, num);
-          } else {
-            addKeyframeAtFrame(selectedId, 'cornerRadius.0', currentFrame, num);
-            addKeyframeAtFrame(selectedId, 'cornerRadius.1', currentFrame, num);
-            addKeyframeAtFrame(selectedId, 'cornerRadius.2', currentFrame, num);
-            addKeyframeAtFrame(selectedId, 'cornerRadius.3', currentFrame, num);
-          }
-        }
+        keyCorners(selectedId);
       } else if (currentNode.type === 'polygon') {
         sceneGraph.updateNode(selectedId, { cornerRadius: num } as Partial<Node>);
         if (shouldKeyframe(autoKeyframe, selectedId, 'cornerRadius')) {

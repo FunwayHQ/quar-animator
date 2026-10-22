@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { render, screen, act, fireEvent } from '../../test/utils';
 import { SceneGraphProvider, useSceneGraph } from '../../contexts/SceneGraphContext';
 import { createDefaultTransform } from '@quar/core';
+import { createTimeline } from '@quar/animation';
 import type { SceneGraph } from '@quar/core';
 import type { ImageNode, RectangleNode, EllipseNode } from '@quar/types';
 import { PropertiesPanel } from './PropertiesPanel';
@@ -483,6 +484,36 @@ describe('PropertiesPanel - Image Node', () => {
       });
 
       expect(screen.getByTestId('corner-radius-lock')).toBeInTheDocument();
+    });
+
+    it('keys every animated corner when one radius is typed for all (F082)', () => {
+      useEditorStore.setState({
+        timeline: createTimeline({ duration: 300, frameRate: 30 }),
+        currentFrame: 0,
+        autoKeyframe: false,
+      });
+      const sg = renderWithSceneGraph();
+      act(() => {
+        sg.addNode(createTestImage('img1', 'Test Image'));
+        useEditorStore.getState().setSelection(['img1']);
+        for (const corner of [0, 1, 2, 3]) {
+          useEditorStore.getState().addKeyframeAtFrame('img1', `cornerRadius.${corner}`, 0, 0);
+        }
+        useEditorStore.setState({ currentFrame: 10 });
+      });
+
+      act(() => {
+        fireEvent.change(screen.getByTestId('corner-radius-input'), { target: { value: '12' } });
+      });
+
+      const { tracks } = useEditorStore.getState().timeline;
+      for (const corner of [0, 1, 2, 3]) {
+        const track = tracks.find((t) => t.property === `cornerRadius.${corner}`);
+        expect(track?.keyframes.map((kf) => [kf.time, kf.value])).toEqual([
+          [0, 0],
+          [10, 12],
+        ]);
+      }
     });
   });
 });

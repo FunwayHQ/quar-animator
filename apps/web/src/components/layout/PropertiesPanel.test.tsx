@@ -1041,6 +1041,89 @@ describe('PropertiesPanel', () => {
       const updatedNode = sg.getNode('poly1') as PolygonNode;
       expect(updatedNode.cornerRadius).toBe(10);
     });
+
+    describe('keyframing one radius for all corners (F082)', () => {
+      const keyedFrames = (property: string) =>
+        useEditorStore
+          .getState()
+          .timeline.tracks.find((track) => track.nodeId === 'rect1' && track.property === property)
+          ?.keyframes.map((kf) => [kf.time, kf.value]);
+
+      beforeEach(() => {
+        useEditorStore.setState({
+          timeline: createTimeline({ duration: 300, frameRate: 30 }),
+          currentFrame: 0,
+          autoKeyframe: false,
+        });
+      });
+
+      it('keys every corner when the corners are animated, auto-key off', () => {
+        const sg = renderWithSceneGraph();
+        act(() => {
+          sg.addNode(createTestRect('rect1', 'Rectangle 1'));
+          useEditorStore.getState().setSelection(['rect1']);
+          for (const corner of [0, 1, 2, 3]) {
+            useEditorStore.getState().addKeyframeAtFrame('rect1', `cornerRadius.${corner}`, 0, 0);
+          }
+          useEditorStore.setState({ currentFrame: 10 });
+        });
+
+        act(() => {
+          fireEvent.change(screen.getByTestId('corner-radius-input'), {
+            target: { value: '20' },
+          });
+        });
+
+        for (const corner of [0, 1, 2, 3]) {
+          expect(keyedFrames(`cornerRadius.${corner}`)).toEqual([
+            [0, 0],
+            [10, 20],
+          ]);
+        }
+      });
+
+      it('keys only the animated corners, auto-key off', () => {
+        const sg = renderWithSceneGraph();
+        act(() => {
+          sg.addNode(createTestRect('rect1', 'Rectangle 1'));
+          useEditorStore.getState().setSelection(['rect1']);
+          useEditorStore.getState().addKeyframeAtFrame('rect1', 'cornerRadius.0', 0, 0);
+          useEditorStore.setState({ currentFrame: 10 });
+        });
+
+        act(() => {
+          fireEvent.change(screen.getByTestId('corner-radius-input'), {
+            target: { value: '20' },
+          });
+        });
+
+        expect(keyedFrames('cornerRadius.0')).toEqual([
+          [0, 0],
+          [10, 20],
+        ]);
+        expect(keyedFrames('cornerRadius.1')).toBeUndefined();
+        expect((sg.getNode('rect1') as RectangleNode).cornerRadius).toEqual([20, 20, 20, 20]);
+      });
+
+      it('keys every corner with auto-key on', () => {
+        const sg = renderWithSceneGraph();
+        act(() => {
+          sg.addNode(createTestRect('rect1', 'Rectangle 1'));
+          useEditorStore.getState().setSelection(['rect1']);
+          useEditorStore.setState({ autoKeyframe: true, currentFrame: 5 });
+        });
+
+        act(() => {
+          fireEvent.change(screen.getByTestId('corner-radius-input'), {
+            target: { value: '8' },
+          });
+        });
+
+        for (const corner of [0, 1, 2, 3]) {
+          expect(keyedFrames(`cornerRadius.${corner}`)).toEqual([[5, 8]]);
+        }
+      });
+    });
   });
 
   // ==========================================================================
