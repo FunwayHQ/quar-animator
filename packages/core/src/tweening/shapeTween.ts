@@ -279,6 +279,15 @@ function addPointsToPath(points: PathPoint[], closed: boolean, count: number): P
 
   // Build new path by subdividing each segment
   const result: PathPoint[] = [];
+  // A split segment's end keeps the handleIn of its last piece (shorter than
+  // the whole curve's); the point that stands for that end next takes it, or
+  // the curve would bulge and the tween's first frame wouldn't match the shape
+  let carriedHandleIn: Vector2 | null = null;
+  const receive = (point: PathPoint): PathPoint => {
+    if (carriedHandleIn) point.handleIn = carriedHandleIn;
+    carriedHandleIn = null;
+    return point;
+  };
 
   for (let seg = 0; seg < segmentCount; seg++) {
     const p0 = points[seg]!;
@@ -286,20 +295,25 @@ function addPointsToPath(points: PathPoint[], closed: boolean, count: number): P
     const extraForSeg = extras[seg]!;
 
     if (extraForSeg === 0) {
-      result.push(clonePathPoint(p0));
+      result.push(receive(clonePathPoint(p0)));
     } else {
       // subdivideSegmentPoints returns (extraForSeg + 1 + 1) points including both endpoints
       const subPoints = subdivideSegmentPoints(p0, p1, extraForSeg + 1);
+      receive(subPoints[0]!);
       // Push all but the last (which is the next segment's start)
       for (let j = 0; j < subPoints.length - 1; j++) {
         result.push(subPoints[j]!);
       }
+      const end = subPoints[subPoints.length - 1]!;
+      carriedHandleIn = p1.handleIn && end.handleIn ? { ...end.handleIn } : null;
     }
   }
 
-  // For open paths, push the last point
+  // For open paths, push the last point; a closed path's end is its start
   if (!closed) {
-    result.push(clonePathPoint(points[points.length - 1]!));
+    result.push(receive(clonePathPoint(points[points.length - 1]!)));
+  } else if (carriedHandleIn && result[0]) {
+    result[0].handleIn = carriedHandleIn;
   }
 
   return result;

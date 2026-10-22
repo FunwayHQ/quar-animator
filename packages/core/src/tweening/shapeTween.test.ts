@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import type { PathPoint, PathShape } from '@quar/types';
+import type { PathPoint, PathShape, Vector2 } from '@quar/types';
 import {
   computeSegmentArcLengths,
   subdivideSegmentPoints,
@@ -15,6 +15,7 @@ import {
   interpolatePathShapeTween,
   toPathShape,
 } from './shapeTween';
+import { bezier } from '../path/bezier';
 
 // ============================================================================
 // Helpers
@@ -122,6 +123,59 @@ describe('subdivideSegmentPoints', () => {
 // ============================================================================
 
 describe('normalizePointCount', () => {
+  // The cubic from a to b, as the path draws it
+  function segmentPoint(a: PathPoint, b: PathPoint, t: number): Vector2 {
+    const cp1 = a.handleOut
+      ? { x: a.position.x + a.handleOut.x, y: a.position.y + a.handleOut.y }
+      : a.position;
+    const cp2 = b.handleIn
+      ? { x: b.position.x + b.handleIn.x, y: b.position.y + b.handleIn.y }
+      : b.position;
+    return bezier.cubicPoint(a.position, cp1, cp2, b.position, t);
+  }
+
+  it('adds points without changing the curve: the end of a split curve gets a shorter handle', () => {
+    // An arch, split in two to match a three-point target
+    const arch = [smooth(0, 0, 0, 0, 0, 60), smooth(100, 0, 0, 60, 0, 0)];
+    const { source } = normalizePointCount(
+      arch,
+      [corner(0, 0), corner(50, 0), corner(100, 0)],
+      false,
+      false
+    );
+    expect(source).toHaveLength(3);
+    expect(Math.hypot(source[2]!.handleIn!.x, source[2]!.handleIn!.y)).toBeLessThan(40);
+    // Both halves lie on the original arch
+    for (const t of [0.1, 0.25, 0.4]) {
+      const original = segmentPoint(arch[0]!, arch[1]!, t / 2 + 0.5);
+      const half = segmentPoint(source[1]!, source[2]!, t);
+      expect(half.x).toBeCloseTo(original.x, 1);
+      expect(half.y).toBeCloseTo(original.y, 1);
+    }
+  });
+
+  it('gives a closed path’s first point the shorter handle when the closing curve is split', () => {
+    // The closing curve (from the last point back to the first) is the longest
+    const a: PathPoint = {
+      position: { x: 0, y: 0 },
+      handleIn: { x: 0, y: -40 },
+      handleOut: null,
+      type: 'corner',
+    };
+    const c: PathPoint = {
+      position: { x: -60, y: 0 },
+      handleIn: null,
+      handleOut: { x: 0, y: -40 },
+      type: 'corner',
+    };
+    const shape = [a, corner(10, 0), c];
+    const target = [corner(0, 0), corner(10, 0), corner(0, 10), corner(-60, 0)];
+    const { source } = normalizePointCount(shape, target, true, true);
+    expect(source).toHaveLength(4);
+    const first = source.find((p) => p.position.x === 0 && p.position.y === 0)!;
+    expect(Math.hypot(first.handleIn!.x, first.handleIn!.y)).toBeLessThan(39);
+  });
+
   it('returns clones when counts are equal', () => {
     const src = [corner(0, 0), corner(100, 0), corner(50, 50)];
     const tgt = [corner(10, 10), corner(90, 10), corner(50, 60)];
