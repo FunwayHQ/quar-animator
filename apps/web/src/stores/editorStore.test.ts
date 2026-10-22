@@ -2910,6 +2910,43 @@ describe('EditorStore', () => {
       // Page 1's undo stack should be restored
       expect(useEditorStore.getState().canUndo).toBe(true);
     });
+
+    it('shows each page’s own timeline length when pages change (F104)', () => {
+      const sg = createMockSceneGraph();
+      const store = () => useEditorStore.getState();
+      const page1Id = store().activePageId;
+      store().setTimelineDuration(120);
+
+      store().addPage(sg);
+      expect(store().timelineDuration).toBe(300);
+      expect(store().workAreaEnd).toBe(299);
+      // A custom work area is kept where it fits and clamped where it doesn't
+      store().setWorkAreaRange(10, 200);
+
+      store().switchPage(page1Id, sg);
+      expect(store().timeline.duration).toBe(120);
+      expect(store().timelineDuration).toBe(120);
+      expect([store().workAreaStart, store().workAreaEnd]).toEqual([10, 119]);
+
+      // Deleting the page in view loads the next one's length too
+      store().switchPage(store().pages[1]!.id, sg);
+      expect(store().timelineDuration).toBe(300);
+      store().deletePage(store().activePageId, sg);
+      expect(store().activePageId).toBe(page1Id);
+      expect(store().timelineDuration).toBe(120);
+    });
+
+    it('runs a new page at the document’s frame rate (F104)', () => {
+      const sg = createMockSceneGraph();
+      useEditorStore.getState().setFrameRate(24);
+
+      useEditorStore.getState().addPage(sg);
+
+      const state = useEditorStore.getState();
+      expect(state.frameRate).toBe(24);
+      expect(state.timeline.frameRate).toBe(24);
+      expect(state.pages.every((page) => page.timeline.frameRate === 24)).toBe(true);
+    });
   });
 
   // ==========================================================================

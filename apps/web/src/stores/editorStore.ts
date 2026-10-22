@@ -454,16 +454,48 @@ function generatePageId(): string {
   return `page-${Date.now()}-${nextPageCounter++}`;
 }
 
-function createDefaultPage(name: string = 'Page 1'): PageData {
+function createDefaultPage(name: string = 'Page 1', frameRate: number = 30): PageData {
   return {
     id: generatePageId(),
     name,
     sceneGraphJSON: { nodes: [], rootNodeIds: [] },
-    timeline: createTimeline({ duration: 300, frameRate: 30 }),
+    timeline: createTimeline({ duration: 300, frameRate }),
     animationSequence: createAnimationSequence(),
     selectedNodeIds: [],
     undoStack: [],
     redoStack: [],
+  };
+}
+
+/**
+ * The work area for a timeline `duration` frames long: one that spans the
+ * whole timeline still does, a custom one is clamped into it.
+ */
+function workAreaFor(
+  duration: number,
+  state: Pick<EditorStore, 'timelineDuration' | 'workAreaStart' | 'workAreaEnd'>
+): Pick<EditorStore, 'workAreaStart' | 'workAreaEnd'> {
+  let end = state.workAreaEnd;
+  let start = state.workAreaStart;
+  if (duration > state.timelineDuration && end === state.timelineDuration - 1) end = duration - 1;
+  if (end >= duration) end = duration - 1;
+  if (start >= duration) start = Math.max(0, duration - 2);
+  if (start >= end) start = Math.max(0, end - 1);
+  return { workAreaStart: start, workAreaEnd: end };
+}
+
+/**
+ * The store fields that put a page's timeline in view (F104): it runs at the
+ * document's frame rate, and the frame count and work area follow its length.
+ */
+function pageTimelineFields(
+  timeline: Timeline,
+  state: Pick<EditorStore, 'frameRate' | 'timelineDuration' | 'workAreaStart' | 'workAreaEnd'>
+): Pick<EditorStore, 'timeline' | 'timelineDuration' | 'workAreaStart' | 'workAreaEnd'> {
+  return {
+    timeline: { ...structuredClone(timeline), frameRate: state.frameRate },
+    timelineDuration: timeline.duration,
+    ...workAreaFor(timeline.duration, state),
   };
 }
 
@@ -2628,29 +2660,13 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       : 1;
     set((state) => {
       if (d === state.timelineDuration) return {};
-      const updates: Partial<EditorStore> = {
+      return {
         timelineDuration: d,
         timeline: { ...state.timeline, duration: d },
         currentFrame: Math.min(state.currentFrame, d - 1),
+        ...workAreaFor(d, state),
         isDirty: true,
       };
-      // Keep a full-duration work area full when the timeline grows, and clamp
-      // custom work areas when the timeline shrinks.
-      if (d > state.timelineDuration && state.workAreaEnd === state.timelineDuration - 1) {
-        updates.workAreaEnd = d - 1;
-      }
-      if (state.workAreaEnd >= d) {
-        updates.workAreaEnd = d - 1;
-      }
-      if (state.workAreaStart >= d) {
-        updates.workAreaStart = Math.max(0, d - 2);
-      }
-      const newEnd = (updates.workAreaEnd as number) ?? state.workAreaEnd;
-      const newStart = (updates.workAreaStart as number) ?? state.workAreaStart;
-      if (newStart >= newEnd) {
-        updates.workAreaStart = Math.max(0, newEnd - 1);
-      }
-      return updates;
     });
   },
   setFrameRate: (rate: number) => {
@@ -3956,7 +3972,7 @@ function createPageActions(
       });
 
       const pageNum = state.pages.length + 1;
-      const newPage = createDefaultPage(`Page ${pageNum}`);
+      const newPage = createDefaultPage(`Page ${pageNum}`, state.frameRate);
 
       // Switch scene graph to empty
       sceneGraph.fromJSON(newPage.sceneGraphJSON);
@@ -3964,7 +3980,7 @@ function createPageActions(
       set({
         pages: [...updatedPages, newPage],
         activePageId: newPage.id,
-        timeline: structuredClone(newPage.timeline),
+        ...pageTimelineFields(newPage.timeline, state),
         animationSequence: structuredClone(newPage.animationSequence ?? createAnimationSequence()),
         selectedNodeIds: new Set<string>(),
         selectedKeyframeIds: new Set<string>(),
@@ -4003,7 +4019,7 @@ function createPageActions(
         set({
           pages: newPages,
           activePageId: switchTo.id,
-          timeline: structuredClone(switchTo.timeline),
+          ...pageTimelineFields(switchTo.timeline, state),
           animationSequence: structuredClone(
             switchTo.animationSequence ?? createAnimationSequence()
           ),
@@ -4130,7 +4146,7 @@ function createPageActions(
       set({
         pages: updatedPages,
         activePageId: pageId,
-        timeline: structuredClone(targetPage.timeline),
+        ...pageTimelineFields(targetPage.timeline, state),
         animationSequence: structuredClone(
           targetPage.animationSequence ?? createAnimationSequence()
         ),
