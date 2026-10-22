@@ -13,6 +13,7 @@ import {
   applyCornerRadius,
 } from './pathUtils';
 import { schneiderFitCurve, curvesToPathPoints } from './schneider';
+import { mat3 } from '../math';
 
 // ============================================================================
 // Polyline → Smooth Bezier (Schneider curve fitting)
@@ -179,11 +180,14 @@ export function outlineStroke(
   const primaryPoints = centeredContours[0]!;
   const additionalSubpaths = centeredContours.slice(1);
 
-  // Compute world position: node transform position + local center * scale
+  // The outline's position: its center, where the node's own transform
+  // (rotation and scale too) puts it in the parent
   const sx = node.transform.scale.x;
   const sy = node.transform.scale.y;
-  const worldX = node.transform.position.x + centerX * sx;
-  const worldY = node.transform.position.y + centerY * sy;
+  const { x: worldX, y: worldY } = mat3.transformPoint(
+    mat3.compose(node.transform.position, node.transform.rotation, node.transform.scale),
+    { x: centerX, y: centerY }
+  );
 
   // Build fill from the stroke color
   const fill = {

@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { outlineStroke } from './outlineStroke';
+import { mat3 } from '../math';
 import type { RectangleNode, EllipseNode, PolygonNode, PathNode, PathPoint } from '@quar/types';
 
 // ============================================================================
@@ -180,6 +181,26 @@ describe('outlineStroke', () => {
       const node = makeRect(100, 80);
       expect(outlineStroke(node, 5, generateId)).toBeNull();
     });
+  });
+
+  it('stays where the stroke was on a rotated, scaled path drawn away from its origin', () => {
+    // A line from (100, 0) to (200, 0) in the path's own space: its middle is (150, 0)
+    const node = makeOpenPath([makeCorner(100, 0), makeCorner(200, 0)], 4);
+    node.transform = {
+      ...makeTransform(10, 20),
+      rotation: 90,
+      scale: { x: 2, y: 1 },
+    };
+    const result = outlineStroke(node, 0, generateId)!;
+    const local = mat3.compose(
+      node.transform.position,
+      node.transform.rotation,
+      node.transform.scale
+    );
+    const middle = mat3.transformPoint(local, { x: 150, y: 0 });
+    expect(result.transform.position.x).toBeCloseTo(middle.x, 3);
+    expect(result.transform.position.y).toBeCloseTo(middle.y, 3);
+    expect(result.transform.rotation).toBe(90);
   });
 
   describe('rectangle outline stroke', () => {
