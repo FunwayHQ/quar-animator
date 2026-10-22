@@ -6,6 +6,8 @@ import type {
   RectangleNode,
   TextNode,
   EllipseNode,
+  PathNode,
+  GroupNode,
 } from '@quar/types';
 import {
   resolveSymbolInstance,
@@ -70,6 +72,57 @@ function makeTextNode(id: string, content: string): TextNode {
     letterSpacing: 0,
     fills: [{ type: 'solid', color: { r: 0, g: 0, b: 0, a: 1 }, opacity: 1, visible: true }],
     strokes: [],
+  };
+}
+
+function makePath(id: string, corners: { x: number; y: number }[]): PathNode {
+  return {
+    id,
+    name: id,
+    type: 'path',
+    parent: null,
+    children: [],
+    transform: {
+      position: { x: 0, y: 0 },
+      rotation: 0,
+      scale: { x: 1, y: 1 },
+      anchor: { x: 0, y: 0 },
+      skew: { x: 0, y: 0 },
+    },
+    visible: true,
+    locked: false,
+    opacity: 1,
+    blendMode: 'normal',
+    points: corners.map((position) => ({
+      position,
+      handleIn: null,
+      handleOut: null,
+      type: 'corner' as const,
+    })),
+    closed: true,
+    fills: [{ type: 'solid', color: { r: 0, g: 0, b: 255, a: 1 }, opacity: 1, visible: true }],
+    strokes: [],
+  };
+}
+
+function makeGroup(id: string, x: number, y: number, children: string[]): GroupNode {
+  return {
+    id,
+    name: id,
+    type: 'group',
+    parent: null,
+    children,
+    transform: {
+      position: { x, y },
+      rotation: 0,
+      scale: { x: 1, y: 1 },
+      anchor: { x: 0, y: 0 },
+      skew: { x: 0, y: 0 },
+    },
+    visible: true,
+    locked: false,
+    opacity: 1,
+    blendMode: 'normal',
   };
 }
 
@@ -260,6 +313,52 @@ describe('symbolResolver', () => {
       const bounds = getSymbolBounds([r1, r2]);
       expect(bounds.width).toBeGreaterThan(0);
       expect(bounds.height).toBeGreaterThan(0);
+    });
+
+    // F133: paths and text have real extents, and group children are placed
+    // through their group
+    it('measures a symbol drawn only with paths', () => {
+      const path = makePath('p1', [
+        { x: 0, y: 0 },
+        { x: 40, y: 0 },
+        { x: 40, y: 20 },
+      ]);
+      const bounds = getSymbolBounds([path]);
+      expect(bounds).toEqual({ x: 0, y: 0, width: 40, height: 20 });
+    });
+
+    it('measures a symbol made only of text', () => {
+      const bounds = getSymbolBounds([makeTextNode('t1', 'Hello')]);
+      expect(bounds.width).toBeGreaterThan(0);
+      expect(bounds.height).toBeGreaterThan(0);
+    });
+
+    it('places a group child through its group', () => {
+      const group = makeGroup('g1', 100, 0, ['r1']);
+      const rect = makeRect('r1', 0, 0, 20, 10);
+      rect.parent = 'g1';
+      const bounds = getSymbolBounds([group, rect]);
+      expect(bounds).toEqual({ x: 90, y: -5, width: 20, height: 10 });
+    });
+
+    it('scales and rotates a group child with its group', () => {
+      const group = makeGroup('g1', 0, 0, ['r1']);
+      group.transform.scale = { x: 2, y: 2 };
+      group.transform.rotation = 90;
+      const rect = makeRect('r1', 0, 0, 20, 10);
+      rect.parent = 'g1';
+      const bounds = getSymbolBounds([group, rect]);
+      expect(bounds.x).toBeCloseTo(-10);
+      expect(bounds.y).toBeCloseTo(-20);
+      expect(bounds.width).toBeCloseTo(20);
+      expect(bounds.height).toBeCloseTo(40);
+    });
+
+    it('leaves out hidden layers', () => {
+      const shown = makeRect('r1', 0, 0, 20, 10);
+      const hidden = makeRect('r2', 500, 500, 20, 10);
+      hidden.visible = false;
+      expect(getSymbolBounds([shown, hidden])).toEqual({ x: -10, y: -5, width: 20, height: 10 });
     });
   });
 

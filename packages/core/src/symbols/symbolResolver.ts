@@ -4,7 +4,16 @@
  * No side effects, easy to test.
  */
 
-import type { Node, SymbolInstanceNode, SymbolDefinition, SymbolOverride, Rect } from '@quar/types';
+import type {
+  Node,
+  SymbolInstanceNode,
+  SymbolDefinition,
+  SymbolOverride,
+  Rect,
+  Matrix3,
+} from '@quar/types';
+import { mat3 } from '../math';
+import { getNodeLocalBounds, transformBoundsToWorld } from '../selection/localBounds';
 
 // ============================================================================
 // Cache
@@ -95,75 +104,48 @@ export function resolveSymbolInstance(
 }
 
 /**
- * Compute AABB bounds from a set of resolved nodes.
- * Uses node transforms to estimate bounding rectangle.
+ * Compute AABB bounds from a set of resolved nodes, in the symbol's own space:
+ * each node's own geometry (paths and text included), placed through its
+ * groups' transforms the way it is drawn. Hidden layers are left out.
  */
 export function getSymbolBounds(resolvedNodes: Node[]): Rect {
-  if (resolvedNodes.length === 0) {
-    return { x: 0, y: 0, width: 0, height: 0 };
-  }
+  const byId = new Map<string, Node>();
+  for (const node of resolvedNodes) byId.set(node.id, node);
 
   let minX = Infinity;
   let minY = Infinity;
   let maxX = -Infinity;
   let maxY = -Infinity;
 
-  for (const node of resolvedNodes) {
-    if (!node.transform) continue;
+  const measured = new Set<string>();
+  const measure = (node: Node, parentMatrix: Matrix3): void => {
+    // A node listed under two parents (or under itself) counts once
+    if (measured.has(node.id)) return;
+    measured.add(node.id);
+    if (!node.visible || !node.transform) return;
 
-    const pos = node.transform.position;
-    const scale = node.transform.scale;
-
-    // Estimate node dimensions from type-specific properties
-    let w = 0;
-    let h = 0;
-
-    switch (node.type) {
-      case 'rectangle':
-      case 'artboard': {
-        const r = node as unknown as Record<string, unknown>;
-        w = typeof r.width === 'number' && isFinite(r.width) ? r.width : 0;
-        h = typeof r.height === 'number' && isFinite(r.height) ? r.height : 0;
-        break;
+    const { position, rotation, scale } = node.transform;
+    const matrix = mat3.multiply(parentMatrix, mat3.compose(position, rotation, scale));
+    const local = getNodeLocalBounds(node);
+    if (local) {
+      const box = transformBoundsToWorld(local, matrix);
+      // A node with broken numbers (from a damaged file) mustn't spoil the rest
+      if ([box.x, box.y, box.width, box.height].every(Number.isFinite)) {
+        minX = Math.min(minX, box.x);
+        minY = Math.min(minY, box.y);
+        maxX = Math.max(maxX, box.x + box.width);
+        maxY = Math.max(maxY, box.y + box.height);
       }
-      case 'image': {
-        const img = node as unknown as Record<string, unknown>;
-        w = typeof img.width === 'number' && isFinite(img.width) ? img.width : 0;
-        h = typeof img.height === 'number' && isFinite(img.height) ? img.height : 0;
-        break;
-      }
-      case 'ellipse': {
-        const e = node as unknown as Record<string, unknown>;
-        const rx = typeof e.radiusX === 'number' && isFinite(e.radiusX) ? e.radiusX : 0;
-        const ry = typeof e.radiusY === 'number' && isFinite(e.radiusY) ? e.radiusY : 0;
-        w = rx * 2;
-        h = ry * 2;
-        break;
-      }
-      case 'polygon': {
-        const p = node as unknown as Record<string, unknown>;
-        const rad = typeof p.radius === 'number' && isFinite(p.radius) ? p.radius : 0;
-        w = rad * 2;
-        h = rad * 2;
-        break;
-      }
-      default:
-        // For paths, text, groups, etc. — use 0 to avoid inflating bounds
-        w = 0;
-        h = 0;
-        break;
     }
+    for (const childId of node.children) {
+      const child = byId.get(childId);
+      if (child) measure(child, matrix);
+    }
+  };
 
-    const anchor = node.transform.anchor;
-    const left = pos.x - w * anchor.x * Math.abs(scale.x);
-    const bottom = pos.y - h * anchor.y * Math.abs(scale.y);
-    const right = left + w * Math.abs(scale.x);
-    const top = bottom + h * Math.abs(scale.y);
-
-    minX = Math.min(minX, left);
-    minY = Math.min(minY, bottom);
-    maxX = Math.max(maxX, right);
-    maxY = Math.max(maxY, top);
+  // Start from the top-level nodes: those whose parent isn't among them
+  for (const node of resolvedNodes) {
+    if (!node.parent || !byId.has(node.parent)) measure(node, mat3.identity());
   }
 
   if (!isFinite(minX)) {
