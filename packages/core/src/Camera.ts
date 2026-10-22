@@ -317,17 +317,24 @@ export class Camera {
    * Get the visible world bounds
    */
   getVisibleBounds(): Rect {
-    const topLeft = this.screenToWorld({ x: 0, y: 0 });
-    const bottomRight = this.screenToWorld({
-      x: this._viewportWidth,
-      y: this._viewportHeight,
-    });
+    // All four corners: when the camera is rotated the screen covers a turned
+    // rectangle in the world, and two opposite corners don't span its box.
+    const width = this._viewportWidth;
+    const height = this._viewportHeight;
+    const corners = [
+      this.screenToWorld({ x: 0, y: 0 }),
+      this.screenToWorld({ x: width, y: 0 }),
+      this.screenToWorld({ x: 0, y: height }),
+      this.screenToWorld({ x: width, y: height }),
+    ];
 
     // Ensure positive width and height (world Y may be flipped)
-    const minX = Math.min(topLeft.x, bottomRight.x);
-    const maxX = Math.max(topLeft.x, bottomRight.x);
-    const minY = Math.min(topLeft.y, bottomRight.y);
-    const maxY = Math.max(topLeft.y, bottomRight.y);
+    const xs = corners.map((corner) => corner.x);
+    const ys = corners.map((corner) => corner.y);
+    const minX = Math.min(...xs);
+    const maxX = Math.max(...xs);
+    const minY = Math.min(...ys);
+    const maxY = Math.max(...ys);
 
     return {
       x: minX,

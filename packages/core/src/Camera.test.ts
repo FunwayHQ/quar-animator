@@ -318,6 +318,40 @@ describe('Camera', () => {
       expect(Math.abs(bounds2.width)).toBeLessThan(Math.abs(bounds1.width));
       expect(Math.abs(bounds2.height)).toBeLessThan(Math.abs(bounds1.height));
     });
+
+    it('covers every screen corner when the camera is rotated', () => {
+      const camera = new Camera();
+      camera.setViewport(800, 600);
+      camera.position = { x: 40, y: -20 };
+      camera.rotation = 45;
+
+      const bounds = camera.getVisibleBounds();
+      const corners = [
+        { x: 0, y: 0 },
+        { x: 800, y: 0 },
+        { x: 0, y: 600 },
+        { x: 800, y: 600 },
+      ].map((corner) => camera.screenToWorld(corner));
+
+      for (const corner of corners) {
+        expect(corner.x).toBeGreaterThanOrEqual(bounds.x - 1e-6);
+        expect(corner.x).toBeLessThanOrEqual(bounds.x + bounds.width + 1e-6);
+        expect(corner.y).toBeGreaterThanOrEqual(bounds.y - 1e-6);
+        expect(corner.y).toBeLessThanOrEqual(bounds.y + bounds.height + 1e-6);
+      }
+      // A 800 × 600 screen turned 45° spans (800 + 600) / √2 both ways
+      expect(bounds.width).toBeCloseTo(1400 / Math.SQRT2);
+      expect(bounds.height).toBeCloseTo(1400 / Math.SQRT2);
+    });
+
+    it('is the screen rectangle itself without rotation', () => {
+      const camera = new Camera();
+      camera.setViewport(800, 600);
+      camera.position = { x: 100, y: 50 };
+      camera.zoom = 2;
+
+      expect(camera.getVisibleBounds()).toEqual({ x: -100, y: -100, width: 400, height: 300 });
+    });
   });
 
   describe('getZoomPercentage', () => {
