@@ -982,6 +982,25 @@ export function LayerPanel() {
     }
   }, [dragState]);
 
+  // A drag released outside the panel (or cancelled) never reaches the
+  // panel's pointerup, so end it here — nothing moves. A release inside the
+  // panel has already dropped the layers by the time this runs, and the click
+  // after a drag is still kept from selecting (didDragRef is left alone).
+  const dragging = dragState !== null;
+  useEffect(() => {
+    if (!dragging) return;
+    const cancelDrag = () => {
+      setDragState(null);
+      setDropTarget(null);
+    };
+    window.addEventListener('pointerup', cancelDrag);
+    window.addEventListener('pointercancel', cancelDrag);
+    return () => {
+      window.removeEventListener('pointerup', cancelDrag);
+      window.removeEventListener('pointercancel', cancelDrag);
+    };
+  }, [dragging]);
+
   // ========================================================================
   // Render
   // ========================================================================

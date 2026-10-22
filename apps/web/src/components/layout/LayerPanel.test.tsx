@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, act, fireEvent } from '../../test/utils';
 import userEvent from '@testing-library/user-event';
 import { SceneGraphProvider, useSceneGraph } from '../../contexts/SceneGraphContext';
@@ -1010,6 +1010,102 @@ describe('LayerPanel', () => {
       fireEvent.pointerMove(content, { clientX: 101, clientY: 51 });
 
       // Row should NOT have dragging class
+      expect(row.className).not.toContain('dragging');
+    });
+
+    it('drops the drag when the button is released outside the panel (F080)', () => {
+      let sg: SceneGraph | null = null;
+      render(
+        <SceneGraphProvider>
+          <SceneGraphCapture onCapture={(s) => (sg = s)} />
+          <LayerPanel />
+        </SceneGraphProvider>
+      );
+      act(() => {
+        sg!.addNode(createTestRect('rect1', 'Rect 1'));
+        sg!.addNode(createTestRect('rect2', 'Rect 2'));
+      });
+
+      // Rows listed topmost first, 24px tall: Rect 2 above Rect 1
+      const top = screen.getByTestId('layer-row-rect2');
+      const bottom = screen.getByTestId('layer-row-rect1');
+      vi.spyOn(top, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 200, 24));
+      vi.spyOn(bottom, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 24, 200, 24));
+      const content = bottom.closest('[class*="content"]')!;
+      const indicators = () =>
+        [top, bottom].filter((row) => /drop(Before|After|Inside)/.test(row.className));
+
+      // Drag Rect 1 up over the top of Rect 2
+      fireEvent.pointerDown(bottom, { clientX: 10, clientY: 36, button: 0 });
+      fireEvent.pointerMove(content, { clientX: 10, clientY: 28 });
+      fireEvent.pointerMove(content, { clientX: 10, clientY: 2 });
+      expect(bottom.className).toContain('dragging');
+      expect(indicators()).toEqual([top]);
+
+      // Released outside the panel: the panel never sees the pointerup
+      fireEvent.pointerLeave(content);
+      fireEvent.pointerUp(window);
+
+      expect(bottom.className).not.toContain('dragging');
+      expect(indicators()).toEqual([]);
+
+      // Coming back over the panel with the button up shows no drop and moves nothing
+      fireEvent.pointerMove(content, { clientX: 10, clientY: 2 });
+      expect(indicators()).toEqual([]);
+      fireEvent.pointerUp(content, { clientX: 10, clientY: 2 });
+      expect(sg!.getRootNodes().map((n: Node) => n.id)).toEqual(['rect1', 'rect2']);
+    });
+
+    it('still drops a layer released inside the panel, and the click after it selects nothing', () => {
+      let sg: SceneGraph | null = null;
+      render(
+        <SceneGraphProvider>
+          <SceneGraphCapture onCapture={(s) => (sg = s)} />
+          <LayerPanel />
+        </SceneGraphProvider>
+      );
+      act(() => {
+        sg!.addNode(createTestRect('rect1', 'Rect 1'));
+        sg!.addNode(createTestRect('rect2', 'Rect 2'));
+      });
+
+      const top = screen.getByTestId('layer-row-rect2');
+      const bottom = screen.getByTestId('layer-row-rect1');
+      vi.spyOn(top, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 200, 24));
+      vi.spyOn(bottom, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 24, 200, 24));
+      const content = bottom.closest('[class*="content"]')!;
+
+      fireEvent.pointerDown(bottom, { clientX: 10, clientY: 36, button: 0 });
+      fireEvent.pointerMove(content, { clientX: 10, clientY: 28 });
+      fireEvent.pointerMove(content, { clientX: 10, clientY: 2 });
+      // Released over the top of Rect 2: the pointerup reaches the panel and the window
+      fireEvent.pointerUp(top, { clientX: 10, clientY: 2 });
+      fireEvent.click(bottom);
+
+      expect(sg!.getRootNodes().map((n: Node) => n.id)).toEqual(['rect2', 'rect1']);
+      expect(useEditorStore.getState().selectedNodeIds.size).toBe(0);
+    });
+
+    it('drops the drag when the pointer is cancelled (F080)', () => {
+      let sg: SceneGraph | null = null;
+      render(
+        <SceneGraphProvider>
+          <SceneGraphCapture onCapture={(s) => (sg = s)} />
+          <LayerPanel />
+        </SceneGraphProvider>
+      );
+      act(() => {
+        sg!.addNode(createTestRect('rect1', 'Rect 1'));
+        sg!.addNode(createTestRect('rect2', 'Rect 2'));
+      });
+
+      const row = screen.getByTestId('layer-row-rect1');
+      const content = row.closest('[class*="content"]')!;
+      fireEvent.pointerDown(row, { clientX: 10, clientY: 36, button: 0 });
+      fireEvent.pointerMove(content, { clientX: 10, clientY: 20 });
+      expect(row.className).toContain('dragging');
+
+      fireEvent.pointerCancel(window);
       expect(row.className).not.toContain('dragging');
     });
 
