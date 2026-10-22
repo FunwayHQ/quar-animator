@@ -44,14 +44,17 @@ function LocalStorageNote(): ReactElement {
 }
 
 let StorageNote: BetaStorageNote = LocalStorageNote;
+let storageIcon: ReactElement = <HardDriveDownload size={15} />;
 
 /**
  * Say where projects are kept differently — for an edition that keeps them
- * elsewhere. Call it before the tag is shown; returns what it replaced.
+ * elsewhere — with its own icon. Call it before the tag is shown; returns
+ * the note it replaced.
  */
-export function setBetaStorageNote(note: BetaStorageNote): BetaStorageNote {
+export function setBetaStorageNote(note: BetaStorageNote, icon?: ReactElement): BetaStorageNote {
   const previous = StorageNote;
   StorageNote = note;
+  if (icon) storageIcon = icon;
   return previous;
 }
 
@@ -166,7 +169,7 @@ export function BetaBadge() {
           <ul className={styles.points}>
             <li>
               <span className={styles.pointIcon} aria-hidden="true">
-                <HardDriveDownload size={15} />
+                {storageIcon}
               </span>
               <span data-testid="beta-notice-storage">
                 <StorageNote />
