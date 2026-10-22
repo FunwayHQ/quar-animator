@@ -1,9 +1,11 @@
 import type { ComponentProps } from 'react';
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '../../test/utils';
-import { SceneGraphProvider } from '../../contexts/SceneGraphContext';
+import { SceneGraphProvider, useSceneGraph } from '../../contexts/SceneGraphContext';
 import { useEditorStore } from '../../stores/editorStore';
+import { toast } from '../common/Toast';
 import { Camera } from '@quar/core';
+import type { SceneGraph } from '@quar/core';
 import { Canvas } from './Canvas';
 
 // Counts the canvas's renders: the smart guides are drawn on every one
@@ -26,6 +28,39 @@ function renderCanvas(onProjectFileDrop?: (file: File) => void | Promise<void>) 
     </SceneGraphProvider>
   );
 }
+
+/** The canvas, and the scene it draws. */
+function renderCanvasWithScene() {
+  const scene: { graph?: SceneGraph } = {};
+  function GrabScene() {
+    scene.graph = useSceneGraph();
+    return null;
+  }
+  render(
+    <SceneGraphProvider>
+      <GrabScene />
+      <Canvas />
+    </SceneGraphProvider>
+  );
+  return scene.graph!;
+}
+
+/** Text pasted onto the page, as the browser hands it over. */
+function pasteText(text: string) {
+  const event = new Event('paste', { bubbles: true, cancelable: true });
+  Object.defineProperty(event, 'clipboardData', {
+    value: {
+      getData: () => '',
+      items: [{ type: 'text/plain', getAsString: (done: (s: string) => void) => done(text) }],
+    },
+  });
+  document.dispatchEvent(event);
+}
+
+const TWO_SHAPES_SVG =
+  '<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100">' +
+  '<rect x="0" y="0" width="10" height="10" fill="red"/>' +
+  '<circle cx="50" cy="50" r="5" fill="blue"/></svg>';
 
 describe('Canvas', () => {
   it('renders the canvas element', () => {
@@ -103,6 +138,35 @@ describe('Canvas', () => {
     expect(smartGuides.renders).toBe(rendersBefore);
     // Nor the panels that show picked points
     expect(useEditorStore.getState().directSelectionPoints).toBe(pointsBefore);
+  });
+
+  it('SVGs pasted in the same millisecond both land (F078)', () => {
+    const sceneGraph = renderCanvasWithScene();
+    const now = vi.spyOn(Date, 'now').mockReturnValue(1_700_000_000_000);
+    const undoSteps = useEditorStore.getState().undoStack.length;
+
+    pasteText(TWO_SHAPES_SVG);
+    pasteText(TWO_SHAPES_SVG);
+    now.mockRestore();
+
+    const groups = sceneGraph.getRootNodes();
+    expect(groups).toHaveLength(2);
+    expect(groups.flatMap((group) => group.children)).toHaveLength(4);
+    expect(useEditorStore.getState().selectedNodeIds).toEqual(new Set([groups[1]!.id]));
+    expect(useEditorStore.getState().undoStack.length).toBe(undoSteps + 2);
+  });
+
+  it('an SVG with nothing to import says so and leaves no undo step (F078)', () => {
+    const sceneGraph = renderCanvasWithScene();
+    const error = vi.spyOn(toast, 'error');
+    const undoSteps = useEditorStore.getState().undoStack.length;
+
+    pasteText('<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"></svg>');
+
+    expect(sceneGraph.getRootNodes()).toHaveLength(0);
+    expect(useEditorStore.getState().undoStack.length).toBe(undoSteps);
+    expect(error).toHaveBeenCalled();
+    error.mockRestore();
   });
 
   it('has crosshair cursor style', () => {

@@ -13,7 +13,7 @@ import {
   gridColorsFor,
   toGlColor,
 } from '@quar/core';
-import type { SceneGraphEvent } from '@quar/core';
+import type { SceneGraph, SceneGraphEvent } from '@quar/core';
 import type { Color, Node, PathNode, Vector2 } from '@quar/types';
 import {
   evaluateIKChains,
@@ -91,6 +91,52 @@ function PointerPosition({ showRef }: { showRef: { current: ShowPointerPosition 
       X: {pos.x.toFixed(1)} Y: {pos.y.toFixed(1)}
     </span>
   );
+}
+
+/**
+ * An SVG's artwork added to the scene, centered on `position`, as one undo
+ * step and selected (several top-level shapes come wrapped in a group). An
+ * SVG with nothing to import says so and changes nothing.
+ */
+function importSvgAt(svgString: string, sg: SceneGraph, position: Vector2): void {
+  // Ids no other import has. Counted up from the time in milliseconds, an SVG
+  // of 500 shapes took the ids of the next 500 milliseconds too, and another
+  // import in that time failed
+  const prefix = `node_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+  let count = 0;
+  const generateId = () => {
+    let id = `${prefix}_${count++}`;
+    while (sg.getNode(id)) id = `${prefix}_${count++}`;
+    return id;
+  };
+
+  const { undoStack, redoStack, canUndo, canRedo } = useEditorStore.getState();
+  try {
+    useEditorStore.getState().pushUndo(sg);
+    const result = importSvg(svgString, sg, generateId, {
+      centerAtOrigin: false,
+      position,
+    });
+    if (result.rootIds.length === 0) {
+      // Nothing came in: no undo step for it
+      useEditorStore.setState({ undoStack, redoStack, canUndo, canRedo });
+      toast.error(result.warnings[0] ?? 'The SVG has nothing to import');
+      return;
+    }
+    if (result.rootIds.length > 1) {
+      const groupId = generateId();
+      const group = createGroupNode(groupId, 'Imported SVG');
+      sg.addNode(group);
+      for (const rootId of result.rootIds) {
+        sg.moveNode(rootId, groupId);
+      }
+      useEditorStore.setState({ selectedNodeIds: new Set([groupId]) });
+    } else {
+      useEditorStore.setState({ selectedNodeIds: new Set(result.rootIds) });
+    }
+  } catch {
+    toast.error('Could not import the SVG');
+  }
 }
 
 // ============================================================================
@@ -1270,30 +1316,7 @@ export function Canvas({
     (svgString: string) => {
       const sg = sceneGraphRef.current;
       if (!sg) return;
-      const worldCenter = getCanvasCenter();
-      let idCounter = Date.now();
-      const generateId = () => `node_${idCounter++}`;
-      try {
-        useEditorStore.getState().pushUndo(sg);
-        const result = importSvg(svgString, sg, generateId, {
-          centerAtOrigin: false,
-          position: worldCenter,
-        });
-        if (result.rootIds.length > 1) {
-          // Wrap multiple root nodes in a group
-          const groupId = generateId();
-          const group = createGroupNode(groupId, 'Imported SVG');
-          sg.addNode(group);
-          for (const rootId of result.rootIds) {
-            sg.moveNode(rootId, groupId);
-          }
-          useEditorStore.setState({ selectedNodeIds: new Set([groupId]) });
-        } else if (result.rootIds.length === 1) {
-          useEditorStore.setState({ selectedNodeIds: new Set(result.rootIds) });
-        }
-      } catch {
-        // Invalid SVG — ignore
-      }
+      importSvgAt(svgString, sg, getCanvasCenter());
     },
     [getCanvasCenter, sceneGraphRef]
   );
@@ -2410,31 +2433,7 @@ export function Canvas({
       if (isSvg) {
         // SVG → import as vector paths
         const reader = new FileReader();
-        reader.onload = () => {
-          const svgString = reader.result as string;
-          let idCounter = Date.now();
-          const generateId = () => `node_${idCounter++}`;
-          try {
-            useEditorStore.getState().pushUndo(sg);
-            const result = importSvg(svgString, sg, generateId, {
-              centerAtOrigin: false,
-              position: worldPos,
-            });
-            if (result.rootIds.length > 1) {
-              const groupId = generateId();
-              const group = createGroupNode(groupId, 'Imported SVG');
-              sg.addNode(group);
-              for (const rootId of result.rootIds) {
-                sg.moveNode(rootId, groupId);
-              }
-              useEditorStore.setState({ selectedNodeIds: new Set([groupId]) });
-            } else if (result.rootIds.length === 1) {
-              useEditorStore.setState({ selectedNodeIds: new Set(result.rootIds) });
-            }
-          } catch {
-            // silently fail on invalid SVG
-          }
-        };
+        reader.onload = () => importSvgAt(reader.result as string, sg, worldPos);
         reader.readAsText(imageFile);
       } else {
         // Raster image (PNG, JPG, etc.) → import as ImageNode
