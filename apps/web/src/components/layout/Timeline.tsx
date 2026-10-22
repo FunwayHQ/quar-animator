@@ -744,10 +744,13 @@ export function Timeline({ playback }: TimelineProps = {}) {
       } else if (drag.type === 'end') {
         setWorkAreaEnd(drag.initialEnd + deltaFrames);
       } else {
-        // body: move both together
-        const newStart = drag.initialStart + deltaFrames;
-        const newEnd = drag.initialEnd + deltaFrames;
-        setWorkAreaRange(newStart, newEnd);
+        // body: move both together, stopping at either end of the timeline
+        // so the work area keeps its length
+        const shift = Math.max(
+          -drag.initialStart,
+          Math.min(duration - 1 - drag.initialEnd, deltaFrames)
+        );
+        setWorkAreaRange(drag.initialStart + shift, drag.initialEnd + shift);
       }
     },
     [duration, setWorkAreaStart, setWorkAreaEnd, setWorkAreaRange]
@@ -1537,6 +1540,7 @@ export function Timeline({ playback }: TimelineProps = {}) {
                       onPointerDown={(e) => handleWorkAreaPointerDown(e, 'body')}
                       onPointerMove={handleWorkAreaPointerMove}
                       onPointerUp={handleWorkAreaPointerUp}
+                      data-testid="work-area-bar"
                     />
                     {/* Start handle */}
                     {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}

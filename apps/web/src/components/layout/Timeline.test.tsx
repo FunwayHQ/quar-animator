@@ -557,6 +557,32 @@ describe('Timeline', () => {
     expect(state.currentFrame).toBe(10);
   });
 
+  it('keeps the work area’s length when it is dragged against either end', () => {
+    useEditorStore.setState({ workAreaEnabled: true, workAreaStart: 50, workAreaEnd: 100 });
+    renderTimeline();
+    // One pixel per frame
+    Object.defineProperty(screen.getByTestId('timeline-ruler'), 'getBoundingClientRect', {
+      configurable: true,
+      value: () => ({ left: 0, top: 0, width: 300, height: 28 }) as DOMRect,
+    });
+    const bar = screen.getByTestId('work-area-bar');
+    Object.defineProperty(bar, 'setPointerCapture', { value: vi.fn() });
+    const range = () => {
+      const { workAreaStart, workAreaEnd } = useEditorStore.getState();
+      return [workAreaStart, workAreaEnd];
+    };
+
+    fireEvent.pointerDown(bar, { button: 0, clientX: 75, pointerId: 1 });
+    fireEvent.pointerMove(bar, { clientX: 65, pointerId: 1 });
+    expect(range()).toEqual([40, 90]);
+    fireEvent.pointerMove(bar, { clientX: 5, pointerId: 1 });
+    expect(range()).toEqual([0, 50]);
+    fireEvent.pointerMove(bar, { clientX: 500, pointerId: 1 });
+    expect(range()).toEqual([249, 299]);
+    fireEvent.pointerUp(bar, { clientX: 500, pointerId: 1 });
+    expect(range()).toEqual([249, 299]);
+  });
+
   it('toggles play state when play button clicked', async () => {
     const user = userEvent.setup();
     renderTimeline();
