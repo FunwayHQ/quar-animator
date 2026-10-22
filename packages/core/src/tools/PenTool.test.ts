@@ -674,6 +674,25 @@ describe('PenTool', () => {
       expect(nodes.length).toBe(0);
       expect(tool.isCurrentlyDrawing()).toBe(false);
     });
+
+    it('keeps a loop whose points meet but whose handles curve it out', () => {
+      // A point with its handle dragged out to the right…
+      tool.onPointerDown(createMockPointerEvent({ worldPosition: { x: 100, y: 100 } }));
+      tool.onPointerMove(createMockPointerEvent({ worldPosition: { x: 150, y: 100 } }));
+      tool.onPointerUp(createMockPointerEvent({ worldPosition: { x: 150, y: 100 } }));
+      // …and one on top of it with its handle dragged out upward
+      tool.onPointerDown(createMockPointerEvent({ worldPosition: { x: 100, y: 100.05 } }));
+      tool.onPointerMove(createMockPointerEvent({ worldPosition: { x: 100, y: 150 } }));
+      tool.onPointerUp(createMockPointerEvent({ worldPosition: { x: 100, y: 150 } }));
+
+      tool.onKeyDown(new KeyboardEvent('keydown', { key: 'Enter' }));
+
+      const nodes = Array.from(context.sceneGraph.getNodes());
+      expect(nodes).toHaveLength(1);
+      expect(nodes[0]!.type).toBe('path');
+      expect((nodes[0] as PathNode).points).toHaveLength(2);
+      expect(tool.isCurrentlyDrawing()).toBe(false);
+    });
   });
 
   describe('rubber band', () => {

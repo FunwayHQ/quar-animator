@@ -536,16 +536,23 @@ export class PenTool extends BaseTool {
       return;
     }
 
-    // Check for degenerate path (all points at essentially the same location)
+    // Check for degenerate path (all points and their handles at essentially
+    // the same location). The handles count: points that meet can still have
+    // handles curving the path out into a loop.
     let minX = Infinity,
       maxX = -Infinity,
       minY = Infinity,
       maxY = -Infinity;
     for (const p of this.currentPath) {
-      if (p.position.x < minX) minX = p.position.x;
-      if (p.position.x > maxX) maxX = p.position.x;
-      if (p.position.y < minY) minY = p.position.y;
-      if (p.position.y > maxY) maxY = p.position.y;
+      const reach = [p.position];
+      if (p.handleIn) reach.push(vec2.add(p.position, p.handleIn));
+      if (p.handleOut) reach.push(vec2.add(p.position, p.handleOut));
+      for (const { x, y } of reach) {
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+      }
     }
     if (maxX - minX < 0.1 && maxY - minY < 0.1) {
       this.cancelPath();
