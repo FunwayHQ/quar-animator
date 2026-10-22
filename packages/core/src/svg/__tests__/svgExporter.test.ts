@@ -186,7 +186,7 @@ describe('fillToSvgAttrs', () => {
     expect(defs[0]).toContain('stop-color="#0000ff"');
   });
 
-  it("turns Quar's upward gradient Y into SVG's downward one", () => {
+  it("keeps Quar's upward gradient Y: shapes are drawn under the root's Y flip", () => {
     const defs: string[] = [];
     fillToSvgAttrs(
       {
@@ -206,8 +206,30 @@ describe('fillToSvgAttrs', () => {
       },
       defs
     );
-    expect(defs[0]).toContain('y1="100%"');
-    expect(defs[0]).toContain('y2="0%"');
+    // Bottom to top on the page, as on the canvas
+    expect(defs[0]).toContain('y1="0%"');
+    expect(defs[0]).toContain('y2="100%"');
+  });
+
+  it('draws a linear gradient without ends at its angle, as the canvas does', () => {
+    const defs: string[] = [];
+    const gradient = (angle: number): Fill => ({
+      type: 'gradient',
+      gradient: {
+        type: 'linear',
+        angle,
+        stops: [
+          { offset: 0, color: makeColor(255, 0, 0) },
+          { offset: 1, color: makeColor(0, 0, 255) },
+        ],
+      },
+      opacity: 1,
+      visible: true,
+    });
+    fillToSvgAttrs(gradient(90), defs);
+    expect(defs[0]).toContain('x1="50%" y1="0%" x2="50%" y2="100%"');
+    fillToSvgAttrs(gradient(0), defs);
+    expect(defs[1]).toContain('x1="0%" y1="50%" x2="100%" y2="50%"');
   });
 
   it('generates radial gradient def', () => {
@@ -232,7 +254,7 @@ describe('fillToSvgAttrs', () => {
     expect(defs[0]).toContain('cy="50%"');
   });
 
-  it('writes a radial focal point as fx/fy, Y down', () => {
+  it('writes a radial focal point as fx/fy, Y up like the shape', () => {
     const defs: string[] = [];
     fillToSvgAttrs(
       {
@@ -253,7 +275,94 @@ describe('fillToSvgAttrs', () => {
       defs
     );
     expect(defs[0]).toContain('fx="25%"');
-    expect(defs[0]).toContain('fy="25%"');
+    expect(defs[0]).toContain('fy="75%"');
+  });
+});
+
+// ============================================================================
+// Effects and blend modes
+// ============================================================================
+
+describe('effects and blend modes', () => {
+  const rect = (overrides: Record<string, unknown>): RectangleNode =>
+    ({
+      ...makeBaseNodeFields('r1', 'rectangle', overrides),
+      width: 100,
+      height: 50,
+      cornerRadius: [0, 0, 0, 0],
+      fills: [makeSolidFill()],
+      strokes: [],
+    }) as RectangleNode;
+
+  it('draws a drop shadow as the canvas does: blurred, offset, behind', () => {
+    const defs: string[] = [];
+    const svg = nodeToSvgElement(
+      rect({
+        effects: [
+          {
+            id: 'fx1',
+            type: 'drop-shadow',
+            visible: true,
+            color: makeColor(0, 0, 0, 0.5),
+            offsetX: 4,
+            offsetY: -4,
+            blur: 12,
+            spread: 0,
+            opacity: 0.5,
+          },
+        ],
+      }),
+      new SceneGraph(),
+      defs
+    );
+    expect(svg).toMatch(/^<g filter="url\(#fx_\d+\)"><rect /);
+    const filter = defs.find((d) => d.startsWith('<filter'));
+    expect(filter).toContain('stdDeviation="4"');
+    expect(filter).toContain('dx="4" dy="-4"');
+    expect(filter).toContain('flood-opacity="0.25"');
+    // The shadow first, the shape over it
+    expect(filter).toMatch(/<feMergeNode in="s0"\/><feMergeNode in="SourceGraphic"\/>/);
+  });
+
+  it('blurs a layer and leaves out what the canvas does not draw', () => {
+    const defs: string[] = [];
+    const svg = nodeToSvgElement(
+      rect({
+        effects: [
+          { id: 'b', type: 'layer-blur', visible: true, radius: 9 },
+          {
+            id: 'i',
+            type: 'inner-shadow',
+            visible: true,
+            color: makeColor(0, 0, 0),
+            offsetX: 2,
+            offsetY: -2,
+            blur: 4,
+            spread: 0,
+            opacity: 0.5,
+          },
+          { id: 'h', type: 'layer-blur', visible: false, radius: 30 },
+        ],
+      }),
+      new SceneGraph(),
+      defs
+    );
+    const filter = defs.find((d) => d.startsWith('<filter')) ?? '';
+    expect(filter).toContain(
+      '<feGaussianBlur in="SourceGraphic" stdDeviation="3" result="blurred"/>'
+    );
+    expect(filter).not.toContain('SourceAlpha');
+    expect(filter).toContain('<feMergeNode in="blurred"/>');
+    expect(svg).toContain('filter=');
+  });
+
+  it('writes a blend mode, and nothing for plain normal layers', () => {
+    const defs: string[] = [];
+    expect(nodeToSvgElement(rect({ blendMode: 'multiply' }), new SceneGraph(), defs)).toMatch(
+      /^<g style="mix-blend-mode:multiply"><rect /
+    );
+    expect(nodeToSvgElement(rect({}), new SceneGraph(), defs)).toMatch(/^<rect /);
+    expect(defs).toHaveLength(0);
   });
 });
 

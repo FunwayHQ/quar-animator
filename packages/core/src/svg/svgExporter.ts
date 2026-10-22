@@ -17,6 +17,7 @@ import type {
   SymbolDefinition,
   PathPoint,
   Color,
+  Effect,
   Fill,
   Stroke,
   Gradient,
@@ -37,6 +38,7 @@ import { nodeToPolygon, performBoolean } from '../boolean/booleanOps';
 import { getTextBox } from '../font/textLayout';
 import { getTextNodeBounds, getTextNodeLines } from '../font/textMetrics';
 import { getTextLocalBounds } from '../font/textPlacement';
+import { linearGradientFromAngle } from '../gradient/gradientUtils';
 
 // ============================================================================
 // Color Helpers
@@ -118,28 +120,26 @@ function gradientStopToSvg(stop: GradientStop): string {
 
 function gradientToSvgDef(gradient: Gradient, id: string): string {
   const stops = gradient.stops.map(gradientStopToSvg).join('');
+  const pct = (n: number) => fmt(n * 100) + '%';
 
-  // Quar's normalized gradient Y runs up the shape, SVG's bounding-box Y down
-  if (gradient.type === 'linear') {
-    const x1 = gradient.start ? fmt(gradient.start.x * 100) + '%' : '0%';
-    const y1 = gradient.start ? fmt((1 - gradient.start.y) * 100) + '%' : '0%';
-    const x2 = gradient.end ? fmt(gradient.end.x * 100) + '%' : '100%';
-    const y2 = gradient.end ? fmt((1 - gradient.end.y) * 100) + '%' : '0%';
-    return `<linearGradient id="${id}" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}">${stops}</linearGradient>`;
-  }
-
+  // Quar's normalized gradient Y runs up the shape, and so does SVG's
+  // bounding-box Y here: every shape is drawn inside the root's scale(1,-1)
   if (gradient.type === 'radial') {
-    const cx = gradient.center ? fmt(gradient.center.x * 100) + '%' : '50%';
-    const cy = gradient.center ? fmt((1 - gradient.center.y) * 100) + '%' : '50%';
-    const r = gradient.radius != null ? fmt(gradient.radius * 100) + '%' : '50%';
+    const cx = gradient.center ? pct(gradient.center.x) : '50%';
+    const cy = gradient.center ? pct(gradient.center.y) : '50%';
+    const r = gradient.radius != null ? pct(gradient.radius) : '50%';
     const focal = gradient.focal
-      ? ` fx="${fmt(gradient.focal.x * 100)}%" fy="${fmt((1 - gradient.focal.y) * 100)}%"`
+      ? ` fx="${pct(gradient.focal.x)}" fy="${pct(gradient.focal.y)}"`
       : '';
     return `<radialGradient id="${id}" cx="${cx}" cy="${cy}" r="${r}"${focal}>${stops}</radialGradient>`;
   }
 
-  // Fallback: treat conic or unknown as linear
-  return `<linearGradient id="${id}">${stops}</linearGradient>`;
+  // Linear: its ends, or — as the canvas does without them — its angle.
+  // SVG has no conic gradient; one is drawn as a linear ramp at its angle.
+  const fromAngle = linearGradientFromAngle(gradient.angle ?? 0);
+  const start = (gradient.type === 'linear' && gradient.start) || fromAngle.start;
+  const end = (gradient.type === 'linear' && gradient.end) || fromAngle.end;
+  return `<linearGradient id="${id}" x1="${pct(start.x)}" y1="${pct(start.y)}" x2="${pct(end.x)}" y2="${pct(end.y)}">${stops}</linearGradient>`;
 }
 
 /**
@@ -256,6 +256,15 @@ export function nodeToSvgElement(
   defs: string[],
   symbolDefs?: Map<string, SymbolDefinition>
 ): string {
+  return withEffects(node, nodeElement(node, sceneGraph, defs, symbolDefs), defs);
+}
+
+function nodeElement(
+  node: Node,
+  sceneGraph: SceneGraph,
+  defs: string[],
+  symbolDefs?: Map<string, SymbolDefinition>
+): string {
   switch (node.type) {
     case 'rectangle':
       return rectangleToSvg(node, defs);
@@ -281,6 +290,61 @@ export function nodeToSvgElement(
     default:
       return '';
   }
+}
+
+// ============================================================================
+// Effects and blending
+// ============================================================================
+
+/**
+ * A node's drop shadows and layer blur as an SVG filter, and its blend mode,
+ * on a group around it — drawn as the canvas draws them: blurs with
+ * sigma = radius / 3 (the canvas's Gaussian), offsets in the node's parent
+ * space (Y up under the root flip, so a negative offsetY falls below),
+ * shadows behind the (possibly blurred) shape. The canvas doesn't draw
+ * inner shadows or a shadow's spread yet, so neither is written.
+ */
+function withEffects(node: Node, element: string, defs: string[]): string {
+  if (!element) return element;
+  const effects = (node.effects ?? []).filter(
+    (e): e is Effect => e.visible && (e.type === 'drop-shadow' || e.type === 'layer-blur')
+  );
+  const blend = node.blendMode && node.blendMode !== 'normal' ? node.blendMode : null;
+  if (effects.length === 0 && !blend) return element;
+
+  let filterAttr = '';
+  if (effects.length > 0) {
+    const id = nextDefsId('fx');
+    const primitives: string[] = [];
+    const merge: string[] = [];
+    let shape = 'SourceGraphic';
+    effects.forEach((effect, i) => {
+      if (effect.type === 'drop-shadow') {
+        const sigma = fmt(Math.max(effect.blur, 0) / 3);
+        const opacity = fmt(effect.opacity * (effect.color.a ?? 1));
+        primitives.push(
+          `<feGaussianBlur in="SourceAlpha" stdDeviation="${sigma}" result="b${i}"/>`,
+          `<feOffset in="b${i}" dx="${fmt(effect.offsetX)}" dy="${fmt(effect.offsetY)}" result="o${i}"/>`,
+          `<feFlood flood-color="${colorToHex(effect.color)}" flood-opacity="${opacity}" result="c${i}"/>`,
+          `<feComposite in="c${i}" in2="o${i}" operator="in" result="s${i}"/>`
+        );
+        merge.push(`<feMergeNode in="s${i}"/>`);
+      } else if (effect.type === 'layer-blur' && shape === 'SourceGraphic') {
+        primitives.push(
+          `<feGaussianBlur in="SourceGraphic" stdDeviation="${fmt(Math.max(effect.radius, 0) / 3)}" result="blurred"/>`
+        );
+        shape = 'blurred';
+      }
+    });
+    merge.push(`<feMergeNode in="${shape}"/>`);
+    // Room for blur and offsets beyond the shape's box
+    defs.push(
+      `<filter id="${id}" x="-50%" y="-50%" width="200%" height="200%" color-interpolation-filters="sRGB">${primitives.join('')}<feMerge>${merge.join('')}</feMerge></filter>`
+    );
+    filterAttr = ` filter="url(#${id})"`;
+  }
+  const blendAttr = blend ? ` style="mix-blend-mode:${blend}"` : '';
+  return `<g${filterAttr}${blendAttr}>${element}</g>`;
 }
 
 function rectangleToSvg(node: RectangleNode, defs: string[]): string {
@@ -734,6 +798,15 @@ function symbolInstanceToSvg(
  * Uses the nodeMap from symbol resolution instead of the scene graph.
  */
 function renderResolvedNodeToSvg(
+  node: Node,
+  nodeMap: Map<string, Node>,
+  defs: string[],
+  symbolDefs?: Map<string, SymbolDefinition>
+): string {
+  return withEffects(node, resolvedNodeElement(node, nodeMap, defs, symbolDefs), defs);
+}
+
+function resolvedNodeElement(
   node: Node,
   nodeMap: Map<string, Node>,
   defs: string[],
