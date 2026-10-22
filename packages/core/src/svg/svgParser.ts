@@ -263,7 +263,7 @@ function collectGradients(
     if (!id) continue;
 
     const type = el.tagName.toLowerCase() === 'lineargradient' ? 'linear' : 'radial';
-    const gradient: ParsedGradient = {
+    const gradient: PendingGradient = {
       type,
       stops: parseGradientStops(el),
       gradientUnits:
@@ -303,16 +303,12 @@ function collectGradients(
     }
 
     // Units given here aren't taken from a gradient this one refers to
-    if (el.hasAttribute('gradientUnits')) {
-      (gradient as ParsedGradient & { _ownUnits?: boolean })._ownUnits = true;
-    }
+    if (el.hasAttribute('gradientUnits')) gradient._ownUnits = true;
 
     // Store href for later inheritance resolution
     const href =
       el.getAttribute('href') || el.getAttributeNS('http://www.w3.org/1999/xlink', 'href');
-    if (href) {
-      (gradient as ParsedGradient & { _href?: string })._href = href.replace('#', '');
-    }
+    if (href) gradient._href = href.replace('#', '');
 
     gradients.set(id, gradient);
   }
@@ -351,21 +347,28 @@ function parseGradientStops(gradientEl: Element): { offset: number; color: Color
   return stops;
 }
 
+/** A gradient as collected, before what it refers to is filled in. */
+type PendingGradient = ParsedGradient & { _href?: string; _ownUnits?: boolean };
+
+/**
+ * Fill in what each gradient leaves out from the gradient its href names,
+ * that one filled in first, so a chain (a → b → c) hands c's stops all the
+ * way down whatever order the document lists them in. A reference back into
+ * its own chain is dropped, which ends a loop.
+ */
 function resolveGradientInheritance(gradients: Map<string, ParsedGradient>): void {
-  const visited = new Set<string>();
-  for (const [id, gradient] of gradients) {
-    const href = (gradient as ParsedGradient & { _href?: string })._href;
-    if (!href) continue;
+  const done = new Set<string>();
+  const resolve = (id: string, chain: ReadonlySet<string>): void => {
+    const gradient: PendingGradient | undefined = gradients.get(id);
+    if (!gradient || done.has(id)) return;
+    done.add(id);
 
-    // Detect self-reference and circular references
-    if (href === id || visited.has(id)) {
-      delete (gradient as ParsedGradient & { _href?: string })._href;
-      continue;
-    }
-    visited.add(id);
-
+    const href = gradient._href;
+    delete gradient._href;
+    if (!href || href === id || chain.has(href)) return;
+    resolve(href, new Set(chain).add(id));
     const parent = gradients.get(href);
-    if (!parent) continue;
+    if (!parent) return;
 
     // Inherit stops if none defined
     if (gradient.stops.length === 0 && parent.stops.length > 0) {
@@ -374,7 +377,7 @@ function resolveGradientInheritance(gradients: Map<string, ParsedGradient>): voi
 
     // Inherit units and transform if not set (else inherited user-space
     // coordinates would be read as fractions of the shape)
-    if (!(gradient as ParsedGradient & { _ownUnits?: boolean })._ownUnits) {
+    if (!gradient._ownUnits) {
       gradient.gradientUnits = parent.gradientUnits;
     }
     gradient.gradientTransform ??= parent.gradientTransform;
@@ -392,12 +395,13 @@ function resolveGradientInheritance(gradients: Map<string, ParsedGradient>): voi
       if (gradient.fx === undefined) gradient.fx = parent.fx;
       if (gradient.fy === undefined) gradient.fy = parent.fy;
     }
+  };
 
-    // Clean up internal properties
-    delete (gradient as ParsedGradient & { _href?: string })._href;
-  }
+  for (const id of gradients.keys()) resolve(id, new Set());
+  // Clean up internal properties
   for (const gradient of gradients.values()) {
-    delete (gradient as ParsedGradient & { _ownUnits?: boolean })._ownUnits;
+    const pending: PendingGradient = gradient;
+    delete pending._ownUnits;
   }
 }
 

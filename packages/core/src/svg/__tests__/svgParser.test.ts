@@ -239,6 +239,59 @@ describe('parseSvg', () => {
     expect(rad.r).toBe(0.5);
   });
 
+  it('passes stops, units and ends down a chain of hrefs in any order', () => {
+    // a refers to b, b to c, and only c has stops: listed before what they refer to
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+      <defs>
+        <linearGradient id="a" xlink:href="#b" />
+        <linearGradient id="b" xlink:href="#c" x1="10" />
+        <linearGradient id="c" gradientUnits="userSpaceOnUse" x1="0" x2="50">
+          <stop offset="0" stop-color="red" />
+          <stop offset="1" stop-color="blue" />
+        </linearGradient>
+      </defs>
+    </svg>`;
+    const { gradients } = parseSvg(svg).defs;
+    const c = gradients.get('c')!;
+    for (const id of ['a', 'b']) {
+      const g = gradients.get(id)!;
+      expect(g.stops).toEqual(c.stops);
+      expect(g.gradientUnits).toBe('userSpaceOnUse');
+      expect(g.x1).toBe(10);
+      expect(g.x2).toBe(50);
+    }
+  });
+
+  it('still passes stops down a chain listed base first', () => {
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+      <defs>
+        <linearGradient id="base">
+          <stop offset="0" stop-color="red" />
+          <stop offset="1" stop-color="blue" />
+        </linearGradient>
+        <linearGradient id="mid" xlink:href="#base" />
+        <linearGradient id="top" href="#mid" />
+      </defs>
+    </svg>`;
+    const { gradients } = parseSvg(svg).defs;
+    expect(gradients.get('mid')!.stops).toHaveLength(2);
+    expect(gradients.get('top')!.stops).toHaveLength(2);
+  });
+
+  it('ends a loop of gradient hrefs', () => {
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+      <defs>
+        <linearGradient id="a" xlink:href="#b" />
+        <linearGradient id="b" xlink:href="#a" />
+        <linearGradient id="self" xlink:href="#self" />
+      </defs>
+    </svg>`;
+    const { gradients } = parseSvg(svg).defs;
+    expect(gradients.get('a')!.stops).toHaveLength(0);
+    expect(gradients.get('b')!.stops).toHaveLength(0);
+    expect(gradients.get('self')!.stops).toHaveLength(0);
+  });
+
   it('parses gradient stop opacity', () => {
     const svg = `<svg xmlns="http://www.w3.org/2000/svg">
       <defs>
