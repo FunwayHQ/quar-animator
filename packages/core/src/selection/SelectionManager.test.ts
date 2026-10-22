@@ -13,6 +13,8 @@ import type {
   PolygonNode,
   TextNode,
   ArtboardNode,
+  SymbolDefinition,
+  SymbolInstanceNode,
 } from '@quar/types';
 
 // ============================================================================
@@ -630,6 +632,77 @@ describe('SelectionManager', () => {
       expect(result!.rotation).toBe(0);
       expect(result!.bounds.rect.width).toBeCloseTo(500);
       expect(result!.bounds.rect.height).toBeCloseTo(400);
+    });
+  });
+
+  // ==========================================================================
+  // Symbol instances inside groups (F125)
+  // ==========================================================================
+
+  describe('symbol instances inside groups', () => {
+    // A 40 × 20 rectangle centered on the symbol's origin
+    const definition: SymbolDefinition = {
+      id: 'badge',
+      name: 'Badge',
+      sceneGraphJSON: {
+        nodes: [createTestRectangle('badge-rect', 0, 0, 40, 20)],
+        rootNodeIds: ['badge-rect'],
+      },
+    };
+
+    function createTestInstance(id: string, x: number, y: number): SymbolInstanceNode {
+      const transform = createDefaultTransform();
+      transform.position = { x, y };
+      return {
+        id,
+        name: `Instance ${id}`,
+        type: 'symbol-instance',
+        parent: null,
+        children: [],
+        transform,
+        visible: true,
+        locked: false,
+        opacity: 1,
+        blendMode: 'normal',
+        symbolId: definition.id,
+        overrides: [],
+      };
+    }
+
+    beforeEach(() => {
+      manager.setSymbolDefinitions([definition]);
+      const group = createTestGroup('group');
+      group.transform.position = { x: 100, y: 50 };
+      sceneGraph.addNode(group);
+    });
+
+    it('measures a group holding only an instance by the symbol it draws', () => {
+      sceneGraph.addNode(createTestInstance('inst', 10, 0), 'group');
+
+      const bounds = manager.getSelectionBounds(new Set(['group']), sceneGraph);
+      expect(bounds?.rect).toEqual({ x: 90, y: 40, width: 40, height: 20 });
+
+      const display = manager.getSelectionBoundsForDisplay(new Set(['group']), sceneGraph);
+      expect(display?.bounds.rect).toEqual({ x: 90, y: 40, width: 40, height: 20 });
+    });
+
+    it('takes in the instances beside a group’s shapes', () => {
+      sceneGraph.addNode(createTestRectangle('shape', 0, 0, 10, 10), 'group');
+      sceneGraph.addNode(createTestInstance('inst', 200, 0), 'group');
+
+      const bounds = manager.getSelectionBounds(new Set(['group']), sceneGraph);
+      // The shape spans x 95–105, the instance 280–320
+      expect(bounds?.rect).toEqual({ x: 95, y: 40, width: 225, height: 20 });
+    });
+
+    it('places an instance through every group it sits in', () => {
+      const inner = createTestGroup('inner');
+      inner.transform.position = { x: 0, y: 100 };
+      sceneGraph.addNode(inner, 'group');
+      sceneGraph.addNode(createTestInstance('inst', 0, 0), 'inner');
+
+      const bounds = manager.getSelectionBounds(new Set(['group']), sceneGraph);
+      expect(bounds?.rect).toEqual({ x: 80, y: 140, width: 40, height: 20 });
     });
   });
 });

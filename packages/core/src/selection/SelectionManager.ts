@@ -3,7 +3,7 @@
  * Calculates bounding boxes for selected nodes
  */
 
-import type { Node, Rect, SymbolDefinition } from '@quar/types';
+import type { Node, Rect, SymbolDefinition, SymbolInstanceNode } from '@quar/types';
 import type { SceneGraph } from '../SceneGraph';
 import type { SelectionBounds } from './types';
 import { rect, mat3 } from '../math';
@@ -179,24 +179,18 @@ export class SelectionManager {
       return;
     }
     if (node.type === 'symbol-instance') {
-      // Symbol instances have virtual children from definition — compute bounds from definition nodes
-      const inst = node;
-      const def = this.symbolDefinitions.find((d) => d.id === inst.symbolId);
-      if (def && def.sceneGraphJSON.nodes.length > 0) {
-        const symBounds = getSymbolBounds(def.sceneGraphJSON.nodes);
-        if (symBounds.width > 0 && symBounds.height > 0) {
-          const worldMatrix = node.parent
-            ? sceneGraph.getWorldTransform(node.id)
-            : mat3.compose(node.transform.position, node.transform.rotation, node.transform.scale);
-          out.push(transformBoundsToWorld(symBounds, worldMatrix));
-        }
-      }
+      this.collectSymbolInstanceBounds(node, sceneGraph, out);
       return;
     }
     if (node.type === 'group') {
       const descendants = sceneGraph.getDescendants(node.id);
       for (const desc of descendants) {
         if (!desc.visible) continue;
+        // An instance has no layers of its own: what it draws comes from its symbol
+        if (desc.type === 'symbol-instance') {
+          this.collectSymbolInstanceBounds(desc, sceneGraph, out);
+          continue;
+        }
         const worldTransform = sceneGraph.getWorldTransform(desc.id);
         const localBounds = getNodeLocalBounds(desc);
         if (localBounds) {
@@ -215,6 +209,27 @@ export class SelectionManager {
       if (nodeBounds) {
         out.push(nodeBounds);
       }
+    }
+  }
+
+  /**
+   * Collect the bounds of what a symbol instance draws: its symbol's artwork
+   * (it has no scene graph children), placed through the instance's own
+   * transform and those of the groups it sits in.
+   */
+  private collectSymbolInstanceBounds(
+    inst: SymbolInstanceNode,
+    sceneGraph: SceneGraph,
+    out: Rect[]
+  ): void {
+    const def = this.symbolDefinitions.find((d) => d.id === inst.symbolId);
+    if (!def || def.sceneGraphJSON.nodes.length === 0) return;
+    const symBounds = getSymbolBounds(def.sceneGraphJSON.nodes);
+    if (symBounds.width > 0 && symBounds.height > 0) {
+      const worldMatrix = inst.parent
+        ? sceneGraph.getWorldTransform(inst.id)
+        : mat3.compose(inst.transform.position, inst.transform.rotation, inst.transform.scale);
+      out.push(transformBoundsToWorld(symBounds, worldMatrix));
     }
   }
 
