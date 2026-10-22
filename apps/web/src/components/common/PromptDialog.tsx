@@ -172,6 +172,8 @@ export function PromptDialog({
 // ============================================================================
 
 interface PromptRequest {
+  /** Tells requests apart, so each gets a dialog of its own */
+  id: number;
   title: string;
   message?: string;
   input?: boolean;
@@ -181,9 +183,10 @@ interface PromptRequest {
   resolve: (value: string | null) => void;
 }
 
-type HostListener = (req: PromptRequest | null) => void;
+type HostListener = (req: PromptRequest) => void;
 
 const hostListeners = new Set<HostListener>();
+let nextRequestId = 1;
 
 export function promptDialog(opts: {
   title: string;
@@ -192,7 +195,7 @@ export function promptDialog(opts: {
   confirmLabel?: string;
 }): Promise<string | null> {
   return new Promise((resolve) => {
-    const req: PromptRequest = { ...opts, resolve };
+    const req: PromptRequest = { ...opts, id: nextRequestId++, resolve };
     hostListeners.forEach((fn) => fn(req));
   });
 }
@@ -209,6 +212,7 @@ export function confirmDialog(opts: {
   return new Promise((resolve) => {
     const req: PromptRequest = {
       ...opts,
+      id: nextRequestId++,
       input: false,
       resolve: (value) => resolve(value !== null),
     };
@@ -220,34 +224,36 @@ export function confirmDialog(opts: {
  * Mount once in the app root to enable the `promptDialog()` imperative API.
  */
 export function PromptDialogHost() {
-  const [request, setRequest] = useState<PromptRequest | null>(null);
+  // Questions asked while one is open wait their turn, so each caller gets its
+  // answer (one replacing another would leave the first waiting forever)
+  const [queue, setQueue] = useState<PromptRequest[]>([]);
 
   useEffect(() => {
-    const listener: HostListener = (req) => setRequest(req);
+    const listener: HostListener = (req) => setQueue((q) => [...q, req]);
     hostListeners.add(listener);
     return () => {
       hostListeners.delete(listener);
     };
   }, []);
 
+  const request = queue[0];
   if (!request) return null;
+  const answer = (value: string | null) => {
+    request.resolve(value);
+    setQueue((q) => q.filter((r) => r !== request));
+  };
 
   return (
     <PromptDialog
+      key={request.id}
       title={request.title}
       message={request.message}
       input={request.input}
       placeholder={request.placeholder}
       defaultValue={request.defaultValue}
       confirmLabel={request.confirmLabel}
-      onConfirm={(val) => {
-        request.resolve(val);
-        setRequest(null);
-      }}
-      onCancel={() => {
-        request.resolve(null);
-        setRequest(null);
-      }}
+      onConfirm={answer}
+      onCancel={() => answer(null)}
     />
   );
 }

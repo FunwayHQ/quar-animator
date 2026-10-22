@@ -109,6 +109,34 @@ describe('PromptDialogHost imperative API', () => {
   });
 });
 
+describe('PromptDialogHost with more than one question at a time (F159)', () => {
+  it('asks a second question once the first is answered, settling both', async () => {
+    vi.useFakeTimers();
+    render(<PromptDialogHost />);
+
+    let first!: Promise<string | null>;
+    let second!: Promise<string | null>;
+    act(() => {
+      first = promptDialog({ title: 'Name the group', defaultValue: 'Faces' });
+      second = promptDialog({ title: 'Name the symbol', defaultValue: 'Star' });
+    });
+
+    // The first question is asked first
+    expect(screen.getByText('Name the group')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('prompt-dialog-confirm'));
+    act(() => vi.advanceTimersByTime(120));
+    await expect(first).resolves.toBe('Faces');
+
+    // Then the second, with its own value
+    expect(screen.getByText('Name the symbol')).toBeInTheDocument();
+    expect(screen.getByTestId('prompt-dialog-input')).toHaveValue('Star');
+    fireEvent.click(screen.getByTestId('prompt-dialog-cancel'));
+    act(() => vi.advanceTimersByTime(120));
+    await expect(second).resolves.toBeNull();
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+});
+
 describe('confirmDialog', () => {
   it('asks a question with no input, and resolves true when confirmed', async () => {
     vi.useFakeTimers();
