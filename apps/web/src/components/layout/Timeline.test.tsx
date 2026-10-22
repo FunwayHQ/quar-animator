@@ -338,6 +338,77 @@ describe('Timeline', () => {
     }
   });
 
+  describe('dragging keyframes', () => {
+    function renderThreeKeyframes() {
+      let graph: SceneGraph | undefined;
+      function CaptureGraph() {
+        graph = useSceneGraph();
+        return null;
+      }
+      const track = createTrack<number>('ball', 'opacity');
+      const keyframes = [
+        addKeyframe(track, 10, 0),
+        addKeyframe(track, 20, 1),
+        addKeyframe(track, 30, 0),
+      ];
+      useEditorStore.setState({
+        timeline: createTimeline({ tracks: [track] }),
+        selectedKeyframeIds: new Set<string>(),
+      });
+      render(
+        <SceneGraphProvider>
+          <CaptureGraph />
+          <Timeline />
+        </SceneGraphProvider>
+      );
+      act(() => {
+        graph!.addNode({ id: 'ball', name: 'Ball', children: [] } as unknown as Node);
+      });
+      // One pixel per frame
+      Object.defineProperty(screen.getByTestId('timeline-tracks'), 'getBoundingClientRect', {
+        configurable: true,
+        value: () => ({ left: 0, top: 0, width: 300, height: 26 }) as DOMRect,
+      });
+      const diamonds = keyframes.map((kf) => {
+        const diamond = screen.getByTestId(`keyframe-${kf.id}`);
+        Object.defineProperty(diamond, 'setPointerCapture', { value: vi.fn() });
+        return diamond;
+      });
+      return { ids: keyframes.map((kf) => kf.id), diamonds };
+    }
+
+    const times = () =>
+      useEditorStore.getState().timeline.tracks[0]!.keyframes.map((kf) => kf.time);
+
+    it('keeps every selected keyframe selected after dragging them', () => {
+      const { ids, diamonds } = renderThreeKeyframes();
+      for (const diamond of diamonds) fireEvent.click(diamond, { shiftKey: true });
+      expect(useEditorStore.getState().selectedKeyframeIds.size).toBe(3);
+
+      const first = diamonds[0]!;
+      fireEvent.pointerDown(first, { button: 0, clientX: 10, pointerId: 1 });
+      fireEvent.pointerMove(first, { clientX: 15, pointerId: 1 });
+      fireEvent.pointerUp(first, { clientX: 15, pointerId: 1 });
+      fireEvent.click(first, { clientX: 15 });
+
+      expect(times()).toEqual([15, 25, 35]);
+      expect(useEditorStore.getState().selectedKeyframeIds).toEqual(new Set(ids));
+    });
+
+    it('selects only the clicked keyframe on a click without a drag', () => {
+      const { ids, diamonds } = renderThreeKeyframes();
+      useEditorStore.setState({ selectedKeyframeIds: new Set(ids) });
+
+      const second = diamonds[1]!;
+      fireEvent.pointerDown(second, { button: 0, clientX: 20, pointerId: 1 });
+      fireEvent.pointerUp(second, { clientX: 20, pointerId: 1 });
+      fireEvent.click(second, { clientX: 20 });
+
+      expect(times()).toEqual([10, 20, 30]);
+      expect(useEditorStore.getState().selectedKeyframeIds).toEqual(new Set([ids[1]]));
+    });
+  });
+
   it('toggles the Animation Sequence window from the toolbar', () => {
     useEditorStore.setState({ sequenceWindowOpen: false });
     renderTimeline();

@@ -166,6 +166,9 @@ export function Timeline({ playback }: TimelineProps = {}) {
     startFrame: number;
     trackWidth: number;
   } | null>(null);
+  // Set once a keyframe drag moves keyframes: the click that ends the drag
+  // then leaves the selection as it is
+  const keyframeDraggedRef = useRef(false);
 
   // Drag state for work area handles
   const workAreaDragRef = useRef<{
@@ -627,6 +630,11 @@ export function Timeline({ playback }: TimelineProps = {}) {
   const handleKeyframeClick = useCallback(
     (e: React.MouseEvent, kfId: string) => {
       e.stopPropagation();
+      // The click that ends a drag: every dragged keyframe stays selected
+      if (keyframeDraggedRef.current) {
+        keyframeDraggedRef.current = false;
+        return;
+      }
       if (e.shiftKey) {
         addKeyframeToSelection(kfId);
       } else {
@@ -658,6 +666,7 @@ export function Timeline({ playback }: TimelineProps = {}) {
 
   const handleKeyframePointerDown = useCallback(
     (e: React.PointerEvent, kfId: string) => {
+      keyframeDraggedRef.current = false;
       if (e.button !== 0) return;
       const tracks = tracksRef.current;
       if (!tracks) return;
@@ -685,6 +694,7 @@ export function Timeline({ playback }: TimelineProps = {}) {
       if (deltaFrames !== 0) {
         moveSelectedKeyframes(keyframeMap, deltaFrames);
         dragRef.current.startX = e.clientX;
+        keyframeDraggedRef.current = true;
       }
     },
     [duration, keyframeMap, moveSelectedKeyframes]
