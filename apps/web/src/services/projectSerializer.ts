@@ -8,6 +8,7 @@
 import type {
   Node,
   Timeline,
+  PropertyTrack,
   VitruvianController,
   DynamicChain,
   WindSettings,
@@ -406,6 +407,16 @@ function migrateV1ToV2(data: ProjectDataV1): ProjectDataV2 {
   };
 }
 
+/** A track that names the property it animates. */
+function isUsableTrack(track: unknown): track is PropertyTrack {
+  return (
+    typeof track === 'object' &&
+    track !== null &&
+    'property' in track &&
+    typeof track.property === 'string'
+  );
+}
+
 function migrateTimeline(
   timeline: Timeline,
   settings: { timelineDuration: number; frameRate: number }
@@ -417,7 +428,12 @@ function migrateTimeline(
       frameRate: settings.frameRate,
     });
 
-  if (result.tracks) {
+  const tracks: unknown = result.tracks;
+  if (tracks != null) {
+    // A file edited by hand or made by another tool can hold tracks that
+    // aren't a list, or tracks that don't name a property. Those animate
+    // nothing, and code that reads a track's property would trip on them.
+    result.tracks = Array.isArray(tracks) ? tracks.filter(isUsableTrack) : [];
     for (const track of result.tracks) {
       // Migrate fill.* → fills.0.*
       if (track.property.startsWith('fill.')) {
@@ -453,13 +469,13 @@ export function deserializeProject(
       ? (data as ProjectDataV2)
       : migrateV1ToV2(data);
 
+  // Everything that can fail on a damaged file runs before the open project is
+  // touched, so a file that can't be read leaves it as it was rather than half
+  // replaced (and open to being autosaved that way)
   for (const page of v2.pages) migrateSkinBindings(page.sceneGraph.nodes);
 
   // Find the active page (or first page as fallback)
   const activePage = v2.pages.find((p) => p.id === v2.activePageId) ?? v2.pages[0]!;
-
-  // Load active page's scene graph
-  sceneGraph.fromJSON(activePage.sceneGraph);
 
   // Migrate all page timelines
   for (const page of v2.pages) {
@@ -478,8 +494,7 @@ export function deserializeProject(
     redoStack: [],
   }));
 
-  // Restore editor state
-  applyEditorState({
+  const editorState: Parameters<typeof applyEditorState>[0] = {
     timeline: structuredClone(activePage.timeline),
     animationSequence: structuredClone(activePage.animationSequence ?? createAnimationSequence()),
     timelineDuration: v2.settings.timelineDuration,
@@ -498,7 +513,11 @@ export function deserializeProject(
     pages,
     activePageId: activePage.id,
     symbols: v2.symbols ?? [],
-  });
+  };
+
+  // Load the active page's scene graph, then restore the editor state
+  sceneGraph.fromJSON(activePage.sceneGraph);
+  applyEditorState(editorState);
 }
 
 // ============================================================================

@@ -2,7 +2,7 @@
  * Tests for Project Serializer
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { SceneGraph, createGroupNode } from '@quar/core';
 import { createTimeline } from '@quar/animation';
 import { DEFAULT_ONION_SKIN_SETTINGS } from '@quar/core';
@@ -503,6 +503,73 @@ describe('ProjectSerializer', () => {
 
       expect(sg.getNode('r1')).toBeDefined();
       expect(appliedState.activePageId).toBe('page-x');
+    });
+  });
+
+  describe('damaged files', () => {
+    /** A one-page project holding 'imported', with these tracks on its timeline. */
+    function damagedProject(tracks: unknown): ProjectDataV2 {
+      const timeline = createTimeline({ duration: 60, frameRate: 30 });
+      return {
+        version: '2.0',
+        name: 'Damaged',
+        createdAt: '2024-01-01',
+        updatedAt: '2024-01-01',
+        pages: [
+          {
+            id: 'page-1',
+            name: 'Page 1',
+            sceneGraph: { nodes: [makeTestNode('imported')], rootNodeIds: ['imported'] },
+            timeline: { ...timeline, tracks } as typeof timeline,
+          },
+        ],
+        activePageId: 'page-1',
+        settings: {
+          timelineDuration: 60,
+          frameRate: 30,
+          autoKeyframe: false,
+          onionSkin: { ...DEFAULT_ONION_SKIN_SETTINGS },
+        },
+      };
+    }
+
+    function appliedTracks(data: ProjectDataV2): unknown[] {
+      let applied: Partial<EditorStateSnapshot> = {};
+      deserializeProject(data, new SceneGraph(), (state) => {
+        applied = state;
+      });
+      return applied.timeline?.tracks ?? [];
+    }
+
+    it('open without the timeline tracks that name no property', () => {
+      const data = damagedProject([
+        { id: 'nameless', nodeId: 'imported', keyframes: [] },
+        null,
+        { id: 'fill', nodeId: 'imported', property: 'fill.color', keyframes: [] },
+      ]);
+
+      expect(validateProjectData(data)).toBe(true);
+      const tracks = appliedTracks(data);
+      expect(tracks).toHaveLength(1);
+      expect(tracks[0]).toMatchObject({ id: 'fill', property: 'fills.0.color' });
+    });
+
+    it('open with no tracks when the tracks are not a list', () => {
+      expect(appliedTracks(damagedProject({ 0: 'not a track' }))).toEqual([]);
+    });
+
+    it('that cannot be opened leave the open project as it was', () => {
+      const sg = new SceneGraph();
+      sg.addNode(makeTestNode('open-already'));
+      // Stored projects aren't validated before they're opened
+      const data = { ...damagedProject([]), settings: undefined } as unknown as ProjectDataV2;
+      const applyEditorState = vi.fn();
+
+      expect(() => deserializeProject(data, sg, applyEditorState)).toThrow();
+
+      expect(sg.getNode('open-already')).toBeDefined();
+      expect(sg.getNode('imported')).toBeUndefined();
+      expect(applyEditorState).not.toHaveBeenCalled();
     });
   });
 
