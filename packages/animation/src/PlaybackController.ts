@@ -268,6 +268,8 @@ export class PlaybackController {
       } else {
         this._setFrame(nextFrame);
       }
+      // A frame's listener can pause or dispose playback: no frames after that
+      if (!this._playing || this._disposed) return;
     }
 
     // Cap remaining accumulator to prevent float drift over long playback

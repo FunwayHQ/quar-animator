@@ -572,3 +572,27 @@ describe('dispose', () => {
     expect(onFrameChange).not.toHaveBeenCalled();
   });
 });
+
+describe('pausing from a frame listener', () => {
+  it('shows no more frames, and asks for none, once a listener pauses', () => {
+    const timer = createFakeTimer();
+    const seen: number[] = [];
+    let controller: PlaybackController | null = null;
+    ({ controller } = createController(
+      {
+        onFrameChange: (frame: number) => {
+          seen.push(frame);
+          if (frame === 2) controller?.pause();
+        },
+      },
+      timer
+    ));
+    controller.play();
+    timer.tick(0);
+    // A long gap: several frames to catch up on, but the listener pauses at 2
+    timer.tick((1000 / 30) * 6 + 1);
+    expect(seen).toEqual([1, 2]);
+    expect(controller.isPlaying).toBe(false);
+    expect(timer.pending).toBe(false);
+  });
+});
