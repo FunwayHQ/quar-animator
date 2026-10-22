@@ -218,7 +218,8 @@ interface LayerRowProps {
   node: Node;
   depth: number;
   selected: boolean;
-  isRenaming: boolean;
+  /** The layer being renamed, wherever it is in the tree. */
+  renamingNodeId: string | null;
   isDragging: boolean;
   isEnteredGroup: boolean;
   dropTarget: DropTarget | null;
@@ -235,7 +236,7 @@ function LayerRow({
   node,
   depth,
   selected,
-  isRenaming,
+  renamingNodeId,
   isDragging,
   isEnteredGroup,
   dropTarget,
@@ -252,6 +253,7 @@ function LayerRow({
   const hasChildren = node.children && node.children.length > 0;
   const parent = node.parent ? sceneGraph.getNode(node.parent) : undefined;
   const isMaskSource = parent?.type === 'group' && parent.maskNodeId === node.id;
+  const isRenaming = renamingNodeId === node.id;
 
   const dropClass =
     dropTarget && dropTarget.nodeId === node.id
@@ -379,7 +381,7 @@ function LayerRow({
               onToggleVisibility={onToggleVisibility}
               onToggleLock={onToggleLock}
               onContextMenu={onContextMenu}
-              isRenaming={false}
+              renamingNodeId={renamingNodeId}
               onRenameCommit={onRenameCommit}
               onPointerDown={onPointerDown}
               draggedIds={isDragging ? new Set<string>() : null}
@@ -399,7 +401,7 @@ function LayerRowById({
   onToggleVisibility,
   onToggleLock,
   onContextMenu,
-  isRenaming,
+  renamingNodeId,
   onRenameCommit,
   onPointerDown,
   draggedIds,
@@ -412,7 +414,7 @@ function LayerRowById({
   onToggleVisibility: (id: string) => void;
   onToggleLock: (id: string) => void;
   onContextMenu: (id: string, e: React.MouseEvent) => void;
-  isRenaming: boolean;
+  renamingNodeId: string | null;
   onRenameCommit: (id: string, name: string) => void;
   onPointerDown: (id: string, e: React.PointerEvent) => void;
   draggedIds: Set<string> | null;
@@ -429,7 +431,7 @@ function LayerRowById({
       node={node}
       depth={depth}
       selected={selectedNodeIds.has(node.id)}
-      isRenaming={isRenaming}
+      renamingNodeId={renamingNodeId}
       isDragging={draggedIds !== null && draggedIds.has(node.id)}
       isEnteredGroup={enteredGroupId === node.id}
       dropTarget={dropTarget}
@@ -1010,7 +1012,7 @@ export function LayerPanel() {
               node={node}
               depth={0}
               selected={selectedNodeIds.has(node.id)}
-              isRenaming={renamingNodeId === node.id}
+              renamingNodeId={renamingNodeId}
               isDragging={draggedIdSet !== null && draggedIdSet.has(node.id)}
               isEnteredGroup={enteredGroupId === node.id}
               dropTarget={dropTarget}

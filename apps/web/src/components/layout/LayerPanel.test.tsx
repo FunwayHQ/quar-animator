@@ -219,6 +219,48 @@ describe('LayerPanel', () => {
     expect(screen.getByTestId('layer-empty')).toBeInTheDocument();
   });
 
+  it('renames a layer inside a group by double-clicking it (F079)', async () => {
+    const user = userEvent.setup();
+    let sg: SceneGraph | null = null;
+    render(
+      <SceneGraphProvider>
+        <SceneGraphCapture onCapture={(s) => (sg = s)} />
+        <LayerPanel />
+      </SceneGraphProvider>
+    );
+    act(() => {
+      sg!.addNode(createTestGroup('group1', 'Group'));
+      sg!.addNode(createTestRect('child1', 'Child'), 'group1');
+    });
+
+    fireEvent.doubleClick(screen.getByTestId('layer-row-child1'));
+    const input = screen.getByTestId('layer-rename-input');
+    await user.clear(input);
+    await user.type(input, 'Renamed Child{Enter}');
+
+    expect(sg!.getNode('child1')?.name).toBe('Renamed Child');
+    expect(screen.queryByTestId('layer-rename-input')).not.toBeInTheDocument();
+  });
+
+  it('renames a layer inside a group from its context menu (F079)', async () => {
+    let sg: SceneGraph | null = null;
+    render(
+      <SceneGraphProvider>
+        <SceneGraphCapture onCapture={(s) => (sg = s)} />
+        <LayerPanel />
+      </SceneGraphProvider>
+    );
+    act(() => {
+      sg!.addNode(createTestGroup('group1', 'Group'));
+      sg!.addNode(createTestRect('child1', 'Child'), 'group1');
+    });
+
+    fireEvent.contextMenu(screen.getByTestId('layer-row-child1'));
+    fireEvent.click(screen.getByTestId('context-menu-item-rename'));
+
+    expect(screen.getByTestId('layer-rename-input')).toHaveValue('Child');
+  });
+
   it('selects a layer on click', async () => {
     const user = userEvent.setup();
     let sg: SceneGraph | null = null;
