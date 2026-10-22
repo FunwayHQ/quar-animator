@@ -551,3 +551,32 @@ def _resource_text(result) -> str:
     if isinstance(result, str):
         return result
     return str(result)
+
+
+# ── Hex colors (read as @quar/core's parseHexColor reads them) ─────
+
+
+def test_hex_to_color_reads_every_hex_form():
+    from app.tools.node_tools import _hex_to_color
+
+    assert _hex_to_color("#abc") == {"r": 170, "g": 187, "b": 204, "a": 1.0}
+    assert _hex_to_color("#abc8") == {"r": 170, "g": 187, "b": 204, "a": 0.533}
+    assert _hex_to_color("#FF8000") == {"r": 255, "g": 128, "b": 0, "a": 1.0}
+    assert _hex_to_color("ff800080") == {"r": 255, "g": 128, "b": 0, "a": 0.502}
+
+
+def test_hex_to_color_turns_down_what_is_not_hex():
+    from app.tools.node_tools import _hex_to_color
+
+    gray = {"r": 128, "g": 128, "b": 128, "a": 1.0}
+    for text in ["#ggg", "#12345", "#1x2y3z", "#", "red", "#ff00ff0", "##abc", "#0x12ab"]:
+        assert _hex_to_color(text) == gray, text
+
+
+@pytest.mark.asyncio
+async def test_add_node_with_a_color_that_is_not_hex(client):
+    await client.call_tool("create_project", {})
+    result = await client.call_tool("add_node", {"node_type": "rectangle", "fill_color": "#GGGGGG"})
+    data = _parse(result)
+    assert data["status"] == "success"
+    assert data["node"]["fills"][0]["color"] == {"r": 128, "g": 128, "b": 128, "a": 1.0}

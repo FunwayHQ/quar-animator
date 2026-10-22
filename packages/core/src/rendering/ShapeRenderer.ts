@@ -59,6 +59,7 @@ import { textToSubpaths } from '../font/glyphConverter';
 import { getTextNodeBounds } from '../font/textMetrics';
 import { getTextBox } from '../font/textLayout';
 import { getVisibleTextContent } from '../font/textReveal';
+import { hexToRgbNormalized } from '../color/colorHex';
 import {
   deformVertices,
   MAX_BONES_GPU,
@@ -3138,11 +3139,7 @@ export class ShapeRenderer {
    * Parse a hex color string to [r, g, b, a] float array.
    */
   private parseBoneColor(hex: string): [number, number, number, number] {
-    const cleaned = hex.replace('#', '');
-    const r = parseInt(cleaned.slice(0, 2), 16) / 255;
-    const g = parseInt(cleaned.slice(2, 4), 16) / 255;
-    const b = parseInt(cleaned.slice(4, 6), 16) / 255;
-    return [r, g, b, 1.0];
+    return [...hexToRgbNormalized(hex), 1.0];
   }
 
   /**

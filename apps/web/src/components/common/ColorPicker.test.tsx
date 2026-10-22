@@ -46,6 +46,18 @@ describe('ColorPicker', () => {
     expect(hex.value).toBe('#FF8000');
   });
 
+  it('shows a valid hex for a color animation carried out of range (F070)', () => {
+    renderPicker(makeColor(300, -5, 127.5));
+    expect(screen.getByTestId('hex-input')).toHaveValue('#FF0080');
+  });
+
+  it('waits for all six digits before taking a typed hex', () => {
+    renderPicker();
+    fireEvent.change(screen.getByTestId('hex-input'), { target: { value: '#ABC' } });
+    expect(onChange).not.toHaveBeenCalled();
+    expect(screen.getByTestId('hex-input')).toHaveValue('#ABC');
+  });
+
   it('shows initial RGB values', () => {
     renderPicker(makeColor(100, 200, 50));
     expect((screen.getByTestId('r-input') as HTMLInputElement).value).toBe('100');

@@ -37,6 +37,12 @@ describe('parseSvgColor', () => {
     expect(c!.a).toBeCloseTo(0.533, 2);
   });
 
+  it('turns down a hex that isn’t one instead of making NaN channels (F070)', () => {
+    expect(parseSvgColor('#ggg')).toBeNull();
+    expect(parseSvgColor('#12x456')).toBeNull();
+    expect(parseSvgColor('#12345')).toBeNull();
+  });
+
   it('parses rgb()', () => {
     expect(parseSvgColor('rgb(255, 128, 0)')).toEqual({ r: 255, g: 128, b: 0, a: 1 });
   });

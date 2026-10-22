@@ -73,6 +73,8 @@ import {
   setPointType,
   pathShapeOf,
   updateHandleWithSymmetry,
+  colorToHex,
+  hexToColor,
 } from '@quar/core';
 import { findTrack, getEasingDisplayName } from '@quar/animation';
 import type { SceneGraph } from '@quar/core';
@@ -86,25 +88,6 @@ import styles from './PropertiesPanel.module.css';
 // ============================================================================
 // Helpers
 // ============================================================================
-
-function colorToHex(color: Color): string {
-  const r = Math.round(color.r).toString(16).padStart(2, '0');
-  const g = Math.round(color.g).toString(16).padStart(2, '0');
-  const b = Math.round(color.b).toString(16).padStart(2, '0');
-  return `#${r}${g}${b}`.toUpperCase();
-}
-
-function hexToColor(hex: string): Color | null {
-  // Strip leading # if present
-  const cleaned = hex.replace(/^#/, '');
-  if (!/^[0-9a-fA-F]{6}$/.test(cleaned)) return null;
-  return {
-    r: parseInt(cleaned.slice(0, 2), 16),
-    g: parseInt(cleaned.slice(2, 4), 16),
-    b: parseInt(cleaned.slice(4, 6), 16),
-    a: 1,
-  };
-}
 
 const groupBoundsManager = new SelectionManager();
 
@@ -2148,11 +2131,11 @@ export function PropertiesPanel() {
                             className={styles.input}
                             value={bone.boneColor.toUpperCase()}
                             onChange={(e) => {
-                              const hex = e.target.value;
-                              if (/^#[0-9a-fA-F]{6}$/.test(hex)) {
+                              const color = hexToColor(e.target.value);
+                              if (color) {
                                 pushUndo(sceneGraph);
                                 sceneGraph.updateNode(nodeId, {
-                                  boneColor: hex,
+                                  boneColor: colorToHex(color),
                                 } as Partial<BoneNode>);
                               }
                             }}

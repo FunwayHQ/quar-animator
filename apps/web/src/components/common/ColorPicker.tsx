@@ -13,6 +13,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import type { Color } from '@quar/types';
+import { hexToColor, rgbToHex } from '@quar/core';
 import styles from './ColorPicker.module.css';
 
 // ============================================================================
@@ -54,36 +55,30 @@ function hsvToRgb(h: number, s: number, v: number): { r: number; g: number; b: n
   let r1 = 0,
     g1 = 0,
     b1 = 0;
-  if (h < 60) { r1 = c; g1 = x; }
-  else if (h < 120) { r1 = x; g1 = c; }
-  else if (h < 180) { g1 = c; b1 = x; }
-  else if (h < 240) { g1 = x; b1 = c; }
-  else if (h < 300) { r1 = x; b1 = c; }
-  else { r1 = c; b1 = x; }
+  if (h < 60) {
+    r1 = c;
+    g1 = x;
+  } else if (h < 120) {
+    r1 = x;
+    g1 = c;
+  } else if (h < 180) {
+    g1 = c;
+    b1 = x;
+  } else if (h < 240) {
+    g1 = x;
+    b1 = c;
+  } else if (h < 300) {
+    r1 = x;
+    b1 = c;
+  } else {
+    r1 = c;
+    b1 = x;
+  }
 
   return {
     r: Math.round((r1 + m) * 255),
     g: Math.round((g1 + m) * 255),
     b: Math.round((b1 + m) * 255),
-  };
-}
-
-function rgbToHex(r: number, g: number, b: number): string {
-  return (
-    '#' +
-    r.toString(16).padStart(2, '0') +
-    g.toString(16).padStart(2, '0') +
-    b.toString(16).padStart(2, '0')
-  ).toUpperCase();
-}
-
-function hexToRgb(hex: string): { r: number; g: number; b: number } | null {
-  const cleaned = hex.replace(/^#/, '');
-  if (!/^[0-9a-fA-F]{6}$/.test(cleaned)) return null;
-  return {
-    r: parseInt(cleaned.slice(0, 2), 16),
-    g: parseInt(cleaned.slice(2, 4), 16),
-    b: parseInt(cleaned.slice(4, 6), 16),
   };
 }
 
@@ -270,7 +265,7 @@ export function ColorPicker({
   const handleHexChange = useCallback(
     (value: string) => {
       setHexInput(value);
-      const rgb = hexToRgb(value);
+      const rgb = hexToColor(value);
       if (rgb) {
         const newHsv = rgbToHsv(rgb.r, rgb.g, rgb.b);
         setHsv(newHsv);
@@ -364,9 +359,9 @@ export function ColorPicker({
   const hueColor = `hsl(${Math.round(hsv.h)}, 100%, 50%)`;
   const currentHex = rgbToHex(rgb.r, rgb.g, rgb.b);
   const initialHex = rgbToHex(
-    Math.round(initialColor.current.r),
-    Math.round(initialColor.current.g),
-    Math.round(initialColor.current.b)
+    initialColor.current.r,
+    initialColor.current.g,
+    initialColor.current.b
   );
 
   return createPortal(
@@ -424,10 +419,7 @@ export function ColorPicker({
               onPointerDown={handleHuePointerDown}
               data-testid="hue-slider"
             >
-              <div
-                className={styles.sliderThumb}
-                style={{ left: `${(hsv.h / 360) * 100}%` }}
-              />
+              <div className={styles.sliderThumb} style={{ left: `${(hsv.h / 360) * 100}%` }} />
             </div>
 
             {/* Alpha slider */}
@@ -444,10 +436,7 @@ export function ColorPicker({
                     background: `linear-gradient(to right, transparent, ${currentHex})`,
                   }}
                 />
-                <div
-                  className={styles.sliderThumb}
-                  style={{ left: `${alpha * 100}%` }}
-                />
+                <div className={styles.sliderThumb} style={{ left: `${alpha * 100}%` }} />
               </div>
             )}
           </div>
@@ -592,12 +581,25 @@ function hslToRgb(h: number, s: number, l: number): { r: number; g: number; b: n
   let r1 = 0,
     g1 = 0,
     b1 = 0;
-  if (h < 60) { r1 = c; g1 = x; }
-  else if (h < 120) { r1 = x; g1 = c; }
-  else if (h < 180) { g1 = c; b1 = x; }
-  else if (h < 240) { g1 = x; b1 = c; }
-  else if (h < 300) { r1 = x; b1 = c; }
-  else { r1 = c; b1 = x; }
+  if (h < 60) {
+    r1 = c;
+    g1 = x;
+  } else if (h < 120) {
+    r1 = x;
+    g1 = c;
+  } else if (h < 180) {
+    g1 = c;
+    b1 = x;
+  } else if (h < 240) {
+    g1 = x;
+    b1 = c;
+  } else if (h < 300) {
+    r1 = x;
+    b1 = c;
+  } else {
+    r1 = c;
+    b1 = x;
+  }
   return {
     r: Math.round((r1 + m) * 255),
     g: Math.round((g1 + m) * 255),

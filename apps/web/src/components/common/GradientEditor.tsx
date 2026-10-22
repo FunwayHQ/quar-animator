@@ -12,7 +12,7 @@
 
 import { useState, useRef, useCallback, useEffect } from 'react';
 import type { Color, Gradient, GradientStop } from '@quar/types';
-import { linearGradientFromAngle } from '@quar/core';
+import { colorToHex, linearGradientFromAngle } from '@quar/core';
 import { ColorPicker } from './ColorPicker';
 import styles from './GradientEditor.module.css';
 
@@ -38,15 +38,6 @@ export interface GradientEditorProps {
 // ============================================================================
 // Helpers
 // ============================================================================
-
-function colorToHex(c: Color): string {
-  return (
-    '#' +
-    Math.round(c.r).toString(16).padStart(2, '0') +
-    Math.round(c.g).toString(16).padStart(2, '0') +
-    Math.round(c.b).toString(16).padStart(2, '0')
-  ).toUpperCase();
-}
 
 function colorToRgba(c: Color): string {
   return `rgba(${Math.round(c.r)}, ${Math.round(c.g)}, ${Math.round(c.b)}, ${c.a})`;

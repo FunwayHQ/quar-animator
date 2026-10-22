@@ -40,22 +40,15 @@ import { getTextBox } from '../font/textLayout';
 import { getTextNodeBounds, getTextNodeLines } from '../font/textMetrics';
 import { getTextLocalBounds } from '../font/textPlacement';
 import { linearGradientFromAngle } from '../gradient/gradientUtils';
+import { colorToHex as colorToUpperHex } from '../color/colorHex';
 
 // ============================================================================
 // Color Helpers
 // ============================================================================
 
+/** SVG colors are written in lower case: '#ff8000'. */
 function colorToHex(color: Color): string {
-  const r = Math.round(Math.max(0, Math.min(255, color.r)))
-    .toString(16)
-    .padStart(2, '0');
-  const g = Math.round(Math.max(0, Math.min(255, color.g)))
-    .toString(16)
-    .padStart(2, '0');
-  const b = Math.round(Math.max(0, Math.min(255, color.b)))
-    .toString(16)
-    .padStart(2, '0');
-  return `#${r}${g}${b}`;
+  return colorToUpperHex(color).toLowerCase();
 }
 
 // ============================================================================

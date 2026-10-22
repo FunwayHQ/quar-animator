@@ -8,6 +8,7 @@
 import type { Matrix3 } from '@quar/types';
 import type { SceneGraph } from '../SceneGraph';
 import type { ShapeRenderer } from './ShapeRenderer';
+import { hexToRgbNormalized } from '../color/colorHex';
 
 // ============================================================================
 // Types & Defaults
@@ -34,21 +35,6 @@ export const DEFAULT_ONION_SKIN_SETTINGS: OnionSkinSettings = {
   opacityFalloff: 0.3,
   showDuringPlayback: false,
 };
-
-// ============================================================================
-// Color Helpers
-// ============================================================================
-
-/**
- * Parse a hex color string to normalized [r, g, b] values (0-1 range).
- */
-function hexToRgbNormalized(hex: string): [number, number, number] {
-  const cleaned = hex.replace('#', '');
-  const r = parseInt(cleaned.substring(0, 2), 16) / 255;
-  const g = parseInt(cleaned.substring(2, 4), 16) / 255;
-  const b = parseInt(cleaned.substring(4, 6), 16) / 255;
-  return [r, g, b];
-}
 
 // ============================================================================
 // OnionSkinRenderer Class

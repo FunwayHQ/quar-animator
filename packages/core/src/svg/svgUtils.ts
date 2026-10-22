@@ -4,6 +4,7 @@
  */
 
 import type { Color, Transform, Vector2 } from '@quar/types';
+import { parseHexColor } from '../color/colorHex';
 
 // ============================================================================
 // Named CSS Colors (148 standard colors)
@@ -197,43 +198,6 @@ export function parseSvgColor(value: string): Color | null {
   const hslMatch = trimmed.match(/^hsla?\(\s*([^)]+)\s*\)$/);
   if (hslMatch) return parseHslFunction(hslMatch[1]!);
 
-  return null;
-}
-
-function parseHexColor(hex: string): Color | null {
-  const h = hex.replace('#', '');
-  if (h.length === 3) {
-    return {
-      r: parseInt(h[0]! + h[0]!, 16),
-      g: parseInt(h[1]! + h[1]!, 16),
-      b: parseInt(h[2]! + h[2]!, 16),
-      a: 1,
-    };
-  }
-  if (h.length === 4) {
-    return {
-      r: parseInt(h[0]! + h[0]!, 16),
-      g: parseInt(h[1]! + h[1]!, 16),
-      b: parseInt(h[2]! + h[2]!, 16),
-      a: parseInt(h[3]! + h[3]!, 16) / 255,
-    };
-  }
-  if (h.length === 6) {
-    return {
-      r: parseInt(h.substring(0, 2), 16),
-      g: parseInt(h.substring(2, 4), 16),
-      b: parseInt(h.substring(4, 6), 16),
-      a: 1,
-    };
-  }
-  if (h.length === 8) {
-    return {
-      r: parseInt(h.substring(0, 2), 16),
-      g: parseInt(h.substring(2, 4), 16),
-      b: parseInt(h.substring(4, 6), 16),
-      a: parseInt(h.substring(6, 8), 16) / 255,
-    };
-  }
   return null;
 }
 

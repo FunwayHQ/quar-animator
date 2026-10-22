@@ -567,6 +567,22 @@ describe('PropertiesPanel', () => {
   // ============================================================================
 
   describe('color editing', () => {
+    it('shows valid hex for colors animation carried out of range (F070)', () => {
+      const sg = renderWithSceneGraph();
+      act(() => {
+        const rect = createTestRect('rect1', 'Rectangle 1');
+        sg.addNode({
+          ...rect,
+          fills: [{ ...rect.fills[0]!, color: { r: 300, g: -5, b: 127.5, a: 1 } }],
+          strokes: [{ ...rect.strokes[0]!, color: { r: 12.4, g: 255.6, b: -0.2, a: 1 } }],
+        });
+        useEditorStore.getState().setSelection(['rect1']);
+      });
+
+      expect(screen.getByDisplayValue('#FF0080')).toBeInTheDocument();
+      expect(screen.getByDisplayValue('#0CFF00')).toBeInTheDocument();
+    });
+
     it('should update fill color when hex text is changed', () => {
       const sg = renderWithSceneGraph();
 

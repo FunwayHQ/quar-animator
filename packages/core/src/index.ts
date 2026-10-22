@@ -4,6 +4,7 @@
  */
 
 export * from './math';
+export * from './color/colorHex';
 export * from './SceneGraph';
 export * from './Camera';
 export * from './rendering';

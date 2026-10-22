@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from fastmcp import Context
@@ -334,14 +335,18 @@ async def group_nodes(node_ids: list[str], page_id: str | None = None, ctx: Cont
     return {"status": "success", "groupId": group_id, "childIds": node_ids}
 
 
+_HEX_DIGITS = re.compile(r"[0-9a-fA-F]+")
+
+
 def _hex_to_color(hex_str: str) -> dict[str, Any]:
-    """Convert '#RRGGBB' or '#RRGGBBAA' to Color dict."""
-    h = hex_str.lstrip("#")
-    if len(h) == 6:
-        r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
-        return {"r": r, "g": g, "b": b, "a": 1.0}
-    elif len(h) == 8:
-        r, g, b, a = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16), int(h[6:8], 16)
-        return {"r": r, "g": g, "b": b, "a": round(a / 255, 3)}
-    else:
+    """Convert a hex color to a Color dict, reading it as the editor does
+    (parseHexColor in @quar/core): '#RGB', '#RGBA', '#RRGGBB' or '#RRGGBBAA',
+    the '#' optional. Anything else is mid gray."""
+    h = hex_str[1:] if hex_str.startswith("#") else hex_str
+    if len(h) not in (3, 4, 6, 8) or not _HEX_DIGITS.fullmatch(h):
         return {"r": 128, "g": 128, "b": 128, "a": 1.0}
+    if len(h) in (3, 4):
+        h = "".join(digit + digit for digit in h)
+    r, g, b = (int(h[i : i + 2], 16) for i in (0, 2, 4))
+    a = round(int(h[6:8], 16) / 255, 3) if len(h) == 8 else 1.0
+    return {"r": r, "g": g, "b": b, "a": a}
