@@ -126,6 +126,14 @@ function createCanvasPointerEvent(
   };
 }
 
+/**
+ * State updater that empties a list, keeping it as it is when already empty:
+ * a new empty list each pointer move would redraw the canvas every time.
+ */
+function emptied<T>(list: T[]): T[] {
+  return list.length === 0 ? list : [];
+}
+
 // ============================================================================
 // Hook Implementation
 // ============================================================================
@@ -547,7 +555,7 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
       setIsPenToolDrawing(penTool.isCurrentlyDrawing());
       setPenRubberBand(penTool.getRubberBand());
     } else {
-      setPenToolPath([]);
+      setPenToolPath(emptied);
       setIsPenToolDrawing(false);
       setPenRubberBand(null);
     }
@@ -585,10 +593,12 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
       setDirectSelectionImageNodes(images);
     } else {
       setIsDirectSelectionActive(false);
-      setDirectSelectionPoints([]);
-      setDirectSelectionPathNodes([]);
-      setDirectSelectionImageNodes([]);
-      useEditorStore.getState().setDirectSelectionPoints([]);
+      setDirectSelectionPoints(emptied);
+      setDirectSelectionPathNodes(emptied);
+      setDirectSelectionImageNodes(emptied);
+      // Panels showing the points needn't redraw either
+      const store = useEditorStore.getState();
+      if (store.directSelectionPoints.length > 0) store.setDirectSelectionPoints([]);
     }
   }, []);
 

@@ -65,6 +65,34 @@ const MIN_ZOOM = 0.1;
 const MAX_ZOOM = 32;
 const ZOOM_SPEED = 0.001;
 
+/** Shows a world position in the status bar; set by the readout while it's mounted. */
+type ShowPointerPosition = (worldPos: Vector2) => void;
+
+/**
+ * The status bar's pointer position, to a tenth of a unit. It keeps its own
+ * state, so following the pointer redraws this label rather than the whole
+ * canvas on every mouse move.
+ */
+function PointerPosition({ showRef }: { showRef: { current: ShowPointerPosition | null } }) {
+  const [pos, setPos] = useState<Vector2>({ x: 0, y: 0 });
+  useEffect(() => {
+    showRef.current = (worldPos) => {
+      const x = Math.round(worldPos.x * 10) / 10;
+      const y = Math.round(worldPos.y * 10) / 10;
+      // The same reading again draws nothing
+      setPos((prev) => (prev.x === x && prev.y === y ? prev : { x, y }));
+    };
+    return () => {
+      showRef.current = null;
+    };
+  }, [showRef]);
+  return (
+    <span className={styles.coordinates}>
+      X: {pos.x.toFixed(1)} Y: {pos.y.toFixed(1)}
+    </span>
+  );
+}
+
 // ============================================================================
 // Canvas Component
 // ============================================================================
@@ -116,7 +144,7 @@ export function Canvas({
 
   // UI state (for display)
   const [zoomPercent, setZoomPercent] = useState(100);
-  const [mouseWorldPos, setMouseWorldPos] = useState<Vector2>({ x: 0, y: 0 });
+  const showPointerPositionRef = useRef<ShowPointerPosition | null>(null);
   const [cameraReady, setCameraReady] = useState(false);
   const [sceneGraphVersion, setSceneGraphVersion] = useState(0);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
@@ -1116,10 +1144,7 @@ export function Canvas({
       if (!positions) return;
 
       // Update world position display
-      setMouseWorldPos({
-        x: Math.round(positions.worldPos.x * 10) / 10,
-        y: Math.round(positions.worldPos.y * 10) / 10,
-      });
+      showPointerPositionRef.current?.(positions.worldPos);
 
       // Handle panning
       if (isPanningRef.current) {
@@ -2718,9 +2743,7 @@ export function Canvas({
           );
         })()}
       <div className={styles.statusBar}>
-        <span className={styles.coordinates}>
-          X: {mouseWorldPos.x.toFixed(1)} Y: {mouseWorldPos.y.toFixed(1)}
-        </span>
+        <PointerPosition showRef={showPointerPositionRef} />
         <span className={styles.zoom}>{zoomPercent}%</span>
       </div>
       {contextMenu && (

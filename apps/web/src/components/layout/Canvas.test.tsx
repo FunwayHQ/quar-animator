@@ -1,8 +1,23 @@
+import type { ComponentProps } from 'react';
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '../../test/utils';
 import { SceneGraphProvider } from '../../contexts/SceneGraphContext';
+import { useEditorStore } from '../../stores/editorStore';
 import { Camera } from '@quar/core';
 import { Canvas } from './Canvas';
+
+// Counts the canvas's renders: the smart guides are drawn on every one
+const smartGuides = vi.hoisted(() => ({ renders: 0 }));
+vi.mock('../canvas/SmartGuidesOverlay', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../canvas/SmartGuidesOverlay')>();
+  return {
+    ...actual,
+    SmartGuidesOverlay: (props: ComponentProps<typeof actual.SmartGuidesOverlay>) => {
+      smartGuides.renders++;
+      return <actual.SmartGuidesOverlay {...props} />;
+    },
+  };
+});
 
 function renderCanvas(onProjectFileDrop?: (file: File) => void | Promise<void>) {
   return render(
@@ -67,6 +82,27 @@ describe('Canvas', () => {
       expect(screen.getByText(/X:/)).toBeInTheDocument();
       expect(screen.getByText(/Y:/)).toBeInTheDocument();
     }
+  });
+
+  it('shows where the pointer is without drawing the whole canvas again (F077)', () => {
+    renderCanvas();
+    const canvas = document.querySelector('canvas')!;
+    vi.spyOn(canvas, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 800, 600));
+    const readout = () => screen.getByText(/X:.*Y:/).textContent;
+    const before = readout();
+
+    const rendersBefore = smartGuides.renders;
+    const pointsBefore = useEditorStore.getState().directSelectionPoints;
+    fireEvent.mouseMove(canvas, { clientX: 100, clientY: 50 });
+    const first = readout();
+    fireEvent.mouseMove(canvas, { clientX: 300, clientY: 250 });
+    const second = readout();
+
+    expect(first).not.toBe(before);
+    expect(second).not.toBe(first);
+    expect(smartGuides.renders).toBe(rendersBefore);
+    // Nor the panels that show picked points
+    expect(useEditorStore.getState().directSelectionPoints).toBe(pointsBefore);
   });
 
   it('has crosshair cursor style', () => {
