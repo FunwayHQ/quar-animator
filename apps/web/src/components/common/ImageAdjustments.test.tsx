@@ -178,6 +178,41 @@ describe('ImageAdjustments', () => {
     expect(onChange).toHaveBeenCalledWith('hue', 45);
   });
 
+  it('keeps a typed minus sign so negative values can be typed (F158)', () => {
+    const { onChange } = renderAdjustments();
+
+    const input = screen.getByTestId('adjustment-value-brightness') as HTMLInputElement;
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: '-' } });
+    expect(input.value).toBe('-');
+    expect(onChange).not.toHaveBeenCalled();
+
+    fireEvent.change(input, { target: { value: '-50' } });
+    expect(onChange).toHaveBeenCalledWith('brightness', -50);
+  });
+
+  it('shows the value again when the field is left half typed (F158)', () => {
+    renderAdjustments({ hue: 30 });
+
+    const input = screen.getByTestId('adjustment-value-hue') as HTMLInputElement;
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: '-' } });
+    expect(input.value).toBe('-');
+
+    fireEvent.blur(input);
+    expect(input.value).toBe('30\u00B0');
+  });
+
+  it('shows the clamped value once Enter is pressed (F158)', () => {
+    renderAdjustments();
+
+    const input = screen.getByTestId('adjustment-value-brightness') as HTMLInputElement;
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: '-' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(input.value).toBe('0');
+  });
+
   // ============================================================================
   // Arrow key handling in value inputs
   // ============================================================================

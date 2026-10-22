@@ -3,7 +3,7 @@
  * (brightness, contrast, saturation, hue, exposure, temperature)
  */
 
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { RotateCcw } from 'lucide-react';
 import type { ImageAdjustments as ImageAdjustmentsType } from '@quar/types';
 import styles from './ImageAdjustments.module.css';
@@ -130,6 +130,9 @@ interface AdjustmentSliderProps {
 
 function AdjustmentSlider({ def, value, onChange, onReset }: AdjustmentSliderProps) {
   const isModified = value !== def.default;
+  // What's typed in the value field while it's being edited, so a value part
+  // way through being typed ("-", "-.") stays in the field until it parses
+  const [draft, setDraft] = useState<string | null>(null);
 
   const handleSliderChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -141,6 +144,7 @@ function AdjustmentSlider({ def, value, onChange, onReset }: AdjustmentSliderPro
   const handleInputChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const cleaned = e.target.value.replace(/[^-\d.]/g, '');
+      setDraft(cleaned);
       const num = parseFloat(cleaned);
       if (!isNaN(num)) {
         const clamped = Math.max(def.min, Math.min(def.max, num));
@@ -152,8 +156,12 @@ function AdjustmentSlider({ def, value, onChange, onReset }: AdjustmentSliderPro
 
   const handleInputKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLInputElement>) => {
-      if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+      if (e.key === 'Enter') {
+        // Show the value as it was taken (clamped), or as it was if none was typed
+        setDraft(null);
+      } else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
         e.preventDefault();
+        setDraft(null);
         const step = e.shiftKey ? 10 : 1;
         const delta = e.key === 'ArrowUp' ? step : -step;
         const next = Math.max(def.min, Math.min(def.max, value + delta));
@@ -177,7 +185,8 @@ function AdjustmentSlider({ def, value, onChange, onReset }: AdjustmentSliderPro
     return { left: '0%', width: `${pct}%` };
   }, [def, value]);
 
-  const displayValue = def.suffix ? `${Math.round(value)}${def.suffix}` : String(Math.round(value));
+  const displayValue =
+    draft ?? (def.suffix ? `${Math.round(value)}${def.suffix}` : String(Math.round(value)));
 
   return (
     <div
@@ -207,6 +216,7 @@ function AdjustmentSlider({ def, value, onChange, onReset }: AdjustmentSliderPro
         value={displayValue}
         onChange={handleInputChange}
         onKeyDown={handleInputKeyDown}
+        onBlur={() => setDraft(null)}
         aria-label={`${def.label} value`}
         data-testid={`adjustment-value-${def.key}`}
       />
