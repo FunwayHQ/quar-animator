@@ -494,6 +494,8 @@ export class SceneGraph {
     // subtrees are sanitized too. For a well-formed file this is a no-op.
     const visited = new Set<string>();
     const queue: string[] = [];
+    // The final root list: each root once, in file order, then the promoted ones
+    const rootIds: string[] = [];
     let qi = 0;
     const enqueueRoot = (id: string): void => {
       const n = newNodes.get(id);
@@ -501,6 +503,7 @@ export class SceneGraph {
       n.parent = null;
       visited.add(id);
       queue.push(id);
+      rootIds.push(id);
     };
     const processQueue = (): void => {
       while (qi < queue.length) {
@@ -521,16 +524,28 @@ export class SceneGraph {
     };
     for (const id of validRootIds) enqueueRoot(id);
     processQueue();
+    // A node no root reaches (its parent is missing, or doesn't list it)
+    // becomes a root itself, so it shows in the Layers panel instead of
+    // hiding in the file and being saved again forever. Promote its topmost
+    // unreached ancestor so a stray group keeps its layers.
     for (const [id] of newNodes) {
-      if (!visited.has(id)) {
-        enqueueRoot(id);
+      while (!visited.has(id)) {
+        let topId = id;
+        const climbed = new Set([id]);
+        let parentId = newNodes.get(id)?.parent;
+        while (parentId && !visited.has(parentId) && !climbed.has(parentId)) {
+          climbed.add(parentId);
+          topId = parentId;
+          parentId = newNodes.get(parentId)?.parent;
+        }
+        enqueueRoot(topId);
         processQueue();
       }
     }
 
     // Atomic swap — only after successful parsing
     this.nodes = newNodes;
-    this.rootNodeIds = validRootIds;
+    this.rootNodeIds = rootIds;
     this.worldTransformCache.clear();
 
     // No per-node nodeRemoved events fire for the replaced nodes; notify

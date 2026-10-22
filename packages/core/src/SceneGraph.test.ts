@@ -811,6 +811,66 @@ describe('SceneGraph', () => {
 
       expect(sceneGraph.getNode('A')!.children).toEqual([]);
     });
+
+    // Every node left in the graph must be reachable from a root, or it is
+    // never drawn or listed but still saved with the file every time
+    const unreachableIds = (): string[] => {
+      const reached = new Set<string>();
+      sceneGraph.traverse((node) => {
+        reached.add(node.id);
+      });
+      return Array.from(sceneGraph.getNodes(), (node) => node.id).filter((id) => !reached.has(id));
+    };
+
+    it('makes a node whose parent is missing a root, and saves it as one', () => {
+      const a = createGroupNode('A', 'A');
+      const orphan = createGroupNode('orphan', 'Orphan');
+      orphan.parent = 'ghost';
+
+      sceneGraph.fromJSON({ nodes: [a, orphan], rootNodeIds: ['A'] });
+
+      expect(sceneGraph.getNode('orphan')!.parent).toBeNull();
+      expect(sceneGraph.getRootNodes().map((node) => node.id)).toEqual(['A', 'orphan']);
+      expect(sceneGraph.toJSON().rootNodeIds).toEqual(['A', 'orphan']);
+      expect(unreachableIds()).toEqual([]);
+    });
+
+    it('keeps an unreachable group whole, whatever order its nodes are listed in', () => {
+      const a = createGroupNode('A', 'A');
+      const child = createGroupNode('child', 'Child');
+      const group = createGroupNode('group', 'Group');
+      group.parent = 'ghost';
+      group.children = ['child'];
+      child.parent = 'group';
+
+      // The child comes before its group in the file
+      sceneGraph.fromJSON({ nodes: [a, child, group], rootNodeIds: ['A'] });
+
+      expect(sceneGraph.getRootNodes().map((node) => node.id)).toEqual(['A', 'group']);
+      expect(sceneGraph.getNode('group')!.children).toEqual(['child']);
+      expect(sceneGraph.getNode('child')!.parent).toBe('group');
+      expect(unreachableIds()).toEqual([]);
+    });
+
+    it('makes a root of a node its parent does not list', () => {
+      const group = createGroupNode('group', 'Group');
+      const stray = createGroupNode('stray', 'Stray');
+      stray.parent = 'group';
+
+      sceneGraph.fromJSON({ nodes: [stray, group], rootNodeIds: ['group'] });
+
+      expect(sceneGraph.getRootNodes().map((node) => node.id)).toEqual(['group', 'stray']);
+      expect(sceneGraph.getNode('stray')!.parent).toBeNull();
+      expect(unreachableIds()).toEqual([]);
+    });
+
+    it('lists a root only once', () => {
+      const a = createGroupNode('A', 'A');
+
+      sceneGraph.fromJSON({ nodes: [a], rootNodeIds: ['A', 'A'] });
+
+      expect(sceneGraph.getRootNodes()).toHaveLength(1);
+    });
   });
 
   // ==========================================================================
