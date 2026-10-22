@@ -9,7 +9,7 @@
 import { useRef, useCallback, useState, useEffect, useMemo } from 'react';
 import { useEditorStore } from '../../stores/editorStore';
 import { useSceneGraph } from '../../contexts/SceneGraphContext';
-import type { PropertyTrack } from '@quar/types';
+import type { PropertyTrack, Timeline } from '@quar/types';
 import {
   screenToGraph,
   findNearestKeyframe,
@@ -49,6 +49,21 @@ type DragMode =
     }
   | { type: 'pan'; startX: number; startY: number; startOffsetX: number; startOffsetY: number }
   | { type: 'marquee'; startX: number; startY: number; currentX: number; currentY: number };
+
+/**
+ * Each animated property's color, by its place among all the timeline's
+ * animated properties. The curves and the property list both use it, so a
+ * property keeps one color whatever is selected or hidden.
+ */
+function trackColorIndices(timeline: Timeline): Map<string, number> {
+  const indices = new Map<string, number>();
+  for (const track of timeline.tracks) {
+    if (track.keyframes.length === 0) continue;
+    const trackId = `${track.nodeId}:${track.property}`;
+    if (!indices.has(trackId)) indices.set(trackId, indices.size);
+  }
+  return indices;
+}
 
 export function GraphEditor() {
   const sceneGraph = useSceneGraph();
@@ -90,35 +105,32 @@ export function GraphEditor() {
     return map;
   }, [sceneGraph]);
 
+  const colorIndices = useMemo(() => trackColorIndices(timeline), [timeline]);
+
   // Filter tracks: only numeric tracks with keyframes, optionally filtered by visibility
   const visibleTrackData = useMemo(() => {
     const result: Array<{ track: PropertyTrack<number>; globalIndex: number }> = [];
-    let globalIndex = 0;
 
     for (const track of timeline.tracks) {
       if (track.keyframes.length === 0) continue;
       // Only show tracks for selected nodes (or all if none selected)
-      if (selectedNodeIds.size > 0 && !selectedNodeIds.has(track.nodeId)) {
-        globalIndex++;
-        continue;
-      }
+      if (selectedNodeIds.size > 0 && !selectedNodeIds.has(track.nodeId)) continue;
 
       const trackId = `${track.nodeId}:${track.property}`;
-      if (graphVisibleTracks.length > 0 && !graphVisibleTracks.includes(trackId)) {
-        globalIndex++;
-        continue;
-      }
+      if (graphVisibleTracks.length > 0 && !graphVisibleTracks.includes(trackId)) continue;
 
       // Only include numeric tracks
       const firstValue = track.keyframes[0]?.value;
       if (typeof firstValue === 'number') {
-        result.push({ track: track as PropertyTrack<number>, globalIndex });
+        result.push({
+          track: track as PropertyTrack<number>,
+          globalIndex: colorIndices.get(trackId) ?? 0,
+        });
       }
-      globalIndex++;
     }
 
     return result;
-  }, [timeline, selectedNodeIds, graphVisibleTracks]);
+  }, [timeline, selectedNodeIds, graphVisibleTracks, colorIndices]);
 
   // Auto-fit view on first render / when tracks change
   const hasFitted = useRef(false);
@@ -629,6 +641,7 @@ export function GraphEditor() {
         selectedNodeIds={selectedNodeIds}
         visibleTracks={graphVisibleTracks}
         nodeNames={nodeNames}
+        colorIndices={colorIndices}
         onToggleTrack={toggleGraphTrackVisibility}
       />
       {/* Focusable so it can take Delete and the arrow keys. jsx-a11y doesn't

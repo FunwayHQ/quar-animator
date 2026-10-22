@@ -12,6 +12,8 @@ interface GraphEditorPropertyListProps {
   selectedNodeIds: Set<string>;
   visibleTracks: string[];
   nodeNames: Map<string, string>;
+  /** Each property's color index ("nodeId:property"), shared with its curve. */
+  colorIndices: Map<string, number>;
   onToggleTrack: (trackId: string) => void;
 }
 
@@ -28,14 +30,14 @@ export function GraphEditorPropertyList({
   selectedNodeIds,
   visibleTracks,
   nodeNames,
+  colorIndices,
   onToggleTrack,
 }: GraphEditorPropertyListProps) {
   // Group tracks by node
   const tracksByNode = new Map<
     string,
-    Array<{ trackId: string; property: string; globalIndex: number }>
+    Array<{ trackId: string; property: string; colorIndex: number }>
   >();
-  let globalIndex = 0;
 
   for (const track of timeline.tracks) {
     if (track.keyframes.length === 0) continue;
@@ -47,12 +49,12 @@ export function GraphEditorPropertyList({
       nodeTracks = [];
       tracksByNode.set(track.nodeId, nodeTracks);
     }
+    const trackId = `${track.nodeId}:${track.property}`;
     nodeTracks.push({
-      trackId: `${track.nodeId}:${track.property}`,
+      trackId,
       property: track.property,
-      globalIndex,
+      colorIndex: colorIndices.get(trackId) ?? 0,
     });
-    globalIndex++;
   }
 
   if (tracksByNode.size === 0) {
@@ -72,9 +74,9 @@ export function GraphEditorPropertyList({
       {Array.from(tracksByNode.entries()).map(([nodeId, tracks]) => (
         <div key={nodeId}>
           <div className={styles.propertyNode}>{nodeNames.get(nodeId) ?? nodeId}</div>
-          {tracks.map(({ trackId, property, globalIndex: idx }) => {
+          {tracks.map(({ trackId, property, colorIndex }) => {
             const isVisible = visibleTracks.length === 0 || visibleTracks.includes(trackId);
-            const color = getTrackColor(idx);
+            const color = getTrackColor(colorIndex);
             return (
               <div
                 key={trackId}

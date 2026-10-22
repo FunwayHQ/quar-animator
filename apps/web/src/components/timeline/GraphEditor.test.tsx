@@ -163,6 +163,47 @@ describe('GraphEditor', () => {
     });
   });
 
+  describe('colors', () => {
+    /** The same color as jsdom writes it into an inline style. */
+    function rgb(hex: string) {
+      const [r, g, b] = [1, 3, 5].map((at) => Number.parseInt(hex.slice(at, at + 2), 16));
+      return `rgb(${r}, ${g}, ${b})`;
+    }
+
+    function colorsShown(view: ReturnType<typeof renderGraphEditor>) {
+      const curves = [
+        ...view.container.querySelectorAll('[data-testid="graph-editor-curves"] path'),
+      ];
+      const dots = [
+        ...view.container.querySelectorAll<HTMLElement>(
+          '[data-testid="graph-property-list"] [class*="propertyDot"]'
+        ),
+      ];
+      return {
+        curves: curves.map((path) => rgb(path.getAttribute('stroke') ?? '')),
+        dots: dots.map((dot) => dot.style.backgroundColor),
+      };
+    }
+
+    it('draws each curve in the color of its property in the list, whatever is selected', () => {
+      const tl = setupTimelineWithKeyframes();
+      const mgr = new KeyframeManager(tl);
+      mgr.addKeyframe('node2', 'transform.rotation', 0, 0, 'linear');
+      mgr.addKeyframe('node2', 'transform.rotation', 30, 90, 'linear');
+      useEditorStore.setState({ timeline: tl });
+      const everything = renderGraphEditor();
+      const all = colorsShown(everything);
+      everything.unmount();
+      expect(all.curves).toEqual(all.dots);
+      expect(new Set(all.dots).size).toBe(3);
+      const rotationColor = all.dots[2];
+
+      useEditorStore.setState({ selectedNodeIds: new Set(['node2']) });
+      const selected = colorsShown(renderGraphEditor());
+      expect(selected).toEqual({ curves: [rotationColor], dots: [rotationColor] });
+    });
+  });
+
   it('updates graph view transform', () => {
     useEditorStore.getState().setGraphViewTransform({ scaleX: 20 });
     expect(useEditorStore.getState().graphViewTransform.scaleX).toBe(20);
