@@ -7,7 +7,8 @@ import type { SceneGraph } from '@quar/core';
 import type { RectangleNode, EllipseNode, GroupNode, ArtboardNode, Node } from '@quar/types';
 import { LayerPanel, computeInsertIndex, dropPositionAt, nodeTypeIcon } from './LayerPanel';
 import { useEditorStore } from '../../stores/editorStore';
-import type { ReactNode } from 'react';
+import { Profiler, type ReactNode } from 'react';
+import { poseScene } from '../../stores/scenePosing';
 
 // ============================================================================
 // Test Helpers
@@ -155,6 +156,40 @@ describe('LayerPanel', () => {
     });
 
     expect(screen.getByText('Loaded Rectangle')).toBeInTheDocument();
+  });
+
+  it('isn’t redrawn for the animation being shown — only for real changes', () => {
+    let sg: SceneGraph | null = null;
+    let renders = 0;
+    render(
+      <SceneGraphProvider>
+        <SceneGraphCapture onCapture={(s) => (sg = s)} />
+        <Profiler id="layers" onRender={() => renders++}>
+          <LayerPanel />
+        </Profiler>
+      </SceneGraphProvider>
+    );
+    act(() => {
+      sg!.addNode(createTestRect('rect1', 'Rectangle 1'));
+    });
+    const before = renders;
+    // Playback posing it, frame after frame: nothing here changes
+    act(() => {
+      for (let frame = 0; frame < 10; frame++) {
+        poseScene(() =>
+          sg!.updateNode('rect1', {
+            transform: { ...createDefaultTransform(), position: { x: frame, y: 0 } },
+          })
+        );
+      }
+    });
+    expect(renders).toBe(before);
+    // Renamed: redrawn
+    act(() => {
+      sg!.updateNode('rect1', { name: 'Renamed' });
+    });
+    expect(renders).toBeGreaterThan(before);
+    expect(screen.getByText('Renamed')).toBeInTheDocument();
   });
 
   it('updates when nodes are added or removed', () => {

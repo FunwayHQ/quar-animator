@@ -23,6 +23,7 @@ import {
 import type { Node, GroupNode, MaskMode } from '@quar/types';
 import { useSceneGraph } from '../../contexts/SceneGraphContext';
 import { useEditorStore, getMaskSelection } from '../../stores/editorStore';
+import { isPosingScene } from '../../stores/scenePosing';
 import { ContextMenu } from '../common/ContextMenu';
 import type { ContextMenuEntry } from '../common/ContextMenu';
 import styles from './LayerPanel.module.css';
@@ -486,7 +487,12 @@ export function LayerPanel() {
   const didDragRef = useRef(false);
 
   useEffect(() => {
-    const increment = () => setVersion((v) => v + 1);
+    // Showing the animation (playback, scrubbing, IK) changes only animated
+    // values — never a name, an icon or a toggle shown here — so the list
+    // isn't redrawn for it, frame after frame
+    const increment = () => {
+      if (!isPosingScene()) setVersion((v) => v + 1);
+    };
     // A loaded project replaces the whole graph at once (graphReplaced)
     const off = (
       ['nodeAdded', 'nodeRemoved', 'nodeChanged', 'nodeMoved', 'graphReplaced'] as const

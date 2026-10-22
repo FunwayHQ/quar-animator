@@ -1,10 +1,11 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { act, fireEvent } from '@testing-library/react';
 import { render, screen } from '../../test/utils';
 import userEvent from '@testing-library/user-event';
 import { Timeline } from './Timeline';
 import { SceneGraphProvider, useSceneGraph } from '../../contexts/SceneGraphContext';
 import { useEditorStore } from '../../stores/editorStore';
+import { poseScene } from '../../stores/scenePosing';
 import { DEFAULT_FILL, DEFAULT_STROKE } from '../../stores/editorStore';
 import { createTimeline, createTrack, addKeyframe } from '@quar/animation';
 import type { SceneGraph } from '@quar/core';
@@ -823,6 +824,51 @@ describe('Timeline', () => {
       renderTimeline();
 
       expect(screen.queryByTestId('timeline-resize-handle')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('while the animation plays', () => {
+    it('moves the playhead, timecode and scrubber with the frame', () => {
+      useEditorStore.setState({
+        timelineExpanded: true,
+        timelineDuration: 100,
+        frameRate: 25,
+        currentFrame: 0,
+      });
+      renderTimeline();
+      act(() => useEditorStore.setState({ currentFrame: 50 }));
+      expect(screen.getAllByText('00:02:00').length).toBeGreaterThan(0);
+      expect(screen.getByTestId('timeline-ruler').getAttribute('aria-valuenow')).toBe('50');
+      const playheads = document.querySelectorAll<HTMLElement>('[style*="left: 50%"]');
+      expect(playheads.length).toBeGreaterThanOrEqual(2);
+    });
+
+    it('doesn’t rebuild its layer rows for frames being shown', () => {
+      let graph: SceneGraph | undefined;
+      function CaptureGraph() {
+        graph = useSceneGraph();
+        return null;
+      }
+      useEditorStore.setState({ timelineExpanded: true });
+      render(
+        <SceneGraphProvider>
+          <CaptureGraph />
+          <Timeline />
+        </SceneGraphProvider>
+      );
+      act(() => {
+        graph!.addNode({ id: 'ball', name: 'Ball', children: [] } as unknown as Node);
+      });
+      const roots = vi.spyOn(graph!, 'getRootNodes');
+      act(() => {
+        for (let frame = 0; frame < 10; frame++) {
+          poseScene(() => graph!.updateNode('ball', { opacity: frame / 10 } as Partial<Node>));
+        }
+      });
+      expect(roots).not.toHaveBeenCalled();
+      act(() => graph!.updateNode('ball', { name: 'Big ball' } as Partial<Node>));
+      expect(roots).toHaveBeenCalled();
+      expect(screen.getByText('Big ball')).toBeInTheDocument();
     });
   });
 });

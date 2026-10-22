@@ -1,6 +1,7 @@
 import { useRef, useCallback, useState, useEffect, useMemo, useLayoutEffect } from 'react';
 import { useSceneGraph } from '../../contexts/SceneGraphContext';
 import { useEditorStore } from '../../stores/editorStore';
+import { isPosingScene } from '../../stores/scenePosing';
 import { formatTimecode, getAnimationSpans, getTracksByNode } from '@quar/animation';
 import type { AnimationSpan } from '@quar/animation';
 import { getRulerScale } from './timelineRuler';
@@ -62,9 +63,24 @@ export interface TimelineProps {
   };
 }
 
+/**
+ * The frame on screen as a timecode. It subscribes to the frame on its own,
+ * so playing doesn't redraw the rest of the timeline every frame.
+ */
+function CurrentTimecode({ className }: { className?: string }) {
+  const currentFrame = useEditorStore((s) => s.currentFrame);
+  const frameRate = useEditorStore((s) => s.frameRate);
+  return <span className={className}>{formatTimecode(currentFrame, frameRate)}</span>;
+}
+
+/** A playhead mark at the frame on screen (on its own, like CurrentTimecode). */
+function PlayheadMark({ className, duration }: { className?: string; duration: number }) {
+  const currentFrame = useEditorStore((s) => s.currentFrame);
+  return <div className={className} style={{ left: `${(currentFrame / duration) * 100}%` }} />;
+}
+
 export function Timeline({ playback }: TimelineProps = {}) {
   const sceneGraph = useSceneGraph();
-  const currentFrame = useEditorStore((s) => s.currentFrame);
   const isPlaying = useEditorStore((s) => s.isPlaying);
   const isLooping = useEditorStore((s) => s.isLooping);
   const duration = useEditorStore((s) => s.timelineDuration);
@@ -248,12 +264,23 @@ export function Timeline({ playback }: TimelineProps = {}) {
     if (!viewport) return;
     const viewportWidth = viewport.clientWidth;
     const contentWidth = viewportWidth * (zoomPercent / 100);
-    const playheadX = (currentFrame / duration) * contentWidth;
+    const playheadX = (useEditorStore.getState().currentFrame / duration) * contentWidth;
     viewport.scrollLeft = Math.max(
       0,
       Math.min(contentWidth - viewportWidth, playheadX - viewportWidth / 2)
     );
-  }, [zoomPercent, currentFrame, duration]);
+  }, [zoomPercent, duration]);
+
+  // The scrubber says where the playhead is, without the timeline redrawing
+  useEffect(
+    () =>
+      useEditorStore.subscribe((state, previous) => {
+        if (state.currentFrame !== previous.currentFrame) {
+          rulerRef.current?.setAttribute('aria-valuenow', String(state.currentFrame));
+        }
+      }),
+    []
+  );
 
   useEffect(() => {
     setDurationDraft(String(duration));
@@ -389,10 +416,15 @@ export function Timeline({ playback }: TimelineProps = {}) {
       setNodes(rows);
     };
     update();
+    // Showing the animation changes no layer's name or place: the rows aren't
+    // rebuilt for it, frame after frame (see isPosingScene)
+    const changed = () => {
+      if (!isPosingScene()) update();
+    };
     // A loaded project replaces the whole graph at once (graphReplaced)
     const off = (
       ['nodeAdded', 'nodeRemoved', 'nodeMoved', 'nodeChanged', 'graphReplaced'] as const
-    ).map((type) => sceneGraph.on(type, update));
+    ).map((type) => sceneGraph.on(type, changed));
     return () => off.forEach((unsubscribe) => unsubscribe());
   }, [sceneGraph]);
 
@@ -553,10 +585,10 @@ export function Timeline({ playback }: TimelineProps = {}) {
         if (delta > 0) playback.nextFrame();
         else playback.prevFrame();
       } else {
-        setCurrentFrame(currentFrame + delta);
+        setCurrentFrame(useEditorStore.getState().currentFrame + delta);
       }
     },
-    [playback, currentFrame, setCurrentFrame]
+    [playback, setCurrentFrame]
   );
 
   const toggleLoop = useCallback(() => {
@@ -758,12 +790,12 @@ export function Timeline({ playback }: TimelineProps = {}) {
       setContextMenu({
         x: e.clientX,
         y: e.clientY,
-        frame: currentFrame,
+        frame: useEditorStore.getState().currentFrame,
         layerNodeId: nodeId,
         layerMenu: true,
       });
     },
-    [selectedNodeIds, setSelection, currentFrame]
+    [selectedNodeIds, setSelection]
   );
 
   const contextMenuItems = useCallback((): ContextMenuEntry[] => {
@@ -1064,7 +1096,7 @@ export function Timeline({ playback }: TimelineProps = {}) {
           </button>
 
           <div className={styles.timeDisplay}>
-            <span className={styles.currentTime}>{formatTimecode(currentFrame, frameRate)}</span>
+            <CurrentTimecode className={styles.currentTime} />
             <span className={styles.separator}>/</span>
             <span className={styles.totalTime}>{formatTimecode(duration, frameRate)}</span>
           </div>
@@ -1250,7 +1282,7 @@ export function Timeline({ playback }: TimelineProps = {}) {
         </div>
 
         <div className={styles.timeDisplay}>
-          <span className={styles.currentTime}>{formatTimecode(currentFrame, frameRate)}</span>
+          <CurrentTimecode className={styles.currentTime} />
           <span className={styles.separator}>/</span>
           <span className={styles.totalTime}>{formatTimecode(duration, frameRate)}</span>
         </div>
@@ -1437,7 +1469,7 @@ export function Timeline({ playback }: TimelineProps = {}) {
                 onPointerCancel={handleRulerPointerUp}
                 onContextMenu={handleTimelineContextMenu}
                 role="slider"
-                aria-valuenow={currentFrame}
+                aria-valuenow={useEditorStore.getState().currentFrame}
                 aria-valuemin={0}
                 aria-valuemax={duration - 1}
                 aria-label="Timeline scrubber. Drag to select a looping range."
@@ -1509,10 +1541,7 @@ export function Timeline({ playback }: TimelineProps = {}) {
                   </>
                 )}
                 {/* Playhead */}
-                <div
-                  className={styles.playhead}
-                  style={{ left: `${(currentFrame / duration) * 100}%` }}
-                />
+                <PlayheadMark className={styles.playhead} duration={duration} />
               </div>
 
               {/* Tracks */}
@@ -1607,10 +1636,7 @@ export function Timeline({ playback }: TimelineProps = {}) {
               )}
 
               {/* Playhead line shares the timeline content width with the ruler. */}
-              <div
-                className={styles.playheadLine}
-                style={{ left: `${(currentFrame / duration) * 100}%` }}
-              />
+              <PlayheadMark className={styles.playheadLine} duration={duration} />
             </div>
           </div>
         </div>
