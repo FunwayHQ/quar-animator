@@ -4073,12 +4073,12 @@ export class ShapeRenderer {
     this.currentVPArray = vpArray;
     gl.uniformMatrix3fv(this.program.uniforms.u_viewProjection ?? null, false, vpArray);
 
-    // Create world matrix from node transform
+    // Create world matrix from node transform (the anchor is a normalized
+    // fraction and positions shapes itself — never part of the matrix)
     const worldMatrix = mat3.compose(
       node.transform.position,
       node.transform.rotation,
-      node.transform.scale,
-      node.transform.anchor
+      node.transform.scale
     );
 
     // Multiply ghost alpha by node's own opacity for correct visual representation

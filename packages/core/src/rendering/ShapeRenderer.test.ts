@@ -998,6 +998,20 @@ describe('ShapeRenderer', () => {
   // ==========================================================================
 
   describe('ghost rendering', () => {
+    it('places a ghost where its layer is drawn (the anchor is not in the matrix)', () => {
+      const rect = {
+        ...createRectangleNode('rect1', 100, 50),
+        transform: { ...createDefaultTransform(), position: { x: 10, y: 20 } },
+      };
+      vi.clearAllMocks();
+      shapeRenderer.renderGhostNode(rect, mat3.identity(), 0.5, [1, 0, 0]);
+      const models = vi
+        .mocked(gl.uniformMatrix3fv)
+        .mock.calls.map((call) => Array.from(call[2] as Float32Array));
+      // Column-major: the translation is entries 6 and 7
+      expect(models.some((m) => m[6] === 10 && m[7] === 20)).toBe(true);
+    });
+
     it('renderGhostNode should render a rectangle without error', () => {
       const rect = createRectangleNode('rect1', 100, 50);
       const vpMatrix = mat3.identity();
