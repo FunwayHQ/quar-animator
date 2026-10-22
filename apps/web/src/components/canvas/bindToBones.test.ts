@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { SceneGraph } from '@quar/core';
 import type { Node } from '@quar/types';
-import { bindLayersToBones, bindableLayers } from './bindToBones';
+import { bindLayersToBones, bindableLayers, skinBinding } from './bindToBones';
 
 const transform = () => ({
   position: { x: 0, y: 0 },
@@ -79,5 +79,41 @@ describe('bindLayersToBones', () => {
     bindLayersToBones(graph, ['b1', 'missing'], () => null, bind);
     expect(bind).not.toHaveBeenCalled();
     expect(bindableLayers(graph, graph.getNode('nested')!)).toEqual([]);
+  });
+});
+
+describe('skinBinding', () => {
+  // Two bones end to end along X: b1 from 0 to 50, b2 from 50 to 100
+  function arm(): SceneGraph {
+    const graph = new SceneGraph();
+    graph.addNode(bone('b1'));
+    const b2 = bone('b2');
+    b2.transform.position = { x: 50, y: 0 };
+    graph.addNode(b2, 'b1');
+    graph.addNode({ ...rect('sleeve'), width: 100, height: 20 } as unknown as Node);
+    return graph;
+  }
+  // The sleeve's bind mesh: a vertex near each end, one at the joint
+  const mesh = new Float32Array([5, 0, 50, 0, 95, 0]);
+
+  it('weights each vertex to the bones near it', () => {
+    const skin = skinBinding(arm(), 'sleeve', ['b1', 'b2'], mesh, { bendMesh: true })!;
+    expect(skin.vertexCount).toBe(3);
+    const top = (i: number) => skin.vertices[i]?.influences[0]?.boneId;
+    expect(top(0)).toBe('b1');
+    expect(top(2)).toBe('b2');
+    for (const vertex of skin.vertices) {
+      const total = vertex.influences.reduce((sum, w) => sum + w.weight, 0);
+      expect(total).toBeCloseTo(1, 5);
+    }
+    // What the weights belong to, and how the shape bends
+    expect(skin.bindVertices).toEqual([5, 0, 50, 0, 95, 0]);
+    expect(skin.bendMesh).toBe(true);
+    expect(Object.keys(skin.inverseBindMatrices).sort()).toEqual(['b1', 'b2']);
+  });
+
+  it('binds nothing without bones or a node', () => {
+    expect(skinBinding(arm(), 'sleeve', [], mesh)).toBeNull();
+    expect(skinBinding(arm(), 'missing', ['b1'], mesh)).toBeNull();
   });
 });

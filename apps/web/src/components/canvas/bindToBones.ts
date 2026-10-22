@@ -3,7 +3,14 @@
  * context menu, so both bind with the mesh the renderer bends.
  */
 
-import type { Node } from '@quar/types';
+import type { Node, SkinData } from '@quar/types';
+import {
+  bindVertexPositions,
+  computeAutoWeights,
+  computeFKChain,
+  createSkinBinding,
+  type FKBoneState,
+} from '@quar/rigging';
 
 const BINDABLE_TYPES = new Set<string>(['rectangle', 'ellipse', 'polygon', 'path', 'image']);
 
@@ -54,4 +61,81 @@ export function bindLayersToBones<G extends BindGraph>(
       bind(graph, layer.id, boneIds, mesh?.vertices, { bendMesh: mesh?.bendMesh });
     }
   }
+}
+
+/** What binding needs of a scene graph: nodes and their world transforms. */
+export type SkinGraph = Parameters<typeof createSkinBinding>[3] &
+  Parameters<typeof computeFKChain>[1];
+
+/**
+ * A layer's binding to bones, weighted from where the bones are now — what
+ * Bind to Bones gives a layer (the editor's, and the cloud server's).
+ * `vertices` are the layer's bind mesh in its own space (`bendMesh`: its
+ * bending mesh); without them the vertices are guessed from the node's type.
+ * Null when there's nothing to bind.
+ */
+export function skinBinding(
+  graph: SkinGraph,
+  nodeId: string,
+  boneIds: string[],
+  vertices?: Float32Array,
+  options?: { bendMesh?: boolean }
+): SkinData | null {
+  const node = graph.getNode(nodeId);
+  if (!node || boneIds.length === 0) return null;
+
+  // The bind mesh's vertex count; without one, roughly the node's outline
+  let vertexCount: number;
+  if (vertices) {
+    vertexCount = vertices.length / 2;
+  } else {
+    vertexCount = 4; // default for rectangles
+    if (node.type === 'ellipse') vertexCount = 64;
+    else if (node.type === 'polygon')
+      vertexCount = node.sides * ((node.innerRadius ?? 0) > 0 ? 2 : 1);
+    else if (node.type === 'path') vertexCount = node.points.length || 4;
+  }
+
+  const skin = createSkinBinding(nodeId, boneIds, vertexCount, graph);
+  if (!skin) return null;
+
+  // Every bone's rest state, chain by chain from each root bone
+  const states: FKBoneState[] = [];
+  const roots = new Set<string>();
+  for (const boneId of boneIds) {
+    let rootId = boneId;
+    let boneNode = graph.getNode(rootId);
+    while (boneNode?.parent) {
+      const parent = graph.getNode(boneNode.parent);
+      if (!parent || parent.type !== 'bone') break;
+      rootId = boneNode.parent;
+      boneNode = parent;
+    }
+    if (!roots.has(rootId)) {
+      roots.add(rootId);
+      states.push(...computeFKChain(rootId, graph));
+    }
+  }
+
+  // The vertices in world space, where the bones are, to weight them by
+  const meshWorld = graph.getWorldTransform(nodeId);
+  const positions = new Float32Array(vertexCount * 2);
+  for (let i = 0; i < vertexCount; i++) {
+    if (vertices) {
+      const lx = vertices[i * 2] ?? 0;
+      const ly = vertices[i * 2 + 1] ?? 0;
+      positions[i * 2] = meshWorld.a * lx + meshWorld.c * ly + meshWorld.tx;
+      positions[i * 2 + 1] = meshWorld.b * lx + meshWorld.d * ly + meshWorld.ty;
+    } else {
+      const t = vertexCount > 1 ? i / (vertexCount - 1) : 0.5;
+      positions[i * 2] = meshWorld.tx + (t - 0.5) * 100;
+      positions[i * 2 + 1] = meshWorld.ty;
+    }
+  }
+
+  const weighted = computeAutoWeights(skin, positions, states);
+  // The geometry the weights belong to, so they can follow later shape edits
+  if (vertices) weighted.bindVertices = bindVertexPositions(vertices);
+  if (options?.bendMesh) weighted.bendMesh = true;
+  return weighted;
 }

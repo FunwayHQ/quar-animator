@@ -108,16 +108,9 @@ import {
   mat3,
 } from '@quar/core';
 import type { OnionSkinSettings, BooleanOp } from '@quar/core';
-import {
-  createSkinBinding,
-  computeAutoWeights,
-  computeFKChain,
-  bindVertexPositions,
-  applySkinSnapshots,
-  DEFAULT_WIND_SETTINGS,
-} from '@quar/rigging';
-import type { FKBoneState } from '@quar/rigging';
+import { applySkinSnapshots, DEFAULT_WIND_SETTINGS } from '@quar/rigging';
 import { toast } from '../components/common/Toast';
+import { skinBinding } from '../components/canvas/bindToBones';
 
 // ============================================================================
 // SceneGraph Interface (subset used by store operations)
@@ -1411,73 +1404,8 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     if (!node) return;
     if (boneIds.length === 0) return;
     get().pushUndo(sceneGraph);
-
-    // Use actual tessellated vertex count if available (from ShapeRenderer geometry cache).
-    // This is critical for path nodes where tessellation subdivides bezier curves into
-    // many more vertices than the control point count.
-    let vertexCount: number;
-    if (tessellatedVertices) {
-      vertexCount = tessellatedVertices.length / 2;
-    } else {
-      // Fallback: approximate from node geometry
-      vertexCount = 4; // default for rectangles
-      if (node.type === 'ellipse') vertexCount = 64;
-      else if (node.type === 'polygon')
-        vertexCount = (node as any).sides * (((node as any).innerRadius ?? 0) > 0 ? 2 : 1);
-      else if (node.type === 'path') vertexCount = (node as any).points?.length ?? 4;
-    }
-
-    const skin = createSkinBinding(nodeId, boneIds, vertexCount, sceneGraph);
-    if (!skin) return;
-
-    // Auto-weight based on bone positions
-    // Compute bone states for all bones
-    const allStates: FKBoneState[] = [];
-    const rootBones = new Set<string>();
-    for (const boneId of boneIds) {
-      // Walk to root bone
-      let rootId = boneId;
-      let boneNode = sceneGraph.getNode(rootId);
-      while (boneNode && boneNode.parent) {
-        const parent = sceneGraph.getNode(boneNode.parent);
-        if (!parent || parent.type !== 'bone') break;
-        rootId = boneNode.parent;
-        boneNode = parent;
-      }
-      if (!rootBones.has(rootId)) {
-        rootBones.add(rootId);
-        allStates.push(...computeFKChain(rootId, sceneGraph));
-      }
-    }
-
-    // Use actual tessellated vertex positions (in local space, need world transform)
-    // or generate approximate positions for auto-weighting
-    let positions: Float32Array;
-    if (tessellatedVertices) {
-      // Transform tessellated vertices (local space) to world space for auto-weighting
-      const meshWorld = sceneGraph.getWorldTransform(nodeId);
-      positions = new Float32Array(tessellatedVertices.length);
-      for (let i = 0; i < vertexCount; i++) {
-        const lx = tessellatedVertices[i * 2] ?? 0;
-        const ly = tessellatedVertices[i * 2 + 1] ?? 0;
-        positions[i * 2] = meshWorld.a * lx + meshWorld.c * ly + meshWorld.tx;
-        positions[i * 2 + 1] = meshWorld.b * lx + meshWorld.d * ly + meshWorld.ty;
-      }
-    } else {
-      const meshWorld = sceneGraph.getWorldTransform(nodeId);
-      positions = new Float32Array(vertexCount * 2);
-      for (let i = 0; i < vertexCount; i++) {
-        const t = vertexCount > 1 ? i / (vertexCount - 1) : 0.5;
-        positions[i * 2] = meshWorld.tx + (t - 0.5) * 100;
-        positions[i * 2 + 1] = meshWorld.ty;
-      }
-    }
-
-    const weighted = computeAutoWeights(skin, positions, allStates);
-    // The geometry the weights belong to, so they can follow later shape edits
-    if (tessellatedVertices) weighted.bindVertices = bindVertexPositions(tessellatedVertices);
-    if (options?.bendMesh) weighted.bendMesh = true;
-
+    const weighted = skinBinding(sceneGraph, nodeId, boneIds, tessellatedVertices, options);
+    if (!weighted) return;
     sceneGraph.updateNode(nodeId, { skinData: weighted } as any);
     set({ isDirty: true });
   },
