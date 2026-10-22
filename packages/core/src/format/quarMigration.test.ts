@@ -12,6 +12,7 @@ import {
 } from './quarMigration';
 import { encodeQuarBinary, decodeQuarBinary, QUAR_MAGIC, FORMAT_VERSION } from './quarFormat';
 import type { QuarFile } from './quarFormat';
+import v1Migration from './__fixtures__/v1-migration.json';
 
 // ============================================================================
 // Helpers
@@ -120,6 +121,20 @@ describe('quarMigration', () => {
 
       expect(v2.name).toBe('Legacy Project');
       expect(v2.createdAt).toBe('2024-01-01T00:00:00.000Z');
+    });
+
+    // The MCP tool (tools/quar-mcp, Python) migrates v1 files too: both are
+    // tested against the same fixture so they stay in agreement (F169)
+    it('migrates the shared fixture as the MCP tool does', () => {
+      const v2 = migrateV1ToV2(structuredClone(v1Migration.v1));
+      const [page, ...rest] = v2.pages as { id: string }[];
+
+      // The page id is made up by each migration
+      expect(rest).toHaveLength(0);
+      expect(v2.activePageId).toBe(page?.id);
+      expect({ ...v2, pages: [{ ...page, id: 'PAGE_ID' }], activePageId: 'PAGE_ID' }).toEqual(
+        v1Migration.v2
+      );
     });
   });
 

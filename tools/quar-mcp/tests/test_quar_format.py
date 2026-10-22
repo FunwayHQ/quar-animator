@@ -1,6 +1,10 @@
 """Tests for .quar binary format parser/writer."""
 
+import copy
 import json
+from pathlib import Path
+
+import pytest
 
 from app.quar_format import (
     decode_quar_binary,
@@ -8,6 +12,7 @@ from app.quar_format import (
     extract_image_buffers,
     is_quar_binary,
     migrate_project,
+    migrate_v1_to_v2,
     restore_image_buffers,
 )
 
@@ -122,6 +127,29 @@ def test_migrate_v1_to_v3():
     assert result["pages"][0]["sceneGraph"]["nodes"][0]["id"] == "n1"
     assert result["activePageId"] == "page_default"
     assert result["rigging"]["ikChains"] == [{"id": "ik1"}]
+
+
+# The v1 -> v2 migration exists in TypeScript too (packages/core quarMigration.ts);
+# both are tested against this fixture so they stay in agreement
+V1_MIGRATION_FIXTURE = (
+    Path(__file__).resolve().parents[3]
+    / "packages/core/src/format/__fixtures__/v1-migration.json"
+)
+
+
+def test_migrate_v1_to_v2_matches_the_typescript_migration():
+    if not V1_MIGRATION_FIXTURE.exists():
+        pytest.skip("shared fixture not available outside the repository")
+    fixture = json.loads(V1_MIGRATION_FIXTURE.read_text())
+
+    result = migrate_v1_to_v2(copy.deepcopy(fixture["v1"]))
+
+    # The page id is made up by each migration
+    page_id = result["pages"][0]["id"]
+    assert result["activePageId"] == page_id
+    result["pages"][0]["id"] = "PAGE_ID"
+    result["activePageId"] = "PAGE_ID"
+    assert result == fixture["v2"]
 
 
 def test_migrate_v2_to_v3():

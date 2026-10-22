@@ -28,6 +28,7 @@ import {
   DEFAULT_ONION_SKIN_SETTINGS,
   writeQuarFile,
   parseQuarFile,
+  migrateV1ToV2,
   mat3,
 } from '@quar/core';
 import type { Guide, PageData } from '../stores/editorStore';
@@ -393,25 +394,12 @@ function migrateSkinBindings(nodes: Node[]): void {
   }
 }
 
-function migrateV1ToV2(data: ProjectDataV1): ProjectDataV2 {
-  const pageId = `page-migrated-${Date.now()}`;
-  return {
-    version: '2.0',
-    name: data.name,
-    createdAt: data.createdAt,
-    updatedAt: data.updatedAt,
-    pages: [
-      {
-        id: pageId,
-        name: 'Page 1',
-        sceneGraph: data.sceneGraph,
-        timeline: data.timeline,
-      },
-    ],
-    activePageId: pageId,
-    settings: data.settings,
-    rigging: data.rigging,
-  };
+/**
+ * A v1.0 project as v2.0, by the migration .quar files get when opened
+ * (parseQuarFile, in @quar/core), so there is one copy of it to keep right.
+ */
+function migrateV1Project(data: ProjectDataV1): ProjectDataV2 {
+  return migrateV1ToV2({ ...data }) as unknown as ProjectDataV2;
 }
 
 /** A track that names the property it animates. */
@@ -474,7 +462,7 @@ export function deserializeProject(
   const v2 =
     data.version === '2.0' || data.version === '3.0'
       ? (data as ProjectDataV2)
-      : migrateV1ToV2(data);
+      : migrateV1Project(data);
 
   // Everything that can fail on a damaged file runs before the open project is
   // touched, so a file that can't be read leaves it as it was rather than half

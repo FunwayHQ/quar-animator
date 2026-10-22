@@ -47,7 +47,8 @@ export function migrateV1ToV2(data: Record<string, unknown>): Record<string, unk
     activePageId: pageId,
     settings: data.settings,
     rigging: data.rigging,
-    symbols: data.symbols,
+    // v1 had no symbols; an empty list, as the MCP tool's migration gives
+    symbols: data.symbols ?? [],
   };
 }
 

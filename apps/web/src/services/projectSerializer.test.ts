@@ -272,6 +272,36 @@ describe('ProjectSerializer', () => {
       expect(typeof appliedState.activePageId).toBe('string');
     });
 
+    it('migrates as .quar files are migrated when opened, keeping every field (F169)', () => {
+      const v1Data: ProjectDataV1 = {
+        version: '1.0',
+        name: 'Legacy',
+        createdAt: '2024-01-01',
+        updatedAt: '2024-01-01',
+        sceneGraph: { nodes: [makeTestNode('rect1')], rootNodeIds: ['rect1'] },
+        timeline: createTimeline({ duration: 300, frameRate: 30 }),
+        settings: {
+          timelineDuration: 300,
+          frameRate: 30,
+          autoKeyframe: false,
+          onionSkin: { ...DEFAULT_ONION_SKIN_SETTINGS },
+        },
+      };
+      // A v1 file can't hold symbols, but one written by hand or another tool might
+      const symbol = {
+        id: 'sym1',
+        name: 'Star',
+        sceneGraphJSON: { nodes: [], rootNodeIds: [] },
+      };
+
+      let appliedState: Record<string, unknown> = {};
+      deserializeProject({ ...v1Data, symbols: [symbol] }, new SceneGraph(), (state) => {
+        appliedState = state;
+      });
+
+      expect(appliedState.symbols).toEqual([symbol]);
+    });
+
     it('should migrate fill.* timeline tracks to fills.0.* on v1 projects', () => {
       const timeline = createTimeline({ duration: 300, frameRate: 30 });
       timeline.tracks = [

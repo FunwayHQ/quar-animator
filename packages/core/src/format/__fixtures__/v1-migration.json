@@ -1,0 +1,137 @@
+{
+  "description": "A v1.0 .quar project and the v2.0 project it migrates to. Shared by the TypeScript migration (quarMigration.test.ts) and the Python one in tools/quar-mcp (test_quar_format.py) so the two stay in agreement. The migrated page's id is made up by each migration, so tests compare it as PAGE_ID.",
+  "v1": {
+    "version": "1.0",
+    "name": "Legacy Project",
+    "createdAt": "2024-01-01T00:00:00.000Z",
+    "updatedAt": "2024-01-02T00:00:00.000Z",
+    "sceneGraph": {
+      "nodes": [
+        {
+          "id": "rect1",
+          "name": "Rectangle",
+          "type": "rectangle",
+          "parent": null,
+          "children": [],
+          "transform": {
+            "position": { "x": 10, "y": 20 },
+            "rotation": 0,
+            "scale": { "x": 1, "y": 1 },
+            "anchor": { "x": 0.5, "y": 0.5 },
+            "skew": { "x": 0, "y": 0 }
+          },
+          "visible": true,
+          "locked": false,
+          "opacity": 1,
+          "blendMode": "normal",
+          "width": 100,
+          "height": 50,
+          "cornerRadius": [0, 0, 0, 0],
+          "fills": [],
+          "strokes": []
+        }
+      ],
+      "rootNodeIds": ["rect1"]
+    },
+    "timeline": {
+      "id": "timeline-1",
+      "name": "Main Timeline",
+      "duration": 120,
+      "frameRate": 24,
+      "tracks": [],
+      "markers": []
+    },
+    "settings": {
+      "timelineDuration": 120,
+      "frameRate": 24,
+      "autoKeyframe": false,
+      "onionSkin": {
+        "enabled": false,
+        "beforeCount": 2,
+        "afterCount": 2,
+        "beforeColor": "#FF0000",
+        "afterColor": "#00FFFF",
+        "opacity": 0.3,
+        "falloff": 0.5,
+        "showDuringPlayback": false
+      }
+    },
+    "rigging": {
+      "ikChains": [{ "id": "ik1" }],
+      "smartBoneActions": [],
+      "dynamicChains": [],
+      "vitruvianControllers": []
+    }
+  },
+  "v2": {
+    "version": "2.0",
+    "name": "Legacy Project",
+    "createdAt": "2024-01-01T00:00:00.000Z",
+    "updatedAt": "2024-01-02T00:00:00.000Z",
+    "pages": [
+      {
+        "id": "PAGE_ID",
+        "name": "Page 1",
+        "sceneGraph": {
+          "nodes": [
+            {
+              "id": "rect1",
+              "name": "Rectangle",
+              "type": "rectangle",
+              "parent": null,
+              "children": [],
+              "transform": {
+                "position": { "x": 10, "y": 20 },
+                "rotation": 0,
+                "scale": { "x": 1, "y": 1 },
+                "anchor": { "x": 0.5, "y": 0.5 },
+                "skew": { "x": 0, "y": 0 }
+              },
+              "visible": true,
+              "locked": false,
+              "opacity": 1,
+              "blendMode": "normal",
+              "width": 100,
+              "height": 50,
+              "cornerRadius": [0, 0, 0, 0],
+              "fills": [],
+              "strokes": []
+            }
+          ],
+          "rootNodeIds": ["rect1"]
+        },
+        "timeline": {
+          "id": "timeline-1",
+          "name": "Main Timeline",
+          "duration": 120,
+          "frameRate": 24,
+          "tracks": [],
+          "markers": []
+        }
+      }
+    ],
+    "activePageId": "PAGE_ID",
+    "settings": {
+      "timelineDuration": 120,
+      "frameRate": 24,
+      "autoKeyframe": false,
+      "onionSkin": {
+        "enabled": false,
+        "beforeCount": 2,
+        "afterCount": 2,
+        "beforeColor": "#FF0000",
+        "afterColor": "#00FFFF",
+        "opacity": 0.3,
+        "falloff": 0.5,
+        "showDuringPlayback": false
+      }
+    },
+    "rigging": {
+      "ikChains": [{ "id": "ik1" }],
+      "smartBoneActions": [],
+      "dynamicChains": [],
+      "vitruvianControllers": []
+    },
+    "symbols": []
+  }
+}
