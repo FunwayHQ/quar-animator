@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { importSvg } from '../svgImporter';
 import { SceneGraph } from '../../SceneGraph';
-import type { RectangleNode, EllipseNode } from '@quar/types';
+import type { RectangleNode, EllipseNode, PathNode } from '@quar/types';
 
 let idCounter = 0;
 const generateId = () => `node_${++idCounter}`;
@@ -19,6 +19,23 @@ describe('importSvg', () => {
       <rect x="50" y="50" width="100" height="100" fill="red" />
     </svg>
   `;
+
+  it('imports an Illustrator SVG painted by classes (open strokes stay unfilled)', () => {
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+      <defs><style>.cls-1{fill:none;stroke:#231f20;stroke-width:2px;}.cls-2{fill:#ed1c24;}</style></defs>
+      <path class="cls-1" d="M10 10 L50 50 L90 10"/>
+      <rect class="cls-2" x="20" y="60" width="60" height="30"/>
+    </svg>`;
+    const result = importSvg(svg, sceneGraph, generateId);
+    expect(result.nodes).toHaveLength(2);
+    const line = result.nodes.find((n) => n.type === 'path') as PathNode;
+    expect(line.closed).toBe(false);
+    expect(line.fills).toHaveLength(0);
+    expect(line.strokes[0]?.color).toMatchObject({ r: 0x23, g: 0x1f, b: 0x20 });
+    expect(line.strokes[0]?.width).toBe(2);
+    const box = result.nodes.find((n) => n.type === 'rectangle') as RectangleNode;
+    expect(box.fills[0]?.color).toMatchObject({ r: 0xed, g: 0x1c, b: 0x24 });
+  });
 
   it('imports a simple SVG into the scene graph', () => {
     const result = importSvg(simpleSvg, sceneGraph, generateId);

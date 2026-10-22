@@ -268,6 +268,45 @@ describe('parseSvgPoints', () => {
 // ============================================================================
 
 describe('resolveStyle', () => {
+  const NS = 'xmlns="http://www.w3.org/2000/svg"';
+
+  it('reads the document’s stylesheet: attribute < class rule < inline style', () => {
+    const doc = new DOMParser().parseFromString(
+      `<svg ${NS}><defs><style>
+        /* Illustrator-style classes */
+        .cls-1 { fill: none; stroke: #231f20; stroke-width: 2px; }
+        .cls-2, .cls-3 { fill: #ed1c24 !important; }
+      </style></defs>
+      <path id="a" class="cls-1" fill="red" d="M0 0L10 10"/>
+      <rect id="b" class="cls-2" width="5" height="5"/>
+      <rect id="c" class="cls-3" style="fill: blue" width="5" height="5"/></svg>`,
+      'image/svg+xml'
+    );
+    const a = resolveStyle(doc.getElementById('a')!);
+    expect(a.fill).toBeNull(); // the class's fill:none beats the attribute
+    expect(a.stroke).toBe('#231f20');
+    expect(a.strokeWidth).toBe(2);
+    expect(resolveStyle(doc.getElementById('b')!).fill).toBe('#ed1c24');
+    expect(resolveStyle(doc.getElementById('c')!).fill).toBe('blue');
+  });
+
+  it('lets the more specific rule win, then the later one', () => {
+    const doc = new DOMParser().parseFromString(
+      `<svg ${NS}><style>
+        #x { fill: green; }
+        rect.a { fill: red; }
+        .a { fill: orange; }
+        rect { stroke: black; }
+        rect { stroke: gray; }
+        @media print { rect { stroke: pink; } }
+      </style><rect id="x" class="a"/><rect id="y" class="a"/></svg>`,
+      'image/svg+xml'
+    );
+    expect(resolveStyle(doc.getElementById('x')!).fill).toBe('green');
+    expect(resolveStyle(doc.getElementById('y')!).fill).toBe('red');
+    expect(resolveStyle(doc.getElementById('y')!).stroke).toBe('gray');
+  });
+
   it('resolves presentation attributes', () => {
     const doc = new DOMParser().parseFromString(
       '<svg><rect fill="red" stroke="blue" stroke-width="2" /></svg>',

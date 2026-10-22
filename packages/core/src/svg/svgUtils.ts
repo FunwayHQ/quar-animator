@@ -532,10 +532,12 @@ export function resolveStyle(element: Element, parentStyle?: ResolvedStyle): Res
 
   // Parse inline style attribute
   const inlineStyle = parseInlineStyle(element.getAttribute('style') || '');
+  const sheetStyle = stylesheetDeclarations(element);
 
-  // Helper: get value from inline style first, then attribute, then inherited
+  // Helper: the inline style first, then the document's stylesheets, then
+  // the attribute, then inherited (CSS's order)
   const get = (prop: string, attr?: string): string | null => {
-    return inlineStyle[prop] ?? element.getAttribute(attr ?? prop) ?? null;
+    return inlineStyle[prop] ?? sheetStyle[prop] ?? element.getAttribute(attr ?? prop) ?? null;
   };
 
   const fill = get('fill');
@@ -596,10 +598,87 @@ function parseInlineStyle(style: string): Record<string, string> {
   for (const declaration of style.split(';')) {
     const [prop, ...valueParts] = declaration.split(':');
     if (prop && valueParts.length > 0) {
-      result[prop.trim()] = valueParts.join(':').trim();
+      result[prop.trim()] = valueParts
+        .join(':')
+        .replace(/!\s*important\s*$/i, '')
+        .trim();
     }
   }
   return result;
+}
+
+// ============================================================================
+// Stylesheets
+// ============================================================================
+
+interface StyleRule {
+  selector: string;
+  specificity: number;
+  order: number;
+  declarations: Record<string, string>;
+}
+
+/** Each document's <style> rules, read once. */
+const documentRules = new WeakMap<Document, StyleRule[]>();
+
+/**
+ * The rules of a document's <style> elements (Illustrator writes an SVG's
+ * paint as classes there): one per selector, at-rules left out.
+ */
+function stylesheetRules(doc: Document): StyleRule[] {
+  let rules = documentRules.get(doc);
+  if (rules) return rules;
+  rules = [];
+  for (const style of Array.from(doc.getElementsByTagName('style'))) {
+    const css = (style.textContent ?? '').replace(/\/\*[\s\S]*?\*\//g, '');
+    for (const block of css.split('}')) {
+      const open = block.indexOf('{');
+      if (open < 0) continue;
+      const selectors = block.slice(0, open).trim();
+      if (!selectors || selectors.startsWith('@')) continue;
+      const declarations = parseInlineStyle(block.slice(open + 1));
+      for (const selector of selectors.split(',').map((part) => part.trim())) {
+        if (selector) {
+          rules.push({
+            selector,
+            specificity: specificity(selector),
+            order: rules.length,
+            declarations,
+          });
+        }
+      }
+    }
+  }
+  documentRules.set(doc, rules);
+  return rules;
+}
+
+/** A selector's specificity, as one number: ids, then classes, then types. */
+function specificity(selector: string): number {
+  const ids = (selector.match(/#[\w-]+/g) ?? []).length;
+  const classes = (selector.match(/\.[\w-]+|\[[^\]]*\]|:(?!:)[\w-]+/g) ?? []).length;
+  const types = (selector.replace(/[#.:][\w-]+|\[[^\]]*\]/g, ' ').match(/[a-zA-Z][\w-]*/g) ?? [])
+    .length;
+  return ids * 10000 + classes * 100 + types;
+}
+
+/** The declarations the document's stylesheets give an element, the most specific winning. */
+function stylesheetDeclarations(element: Element): Record<string, string> {
+  const doc = element.ownerDocument;
+  const rules = stylesheetRules(doc);
+  if (rules.length === 0) return {};
+  const matching = rules
+    .filter((rule) => {
+      try {
+        return element.matches(rule.selector);
+      } catch {
+        return false; // A selector the DOM can't read
+      }
+    })
+    .sort((a, b) => a.specificity - b.specificity || a.order - b.order);
+  const declarations: Record<string, string> = {};
+  for (const rule of matching) Object.assign(declarations, rule.declarations);
+  return declarations;
 }
 
 // ============================================================================
