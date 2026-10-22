@@ -113,7 +113,26 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(
     const [internalChecked, setInternalChecked] = React.useState(defaultChecked ?? false);
     const effectiveChecked = isControlled ? checked : internalChecked;
 
+    // `indeterminate` is a property of the input with no HTML attribute, so
+    // it is set on the element itself; that is what screen readers announce
+    // as mixed. The input is kept in a ref of our own and passed on to `ref`.
+    const inputRef = React.useRef<HTMLInputElement | null>(null);
+    const setInputRef = React.useCallback(
+      (el: HTMLInputElement | null) => {
+        inputRef.current = el;
+        if (typeof ref === 'function') ref(el);
+        else if (ref) ref.current = el;
+      },
+      [ref]
+    );
+
+    React.useEffect(() => {
+      if (inputRef.current) inputRef.current.indeterminate = indeterminate;
+    }, [indeterminate]);
+
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      // A click clears the input's indeterminate flag; the prop decides it.
+      e.target.indeterminate = indeterminate;
       if (!isControlled) setInternalChecked(e.target.checked);
       onChange?.(e);
     };
@@ -156,7 +175,7 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(
       >
         <div style={checkboxWrapperStyles}>
           <input
-            ref={ref}
+            ref={setInputRef}
             type="checkbox"
             checked={effectiveChecked}
             disabled={disabled}

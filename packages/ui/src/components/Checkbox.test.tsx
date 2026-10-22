@@ -1,3 +1,4 @@
+import { createRef } from 'react';
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -85,6 +86,48 @@ describe('Checkbox', () => {
     render(<Checkbox label="Indeterminate" indeterminate />);
     // Indeterminate shows minus icon, checkbox exists
     expect(screen.getByRole('checkbox')).toBeInTheDocument();
+  });
+
+  it('marks the input itself as indeterminate, so it reads as mixed', () => {
+    const { rerender } = render(<Checkbox label="Mixed" indeterminate />);
+    expect(screen.getByRole('checkbox')).toBePartiallyChecked();
+
+    rerender(<Checkbox label="Mixed" indeterminate={false} />);
+    expect(screen.getByRole('checkbox')).not.toBePartiallyChecked();
+
+    rerender(<Checkbox label="Mixed" indeterminate />);
+    expect(screen.getByRole('checkbox')).toBePartiallyChecked();
+  });
+
+  it('stays mixed after a click while the indeterminate prop is still set', async () => {
+    const user = userEvent.setup();
+    render(<Checkbox label="Mixed" indeterminate />);
+
+    // Clicking clears the input's own flag; the prop still says mixed.
+    await user.click(screen.getByRole('checkbox'));
+    expect(screen.getByRole('checkbox')).toBePartiallyChecked();
+  });
+
+  it('forwards its ref to the input', () => {
+    const ref = createRef<HTMLInputElement>();
+    render(<Checkbox label="Ref" indeterminate ref={ref} />);
+
+    expect(ref.current).toBe(screen.getByRole('checkbox'));
+    expect(ref.current?.indeterminate).toBe(true);
+  });
+
+  it('forwards a callback ref to the input', () => {
+    let input: HTMLInputElement | null = null;
+    render(
+      <Checkbox
+        label="Ref"
+        ref={(el) => {
+          input = el;
+        }}
+      />
+    );
+
+    expect(input).toBe(screen.getByRole('checkbox'));
   });
 
   it('renders different sizes', () => {
