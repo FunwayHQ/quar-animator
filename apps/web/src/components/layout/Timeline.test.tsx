@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { Profiler } from 'react';
 import { act, fireEvent } from '@testing-library/react';
 import { render, screen } from '../../test/utils';
 import userEvent from '@testing-library/user-event';
@@ -188,7 +189,48 @@ describe('Timeline', () => {
 
     expect(screen.getByText('Parent')).toBeInTheDocument();
     expect(screen.getByText('Child')).toBeInTheDocument();
-    expect(screen.getByTestId(`keyframe-${keyframe.id}`)).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId(`keyframe-${keyframe.id}`));
+    expect(useEditorStore.getState().selectedKeyframeIds).toEqual(new Set([keyframe.id]));
+  });
+
+  it('doesn’t redraw while a layer is dragged, only when a name or the order changes', () => {
+    let graph: SceneGraph | undefined;
+    function CaptureGraph() {
+      graph = useSceneGraph();
+      return null;
+    }
+    const onRender = vi.fn();
+    render(
+      <SceneGraphProvider>
+        <CaptureGraph />
+        <Profiler id="timeline" onRender={onRender}>
+          <Timeline />
+        </Profiler>
+      </SceneGraphProvider>
+    );
+    act(() => {
+      graph!.addNode({ id: 'ball', name: 'Ball', children: [] } as unknown as Node);
+      graph!.addNode({ id: 'box', name: 'Box', children: [] } as unknown as Node);
+    });
+    onRender.mockClear();
+
+    // A drag moves the shape on every pointer move
+    act(() => {
+      for (let step = 0; step < 10; step++) {
+        graph!.updateNode('ball', { opacity: step / 10 } as Partial<Node>);
+      }
+    });
+    expect(onRender).not.toHaveBeenCalled();
+
+    act(() => graph!.updateNode('ball', { name: 'Big ball' } as Partial<Node>));
+    expect(onRender).toHaveBeenCalled();
+    expect(screen.getByText('Big ball')).toBeInTheDocument();
+
+    onRender.mockClear();
+    act(() => graph!.moveNode('ball', null, 1));
+    expect(onRender).toHaveBeenCalled();
+    const labels = screen.getAllByTestId(/^timeline-layer-/).map((row) => row.textContent);
+    expect(labels).toEqual(['Big ball', 'Box']);
   });
 
   it('lists the layers of a project as it loads (the whole graph replaced at once)', () => {

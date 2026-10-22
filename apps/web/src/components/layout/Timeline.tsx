@@ -403,6 +403,10 @@ export function Timeline({ playback }: TimelineProps = {}) {
   // Track scene graph changes for layer labels
   const [nodes, setNodes] = useState<Node[]>([]);
   useEffect(() => {
+    // The rows show only each layer's name, in tree order: an edit that keeps
+    // both (dragging or recoloring a shape) doesn't redraw the timeline. Nodes
+    // change in place, so what was shown is kept as ids and names
+    let shown: Array<{ id: string; name: string | undefined }> | null = null;
     const update = () => {
       const rows: Node[] = [];
       const visit = (node: Node) => {
@@ -413,6 +417,13 @@ export function Timeline({ playback }: TimelineProps = {}) {
         }
       };
       for (const root of [...sceneGraph.getRootNodes()].reverse()) visit(root);
+      const before = shown;
+      const unchanged =
+        before !== null &&
+        before.length === rows.length &&
+        rows.every((row, i) => row.id === before[i]?.id && row.name === before[i]?.name);
+      if (unchanged) return;
+      shown = rows.map(({ id, name }) => ({ id, name }));
       setNodes(rows);
     };
     update();
