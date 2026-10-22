@@ -198,7 +198,6 @@ export function solveFABRIK(config: FABRIKConfig): IKSolveResult {
       applyPoleTarget(positions, boneLengths, poleTarget);
       applyConstraints(positions, boneLengths, joints, rootPos, rest);
     } else if (
-      !poleTarget &&
       isStraight(positions) &&
       v2dist(positions[positions.length - 1]!, target) > tolerance &&
       distToTarget < totalLength - tolerance
@@ -229,7 +228,7 @@ export function solveFABRIK(config: FABRIKConfig): IKSolveResult {
         positions[i + 1] = v2add(positions[i]!, v2scale(dir, boneLengths[i]!));
       }
 
-      // === Pole target projection ===
+      // === Pole target: the side the chain bends to ===
       if (poleTarget && joints.length >= 2) {
         applyPoleTarget(positions, boneLengths, poleTarget);
       }
@@ -334,8 +333,8 @@ function bendSlightly(positions: Vector2[], boneLengths: number[], joints: IKJoi
 }
 
 /**
- * Apply pole target to mid-chain joints.
- * Projects intermediate joints toward the pole target plane.
+ * Bend the chain to the pole target's side of the line from its root to its
+ * tip, keeping bone lengths and the tip where they are.
  */
 function applyPoleTarget(positions: Vector2[], boneLengths: number[], poleTarget: Vector2): void {
   if (positions.length === 3) {
@@ -361,35 +360,21 @@ function applyPoleTarget(positions: Vector2[], boneLengths: number[], poleTarget
     return;
   }
 
-  // For longer chains, apply pole target to the middle joints
+  // Longer chains: the pole picks the side of the root–tip line the chain
+  // bends to. When it bends the other way, its inner joints are mirrored
+  // across that line, which keeps every bone's length and the tip in place.
   const root = positions[0]!;
   const end = positions[positions.length - 1]!;
-  const chainDir = v2normalize(v2sub(end, root));
-  const chainLen = v2dist(root, end);
-  if (chainLen < 1e-10) return;
-
+  if (v2dist(root, end) < 1e-10) return;
+  const axis = v2normalize(v2sub(end, root));
+  const offsetOf = (p: Vector2) => axis.x * (p.y - root.y) - axis.y * (p.x - root.x);
+  let bend = 0;
+  for (let i = 1; i < positions.length - 1; i++) bend += offsetOf(positions[i]!);
+  if (bend * offsetOf(poleTarget) >= 0) return;
   for (let i = 1; i < positions.length - 1; i++) {
     const joint = positions[i]!;
-    const jointRel = v2sub(joint, root);
-    const projLen = v2dot(jointRel, chainDir);
-    const projOnChain = v2add(root, v2scale(chainDir, projLen));
-
-    const poleRel = v2sub(poleTarget, projOnChain);
-    const poleDist = Math.sqrt(poleRel.x * poleRel.x + poleRel.y * poleRel.y);
-    if (poleDist < 1e-10) continue;
-
-    const currentOff = v2sub(joint, projOnChain);
-    const offDist = Math.sqrt(currentOff.x * currentOff.x + currentOff.y * currentOff.y);
-    if (offDist < 1e-10) continue;
-
-    const poleDir = v2normalize(poleRel);
-    positions[i] = v2add(projOnChain, v2scale(poleDir, offDist));
-  }
-
-  // Re-enforce bone lengths from root forward
-  for (let i = 0; i < positions.length - 2; i++) {
-    const dir = v2normalize(v2sub(positions[i + 1]!, positions[i]!));
-    positions[i + 1] = v2add(positions[i]!, v2scale(dir, boneLengths[i]!));
+    const offset = offsetOf(joint);
+    positions[i] = { x: joint.x + 2 * offset * axis.y, y: joint.y - 2 * offset * axis.x };
   }
 }
 

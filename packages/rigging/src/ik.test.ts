@@ -832,6 +832,61 @@ describe('IK integration: extract → solve → apply', () => {
     }
   });
 
+  it('a 3-bone chain with a pole reaches its target, bent to the pole side (F148)', () => {
+    const target = { x: 100, y: 50 };
+    // Which side of the root–target line a point is on (+1 left, −1 right)
+    const side = (p: Vector2) => Math.sign(target.x * p.y - target.y * p.x);
+    for (const pole of [
+      { x: 50, y: -100 },
+      { x: 0, y: 150 },
+    ]) {
+      const b1 = createBoneNode('b1', 'B1', { x: 0, y: 0 }, 80, 0);
+      const b2 = createBoneNode('b2', 'B2', { x: 80, y: 0 }, 60, 0);
+      const b3 = createBoneNode('b3', 'B3', { x: 60, y: 0 }, 40, 0);
+      b2.parent = 'b1';
+      b3.parent = 'b2';
+      const sg = createMockSceneGraph([b1, b2, b3]);
+
+      const result = solveFABRIK({
+        joints: extractIKJoints('b1', 'b3', sg),
+        target,
+        poleTarget: pole,
+        maxIterations: 50,
+        tolerance: 0.5,
+      });
+      applyIKResult(result, sg);
+
+      // The bones as posed, not just the solver's points, put the tip on the target
+      const w = sg.getWorldTransform('b3');
+      const tip = { x: w.a * 40 + w.tx, y: w.b * 40 + w.ty };
+      expect(result.converged).toBe(true);
+      expect(Math.hypot(tip.x - target.x, tip.y - target.y)).toBeLessThanOrEqual(0.5);
+      const elbow = sg.getWorldTransform('b2');
+      expect(side({ x: elbow.tx, y: elbow.ty })).toBe(side(pole));
+    }
+  });
+
+  it('a straight 3-bone chain with a pole bends to reach a target on its axis', () => {
+    const b1 = createBoneNode('b1', 'B1', { x: 0, y: 0 }, 80, 0);
+    const b2 = createBoneNode('b2', 'B2', { x: 80, y: 0 }, 60, 0);
+    const b3 = createBoneNode('b3', 'B3', { x: 60, y: 0 }, 40, 0);
+    b2.parent = 'b1';
+    b3.parent = 'b2';
+    const sg = createMockSceneGraph([b1, b2, b3]);
+
+    const result = solveFABRIK({
+      joints: extractIKJoints('b1', 'b3', sg),
+      target: { x: 150, y: 0 },
+      poleTarget: { x: 70, y: -100 },
+      maxIterations: 50,
+      tolerance: 0.5,
+    });
+    applyIKResult(result, sg);
+
+    expect(result.converged).toBe(true);
+    expect(sg.getWorldTransform('b2').ty).toBeLessThan(0);
+  });
+
   it('respects constraints through full pipeline', () => {
     const root = createBoneNode('root', 'Root', { x: 0, y: 0 }, 100, 0);
     (root as any).angleMin = -10;
