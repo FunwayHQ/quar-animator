@@ -11,7 +11,10 @@ import { Check, Minus } from 'lucide-react';
 
 export type CheckboxSize = 'sm' | 'md' | 'lg';
 
-export interface CheckboxProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'size' | 'type'> {
+export interface CheckboxProps extends Omit<
+  InputHTMLAttributes<HTMLInputElement>,
+  'size' | 'type'
+> {
   size?: CheckboxSize;
   label?: string;
   indeterminate?: boolean;
@@ -94,6 +97,7 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(
       indeterminate = false,
       error = false,
       checked,
+      defaultChecked,
       disabled,
       onChange,
       ...props
@@ -103,7 +107,18 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(
     const [isHovered, setIsHovered] = React.useState(false);
     const [isFocused, setIsFocused] = React.useState(false);
 
-    const isChecked = checked || indeterminate;
+    // Without a `checked` prop the box keeps its own state, so the check mark
+    // still follows clicks and `defaultChecked`.
+    const isControlled = checked !== undefined;
+    const [internalChecked, setInternalChecked] = React.useState(defaultChecked ?? false);
+    const effectiveChecked = isControlled ? checked : internalChecked;
+
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      if (!isControlled) setInternalChecked(e.target.checked);
+      onChange?.(e);
+    };
+
+    const isChecked = effectiveChecked || indeterminate;
 
     const computedBoxStyles: React.CSSProperties = {
       ...baseBoxStyles,
@@ -112,9 +127,11 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(
         backgroundColor: 'var(--color-accent-primary)',
         borderColor: 'var(--color-accent-primary)',
       }),
-      ...(isHovered && !disabled && !isChecked && {
-        borderColor: 'var(--color-border-strong)',
-      }),
+      ...(isHovered &&
+        !disabled &&
+        !isChecked && {
+          borderColor: 'var(--color-border-strong)',
+        }),
       ...(isFocused && {
         borderColor: 'var(--color-border-focus)',
         boxShadow: '0 0 0 2px rgba(59, 130, 246, 0.3)',
@@ -141,9 +158,9 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(
           <input
             ref={ref}
             type="checkbox"
-            checked={checked}
+            checked={effectiveChecked}
             disabled={disabled}
-            onChange={onChange}
+            onChange={handleChange}
             style={hiddenInputStyles}
             onFocus={() => setIsFocused(true)}
             onBlur={() => setIsFocused(false)}
@@ -152,14 +169,12 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(
           <div style={computedBoxStyles}>
             {indeterminate ? (
               <Minus size={sizeStyles[size].icon} color="white" strokeWidth={3} />
-            ) : checked ? (
+            ) : effectiveChecked ? (
               <Check size={sizeStyles[size].icon} color="white" strokeWidth={3} />
             ) : null}
           </div>
         </div>
-        {label && (
-          <span style={{ ...labelStyles, ...labelSizeStyles[size] }}>{label}</span>
-        )}
+        {label && <span style={{ ...labelStyles, ...labelSizeStyles[size] }}>{label}</span>}
       </label>
     );
   }

@@ -36,6 +36,46 @@ describe('Checkbox', () => {
     expect(onChange).toHaveBeenCalledTimes(1);
   });
 
+  it('shows the check mark after an uncontrolled checkbox is clicked', async () => {
+    const user = userEvent.setup();
+    const { container } = render(<Checkbox label="Loop" />);
+
+    expect(container.querySelector('.lucide-check')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('checkbox'));
+
+    expect(screen.getByRole('checkbox')).toBeChecked();
+    expect(container.querySelector('.lucide-check')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('checkbox'));
+    expect(screen.getByRole('checkbox')).not.toBeChecked();
+    expect(container.querySelector('.lucide-check')).not.toBeInTheDocument();
+  });
+
+  it('shows the check mark for defaultChecked on first render', () => {
+    const { container } = render(<Checkbox label="Loop" defaultChecked />);
+
+    expect(screen.getByRole('checkbox')).toBeChecked();
+    expect(container.querySelector('.lucide-check')).toBeInTheDocument();
+  });
+
+  it('follows the checked prop when controlled', async () => {
+    const onChange = vi.fn();
+    const user = userEvent.setup();
+    const { container, rerender } = render(
+      <Checkbox label="Loop" checked={false} onChange={onChange} />
+    );
+
+    await user.click(screen.getByRole('checkbox'));
+    expect(onChange).toHaveBeenCalledTimes(1);
+    // The parent did not change `checked`, so the box stays unchecked.
+    expect(screen.getByRole('checkbox')).not.toBeChecked();
+    expect(container.querySelector('.lucide-check')).not.toBeInTheDocument();
+
+    rerender(<Checkbox label="Loop" checked onChange={onChange} />);
+    expect(screen.getByRole('checkbox')).toBeChecked();
+    expect(container.querySelector('.lucide-check')).toBeInTheDocument();
+  });
+
   it('renders disabled state', () => {
     render(<Checkbox label="Disabled" disabled />);
     expect(screen.getByRole('checkbox')).toBeDisabled();
