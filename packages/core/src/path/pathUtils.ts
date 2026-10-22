@@ -961,6 +961,19 @@ export function generateStrokeOutlineVertices(
   const leftSide: number[] = [];
   const rightSide: number[] = [];
 
+  // A width profile runs along the stroke's length: how far along each vertex
+  // is (curves are tessellated into many more vertices than straight runs, so
+  // the vertex count would squeeze the taper into the curves)
+  const along = new Float64Array(numVertices);
+  if (widthProfile && widthProfile.length >= 2) {
+    for (let i = 1; i < numVertices; i++) {
+      const dx = (vertices[i * 2] as number) - (vertices[(i - 1) * 2] as number);
+      const dy = (vertices[i * 2 + 1] as number) - (vertices[(i - 1) * 2 + 1] as number);
+      along[i] = (along[i - 1] as number) + Math.hypot(dx, dy);
+    }
+  }
+  const length = along[numVertices - 1] as number;
+
   let lastPerpX = 0;
   let lastPerpY = 1; // Default perpendicular direction
 
@@ -1064,7 +1077,7 @@ export function generateStrokeOutlineVertices(
     let effLeftOffset = leftOffset;
     let effRightOffset = rightOffset;
     if (widthProfile && widthProfile.length >= 2) {
-      const t = numVertices > 1 ? i / (numVertices - 1) : 0;
+      const t = length > GEOMETRY_EPSILON ? (along[i] as number) / length : i / (numVertices - 1);
       const profileLen = widthProfile.length;
       const fi = t * (profileLen - 1);
       const lo = Math.floor(fi);

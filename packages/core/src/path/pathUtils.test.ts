@@ -520,6 +520,21 @@ describe('Shape Generators', () => {
 // ============================================================================
 
 describe('generateStrokeOutlineVertices', () => {
+  it('tapers a width profile along the length, not by vertex count', () => {
+    // A long straight run then a few close vertices (as a tight curve tessellates)
+    const vertices = new Float32Array([0, 0, 100, 0, 101, 0, 102, 0, 103, 0]);
+    const result = generateStrokeOutlineVertices(vertices, 5, 10, false, 'center', [1, 0]);
+    // At x = 100 the stroke is 100/103 of the way along: almost fully tapered
+    const at100: number[] = [];
+    for (let k = 0; k < result.length; k += 2) {
+      if (Math.abs((result[k] as number) - 100) < 1e-3) at100.push(result[k + 1] as number);
+    }
+    expect(at100).toHaveLength(2);
+    for (const y of at100) expect(Math.abs(y)).toBeLessThan(0.5);
+    // And still full width at the start
+    expect(Math.abs(result[1] as number)).toBeCloseTo(5);
+  });
+
   it('returns empty array for fewer than 2 vertices', () => {
     const vertices = new Float32Array([10, 20]);
     const result = generateStrokeOutlineVertices(vertices, 1, 4, false);
