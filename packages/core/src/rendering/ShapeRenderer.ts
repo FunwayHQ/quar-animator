@@ -570,6 +570,8 @@ export class ShapeRenderer {
   private pendingImages: Map<string, Promise<HTMLImageElement>> = new Map();
   /** When each image that failed to load last failed (it's tried again after a pause) */
   private failedImages = new Map<string, number>();
+  /** Set by dispose(): images that finish loading afterwards make no textures. */
+  private disposed = false;
   private currentVPArray: Float32Array | null = null;
   private currentMorphOffsets: Map<string, Float32Array> | undefined = undefined;
 
@@ -1204,9 +1206,14 @@ export class ShapeRenderer {
     });
 
     this.pendingImages.set(src, promise);
+    // disposeTexture, clearTextures or dispose drop the pending entry; then the
+    // image makes no texture (nothing would delete it), and a newer load of the
+    // same image keeps its own entry.
+    const stillWanted = () => this.pendingImages.get(src) === promise;
 
     promise
       .then((img) => {
+        if (!stillWanted()) return;
         this.pendingImages.delete(src);
         const gl = this.renderer.context;
         const texture = gl.createTexture();
@@ -1224,6 +1231,7 @@ export class ShapeRenderer {
         this.textureCache.set(src, texture);
       })
       .catch(() => {
+        if (!stillWanted()) return;
         this.pendingImages.delete(src);
         this.failedImages.set(src, Date.now());
       });
@@ -1304,7 +1312,8 @@ export class ShapeRenderer {
           const img = new Image();
           img.crossOrigin = 'anonymous';
           img.onload = () => {
-            const texture = gl.createTexture();
+            // Disposed meanwhile: nothing would delete the texture
+            const texture = this.disposed ? null : gl.createTexture();
             if (texture) {
               gl.bindTexture(gl.TEXTURE_2D, texture);
               gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
@@ -4642,6 +4651,7 @@ export class ShapeRenderer {
 
   dispose(): void {
     const gl = this.renderer.context;
+    this.disposed = true;
     this.renderer.clearProgramUseHook(this.programUseHook);
     this.maskFramebufferManager.dispose();
     this.ghostFramebuffers?.dispose();
@@ -4687,6 +4697,7 @@ export class ShapeRenderer {
     }
     this.textureCache.clear();
     this.pendingImages.clear();
+    this.failedImages.clear();
 
     // Weight visualization resources
     if (this.weightVertexBuffer) {

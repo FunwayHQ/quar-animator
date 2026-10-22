@@ -2,7 +2,7 @@
  * Tests for ShapeRenderer image node features
  */
 
-import { describe, it, expect, beforeEach, vi, type Mock } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi, type Mock } from 'vitest';
 import { ShapeRenderer } from './ShapeRenderer';
 import { WebGLRenderer } from './WebGLRenderer';
 import { SceneGraph, createDefaultTransform } from '../SceneGraph';
@@ -245,6 +245,84 @@ describe('ShapeRenderer - Image Rendering', () => {
       // After dispose, calling getTexture again should start a new load
       // (returns null, meaning it is not cached)
       expect(shapeRenderer.getTexture('data:image/png;base64,test')).toBeNull();
+    });
+  });
+
+  describe('images that finish loading after they were dropped (F182)', () => {
+    const src = 'https://example.test/photo.png';
+    const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+    /** Images started so far; call one to finish loading it. */
+    let loads: (() => void)[];
+
+    beforeEach(() => {
+      loads = [];
+      class DeferredImage {
+        crossOrigin = '';
+        onload: (() => void) | null = null;
+        onerror: (() => void) | null = null;
+        set src(_value: string) {
+          loads.push(() => this.onload?.());
+        }
+      }
+      vi.stubGlobal('Image', DeferredImage);
+    });
+
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+
+    it('makes no texture for an image still loading when the renderer is disposed', async () => {
+      shapeRenderer.getTexture(src);
+      shapeRenderer.dispose();
+      (gl.createTexture as Mock).mockClear();
+
+      loads[0]!();
+      await settle();
+
+      expect(gl.createTexture).not.toHaveBeenCalled();
+    });
+
+    it('makes no texture for an image disposed or cleared while loading', async () => {
+      shapeRenderer.getTexture(src);
+      shapeRenderer.disposeTexture(src);
+      shapeRenderer.getTexture('https://example.test/other.png');
+      shapeRenderer.clearTextures();
+
+      loads[0]!();
+      loads[1]!();
+      await settle();
+
+      expect(gl.createTexture).not.toHaveBeenCalled();
+      expect(shapeRenderer.getTexture(src)).toBeNull(); // not cached: loads again
+      expect(loads).toHaveLength(3);
+    });
+
+    it('makes no texture for an image an export preloads when the renderer is disposed', async () => {
+      sceneGraph.addNode(createImageNode('img1', src, 100, 100));
+      const preload = shapeRenderer.preloadTextures(sceneGraph.getRootNodes(), sceneGraph);
+      shapeRenderer.dispose();
+
+      for (const load of loads) load();
+      await preload;
+
+      expect(gl.createTexture).not.toHaveBeenCalled();
+    });
+
+    it('keeps the newer load when an image is loaded again before the old load finishes', async () => {
+      shapeRenderer.getTexture(src);
+      shapeRenderer.disposeTexture(src);
+      shapeRenderer.getTexture(src);
+
+      loads[0]!(); // the dropped load
+      await settle();
+      expect(gl.createTexture).not.toHaveBeenCalled();
+      shapeRenderer.getTexture(src);
+      expect(loads).toHaveLength(2); // the newer load is still the one awaited
+
+      loads[1]!();
+      await settle();
+      expect(gl.createTexture).toHaveBeenCalledTimes(1);
+      expect(shapeRenderer.getTexture(src)).not.toBeNull();
     });
   });
 
