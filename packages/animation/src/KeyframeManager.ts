@@ -20,6 +20,8 @@ import {
 export interface KeyframeClipboard {
   /** Keyframes with times relative to the earliest keyframe */
   entries: Array<{
+    /** The layer the keyframe was copied from */
+    nodeId: string;
     property: string;
     time: number; // Relative time (offset from earliest)
     value: unknown;
@@ -198,6 +200,7 @@ export class KeyframeManager {
       const keyframe = track.keyframes.find((k: Keyframe) => k.id === kf.keyframeId);
       if (!keyframe) continue;
       entries.push({
+        nodeId: track.nodeId,
         property: track.property,
         time: keyframe.time,
         value: structuredClone(keyframe.value),
@@ -221,10 +224,18 @@ export class KeyframeManager {
    */
   pasteKeyframes(clipboard: KeyframeClipboard, nodeId: string, targetFrame: number): Keyframe[] {
     const pasted: Keyframe[] = [];
+    // Keyframes copied from one layer go onto `nodeId`; copied from several,
+    // each goes back to its own layer (onto one, same-property keyframes at
+    // the same frame would replace each other)
+    const oneSource = new Set(clipboard.entries.map((entry) => entry.nodeId)).size <= 1;
 
     for (const entry of clipboard.entries) {
       const frame = targetFrame + entry.time;
-      const track = getOrCreateTrack(this.timeline, nodeId, entry.property);
+      const track = getOrCreateTrack(
+        this.timeline,
+        oneSource ? nodeId : entry.nodeId,
+        entry.property
+      );
       const kf = addKeyframe(track, Math.max(0, Math.round(frame)), entry.value, entry.easing);
       pasted.push(kf);
     }

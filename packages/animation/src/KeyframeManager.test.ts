@@ -196,6 +196,20 @@ describe('copyKeyframes / pasteKeyframes', () => {
     expect(pasted[1].time).toBe(60);
   });
 
+  it('pastes keyframes copied from several layers back onto their own layers', () => {
+    const a = mgr.addKeyframe('node1', 'opacity', 10, 0.2);
+    const b = mgr.addKeyframe('node2', 'opacity', 10, 0.9);
+    const clipboard = mgr.copyKeyframes([
+      { nodeId: 'node1', property: 'opacity', keyframeId: a.id },
+      { nodeId: 'node2', property: 'opacity', keyframeId: b.id },
+    ])!;
+    const pasted = mgr.pasteKeyframes(clipboard, 'node1', 40);
+    expect(pasted).toHaveLength(2);
+    // Neither replaced the other: each layer has its own at frame 40
+    expect(mgr.getKeyframeAt('node1', 'opacity', 40)?.value).toBe(0.2);
+    expect(mgr.getKeyframeAt('node2', 'opacity', 40)?.value).toBe(0.9);
+  });
+
   it('returns null for empty selection', () => {
     const clipboard = mgr.copyKeyframes([]);
     expect(clipboard).toBeNull();
