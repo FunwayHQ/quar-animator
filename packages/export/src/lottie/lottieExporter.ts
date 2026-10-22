@@ -63,8 +63,12 @@ export function exportToLottieJson(
   const duration = endFrame - startFrame + 1;
   const canvasH = height;
 
-  // Build node resolver from provided nodes if not given
+  // Without a resolver, children are found among the given nodes
   const resolver = nodeResolver ?? buildNodeResolver(nodes);
+  // A node whose parent was given too is drawn inside it, not as a layer of
+  // its own — so the nodes can be every node of the scene, not just its roots
+  const given = new Set(nodes.map((node) => node.id));
+  const topLevel = nodes.filter((node) => node.parent === null || !given.has(node.parent));
   const context: LottieConvertContext = {
     textOutlines: options.textOutlines ?? editorTextOutlines,
     ...(options.skinning
@@ -83,7 +87,7 @@ export function exportToLottieJson(
   // Convert nodes to layers (Lottie lists the top layer first)
   const assets: LottieAsset[] = [];
   const layers: LottieLayer[] = buildLayers(
-    nodes,
+    topLevel,
     { originX: 0, originY: canvasH },
     {
       timeline,
@@ -127,7 +131,9 @@ export function exportLottieBlob(
 }
 
 /**
- * Build a node resolver from a flat array of nodes (walks children recursively).
+ * Build a node resolver from a flat array of nodes. It finds only the nodes
+ * given (children are stored by id), so pass every node a group's children
+ * might be looked up in.
  */
 function buildNodeResolver(nodes: Node[]): (id: string) => Node | undefined {
   const map = new Map<string, Node>();

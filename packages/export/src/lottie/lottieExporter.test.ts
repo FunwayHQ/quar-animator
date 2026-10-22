@@ -319,6 +319,37 @@ describe('exportToLottieJson - additional', () => {
 // Mask groups
 // ============================================================================
 
+describe('exportToLottieJson - nodes given without a resolver', () => {
+  it('exports a group from a flat list of its nodes, its children drawn once', () => {
+    const group: GroupNode = {
+      id: 'g',
+      name: 'Group',
+      type: 'group',
+      parent: null,
+      children: ['a', 'b'],
+      transform: defaultTransform,
+      visible: true,
+      locked: false,
+      opacity: 1,
+      blendMode: 'normal',
+    };
+    const nodes: Node[] = [
+      group,
+      { ...makeRect('a', 'A'), parent: 'g' },
+      { ...makeEllipse('b', 'B'), parent: 'g' },
+    ];
+    const flat = exportToLottieJson(nodes, emptyTimeline, { width: 800, height: 600 });
+    const map = new Map(nodes.map((n) => [n.id, n]));
+    const resolved = exportToLottieJson([group], emptyTimeline, { width: 800, height: 600 }, (id) =>
+      map.get(id)
+    );
+    // Not empty, and no child repeated as a layer of its own
+    expect(flat.layers.length).toBeGreaterThan(0);
+    expect(flat.layers.map((l) => l.nm)).not.toContain('A');
+    expect(flat).toEqual(resolved);
+  });
+});
+
 describe('exportToLottieJson - masks', () => {
   function makeMaskGroup(mode: 'clip' | 'alpha' | 'luminance'): Node[] {
     const group: GroupNode = {
