@@ -35,6 +35,7 @@ import { PenToolOverlay } from '../canvas/PenToolOverlay';
 import { DirectSelectionOverlay } from '../canvas/DirectSelectionOverlay';
 import { GradientHandleOverlay } from '../canvas/GradientHandleOverlay';
 import { CanvasRuler, RULER_SIZE } from '../canvas/CanvasRuler';
+import { createSmartBoneMorphCache } from '../canvas/smartBoneMorphs';
 import { TextEditOverlay } from '../canvas/TextEditOverlay';
 import { BoneOverlay } from '../canvas/BoneOverlay';
 import { GhostSceneCache, poseSceneAtFrame } from '../canvas/onionSkinScenes';
@@ -645,6 +646,8 @@ export function Canvas({
       gridRef.current = grid;
       // The background the grid's colors were last matched to
       let gridBackground: Color | null = null;
+      // Smart Bone morphs, kept while their driver bones don't move
+      const smartBoneMorphs = createSmartBoneMorphCache();
 
       // Initialize shape renderer (let: rebuilt on WebGL context restore)
       let shapeRenderer = new ShapeRenderer(renderer);
@@ -797,14 +800,15 @@ export function Canvas({
           }
 
           if (smartBoneActions.length > 0) {
-            const result = evaluateSmartBones(
-              // The action being recorded shows as the Point Magnet's working offsets
-              smartBoneRecordingActionId
-                ? smartBoneActions.filter((a) => a.id !== smartBoneRecordingActionId)
-                : smartBoneActions,
-              sceneGraphRef.current,
-              nodeVertexCounts
-            );
+            const result = smartBoneRecordingActionId
+              ? // The action being recorded shows as the Point Magnet's working
+                // offsets, added into a fresh map below (the kept one is shared)
+                evaluateSmartBones(
+                  smartBoneActions.filter((a) => a.id !== smartBoneRecordingActionId),
+                  sceneGraphRef.current,
+                  nodeVertexCounts
+                )
+              : smartBoneMorphs(smartBoneActions, sceneGraphRef.current, nodeVertexCounts);
             if (result.size > 0) morphOffsetsMap = result;
           }
 
