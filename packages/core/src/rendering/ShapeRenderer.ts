@@ -586,7 +586,6 @@ export class ShapeRenderer {
   private geometryCache: Map<string, TessellationCacheEntry> = new Map();
 
   // Per-ring vertex arrays for boolean groups — needed for per-ring stroke rendering
-  private booleanRingCache: Map<string, Float32Array[]> = new Map();
 
   // Effect renderer for drop shadows, blur, blend modes
   private effectRenderer: EffectRenderer;
@@ -1448,7 +1447,6 @@ export class ShapeRenderer {
    */
   clearCache(): void {
     this.geometryCache.clear();
-    this.booleanRingCache.clear();
   }
 
   // --------------------------------------------------------------------------
@@ -2536,16 +2534,19 @@ export class ShapeRenderer {
     // Compute the boolean result using children's world transforms
     const childTransforms = children.map((c) => sceneGraph.getWorldTransform(c.id));
 
-    // Try to get cached tessellation
+    // Try to get cached tessellation: one entry per group, current while its
+    // children's geometry and placement are as they were
     const cacheKey = this.buildBooleanGroupCacheKey(groupNode, children, childTransforms, op);
-    const cached = this.geometryCache.get(cacheKey);
+    const cached = this.geometryCache.get(groupNode.id);
 
     let vertices: Float32Array;
     let fillIndices: number[];
+    let ringArrays: Float32Array[];
 
-    if (cached && cached.geoKey === cacheKey) {
+    if (cached?.geoKey === cacheKey && cached.contours) {
       vertices = cached.vertices;
       fillIndices = cached.fillIndices;
+      ringArrays = cached.contours;
     } else {
       // Compute boolean result
       try {
@@ -2660,17 +2661,15 @@ export class ShapeRenderer {
         }
         fillIndices = allFillIndices;
 
-        // Cache the result
-        const entry: TessellationCacheEntry = {
+        // Cache the result, with per-ring arrays for per-ring stroke rendering
+        ringArrays = allRingArrays;
+        this.geometryCache.set(groupNode.id, {
           geoKey: cacheKey,
           vertices,
           fillIndices,
+          contours: ringArrays,
           strokeCache: new Map(),
-        };
-        this.geometryCache.set(cacheKey, entry);
-
-        // Cache per-ring arrays for per-ring stroke rendering
-        this.booleanRingCache.set(cacheKey, allRingArrays);
+        });
       } catch (_err) {
         return;
       }
@@ -2699,37 +2698,13 @@ export class ShapeRenderer {
       }
     }
 
-    // Render strokes PER-RING to avoid bridge lines between disjoint contours.
-    // Uses triangle strip instead of earcut to avoid artifacts on concave outlines.
-    const ringArrays = this.booleanRingCache.get(cacheKey);
-    if (ringArrays) {
-      for (const stroke of strokes) {
-        if (stroke.visible && stroke.width > 0) {
-          for (const ringVerts of ringArrays) {
-            const numVerts = ringVerts.length / 2;
-            if (numVerts < 2) continue;
-            const outline = generateStrokeOutlineVertices(
-              ringVerts,
-              numVerts,
-              stroke.width,
-              true,
-              stroke.align ?? 'center'
-            );
-            if (outline.length / 2 < 3) continue;
-
-            if (stroke.gradient) {
-              this.renderStrokeStripGradient(
-                outline,
-                stroke.gradient,
-                stroke.opacity * nodeOpacity,
-                true
-              );
-            } else {
-              const color = this.getStrokeColor(stroke, nodeOpacity);
-              this.renderStrokeStrip(outline, color, true);
-            }
-          }
-        }
+    // Render strokes PER-RING to avoid bridge lines between disjoint contours
+    // (each ring's outline cached in the group's entry)
+    for (const stroke of strokes) {
+      if (stroke.visible && stroke.width > 0) {
+        ringArrays.forEach((ringVerts, ri) => {
+          this.renderStroke(groupNode.id, ringVerts, stroke, true, nodeOpacity, `r${ri}`);
+        });
       }
     }
   }
@@ -4746,7 +4721,6 @@ export class ShapeRenderer {
     this.skinnedGradientProgram = null;
 
     this.geometryCache.clear();
-    this.booleanRingCache.clear();
 
     // Effect renderer cleanup
     this.effectRenderer.dispose();

@@ -4,7 +4,7 @@
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import type { PathNode, PathPoint, Stroke } from '@quar/types';
+import type { GroupNode, PathNode, PathPoint, RectangleNode, Stroke } from '@quar/types';
 
 const counts = vi.hoisted(() => ({ tessellate: 0, outline: 0, corners: 0 }));
 
@@ -31,7 +31,7 @@ vi.mock('../path/pathUtils', async (importOriginal) => {
 
 const { ShapeRenderer } = await import('./ShapeRenderer');
 const { WebGLRenderer } = await import('./WebGLRenderer');
-const { SceneGraph, createDefaultTransform } = await import('../SceneGraph');
+const { SceneGraph, createDefaultTransform, createGroupNode } = await import('../SceneGraph');
 const { mat3 } = await import('../math');
 const { createMockWebGL2Context } = await import('../test/setup');
 
@@ -132,6 +132,43 @@ describe('ShapeRenderer caches', () => {
     expect(second.length).toBe(first.length);
     expect(second.length).toBeGreaterThan(0);
     second.forEach((data, i) => expect(data).toBe(first[i]));
+  });
+
+  it('keeps one cached result per boolean group while its shapes are dragged', () => {
+    const square = (id: string, x: number): RectangleNode => ({
+      ...compoundPath([]),
+      id,
+      name: id,
+      type: 'rectangle',
+      width: 50,
+      height: 50,
+      cornerRadius: [0, 0, 0, 0],
+      transform: { ...createDefaultTransform(), position: { x, y: 0 } },
+    });
+    const group: GroupNode = {
+      ...createGroupNode('union', 'Union'),
+      booleanOp: 'union',
+      fills: compoundPath([]).fills,
+      strokes: [stroke],
+    };
+    sceneGraph.addNode(group);
+    sceneGraph.addNode(square('a', 0), 'union');
+    sceneGraph.addNode(square('b', 30), 'union');
+    const cache = (shapeRenderer as unknown as { geometryCache: Map<string, unknown> })
+      .geometryCache;
+    frames(1);
+    const entries = cache.size;
+    // Drag one square across 20 positions
+    for (let x = 31; x <= 50; x++) {
+      sceneGraph.updateNode('b', {
+        transform: { ...createDefaultTransform(), position: { x, y: 0 } },
+      } as Partial<RectangleNode>);
+      frames(1);
+    }
+    expect(cache.size).toBe(entries);
+    // Deleting the group frees its entry (the canvas invalidates removed nodes)
+    shapeRenderer.invalidateCache('union');
+    expect(cache.has('union')).toBe(false);
   });
 
   it('outlines again when the stroke changes, and only then', () => {
