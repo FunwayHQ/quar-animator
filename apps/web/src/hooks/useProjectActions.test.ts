@@ -314,6 +314,39 @@ describe('useProjectActions', () => {
       expect(mockEditorState.projectCreatedAt).toBe('2024-01-01');
     });
 
+    it('leaves another project opened during the save as it is (F168)', async () => {
+      const { result } = renderProjectActions();
+      mockEditorState.projectId = 'A';
+      let finishWrite: () => void = () => undefined;
+      mockSave.mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve) => {
+            finishWrite = resolve;
+          })
+      );
+
+      let saving: Promise<void> = Promise.resolve();
+      act(() => {
+        saving = result.current.saveProject();
+      });
+      // Project B is opened while A is still being written
+      Object.assign(mockEditorState, {
+        projectId: 'B',
+        isDirty: true,
+        projectCreatedAt: 'B created',
+      });
+      await act(async () => {
+        finishWrite();
+        await saving;
+      });
+
+      // A was saved, but B stays the project to reopen, with its own state
+      expect(mockSave).toHaveBeenCalledWith('A', expect.anything(), expect.anything());
+      expect(mockSetLastProjectId).not.toHaveBeenCalledWith('A');
+      expect(mockEditorState.isDirty).toBe(true);
+      expect(mockEditorState.projectCreatedAt).toBe('B created');
+    });
+
     it('marks project as not dirty after save', async () => {
       const { result } = renderProjectActions();
       mockEditorState.projectId = 'existing-id';
@@ -354,6 +387,30 @@ describe('useProjectActions', () => {
       expect(mockSerialize).toHaveBeenCalledTimes(1);
       expect(mockSerializeToBinary).not.toHaveBeenCalled();
       expect(mockProjectDataToBinary).toHaveBeenCalledWith(mockSerialize.mock.results[0]?.value);
+    });
+
+    it("doesn't make the copy the project to reopen when another was opened meanwhile (F168)", async () => {
+      const { result } = renderProjectActions();
+      let finishWrite: () => void = () => undefined;
+      mockSave.mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve) => {
+            finishWrite = resolve;
+          })
+      );
+
+      let saving: Promise<void> = Promise.resolve();
+      act(() => {
+        saving = result.current.saveProjectAs('Copy');
+      });
+      const copyId = mockEditorState.projectId;
+      mockEditorState.projectId = 'B';
+      await act(async () => {
+        finishWrite();
+        await saving;
+      });
+
+      expect(mockSetLastProjectId).not.toHaveBeenCalledWith(copyId);
     });
 
     it('saves with new name to storage', async () => {

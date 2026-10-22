@@ -136,6 +136,9 @@ export function useProjectActions(options: UseProjectActionsOptions = {}): Proje
       );
       const binary = projectDataToBinary(data);
       await dbSave(projectId, state.projectName, binary);
+      // Another project opened while this one was being written is the one to
+      // reopen next time, and the state below is its own, not this one's
+      if (useEditorStore.getState().projectId !== projectId) return;
       await setLastProjectId(projectId);
       // Clear dirty only after the write succeeds — a failed save must keep the
       // project marked dirty (and surface the error to the caller).
@@ -163,6 +166,8 @@ export function useProjectActions(options: UseProjectActionsOptions = {}): Proje
       const data = serializeProject(name, sceneGraph, getEditorSnapshot());
       const binary = projectDataToBinary(data);
       await dbSave(newId, name, binary);
+      // Unless another project was opened meanwhile (see saveProject)
+      if (useEditorStore.getState().projectId !== newId) return;
       await setLastProjectId(newId);
       // Clear dirty only after the write succeeds (see saveProject).
       useEditorStore.setState({
