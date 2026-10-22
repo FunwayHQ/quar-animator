@@ -9,6 +9,21 @@ import type { PathPoint, Vector2, Rect } from '@quar/types';
 import { breakTextLines, fontMeasure } from './textLayout';
 
 /**
+ * Smooth only where the curve runs straight through the point: both handles,
+ * pointing opposite ways along one line. A glyph's cusps, and points with one
+ * handle, are corners — editing a 'smooth' point would force its handles into
+ * line and reshape the letter.
+ */
+function pointType(point: PathPoint): PathPoint['type'] {
+  const { handleIn: a, handleOut: b } = point;
+  if (!a || !b) return 'corner';
+  const la = Math.hypot(a.x, a.y);
+  const lb = Math.hypot(b.x, b.y);
+  if (la < 1e-9 || lb < 1e-9) return 'corner';
+  return (a.x * b.x + a.y * b.y) / (la * lb) < -0.999 ? 'smooth' : 'corner';
+}
+
+/**
  * Convert opentype.js path commands to QUAR PathPoint subpaths.
  * Each closed contour becomes a separate subpath.
  *
@@ -60,9 +75,7 @@ export function glyphPathToSubpaths(opPath: opentype.Path): PathPoint[][] {
             x: cp1.x - prevPoint.position.x,
             y: cp1.y - prevPoint.position.y,
           };
-          if (prevPoint.type === 'corner' && prevPoint.handleOut) {
-            prevPoint.type = 'smooth';
-          }
+          prevPoint.type = pointType(prevPoint);
         }
 
         currentPos = end;
@@ -74,7 +87,7 @@ export function glyphPathToSubpaths(opPath: opentype.Path): PathPoint[][] {
             y: cp2.y - end.y,
           },
           handleOut: null,
-          type: 'smooth',
+          type: 'corner', // until its outgoing handle says otherwise
         });
         break;
       }
@@ -110,9 +123,7 @@ export function glyphPathToSubpaths(opPath: opentype.Path): PathPoint[][] {
           x: cubicCp1.x - prevPt.position.x,
           y: cubicCp1.y - prevPt.position.y,
         };
-        if (prevPt.type === 'corner' && prevPt.handleOut) {
-          prevPt.type = 'smooth';
-        }
+        prevPt.type = pointType(prevPt);
 
         currentPos = endPt;
         current.push({
@@ -122,7 +133,7 @@ export function glyphPathToSubpaths(opPath: opentype.Path): PathPoint[][] {
             y: cubicCp2.y - endPt.y,
           },
           handleOut: null,
-          type: 'smooth',
+          type: 'corner', // until its outgoing handle says otherwise
         });
         break;
       }
@@ -137,7 +148,7 @@ export function glyphPathToSubpaths(opPath: opentype.Path): PathPoint[][] {
             // Transfer handleIn from duplicate closing point to first point
             if (last.handleIn) {
               first.handleIn = last.handleIn;
-              if (first.type === 'corner') first.type = 'smooth';
+              first.type = pointType(first);
             }
             current.pop();
           }

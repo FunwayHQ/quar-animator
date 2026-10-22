@@ -75,14 +75,55 @@ describe('glyphPathToSubpaths', () => {
     expect(pt0.handleOut).not.toBeNull();
     expect(pt0.handleOut!.x).toBeCloseTo(10 - 0);
     expect(pt0.handleOut!.y).toBeCloseTo(-20 - 0); // Y flipped
-    expect(pt0.type).toBe('smooth');
+    expect(pt0.type).toBe('corner'); // one handle: a corner
 
     // Second point should have handleIn (cp2 - end)
     const pt1 = result[0][1];
     expect(pt1.handleIn).not.toBeNull();
     expect(pt1.handleIn!.x).toBeCloseTo(30 - 50);
     expect(pt1.handleIn!.y).toBeCloseTo(-40 - -60); // Y flipped
-    expect(pt1.type).toBe('smooth');
+    expect(pt1.type).toBe('corner');
+  });
+
+  it('keeps a cusp a corner, with both its handles', () => {
+    // Into (50, 0) heading right-down, out of it heading right-up: a sharp tip
+    const path = makePath([
+      { type: 'M', x: 0, y: 0 },
+      { type: 'C', x1: 10, y1: 30, x2: 40, y2: 30, x: 50, y: 0 },
+      { type: 'C', x1: 60, y1: 30, x2: 90, y2: 30, x: 100, y: 0 },
+    ]);
+    const tip = glyphPathToSubpaths(path as never)[0]![1]!;
+    expect(tip.type).toBe('corner');
+    expect(tip.handleIn).toEqual({ x: -10, y: -30 });
+    expect(tip.handleOut).toEqual({ x: 10, y: -30 });
+  });
+
+  it('makes a point smooth where the curve runs straight through it', () => {
+    const path = makePath([
+      { type: 'M', x: 0, y: 0 },
+      { type: 'C', x1: 0, y1: 30, x2: 20, y2: 50, x: 50, y: 50 },
+      { type: 'C', x1: 80, y1: 50, x2: 100, y2: 30, x: 100, y: 0 },
+    ]);
+    expect(glyphPathToSubpaths(path as never)[0]![1]!.type).toBe('smooth');
+  });
+
+  it('decides a closed contour’s first point by both its handles', () => {
+    // A circle-ish contour: the curve runs straight through (0, 50) both ways
+    const smoothStart = makePath([
+      { type: 'M', x: 0, y: 50 },
+      { type: 'C', x1: 0, y1: 80, x2: 100, y2: 80, x: 100, y: 50 },
+      { type: 'C', x1: 100, y1: 20, x2: 0, y2: 20, x: 0, y: 50 },
+      { type: 'Z' },
+    ]);
+    expect(glyphPathToSubpaths(smoothStart as never)[0]![0]!.type).toBe('smooth');
+    // A lens: both curves leave and meet (0, 0) at an angle
+    const lens = makePath([
+      { type: 'M', x: 0, y: 0 },
+      { type: 'C', x1: 20, y1: 30, x2: 80, y2: 30, x: 100, y: 0 },
+      { type: 'C', x1: 80, y1: -30, x2: 20, y2: -30, x: 0, y: 0 },
+      { type: 'Z' },
+    ]);
+    expect(glyphPathToSubpaths(lens as never)[0]![0]!.type).toBe('corner');
   });
 
   it('handles quadratic bezier (Q) commands converted to cubic', () => {
@@ -103,7 +144,7 @@ describe('glyphPathToSubpaths', () => {
     // cp1 = (0,0) + 2/3*(50,0) = (33.33, 0) → handleOut = (33.33, 0)
     expect(pt0.handleOut!.x).toBeCloseTo((50 * 2) / 3);
     expect(pt0.handleOut!.y).toBeCloseTo(0);
-    expect(pt0.type).toBe('smooth');
+    expect(pt0.type).toBe('corner');
 
     // cp2 = (100,0) + 2/3*(50-100,0) = (100 + (-33.33), 0) = (66.67, 0)
     // handleIn = cp2 - end = (66.67-100, 0) = (-33.33, 0)
