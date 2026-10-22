@@ -1338,7 +1338,8 @@ export class ShapeRenderer {
   private getCachedTessellation(
     nodeId: string,
     node: Node,
-    pathPoints: import('@quar/types').PathPoint[],
+    /** The outline's points, built only when the cache can't be used */
+    pathPoints: () => import('@quar/types').PathPoint[],
     closed: boolean,
     tolerance: number
   ): { vertices: Float32Array; fillIndices: number[] } {
@@ -1350,7 +1351,7 @@ export class ShapeRenderer {
     }
 
     // Compute fresh tessellation
-    const vertices = tessellatePathToVertices(pathPoints, closed, tolerance);
+    const vertices = tessellatePathToVertices(pathPoints(), closed, tolerance);
     const numVerts = vertices.length / 2;
     const fillIndices = numVerts >= 3 ? earcut(vertices.subarray(0, numVerts * 2)) : [];
 
@@ -1960,13 +1961,14 @@ export class ShapeRenderer {
     const gl = this.renderer.context;
 
     // Generate rectangle path and get cached tessellation
-    const pathPoints = createRectanglePath(
-      -node.width * node.transform.anchor.x,
-      -node.height * node.transform.anchor.y,
-      node.width,
-      node.height,
-      node.cornerRadius
-    );
+    const pathPoints = () =>
+      createRectanglePath(
+        -node.width * node.transform.anchor.x,
+        -node.height * node.transform.anchor.y,
+        node.width,
+        node.height,
+        node.cornerRadius
+      );
     const { vertices: tessellated, fillIndices } = this.getCachedTessellation(
       node.id,
       node,
@@ -2003,13 +2005,14 @@ export class ShapeRenderer {
     const gl = this.renderer.context;
 
     const anchor = node.transform.anchor;
-    const pathPoints = createRectanglePath(
-      -node.width * anchor.x,
-      -node.height * anchor.y,
-      node.width,
-      node.height,
-      [0, 0, 0, 0]
-    );
+    const pathPoints = () =>
+      createRectanglePath(
+        -node.width * anchor.x,
+        -node.height * anchor.y,
+        node.width,
+        node.height,
+        [0, 0, 0, 0]
+      );
     const { vertices: tessellated, fillIndices } = this.getCachedTessellation(
       node.id + ':bg',
       node,
@@ -2043,7 +2046,7 @@ export class ShapeRenderer {
     const gl = this.renderer.context;
 
     // Generate ellipse path and get cached tessellation
-    const pathPoints = createEllipsePath(0, 0, node.radiusX, node.radiusY);
+    const pathPoints = () => createEllipsePath(0, 0, node.radiusX, node.radiusY);
     const { vertices: tessellated, fillIndices } = this.getCachedTessellation(
       node.id,
       node,
@@ -2077,7 +2080,7 @@ export class ShapeRenderer {
     const gl = this.renderer.context;
 
     // Generate polygon or star path and get cached tessellation
-    const pathPoints =
+    const pathPoints = () =>
       node.innerRadius !== undefined
         ? createStarPath(
             0,
@@ -2303,7 +2306,7 @@ export class ShapeRenderer {
     }
 
     // Simple single-contour path
-    const processed = applyCornerRadius(node.points, node.closed);
+    const processed = () => applyCornerRadius(node.points, node.closed);
     const { vertices: tessellated, fillIndices } = this.getCachedTessellation(
       node.id,
       node,
@@ -3528,25 +3531,26 @@ export class ShapeRenderer {
     switch (node.type) {
       case 'rectangle': {
         const n = node;
-        const pathPoints = createRectanglePath(
-          -n.width * n.transform.anchor.x,
-          -n.height * n.transform.anchor.y,
-          n.width,
-          n.height,
-          n.cornerRadius
-        );
+        const pathPoints = () =>
+          createRectanglePath(
+            -n.width * n.transform.anchor.x,
+            -n.height * n.transform.anchor.y,
+            n.width,
+            n.height,
+            n.cornerRadius
+          );
         this.getCachedTessellation(n.id, n, pathPoints, true, DEFAULT_TESSELLATION_TOLERANCE);
         break;
       }
       case 'ellipse': {
         const n = node;
-        const pathPoints = createEllipsePath(0, 0, n.radiusX, n.radiusY);
+        const pathPoints = () => createEllipsePath(0, 0, n.radiusX, n.radiusY);
         this.getCachedTessellation(n.id, n, pathPoints, true, ELLIPSE_TESSELLATION_TOLERANCE);
         break;
       }
       case 'polygon': {
         const n = node;
-        const pathPoints =
+        const pathPoints = () =>
           n.innerRadius !== undefined
             ? createStarPath(0, 0, n.radius, n.innerRadius, n.sides, undefined, n.cornerRadius)
             : createPolygonPath(0, 0, n.radius, n.sides, undefined, n.cornerRadius);
@@ -3559,7 +3563,7 @@ export class ShapeRenderer {
         if (n.subpaths && n.subpaths.length > 0 && n.closed) {
           this.getCachedMultiContourTessellation(n.id, n);
         } else {
-          const processed = applyCornerRadius(n.points, n.closed);
+          const processed = () => applyCornerRadius(n.points, n.closed);
           this.getCachedTessellation(n.id, n, processed, n.closed, DEFAULT_TESSELLATION_TOLERANCE);
         }
         break;

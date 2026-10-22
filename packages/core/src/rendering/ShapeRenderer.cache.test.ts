@@ -103,6 +103,18 @@ describe('ShapeRenderer caches', () => {
     expect(counts.outline).toBe(0);
   });
 
+  it('builds a path’s points only when its geometry changes, not every frame', () => {
+    sceneGraph.addNode({ ...compoundPath([stroke]), subpaths: undefined });
+    frames(5);
+    expect(counts.corners).toBe(1);
+    expect(counts.tessellate).toBe(1);
+    sceneGraph.updateNode('frame', {
+      points: [corner(0, 0), corner(120, 0), corner(120, 100), corner(0, 100)],
+    } as Partial<PathNode>);
+    frames(3);
+    expect(counts.corners).toBe(2);
+  });
+
   it('outlines again when the stroke changes, and only then', () => {
     sceneGraph.addNode(compoundPath([stroke]));
     frames(2);
