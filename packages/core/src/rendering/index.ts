@@ -12,4 +12,5 @@ export * from './PostProcessShaders';
 export * from './EffectRenderer';
 export * from './imageMesh';
 export * from './bendMesh';
+export * from './bindVertices';
 export * from './shapeOutline';
