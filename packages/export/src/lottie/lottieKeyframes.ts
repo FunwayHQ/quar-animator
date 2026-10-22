@@ -12,7 +12,12 @@
  */
 
 import type { EasingFunction, PropertyTrack, Keyframe, Color } from '@quar/types';
-import { easingToBezierPoints, evaluateTrack } from '@quar/animation';
+import {
+  easingToBezierPoints,
+  evaluateTrack,
+  interpolateValue,
+  interpolators,
+} from '@quar/animation';
 import type {
   LottieAnimatedValue,
   LottieAnimatedMulti,
@@ -426,8 +431,8 @@ function collectUniqueTimes(...tracks: (PropertyTrack | undefined)[]): number[] 
 }
 
 /**
- * Sample a track's value at a given frame using simple linear interpolation
- * between surrounding keyframes.
+ * A number track's value at a frame, as the editor plays it (its easing
+ * included).
  */
 function sampleTrackAt(
   track: PropertyTrack<number> | undefined,
@@ -435,27 +440,7 @@ function sampleTrackAt(
   defaultValue: number
 ): number {
   if (!track || track.keyframes.length === 0) return defaultValue;
-
-  const kfs = track.keyframes;
-
-  // Before first keyframe
-  if (frame <= kfs[0]!.time) return kfs[0]!.value;
-  // After last keyframe
-  if (frame >= kfs[kfs.length - 1]!.time) return kfs[kfs.length - 1]!.value;
-
-  // Find surrounding keyframes
-  for (let i = 0; i < kfs.length - 1; i++) {
-    const current = kfs[i]!;
-    const next = kfs[i + 1]!;
-    if (current.time <= frame && frame <= next.time) {
-      const duration = next.time - current.time;
-      if (duration === 0) return current.value;
-      const t = (frame - current.time) / duration;
-      return current.value + (next.value - current.value) * t;
-    }
-  }
-
-  return defaultValue;
+  return interpolateValue(track, frame, interpolators.number);
 }
 
 // Export for testing

@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { EasingFunction, PropertyTrack, Keyframe, Color } from '@quar/types';
+import { applyEasing } from '@quar/animation';
 import {
   quarEasingToLottieTangents,
   easingNeedsBaking,
@@ -176,6 +177,12 @@ describe('trackToLottieAnimated', () => {
     expect(result.a).toBe(1);
     // One keyframe per frame across [0,10].
     expect((result.k as unknown[]).length).toBe(11);
+    // …each on the bounce, not on a straight line from 0 to 100
+    const k = result.k as Array<{ s: number[] }>;
+    for (let frame = 0; frame <= 10; frame++) {
+      expect(k[frame]!.s[0]).toBeCloseTo(100 * applyEasing(frame / 10, 'easeOutBounce'), 6);
+    }
+    expect(k[5]!.s[0]).toBeGreaterThan(70); // easeOutBounce(0.5) ≈ 0.77
   });
 
   it('exports a cubic-representable easing as tangents, not baked (F061)', () => {
