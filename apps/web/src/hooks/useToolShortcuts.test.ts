@@ -243,6 +243,21 @@ describe('useToolShortcuts', () => {
 
       document.body.removeChild(div);
     });
+
+    it('should leave a focused dropdown its type-ahead (F093)', () => {
+      renderHook(() => useToolShortcuts());
+
+      const select = document.createElement('select');
+      document.body.appendChild(select);
+      select.focus();
+
+      const event = dispatchKeyDown('r', {}, select);
+
+      expect(useEditorStore.getState().activeTool).toBe('selection');
+      expect(event.defaultPrevented).toBe(false);
+
+      document.body.removeChild(select);
+    });
   });
 
   // ==========================================================================

@@ -42,7 +42,7 @@ const TOOL_SHORTCUTS: Record<string, ToolType> = {
  * W weight paint
  *
  * Shortcuts are ignored when:
- * - Input or textarea is focused
+ * - Input, textarea, or select is focused
  * - Ctrl, Alt, or Meta modifiers are pressed
  */
 export function useToolShortcuts() {
@@ -55,13 +55,14 @@ export function useToolShortcuts() {
         return;
       }
 
-      // Ignore when input or textarea is focused
+      // Ignore when input, textarea, or select is focused (a dropdown's
+      // letters pick its options)
       const target = event.target as HTMLElement | null;
       if (target && target.tagName) {
         const tagName = target.tagName.toLowerCase();
         const isEditable =
           target.isContentEditable || target.getAttribute?.('contenteditable') === 'true';
-        if (tagName === 'input' || tagName === 'textarea' || isEditable) {
+        if (tagName === 'input' || tagName === 'textarea' || tagName === 'select' || isEditable) {
           return;
         }
       }
