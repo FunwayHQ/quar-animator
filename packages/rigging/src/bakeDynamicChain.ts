@@ -6,7 +6,7 @@
 import type { DynamicChain, DynamicChainState, WindSettings, Keyframe } from '@quar/types';
 import {
   initializeChainState,
-  stepDynamicChain,
+  stepDynamicChainFrame,
   applyChainToBones,
   computeWindForce,
   type DynamicChainSceneGraph,
@@ -68,7 +68,7 @@ export function bakeDynamicChainToKeyframes(
     // Step physics (skip frame 0 — it's the initial state)
     if (frame > 0) {
       const windForce = computeWindForce(wind, time);
-      stepDynamicChain(chain, state, sceneGraph, dt, windForce);
+      stepDynamicChainFrame(chain, state, sceneGraph, dt, windForce);
       applyChainToBones(chain, state, sceneGraph);
     }
 

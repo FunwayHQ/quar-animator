@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   initializeChainState,
   stepDynamicChain,
+  stepDynamicChainFrame,
   applyChainToBones,
   computeWindForce,
   type DynamicChainSceneGraph,
@@ -340,6 +341,21 @@ describe('stepDynamicChain', () => {
 
     stepDynamicChain(chain, state, sg, 0.5, { x: 0, y: 0 }); // > 0.1
     expect(state.particles[3]!.position).toEqual(posBefore);
+  });
+
+  it('steps a frame longer than the solver takes in substeps', () => {
+    const { sg } = makeHorizontalChainSG();
+    const chain = makeChain({ gravity: 100 });
+    const state = initializeChainState(chain, sg)!;
+    const posBefore = { ...state.particles[3]!.position };
+
+    for (const dt of [Number.NaN, Number.POSITIVE_INFINITY, 0, -1]) {
+      stepDynamicChainFrame(chain, state, sg, dt, { x: 0, y: 0 });
+    }
+    expect(state.particles[3]!.position).toEqual(posBefore);
+
+    stepDynamicChainFrame(chain, state, sg, 0.5, { x: 0, y: 0 }); // a 2 fps frame
+    expect(state.particles[3]!.position.y).toBeLessThan(posBefore.y);
   });
 
   it('does nothing for uninitialized state', () => {

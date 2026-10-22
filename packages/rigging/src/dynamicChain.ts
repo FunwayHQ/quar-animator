@@ -172,6 +172,31 @@ export function computeWindForce(wind: WindSettings | undefined, time: number): 
   };
 }
 
+/** The longest step the solver takes, in seconds: stepDynamicChain ignores longer ones. */
+export const MAX_STEP_DT = 0.1;
+
+/** How long the substeps of a longer frame are, at most (seconds). */
+const SUBSTEP_DT = 0.05;
+
+/**
+ * Step a dynamic chain forward by one frame of dt seconds. A frame longer
+ * than the solver's longest step (a frame rate under 10 fps) is simulated in
+ * equal substeps, so the chain moves at low frame rates instead of freezing.
+ */
+export function stepDynamicChainFrame(
+  chain: DynamicChain,
+  state: DynamicChainState,
+  sceneGraph: DynamicChainSceneGraph,
+  dt: number,
+  windForce: Vector2
+): void {
+  if (!Number.isFinite(dt)) return;
+  const substeps = dt > MAX_STEP_DT ? Math.ceil(dt / SUBSTEP_DT) : 1;
+  for (let i = 0; i < substeps; i++) {
+    stepDynamicChain(chain, state, sceneGraph, dt / substeps, windForce);
+  }
+}
+
 /**
  * Step a dynamic chain simulation forward by dt seconds.
  *
@@ -190,7 +215,7 @@ export function stepDynamicChain(
   windForce: Vector2
 ): void {
   if (!state.initialized || state.particles.length < 2) return;
-  if (dt <= 0 || dt > 0.1) return; // Guard against huge timesteps
+  if (!(dt > 0 && dt <= MAX_STEP_DT)) return; // Guard against huge or invalid timesteps
 
   const { particles } = state;
   const { damping, gravity, gravityAngle, stiffness, windInfluence, elasticity, freezeAxis } =

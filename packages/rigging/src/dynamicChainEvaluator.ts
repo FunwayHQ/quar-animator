@@ -8,7 +8,7 @@
 import type { DynamicChain, DynamicChainState, WindSettings } from '@quar/types';
 import {
   initializeChainState,
-  stepDynamicChain,
+  stepDynamicChainFrame,
   applyChainToBones,
   computeWindForce,
   type DynamicChainSceneGraph,
@@ -20,7 +20,7 @@ import {
  * @param chains - All dynamic chain configurations
  * @param stateMap - Mutable map of chainId → simulation state (managed by caller)
  * @param sceneGraph - Scene graph for reading/writing bone transforms
- * @param dt - Time delta in seconds since last step
+ * @param dt - Time delta in seconds since last step (a long one is simulated in substeps)
  * @param wind - Global wind settings
  * @param time - Current time in seconds (for wind turbulence)
  */
@@ -48,7 +48,7 @@ export function evaluateDynamicChains(
     }
 
     // Step simulation
-    stepDynamicChain(chain, state, sceneGraph, dt, windForce);
+    stepDynamicChainFrame(chain, state, sceneGraph, dt, windForce);
 
     // Apply results to bones
     applyChainToBones(chain, state, sceneGraph);

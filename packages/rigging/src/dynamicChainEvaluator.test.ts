@@ -265,6 +265,16 @@ describe('simulating to a timeline frame', () => {
     expect(rotations(everyFrame)[0]).toBeLessThan(-1);
   });
 
+  it('moves at frame rates under 10 fps (F146)', () => {
+    const bones = tail();
+    const states = new Map<string, DynamicChainState>();
+    const clock = { lastFrame: null as number | null };
+    for (let frame = 0; frame <= 8; frame++) {
+      evaluateDynamicChainsAtFrame([falling], states, makeSG(bones), frame, 8, undefined, clock);
+    }
+    expect(rotations(bones)[0]).toBeLessThan(-1);
+  });
+
   it('starts again from the bones’ own pose when time goes back', () => {
     const bones = tail();
     const states = new Map<string, DynamicChainState>();

@@ -215,4 +215,23 @@ describe('bakeDynamicChainToKeyframes', () => {
     const rot20 = kfs[20]!.value;
     expect(rot0).not.toEqual(rot20);
   });
+
+  it('moves under 10 fps as it does at 24 fps (F146)', () => {
+    const chain = makeChain({ gravity: 200, gravityAngle: -90 });
+    // One second at each frame rate
+    const bake = (frameRate: number) =>
+      bakeDynamicChainToKeyframes(
+        chain,
+        makeSG(makeHorizontalBones()),
+        frameRate,
+        frameRate,
+        makeWind(),
+        () => {}
+      )!.boneKeyframes.get('bone-1')!;
+    const slow = bake(8);
+    const usual = bake(24);
+    expect(slow[8]!.value).toBeLessThan(slow[0]!.value - 1);
+    // Each 8 fps frame is three steps of 1/24 s: the same fall
+    expect(slow[8]!.value).toBeCloseTo(usual[24]!.value, 6);
+  });
 });
