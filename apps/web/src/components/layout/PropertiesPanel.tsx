@@ -4,6 +4,7 @@ import type {
   EllipseNode,
   PathNode,
   PathPoint,
+  PolygonNode,
   GroupNode,
   BoneNode,
   Color,
@@ -111,6 +112,15 @@ const groupBoundsManager = new SelectionManager();
 function fmt1(v: number): string {
   if (!isFinite(v)) return '0.0';
   return (Math.round(v * 10) / 10).toFixed(1);
+}
+
+/**
+ * A polygon's inner radius. A regular polygon has none; for it this is the
+ * distance to the middle of its edges, the inner radius whose star is the very
+ * same polygon, so showing or keying it doesn't change the shape (F083).
+ */
+function polygonInnerRadius(poly: PolygonNode): number {
+  return poly.innerRadius ?? poly.radius * Math.cos(Math.PI / Math.max(3, poly.sides));
 }
 
 /** Returns true if auto-keyframe is on OR the property already has keyframes */
@@ -1976,7 +1986,7 @@ export function PropertiesPanel() {
                         <span className={styles.propertyLabel}>Inner Radius</span>
                         <KeyframeIndicator
                           state={getKeyframeState(timeline, nodeId, 'innerRadius', currentFrame)}
-                          onToggle={() => toggleKeyframe('innerRadius', poly.innerRadius ?? 1)}
+                          onToggle={() => toggleKeyframe('innerRadius', polygonInnerRadius(poly))}
                         />
                       </div>
                       <div className={styles.propertyInputs}>
@@ -1985,7 +1995,7 @@ export function PropertiesPanel() {
                             const sx = Math.abs(poly.transform.scale?.x ?? 1);
                             const sy = Math.abs(poly.transform.scale?.y ?? 1);
                             const avgScale = (sx + sy) / 2;
-                            const irRaw = poly.innerRadius ?? poly.radius;
+                            const irRaw = polygonInnerRadius(poly);
                             const irPixels = irRaw * avgScale;
                             const maxPixels = poly.radius * avgScale;
                             return (

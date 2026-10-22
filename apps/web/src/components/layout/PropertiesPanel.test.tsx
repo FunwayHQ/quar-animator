@@ -1,8 +1,14 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { render, screen, act, fireEvent } from '../../test/utils';
+import { render, screen, act, fireEvent, within } from '../../test/utils';
 import userEvent from '@testing-library/user-event';
 import { SceneGraphProvider, useSceneGraph } from '../../contexts/SceneGraphContext';
-import { createDefaultTransform, getTextLocalBounds, getTextNodeBounds } from '@quar/core';
+import {
+  createDefaultTransform,
+  createPolygonPath,
+  createStarPath,
+  getTextLocalBounds,
+  getTextNodeBounds,
+} from '@quar/core';
 import { applyAnimatedValues, createTimeline, evaluateNodeAtFrame } from '@quar/animation';
 import type { SceneGraph } from '@quar/core';
 import type {
@@ -1040,6 +1046,41 @@ describe('PropertiesPanel', () => {
 
       const updatedNode = sg.getNode('poly1') as PolygonNode;
       expect(updatedNode.cornerRadius).toBe(10);
+    });
+
+    it('keys a regular polygon’s Inner Radius as the same polygon, as the field shows it (F083)', () => {
+      useEditorStore.setState({
+        timeline: createTimeline({ duration: 300, frameRate: 30 }),
+        currentFrame: 0,
+      });
+      const sg = renderWithSceneGraph();
+      act(() => {
+        sg.addNode(createTestPolygon('poly1', 'Polygon 1')); // 5 sides, radius 50
+        useEditorStore.getState().setSelection(['poly1']);
+      });
+      // The distance to the middle of its edges
+      const apothem = 50 * Math.cos(Math.PI / 5);
+      expect(screen.getByTestId('polygon-inner-radius-input')).toHaveValue(apothem.toFixed(1));
+
+      const row = screen.getByText('Inner Radius').parentElement!;
+      act(() => {
+        fireEvent.click(within(row).getByTestId('keyframe-indicator'));
+      });
+
+      const track = useEditorStore
+        .getState()
+        .timeline.tracks.find((t) => t.nodeId === 'poly1' && t.property === 'innerRadius');
+      expect(track?.keyframes.map((kf) => kf.value)).toEqual([apothem]);
+      // As a star, every other point sits on an edge of the polygon: the same shape
+      const polygon = createPolygonPath(0, 0, 50, 5).map((p) => p.position);
+      const star = createStarPath(0, 0, 50, apothem, 5).map((p) => p.position);
+      polygon.forEach((corner, i) => {
+        const next = polygon[(i + 1) % polygon.length]!;
+        expect(star[2 * i]!.x).toBeCloseTo(corner.x);
+        expect(star[2 * i]!.y).toBeCloseTo(corner.y);
+        expect(star[2 * i + 1]!.x).toBeCloseTo((corner.x + next.x) / 2);
+        expect(star[2 * i + 1]!.y).toBeCloseTo((corner.y + next.y) / 2);
+      });
     });
 
     describe('keyframing one radius for all corners (F082)', () => {
