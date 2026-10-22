@@ -16,6 +16,7 @@ import {
   EASE_IN,
   EASE_OUT,
   EASE_IN_OUT,
+  _cubicBezierCacheSize,
 } from './Easing';
 import type { EasingType } from '@quar/types';
 
@@ -476,5 +477,20 @@ describe('easingToBezierPoints', () => {
   it('should return custom points for createCubicBezier', () => {
     const easing = createCubicBezier(0.1, 0.2, 0.8, 0.9);
     expect(easingToBezierPoints(easing)).toEqual([0.1, 0.2, 0.8, 0.9]);
+  });
+});
+
+describe('the cubic-bezier cache', () => {
+  it('keeps at most 256 curves however many are made (a tangent drag makes one per move)', () => {
+    for (let i = 0; i < 1000; i++) {
+      const x = i / 1000;
+      expect(applyEasing(0.5, createCubicBezier(x, 0.1, 0.9, x))).toBeGreaterThan(0);
+    }
+    expect(_cubicBezierCacheSize()).toBeLessThanOrEqual(256);
+    // Curves still evaluate correctly after older ones were let go
+    const curve = createCubicBezier(0.42, 0, 0.58, 1);
+    expect(applyEasing(0, curve)).toBeCloseTo(0, 6);
+    expect(applyEasing(1, curve)).toBeCloseTo(1, 6);
+    expect(applyEasing(0.5, curve)).toBeCloseTo(0.5, 3);
   });
 });

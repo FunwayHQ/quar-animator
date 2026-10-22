@@ -123,6 +123,11 @@ const easeInOutBounce = (t: number): number =>
 // ============================================================================
 
 const cubicBezierCache = new Map<string, (t: number) => number>();
+/**
+ * At most this many curves are kept: dragging a tangent handle makes a new
+ * curve on every move, so the cache can't keep them all.
+ */
+const MAX_CUBIC_BEZIER_CACHE = 256;
 
 function getCachedCubicBezier(
   x1: number,
@@ -135,8 +140,18 @@ function getCachedCubicBezier(
   if (!fn) {
     fn = cubicBezier(x1, y1, x2, y2);
     cubicBezierCache.set(key, fn);
+    // The oldest goes first (a Map keeps insertion order)
+    if (cubicBezierCache.size > MAX_CUBIC_BEZIER_CACHE) {
+      const oldest = cubicBezierCache.keys().next().value;
+      if (oldest !== undefined) cubicBezierCache.delete(oldest);
+    }
   }
   return fn;
+}
+
+/** How many curves the cache holds (for tests). */
+export function _cubicBezierCacheSize(): number {
+  return cubicBezierCache.size;
 }
 
 function cubicBezier(x1: number, y1: number, x2: number, y2: number): (t: number) => number {
