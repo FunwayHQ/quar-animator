@@ -170,6 +170,41 @@ describe('ShapeRenderer - Image Rendering', () => {
       expect(result2).toBeNull();
     });
 
+    it('doesn’t try a failed image again on every frame, only after a pause', async () => {
+      let loads = 0;
+      class FailingImage {
+        crossOrigin = '';
+        onload: (() => void) | null = null;
+        onerror: (() => void) | null = null;
+        set src(_value: string) {
+          loads++;
+          queueMicrotask(() => this.onerror?.());
+        }
+      }
+      vi.stubGlobal('Image', FailingImage);
+      vi.useFakeTimers({ toFake: ['Date'] });
+      try {
+        const src = 'https://example.invalid/missing.png';
+        const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+        expect(shapeRenderer.getTexture(src)).toBeNull();
+        await settle(); // the load fails
+        expect(loads).toBe(1);
+        for (let frame = 0; frame < 30; frame++) shapeRenderer.getTexture(src);
+        expect(loads).toBe(1);
+        vi.advanceTimersByTime(10_000);
+        shapeRenderer.getTexture(src);
+        expect(loads).toBe(2);
+        // A source given up on loads again once disposed (e.g. the image was replaced)
+        await settle();
+        shapeRenderer.disposeTexture(src);
+        shapeRenderer.getTexture(src);
+        expect(loads).toBe(3);
+      } finally {
+        vi.useRealTimers();
+        vi.unstubAllGlobals();
+      }
+    });
+
     it('should not create duplicate pending promises for same source', () => {
       shapeRenderer.getTexture('data:image/png;base64,test');
       shapeRenderer.getTexture('data:image/png;base64,test');

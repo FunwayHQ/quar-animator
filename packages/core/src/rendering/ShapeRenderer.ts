@@ -436,6 +436,8 @@ void main() {
 // Ellipse segments constant reserved for future use
 // const _DEFAULT_ELLIPSE_SEGMENTS = 64;
 const MAX_VERTICES = 10000;
+/** How long an image that failed to load waits before it's tried again (ms) */
+const IMAGE_RETRY_MS = 10_000;
 const DEFAULT_TESSELLATION_TOLERANCE = 1.0;
 const ELLIPSE_TESSELLATION_TOLERANCE = 0.5;
 
@@ -565,6 +567,8 @@ export class ShapeRenderer {
   private imageMeshIndexBuffer: WebGLBuffer | null = null;
   private textureCache: Map<string, WebGLTexture> = new Map();
   private pendingImages: Map<string, Promise<HTMLImageElement>> = new Map();
+  /** When each image that failed to load last failed (it's tried again after a pause) */
+  private failedImages = new Map<string, number>();
   private currentVPArray: Float32Array | null = null;
   private currentMorphOffsets: Map<string, Float32Array> | undefined = undefined;
 
@@ -1185,6 +1189,11 @@ export class ShapeRenderer {
     // Already loading?
     if (this.pendingImages.has(src)) return null;
 
+    // Failed lately: not tried again on every frame
+    const failedAt = this.failedImages.get(src);
+    if (failedAt !== undefined && Date.now() - failedAt < IMAGE_RETRY_MS) return null;
+    this.failedImages.delete(src);
+
     // Start async load
     const promise = new Promise<HTMLImageElement>((resolve, reject) => {
       const img = new Image();
@@ -1216,6 +1225,7 @@ export class ShapeRenderer {
       })
       .catch(() => {
         this.pendingImages.delete(src);
+        this.failedImages.set(src, Date.now());
       });
 
     return null;
@@ -1329,6 +1339,7 @@ export class ShapeRenderer {
       this.textureCache.delete(src);
     }
     this.pendingImages.delete(src);
+    this.failedImages.delete(src);
   }
 
   /** Delete every cached GPU texture (e.g. when the whole scene is replaced). */
@@ -1339,6 +1350,7 @@ export class ShapeRenderer {
     }
     this.textureCache.clear();
     this.pendingImages.clear();
+    this.failedImages.clear();
   }
 
   // --------------------------------------------------------------------------
