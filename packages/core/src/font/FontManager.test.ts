@@ -100,6 +100,15 @@ describe('FontManager cache and lookup behavior', () => {
     expect(fm.generation).toBeGreaterThan(start + 1);
   });
 
+  it('does not report a font read from a file as still loading (F178)', async () => {
+    await fm.loadFontFromBuffer(new ArrayBuffer(8), 'MyFont');
+    await flush();
+
+    expect(fm.hasFont('MyFont')).toBe(true);
+    expect(fm.isLoading('MyFont')).toBe(false);
+    expect(fm.isLoading('MyFont', 400)).toBe(false);
+  });
+
   it('uses exact, regular, then family-weight fallbacks for font lookup', async () => {
     const buffer = new ArrayBuffer(8);
     const regular = await fm.loadFontFromBuffer(buffer, 'Roboto', 'local', 400);

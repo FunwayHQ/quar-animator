@@ -48,17 +48,13 @@ export class FontManager {
     const loading = this.loadingPromises.get(key);
     if (loading) return loading;
 
-    const promise = (() => {
-      const font = opentype.parse(buffer);
-      this.fontCache.set(key, font);
-      this.changes++;
-      this.availableFonts.set(family, { family, source });
-      this.loadingPromises.delete(key);
-      return font;
-    })();
-
-    this.loadingPromises.set(key, Promise.resolve(promise));
-    return promise;
+    // Parsing is synchronous, so the font is cached before anyone else can ask
+    // for it: there is nothing in flight to record in loadingPromises.
+    const font = opentype.parse(buffer);
+    this.fontCache.set(key, font);
+    this.changes++;
+    this.availableFonts.set(family, { family, source });
+    return font;
   }
 
   /**
