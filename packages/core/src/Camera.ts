@@ -258,14 +258,19 @@ export class Camera {
 
   getViewMatrix(): Matrix3 {
     if (!this._viewMatrix) {
-      // View matrix: translate to camera position, then rotate
+      // View matrix: move the camera position to the origin, then rotate
+      // about it, so the camera position is the world point at the screen's
+      // center at any rotation (pan, zoomAt and fitBounds rely on that).
+      // mat3.rotate/translate multiply on the right, so the translation is
+      // applied to points first.
       let m = mat3.identity();
-      m = mat3.translate(m, -this._position.x, -this._position.y);
 
       if (this._rotation !== 0) {
         const rad = (-this._rotation * Math.PI) / 180;
         m = mat3.rotate(m, rad);
       }
+
+      m = mat3.translate(m, -this._position.x, -this._position.y);
 
       this._viewMatrix = m;
     }

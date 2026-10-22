@@ -60,6 +60,58 @@ describe('Camera', () => {
       camera.rotation = 45;
       expect(camera.rotation).toBe(45);
     });
+
+    it('keeps the camera position at the center of the screen', () => {
+      const camera = new Camera();
+      camera.setViewport(800, 600);
+      camera.position = { x: 120, y: -80 };
+      camera.rotation = 30;
+
+      const center = camera.worldToScreen({ x: 120, y: -80 });
+      expect(center.x).toBeCloseTo(400);
+      expect(center.y).toBeCloseTo(300);
+    });
+
+    it('pans content by the dragged screen delta', () => {
+      const camera = new Camera();
+      camera.setViewport(800, 600);
+      camera.rotation = 90;
+      const point = { x: 30, y: 40 };
+
+      const before = camera.worldToScreen(point);
+      camera.pan({ x: 100, y: 50 });
+      const after = camera.worldToScreen(point);
+
+      expect(after.x - before.x).toBeCloseTo(100);
+      expect(after.y - before.y).toBeCloseTo(50);
+    });
+
+    it('keeps the world point under the cursor still when zooming', () => {
+      const camera = new Camera();
+      camera.setViewport(800, 600);
+      camera.position = { x: 50, y: 20 };
+      camera.rotation = 60;
+      const cursor = { x: 650, y: 120 };
+
+      const worldBefore = camera.screenToWorld(cursor);
+      camera.zoomAt(cursor, 300);
+      const worldAfter = camera.screenToWorld(cursor);
+
+      expect(worldAfter.x).toBeCloseTo(worldBefore.x);
+      expect(worldAfter.y).toBeCloseTo(worldBefore.y);
+    });
+
+    it('centers fitted bounds on screen', () => {
+      const camera = new Camera();
+      camera.setViewport(800, 600);
+      camera.rotation = 45;
+
+      camera.fitBounds({ x: 100, y: 100, width: 200, height: 200 }, 0);
+
+      const center = camera.worldToScreen({ x: 200, y: 200 });
+      expect(center.x).toBeCloseTo(400);
+      expect(center.y).toBeCloseTo(300);
+    });
   });
 
   describe('viewport', () => {
