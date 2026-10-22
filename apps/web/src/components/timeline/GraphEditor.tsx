@@ -345,19 +345,19 @@ export function GraphEditor() {
         let newTime = graphPos.frame;
         let newValue = graphPos.value;
 
-        // Shift constrains to one axis
+        // Shift constrains to one axis: the one the drag first went along,
+        // kept once it has gone 5 px (it then can't flip as the pointer wanders)
+        let axis = dragMode.axis;
         if (e.shiftKey) {
           const dx = Math.abs(e.clientX - dragMode.startScreenX);
           const dy = Math.abs(e.clientY - dragMode.startScreenY);
-          const axis = dragMode.axis ?? (dx > dy ? 'x' : 'y');
-          if (axis === 'x') {
+          const along = axis ?? (dx > dy ? 'x' : 'y');
+          if (along === 'x') {
             newValue = dragMode.startValue;
           } else {
             newTime = dragMode.startTime;
           }
-          if (!dragMode.axis && (dx > 5 || dy > 5)) {
-            setDragMode({ ...dragMode, axis });
-          }
+          if (!axis && (dx > 5 || dy > 5)) axis = along;
         }
 
         // Snap time to integer frames
@@ -372,8 +372,9 @@ export function GraphEditor() {
           newTime,
           newValue
         );
-        // Update startTime so next move uses the new position
-        setDragMode({ ...dragMode, startTime: newTime, startValue: newValue });
+        // Update startTime so next move uses the new position (one update,
+        // so the axis just locked isn't lost)
+        setDragMode({ ...dragMode, axis, startTime: newTime, startValue: newValue });
         return;
       }
 

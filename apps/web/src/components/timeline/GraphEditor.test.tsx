@@ -5,7 +5,7 @@ import { GraphEditor } from './GraphEditor';
 import { SceneGraphProvider } from '../../contexts/SceneGraphContext';
 import { useEditorStore } from '../../stores/editorStore';
 import { DEFAULT_FILL, DEFAULT_STROKE } from '../../stores/editorStore';
-import { createTimeline, KeyframeManager } from '@quar/animation';
+import { createTimeline, graphToScreen, KeyframeManager } from '@quar/animation';
 
 function renderGraphEditor() {
   return render(
@@ -160,6 +160,44 @@ describe('GraphEditor', () => {
 
       fireEvent.keyDown(area, { key: 'Delete' });
       expect(xTimes()).toEqual([60]);
+    });
+  });
+
+  describe('dragging a keyframe with Shift', () => {
+    it('keeps to the axis it started on, however the pointer wanders after', () => {
+      useEditorStore.setState({ timeline: setupTimelineWithKeyframes(), graphVisibleTracks: [] });
+      const view = renderGraphEditor();
+      const area = screen.getByTestId('graph-editor-area');
+      // The x track's keyframe at frame 30, value 200, where the view draws it
+      const transform = useEditorStore.getState().graphViewTransform;
+      const at = graphToScreen(30, 200, transform);
+      const dot = [...view.container.querySelectorAll('circle[class*="keyframeDot"]')].find(
+        (c) =>
+          Math.abs(Number(c.getAttribute('cx')) - at.x) < 0.01 &&
+          Math.abs(Number(c.getAttribute('cy')) - at.y) < 0.01
+      );
+      expect(dot).toBeDefined();
+      const xKeys = () =>
+        useEditorStore
+          .getState()
+          .timeline.tracks.find((t) => t.property === 'transform.position.x')!
+          .keyframes.map((kf) => [kf.time, kf.value]);
+
+      fireEvent.mouseDown(dot!, { button: 0, clientX: at.x, clientY: at.y });
+      // Mostly sideways: the drag locks to time
+      fireEvent.mouseMove(area, { clientX: at.x + 100, clientY: at.y + 2, shiftKey: true });
+      // Then far up: still only time changes
+      fireEvent.mouseMove(area, { clientX: at.x + 110, clientY: at.y - 300, shiftKey: true });
+      fireEvent.mouseUp(area);
+
+      const moved = 30 + Math.round(110 / transform.scaleX);
+      expect(xKeys()).toEqual(
+        [
+          [0, 100],
+          [moved, 200],
+          [60, 150],
+        ].sort((a, b) => a[0]! - b[0]!)
+      );
     });
   });
 
