@@ -20,6 +20,7 @@ import type {
 import { createDefaultTransform } from '../SceneGraph';
 import { getNodeLocalBounds } from '../gradient/gradientUtils';
 import { clonePathPoint } from '../path/pathUtils';
+import { getShapeOutlinePoints } from '../path/shapeToPath';
 import {
   parseSvgTransform,
   parseSvgColor,
@@ -75,7 +76,72 @@ export function convertSvgToNodes(
     }
   }
 
+  // Layers don't draw skew: a sheared shape's whole transform goes into its
+  // outline instead, so it looks as the SVG draws it (and exports that way)
+  for (let i = 0; i < allNodes.length; i++) {
+    const baked = bakeShear(allNodes[i]!);
+    if (baked) allNodes[i] = baked;
+  }
+
   return { nodes: allNodes, rootIds };
+}
+
+/**
+ * A shape whose transform shears it, as a path with the transform's whole
+ * linear part applied to its points (and handles): rotation 0, scale 1, no
+ * skew. Same id, so its parent and masks still find it. Null when there's no
+ * shear (a skew of 0° or 180° — the latter a mirror, kept by the scale), or
+ * for layers without an outline of their own (groups).
+ */
+function bakeShear(node: Node): PathNode | null {
+  const { rotation, scale, skew } = node.transform;
+  const phi = (skew.x * Math.PI) / 180;
+  if (Math.abs(Math.sin(phi)) < 1e-9) return null;
+  const outline = getShapeOutlinePoints(node);
+  if (!outline) return null;
+
+  // The SVG matrix's linear part, rebuilt from what decomposeMatrix kept:
+  // column 1 from the rotation (stored negated, Y-up) and scale.x; column 2
+  // from its dot product and determinant with column 1 (the skew angle and
+  // both scales)
+  const theta = (-rotation * Math.PI) / 180;
+  const sx = scale.x;
+  const sy = Math.abs(scale.y);
+  const a = sx * Math.cos(theta);
+  const b = sx * Math.sin(theta);
+  const dot = sx * sy * Math.sin(phi);
+  const det = sx * sy * Math.cos(phi);
+  const c = (a * dot - b * det) / (sx * sx);
+  const d = (b * dot + a * det) / (sx * sx);
+  // In the layer's Y-up space: F·M·F with F = diag(1, -1)
+  const map = (v: Vector2): Vector2 => ({ x: a * v.x - c * v.y, y: -b * v.x + d * v.y });
+  const bake = (points: PathPoint[]): PathPoint[] =>
+    points.map((pt) => ({
+      ...pt,
+      position: map(pt.position),
+      handleIn: pt.handleIn ? map(pt.handleIn) : null,
+      handleOut: pt.handleOut ? map(pt.handleOut) : null,
+    }));
+
+  const { id, name, parent, children, visible, locked, opacity, blendMode } = node;
+  return {
+    id,
+    name,
+    type: 'path',
+    parent,
+    children,
+    transform: { ...createDefaultTransform(), position: { ...node.transform.position } },
+    visible,
+    locked,
+    opacity,
+    blendMode,
+    points: bake(outline.points),
+    ...(outline.subpaths ? { subpaths: outline.subpaths.map(bake) } : {}),
+    closed: outline.closed,
+    ...(node.type === 'path' && node.fillRule ? { fillRule: node.fillRule } : {}),
+    fills: ('fills' in node ? node.fills : undefined) ?? [],
+    strokes: ('strokes' in node ? node.strokes : undefined) ?? [],
+  };
 }
 
 interface ConvertContext {

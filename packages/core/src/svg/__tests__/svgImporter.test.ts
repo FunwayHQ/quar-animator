@@ -273,3 +273,72 @@ describe('importSvg', () => {
     expect(uniqueIds.size).toBe(ids.length);
   });
 });
+
+describe('importSvg — sheared shapes', () => {
+  /** Each point of a path where the canvas draws it. */
+  function drawnPoints(id: string): Array<[number, number]> {
+    const node = sceneGraph.getNode(id) as PathNode;
+    const m = sceneGraph.getWorldTransform(id);
+    return node.points.map(({ position: p }) => [
+      m.a * p.x + m.c * p.y + m.tx,
+      m.b * p.x + m.d * p.y + m.ty,
+    ]);
+  }
+
+  /** SVG-space points as the canvas shows them (Y up, a 100-high view box). */
+  const flipped = (points: Array<[number, number]>) =>
+    points.map(([x, y]) => [x, 100 - y] as [number, number]);
+
+  function expectPoints(actual: Array<[number, number]>, expected: Array<[number, number]>) {
+    expect(actual).toHaveLength(expected.length);
+    actual.forEach(([x, y], i) => {
+      expect(x).toBeCloseTo(expected[i]![0], 3);
+      expect(y).toBeCloseTo(expected[i]![1], 3);
+    });
+  }
+
+  it('draws a skewed rectangle sheared, as the SVG does', () => {
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 100">
+      <rect x="0" y="0" width="100" height="50" transform="skewX(30)"/></svg>`;
+    const { rootIds } = importSvg(svg, sceneGraph, generateId, { centerAtOrigin: false });
+    const node = sceneGraph.getNode(rootIds[0]!)!;
+    expect(node.type).toBe('path');
+    expect(node.transform.skew).toEqual({ x: 0, y: 0 });
+    const t = Math.tan(Math.PI / 6);
+    const corners: Array<[number, number]> = [
+      [0, 0],
+      [100, 0],
+      [100 + 50 * t, 50],
+      [50 * t, 50],
+    ];
+    // The same corners, in whichever order the outline starts
+    const drawn = drawnPoints(node.id).map(([x, y]) => `${x.toFixed(3)},${y.toFixed(3)}`);
+    for (const [x, y] of flipped(corners))
+      expect(drawn).toContain(`${x.toFixed(3)},${y.toFixed(3)}`);
+  });
+
+  it('keeps every point of a rotated, skewed and scaled path where the SVG puts it', () => {
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 100">
+      <path d="M10 10 L60 10 L40 40 Z" transform="translate(50 20) rotate(20) skewX(25) scale(1.5 0.8)"/></svg>`;
+    const { rootIds } = importSvg(svg, sceneGraph, generateId, { centerAtOrigin: false });
+    // The matrix, applied by hand to the SVG points
+    const rad = (deg: number) => (deg * Math.PI) / 180;
+    const [cr, sr, tk] = [Math.cos(rad(20)), Math.sin(rad(20)), Math.tan(rad(25))];
+    const apply = ([x, y]: [number, number]): [number, number] => {
+      const [x1, y1] = [x * 1.5, y * 0.8]; // scale
+      const x2 = x1 + tk * y1; // skewX
+      return [50 + cr * x2 - sr * y1, 20 + sr * x2 + cr * y1]; // rotate, translate
+    };
+    expectPoints(
+      drawnPoints(rootIds[0]!),
+      flipped([apply([10, 10]), apply([60, 10]), apply([40, 40])])
+    );
+  });
+
+  it('leaves a mirrored (unsheared) rectangle a rectangle', () => {
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 100">
+      <rect x="10" y="10" width="40" height="20" transform="scale(1 -1) translate(0 -60)"/></svg>`;
+    const { rootIds } = importSvg(svg, sceneGraph, generateId, { centerAtOrigin: false });
+    expect(sceneGraph.getNode(rootIds[0]!)!.type).toBe('rectangle');
+  });
+});
