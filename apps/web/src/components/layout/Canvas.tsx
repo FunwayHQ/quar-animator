@@ -34,7 +34,7 @@ import { SelectionOverlay } from '../canvas/SelectionOverlay';
 import { PenToolOverlay } from '../canvas/PenToolOverlay';
 import { DirectSelectionOverlay } from '../canvas/DirectSelectionOverlay';
 import { GradientHandleOverlay } from '../canvas/GradientHandleOverlay';
-import { CanvasRuler } from '../canvas/CanvasRuler';
+import { CanvasRuler, RULER_SIZE } from '../canvas/CanvasRuler';
 import { TextEditOverlay } from '../canvas/TextEditOverlay';
 import { BoneOverlay } from '../canvas/BoneOverlay';
 import { GhostSceneCache, poseSceneAtFrame } from '../canvas/onionSkinScenes';
@@ -2685,6 +2685,7 @@ export function Canvas({
           cameraVersion={cameraVersion}
           dragPreview={guideDragPreview}
           canvasRef={canvasRef}
+          rulerSize={showRulers ? RULER_SIZE : 0}
           onRemoveGuide={removeGuide}
           onUpdateGuidePosition={updateGuidePosition}
         />

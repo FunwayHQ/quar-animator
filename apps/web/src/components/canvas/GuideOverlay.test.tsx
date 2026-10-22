@@ -258,4 +258,53 @@ describe('GuideOverlay', () => {
     fireEvent.keyDown(window, { key: 'Delete' });
     expect(onRemoveGuide).not.toHaveBeenCalled();
   });
+  describe('dragging a guide onto a ruler removes it (F155)', () => {
+    function renderDraggable(guide: Guide, rulerSize?: number) {
+      const camera = new Camera();
+      camera.setViewport(800, 600);
+      const canvas = document.createElement('canvas');
+      canvas.getBoundingClientRect = () => new DOMRect(0, 0, 800, 600);
+      const onRemoveGuide = vi.fn();
+      render(
+        <GuideOverlay
+          guides={[guide]}
+          camera={camera}
+          viewportWidth={800}
+          viewportHeight={600}
+          cameraVersion={0}
+          dragPreview={null}
+          canvasRef={{ current: canvas }}
+          rulerSize={rulerSize}
+          onRemoveGuide={onRemoveGuide}
+          onUpdateGuidePosition={vi.fn()}
+        />
+      );
+      fireEvent.pointerDown(screen.getAllByTestId('guide-hit')[0]!);
+      return onRemoveGuide;
+    }
+
+    it('a vertical guide dropped on the left ruler strip is removed', () => {
+      const onRemoveGuide = renderDraggable(createGuide('g1', 'x', 100), 20);
+      fireEvent.pointerUp(window, { clientX: 10, clientY: 300 });
+      expect(onRemoveGuide).toHaveBeenCalledWith('g1');
+    });
+
+    it('a horizontal guide dropped on the top ruler strip is removed', () => {
+      const onRemoveGuide = renderDraggable(createGuide('g1', 'y', 100), 20);
+      fireEvent.pointerUp(window, { clientX: 400, clientY: 10 });
+      expect(onRemoveGuide).toHaveBeenCalledWith('g1');
+    });
+
+    it('a guide dropped just past the ruler stays', () => {
+      const onRemoveGuide = renderDraggable(createGuide('g1', 'x', 100), 20);
+      fireEvent.pointerUp(window, { clientX: 30, clientY: 300 });
+      expect(onRemoveGuide).not.toHaveBeenCalled();
+    });
+
+    it('with the rulers hidden, only dropping past the canvas edge removes it', () => {
+      const onRemoveGuide = renderDraggable(createGuide('g1', 'x', 100));
+      fireEvent.pointerUp(window, { clientX: 10, clientY: 300 });
+      expect(onRemoveGuide).not.toHaveBeenCalled();
+    });
+  });
 });

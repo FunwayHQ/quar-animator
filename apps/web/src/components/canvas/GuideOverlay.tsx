@@ -33,6 +33,8 @@ interface GuideOverlayProps {
   dragPreview: { axis: 'x' | 'y'; worldPosition: number } | null;
   /** Ref to the WebGL canvas element — used to compute canvas-relative screen coords */
   canvasRef?: React.RefObject<HTMLCanvasElement | null>;
+  /** Width of the ruler strips along the top and left edges; 0 when the rulers are hidden */
+  rulerSize?: number;
   onRemoveGuide: (id: string) => void;
   onUpdateGuidePosition: (id: string, position: number) => void;
 }
@@ -49,6 +51,7 @@ export function GuideOverlay({
   cameraVersion,
   dragPreview,
   canvasRef: externalCanvasRef,
+  rulerSize = 0,
   onRemoveGuide,
   onUpdateGuidePosition,
 }: GuideOverlayProps) {
@@ -62,6 +65,8 @@ export function GuideOverlay({
   onRemoveGuideRef.current = onRemoveGuide;
   const onUpdateGuidePositionRef = useRef(onUpdateGuidePosition);
   onUpdateGuidePositionRef.current = onUpdateGuidePosition;
+  const rulerSizeRef = useRef(rulerSize);
+  rulerSizeRef.current = rulerSize;
 
   // Track active global listener cleanups for unmount safety
   const guideCleanupRef = useRef<(() => void) | null>(null);
@@ -176,11 +181,13 @@ export function GuideOverlay({
       const onUp = (ev: PointerEvent) => {
         setDraggingGuideId(null);
         const screen = toCanvasScreen(ev.clientX, ev.clientY);
-        // If dragged back onto ruler area (negative canvas-local coords), remove the guide
-        if (guide.axis === 'x' && screen.x <= 0) {
+        // Dropped on its ruler (or past the canvas edge when the rulers are
+        // hidden): the guide goes away
+        const ruler = rulerSizeRef.current;
+        if (guide.axis === 'x' && screen.x <= ruler) {
           onRemoveGuideRef.current(guide.id);
           setSelectedGuideId(null);
-        } else if (guide.axis === 'y' && screen.y <= 0) {
+        } else if (guide.axis === 'y' && screen.y <= ruler) {
           onRemoveGuideRef.current(guide.id);
           setSelectedGuideId(null);
         }
