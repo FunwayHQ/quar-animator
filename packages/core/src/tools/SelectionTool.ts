@@ -98,6 +98,8 @@ interface ResizeState {
 interface RotationState {
   initialBounds: SelectionBounds;
   initialAngle: number; // Angle from center to start point (radians)
+  /** Degrees turned so far, counted past ±180° (a turn and a half is 540°). */
+  turned: number;
   initialRotations: Map<string, number>; // Initial rotation of each node
 }
 
@@ -238,6 +240,7 @@ export class SelectionTool extends BaseTool {
             initialBounds: bounds,
             initialAngle,
             initialRotations,
+            turned: 0,
           };
           return;
         } else if (hitHandle && !this.onlyBones(selectedIds)) {
@@ -1526,8 +1529,13 @@ export class SelectionTool extends BaseTool {
       worldPos.x - initialBounds.center.x
     );
 
-    // Calculate rotation delta (radians to degrees)
-    let deltaRotation = (currentAngle - initialAngle) * (180 / Math.PI);
+    // Calculate rotation delta (radians to degrees), kept continuous with the
+    // last move: atan2 jumps by 360° at the ±180° seam, and a keyframed
+    // rotation tweens by its degrees, so a jump would spin the wrong way
+    const raw = (currentAngle - initialAngle) * (180 / Math.PI);
+    const turned = raw + 360 * Math.round((this.rotationState.turned - raw) / 360);
+    this.rotationState.turned = turned;
+    let deltaRotation = turned;
 
     // Constrain to 15-degree increments when shift is held
     if (constrained) {

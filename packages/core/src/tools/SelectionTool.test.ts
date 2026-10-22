@@ -1499,6 +1499,40 @@ describe('SelectionTool', () => {
       expect(rotatedRect?.transform.rotation).not.toBe(0);
     });
 
+    it('keeps counting past ±180°: a drag a turn and a quarter round is 450°', () => {
+      const rect = createTestRectangle('rect1', 100, 100, 100, 100);
+      context.sceneGraph.addNode(rect);
+      context.setSelectedIds(['rect1']);
+      const { worldPos, screenPos } = getRotationZonePoint({ x: 50, y: 50 }, -15, 0);
+      tool.onPointerDown(
+        createMockPointerEvent({ worldPosition: worldPos, screenPosition: screenPos, button: 0 })
+      );
+      expect(tool.getMode()).toBe('rotating');
+
+      // Round the center in 10° steps; each step turns the rectangle by 10°
+      const center = { x: 100, y: 100 };
+      const radius = Math.hypot(worldPos.x - center.x, worldPos.y - center.y);
+      const start = Math.atan2(worldPos.y - center.y, worldPos.x - center.x);
+      let last = 0;
+      for (let step = 1; step <= 45; step++) {
+        const angle = start + (step * 10 * Math.PI) / 180;
+        const point = {
+          x: center.x + radius * Math.cos(angle),
+          y: center.y + radius * Math.sin(angle),
+        };
+        tool.onPointerMove(
+          createMockPointerEvent({
+            worldPosition: point,
+            screenPosition: context.camera.worldToScreen(point),
+          })
+        );
+        const rotation = context.sceneGraph.getNode('rect1')!.transform.rotation;
+        expect(rotation - last).toBeCloseTo(10, 6);
+        last = rotation;
+      }
+      expect(last).toBeCloseTo(450, 6);
+    });
+
     it('should constrain rotation to 15 degree increments with shift key', () => {
       const rect = createTestRectangle('rect1', 100, 100, 100, 100);
       context.sceneGraph.addNode(rect);

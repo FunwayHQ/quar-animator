@@ -527,7 +527,7 @@ export function detectInterpolationType(path: string): InterpolationType {
   )
     return 'vector2';
 
-  // Rotation property — uses shortest-path interpolation
+  // Rotation property — tweens the authored degrees (full turns spin)
   if (path === 'transform.rotation') return 'rotation';
 
   // Number properties (individual components, opacity, width, etc.)

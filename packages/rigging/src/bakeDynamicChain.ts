@@ -80,10 +80,17 @@ export function bakeDynamicChainToKeyframes(
       const keyframes = boneKeyframes.get(boneId);
       if (!keyframes) continue;
 
+      // Continuous with the frame before: physics angles come from atan2 and
+      // jump by 360° at the seam, which a rotation keyframe would tween as a spin
+      const rotation = node.transform.rotation;
+      const previous = keyframes[keyframes.length - 1]?.value;
       keyframes.push({
         id: `baked_${boneId}_${frame}`,
         time: frame,
-        value: node.transform.rotation,
+        value:
+          previous === undefined
+            ? rotation
+            : rotation + 360 * Math.round((previous - rotation) / 360),
         easing: 'linear',
       });
     }

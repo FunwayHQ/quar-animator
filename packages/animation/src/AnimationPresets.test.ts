@@ -149,7 +149,7 @@ describe('animation presets', () => {
     ).toEqual([100, 136, 100, 115, 100]);
   });
 
-  it('segments full-spin keyframes so shortest-path rotation still spins', () => {
+  it('keys full spins in 120° steps', () => {
     const node = makeNode();
     const spinIn = createAnimationPresetKeyframes(node, 'spin-in', 0, 24);
     const spinOut = createAnimationPresetKeyframes(node, 'spin-out', 0, 24);

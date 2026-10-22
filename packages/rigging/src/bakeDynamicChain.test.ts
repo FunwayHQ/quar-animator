@@ -129,6 +129,30 @@ describe('bakeDynamicChainToKeyframes', () => {
     expect(applyAnimation).toHaveBeenCalledWith(5);
   });
 
+  it('bakes continuous rotations: a bone swinging past ±180° keeps counting', () => {
+    // Pointing left (180°) and falling under gravity: atan2 says -179.9° next
+    const bones = {
+      'bone-1': makeBone(50, { x: 0, y: 0 }, 180),
+      'bone-2': makeBone(50, { x: 50, y: 0 }, 0, 'bone-1'),
+    };
+    const result = bakeDynamicChainToKeyframes(
+      makeChain({ gravity: 500 }),
+      makeSG(bones),
+      24,
+      24,
+      makeWind(),
+      () => {}
+    );
+    const values = result!.boneKeyframes.get('bone-1')!.map((kf) => kf.value);
+    expect(values[0]).toBe(180);
+    // It does swing past the seam…
+    expect(Math.max(...values)).toBeGreaterThan(181);
+    // …and no frame jumps by a turn (a rotation keyframe tweens its degrees)
+    for (let i = 1; i < values.length; i++) {
+      expect(Math.abs(values[i]! - values[i - 1]!)).toBeLessThan(90);
+    }
+  });
+
   it('keyframes have linear easing', () => {
     const bones = makeHorizontalBones();
     const sg = makeSG(bones);

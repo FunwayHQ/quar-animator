@@ -226,9 +226,8 @@ function directionVector(direction: Exclude<AnimationPresetDirection, 'auto'>) {
 
 /**
  * The number of frames a preset actually spans for a requested duration.
- * Multi-beat keyframes need a few frames to stay distinct, and each spin
- * segment must stay within the rotation track's shortest-path range so full
- * turns remain visible.
+ * Multi-beat keyframes need a few frames to stay distinct, and spins are
+ * keyed in 120° steps, each at least a frame apart.
  */
 export function getPresetDurationFrames(
   presetId: AnimationPresetId,

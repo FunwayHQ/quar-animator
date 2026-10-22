@@ -582,3 +582,19 @@ describe('formatTimecode', () => {
     expect(formatTimecode(300, 30)).toBe('00:10:00');
   });
 });
+
+describe('rotation interpolation', () => {
+  function rotationAt(from: number, to: number, frame: number) {
+    const track = createTrack<number>('node', 'transform.rotation');
+    addKeyframe(track, 0, from);
+    addKeyframe(track, 10, to);
+    return interpolateValue(track, frame, interpolators.rotation);
+  }
+
+  it('turns the way the keyframes say, however far', () => {
+    expect(rotationAt(0, 360, 5)).toBeCloseTo(180); // a whole turn spins (it stood still)
+    expect(rotationAt(0, 270, 5)).toBeCloseTo(135); // not −45 the short way
+    expect(rotationAt(0, -720, 5)).toBeCloseTo(-360);
+    expect(rotationAt(170, -170, 5)).toBeCloseTo(0); // back through 0, as authored
+  });
+});

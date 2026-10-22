@@ -268,10 +268,9 @@ export const interpolators = {
   },
 
   rotation: (a: number, b: number, t: number): number => {
-    // Shortest-path interpolation: wrap difference to [-180, 180]
-    // Use true mathematical modulo ((x % n) + n) % n to handle negative values
-    const diff = ((((b - a + 180) % 360) + 360) % 360) - 180;
-    return a + diff * t;
+    // The authored turn, not the shortest one: 0 → 360 spins once, 0 → 270
+    // turns three quarters (as Lottie, which tweens the degrees, plays it)
+    return a + (b - a) * t;
   },
 
   // Discrete - no interpolation, just snap to value
