@@ -471,7 +471,7 @@ function sampleTrackAt(
   defaultValue: number
 ): number {
   if (!track || track.keyframes.length === 0) return defaultValue;
-  return interpolateValue(track, frame, interpolators.number);
+  return interpolateValue(track, frame, interpolators.number) ?? defaultValue;
 }
 
 // Export for testing
