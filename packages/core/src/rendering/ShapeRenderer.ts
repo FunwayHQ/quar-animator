@@ -2410,7 +2410,9 @@ export class ShapeRenderer {
 
     // Get cached tessellation for this text
     // Glyph positions depend on the full text (alignment) and the revealed length
-    const geoKey = `${buildGeometryKey(node)}:${content.length}`;
+    // With the fonts loaded so far: text drawn with a fallback is drawn
+    // again once its own font arrives
+    const geoKey = `${buildGeometryKey(node)}:${content.length}:f${fm.generation}`;
     const cached = this.geometryCache.get(node.id);
 
     if (cached && cached.geoKey === geoKey) {

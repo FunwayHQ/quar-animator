@@ -27,6 +27,8 @@ function fontCacheKey(family: string, weight: number = 400): string {
 
 export class FontManager {
   private fontCache: Map<string, opentype.Font> = new Map();
+  /** Counts changes to the loaded fonts (see `generation`). */
+  private changes = 0;
   private loadingPromises: Map<string, Promise<opentype.Font>> = new Map();
   private availableFonts: Map<string, FontInfo> = new Map();
 
@@ -49,6 +51,7 @@ export class FontManager {
     const promise = (() => {
       const font = opentype.parse(buffer);
       this.fontCache.set(key, font);
+      this.changes++;
       this.availableFonts.set(family, { family, source });
       this.loadingPromises.delete(key);
       return font;
@@ -81,6 +84,7 @@ export class FontManager {
       const buffer = await response.arrayBuffer();
       const font = opentype.parse(buffer);
       this.fontCache.set(key, font);
+      this.changes++;
       this.availableFonts.set(family, { family, source });
       return font;
     })();
@@ -121,6 +125,7 @@ export class FontManager {
       const buffer = await response.arrayBuffer();
       const font = opentype.parse(buffer);
       this.fontCache.set(key, font);
+      this.changes++;
       this.availableFonts.set(family, { family, source: 'google' });
       return font;
     })();
@@ -149,6 +154,14 @@ export class FontManager {
       if (key.startsWith(family + ':')) return font;
     }
     return null;
+  }
+
+  /**
+   * Goes up whenever a font is loaded or removed: what a fallback stood in for
+   * may be here now, so text drawn before can be drawn again with it.
+   */
+  get generation(): number {
+    return this.changes;
   }
 
   /**
@@ -234,6 +247,7 @@ export class FontManager {
     for (const key of [...this.fontCache.keys()]) {
       if (key.startsWith(family + ':')) {
         this.fontCache.delete(key);
+        this.changes++;
         this.loadingPromises.delete(key);
       }
     }
@@ -245,6 +259,7 @@ export class FontManager {
    */
   dispose(): void {
     this.fontCache.clear();
+    this.changes++;
     this.loadingPromises.clear();
     this.availableFonts.clear();
   }

@@ -32,8 +32,19 @@ const mockFont = {
   getKerningValue: () => 0,
 };
 
+// The font drawn with, and the font manager's count of font loads
+const fonts: { current: typeof mockFont; generation: number } = {
+  current: mockFont,
+  generation: 0,
+};
+
 vi.mock('../font/FontManager', () => ({
-  getFontManager: () => ({ getFontOrFallback: () => mockFont }),
+  getFontManager: () => ({
+    getFontOrFallback: () => fonts.current,
+    get generation() {
+      return fonts.generation;
+    },
+  }),
 }));
 
 vi.mock('../font/textMetrics', () => {
@@ -103,6 +114,28 @@ describe('ShapeRenderer - text reveal', () => {
     const calls = (gl.uniformMatrix3fv as Mock).mock.calls;
     return Array.from(calls[calls.length - 1]![2] as Float32Array);
   }
+
+  it('draws text again with its own font once that font has loaded', () => {
+    const vertexUpload = (node: TextNode) => {
+      (gl.bufferSubData as Mock).mockClear();
+      shapeRenderer.renderNode(node, mat3.create());
+      const call = (gl.bufferSubData as Mock).mock.calls.find((c) => c[0] === gl.ARRAY_BUFFER);
+      return Array.from(call?.[2] as Float32Array);
+    };
+    const node = createTextNode('Hi');
+    try {
+      const withFallback = vertexUpload(node);
+      // Its font arrives: glyphs twice as wide
+      const wideGlyph = { ...mockGlyph, advanceWidth: 1000 };
+      fonts.current = { ...mockFont, stringToGlyphs: (t: string) => [...t].map(() => wideGlyph) };
+      expect(vertexUpload(node)).toEqual(withFallback); // until the manager says it loaded
+      fonts.generation++;
+      expect(vertexUpload(node)).not.toEqual(withFallback);
+    } finally {
+      fonts.current = mockFont;
+      fonts.generation = 0;
+    }
+  });
 
   it('anchors a partially revealed text by the full content', () => {
     renderModelMatrix(createTextNode('Hello', 2));

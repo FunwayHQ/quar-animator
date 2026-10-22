@@ -89,6 +89,17 @@ describe('FontManager cache and lookup behavior', () => {
     expect(fm.getAvailableFonts()).toEqual([{ family: 'Roboto', source: 'bundled' }]);
   });
 
+  it('counts each font loaded or removed, so text drawn with a fallback can be redrawn', async () => {
+    const buffer = new ArrayBuffer(8);
+    const start = fm.generation;
+    await fm.loadFontFromBuffer(buffer, 'Roboto', 'local', 400);
+    expect(fm.generation).toBe(start + 1);
+    await fm.loadFontFromBuffer(buffer, 'Roboto', 'local', 400); // already loaded
+    expect(fm.generation).toBe(start + 1);
+    fm.removeFont('Roboto');
+    expect(fm.generation).toBeGreaterThan(start + 1);
+  });
+
   it('uses exact, regular, then family-weight fallbacks for font lookup', async () => {
     const buffer = new ArrayBuffer(8);
     const regular = await fm.loadFontFromBuffer(buffer, 'Roboto', 'local', 400);
