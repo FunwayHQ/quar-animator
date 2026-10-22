@@ -358,7 +358,6 @@ export class EraserTool extends BaseTool {
     const candidates: Array<{
       node: Node;
       parentId: string | null;
-      index: number;
     }> = [];
 
     this.context.sceneGraph.traverseVisible((node) => {
@@ -378,27 +377,14 @@ export class EraserTool extends BaseTool {
       // Skip open paths (nodeToPolygon returns null for them anyway)
       if (node.type === 'path' && !node.closed) return;
 
-      // Figure out sibling index
-      const parentId = node.parent;
-      let index = 0;
-      if (parentId) {
-        const parent = this.context.sceneGraph.getNode(parentId);
-        if (parent) {
-          index = parent.children.indexOf(node.id);
-        }
-      } else {
-        const roots = this.context.sceneGraph.getRootNodes();
-        index = roots.findIndex((n) => n.id === node.id);
-      }
-
-      candidates.push({ node, parentId, index });
+      candidates.push({ node, parentId: node.parent });
     });
 
     // Process each candidate
     const oldToNew = new Map<string, string>();
     const removedIds = new Set<string>();
 
-    for (const { node, parentId, index } of candidates) {
+    for (const { node, parentId } of candidates) {
       const worldMatrix = this.context.sceneGraph.getWorldTransform(node.id);
 
       // AABB quick rejection
@@ -522,6 +508,13 @@ export class EraserTool extends BaseTool {
       resultNode.blendMode = node.blendMode ?? 'normal';
 
       this.ensureUndo();
+
+      // Where the node sits among its siblings now: shapes this stroke already
+      // erased or replaced have shifted it since the candidates were collected
+      const siblingIds = parentId
+        ? (this.context.sceneGraph.getNode(parentId)?.children ?? [])
+        : this.context.sceneGraph.getRootNodes().map((n) => n.id);
+      const index = siblingIds.indexOf(node.id);
 
       // Remove old node and add new one at the same position
       this.context.sceneGraph.removeNode(node.id);

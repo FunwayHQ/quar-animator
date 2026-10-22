@@ -504,6 +504,25 @@ describe('EraserTool', () => {
       const resultNode = context.sceneGraph.getRootNodes()[0]!;
       expect(resultNode.type).toBe('path');
     });
+
+    it('keeps a cut shape in its place in the stack when a shape below it is erased', () => {
+      // Bottom to top: a tiny shape the stroke covers, one it cuts, one it misses
+      const tiny = createTestRectangle(-300, 0, 5, 5);
+      const cut = createTestRectangle(0, 0, 100, 100);
+      const missed = createTestRectangle(400, 0, 100, 100);
+      context.sceneGraph.addNode(tiny);
+      context.sceneGraph.addNode(cut);
+      context.sceneGraph.addNode(missed);
+
+      performStrokeErase({ x: -350, y: 0 }, { x: 0, y: 0 });
+
+      const roots = context.sceneGraph.getRootNodes();
+      expect(roots.map((node) => node.id)).not.toContain(tiny.id);
+      expect(roots).toHaveLength(2);
+      expect(roots[0]!.type).toBe('path'); // the cut shape, still below
+      expect(roots[0]!.id).not.toBe(cut.id);
+      expect(roots[1]!.id).toBe(missed.id);
+    });
   });
 
   // ==========================================================================
@@ -583,6 +602,40 @@ describe('EraserTool', () => {
       const child = context.sceneGraph.getNode(childId)!;
       expect(child.type).toBe('path');
       expect(child.parent).toBe(group.id);
+    });
+
+    it('keeps cut shapes in their place among the group layers', () => {
+      const group: GroupNode = {
+        id: context.generateId(),
+        name: 'Test Group',
+        type: 'group',
+        parent: null,
+        children: [],
+        transform: createDefaultTransform(),
+        visible: true,
+        locked: false,
+        opacity: 1,
+        blendMode: 'normal',
+      };
+      context.sceneGraph.addNode(group);
+      // Bottom to top: erased, cut, missed, cut
+      const tiny = createTestRectangle(-300, 0, 5, 5);
+      const firstCut = createTestRectangle(-150, 0, 100, 100);
+      const missed = createTestRectangle(0, 300, 100, 100);
+      const secondCut = createTestRectangle(150, 0, 100, 100);
+      for (const node of [tiny, firstCut, missed, secondCut]) {
+        context.sceneGraph.addNode(node, group.id);
+      }
+
+      performStrokeErase({ x: -350, y: 0 }, { x: 350, y: 0 });
+
+      const children = context.sceneGraph.getChildren(group.id);
+      expect(children).toHaveLength(3);
+      expect(children[0]!.type).toBe('path');
+      expect(children[0]!.id).not.toBe(firstCut.id);
+      expect(children[1]!.id).toBe(missed.id);
+      expect(children[2]!.type).toBe('path');
+      expect(children[2]!.id).not.toBe(secondCut.id);
     });
 
     /** A world-space box around a list of world points. */
