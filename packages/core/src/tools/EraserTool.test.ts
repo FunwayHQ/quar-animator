@@ -763,7 +763,7 @@ describe('EraserTool', () => {
       expect(preview!.opacity).toBe(0.3);
       expect(preview!.closed).toBe(true);
       expect(preview!.fills.length).toBe(1);
-      expect(preview!.fills[0]!.color.r).toBe(1); // Red
+      expect(preview!.fills[0]!.color.r).toBe(255); // Red on the 0–255 scale
       expect(preview!.fills[0]!.color.g).toBe(0);
     });
 
