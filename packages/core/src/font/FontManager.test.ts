@@ -144,6 +144,82 @@ describe('FontManager cache and lookup behavior', () => {
     expect(fm.getAvailableFonts()).toEqual([{ family: 'Inter', source: 'google' }]);
   });
 
+  describe('removing a font while it downloads (F179)', () => {
+    type FontResponse = { ok: boolean; arrayBuffer: () => Promise<ArrayBuffer> };
+    const fontResponse: FontResponse = { ok: true, arrayBuffer: async () => new ArrayBuffer(8) };
+
+    /** fetch that hangs until the test answers each request in turn. */
+    function deferredFetch() {
+      const pending: ((response: FontResponse) => void)[] = [];
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(() => new Promise<FontResponse>((resolve) => pending.push(resolve)))
+      );
+      return pending;
+    }
+
+    it('keeps a removed URL font out when its download finishes', async () => {
+      const pending = deferredFetch();
+      const load = fm.loadFontFromUrl('/x.ttf', 'X', 'google', 400);
+      fm.removeFont('X');
+      expect(fm.isLoading('X')).toBe(false);
+
+      pending[0]!(fontResponse);
+      await load;
+      await flush();
+
+      expect(fm.hasFont('X')).toBe(false);
+      expect(fm.getAvailableFonts().every((f) => f.family !== 'X')).toBe(true);
+      expect(fm.isLoading('X')).toBe(false);
+    });
+
+    it('keeps a removed Google font out when its download finishes', async () => {
+      const pending = deferredFetch();
+      const load = fm.loadGoogleFont('Roboto', 400);
+      fm.removeFont('Roboto');
+
+      pending[0]!(fontResponse);
+      await load;
+      await flush();
+
+      expect(fm.hasFont('Roboto')).toBe(false);
+      expect(fm.getAvailableFonts()).toEqual([]);
+    });
+
+    it('keeps a font out when the manager is disposed during its download', async () => {
+      const pending = deferredFetch();
+      const load = fm.loadFontFromUrl('/x.ttf', 'X', 'google', 400);
+      fm.dispose();
+
+      pending[0]!(fontResponse);
+      await load;
+
+      expect(fm.hasFont('X')).toBe(false);
+      expect(fm.getAvailableFonts()).toEqual([]);
+    });
+
+    it('lets a load started after the removal finish and stay loading meanwhile', async () => {
+      const pending = deferredFetch();
+      const stale = fm.loadFontFromUrl('/x.ttf', 'X', 'google', 400);
+      fm.removeFont('X');
+      const fresh = fm.loadFontFromUrl('/x.ttf', 'X', 'google', 400);
+      expect(fresh).not.toBe(stale);
+
+      // The removed download finishing must not clear the new one's entry.
+      pending[0]!(fontResponse);
+      await stale;
+      await flush();
+      expect(fm.isLoading('X', 400)).toBe(true);
+      expect(fm.hasFont('X')).toBe(false);
+
+      pending[1]!(fontResponse);
+      const font = await fresh;
+      expect(fm.getFont('X')).toBe(font);
+      await flush();
+      expect(fm.isLoading('X')).toBe(false);
+    });
+  });
+
   it('returns null for unknown Google fonts and removes or disposes cached fonts', async () => {
     expect(await fm.loadGoogleFont('Not a Google Font')).toBeNull();
     await fm.loadFontFromBuffer(new ArrayBuffer(8), 'Inter', 'local', 400);

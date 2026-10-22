@@ -25,6 +25,14 @@ function fontCacheKey(family: string, weight: number = 400): string {
   return `${family}:${weight}`;
 }
 
+/** Fetch a font file and parse it. */
+async function fetchFont(url: string): Promise<opentype.Font> {
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`Failed to fetch font: ${response.statusText}`);
+  const buffer = await response.arrayBuffer();
+  return opentype.parse(buffer);
+}
+
 export class FontManager {
   private fontCache: Map<string, opentype.Font> = new Map();
   /** Counts changes to the loaded fonts (see `generation`). */
@@ -74,24 +82,7 @@ export class FontManager {
     const loading = this.loadingPromises.get(key);
     if (loading) return loading;
 
-    const promise = (async () => {
-      const response = await fetch(url);
-      if (!response.ok) throw new Error(`Failed to fetch font: ${response.statusText}`);
-      const buffer = await response.arrayBuffer();
-      const font = opentype.parse(buffer);
-      this.fontCache.set(key, font);
-      this.changes++;
-      this.availableFonts.set(family, { family, source });
-      return font;
-    })();
-
-    this.loadingPromises.set(key, promise);
-    // Clear the in-flight entry on BOTH settle paths so a failed load doesn't
-    // leave a rejected promise cached (which would make the font unloadable for
-    // the session). The `.catch` swallows only the derived cleanup promise; the
-    // original `promise` returned to the caller still rejects.
-    void promise.catch(() => {}).finally(() => this.loadingPromises.delete(key));
-    return promise;
+    return this.download(key, url, family, source);
   }
 
   /**
@@ -114,21 +105,41 @@ export class FontManager {
     const loading = this.loadingPromises.get(key);
     if (loading) return loading;
 
-    const promise = (async () => {
-      const url = entry.url(closestWeight);
-      const response = await fetch(url);
-      if (!response.ok) throw new Error(`Failed to fetch font: ${response.statusText}`);
-      const buffer = await response.arrayBuffer();
-      const font = opentype.parse(buffer);
-      this.fontCache.set(key, font);
-      this.changes++;
-      this.availableFonts.set(family, { family, source: 'google' });
+    return this.download(key, entry.url(closestWeight), family, 'google');
+  }
+
+  /**
+   * Download and parse a font, caching it under `key` unless removeFont or
+   * dispose dropped the download meanwhile: then the caller still gets the
+   * font, but it isn't added back.
+   */
+  private download(
+    key: string,
+    url: string,
+    family: string,
+    source: FontInfo['source']
+  ): Promise<opentype.Font> {
+    const promise = fetchFont(url).then((font) => {
+      if (this.loadingPromises.get(key) === promise) {
+        this.fontCache.set(key, font);
+        this.changes++;
+        this.availableFonts.set(family, { family, source });
+      }
       return font;
-    })();
+    });
 
     this.loadingPromises.set(key, promise);
-    // Clear the in-flight entry on both settle paths (see loadFontFromUrl).
-    void promise.catch(() => {}).finally(() => this.loadingPromises.delete(key));
+    // Clear the in-flight entry on BOTH settle paths so a failed load doesn't
+    // leave a rejected promise cached (which would make the font unloadable for
+    // the session) — but only this download's entry: after removeFont a new
+    // load of the same font may have taken the key. The `.catch` swallows only
+    // the derived cleanup promise; the promise returned to the caller still
+    // rejects.
+    void promise
+      .catch(() => {})
+      .finally(() => {
+        if (this.loadingPromises.get(key) === promise) this.loadingPromises.delete(key);
+      });
     return promise;
   }
 
@@ -236,7 +247,8 @@ export class FontManager {
   }
 
   /**
-   * Remove a specific font from cache.
+   * Remove a specific font from cache, along with any of its weights still
+   * downloading (they finish without being added).
    */
   removeFont(family: string): void {
     // Remove all weights
@@ -244,8 +256,10 @@ export class FontManager {
       if (key.startsWith(family + ':')) {
         this.fontCache.delete(key);
         this.changes++;
-        this.loadingPromises.delete(key);
       }
+    }
+    for (const key of [...this.loadingPromises.keys()]) {
+      if (key.startsWith(family + ':')) this.loadingPromises.delete(key);
     }
     this.availableFonts.delete(family);
   }
