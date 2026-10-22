@@ -111,6 +111,28 @@ describe('Panel', () => {
     expect(screen.getByText('Body')).toBeInTheDocument();
   });
 
+  it('points its header at the content it folds', async () => {
+    const user = userEvent.setup();
+    render(
+      <>
+        <Panel title="First">First body</Panel>
+        <Panel title="Second">Second body</Panel>
+      </>
+    );
+    const header = screen.getByRole('button', { name: /First/ });
+    const contentId = header.getAttribute('aria-controls');
+    expect(contentId).toBeTruthy();
+    expect(document.getElementById(contentId ?? '')).toHaveTextContent('First body');
+    expect(screen.getByRole('button', { name: /Second/ })).not.toHaveAttribute(
+      'aria-controls',
+      contentId ?? ''
+    );
+
+    // Folded, the content is gone, so the header points at nothing
+    await user.click(header);
+    expect(header).not.toHaveAttribute('aria-controls');
+  });
+
   it("is no button when it can't fold", () => {
     render(
       <Panel title="Still" collapsible={false}>

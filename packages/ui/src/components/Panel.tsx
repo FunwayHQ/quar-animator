@@ -90,6 +90,8 @@ export function Panel({
 
   const isControlled = controlledExpanded !== undefined;
   const isExpanded = isControlled ? controlledExpanded : internalExpanded;
+  // The header points at the content it folds (aria-controls) while it's shown
+  const contentId = React.useId();
 
   const handleToggle = () => {
     if (!collapsible) return;
@@ -114,6 +116,7 @@ export function Panel({
         role={collapsible ? 'button' : undefined}
         tabIndex={collapsible ? 0 : undefined}
         aria-expanded={collapsible ? isExpanded : undefined}
+        aria-controls={collapsible && isExpanded ? contentId : undefined}
         onClick={handleToggle}
         onKeyDown={(e) => {
           // Not keys pressed on the header's own actions
@@ -135,7 +138,11 @@ export function Panel({
           </div>
         )}
       </div>
-      {isExpanded && <div style={contentStyles}>{children}</div>}
+      {isExpanded && (
+        <div id={contentId} style={contentStyles}>
+          {children}
+        </div>
+      )}
     </div>
   );
 }
