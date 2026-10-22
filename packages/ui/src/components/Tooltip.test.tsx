@@ -147,6 +147,82 @@ describe('Tooltip', () => {
     }
   });
 
+  describe('for screen readers', () => {
+    it('is a tooltip that describes its trigger, shortcut included', () => {
+      render(
+        <Tooltip content="Save the project" shortcut="Ctrl+S" delay={0}>
+          <button>Save</button>
+        </Tooltip>
+      );
+      const button = screen.getByRole('button');
+      expect(button).not.toHaveAttribute('aria-describedby');
+
+      fireEvent.mouseEnter(button);
+      act(() => {
+        vi.advanceTimersByTime(0);
+      });
+
+      const tooltip = screen.getByRole('tooltip');
+      expect(tooltip).toHaveTextContent('Save the project Ctrl+S');
+      expect(button).toHaveAttribute('aria-describedby', tooltip.id);
+      expect(button).toHaveAccessibleDescription('Save the project Ctrl+S');
+    });
+
+    it('keeps a description given by the caller alongside its own', () => {
+      render(
+        <>
+          <span id="save-hint">Unsaved changes</span>
+          <Tooltip content="Save the project" delay={0}>
+            <button aria-describedby="save-hint">Save</button>
+          </Tooltip>
+        </>
+      );
+      const button = screen.getByRole('button');
+
+      fireEvent.mouseEnter(button);
+      act(() => {
+        vi.advanceTimersByTime(0);
+      });
+
+      expect(button).toHaveAccessibleDescription('Unsaved changes Save the project');
+    });
+
+    it('describes the wrapper when the trigger is plain text', () => {
+      render(
+        <Tooltip content="More about frames" delay={0}>
+          Frames
+        </Tooltip>
+      );
+      const wrapper = screen.getByText('Frames');
+
+      fireEvent.mouseEnter(wrapper);
+      act(() => {
+        vi.advanceTimersByTime(0);
+      });
+
+      expect(wrapper).toHaveAttribute('aria-describedby', screen.getByRole('tooltip').id);
+    });
+
+    it('hides with Escape, wherever focus is', () => {
+      render(
+        <Tooltip content="Save the project" delay={0}>
+          <button>Save</button>
+        </Tooltip>
+      );
+      const button = screen.getByRole('button');
+
+      fireEvent.mouseEnter(button);
+      act(() => {
+        vi.advanceTimersByTime(0);
+      });
+      expect(screen.getByRole('tooltip')).toBeInTheDocument();
+
+      fireEvent.keyDown(document.body, { key: 'Escape' });
+      expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+      expect(button).not.toHaveAttribute('aria-describedby');
+    });
+  });
+
   describe('placement on screen', () => {
     // jsdom has no layout, so the trigger and tooltip boxes are mocked; the
     // window is jsdom's 1024 x 768.

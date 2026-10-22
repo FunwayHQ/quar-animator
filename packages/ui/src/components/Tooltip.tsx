@@ -4,8 +4,12 @@
 
 import React, {
   type ReactNode,
+  cloneElement,
+  Fragment,
+  isValidElement,
   useCallback,
   useEffect,
+  useId,
   useLayoutEffect,
   useRef,
   useState,
@@ -55,7 +59,7 @@ const tooltipStyles: React.CSSProperties = {
 };
 
 const shortcutStyles: React.CSSProperties = {
-  marginLeft: '8px',
+  marginLeft: '4px',
   padding: '2px 6px',
   backgroundColor: 'var(--color-bg-active)',
   borderRadius: 'var(--radius-sm)',
@@ -86,6 +90,7 @@ export function Tooltip({
   const triggerRef = useRef<HTMLDivElement>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
   const timeoutRef = useRef<number | null>(null);
+  const tooltipId = useId();
 
   const showTooltip = () => {
     if (disabled) return;
@@ -101,13 +106,25 @@ export function Tooltip({
     }, delay);
   };
 
-  const hideTooltip = () => {
+  const hideTooltip = useCallback(() => {
     if (timeoutRef.current) {
       clearTimeout(timeoutRef.current);
       timeoutRef.current = null;
     }
     setIsVisible(false);
-  };
+  }, []);
+
+  // Escape hides a showing tooltip, wherever focus is, without moving the
+  // pointer or focus away.
+  useEffect(() => {
+    if (!isVisible) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') hideTooltip();
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [isVisible, hideTooltip]);
 
   // The tooltip's size is known once it is on the page, so it is placed
   // then (before it is painted) and again when anything scrolls or the
@@ -144,21 +161,39 @@ export function Tooltip({
     };
   }, []);
 
+  // While it shows, the tooltip describes its trigger. That has to be the
+  // element itself, which is what gets focus; text children have no element
+  // of their own, so the wrapper is described instead.
+  const describedBy = isVisible ? tooltipId : undefined;
+  const describesChild =
+    isValidElement<{ 'aria-describedby'?: string }>(children) && children.type !== Fragment;
+  const trigger =
+    describesChild && describedBy
+      ? cloneElement(children, {
+          'aria-describedby': [children.props['aria-describedby'], describedBy]
+            .filter(Boolean)
+            .join(' '),
+        })
+      : children;
+
   return (
     <>
       <div
         ref={triggerRef}
         style={wrapperStyles}
+        aria-describedby={describesChild ? undefined : describedBy}
         onMouseEnter={showTooltip}
         onMouseLeave={hideTooltip}
         onFocus={showTooltip}
         onBlur={hideTooltip}
       >
-        {children}
+        {trigger}
       </div>
       {isVisible && (
         <div
           ref={tooltipRef}
+          id={tooltipId}
+          role="tooltip"
           style={{
             ...tooltipStyles,
             top: tooltipPosition.top,
@@ -166,7 +201,13 @@ export function Tooltip({
           }}
         >
           {content}
-          {shortcut && <span style={shortcutStyles}>{shortcut}</span>}
+          {/* The space keeps the shortcut a word of its own when read out. */}
+          {shortcut && (
+            <>
+              {' '}
+              <span style={shortcutStyles}>{shortcut}</span>
+            </>
+          )}
         </div>
       )}
     </>
