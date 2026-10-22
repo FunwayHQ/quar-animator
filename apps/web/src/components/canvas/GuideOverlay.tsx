@@ -134,6 +134,20 @@ export function GuideOverlay({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [selectedGuideId]);
 
+  // A click anywhere but on a guide deselects the selected one. The overlay
+  // lets clicks through to the canvas, so it never sees them itself: listen
+  // on the window, before anything else can stop them
+  const svgRef = useRef<SVGSVGElement>(null);
+  useEffect(() => {
+    if (!selectedGuideId) return;
+    const handlePointerDown = (e: PointerEvent) => {
+      if (e.target instanceof Node && svgRef.current?.contains(e.target)) return;
+      setSelectedGuideId(null);
+    };
+    window.addEventListener('pointerdown', handlePointerDown, true);
+    return () => window.removeEventListener('pointerdown', handlePointerDown, true);
+  }, [selectedGuideId]);
+
   // Handle clicking a guide to select it
   const handleGuidePointerDown = useCallback(
     (e: React.PointerEvent, guide: Guide) => {
@@ -180,13 +194,9 @@ export function GuideOverlay({
     [toCanvasScreen]
   );
 
-  // Click on empty area deselects guide
-  const handleSvgPointerDown = useCallback(() => {
-    setSelectedGuideId(null);
-  }, []);
-
   return (
     <svg
+      ref={svgRef}
       style={{
         position: 'absolute',
         top: 0,
@@ -197,7 +207,6 @@ export function GuideOverlay({
         zIndex: 7,
       }}
       data-testid="guide-overlay"
-      onPointerDown={handleSvgPointerDown}
     >
       {/* Persistent guides */}
       {guideLines.map((g) => {

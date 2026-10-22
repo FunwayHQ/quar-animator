@@ -216,4 +216,46 @@ describe('GuideOverlay', () => {
     fireEvent.keyDown(window, { key: 'Delete' });
     expect(onRemoveGuide).toHaveBeenCalledWith('g1');
   });
+
+  it('a click away from the guides deselects the selected one (F067)', () => {
+    const camera = new Camera();
+    camera.setViewport(800, 600);
+    const onRemoveGuide = vi.fn();
+    const { container } = render(
+      <>
+        <canvas data-testid="behind" />
+        <GuideOverlay
+          guides={[createGuide('g1', 'x', 100), createGuide('g2', 'x', 200)]}
+          camera={camera}
+          viewportWidth={800}
+          viewportHeight={600}
+          cameraVersion={0}
+          dragPreview={null}
+          onRemoveGuide={onRemoveGuide}
+          onUpdateGuidePosition={vi.fn()}
+        />
+      </>
+    );
+    const shownWidth = (index: number) =>
+      container
+        .querySelectorAll('line:not([data-testid="guide-hit"])')
+        [index]?.getAttribute('stroke-width');
+    const [firstHit, secondHit] = screen.getAllByTestId('guide-hit');
+
+    fireEvent.pointerDown(firstHit!);
+    fireEvent.pointerUp(window, { clientX: 400, clientY: 300 });
+    expect(shownWidth(0)).toBe('2');
+
+    // Clicking another guide selects that one instead
+    fireEvent.pointerDown(secondHit!);
+    fireEvent.pointerUp(window, { clientX: 400, clientY: 300 });
+    expect(shownWidth(0)).toBe('1');
+    expect(shownWidth(1)).toBe('2');
+
+    // Clicking the canvas deselects it, and Delete no longer removes it
+    fireEvent.pointerDown(screen.getByTestId('behind'));
+    expect(shownWidth(1)).toBe('1');
+    fireEvent.keyDown(window, { key: 'Delete' });
+    expect(onRemoveGuide).not.toHaveBeenCalled();
+  });
 });
