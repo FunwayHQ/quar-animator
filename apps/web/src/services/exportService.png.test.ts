@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   render: vi.fn(),
   shapeDispose: vi.fn(),
   rendererDispose: vi.fn(),
+  loseContext: vi.fn(),
 }));
 
 vi.mock('@quar/core', async (importOriginal) => {
@@ -15,7 +16,14 @@ vi.mock('@quar/core', async (importOriginal) => {
   return {
     ...actual,
     WebGLRenderer: class {
-      context = { viewport: vi.fn(), clearColor: vi.fn(), clear: vi.fn(), COLOR_BUFFER_BIT: 1 };
+      context = {
+        viewport: vi.fn(),
+        clearColor: vi.fn(),
+        clear: vi.fn(),
+        COLOR_BUFFER_BIT: 1,
+        getExtension: (name: string) =>
+          name === 'WEBGL_lose_context' ? { loseContext: mocks.loseContext } : null,
+      };
       dispose = mocks.rendererDispose;
     },
     ShapeRenderer: class {
@@ -51,7 +59,7 @@ function makeArtboard(): ArtboardNode {
   };
 }
 
-describe('transparent artboard PNG export', () => {
+describe('artboard PNG export', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.spyOn(HTMLCanvasElement.prototype, 'toBlob').mockImplementation((callback) =>
@@ -80,6 +88,36 @@ describe('transparent artboard PNG export', () => {
     expect(mocks.rendererDispose).toHaveBeenCalledOnce();
   });
 
+  it('hands its WebGL context back to the browser when done', async () => {
+    const graph = new SceneGraph();
+    const artboard = makeArtboard();
+    graph.addNode(artboard);
+
+    await exportSelectionAsPng([artboard], graph);
+
+    // Released at once, not left for garbage collection to count against the
+    // browser's limit (past it, the editor's own canvas can lose its context)
+    expect(mocks.loseContext).toHaveBeenCalledOnce();
+    expect(mocks.rendererDispose.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.loseContext.mock.invocationCallOrder[0]!
+    );
+  });
+
+  it('hands its WebGL context back when rendering fails', async () => {
+    const graph = new SceneGraph();
+    const artboard = makeArtboard();
+    graph.addNode(artboard);
+    mocks.render.mockImplementationOnce(() => {
+      throw new Error('context lost');
+    });
+
+    await expect(exportSelectionAsPng([artboard], graph)).rejects.toThrow('context lost');
+
+    expect(mocks.shapeDispose).toHaveBeenCalledOnce();
+    expect(mocks.rendererDispose).toHaveBeenCalledOnce();
+    expect(mocks.loseContext).toHaveBeenCalledOnce();
+  });
+
   it('preserves the live artboard and disposes renderers if preload fails', async () => {
     const graph = new SceneGraph();
     const artboard = makeArtboard();
@@ -93,5 +131,6 @@ describe('transparent artboard PNG export', () => {
     expect((graph.getNode('artboard') as ArtboardNode).fills).toHaveLength(1);
     expect(mocks.shapeDispose).toHaveBeenCalledOnce();
     expect(mocks.rendererDispose).toHaveBeenCalledOnce();
+    expect(mocks.loseContext).toHaveBeenCalledOnce();
   });
 });

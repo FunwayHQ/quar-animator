@@ -469,10 +469,10 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
           backgroundColor: state.pngTransparent ? null : documentBackground,
         });
 
-        // Pre-load image textures so they render correctly
-        await renderer.preloadTextures(frameRenderRoots, sceneGraph, frameRenderContext.symbols);
-
         try {
+          // Pre-load image textures so they render correctly
+          await renderer.preloadTextures(frameRenderRoots, sceneGraph, frameRenderContext.symbols);
+
           for (let i = 0; i < frameCount; i++) {
             if (cancelledRef.current) break;
 
@@ -556,10 +556,10 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
           multiplier: 1,
         });
 
-        // Pre-load image textures so they render correctly
-        await renderer.preloadTextures(frameRenderRoots, sceneGraph, frameRenderContext.symbols);
-
         try {
+          // Pre-load image textures so they render correctly
+          await renderer.preloadTextures(frameRenderRoots, sceneGraph, frameRenderContext.symbols);
+
           for (let i = 0; i < frameCount; i++) {
             if (cancelledRef.current) break;
 

@@ -42,12 +42,23 @@ vi.mock('../../stores/editorStore', () => ({
   ),
 }));
 
+// A frame renderer for PNG sequences and sprite sheets that draws nothing
+const frameRenderer = vi.hoisted(() => ({
+  preloadTextures: vi.fn(() => Promise.resolve()),
+  renderFrame: vi.fn(() => document.createElement('canvas')),
+  renderFrameAsBlob: vi.fn(() => Promise.resolve(new Blob(['png'], { type: 'image/png' }))),
+  dispose: vi.fn(),
+}));
+
 // Mock export functions (the scene's extent is the real thing: it decides the framing)
 vi.mock('@quar/export', async () => {
   const actual = await vi.importActual<typeof import('@quar/export')>('@quar/export');
   return {
     getAnimatedArtworkBounds: actual.getAnimatedArtworkBounds,
     sampleFrames: actual.sampleFrames,
+    getFrameCount: actual.getFrameCount,
+    generateFrameFilenames: actual.generateFrameFilenames,
+    createFrameRenderer: vi.fn(() => frameRenderer),
     exportLottieBlob: vi.fn().mockReturnValue(new Blob(['{}'], { type: 'application/json' })),
     exportGif: vi.fn().mockResolvedValue(new Blob(['gif'], { type: 'image/gif' })),
     exportMp4: vi.fn().mockResolvedValue(new Blob(['mp4'], { type: 'video/mp4' })),
@@ -482,6 +493,17 @@ describe('ExportDialog', () => {
     await waitFor(() =>
       expect(downloadBlob).toHaveBeenCalledWith(expect.any(Blob), 'animation.webm')
     );
+  });
+
+  it('releases the frame renderer when its images fail to load', async () => {
+    frameRenderer.preloadTextures.mockRejectedValueOnce(new Error('image failed'));
+    render(<ExportDialogHost />);
+    act(() => showExportDialog('png-sequence'));
+    fireEvent.click(screen.getByTestId('export-dialog-export'));
+
+    expect(await screen.findByTestId('export-error')).toHaveTextContent('image failed');
+    // Its WebGL context goes back to the browser rather than waiting for garbage collection
+    expect(frameRenderer.dispose).toHaveBeenCalledOnce();
   });
 
   it('exports a still of the current frame as SVG', async () => {

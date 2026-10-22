@@ -141,38 +141,39 @@ export async function exportSelectionAsPng(
     preserveDrawingBuffer: true,
     alpha: true,
   });
-
-  const shapeRenderer = new ShapeRenderer(renderer);
-
-  // Pass symbol definitions so symbol instances render correctly
-  if (symbolDefs && symbolDefs.length > 0) {
-    const symMap = new Map<string, SymbolDefinition>();
-    for (const s of symbolDefs) symMap.set(s.id, s);
-    shapeRenderer.setSymbolDefinitions(symMap);
-  }
-
-  // Build orthographic VP matrix that maps world bounds → clip space
-  const projection = mat3.create(1 / halfW, 0, 0, 1 / halfH, 0, 0);
-  const view = mat3.create(1, 0, 0, 1, -cx, -cy);
-  const vpMatrix = mat3.multiply(projection, view);
-
-  // Clear
   const gl = renderer.context;
-  gl.viewport(0, 0, pixelWidth, pixelHeight);
-
-  gl.clearColor(0, 0, 0, 0);
-  gl.clear(gl.COLOR_BUFFER_BIT);
-
-  // Render against a copy when omitting the artboard background. The live graph
-  // must remain intact while image textures load and the PNG is generated.
-  let exportGraph = sceneGraph;
-  if (artboard && !includeBackground) {
-    exportGraph = new SceneGraph();
-    exportGraph.fromJSON(structuredClone(sceneGraph.toJSON()));
-    exportGraph.updateNode(artboard.id, { fills: [] } as Partial<Node>);
-  }
+  let shapeRenderer: ShapeRenderer | null = null;
 
   try {
+    shapeRenderer = new ShapeRenderer(renderer);
+
+    // Pass symbol definitions so symbol instances render correctly
+    if (symbolDefs && symbolDefs.length > 0) {
+      const symMap = new Map<string, SymbolDefinition>();
+      for (const s of symbolDefs) symMap.set(s.id, s);
+      shapeRenderer.setSymbolDefinitions(symMap);
+    }
+
+    // Build orthographic VP matrix that maps world bounds → clip space
+    const projection = mat3.create(1 / halfW, 0, 0, 1 / halfH, 0, 0);
+    const view = mat3.create(1, 0, 0, 1, -cx, -cy);
+    const vpMatrix = mat3.multiply(projection, view);
+
+    // Clear
+    gl.viewport(0, 0, pixelWidth, pixelHeight);
+
+    gl.clearColor(0, 0, 0, 0);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+
+    // Render against a copy when omitting the artboard background. The live graph
+    // must remain intact while image textures load and the PNG is generated.
+    let exportGraph = sceneGraph;
+    if (artboard && !includeBackground) {
+      exportGraph = new SceneGraph();
+      exportGraph.fromJSON(structuredClone(sceneGraph.toJSON()));
+      exportGraph.updateNode(artboard.id, { fills: [] } as Partial<Node>);
+    }
+
     // A fresh ShapeRenderer has an empty texture cache.
     await shapeRenderer.preloadTextures(nodes, exportGraph);
 
@@ -184,8 +185,12 @@ export async function exportSelectionAsPng(
       downloadBlob(blob, getExportFilename(nodes, 'png'));
     }
   } finally {
-    shapeRenderer.dispose();
+    shapeRenderer?.dispose();
     renderer.dispose();
+    // The canvas is ours alone: hand its context back now rather than at
+    // garbage collection. Browsers keep only a few alive at once and drop the
+    // oldest past that, which can be the editor's own canvas.
+    gl.getExtension('WEBGL_lose_context')?.loseContext();
   }
 }
 
