@@ -267,20 +267,22 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
     close();
   }, [state.exporting, close]);
 
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        if (state.exporting) {
-          cancelledRef.current = true;
-          setState((s) => ({ ...s, cancelled: true }));
-        } else {
-          close();
-        }
+  // Escape stops a running export, or else closes the dialog. It listens on
+  // the document: focus usually stays where it was when the dialog opened
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      e.preventDefault();
+      if (state.exporting) {
+        cancelledRef.current = true;
+        setState((s) => ({ ...s, cancelled: true }));
+      } else {
+        close();
       }
-    },
-    [close, state.exporting]
-  );
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [close, state.exporting]);
 
   const update = <K extends keyof ExportDialogState>(key: K, value: ExportDialogState[K]) => {
     setState((s) => ({ ...s, [key]: value, error: null }));
@@ -669,7 +671,6 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
       onMouseDown={(e) => {
         if (e.target === e.currentTarget && !state.exporting) close();
       }}
-      onKeyDown={handleKeyDown}
       data-testid="export-dialog-backdrop"
     >
       <div
