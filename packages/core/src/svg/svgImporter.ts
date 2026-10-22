@@ -3,8 +3,10 @@
  * Orchestrator that parses, converts, and adds SVG content to the scene graph.
  */
 
-import type { Node, Vector2 } from '@quar/types';
+import type { Matrix3, Node, Vector2 } from '@quar/types';
 import type { SceneGraph } from '../SceneGraph';
+import { mat3 } from '../math';
+import { getNodeLocalBounds } from '../gradient/gradientUtils';
 import { parseSvg } from './svgParser';
 import { convertSvgToNodes } from './svgConverter';
 
@@ -79,7 +81,7 @@ export function importSvg(
 
   // Step 3: Compute bounds and apply transformations
   if (centerAtOrigin || position || scale !== 1) {
-    const bounds = computeNodesBounds(nodes, rootIds);
+    const bounds = computeNodesBounds(nodes);
 
     if (bounds) {
       const centerX = bounds.minX + (bounds.maxX - bounds.minX) / 2;
@@ -161,73 +163,53 @@ interface Bounds {
   maxY: number;
 }
 
-function computeNodesBounds(nodes: Node[], rootIds: string[]): Bounds | null {
+/**
+ * Where the imported artwork lies: every shape's bounds, placed by its own
+ * transform and its groups' as the scene graph will place them. Groups have
+ * no area of their own; taken as a point at their origin, they centered an
+ * SVG wrapped in a <g> on that point instead of on its artwork.
+ */
+function computeNodesBounds(nodes: Node[]): Bounds | null {
+  const byId = new Map(nodes.map((node) => [node.id, node]));
+  const worlds = new Map<string, Matrix3>();
+  const worldMatrix = (node: Node): Matrix3 => {
+    const known = worlds.get(node.id);
+    if (known) return known;
+    // Composed as the scene graph composes it: no anchor
+    const { position, rotation, scale } = node.transform;
+    const local = mat3.compose(position, rotation, scale);
+    const parent = node.parent ? byId.get(node.parent) : undefined;
+    const world = parent ? mat3.multiply(worldMatrix(parent), local) : local;
+    worlds.set(node.id, world);
+    return world;
+  };
+
   let minX = Infinity,
     minY = Infinity;
   let maxX = -Infinity,
     maxY = -Infinity;
 
   for (const node of nodes) {
-    if (!rootIds.includes(node.id) && node.parent) continue;
+    if (node.type === 'group') continue;
 
-    const pos = node.transform.position;
-    const halfW = getNodeHalfWidth(node);
-    const halfH = getNodeHalfHeight(node);
-
-    minX = Math.min(minX, pos.x - halfW);
-    maxX = Math.max(maxX, pos.x + halfW);
-    minY = Math.min(minY, pos.y - halfH);
-    maxY = Math.max(maxY, pos.y + halfH);
+    const world = worldMatrix(node);
+    const [x0, y0, x1, y1] = getNodeLocalBounds(node);
+    for (const corner of [
+      { x: x0, y: y0 },
+      { x: x1, y: y0 },
+      { x: x1, y: y1 },
+      { x: x0, y: y1 },
+    ]) {
+      const p = mat3.transformPoint(world, corner);
+      minX = Math.min(minX, p.x);
+      maxX = Math.max(maxX, p.x);
+      minY = Math.min(minY, p.y);
+      maxY = Math.max(maxY, p.y);
+    }
   }
 
   if (!isFinite(minX)) return null;
   return { minX, minY, maxX, maxY };
-}
-
-function getNodeHalfWidth(node: Node): number {
-  switch (node.type) {
-    case 'rectangle':
-      return node.width / 2;
-    case 'ellipse':
-      return node.radiusX;
-    case 'polygon':
-      return node.radius;
-    case 'path': {
-      if (node.points.length === 0) return 0;
-      let minX = Infinity,
-        maxX = -Infinity;
-      for (const pt of node.points) {
-        if (pt.position.x < minX) minX = pt.position.x;
-        if (pt.position.x > maxX) maxX = pt.position.x;
-      }
-      return (maxX - minX) / 2;
-    }
-    default:
-      return 0;
-  }
-}
-
-function getNodeHalfHeight(node: Node): number {
-  switch (node.type) {
-    case 'rectangle':
-      return node.height / 2;
-    case 'ellipse':
-      return node.radiusY;
-    case 'polygon':
-      return node.radius;
-    case 'path': {
-      if (node.points.length === 0) return 0;
-      let minY = Infinity,
-        maxY = -Infinity;
-      for (const pt of node.points) {
-        if (pt.position.y < minY) minY = pt.position.y;
-        if (pt.position.y > maxY) maxY = pt.position.y;
-      }
-      return (maxY - minY) / 2;
-    }
-    default:
-      return 0;
-  }
 }
 
 function scaleNodeDimensions(node: Node, scale: number): void {

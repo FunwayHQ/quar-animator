@@ -132,6 +132,50 @@ describe('importSvg', () => {
     expect(parentGroup.children).toContain(result.rootIds[0]);
   });
 
+  describe('artwork in groups', () => {
+    it('centers artwork wrapped in a group at the origin', () => {
+      const result = importSvg(
+        `
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
+          <g><rect x="50" y="50" width="100" height="100" /></g>
+        </svg>
+      `,
+        sceneGraph,
+        generateId
+      );
+      const group = sceneGraph.getNode(result.rootIds[0])!;
+      const rect = sceneGraph.getNode(group.children[0]!)!;
+      const center = sceneGraph.getWorldPosition(rect.id);
+      expect(center.x).toBeCloseTo(0);
+      expect(center.y).toBeCloseTo(0);
+    });
+
+    it('drops grouped artwork centered on the point asked for, group transform and all', () => {
+      const result = importSvg(
+        `
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
+          <g transform="translate(40 20)">
+            <rect x="0" y="0" width="100" height="50" />
+            <circle cx="150" cy="25" r="25" />
+          </g>
+        </svg>
+      `,
+        sceneGraph,
+        generateId,
+        { centerAtOrigin: false, position: { x: 500, y: 300 } }
+      );
+      // The artwork spans x 40–215 in the SVG, so its center is 127.5 across
+      const group = sceneGraph.getNode(result.rootIds[0])!;
+      const [rectId, circleId] = group.children;
+      const rect = sceneGraph.getWorldPosition(rectId!);
+      const circle = sceneGraph.getWorldPosition(circleId!);
+      expect(rect.x).toBeCloseTo(500 - 37.5);
+      expect(rect.y).toBeCloseTo(300);
+      expect(circle.x).toBeCloseTo(500 + 62.5);
+      expect(circle.y).toBeCloseTo(300);
+    });
+  });
+
   it('returns warnings for invalid SVG', () => {
     const result = importSvg('not xml <><>', sceneGraph, generateId);
     expect(result.warnings.length).toBeGreaterThan(0);
