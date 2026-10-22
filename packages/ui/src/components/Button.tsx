@@ -17,6 +17,10 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   loading?: boolean;
   iconLeft?: ReactNode;
   iconRight?: ReactNode;
+  /**
+   * Shows only the icons. Text children still name the button for screen
+   * readers; other children need an `aria-label`.
+   */
   iconOnly?: boolean;
   fullWidth?: boolean;
 }
@@ -125,6 +129,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       style,
       onMouseEnter,
       onMouseLeave,
+      'aria-label': ariaLabel,
       ...props
     },
     ref
@@ -138,6 +143,11 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
     React.useEffect(() => {
       if (isDisabled) setIsHovered(false);
     }, [isDisabled]);
+
+    // When only icons or the spinner show, the text is not on screen, so it
+    // names the button instead (unless the caller gave a label).
+    const textHidden = iconOnly || loading;
+    const label = ariaLabel ?? (textHidden && typeof children === 'string' ? children : undefined);
 
     const handleMouseEnter = (e: React.MouseEvent<HTMLButtonElement>) => {
       setIsHovered(true);
@@ -163,6 +173,8 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       <button
         ref={ref}
         disabled={isDisabled}
+        aria-label={label}
+        aria-busy={loading || undefined}
         style={computedStyles}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}

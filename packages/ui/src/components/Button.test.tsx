@@ -122,6 +122,35 @@ describe('Button', () => {
     expect(screen.queryByText('Hidden text')).not.toBeInTheDocument();
   });
 
+  it('names an icon-only button by its text', () => {
+    render(
+      <Button iconOnly iconLeft={<span data-testid="icon">★</span>}>
+        Delete
+      </Button>
+    );
+    expect(screen.getByRole('button', { name: 'Delete' })).toBeInTheDocument();
+  });
+
+  it('lets an aria-label given by the caller name an icon-only button', () => {
+    render(
+      <Button iconOnly aria-label="Remove layer" iconLeft={<span data-testid="icon">★</span>}>
+        Delete
+      </Button>
+    );
+    expect(screen.getByRole('button', { name: 'Remove layer' })).toBeInTheDocument();
+  });
+
+  it('keeps its name and reads as busy while loading', () => {
+    render(<Button loading>Save</Button>);
+    const button = screen.getByRole('button', { name: 'Save' });
+    expect(button).toHaveAttribute('aria-busy', 'true');
+  });
+
+  it('is not marked busy when not loading', () => {
+    render(<Button>Save</Button>);
+    expect(screen.getByRole('button', { name: 'Save' })).not.toHaveAttribute('aria-busy');
+  });
+
   it('renders full width', () => {
     render(<Button fullWidth>Full Width</Button>);
     expect(screen.getByRole('button')).toHaveStyle({ width: '100%' });
