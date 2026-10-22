@@ -137,6 +137,49 @@ describe('ShapeRenderer - text reveal', () => {
     }
   });
 
+  it('draws an onion-skin ghost of text with its letters’ holes left open', () => {
+    // An 'o': a 500 × 800 square with a 300 × 600 hole (wound the other way)
+    const ringGlyph = {
+      ...mockGlyph,
+      getPath: (x: number) => ({
+        commands: [
+          { type: 'M', x, y: 0 },
+          { type: 'L', x: x + 500, y: 0 },
+          { type: 'L', x: x + 500, y: 800 },
+          { type: 'L', x, y: 800 },
+          { type: 'Z' },
+          { type: 'M', x: x + 100, y: 100 },
+          { type: 'L', x: x + 100, y: 700 },
+          { type: 'L', x: x + 400, y: 700 },
+          { type: 'L', x: x + 400, y: 100 },
+          { type: 'Z' },
+        ],
+      }),
+    };
+    fonts.current = { ...mockFont, stringToGlyphs: (t: string) => [...t].map(() => ringGlyph) };
+    try {
+      (gl.bufferSubData as Mock).mockClear();
+      shapeRenderer.renderGhostNode(createTextNode('o'), mat3.create(), 0.5, [1, 0, 0]);
+      // The fill: the first vertex upload and the index upload after it
+      const calls = (gl.bufferSubData as Mock).mock.calls;
+      const vertices = calls.find((c) => c[0] === gl.ARRAY_BUFFER)?.[2] as Float32Array;
+      const indices = calls.find((c) => c[0] === gl.ELEMENT_ARRAY_BUFFER)?.[2] as Uint32Array;
+      let area = 0;
+      for (let t = 0; t < indices.length; t += 3) {
+        const [a, b, c] = [indices[t]!, indices[t + 1]!, indices[t + 2]!];
+        area +=
+          Math.abs(
+            (vertices[b * 2]! - vertices[a * 2]!) * (vertices[c * 2 + 1]! - vertices[a * 2 + 1]!) -
+              (vertices[c * 2]! - vertices[a * 2]!) * (vertices[b * 2 + 1]! - vertices[a * 2 + 1]!)
+          ) / 2;
+      }
+      // The ring's area, 400000 − 180000 font units², at 24 / 1000 to the unit
+      expect(area).toBeCloseTo(220000 * 0.024 ** 2, 1);
+    } finally {
+      fonts.current = mockFont;
+    }
+  });
+
   it('anchors a partially revealed text by the full content', () => {
     renderModelMatrix(createTextNode('Hello', 2));
     expect(getTextBounds).toHaveBeenCalledWith('Hello', 'Inter', 24, 1.2, 0, 'left');

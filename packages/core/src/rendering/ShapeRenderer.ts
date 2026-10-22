@@ -4355,44 +4355,13 @@ export class ShapeRenderer {
         );
       }
 
-      const { vertices: combined, indices: ghostFillIndices } = triangulateContours(
+      this.renderContoursGhost(
         contourArrays,
-        node.fillRule ?? 'nonzero'
+        node.fillRule ?? 'nonzero',
+        node,
+        worldMatrix,
+        colorOverride
       );
-
-      // Ghost fills
-      if (!this.program) return;
-      const gl = this.renderer.context;
-      gl.uniformMatrix3fv(
-        this.program.uniforms.u_model ?? null,
-        false,
-        mat3.toFloat32Array(worldMatrix)
-      );
-
-      for (const fill of node.fills) {
-        if (fill.visible && fill.type !== 'none') {
-          const color = this.applyTintAndAlpha(
-            this.getFillColor(fill),
-            colorOverride.tint,
-            colorOverride.alpha
-          );
-          this.renderFillWithColor(combined, ghostFillIndices, color);
-        }
-      }
-
-      // Ghost strokes per contour
-      for (const contourVerts of contourArrays) {
-        for (const stroke of node.strokes) {
-          if (stroke.visible && stroke.width > 0) {
-            const color = this.applyTintAndAlpha(
-              this.getStrokeColor(stroke),
-              colorOverride.tint,
-              colorOverride.alpha
-            );
-            this.renderStrokeWithColor(contourVerts, stroke, true, color);
-          }
-        }
-      }
       return;
     }
 
@@ -4453,17 +4422,54 @@ export class ShapeRenderer {
 
     if (contourArrays.length === 0) return;
 
-    // Combine into single array
-    let totalFloats = 0;
-    for (const arr of contourArrays) totalFloats += arr.length;
-    const combined = new Float32Array(totalFloats);
-    let writeOff = 0;
-    for (const arr of contourArrays) {
-      combined.set(arr, writeOff);
-      writeOff += arr.length;
+    // Glyphs with holes, as renderText draws them
+    this.renderContoursGhost(contourArrays, 'evenodd', node, adjustedMatrix, colorOverride);
+  }
+
+  /**
+   * A ghost of a shape made of several closed contours (a compound path, a
+   * text's glyphs): fills triangulated with their holes, strokes round each
+   * contour on its own — never one outline bridging them all.
+   */
+  private renderContoursGhost(
+    contourArrays: Float32Array[],
+    fillRule: 'nonzero' | 'evenodd',
+    paint: { fills: Fill[]; strokes: Stroke[] },
+    matrix: Matrix3,
+    colorOverride: { tint: [number, number, number]; alpha: number }
+  ): void {
+    if (!this.program) return;
+    const { vertices: combined, indices: ghostFillIndices } = triangulateContours(
+      contourArrays,
+      fillRule
+    );
+
+    const gl = this.renderer.context;
+    gl.uniformMatrix3fv(this.program.uniforms.u_model ?? null, false, mat3.toFloat32Array(matrix));
+
+    for (const fill of paint.fills) {
+      if (fill.visible && fill.type !== 'none') {
+        const color = this.applyTintAndAlpha(
+          this.getFillColor(fill),
+          colorOverride.tint,
+          colorOverride.alpha
+        );
+        this.renderFillWithColor(combined, ghostFillIndices, color);
+      }
     }
 
-    this.renderNodeGhost(combined, node.fills, node.strokes, true, adjustedMatrix, colorOverride);
+    for (const contourVerts of contourArrays) {
+      for (const stroke of paint.strokes) {
+        if (stroke.visible && stroke.width > 0) {
+          const color = this.applyTintAndAlpha(
+            this.getStrokeColor(stroke),
+            colorOverride.tint,
+            colorOverride.alpha
+          );
+          this.renderStrokeWithColor(contourVerts, stroke, true, color);
+        }
+      }
+    }
   }
 
   private renderImageWithOverride(
