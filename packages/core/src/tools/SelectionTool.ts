@@ -308,10 +308,11 @@ export class SelectionTool extends BaseTool {
       if (this.isAdditive(event) || event.shiftKey) {
         // Ctrl/Cmd/Shift+click: toggle selection
         if (isAlreadySelected) {
-          // Remove from selection
+          // Remove from selection. That's all the click does: no move starts,
+          // so a slight wobble before release doesn't drag the rest along
           const newIds = [...selectedIds].filter((id) => id !== hitNode.id);
-          selectedIds.delete(hitNode.id);
           this.context.setSelectedIds(newIds);
+          return;
         } else {
           // Add to selection
           selectedIds.add(hitNode.id);

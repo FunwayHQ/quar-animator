@@ -284,6 +284,35 @@ describe('SelectionTool', () => {
       expect(context.getSelectedIds().has('rect2')).toBe(true);
     });
 
+    it('does not drag the rest of the selection when Shift-click deselects a node', () => {
+      const a = createTestRectangle('a', 50, 50, 100, 100);
+      const b = createTestRectangle('b', 200, 50, 100, 100);
+      const c = createTestRectangle('c', 350, 50, 100, 100);
+      context.sceneGraph.addNode(a);
+      context.sceneGraph.addNode(b);
+      context.sceneGraph.addNode(c);
+      context.setSelectedIds(['a', 'b', 'c']);
+      const onTransformComplete = vi.fn();
+      context.onTransformComplete = onTransformComplete;
+
+      tool.onPointerDown(
+        createMockPointerEvent({ worldPosition: { x: 200, y: 50 }, shiftKey: true, button: 0 })
+      );
+      expect(tool.getMode()).toBe('idle');
+      // The hand wobbles a little before letting go
+      tool.onPointerMove(
+        createMockPointerEvent({ worldPosition: { x: 206, y: 47 }, shiftKey: true })
+      );
+      tool.onPointerUp(
+        createMockPointerEvent({ worldPosition: { x: 206, y: 47 }, shiftKey: true, button: 0 })
+      );
+
+      expect([...context.getSelectedIds()].sort()).toEqual(['a', 'c']);
+      expect(context.sceneGraph.getNode('a')!.transform.position).toEqual({ x: 50, y: 50 });
+      expect(context.sceneGraph.getNode('c')!.transform.position).toEqual({ x: 350, y: 50 });
+      expect(onTransformComplete).not.toHaveBeenCalled();
+    });
+
     it('should select only clicked node without Ctrl', () => {
       const rect1 = createTestRectangle('rect1', 50, 50, 100, 100);
       const rect2 = createTestRectangle('rect2', 200, 50, 100, 100);
