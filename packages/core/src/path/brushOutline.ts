@@ -233,7 +233,9 @@ export function generateRoundCap(
   const points: Vector2[] = [];
   for (let i = 0; i <= numPoints; i++) {
     const t = i / numPoints;
-    const angle = startAngle + t * Math.PI; // semicircle = PI radians
+    // A semicircle, clockwise: from the left side round past the end (or
+    // from the right side round behind the start), never back into the stroke
+    const angle = startAngle - t * Math.PI;
     points.push({
       x: center.x + Math.cos(angle) * radius,
       y: center.y + Math.sin(angle) * radius,

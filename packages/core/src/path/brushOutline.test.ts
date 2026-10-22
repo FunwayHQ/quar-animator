@@ -194,6 +194,24 @@ describe('generateRoundCap', () => {
     const cap = generateRoundCap(center, left, right, 4, true);
     expect(cap.length).toBe(5); // numPoints + 1
   });
+
+  // A stroke running along +x, 10 wide: left is +y, right is -y
+  it('rounds the end cap out past the end, not back into the stroke', () => {
+    const cap = generateRoundCap({ x: 100, y: 0 }, { x: 100, y: 5 }, { x: 100, y: -5 }, 8, false);
+    expect(cap[0]!.x).toBeCloseTo(100);
+    expect(cap[0]!.y).toBeCloseTo(5); // starts on the left side
+    expect(cap[8]!.y).toBeCloseTo(-5); // ends on the right side
+    for (const p of cap) expect(p.x).toBeGreaterThanOrEqual(100 - 1e-9);
+    expect(cap[4]!.x).toBeCloseTo(105); // its tip, half the width beyond
+  });
+
+  it('rounds the start cap out behind the start', () => {
+    const cap = generateRoundCap({ x: 0, y: 0 }, { x: 0, y: 5 }, { x: 0, y: -5 }, 8, true);
+    expect(cap[0]!.y).toBeCloseTo(-5); // from the right side
+    expect(cap[8]!.y).toBeCloseTo(5); // to the left side
+    for (const p of cap) expect(p.x).toBeLessThanOrEqual(1e-9);
+    expect(cap[4]!.x).toBeCloseTo(-5);
+  });
 });
 
 describe('cornerPoint', () => {
