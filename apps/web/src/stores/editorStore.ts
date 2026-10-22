@@ -37,6 +37,7 @@ import type {
   MaskMode,
   SkinData,
   BoneGroup,
+  Matrix3,
 } from '@quar/types';
 import type { AnimationSequence, KeyframeClipboard, GraphViewTransform } from '@quar/animation';
 import {
@@ -4271,6 +4272,41 @@ function createSymbolActions(
         if (node) nodesForDef.push(structuredClone(node));
       }
 
+      // The instance takes the selection's place: in the group the selected
+      // layers share (the top level when they're in different ones), where the
+      // first of them was. Each layer is placed in that group's space, so the
+      // artwork stays where it is on the canvas
+      const parentIds = new Set(
+        rootSelectedIds.map((id) => sceneGraph.getNode(id)?.parent ?? null)
+      );
+      const instanceParent: string | null =
+        parentIds.size === 1 ? (parentIds.values().next().value ?? null) : null;
+      const siblings = instanceParent
+        ? (sceneGraph.getNode(instanceParent)?.children ?? [])
+        : sceneGraph.getRootNodes().map((n) => n.id);
+      const placeAmongSiblings = (id: string): number => {
+        // The layer's own place, or that of the sibling it's inside
+        let current: string | null = id;
+        while (current) {
+          const index = siblings.indexOf(current);
+          if (index !== -1) return index;
+          current = sceneGraph.getNode(current)?.parent ?? null;
+        }
+        return -1;
+      };
+      const places = rootSelectedIds.map(placeAmongSiblings).filter((index) => index !== -1);
+      // The selected layers before it are removed too, so this is its place after
+      const instanceIndex = places.length > 0 ? Math.min(...places) : undefined;
+      const toInstanceSpace = new Map<string, Matrix3 | null>(
+        rootSelectedIds.map((id) => [id, reparentMatrix(sceneGraph, id, instanceParent)])
+      );
+      const placedTransform = (node: Node): Node['transform'] => {
+        const m = toInstanceSpace.get(node.id);
+        return m
+          ? applyPlacement(node.transform, mapPlacement(placementOf(node.transform), m))
+          : node.transform;
+      };
+
       // Compute center of selected root nodes for instance position
       let sumX = 0;
       let sumY = 0;
@@ -4278,8 +4314,9 @@ function createSymbolActions(
       for (const id of rootSelectedIds) {
         const node = sceneGraph.getNode(id);
         if (node) {
-          sumX += node.transform.position.x;
-          sumY += node.transform.position.y;
+          const { position } = placedTransform(node);
+          sumX += position.x;
+          sumY += position.y;
           count++;
         }
       }
@@ -4292,13 +4329,23 @@ function createSymbolActions(
       for (const node of nodesForDef) {
         if (rootSelectedIds.includes(node.id)) {
           node.parent = null;
+          const transform = placedTransform(node);
           node.transform = {
-            ...node.transform,
+            ...transform,
             position: {
-              x: node.transform.position.x - centerX,
-              y: node.transform.position.y - centerY,
+              x: transform.position.x - centerX,
+              y: transform.position.y - centerY,
             },
           };
+          // A bound mesh's binding remembers its local transform (see moveNodeKeepingPlacement)
+          const m = toInstanceSpace.get(node.id);
+          const skin = (node as { skinData?: SkinData }).skinData;
+          if (m && skin?.meshBindLocal) {
+            (node as { skinData?: SkinData }).skinData = {
+              ...skin,
+              meshBindLocal: multiply6(m, skin.meshBindLocal),
+            };
+          }
         }
       }
 
@@ -4330,7 +4377,7 @@ function createSymbolActions(
         id: instanceId,
         name: symbolName,
         type: 'symbol-instance',
-        parent: null,
+        parent: instanceParent,
         children: [],
         transform: {
           position: { x: centerX, y: centerY },
@@ -4347,7 +4394,9 @@ function createSymbolActions(
         overrides: [],
       };
 
-      sceneGraph.addNode(instanceNode);
+      sceneGraph.addNode(instanceNode, instanceParent ?? undefined);
+      if (instanceIndex !== undefined)
+        sceneGraph.moveNode(instanceId, instanceParent, instanceIndex);
 
       set({
         symbols: [...state.symbols, definition],

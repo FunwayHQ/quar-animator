@@ -3127,6 +3127,83 @@ describe('EditorStore', () => {
       expect(sg.removeNode).toHaveBeenCalledWith(instId);
     });
 
+    describe('a symbol made from layers in a group stays where they were (F172)', () => {
+      const base = { visible: true, locked: false, opacity: 1, blendMode: 'normal' };
+      const at = (x: number, y: number, rotation = 0, scale = 1) => ({
+        position: { x, y },
+        rotation,
+        scale: { x: scale, y: scale },
+        anchor: { x: 0, y: 0 },
+        skew: { x: 0, y: 0 },
+      });
+      const group = (id: string, transform: ReturnType<typeof at>) =>
+        ({ ...base, id, name: id, type: 'group', parent: null, children: [], transform }) as never;
+      const rect = (id: string, transform: ReturnType<typeof at>) =>
+        ({
+          ...base,
+          id,
+          name: id,
+          type: 'rectangle',
+          parent: null,
+          children: [],
+          transform,
+          width: 10,
+          height: 10,
+          cornerRadius: [0, 0, 0, 0],
+          fills: [],
+          strokes: [],
+        }) as never;
+      const worldPosition = (sg: SceneGraph, id: string) => {
+        const m = sg.getWorldTransform(id);
+        return { x: m.tx, y: m.ty };
+      };
+
+      it('puts the instance in the group, in the layer’s place', () => {
+        const sg = new SceneGraph();
+        sg.addNode(group('g', at(200, 200, 30, 2)));
+        sg.addNode(rect('below', at(0, 0)), 'g');
+        sg.addNode(rect('r', at(10, 10)), 'g');
+        sg.addNode(rect('above', at(50, 0)), 'g');
+        const before = worldPosition(sg, 'r');
+        useEditorStore.setState({ symbols: [], selectedNodeIds: new Set(['r']) });
+
+        useEditorStore.getState().createSymbol(sg);
+
+        const instanceId = Array.from(useEditorStore.getState().selectedNodeIds)[0]!;
+        expect(sg.getNode(instanceId)?.parent).toBe('g');
+        expect(sg.getNode('g')?.children).toEqual(['below', instanceId, 'above']);
+        const after = worldPosition(sg, instanceId);
+        expect(after.x).toBeCloseTo(before.x);
+        expect(after.y).toBeCloseTo(before.y);
+      });
+
+      it('keeps layers from different groups in place, at the top level', () => {
+        const sg = new SceneGraph();
+        sg.addNode(rect('a', at(0, 0)));
+        sg.addNode(group('g', at(200, 200, 90, 2)));
+        sg.addNode(rect('b', at(10, 0, 15)), 'g');
+        const bWorld = worldPosition(sg, 'b'); // (200, 220)
+        useEditorStore.setState({ symbols: [], selectedNodeIds: new Set(['a', 'b']) });
+
+        useEditorStore.getState().createSymbol(sg);
+
+        const instanceId = Array.from(useEditorStore.getState().selectedNodeIds)[0]!;
+        const instance = sg.getNode(instanceId)!;
+        expect(instance.parent).toBeNull();
+        // Halfway between the two, as placed on the canvas
+        expect(instance.transform.position.x).toBeCloseTo(bWorld.x / 2);
+        expect(instance.transform.position.y).toBeCloseTo(bWorld.y / 2);
+        const definition = useEditorStore.getState().symbols[0]!;
+        const b = definition.sceneGraphJSON.nodes.find((node) => node.id === 'b')!;
+        // Offset from the instance by its place on the canvas, turned and
+        // scaled as the group showed it
+        expect(b.transform.position.x).toBeCloseTo(bWorld.x / 2);
+        expect(b.transform.position.y).toBeCloseTo(bWorld.y / 2);
+        expect(b.transform.rotation).toBeCloseTo(105);
+        expect(b.transform.scale.x).toBeCloseTo(2);
+      });
+    });
+
     it('detachInstance preserves nested artwork with no dangling refs (F028)', () => {
       const sg = new SceneGraph();
       const tf = () => ({
