@@ -8,6 +8,15 @@ const DB_VERSION = 1;
 const PROJECTS_STORE = 'projects';
 const SETTINGS_STORE = 'settings';
 
+// Each project's name and save time, kept apart from the project so listing
+// the projects doesn't read every one in full. A database of its own, like the
+// thumbnails: the projects database needs no upgrade (so a tab still running
+// an earlier version keeps working with it), and a project missing here is
+// read once from the projects database and added.
+const LIST_DB_NAME = 'quar-animator-project-list';
+const LIST_DB_VERSION = 1;
+const LIST_STORE = 'projects';
+
 // ============================================================================
 // Types
 // ============================================================================
@@ -58,9 +67,44 @@ export function initDB(): Promise<IDBDatabase> {
   return dbPromise;
 }
 
-/** Reset the cached DB promise (for testing) */
+let listDbPromise: Promise<IDBDatabase> | null = null;
+
+function initListDB(): Promise<IDBDatabase> {
+  if (listDbPromise) return listDbPromise;
+
+  listDbPromise = new Promise<IDBDatabase>((resolve, reject) => {
+    const request = indexedDB.open(LIST_DB_NAME, LIST_DB_VERSION);
+
+    request.onerror = () => {
+      listDbPromise = null; // allow retry on next call
+      reject(request.error);
+    };
+
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains(LIST_STORE)) {
+        db.createObjectStore(LIST_STORE, { keyPath: 'id' });
+      }
+    };
+
+    request.onsuccess = () => {
+      const db = request.result;
+      // Let a later version upgrade it rather than wait on this tab
+      db.onversionchange = () => {
+        db.close();
+        listDbPromise = null;
+      };
+      resolve(db);
+    };
+  });
+
+  return listDbPromise;
+}
+
+/** Reset the cached DB promises (for testing) */
 export function resetDB(): void {
   dbPromise = null;
+  listDbPromise = null;
 }
 
 // ============================================================================
@@ -88,7 +132,7 @@ export async function saveProject(
     data,
   };
 
-  return new Promise<void>((resolve, reject) => {
+  await new Promise<void>((resolve, reject) => {
     const tx = db.transaction(PROJECTS_STORE, 'readwrite');
     tx.objectStore(PROJECTS_STORE).put(record);
     tx.oncomplete = () => resolve();
@@ -106,6 +150,8 @@ export async function saveProject(
     // Promise would otherwise hang forever.
     tx.onabort = rejectWithQuota;
   });
+
+  await updateList({ put: [{ id, name, updatedAt: record.updatedAt }] });
 }
 
 export async function loadProject(id: string): Promise<StoredProject | undefined> {
@@ -122,33 +168,130 @@ export async function loadProject(id: string): Promise<StoredProject | undefined
 export async function listProjects(): Promise<ProjectListItem[]> {
   const db = await initDB();
 
-  return new Promise<ProjectListItem[]>((resolve, reject) => {
+  // The list before the ids: a project saved in between then has its record
+  // among the ids, and is read below if its entry was missed
+  const listed = await readList();
+  // Just the ids: a project itself is read only when the list lacks it
+  const ids = await new Promise<IDBValidKey[]>((resolve, reject) => {
     const tx = db.transaction(PROJECTS_STORE, 'readonly');
-    const request = tx.objectStore(PROJECTS_STORE).getAll();
-    request.onsuccess = () => {
-      const projects = (request.result as StoredProject[]).map((p) => ({
-        id: p.id,
-        name: p.name,
-        updatedAt: p.updatedAt,
-      }));
-      // Sort by most recently updated first
-      projects.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
-      resolve(projects);
-    };
+    const request = tx.objectStore(PROJECTS_STORE).getAllKeys();
+    request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error);
   });
+
+  const projects: ProjectListItem[] = [];
+  const found: ProjectListItem[] = [];
+  for (const id of ids) {
+    if (typeof id !== 'string') continue;
+    const entry = listed.get(id);
+    if (entry) {
+      projects.push(entry);
+      continue;
+    }
+    // Saved before the list existed, or by a tab running an earlier version:
+    // read it once (one at a time, not all at once) and list it from now on
+    const stored = await loadProject(id);
+    if (!stored) continue;
+    const item = { id: stored.id, name: stored.name, updatedAt: stored.updatedAt };
+    projects.push(item);
+    found.push(item);
+  }
+  // Entries of projects deleted where the list wasn't told
+  const kept = new Set(ids);
+  const gone = [...listed.keys()].filter((id) => !kept.has(id));
+  if (found.length > 0 || gone.length > 0) await updateList({ fill: found, remove: gone });
+
+  // Sort by most recently updated first
+  projects.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  return projects;
 }
 
 export async function deleteProject(id: string): Promise<void> {
   const db = await initDB();
 
-  return new Promise<void>((resolve, reject) => {
+  await new Promise<void>((resolve, reject) => {
     const tx = db.transaction(PROJECTS_STORE, 'readwrite');
     tx.objectStore(PROJECTS_STORE).delete(id);
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
     tx.onabort = () => reject(tx.error ?? new DOMException('Transaction aborted', 'AbortError'));
   });
+
+  await updateList({ remove: [id] });
+}
+
+// ============================================================================
+// Project list
+// ============================================================================
+
+function isListItem(value: unknown): value is ProjectListItem {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'id' in value &&
+    typeof value.id === 'string' &&
+    'name' in value &&
+    typeof value.name === 'string' &&
+    'updatedAt' in value &&
+    typeof value.updatedAt === 'string'
+  );
+}
+
+/** The listed projects by id; none when the list can't be read. */
+async function readList(): Promise<Map<string, ProjectListItem>> {
+  try {
+    const db = await initListDB();
+    const entries = await new Promise<unknown[]>((resolve, reject) => {
+      const tx = db.transaction(LIST_STORE, 'readonly');
+      const request = tx.objectStore(LIST_STORE).getAll();
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    // Only what a listing shows, should an entry hold more
+    return new Map(
+      entries
+        .filter(isListItem)
+        .map(({ id, name, updatedAt }) => [id, { id, name, updatedAt }] as const)
+    );
+  } catch {
+    // Every project is then read from the projects database
+    return new Map();
+  }
+}
+
+/**
+ * Change the list: `put` entries are written as given, `fill` entries only
+ * where the list still has none (one written meanwhile, by a save, is newer
+ * than what was read), and `remove` ids are taken out.
+ */
+async function updateList(changes: {
+  put?: ProjectListItem[];
+  fill?: ProjectListItem[];
+  remove?: string[];
+}): Promise<void> {
+  try {
+    const db = await initListDB();
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(LIST_STORE, 'readwrite');
+      const store = tx.objectStore(LIST_STORE);
+      for (const entry of changes.put ?? []) store.put(entry);
+      for (const entry of changes.fill ?? []) {
+        const request = store.getKey(entry.id);
+        request.onsuccess = () => {
+          if (request.result === undefined) store.put(entry);
+        };
+      }
+      for (const id of changes.remove ?? []) store.delete(id);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error ?? new DOMException('Transaction aborted', 'AbortError'));
+    });
+  } catch {
+    // The project itself is saved or deleted, which is what matters. A project
+    // the list lacks is read from the projects database, and an entry left for
+    // a deleted one dropped, the next time the projects are listed; an entry
+    // a save couldn't update shows the earlier name and time until the next.
+  }
 }
 
 // ============================================================================

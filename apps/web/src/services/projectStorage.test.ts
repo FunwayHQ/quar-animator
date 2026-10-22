@@ -2,7 +2,7 @@
  * Tests for Project Storage Service (IndexedDB)
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import 'fake-indexeddb/auto';
 import {
   initDB,
@@ -120,6 +120,124 @@ describe('ProjectStorage', () => {
       expect(projects[0]).toHaveProperty('name');
       expect(projects[0]).toHaveProperty('updatedAt');
       expect(projects[0]).not.toHaveProperty('data');
+    });
+  });
+
+  describe('listing without reading the projects (F099)', () => {
+    /** Calls that read whole project records, as "method" names. */
+    function watchProjectReads(): string[] {
+      const reads: string[] = [];
+      for (const method of ['get', 'getAll', 'openCursor'] as const) {
+        const original = IDBObjectStore.prototype[method] as (...args: unknown[]) => IDBRequest;
+        vi.spyOn(IDBObjectStore.prototype, method).mockImplementation(function (
+          this: IDBObjectStore,
+          ...args: unknown[]
+        ) {
+          if (this.transaction.db.name === 'quar-animator-db' && this.name === 'projects') {
+            reads.push(method);
+          }
+          return original.apply(this, args);
+        } as never);
+      }
+      return reads;
+    }
+
+    /** A projects database as earlier versions made it, holding these records. */
+    async function seedEarlierVersion(
+      records: { id: string; name: string; updatedAt: string; data: string | ArrayBuffer }[]
+    ): Promise<void> {
+      const db = await new Promise<IDBDatabase>((resolve, reject) => {
+        const request = indexedDB.open('quar-animator-db', 1);
+        request.onupgradeneeded = () => {
+          request.result.createObjectStore('projects', { keyPath: 'id' });
+          request.result.createObjectStore('settings', { keyPath: 'key' });
+        };
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+      await new Promise<void>((resolve, reject) => {
+        const tx = db.transaction('projects', 'readwrite');
+        for (const record of records) tx.objectStore('projects').put(record);
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+      });
+      db.close();
+    }
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it('lists projects without reading them', async () => {
+      await saveProject('big', 'Big', new ArrayBuffer(4 * 1024 * 1024));
+      await saveProject('small', 'Small', '{}');
+      const reads = watchProjectReads();
+
+      const projects = await listProjects();
+
+      expect(projects.map((p) => p.name)).toEqual(['Small', 'Big']);
+      expect(projects[1]).toEqual({ id: 'big', name: 'Big', updatedAt: expect.any(String) });
+      expect(reads).toEqual([]);
+    });
+
+    it('lists projects saved by earlier versions, reading each just once', async () => {
+      await seedEarlierVersion([
+        { id: 'a', name: 'Older', updatedAt: '2026-01-01T00:00:00.000Z', data: '{"v":1}' },
+        { id: 'b', name: 'Newer', updatedAt: '2026-02-01T00:00:00.000Z', data: new ArrayBuffer(8) },
+      ]);
+      const reads = watchProjectReads();
+
+      expect(await listProjects()).toEqual([
+        { id: 'b', name: 'Newer', updatedAt: '2026-02-01T00:00:00.000Z' },
+        { id: 'a', name: 'Older', updatedAt: '2026-01-01T00:00:00.000Z' },
+      ]);
+      expect(reads).toHaveLength(2);
+      reads.length = 0;
+
+      resetDB();
+      expect(await listProjects()).toHaveLength(2);
+      expect(reads).toEqual([]);
+      // The projects themselves and their database are as they were
+      expect((await initDB()).version).toBe(1);
+      expect((await loadProject('a'))?.data).toBe('{"v":1}');
+    });
+
+    it('follows saves and deletes, including those of earlier versions', async () => {
+      await saveProject('kept', 'Draft', '{}');
+      await saveProject('removed', 'Removed', '{}');
+      await saveProject('kept', 'Final', '{}');
+      await deleteProject('removed');
+      expect((await listProjects()).map((p) => p.name)).toEqual(['Final']);
+
+      // A tab running an earlier version deletes and adds projects directly
+      const db = await initDB();
+      await new Promise<void>((resolve, reject) => {
+        const tx = db.transaction('projects', 'readwrite');
+        tx.objectStore('projects').delete('kept');
+        tx.objectStore('projects').put({
+          id: 'other',
+          name: 'From another tab',
+          updatedAt: new Date().toISOString(),
+          data: '{}',
+        });
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+      });
+      expect((await listProjects()).map((p) => p.name)).toEqual(['From another tab']);
+    });
+
+    it('still saves and lists projects when the list cannot be opened', async () => {
+      const open = indexedDB.open.bind(indexedDB);
+      vi.spyOn(indexedDB, 'open').mockImplementation((name, version) => {
+        if (name === 'quar-animator-project-list') throw new Error('unavailable');
+        return open(name, version);
+      });
+
+      await saveProject('p', 'Saved', '{}');
+
+      expect(await listProjects()).toEqual([
+        { id: 'p', name: 'Saved', updatedAt: expect.any(String) },
+      ]);
     });
   });
 
