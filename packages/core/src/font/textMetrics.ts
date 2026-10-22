@@ -16,6 +16,8 @@ import type { MeasureText, TextBox, TextLine } from './textLayout';
  * Returns bounds in local space (before transform): from the left of the
  * text, and from the ascender above the first baseline down. Text set in a
  * box is as wide as the box, and as tall when the box has a height.
+ * Measured in the font the text is drawn in: its weight, or the fallback that
+ * stands in while its family isn't loaded.
  */
 export function getTextBounds(
   content: string,
@@ -25,10 +27,11 @@ export function getTextBounds(
   letterSpacing: number = 0,
   // Lines align within the bounds, so alignment doesn't change them
   _textAlign: 'left' | 'center' | 'right' = 'left',
-  box?: TextBox
+  box?: TextBox,
+  fontWeight: number = 400
 ): Rect {
   const fm = getFontManager();
-  const font = fm.getFont(fontFamily);
+  const font = fm.getFontOrFallback(fontFamily, fontWeight);
 
   if (font) {
     const ascender = font.ascender * (fontSize / font.unitsPerEm);
@@ -42,7 +45,7 @@ export function getTextBounds(
     );
   }
 
-  // Canvas 2D fallback for system fonts
+  // No font loaded at all yet: estimate with Canvas 2D
   return getTextBoundsFromCanvas(content, fontFamily, fontSize, lineHeight, letterSpacing, box);
 }
 
@@ -55,7 +58,8 @@ export function getTextNodeBounds(node: TextNode): Rect {
     node.lineHeight,
     node.letterSpacing,
     node.textAlign,
-    getTextBox(node)
+    getTextBox(node),
+    node.fontWeight
   );
 }
 

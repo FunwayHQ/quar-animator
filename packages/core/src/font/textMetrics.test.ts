@@ -3,16 +3,18 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import type { TextNode } from '@quar/types';
 
 // Mock the FontManager before importing
 const mockGetFont = vi.fn();
 vi.mock('./FontManager', () => ({
   getFontManager: () => ({
     getFont: mockGetFont,
+    getFontOrFallback: mockGetFont,
   }),
 }));
 
-import { getTextBounds, getScaledMetrics } from './textMetrics';
+import { getTextBounds, getTextNodeBounds, getScaledMetrics } from './textMetrics';
 
 // ============================================================================
 // Helpers
@@ -123,6 +125,60 @@ describe('getTextBounds', () => {
       const bounds = getTextBounds('', 'TestFont', 24);
       expect(bounds.width).toBe(1); // min width
       expect(bounds.height).toBeGreaterThan(0);
+    });
+  });
+
+  describe('font weight (F181)', () => {
+    // Regular glyphs are half an em wide, bold ones 0.7 em
+    const regular = createMockFont();
+    const bold = createMockFont({
+      stringToGlyphs: (text: string) => [...text].map(() => ({ advanceWidth: 700 })),
+    });
+
+    beforeEach(() => {
+      mockGetFont.mockImplementation((_family: string, weight: number = 400) =>
+        weight === 700 ? bold : regular
+      );
+    });
+
+    it('measures text in the weight it is drawn in', () => {
+      expect(getTextBounds('Hello', 'Inter', 20).width).toBeCloseTo(50);
+      expect(getTextBounds('Hello', 'Inter', 20, 1.2, 0, 'left', undefined, 700).width).toBeCloseTo(
+        70
+      );
+    });
+
+    it('measures a text node in its own weight, so bold text centres on its anchor', () => {
+      const node: TextNode = {
+        id: 't',
+        name: 'Text',
+        type: 'text',
+        parent: null,
+        children: [],
+        transform: {
+          position: { x: 0, y: 0 },
+          rotation: 0,
+          scale: { x: 1, y: 1 },
+          anchor: { x: 0.5, y: 0.5 },
+          skew: { x: 0, y: 0 },
+        },
+        visible: true,
+        locked: false,
+        opacity: 1,
+        blendMode: 'normal',
+        content: 'Hello',
+        fontFamily: 'Inter',
+        fontSize: 20,
+        fontWeight: 700,
+        fontStyle: 'normal',
+        textAlign: 'left',
+        lineHeight: 1.2,
+        letterSpacing: 0,
+        fills: [],
+        strokes: [],
+      };
+      expect(getTextNodeBounds(node).width).toBeCloseTo(70);
+      expect(getTextNodeBounds({ ...node, fontWeight: 400 }).width).toBeCloseTo(50);
     });
   });
 
