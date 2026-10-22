@@ -121,11 +121,24 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
       style,
       onFocus,
       onBlur,
+      id,
+      'aria-describedby': ariaDescribedBy,
+      'aria-invalid': ariaInvalid,
       ...props
     },
     ref
   ) => {
     const [isFocused, setIsFocused] = React.useState(false);
+
+    // The label names the select through its id, and the helper text or error
+    // message (never both at once) describes it, after any description the
+    // caller gave.
+    const generatedId = React.useId();
+    const selectId = id ?? generatedId;
+    const messageId = `${selectId}-helper`;
+    const message = error ? errorMessage : helperText;
+    const describedBy =
+      [ariaDescribedBy, message ? messageId : undefined].filter(Boolean).join(' ') || undefined;
 
     const handleFocus = (e: React.FocusEvent<HTMLSelectElement>) => {
       setIsFocused(true);
@@ -150,10 +163,17 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
 
     return (
       <div style={{ ...containerStyles, ...(fullWidth && { width: '100%' }) }}>
-        {label && <label style={labelStyles}>{label}</label>}
+        {label && (
+          <label htmlFor={selectId} style={labelStyles}>
+            {label}
+          </label>
+        )}
         <div style={selectWrapperStyles}>
           <select
             ref={ref}
+            id={selectId}
+            aria-describedby={describedBy}
+            aria-invalid={error || ariaInvalid}
             disabled={disabled}
             style={computedSelectStyles}
             onFocus={handleFocus}
@@ -173,8 +193,16 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
           </select>
           <ChevronDown size={iconSize} style={chevronStyles} />
         </div>
-        {helperText && !error && <span style={helperTextStyles}>{helperText}</span>}
-        {error && errorMessage && <span style={errorMessageStyles}>{errorMessage}</span>}
+        {helperText && !error && (
+          <span id={messageId} style={helperTextStyles}>
+            {helperText}
+          </span>
+        )}
+        {error && errorMessage && (
+          <span id={messageId} style={errorMessageStyles}>
+            {errorMessage}
+          </span>
+        )}
       </div>
     );
   }
