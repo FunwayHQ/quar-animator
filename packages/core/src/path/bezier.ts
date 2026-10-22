@@ -128,18 +128,31 @@ export const bezier = {
    * Uses recursive subdivision until segments are small enough
    */
   cubicLength(p0: Vector2, p1: Vector2, p2: Vector2, p3: Vector2, tolerance: number = 0.1): number {
-    const chordLength = vec2.distance(p0, p3);
-    const controlLength = vec2.distance(p0, p1) + vec2.distance(p1, p2) + vec2.distance(p2, p3);
-
-    if (controlLength - chordLength < tolerance) {
-      return (controlLength + chordLength) / 2;
+    // A point that isn't a finite number never splits down to flat pieces:
+    // the length is the chord's, or 0
+    const finite = (p: Vector2) => Number.isFinite(p.x) && Number.isFinite(p.y);
+    if (!finite(p0) || !finite(p1) || !finite(p2) || !finite(p3)) {
+      const chord = vec2.distance(p0, p3);
+      return Number.isFinite(chord) ? chord : 0;
     }
 
-    const [left, right] = bezier.subdivide(p0, p1, p2, p3, 0.5);
-    return (
-      bezier.cubicLength(left.p0, left.p1, left.p2, left.p3, tolerance) +
-      bezier.cubicLength(right.p0, right.p1, right.p2, right.p3, tolerance)
-    );
+    const measure = (a: Vector2, b: Vector2, c: Vector2, d: Vector2, depth: number): number => {
+      const chordLength = vec2.distance(a, d);
+      const controlLength = vec2.distance(a, b) + vec2.distance(b, c) + vec2.distance(c, d);
+
+      // 16 halvings measure curves up to ~10⁸ units to 0.1, and keep a
+      // tolerance that can't be met (0, or too small for the numbers) bounded
+      if (controlLength - chordLength < tolerance || depth >= 16) {
+        return (controlLength + chordLength) / 2;
+      }
+
+      const [left, right] = bezier.subdivide(a, b, c, d, 0.5);
+      return (
+        measure(left.p0, left.p1, left.p2, left.p3, depth + 1) +
+        measure(right.p0, right.p1, right.p2, right.p3, depth + 1)
+      );
+    };
+    return measure(p0, p1, p2, p3, 0);
   },
 
   /**

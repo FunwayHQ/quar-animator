@@ -498,6 +498,27 @@ describe('bezier', () => {
   // ==========================================================================
 
   describe('cubicLength', () => {
+    it('returns a finite length (no stack overflow) when a point is not a number', () => {
+      const p0 = { x: 0, y: 0 };
+      const p3 = { x: 30, y: 40 };
+      expect(bezier.cubicLength(p0, { x: NaN, y: 0 }, { x: 10, y: 10 }, p3)).toBe(50);
+      expect(bezier.cubicLength(p0, { x: 0, y: Infinity }, { x: 10, y: 10 }, p3)).toBe(50);
+      expect(bezier.cubicLength({ x: NaN, y: NaN }, p0, p0, p3)).toBe(0);
+    });
+
+    it('stops splitting when the tolerance can never be met', () => {
+      const curve = [
+        { x: 0, y: 0 },
+        { x: 0, y: 100 },
+        { x: 100, y: 100 },
+        { x: 100, y: 0 },
+      ] as const;
+      const exact = bezier.cubicLength(...curve, 0.0001);
+      const zero = bezier.cubicLength(...curve, 0);
+      expect(Number.isFinite(zero)).toBe(true);
+      expect(zero).toBeCloseTo(exact, 2);
+    });
+
     it('should compute length of straight line correctly', () => {
       const p0 = { x: 0, y: 0 };
       const p1 = { x: 33.33, y: 33.33 };
@@ -553,13 +574,7 @@ describe('bezier', () => {
         { x: 66.67, y: 66.67 },
         { x: 100, y: 100 },
       ];
-      const result = bezier.cubicSecondDerivative(
-        linear[0],
-        linear[1],
-        linear[2],
-        linear[3],
-        0.5
-      );
+      const result = bezier.cubicSecondDerivative(linear[0], linear[1], linear[2], linear[3], 0.5);
       expect(result.x).toBeCloseTo(0, 0);
       expect(result.y).toBeCloseTo(0, 0);
     });
