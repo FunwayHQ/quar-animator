@@ -225,7 +225,7 @@ export function serializeProject(
 
 /**
  * Serializes a project directly to a v3.0 binary ArrayBuffer.
- * Convenience wrapper around serializeProject + writeQuarFile.
+ * Convenience wrapper around serializeProject + projectDataToBinary.
  */
 export function serializeProjectToBinary(
   name: string,
@@ -233,8 +233,15 @@ export function serializeProjectToBinary(
   editorState: EditorStateSnapshot,
   existingCreatedAt?: string
 ): ArrayBuffer {
-  const json = serializeProject(name, sceneGraph, editorState, existingCreatedAt);
-  return writeQuarFile(json as unknown as Record<string, unknown>);
+  return projectDataToBinary(serializeProject(name, sceneGraph, editorState, existingCreatedAt));
+}
+
+/**
+ * A project already serialized (serializeProject), as a v3.0 binary .quar
+ * file — for callers that also need the serialized data itself.
+ */
+export function projectDataToBinary(data: ProjectData): ArrayBuffer {
+  return writeQuarFile(data as unknown as Record<string, unknown>);
 }
 
 /**
@@ -525,7 +532,7 @@ export function deserializeProject(
 // ============================================================================
 
 export function downloadProjectFile(name: string, data: ProjectData): void {
-  const binary = writeQuarFile(data as unknown as Record<string, unknown>);
+  const binary = projectDataToBinary(data);
   const blob = new Blob([binary], { type: 'application/octet-stream' });
   const url = URL.createObjectURL(blob);
 

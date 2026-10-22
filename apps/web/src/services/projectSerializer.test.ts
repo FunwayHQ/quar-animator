@@ -9,6 +9,7 @@ import { DEFAULT_ONION_SKIN_SETTINGS } from '@quar/core';
 import {
   serializeProject,
   serializeProjectToBinary,
+  projectDataToBinary,
   deserializeProject,
   deserializeProjectFromBinary,
   validateProjectData,
@@ -1028,6 +1029,33 @@ describe('ProjectSerializer', () => {
       // Check magic bytes
       const view = new DataView(binary);
       expect(view.getUint32(0, true)).toBe(0x52415551); // "QUAR"
+    });
+
+    it('projectDataToBinary writes already serialized data as it is (F167)', () => {
+      const sg = new SceneGraph();
+      sg.addNode(makeTestNode('rect1', 42, 84));
+      const data = serializeProject(
+        'Saved Once',
+        sg,
+        {
+          timeline: createTimeline({ duration: 300, frameRate: 30 }),
+          timelineDuration: 300,
+          frameRate: 30,
+          autoKeyframe: false,
+          onionSkin: { ...DEFAULT_ONION_SKIN_SETTINGS },
+        },
+        '2020-02-02T00:00:00.000Z'
+      );
+
+      const parsed = deserializeProjectFromBinary(
+        projectDataToBinary(data),
+        new SceneGraph(),
+        () => undefined
+      );
+
+      expect(parsed.name).toBe('Saved Once');
+      expect(parsed.createdAt).toBe(data.createdAt);
+      expect(parsed.updatedAt).toBe(data.updatedAt);
     });
 
     it('deserializeProjectFromBinary with binary input', () => {

@@ -18,6 +18,7 @@ import {
 import {
   serializeProject,
   serializeProjectToBinary,
+  projectDataToBinary,
   deserializeProject,
   deserializeProjectFromBinary,
   downloadProjectFile,
@@ -126,19 +127,14 @@ export function useProjectActions(options: UseProjectActionsOptions = {}): Proje
         useEditorStore.setState({ projectId });
       }
 
+      // Serialized once: the file written is this data, and the store keeps its createdAt
       const data = serializeProject(
         state.projectName,
         sceneGraph,
         getEditorSnapshot(),
         state.projectCreatedAt ?? undefined
       );
-
-      const binary = serializeProjectToBinary(
-        state.projectName,
-        sceneGraph,
-        getEditorSnapshot(),
-        state.projectCreatedAt ?? undefined
-      );
+      const binary = projectDataToBinary(data);
       await dbSave(projectId, state.projectName, binary);
       await setLastProjectId(projectId);
       // Clear dirty only after the write succeeds — a failed save must keep the
@@ -165,8 +161,7 @@ export function useProjectActions(options: UseProjectActionsOptions = {}): Proje
       });
 
       const data = serializeProject(name, sceneGraph, getEditorSnapshot());
-
-      const binary = serializeProjectToBinary(name, sceneGraph, getEditorSnapshot());
+      const binary = projectDataToBinary(data);
       await dbSave(newId, name, binary);
       await setLastProjectId(newId);
       // Clear dirty only after the write succeeds (see saveProject).

@@ -36,6 +36,7 @@ const mockSerialize = vi.fn().mockReturnValue({
   settings: {},
 });
 const mockSerializeToBinary = vi.fn().mockReturnValue(new ArrayBuffer(16));
+const mockProjectDataToBinary = vi.fn().mockReturnValue(new ArrayBuffer(8));
 const mockDeserialize = vi.fn();
 const mockDeserializeFromBinary = vi.fn().mockReturnValue({
   name: 'Test Project',
@@ -60,6 +61,7 @@ const mockReadProjectFile = vi.fn().mockResolvedValue({
 vi.mock('../services/projectSerializer', () => ({
   serializeProject: (...args: unknown[]) => mockSerialize(...args),
   serializeProjectToBinary: (...args: unknown[]) => mockSerializeToBinary(...args),
+  projectDataToBinary: (...args: unknown[]) => mockProjectDataToBinary(...args),
   deserializeProject: (...args: unknown[]) => mockDeserialize(...args),
   deserializeProjectFromBinary: (...args: unknown[]) => mockDeserializeFromBinary(...args),
   downloadProjectFile: (...args: unknown[]) => mockDownloadFile(...args),
@@ -294,6 +296,24 @@ describe('useProjectActions', () => {
       expect(mockSetLastProjectId).toHaveBeenCalled();
     });
 
+    it('serializes the project once, and writes that (F167)', async () => {
+      const { result } = renderProjectActions();
+      mockEditorState.projectId = 'existing-id';
+
+      await act(async () => {
+        await result.current.saveProject();
+      });
+
+      expect(mockSerialize).toHaveBeenCalledTimes(1);
+      expect(mockSerializeToBinary).not.toHaveBeenCalled();
+      const data: unknown = mockSerialize.mock.results[0]?.value;
+      expect(mockProjectDataToBinary).toHaveBeenCalledWith(data);
+      const binary: unknown = mockProjectDataToBinary.mock.results[0]?.value;
+      expect(mockSave).toHaveBeenCalledWith('existing-id', 'Untitled Project', binary);
+      // The store keeps the creation time the file was written with
+      expect(mockEditorState.projectCreatedAt).toBe('2024-01-01');
+    });
+
     it('marks project as not dirty after save', async () => {
       const { result } = renderProjectActions();
       mockEditorState.projectId = 'existing-id';
@@ -322,6 +342,18 @@ describe('useProjectActions', () => {
           projectName: 'New Name',
         })
       );
+    });
+
+    it('serializes the project once, and writes that (F167)', async () => {
+      const { result } = renderProjectActions();
+
+      await act(async () => {
+        await result.current.saveProjectAs('Copy');
+      });
+
+      expect(mockSerialize).toHaveBeenCalledTimes(1);
+      expect(mockSerializeToBinary).not.toHaveBeenCalled();
+      expect(mockProjectDataToBinary).toHaveBeenCalledWith(mockSerialize.mock.results[0]?.value);
     });
 
     it('saves with new name to storage', async () => {
