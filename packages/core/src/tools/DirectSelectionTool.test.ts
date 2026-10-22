@@ -982,6 +982,76 @@ describe('DirectSelectionTool', () => {
       expect(tool.getSelectedPoints().length).toBe(0);
     });
 
+    it('puts a dragged point back on Escape mid-drag, keeping it picked', () => {
+      const path = createTestPath(context, [createPoint(0, 0), createPoint(100, 0)]);
+      const onTransformComplete = vi.fn();
+      context.onTransformComplete = onTransformComplete;
+
+      tool.onPointerDown(createMockPointerEvent({ worldPosition: { x: 0, y: 0 }, button: 0 }));
+      tool.onPointerMove(createMockPointerEvent({ worldPosition: { x: 40, y: 30 } }));
+      expect(context.sceneGraph.getNode<PathNode>(path.id)!.points[0]!.position).toEqual({
+        x: 40,
+        y: 30,
+      });
+
+      tool.onKeyDown({ key: 'Escape' } as KeyboardEvent);
+      // Further moves and the release change nothing
+      tool.onPointerMove(createMockPointerEvent({ worldPosition: { x: 60, y: 60 } }));
+      tool.onPointerUp(createMockPointerEvent({ worldPosition: { x: 60, y: 60 } }));
+
+      const node = context.sceneGraph.getNode<PathNode>(path.id)!;
+      expect(node.points[0]!.position).toEqual({ x: 0, y: 0 });
+      expect(node.points[1]!.position).toEqual({ x: 100, y: 0 });
+      expect(onTransformComplete).not.toHaveBeenCalled();
+      expect(tool.getSelectedPoints()).toEqual([{ nodeId: path.id, pointIndex: 0 }]);
+    });
+
+    it('puts a dragged handle (and its mirrored partner) back on Escape mid-drag', () => {
+      const path = createTestPath(context, [
+        createSmoothPoint(0, 0, { x: -20, y: 0 }, { x: 20, y: 0 }),
+        createPoint(100, 0),
+      ]);
+      const onTransformComplete = vi.fn();
+      context.onTransformComplete = onTransformComplete;
+
+      // Pick the point, then drag its out-handle
+      tool.onPointerDown(createMockPointerEvent({ worldPosition: { x: 0, y: 0 }, button: 0 }));
+      tool.onPointerUp(createMockPointerEvent({ worldPosition: { x: 0, y: 0 } }));
+      tool.onPointerDown(createMockPointerEvent({ worldPosition: { x: 20, y: 0 }, button: 0 }));
+      tool.onPointerMove(createMockPointerEvent({ worldPosition: { x: 0, y: 30 } }));
+      expect(context.sceneGraph.getNode<PathNode>(path.id)!.points[0]!.handleOut).toEqual({
+        x: 0,
+        y: 30,
+      });
+
+      tool.onKeyDown({ key: 'Escape' } as KeyboardEvent);
+      tool.onPointerUp(createMockPointerEvent({ worldPosition: { x: 0, y: 30 } }));
+
+      const point = context.sceneGraph.getNode<PathNode>(path.id)!.points[0]!;
+      expect(point.handleOut).toEqual({ x: 20, y: 0 });
+      expect(point.handleIn).toEqual({ x: -20, y: 0 });
+      expect(onTransformComplete).not.toHaveBeenCalled();
+      expect(tool.getSelectedPoints()).toHaveLength(1);
+    });
+
+    it('puts a bent segment back on Escape mid-drag', () => {
+      const path = createTestPath(context, [createPoint(0, 0), createPoint(100, 0)]);
+      const onTransformComplete = vi.fn();
+      context.onTransformComplete = onTransformComplete;
+
+      tool.onPointerDown(createMockPointerEvent({ worldPosition: { x: 50, y: 0 }, button: 0 }));
+      tool.onPointerMove(createMockPointerEvent({ worldPosition: { x: 50, y: 40 } }));
+      expect(context.sceneGraph.getNode<PathNode>(path.id)!.points[0]!.handleOut).not.toBeNull();
+
+      tool.onKeyDown({ key: 'Escape' } as KeyboardEvent);
+      tool.onPointerUp(createMockPointerEvent({ worldPosition: { x: 50, y: 40 } }));
+
+      const node = context.sceneGraph.getNode<PathNode>(path.id)!;
+      expect(node.points[0]!.handleOut).toBeNull();
+      expect(node.points[1]!.handleIn).toBeNull();
+      expect(onTransformComplete).not.toHaveBeenCalled();
+    });
+
     it('should select all points with Ctrl+A when path is selected', () => {
       const path = createTestPath(context, [
         createPoint(0, 0),
@@ -2365,6 +2435,21 @@ describe('DirectSelectionTool', () => {
         { nodeId: a.id, pointIndex: 0 },
         { nodeId: b.id, pointIndex: 1 },
       ]);
+    });
+
+    it('Escape mid-marquee drops the box: nothing is picked and the tool stays', () => {
+      createTestPath(context, [createPoint(0, 0), createPoint(100, 0)]);
+      const setActiveTool = vi.fn();
+      context.setActiveTool = setActiveTool;
+
+      tool.onPointerDown(createMockPointerEvent({ worldPosition: { x: -20, y: -20 }, button: 0 }));
+      tool.onPointerMove(createMockPointerEvent({ worldPosition: { x: 120, y: 20 } }));
+      tool.onKeyDown({ key: 'Escape' } as KeyboardEvent);
+      expect(tool.getMarqueeRect()).toBeNull();
+      tool.onPointerUp(createMockPointerEvent({ worldPosition: { x: 120, y: 20 } }));
+
+      expect(tool.getSelectedPoints()).toEqual([]);
+      expect(setActiveTool).not.toHaveBeenCalled();
     });
 
     it('a click without dragging still selects the layer under it', () => {

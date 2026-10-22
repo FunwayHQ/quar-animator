@@ -165,6 +165,8 @@ export class DirectSelectionTool extends BaseTool {
   /** Where each dragged point was drawn from at the start (pointFrames) */
   private initialPointFrames: Map<string, Matrix3> = new Map();
   private hasDragged: boolean = false;
+  /** The dragged layers' points as they were, for Escape to put back */
+  private dragOriginals: Map<string, Partial<Node>> = new Map();
   /** The point pressed to start a point drag, where it was: it decides the snap. */
   private grabbed: { nodeId: string; pointIndex: number; world: Vector2 } | null = null;
 
@@ -249,10 +251,9 @@ export class DirectSelectionTool extends BaseTool {
       this.dragHandle = handleHit;
       const handleNode = this.context.sceneGraph.getNode(handleHit.nodeId);
       this.dragHandleFrame = handleNode ? this.pointFrames(handleNode)(handleHit.pointIndex) : null;
+      if (handleNode) this.rememberPoints(handleNode);
       this.state.isDragging = true;
       this.hasDragged = false;
-
-      // Note: initial handle position stored implicitly via dragHandle
       return;
     }
 
@@ -321,6 +322,7 @@ export class DirectSelectionTool extends BaseTool {
             }
             this.initialPointFrames.set(key, frames(sel.pointIndex));
           }
+          this.rememberPoints(node);
         }
       }
       return;
@@ -340,6 +342,7 @@ export class DirectSelectionTool extends BaseTool {
         frame: this.pointFrames(node)(segmentHit.segmentIndex),
         shiftKey: event.shiftKey,
       };
+      this.rememberPoints(node);
       this.dragMode = 'bending-segment';
       this.state.isDragging = true;
       this.hasDragged = false;
@@ -620,13 +623,46 @@ export class DirectSelectionTool extends BaseTool {
       this.context.onTransformComplete?.(nodeIds, 'vertex-move');
     }
 
+    this.endDrag();
+  }
+
+  /** Keep a layer's points as they are before a drag changes them. */
+  private rememberPoints(node: Node): void {
+    if (this.dragOriginals.has(node.id)) return;
+    if (node.type === 'path') {
+      this.dragOriginals.set(
+        node.id,
+        structuredClone({ points: node.points, subpaths: node.subpaths })
+      );
+    } else if (node.type === 'image') {
+      this.dragOriginals.set(node.id, structuredClone({ vertexOffsets: node.vertexOffsets }));
+    }
+  }
+
+  /**
+   * Escape mid-drag: the dragged points, handles or segment go back where they
+   * were and the release changes nothing; the picked points stay picked.
+   */
+  private cancelDrag(): void {
+    for (const [id, points] of this.dragOriginals) {
+      this.context.sceneGraph.updateNode(id, points);
+    }
+    this.endDrag();
+  }
+
+  /** Forget the drag in progress (on release, Escape or leaving the tool). */
+  private endDrag(): void {
     this.dragMode = 'idle';
     this.dragStartPoint = null;
     this.dragHandle = null;
     this.dragHandleFrame = null;
     this.grabbed = null;
+    this.bend = null;
+    this.marqueeRect = null;
+    this.hasDragged = false;
     this.initialPointPositions.clear();
     this.initialPointFrames.clear();
+    this.dragOriginals.clear();
     this.state.isDragging = false;
   }
 
@@ -691,6 +727,10 @@ export class DirectSelectionTool extends BaseTool {
         break;
 
       case 'Escape': {
+        if (this.dragMode !== 'idle') {
+          this.cancelDrag();
+          break;
+        }
         const groupId = this.context.getEnteredGroupId?.() ?? null;
         if (this.selectedPoints.length > 0) {
           this.clearPointSelection();
@@ -1361,16 +1401,10 @@ export class DirectSelectionTool extends BaseTool {
   onDeactivate(): void {
     this.clearPointSelection();
     this.context.setEnteredGroupId?.(null);
-    this.dragMode = 'idle';
-    this.dragStartPoint = null;
-    this.dragHandle = null;
-    this.initialPointPositions.clear();
-    this.marqueeRect = null;
-    this.bend = null;
+    this.endDrag();
     this.lastClickTime = 0;
     this.lastClickPosition = null;
     this.currentHover = null;
-    this.state.isDragging = false;
   }
 }
 
