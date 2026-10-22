@@ -69,6 +69,57 @@ describe('importSvg', () => {
     expect(node.height).toBe(200);
   });
 
+  it('scales about the point it imports to, not the origin', () => {
+    const result = importSvg(simpleSvg, sceneGraph, generateId, {
+      position: { x: 500, y: 300 },
+      scale: 0.5,
+    });
+    const node = sceneGraph.getNode(result.rootIds[0]) as RectangleNode;
+    expect(node.transform.position.x).toBeCloseTo(500);
+    expect(node.transform.position.y).toBeCloseTo(300);
+    expect(node.width).toBe(50);
+  });
+
+  it('scales the layout inside a group, not just its shapes', () => {
+    const svg = `
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
+        <g>
+          <rect x="0" y="0" width="50" height="50" />
+          <rect x="100" y="0" width="50" height="50" />
+        </g>
+      </svg>
+    `;
+    const result = importSvg(svg, sceneGraph, generateId, { centerAtOrigin: false, scale: 2 });
+    const group = sceneGraph.getNode(result.rootIds[0])!;
+    const [a, b] = group.children.map((id) => sceneGraph.getNode(id) as RectangleNode);
+    expect(a!.width).toBe(100);
+    expect(b!.width).toBe(100);
+    // The gap between them doubles with the shapes
+    expect(Math.abs(b!.transform.position.x - a!.transform.position.x)).toBeCloseTo(200);
+  });
+
+  it('scales grouped artwork about the point it imports to', () => {
+    const svg = `
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
+        <g transform="translate(10 10)">
+          <rect x="0" y="0" width="50" height="50" />
+          <rect x="100" y="0" width="50" height="50" />
+        </g>
+      </svg>
+    `;
+    const result = importSvg(svg, sceneGraph, generateId, {
+      position: { x: 500, y: 300 },
+      scale: 2,
+    });
+    const group = sceneGraph.getNode(result.rootIds[0])!;
+    const [a, b] = group.children.map((id) => sceneGraph.getWorldPosition(id));
+    // 50 either side of the middle in the SVG, 100 once scaled
+    expect(a!.x).toBeCloseTo(400);
+    expect(a!.y).toBeCloseTo(300);
+    expect(b!.x).toBeCloseTo(600);
+    expect(b!.y).toBeCloseTo(300);
+  });
+
   it('imports multiple elements', () => {
     const svg = `
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">

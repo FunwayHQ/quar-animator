@@ -87,17 +87,24 @@ export function importSvg(
       const centerX = bounds.minX + (bounds.maxX - bounds.minX) / 2;
       const centerY = bounds.minY + (bounds.maxY - bounds.minY) / 2;
 
-      const targetX = position?.x ?? 0;
-      const targetY = position?.y ?? 0;
-
-      const offsetX = centerAtOrigin || position ? targetX - centerX : 0;
-      const offsetY = centerAtOrigin || position ? targetY - centerY : 0;
+      // Moving to a target scales about the artwork's center, which lands on
+      // the target; scaling alone scales about the origin
+      const reposition = centerAtOrigin || !!position;
+      const fromX = reposition ? centerX : 0;
+      const fromY = reposition ? centerY : 0;
+      const toX = reposition ? (position?.x ?? 0) : 0;
+      const toY = reposition ? (position?.y ?? 0) : 0;
 
       for (const node of nodes) {
-        // Only offset root-level nodes (children are relative to parents)
+        const pos = node.transform.position;
         if (rootIds.includes(node.id) || !node.parent) {
-          node.transform.position.x = (node.transform.position.x + offsetX) * scale;
-          node.transform.position.y = (node.transform.position.y + offsetY) * scale;
+          pos.x = (pos.x - fromX) * scale + toX;
+          pos.y = (pos.y - fromY) * scale + toY;
+        } else {
+          // In its group's space, which moves with the group: its offset
+          // from the group's origin scales with the shapes
+          pos.x *= scale;
+          pos.y *= scale;
         }
 
         // Scale dimensions for shape nodes
