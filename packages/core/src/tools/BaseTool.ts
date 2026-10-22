@@ -144,6 +144,12 @@ export abstract class BaseTool {
   onKeyUp?(event: KeyboardEvent): void;
 
   /**
+   * Whether this tool uses the key itself while active. A tool shortcut on
+   * the same key (F, say) then steps aside and the key goes to the tool.
+   */
+  consumesKey?(event: KeyboardEvent): boolean;
+
+  /**
    * Called when this tool becomes active
    */
   onActivate?(): void;

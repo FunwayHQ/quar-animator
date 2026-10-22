@@ -10,6 +10,13 @@ import { applyBrushDisplacement, type FalloffType } from '@quar/rigging';
 import type { MorphVertexOffset } from '@quar/types';
 import { mat3 } from '../math';
 
+/**
+ * The keys the Point Magnet uses while active: [ and ] size the brush, F
+ * cycles the falloff, Escape drops the strokes. F is also the Artboard tool's
+ * key, which steps aside for it.
+ */
+export const POINT_MAGNET_KEYS: readonly string[] = ['[', ']', 'f', 'F', 'Escape'];
+
 /** Type guard for nodes that can have skinData */
 function isSkinnableNode(node: Node): node is SkinnableNode {
   return (
@@ -144,6 +151,10 @@ export class PointMagnetTool extends BaseTool {
   // --------------------------------------------------------------------------
   // Keyboard
   // --------------------------------------------------------------------------
+
+  consumesKey(event: KeyboardEvent): boolean {
+    return POINT_MAGNET_KEYS.includes(event.key);
+  }
 
   onKeyDown(event: KeyboardEvent): void {
     switch (event.key) {

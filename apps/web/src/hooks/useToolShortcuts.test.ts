@@ -98,6 +98,18 @@ describe('useToolShortcuts', () => {
 
       expect(useEditorStore.getState().activeTool).toBe('artboard');
     });
+
+    it('leaves F to the Point Magnet (its falloff) while sculpting', () => {
+      useEditorStore.setState({ activeTool: 'point-magnet' });
+      renderHook(() => useToolShortcuts());
+
+      dispatchKeyDown('f');
+      expect(useEditorStore.getState().activeTool).toBe('point-magnet');
+
+      // Other tool keys still switch tools
+      dispatchKeyDown('v');
+      expect(useEditorStore.getState().activeTool).toBe('selection');
+    });
   });
 
   // ==========================================================================

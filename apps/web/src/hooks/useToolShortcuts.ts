@@ -5,6 +5,7 @@
 
 import { useEffect, useCallback } from 'react';
 import { useEditorStore } from '../stores/editorStore';
+import { POINT_MAGNET_KEYS } from '@quar/core';
 import type { ToolType } from '@quar/types';
 
 // ============================================================================
@@ -28,6 +29,12 @@ const TOOL_SHORTCUTS: Record<string, ToolType> = {
   f: 'artboard',
   j: 'bone',
   w: 'weight-paint',
+};
+
+// Keys a tool uses itself while it's active, which then switch no tool (the
+// canvas's tool manager hands them to the tool)
+const TOOL_OWN_KEYS: Partial<Record<ToolType, readonly string[]>> = {
+  'point-magnet': POINT_MAGNET_KEYS,
 };
 
 // ============================================================================
@@ -65,6 +72,11 @@ export function useToolShortcuts() {
         if (tagName === 'input' || tagName === 'textarea' || tagName === 'select' || isEditable) {
           return;
         }
+      }
+
+      // The Point Magnet's F cycles its falloff rather than picking the Artboard tool
+      if (TOOL_OWN_KEYS[useEditorStore.getState().activeTool]?.includes(event.key)) {
+        return;
       }
 
       // Check for tool shortcut (case-insensitive)

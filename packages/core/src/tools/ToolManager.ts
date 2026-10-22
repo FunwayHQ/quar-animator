@@ -211,6 +211,13 @@ export class ToolManager {
    * Route key down event to active tool
    */
   handleKeyDown(event: KeyboardEvent): void {
+    // A key the active tool uses itself goes to it, even when it's a tool
+    // shortcut (the Point Magnet's F would otherwise switch to the Artboard tool)
+    if (this.activeTool?.consumesKey?.(event)) {
+      this.activeTool.onKeyDown?.(event);
+      return;
+    }
+
     // Check for tool shortcuts first (skip when Shift is held — Shift+letter is reserved for other shortcuts)
     if (!event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey) {
       const newTool = this.getToolForShortcut(event.key);

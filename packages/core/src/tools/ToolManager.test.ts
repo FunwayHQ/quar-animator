@@ -7,6 +7,7 @@ import { ToolManager, type ToolManagerOptions } from './ToolManager';
 import { SceneGraph } from '../SceneGraph';
 import { Camera } from '../Camera';
 import { createMockPointerEvent } from '../test/setup';
+import type { PointMagnetTool } from './PointMagnetTool';
 
 function createToolManagerOptions(): ToolManagerOptions {
   const selectedIds = new Set<string>();
@@ -241,6 +242,23 @@ describe('ToolManager', () => {
     it('should not switch tools when alt is held', () => {
       manager.handleKeyDown({ key: 'r', altKey: true } as KeyboardEvent);
       expect(manager.getActiveToolType()).toBe('selection');
+    });
+
+    it('lets the Point Magnet keep F (falloff) instead of switching to the Artboard tool', () => {
+      manager.setActiveTool('point-magnet');
+      const magnet = manager.getTool<PointMagnetTool>('point-magnet')!;
+      expect(magnet.getFalloff()).toBe('smooth');
+
+      manager.handleKeyDown({ key: 'f' } as KeyboardEvent);
+
+      expect(manager.getActiveToolType()).toBe('point-magnet');
+      expect(magnet.getFalloff()).toBe('linear');
+      // Other tool keys still switch tools
+      manager.handleKeyDown({ key: 'v' } as KeyboardEvent);
+      expect(manager.getActiveToolType()).toBe('selection');
+      // And F is the Artboard tool's again
+      manager.handleKeyDown({ key: 'f' } as KeyboardEvent);
+      expect(manager.getActiveToolType()).toBe('artboard');
     });
   });
 
