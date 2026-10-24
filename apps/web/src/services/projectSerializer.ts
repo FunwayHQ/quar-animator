@@ -453,6 +453,24 @@ export interface DeserializedPages {
   activePageId: string;
 }
 
+/**
+ * A page's sequence made whole: a file without one, or one a tool wrote with
+ * its parts missing or null, opens with no steps and no rest poses (the
+ * editor reads both on every edit, export and frame shown).
+ */
+function readAnimationSequence(sequence: AnimationSequence | undefined): AnimationSequence {
+  const parts = (sequence ?? {}) as Partial<Record<keyof AnimationSequence, unknown>>;
+  return {
+    ...createAnimationSequence(),
+    ...sequence,
+    steps: Array.isArray(parts.steps) ? structuredClone(parts.steps) : [],
+    restPoses:
+      parts.restPoses && typeof parts.restPoses === 'object'
+        ? structuredClone(parts.restPoses as AnimationSequence['restPoses'])
+        : {},
+  };
+}
+
 export function deserializeProject(
   data: ProjectData,
   sceneGraph: SceneGraph,
@@ -483,7 +501,7 @@ export function deserializeProject(
     name: p.name,
     sceneGraphJSON: structuredClone(p.sceneGraph),
     timeline: structuredClone(p.timeline),
-    animationSequence: structuredClone(p.animationSequence ?? createAnimationSequence()),
+    animationSequence: readAnimationSequence(p.animationSequence),
     selectedNodeIds: [],
     undoStack: [],
     redoStack: [],
@@ -491,7 +509,7 @@ export function deserializeProject(
 
   const editorState: Parameters<typeof applyEditorState>[0] = {
     timeline: structuredClone(activePage.timeline),
-    animationSequence: structuredClone(activePage.animationSequence ?? createAnimationSequence()),
+    animationSequence: readAnimationSequence(activePage.animationSequence),
     timelineDuration: v2.settings.timelineDuration,
     frameRate: v2.settings.frameRate,
     autoKeyframe: v2.settings.autoKeyframe,

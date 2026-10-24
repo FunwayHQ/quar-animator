@@ -589,6 +589,49 @@ describe('ProjectSerializer', () => {
       expect(appliedTracks(damagedProject({ 0: 'not a track' }))).toEqual([]);
     });
 
+    it.each([
+      ['written as null', { steps: null, restPoses: null }],
+      ['left out', { steps: [] }],
+      ['not what they should be', { steps: 'none', restPoses: 3 }],
+    ])('open with an empty sequence when its parts were %s', (_, sequence) => {
+      const data = damagedProject([]);
+      data.pages[0]!.animationSequence =
+        sequence as unknown as ProjectDataV2['pages'][number]['animationSequence'];
+      let applied: Partial<EditorStateSnapshot> = {};
+      deserializeProject(data, new SceneGraph(), (state) => {
+        applied = state;
+      });
+
+      expect(applied.animationSequence).toEqual({ steps: [], restPoses: {} });
+      expect(applied.pages?.[0]?.animationSequence).toEqual({ steps: [], restPoses: {} });
+    });
+
+    it('keep a sequence that is whole as it was', () => {
+      const data = damagedProject([]);
+      const sequence = {
+        steps: [
+          {
+            id: 's1',
+            nodeId: 'imported',
+            presetId: 'fade-in',
+            trigger: 'afterPrevious',
+            delay: 0,
+            duration: 12,
+          },
+        ],
+        restPoses: { imported: { opacity: 1 } },
+      };
+      data.pages[0]!.animationSequence =
+        sequence as unknown as ProjectDataV2['pages'][number]['animationSequence'];
+      let applied: Partial<EditorStateSnapshot> = {};
+      deserializeProject(data, new SceneGraph(), (state) => {
+        applied = state;
+      });
+
+      expect(applied.animationSequence).toEqual(sequence);
+      expect(applied.animationSequence).not.toBe(sequence);
+    });
+
     it('that cannot be opened leave the open project as it was', () => {
       const sg = new SceneGraph();
       sg.addNode(makeTestNode('open-already'));
