@@ -480,6 +480,22 @@ interface TessellationCacheEntry {
   fittedSkin?: { source: SkinData; skin: SkinData };
 }
 
+/** A piece of geometry's own vertex (and index) buffer, bound by its own VAO. */
+interface StaticGeometry {
+  vao: WebGLVertexArrayObject;
+  vertexBuffer: WebGLBuffer;
+  indexBuffer: WebGLBuffer | null;
+  /** The frame it was last drawn in */
+  lastUsed: number;
+  /** Where it's filed, to take it out when it's freed */
+  owner: Map<Uint32Array | null, StaticGeometry>;
+  key: Uint32Array | null;
+}
+
+/** How often unused static geometry is freed, and after how long unused (in frames) */
+const STATIC_SWEEP_EVERY = 120;
+const STATIC_UNUSED_AFTER = 240;
+
 /**
  * Index arrays as the GPU takes them, converted once per array: cached
  * geometry keeps its index array, so drawing it again needs no new copy.
@@ -494,6 +510,72 @@ function indexData(indices: readonly number[]): Uint32Array {
   return data;
 }
 
+/** A path's geometry key, kept with its points array (see pathGeometryKey) */
+interface PathKeyEntry {
+  key: string;
+  subpaths: PathNode['subpaths'];
+  closed: boolean;
+  fillRule: PathNode['fillRule'];
+  length: number;
+  x: number;
+  y: number;
+}
+const pathKeys = new WeakMap<PathNode['points'], PathKeyEntry>();
+
+/**
+ * A path's key without reading every point each frame: edits replace the
+ * points array (or the subpaths), so the same arrays with the same first point
+ * mean the same geometry. Spelling it out from every point of a traced picture
+ * (hundreds of thousands) took most of each frame.
+ */
+function pathGeometryKey(node: PathNode): string {
+  const first = node.points[0]?.position;
+  const known = pathKeys.get(node.points);
+  if (
+    known &&
+    known.subpaths === node.subpaths &&
+    known.closed === node.closed &&
+    known.fillRule === node.fillRule &&
+    known.length === node.points.length &&
+    known.x === (first?.x ?? 0) &&
+    known.y === (first?.y ?? 0)
+  ) {
+    return known.key;
+  }
+  const key = spellPathKey(node);
+  pathKeys.set(node.points, {
+    key,
+    subpaths: node.subpaths,
+    closed: node.closed,
+    fillRule: node.fillRule,
+    length: node.points.length,
+    x: first?.x ?? 0,
+    y: first?.y ?? 0,
+  });
+  return key;
+}
+
+/** A path's key from all of its point positions and handles. */
+function spellPathKey(node: PathNode): string {
+  const parts: string[] = ['X', String(node.closed), String(node.fillRule ?? 'nonzero')];
+  const pushPoints = (pts: import('@quar/types').PathPoint[]) => {
+    for (const pt of pts) {
+      parts.push(`${pt.position.x}:${pt.position.y}:${pt.type}`);
+      if (pt.handleIn) parts.push(`i${pt.handleIn.x}:${pt.handleIn.y}`);
+      if (pt.handleOut) parts.push(`o${pt.handleOut.x}:${pt.handleOut.y}`);
+      if (pt.cornerRadius) parts.push(`cr${pt.cornerRadius}`);
+    }
+  };
+  pushPoints(node.points);
+  if (node.subpaths) {
+    for (const sp of node.subpaths) {
+      parts.push('|');
+      pushPoints(sp);
+    }
+  }
+  return parts.join(',');
+}
+
 /** Build a cache key string from node geometry properties */
 function buildGeometryKey(node: Node): string {
   switch (node.type) {
@@ -503,26 +585,8 @@ function buildGeometryKey(node: Node): string {
       return `E:${node.radiusX}:${node.radiusY}`;
     case 'polygon':
       return `P:${node.radius}:${node.sides}:${node.innerRadius ?? ''}:${node.cornerRadius ?? 0}`;
-    case 'path': {
-      // Use a hash of all point positions/handles for paths
-      const parts: string[] = ['X', String(node.closed), String(node.fillRule ?? 'nonzero')];
-      const pushPoints = (pts: import('@quar/types').PathPoint[]) => {
-        for (const pt of pts) {
-          parts.push(`${pt.position.x}:${pt.position.y}:${pt.type}`);
-          if (pt.handleIn) parts.push(`i${pt.handleIn.x}:${pt.handleIn.y}`);
-          if (pt.handleOut) parts.push(`o${pt.handleOut.x}:${pt.handleOut.y}`);
-          if (pt.cornerRadius) parts.push(`cr${pt.cornerRadius}`);
-        }
-      };
-      pushPoints(node.points);
-      if (node.subpaths) {
-        for (const sp of node.subpaths) {
-          parts.push('|');
-          pushPoints(sp);
-        }
-      }
-      return parts.join(',');
-    }
+    case 'path':
+      return pathGeometryKey(node);
     case 'text':
       return `T:${node.content}:${node.fontFamily}:${node.fontSize}:${node.fontWeight}:${node.fontStyle}:${node.textAlign}:${node.lineHeight}:${node.letterSpacing}:${getTextBox(node)?.width ?? ''}`;
     case 'image': {
@@ -555,6 +619,20 @@ export class ShapeRenderer {
   private vao: WebGLVertexArrayObject | null = null;
   private vertexBuffer: WebGLBuffer | null = null;
   private indexBuffer: WebGLBuffer | null = null;
+
+  /**
+   * Geometry drawn from GPU buffers of its own, uploaded once (see drawGeometry),
+   * by vertex array and then index array (null: drawn without indices).
+   */
+  private staticGeometry = new WeakMap<Float32Array, Map<Uint32Array | null, StaticGeometry>>();
+  /** Every StaticGeometry made, to free the ones no longer drawn */
+  private staticGeometryList: StaticGeometry[] = [];
+  /** The frame each array was last drawn in, while it's still on the shared buffers */
+  private drawnInFrame = new WeakMap<ArrayBufferView, number>();
+  /** Counts render() calls: when geometry was drawn, and when to free unused buffers */
+  private frame = 0;
+  /** Triangle strips of cached stroke outlines, open and closed */
+  private stripCache = new WeakMap<Float32Array, { open?: Float32Array; closed?: Float32Array }>();
 
   // GPU skinning
   private skinnedProgram: ShaderProgram | null = null;
@@ -652,6 +730,114 @@ export class ShapeRenderer {
       this.bufferCapacity.set(buffer, grown);
     }
     gl.bufferSubData(target, 0, data);
+  }
+
+  /**
+   * Draw vertices (as indexed triangles when indices are given) with the flat or
+   * gradient program in use. Geometry that comes back unchanged in a later frame
+   * (cached tessellations, their indices, stroke strips: the same arrays) is
+   * drawn from buffers of its own, uploaded once. Uploading every shape into the
+   * one shared buffer each frame made the GPU finish each draw before the next
+   * upload, about a millisecond a shape: a traced picture of a thousand shapes
+   * drew at 1 fps. Arrays made afresh each frame (posed meshes, ghosts) still go
+   * through the shared buffers.
+   */
+  private drawGeometry(
+    mode: number,
+    vertices: Float32Array,
+    indices: Uint32Array | null,
+    count: number
+  ): void {
+    const gl = this.renderer.context;
+    const geometry = this.staticGeometryFor(vertices, indices);
+    if (geometry) {
+      this.renderer.bindVAO(geometry.vao);
+      if (indices) gl.drawElements(mode, count, gl.UNSIGNED_INT, 0);
+      else gl.drawArrays(mode, 0, count);
+      this.renderer.bindVAO(this.vao);
+      return;
+    }
+    this.uploadToBuffer(gl.ARRAY_BUFFER, this.vertexBuffer, vertices);
+    if (indices) {
+      this.uploadToBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indexBuffer, indices);
+      gl.drawElements(mode, count, gl.UNSIGNED_INT, 0);
+    } else {
+      gl.drawArrays(mode, 0, count);
+    }
+  }
+
+  /** The geometry's own buffers: made when its arrays are drawn again in a later frame. */
+  private staticGeometryFor(
+    vertices: Float32Array,
+    indices: Uint32Array | null
+  ): StaticGeometry | null {
+    const owner = this.staticGeometry.get(vertices);
+    const existing = owner?.get(indices);
+    if (existing) {
+      existing.lastUsed = this.frame;
+      return existing;
+    }
+    const seenBefore = (data: ArrayBufferView) => {
+      const at = this.drawnInFrame.get(data);
+      this.drawnInFrame.set(data, this.frame);
+      return at !== undefined && at < this.frame;
+    };
+    const vertsBefore = seenBefore(vertices);
+    const indicesBefore = indices ? seenBefore(indices) : true;
+    if (!vertsBefore || !indicesBefore || !this.program) return null;
+
+    const gl = this.renderer.context;
+    const vao = this.renderer.createVAO();
+    const vertexBuffer = gl.createBuffer();
+    const indexBuffer = indices ? gl.createBuffer() : null;
+    if (!vertexBuffer || (indices && !indexBuffer)) {
+      gl.deleteVertexArray(vao);
+      if (vertexBuffer) gl.deleteBuffer(vertexBuffer);
+      return null;
+    }
+    this.renderer.bindVAO(vao);
+    gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW);
+    // The flat and gradient programs share a_position's location (they share this.vao too)
+    const location = attributeLocation(this.program, 'a_position');
+    gl.enableVertexAttribArray(location);
+    gl.vertexAttribPointer(location, 2, gl.FLOAT, false, 0, 0);
+    if (indices && indexBuffer) {
+      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
+      gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indices, gl.STATIC_DRAW);
+    }
+    this.renderer.bindVAO(this.vao);
+
+    const map = owner ?? new Map<Uint32Array | null, StaticGeometry>();
+    if (!owner) this.staticGeometry.set(vertices, map);
+    const geometry: StaticGeometry = {
+      vao,
+      vertexBuffer,
+      indexBuffer,
+      lastUsed: this.frame,
+      owner: map,
+      key: indices,
+    };
+    map.set(indices, geometry);
+    this.staticGeometryList.push(geometry);
+    return geometry;
+  }
+
+  /** Free the buffers of geometry not drawn for a while (shapes edited, deleted, hidden). */
+  private sweepStaticGeometry(all = false): void {
+    const gl = this.renderer.context;
+    const keep: StaticGeometry[] = [];
+    for (const geometry of this.staticGeometryList) {
+      if (!all && this.frame - geometry.lastUsed < STATIC_UNUSED_AFTER) {
+        keep.push(geometry);
+        continue;
+      }
+      gl.deleteVertexArray(geometry.vao);
+      gl.deleteBuffer(geometry.vertexBuffer);
+      if (geometry.indexBuffer) gl.deleteBuffer(geometry.indexBuffer);
+      geometry.owner.delete(geometry.key);
+    }
+    this.staticGeometryList = keep;
   }
 
   /** Set the symbol definitions registry so instances can be resolved during rendering. */
@@ -1477,6 +1663,8 @@ export class ShapeRenderer {
     if (!this.program || !this.vao) return;
     // Checked here; the effect passes below call back into it
     const program = this.program;
+    this.frame++;
+    if (this.frame % STATIC_SWEEP_EVERY === 0) this.sweepStaticGeometry();
 
     const gl = this.renderer.context;
 
@@ -2850,24 +3038,16 @@ export class ShapeRenderer {
     const color = this.getFillColor(fill, nodeOpacity);
     gl.uniform4fv(this.program.uniforms.u_color ?? null, color);
 
-    // Upload vertices
-    this.uploadToBuffer(gl.ARRAY_BUFFER, this.vertexBuffer, vertices);
-
     const numVertices = vertices.length / 2;
     if (numVertices < 3) return;
 
     if (fillIndices.length === 0) {
       // Fallback to triangle fan if earcut produced no indices
-      gl.drawArrays(gl.TRIANGLE_FAN, 0, numVertices);
+      this.drawGeometry(gl.TRIANGLE_FAN, vertices, null, numVertices);
       return;
     }
 
-    // Upload cached indices
-    const indicesArray = indexData(fillIndices);
-    this.uploadToBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indexBuffer, indicesArray);
-
-    // Draw using indexed triangles
-    gl.drawElements(gl.TRIANGLES, fillIndices.length, gl.UNSIGNED_INT, 0);
+    this.drawGeometry(gl.TRIANGLES, vertices, indexData(fillIndices), fillIndices.length);
   }
 
   /**
@@ -2946,20 +3126,32 @@ export class ShapeRenderer {
     return strip;
   }
 
+  /** An outline's strip, kept with the outline: a cached outline draws the same strip each frame. */
+  private stripOf(outline: Float32Array, closed: boolean): Float32Array | null {
+    let strips = this.stripCache.get(outline);
+    if (!strips) {
+      strips = {};
+      this.stripCache.set(outline, strips);
+    }
+    const which = closed ? 'closed' : 'open';
+    const strip = strips[which] ?? this.outlineToTriangleStrip(outline, closed);
+    if (strip) strips[which] = strip;
+    return strip;
+  }
+
   /**
    * Render stroke as a triangle strip from the outline polygon.
    * More robust than earcut for concave shapes where the outline self-intersects.
    */
   private renderStrokeStrip(outline: Float32Array, color: Float32Array, closed: boolean): void {
     if (!this.program) return;
-    const strip = this.outlineToTriangleStrip(outline, closed);
+    const strip = this.stripOf(outline, closed);
     if (!strip) return;
 
     const gl = this.renderer.context;
     this.renderer.useProgram(this.program);
     gl.uniform4fv(this.program.uniforms.u_color ?? null, color);
-    this.uploadToBuffer(gl.ARRAY_BUFFER, this.vertexBuffer, strip);
-    gl.drawArrays(gl.TRIANGLE_STRIP, 0, strip.length / 2);
+    this.drawGeometry(gl.TRIANGLE_STRIP, strip, null, strip.length / 2);
   }
 
   /**
@@ -2973,7 +3165,7 @@ export class ShapeRenderer {
     closed: boolean
   ): void {
     if (!this.gradientProgram) return;
-    const strip = this.outlineToTriangleStrip(outline, closed);
+    const strip = this.stripOf(outline, closed);
     if (!strip) return;
 
     const gl = this.renderer.context;
@@ -2987,8 +3179,7 @@ export class ShapeRenderer {
         );
       }
       this.setGradientUniforms(gradient, computeBounds(outline), opacity);
-      this.uploadToBuffer(gl.ARRAY_BUFFER, this.vertexBuffer, strip);
-      gl.drawArrays(gl.TRIANGLE_STRIP, 0, strip.length / 2);
+      this.drawGeometry(gl.TRIANGLE_STRIP, strip, null, strip.length / 2);
     } finally {
       if (this.program) {
         this.renderer.useProgram(this.program);
@@ -3031,15 +3222,10 @@ export class ShapeRenderer {
       // Upload gradient uniforms
       this.setGradientUniforms(gradient, computeBounds(vertices), opacity);
 
-      // Upload vertices
-      this.uploadToBuffer(gl.ARRAY_BUFFER, this.vertexBuffer, vertices);
-
       if (cachedIndices.length === 0) {
-        gl.drawArrays(gl.TRIANGLE_FAN, 0, numVertices);
+        this.drawGeometry(gl.TRIANGLE_FAN, vertices, null, numVertices);
       } else {
-        const indicesArray = indexData(cachedIndices);
-        this.uploadToBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indexBuffer, indicesArray);
-        gl.drawElements(gl.TRIANGLES, cachedIndices.length, gl.UNSIGNED_INT, 0);
+        this.drawGeometry(gl.TRIANGLES, vertices, indexData(cachedIndices), cachedIndices.length);
       }
     } finally {
       // Switch back to flat program for subsequent rendering
@@ -4575,16 +4761,13 @@ export class ShapeRenderer {
     if (!this.program) return;
     const gl = this.renderer.context;
     gl.uniform4fv(this.program.uniforms.u_color ?? null, color);
-    this.uploadToBuffer(gl.ARRAY_BUFFER, this.vertexBuffer, vertices);
     const numVertices = vertices.length / 2;
     if (numVertices < 3) return;
     if (cachedIndices.length === 0) {
-      gl.drawArrays(gl.TRIANGLE_FAN, 0, numVertices);
+      this.drawGeometry(gl.TRIANGLE_FAN, vertices, null, numVertices);
       return;
     }
-    const indicesArray = indexData(cachedIndices);
-    this.uploadToBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indexBuffer, indicesArray);
-    gl.drawElements(gl.TRIANGLES, cachedIndices.length, gl.UNSIGNED_INT, 0);
+    this.drawGeometry(gl.TRIANGLES, vertices, indexData(cachedIndices), cachedIndices.length);
   }
 
   /**
@@ -4650,6 +4833,7 @@ export class ShapeRenderer {
     const gl = this.renderer.context;
     this.disposed = true;
     this.renderer.clearProgramUseHook(this.programUseHook);
+    this.sweepStaticGeometry(true);
     this.maskFramebufferManager.dispose();
     this.ghostFramebuffers?.dispose();
     this.ghostFramebuffers = null;
