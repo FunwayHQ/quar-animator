@@ -124,6 +124,15 @@ export {
   type VideoFormat,
 } from './videoExporter';
 
+export {
+  decodeSound,
+  mixSoundtrack,
+  soundBytes,
+  soundtrackPlays,
+  SOUNDTRACK_RATE,
+  type SoundtrackPart,
+} from './soundtrack';
+
 // ============================================================================
 // Sprite Sheet
 // ============================================================================

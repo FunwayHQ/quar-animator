@@ -4,6 +4,10 @@ import { exportMp4, exportWebm } from './videoExporter';
 const mocks = vi.hoisted(() => ({
   canEncodeVideo: vi.fn(),
   getFirstEncodableVideoCodec: vi.fn(),
+  getFirstEncodableAudioCodec: vi.fn(),
+  mixSoundtrack: vi.fn(),
+  audio: null as null | { config: unknown; added: unknown[]; closed: boolean },
+  audioTracks: [] as unknown[],
   renderer: {
     preloadTextures: vi.fn(async () => {}),
     renderFrame: vi.fn((_: unknown, frame: number) => ({ frame }) as unknown as HTMLCanvasElement),
@@ -25,6 +29,12 @@ const mocks = vi.hoisted(() => ({
 
 const createFrameRendererMock = vi.hoisted(() => vi.fn());
 
+vi.mock('./soundtrack', async (importOriginal) => {
+  // What plays when, as it is: only the mixing is stood in for
+  const actual = await importOriginal<typeof import('./soundtrack')>();
+  return { ...actual, mixSoundtrack: mocks.mixSoundtrack };
+});
+
 vi.mock('./frameRenderer', async (importOriginal) => {
   // The shot plan as it is: only the renderer is stood in for
   const actual = await importOriginal<typeof import('./frameRenderer')>();
@@ -44,6 +54,20 @@ vi.mock('./frameRenderer', async (importOriginal) => {
 vi.mock('mediabunny', () => ({
   canEncodeVideo: mocks.canEncodeVideo,
   getFirstEncodableVideoCodec: mocks.getFirstEncodableVideoCodec,
+  getFirstEncodableAudioCodec: mocks.getFirstEncodableAudioCodec,
+  AudioBufferSource: class {
+    added: unknown[] = [];
+    closed = false;
+    constructor(readonly config: unknown) {
+      mocks.audio = this;
+    }
+    async add(buffer: unknown) {
+      this.added.push(buffer);
+    }
+    close() {
+      this.closed = true;
+    }
+  },
   WebMOutputFormat: class {
     readonly container = 'webm';
   },
@@ -85,6 +109,9 @@ vi.mock('mediabunny', () => ({
         mocks.output.trackMetadata = metadata;
       }
     }
+    addAudioTrack(source: unknown) {
+      mocks.audioTracks.push(source);
+    }
     async start() {
       this.state = 'started';
     }
@@ -104,6 +131,8 @@ describe('exportMp4', () => {
     vi.clearAllMocks();
     mocks.output = null;
     mocks.source = null;
+    mocks.audio = null;
+    mocks.audioTracks = [];
   });
 
   it('renders the selected range, muxes H.264 MP4, and reports progress', async () => {
@@ -315,5 +344,131 @@ describe('exportWebm', () => {
     await expect(
       exportWebm(ctx, { width: 64, height: 48, frameRate: 24, startFrame: 0, endFrame: 0 })
     ).rejects.toThrow(/can’t encode WebM/);
+  });
+});
+
+describe('a video’s sound', () => {
+  const voice = { id: 'voice', name: 'Voice', src: 'data:audio/wav;base64,AAAA', duration: 4 };
+  const clip = (id: string, start: number) => ({
+    id,
+    soundId: 'voice',
+    start,
+    offset: 0,
+    duration: 2,
+    gain: 1,
+  });
+  const scene = (sounds: ReturnType<typeof clip>[], name = 'scene') =>
+    ({ name, sceneGraph: { getRootNodes: () => [] }, timeline: { tracks: [], sounds } }) as never;
+  const mixed = { soundtrack: true };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.audio = null;
+    mocks.audioTracks = [];
+    mocks.canEncodeVideo.mockResolvedValue(true);
+    mocks.getFirstEncodableVideoCodec.mockResolvedValue('vp9');
+    mocks.getFirstEncodableAudioCodec.mockImplementation(async (codecs: string[]) => codecs[0]);
+    mocks.mixSoundtrack.mockResolvedValue(mixed);
+  });
+
+  it('has the range’s sounds, timed from its start, in AAC', async () => {
+    // Frames 30–89 at 30 fps: two seconds, from one second in
+    await exportMp4(scene([clip('a', 15), clip('b', 60)]), {
+      width: 64,
+      height: 48,
+      frameRate: 30,
+      startFrame: 30,
+      endFrame: 89,
+      sounds: [voice],
+    });
+    const [plays, sounds, duration] = mocks.mixSoundtrack.mock.calls[0]!;
+    expect(
+      (plays as Array<{ clipId: string; at: number; offset: number }>).map((p) => [
+        p.clipId,
+        p.at,
+        p.offset,
+      ])
+    ).toEqual([
+      ['a', 0, 0.5],
+      ['b', 1, 0],
+    ]);
+    expect(sounds).toEqual([voice]);
+    expect(duration).toBe(2);
+    expect(mocks.getFirstEncodableAudioCodec).toHaveBeenCalledWith(
+      ['aac', 'opus'],
+      expect.objectContaining({ numberOfChannels: 2, sampleRate: 48000 })
+    );
+    expect(mocks.audioTracks).toEqual([mocks.audio]);
+    expect(mocks.audio).toMatchObject({ config: { codec: 'aac' }, added: [mixed], closed: true });
+  });
+
+  it('plays each slide’s sounds as that slide plays', async () => {
+    const intro = scene([clip('a', 0)], 'intro');
+    const outro = scene([clip('b', 0)], 'outro');
+    await exportMp4(intro, {
+      width: 64,
+      height: 48,
+      frameRate: 30,
+      startFrame: 0,
+      endFrame: 0,
+      sounds: [voice],
+      slides: [
+        { ctx: intro, frameCount: 30 },
+        { ctx: outro, frameCount: 45 },
+      ],
+    });
+    const [plays, , duration] = mocks.mixSoundtrack.mock.calls[0]!;
+    // The intro's clip cut at its end; the outro's from a second in
+    expect(
+      (plays as Array<{ clipId: string; at: number; duration: number }>).map((p) => [
+        p.clipId,
+        p.at,
+        p.duration,
+      ])
+    ).toEqual([
+      ['a', 0, 1],
+      ['b', 1, 1.5],
+    ]);
+    expect(duration).toBe(2.5);
+  });
+
+  it('is Opus in WebM', async () => {
+    await exportWebm(scene([clip('a', 0)]), {
+      width: 64,
+      height: 48,
+      frameRate: 30,
+      startFrame: 0,
+      endFrame: 29,
+      sounds: [voice],
+    });
+    expect(mocks.getFirstEncodableAudioCodec).toHaveBeenCalledWith(
+      ['opus', 'vorbis'],
+      expect.anything()
+    );
+    expect(mocks.audio).toMatchObject({ config: { codec: 'opus' } });
+  });
+
+  it('is left out without the sounds, or with nothing playing', async () => {
+    const timing = { width: 64, height: 48, frameRate: 30, startFrame: 0, endFrame: 29 };
+    await exportMp4(scene([clip('a', 0)]), timing);
+    expect(mocks.mixSoundtrack).not.toHaveBeenCalled();
+    mocks.mixSoundtrack.mockResolvedValue(null);
+    await exportMp4(scene([]), { ...timing, sounds: [voice] });
+    expect(mocks.audioTracks).toEqual([]);
+    expect(mocks.output?.state).toBe('finalized');
+  });
+
+  it('explains when the browser can’t encode sound', async () => {
+    mocks.getFirstEncodableAudioCodec.mockResolvedValue(null);
+    await expect(
+      exportMp4(scene([clip('a', 0)]), {
+        width: 64,
+        height: 48,
+        frameRate: 30,
+        startFrame: 0,
+        endFrame: 29,
+        sounds: [voice],
+      })
+    ).rejects.toThrow(/can’t encode the video’s sound/);
   });
 });

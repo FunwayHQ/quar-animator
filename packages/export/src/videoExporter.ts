@@ -1,13 +1,16 @@
 /**
  * Render an animation range and encode it as video: H.264 in MP4, or VP9
  * (VP8 where VP9 can't be encoded) in WebM — which can keep transparency.
+ * The sounds on the timeline go with it: AAC (or Opus) in MP4, Opus in WebM.
  */
 
-import type { Color } from '@quar/types';
+import type { Color, Sound } from '@quar/types';
 import { DEFAULT_DOCUMENT_BACKGROUND } from '@quar/core';
 import type { FrameRenderContext, FrameSlide } from './frameRenderer';
 import { createFrameRenderer, framePlan, getFrameCount, preloadShots } from './frameRenderer';
 import type { PlaybackTiming } from './exportUtils';
+import { SOUNDTRACK_RATE, mixSoundtrack, soundtrackPlays } from './soundtrack';
+import type { SoundtrackPart } from './soundtrack';
 import type { ExportProgress } from './index';
 
 export type VideoFormat = 'mp4' | 'webm';
@@ -22,6 +25,10 @@ export interface VideoExportOptions extends PlaybackTiming {
   transparent?: boolean;
   /** One video of these slides, each its whole timeline (the range is then theirs) */
   slides?: FrameSlide[];
+  /** The document's sounds: the video has the sound of the clips it plays (none without) */
+  sounds?: readonly Sound[];
+  /** Decodes a sound (the editor has them decoded); they're decoded here otherwise */
+  decodeSound?: (sound: Sound) => Promise<AudioBuffer>;
 }
 
 export type Mp4ExportOptions = Omit<VideoExportOptions, 'transparent'>;
@@ -69,7 +76,9 @@ export async function exportVideo(
     WebMOutputFormat,
     Output,
     Quality,
+    AudioBufferSource,
     canEncodeVideo,
+    getFirstEncodableAudioCodec,
     getFirstEncodableVideoCodec,
   } = await import('mediabunny');
   const { fps, shots } = framePlan(ctx, options);
@@ -105,6 +114,38 @@ export async function exportVideo(
     await preloadShots(renderer, shots);
     if (isCancelled()) return null;
 
+    // The clips each stretch of the video plays: the range's, or each slide's from where it starts
+    const parts: SoundtrackPart[] = options.slides?.length
+      ? options.slides.flatMap((slide) => {
+          const first = shots.findIndex((shot) => shot.ctx === slide.ctx);
+          if (first < 0) return [];
+          const part = { at: first / fps, startFrame: 0, endFrame: slide.frameCount - 1 };
+          return [{ ...part, clips: slide.ctx.timeline?.sounds }];
+        })
+      : [{ clips: ctx.timeline?.sounds, at: 0, startFrame, endFrame }];
+    const soundtrack = options.sounds?.length
+      ? await mixSoundtrack(
+          soundtrackPlays(parts, options.frameRate, options.speed),
+          options.sounds,
+          frameCount / fps,
+          options.decodeSound
+        )
+      : null;
+    // Mixing takes a moment: it may have been called off meanwhile
+    if (soundtrack && isCancelled()) return null;
+    const audioCodec = soundtrack
+      ? await getFirstEncodableAudioCodec(format === 'mp4' ? ['aac', 'opus'] : ['opus', 'vorbis'], {
+          numberOfChannels: 2,
+          sampleRate: SOUNDTRACK_RATE,
+          quality,
+        })
+      : null;
+    if (soundtrack && !audioCodec) {
+      throw new Error(
+        'This browser can’t encode the video’s sound. Turn Sound off to export the video without it.'
+      );
+    }
+
     const first = shots[0]!;
     const canvas = renderer.renderFrame(first.ctx, first.frame);
     const target = new BufferTarget();
@@ -119,7 +160,14 @@ export async function exportVideo(
       alpha: transparent ? 'keep' : 'discard',
     });
     output.addVideoTrack(source, { frameRate: fps });
+    const audio =
+      soundtrack && audioCodec ? new AudioBufferSource({ codec: audioCodec, quality }) : null;
+    if (audio) output.addAudioTrack(audio);
     await output.start();
+    if (audio && soundtrack) {
+      await audio.add(soundtrack);
+      audio.close();
+    }
 
     for (let i = 0; i < frameCount; i++) {
       if (isCancelled()) {
