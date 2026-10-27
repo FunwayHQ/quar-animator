@@ -242,6 +242,32 @@ describe('Timeline', () => {
     expect(screen.getByTestId('timeline-layer-logo')).toBeInTheDocument();
   });
 
+  it('tells artboards of the same name apart in the picker', () => {
+    let graph: SceneGraph | undefined;
+    function CaptureGraph() {
+      graph = useSceneGraph();
+      return null;
+    }
+    useEditorStore.setState({ timeline: createTimeline(), timelineScope: null });
+    render(
+      <SceneGraphProvider>
+        <CaptureGraph />
+        <Timeline />
+      </SceneGraphProvider>
+    );
+    act(() => {
+      for (const id of ['a', 'b']) {
+        graph!.addNode({ id, name: 'Artboard', type: 'artboard', children: [] } as unknown as Node);
+      }
+    });
+    const picker = screen.getByRole('combobox', { name: 'Timeline' });
+    expect([...picker.querySelectorAll('option')].map((o) => o.textContent)).toEqual([
+      'Artboard',
+      'Artboard 2',
+      'Page (outside artboards)',
+    ]);
+  });
+
   it('has no picker on a page without artboards (it has the one timeline)', () => {
     useEditorStore.setState({ timeline: createTimeline(), timelineScope: null });
     renderTimeline();

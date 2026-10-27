@@ -433,9 +433,16 @@ export function Timeline({ playback }: TimelineProps = {}) {
           timelineScope === null ? root.type !== 'artboard' : root.id === timelineScope;
         if (inView) visit(root);
       }
+      // Named apart where names repeat ("Artboard", "Artboard 2"), in the Layers order
+      const seen = new Map<string, number>();
       const boards = roots
         .filter((root) => root.type === 'artboard')
-        .map((root) => ({ id: root.id, name: root.name || 'Artboard' }));
+        .map((root) => {
+          const name = root.name || 'Artboard';
+          const count = (seen.get(name) ?? 0) + 1;
+          seen.set(name, count);
+          return { id: root.id, name: count > 1 ? `${name} ${count}` : name };
+        });
       const boardsKey = JSON.stringify(boards);
       if (boardsKey !== shownBoards) {
         shownBoards = boardsKey;
