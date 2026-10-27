@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { parseSvg } from '../svgParser';
 import { convertSvgToNodes } from '../svgConverter';
+import type { PathNode } from '@quar/types';
 
 describe('parseSvg', () => {
   // --------------------------------------------------------------------------
@@ -356,6 +357,25 @@ describe('parseSvg', () => {
     });
     // A child's own paint still wins
     expect(circle!.style).toMatchObject({ fill: '#ffffff', stroke: '#d4a03c' });
+  });
+
+  it('paints currentColor with each element’s color property, black when none is set', () => {
+    const shapes = (svg: string) => {
+      let n = 0;
+      return convertSvgToNodes(parseSvg(svg), () => `n${++n}`).nodes.filter(
+        (node) => node.type === 'path'
+      ) as PathNode[];
+    };
+    const [outer, inner] = shapes(
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" style="color:#d4a03c"><path d="M0 0L5 5"/><g color="#ff0000"><path d="M0 0L5 5"/></g></svg>'
+    );
+    expect(outer!.strokes[0]!.color).toEqual({ r: 212, g: 160, b: 60, a: 1 });
+    expect(inner!.strokes[0]!.color).toEqual({ r: 255, g: 0, b: 0, a: 1 });
+
+    const [plain] = shapes(
+      '<svg xmlns="http://www.w3.org/2000/svg"><path d="M0 0L5 5L0 5Z" fill="currentColor"/></svg>'
+    );
+    expect(plain!.fills[0]!.color).toEqual({ r: 0, g: 0, b: 0, a: 1 });
   });
 
   it('captures transform attribute', () => {

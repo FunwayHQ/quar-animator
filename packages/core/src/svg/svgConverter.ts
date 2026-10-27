@@ -24,6 +24,7 @@ import { getShapeOutlinePoints } from '../path/shapeToPath';
 import {
   parseSvgTransform,
   parseSvgColor,
+  paintColor,
   parseUrlRef,
   parseSvgTransformToMatrix,
   decomposeMatrix,
@@ -753,7 +754,7 @@ function convertFills(style: ResolvedStyle, defs: SvgDefs, frame: GradientFrame)
   }
 
   // Solid color
-  const color = parseSvgColor(style.fill);
+  const color = parseSvgColor(paintColor(style.fill, style));
   if (!color) return [];
 
   return [
@@ -769,7 +770,7 @@ function convertFills(style: ResolvedStyle, defs: SvgDefs, frame: GradientFrame)
 function convertStrokes(style: ResolvedStyle, defs: SvgDefs, frame: GradientFrame): Stroke[] {
   if (!style.stroke || style.strokeWidth <= 0) return [];
 
-  const color = parseSvgColor(style.stroke) ?? { r: 0, g: 0, b: 0, a: 1 };
+  const color = parseSvgColor(paintColor(style.stroke, style)) ?? { r: 0, g: 0, b: 0, a: 1 };
 
   // Check for gradient stroke
   let gradient: Gradient | undefined;

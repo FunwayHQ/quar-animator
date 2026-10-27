@@ -466,6 +466,8 @@ export interface ResolvedStyle {
   opacity: number;
   display: string;
   visibility: string;
+  /** The color property: what currentColor paints with. */
+  color: string;
 }
 
 const DEFAULT_STYLE: ResolvedStyle = {
@@ -482,6 +484,7 @@ const DEFAULT_STYLE: ResolvedStyle = {
   opacity: 1,
   display: 'inline',
   visibility: 'visible',
+  color: '#000000',
 };
 
 /**
@@ -504,6 +507,11 @@ export function resolveStyle(element: Element, parentStyle?: ResolvedStyle): Res
     return inlineStyle[prop] ?? sheetStyle[prop] ?? element.getAttribute(attr ?? prop) ?? null;
   };
 
+  const color = get('color');
+  if (color !== null && !isCurrentColor(color) && color !== 'inherit') base.color = color;
+
+  // currentColor stays as it is, inherited as the keyword: each element paints
+  // it with its own color (paintColor)
   const fill = get('fill');
   if (fill !== null) base.fill = fill === 'none' ? null : fill;
 
@@ -553,6 +561,13 @@ export function resolveStyle(element: Element, parentStyle?: ResolvedStyle): Res
   if (visibility !== null) base.visibility = visibility;
 
   return base;
+}
+
+const isCurrentColor = (value: string) => value.trim().toLowerCase() === 'currentcolor';
+
+/** A fill or stroke value with currentColor read as the element's color property. */
+export function paintColor(value: string, style: Pick<ResolvedStyle, 'color'>): string {
+  return isCurrentColor(value) ? style.color : value;
 }
 
 function parseInlineStyle(style: string): Record<string, string> {
