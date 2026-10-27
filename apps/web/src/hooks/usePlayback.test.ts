@@ -181,6 +181,89 @@ describe('usePlayback', () => {
     expect(useEditorStore.getState().isPlaying).toBe(false);
   });
 
+  describe('each artboard its own timeline', () => {
+    const transform = () => ({
+      position: { x: 0, y: 0 },
+      rotation: 0,
+      scale: { x: 1, y: 1 },
+      anchor: { x: 0.5, y: 0.5 },
+      skew: { x: 0, y: 0 },
+    });
+    const base = (id: string, type: string) =>
+      ({
+        id,
+        name: id,
+        type,
+        parent: null,
+        children: [],
+        transform: transform(),
+        visible: true,
+        locked: false,
+        opacity: 1,
+        blendMode: 'normal',
+        width: 100,
+        height: 100,
+        fills: [],
+        strokes: [],
+        cornerRadius: [0, 0, 0, 0],
+        clipContent: true,
+      }) as unknown as Node;
+
+    /** Two slides, a box on each; each box fades from 1 to 0 over 10 frames. */
+    function slides(sg: ReturnType<typeof useSceneGraph>) {
+      sg.addNode(base('slide1', 'artboard'));
+      sg.addNode(base('box1', 'rectangle'), 'slide1');
+      sg.addNode(base('slide2', 'artboard'));
+      sg.addNode(base('box2', 'rectangle'), 'slide2');
+      const timeline = createTimeline({ duration: 300, frameRate: 30 });
+      for (const id of ['box1', 'box2']) {
+        const track = getOrCreateTrack<number>(timeline, id, 'opacity');
+        addKeyframe(track, 0, 1);
+        addKeyframe(track, 10, 0);
+      }
+      return timeline;
+    }
+
+    it('plays only the timeline in view; the other artboard stays as it was', () => {
+      const { result } = renderHook(() => usePlaybackWithSceneGraph(), { wrapper });
+      const sg = result.current.sceneGraph;
+      act(() => {
+        useEditorStore.getState().resetProject();
+        const timeline = slides(sg);
+        useEditorStore.setState({ timeline, timelineScope: 'slide1' });
+      });
+      act(() => useEditorStore.getState().setCurrentFrame(10));
+      expect(sg.getNode('box1')!.opacity).toBeCloseTo(0);
+      expect(sg.getNode('box2')!.opacity).toBeCloseTo(1);
+
+      // The other slide in view: its box at the playhead; the first keeps its frame
+      act(() => useEditorStore.getState().setCurrentFrame(5));
+      act(() => useEditorStore.getState().setTimelineScope('slide2'));
+      expect(sg.getNode('box2')!.opacity).toBeCloseTo(0.5);
+      expect(sg.getNode('box1')!.opacity).toBeCloseTo(0.5);
+      act(() => useEditorStore.getState().setCurrentFrame(10));
+      expect(sg.getNode('box2')!.opacity).toBeCloseTo(0);
+      expect(sg.getNode('box1')!.opacity).toBeCloseTo(0.5, 5);
+    });
+
+    it('runs each artboard for its own length', () => {
+      renderHook(() => usePlaybackWithSceneGraph(), { wrapper });
+      act(() => {
+        useEditorStore.getState().resetProject();
+        useEditorStore.setState({ timelineScope: null });
+        useEditorStore.getState().setTimelineScope('slide1');
+        useEditorStore.getState().setTimelineDuration(48);
+      });
+      const state = useEditorStore.getState();
+      expect(state.timeline.artboards?.slide1?.duration).toBe(48);
+      expect(state.timeline.duration).toBe(300);
+      act(() => useEditorStore.getState().setTimelineScope(null));
+      expect(useEditorStore.getState().timelineDuration).toBe(300);
+      act(() => useEditorStore.getState().setTimelineScope('slide1'));
+      expect(useEditorStore.getState().timelineDuration).toBe(48);
+    });
+  });
+
   describe('Animation Sequence objects', () => {
     function addBox(sg: ReturnType<typeof useSceneGraph>) {
       sg.addNode({

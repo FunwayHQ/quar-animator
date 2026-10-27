@@ -4,7 +4,13 @@
  */
 
 import { useEffect, useRef, useCallback } from 'react';
-import { PlaybackController, evaluateTimelineAtFrame, applyAnimatedValues } from '@quar/animation';
+import {
+  PlaybackController,
+  evaluateTimelineAtFrame,
+  applyAnimatedValues,
+  scopedTimeline,
+} from '@quar/animation';
+import { inTimelineScope } from '@quar/core';
 import { evaluateIKChains } from '@quar/rigging';
 import { useEditorStore } from '../stores/editorStore';
 import { noteSequenceShown } from '../stores/sequenceActions';
@@ -69,23 +75,59 @@ export function usePlayback() {
   // True while this hook writes animated values, so those aren't taken for user edits
   const applyingRef = useRef(false);
 
-  // Apply the timeline at a frame
-  const applyAnimations = useCallback((frame: number) => {
-    const sg = sceneGraphRef.current;
-    // Before overwriting sequenced objects, keep what the user changed on them
-    // (moved, scaled, ...) by shifting their rest poses. Skipped when the
-    // sequence itself was replaced (undo, page switch, project load).
-    useEditorStore.getState().flushSequenceEdits(sg);
-    const { timeline, ikChains, animationSequence } = useEditorStore.getState();
-    noteSequenceShown(timeline, frame, animationSequence);
-    applyingRef.current = true;
-    try {
-      // Showing a frame isn't an edit: the project stays saved
-      poseScene(() => applyFrame(sg, timeline, ikChains, frame));
-    } finally {
-      applyingRef.current = false;
+  // The timeline in view on its own (an artboard's layers, or the page's
+  // loose ones): kept until the timeline, the scope or the layers change
+  const layersChangedRef = useRef(0);
+  const scopedRef = useRef<{
+    timeline: EditorState['timeline'];
+    scope: string | null;
+    layers: number;
+    scoped: EditorState['timeline'];
+  } | null>(null);
+  useEffect(() => {
+    const changed = () => {
+      layersChangedRef.current++;
+    };
+    const stops = (['nodeAdded', 'nodeRemoved', 'nodeMoved', 'graphReplaced'] as const).map(
+      (type) => sceneGraph.on(type, changed)
+    );
+    return () => stops.forEach((stop) => stop());
+  }, [sceneGraph]);
+  const scopedOf = useCallback((timeline: EditorState['timeline'], scope: string | null) => {
+    const known = scopedRef.current;
+    if (
+      known?.timeline === timeline &&
+      known.scope === scope &&
+      known.layers === layersChangedRef.current
+    ) {
+      return known.scoped;
     }
+    const sg = sceneGraphRef.current;
+    const scoped = scopedTimeline(timeline, scope, inTimelineScope(sg, scope));
+    scopedRef.current = { timeline, scope, layers: layersChangedRef.current, scoped };
+    return scoped;
   }, []);
+
+  // Apply the timeline in view at a frame (the other artboards stay as they are)
+  const applyAnimations = useCallback(
+    (frame: number) => {
+      const sg = sceneGraphRef.current;
+      // Before overwriting sequenced objects, keep what the user changed on them
+      // (moved, scaled, ...) by shifting their rest poses. Skipped when the
+      // sequence itself was replaced (undo, page switch, project load).
+      useEditorStore.getState().flushSequenceEdits(sg);
+      const { timeline, timelineScope, ikChains, animationSequence } = useEditorStore.getState();
+      noteSequenceShown(timeline, frame, animationSequence);
+      applyingRef.current = true;
+      try {
+        // Showing a frame isn't an edit: the project stays saved
+        poseScene(() => applyFrame(sg, scopedOf(timeline, timelineScope), ikChains, frame));
+      } finally {
+        applyingRef.current = false;
+      }
+    },
+    [scopedOf]
+  );
 
   // Absorb edits to sequenced objects shortly after they're made (a drag ends,
   // a field is committed) so saving or switching pages can't lose them
@@ -120,14 +162,16 @@ export function usePlayback() {
     });
     // Initialize work area and play end from store
     ctrl.setWorkArea(state.workAreaEnabled, state.workAreaStart, state.workAreaEnd);
-    ctrl.setPlayEnd(getPlayEnd(state.timeline));
+    ctrl.setPlayEnd(getPlayEnd(scopedOf(state.timeline, state.timelineScope)));
     controllerRef.current = ctrl;
 
     const unsub = useEditorStore.subscribe((curr, prev) => {
       if (curr.timelineDuration !== prev.timelineDuration) {
         ctrl.setDuration(Math.max(1, curr.timelineDuration));
       }
-      if (curr.timeline !== prev.timeline) ctrl.setPlayEnd(getPlayEnd(curr.timeline));
+      if (curr.timeline !== prev.timeline || curr.timelineScope !== prev.timelineScope) {
+        ctrl.setPlayEnd(getPlayEnd(scopedOf(curr.timeline, curr.timelineScope)));
+      }
       if (curr.frameRate !== prev.frameRate) {
         ctrl.setFrameRate(curr.frameRate);
       }
@@ -163,8 +207,10 @@ export function usePlayback() {
       // Loading a project or switching pages replaces the timeline without
       // necessarily changing the current frame. Apply its values at the current
       // playhead so animations are visible immediately, including at frame 0.
+      // Another timeline in view: its layers at the playhead
       if (
         curr.timeline !== prev.timeline ||
+        curr.timelineScope !== prev.timelineScope ||
         (curr.currentFrame !== prev.currentFrame && !ctrl.isPlaying)
       ) {
         applyAnimations(curr.currentFrame);
@@ -176,7 +222,7 @@ export function usePlayback() {
       ctrl.dispose();
       controllerRef.current = null;
     };
-  }, [applyAnimations]);
+  }, [applyAnimations, scopedOf]);
 
   const play = useCallback(() => {
     controllerRef.current?.play();

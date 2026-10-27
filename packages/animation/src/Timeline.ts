@@ -27,6 +27,7 @@ export function createTimeline(options: Partial<Timeline> = {}): Timeline {
     frameRate: options.frameRate ?? 30,
     tracks: options.tracks ?? [],
     markers: options.markers ?? [],
+    ...(options.artboards ? { artboards: options.artboards } : {}),
   };
 }
 

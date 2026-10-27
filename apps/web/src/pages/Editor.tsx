@@ -12,6 +12,7 @@ import { ErrorBoundary } from '../components/ErrorBoundary';
 import { ExportDialogHost } from '../components/common/ExportDialog';
 import { AnimationSequenceWindow } from '../components/common/AnimationSequenceWindow';
 import { SceneGraphProvider } from '../contexts/SceneGraphContext';
+import { useTimelineScope } from '../hooks/useTimelineScope';
 import { usePlayback } from '../hooks/usePlayback';
 import { useTimelineShortcuts } from '../hooks/useTimelineShortcuts';
 import { useProjectActions } from '../hooks/useProjectActions';
@@ -29,6 +30,7 @@ import styles from './Editor.module.css';
 function EditorInner() {
   const playback = usePlayback();
   useTimelineShortcuts(playback);
+  useTimelineScope();
 
   const sceneGraph = useSceneGraph();
   useUndoShortcuts(sceneGraph);

@@ -6,6 +6,7 @@
 export * from './math';
 export * from './color/colorHex';
 export * from './SceneGraph';
+export * from './timelineScope';
 export * from './Camera';
 export * from './rendering';
 export * from './path';

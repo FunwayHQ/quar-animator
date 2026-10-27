@@ -4,6 +4,7 @@
  */
 
 export * from './Timeline';
+export * from './TimelineScope';
 export * from './AnimationPresets';
 export * from './AnimationSequence';
 export * from './AnimationSpans';

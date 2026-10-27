@@ -193,6 +193,61 @@ describe('Timeline', () => {
     expect(useEditorStore.getState().selectedKeyframeIds).toEqual(new Set([keyframe.id]));
   });
 
+  it('shows the timeline in view: one artboard’s layers, or the page’s outside them', () => {
+    let graph: SceneGraph | undefined;
+    function CaptureGraph() {
+      graph = useSceneGraph();
+      return null;
+    }
+    useEditorStore.setState({ timeline: createTimeline(), timelineScope: 'slide1' });
+    render(
+      <SceneGraphProvider>
+        <CaptureGraph />
+        <Timeline />
+      </SceneGraphProvider>
+    );
+    act(() => {
+      graph!.addNode({
+        id: 'slide1',
+        name: 'Intro',
+        type: 'artboard',
+        children: [],
+      } as unknown as Node);
+      graph!.addNode({ id: 'title', name: 'Title', children: [] } as unknown as Node, 'slide1');
+      graph!.addNode({
+        id: 'slide2',
+        name: 'Outro',
+        type: 'artboard',
+        children: [],
+      } as unknown as Node);
+      graph!.addNode({ id: 'logo', name: 'Logo', children: [] } as unknown as Node, 'slide2');
+      graph!.addNode({ id: 'note', name: 'Note', children: [] } as unknown as Node);
+    });
+    expect(screen.getByTestId('timeline-layer-title')).toBeInTheDocument();
+    expect(screen.queryByTestId('timeline-layer-logo')).toBeNull();
+    expect(screen.queryByTestId('timeline-layer-note')).toBeNull();
+
+    // The picker: each artboard (topmost first), then the page's own
+    const picker = screen.getByRole('combobox', { name: 'Timeline' });
+    expect([...picker.querySelectorAll('option')].map((o) => o.textContent)).toEqual([
+      'Outro',
+      'Intro',
+      'Page (outside artboards)',
+    ]);
+    fireEvent.change(picker, { target: { value: '' } });
+    expect(useEditorStore.getState().timelineScope).toBeNull();
+    expect(screen.getByTestId('timeline-layer-note')).toBeInTheDocument();
+    expect(screen.queryByTestId('timeline-layer-title')).toBeNull();
+    fireEvent.change(picker, { target: { value: 'slide2' } });
+    expect(screen.getByTestId('timeline-layer-logo')).toBeInTheDocument();
+  });
+
+  it('has no picker on a page without artboards (it has the one timeline)', () => {
+    useEditorStore.setState({ timeline: createTimeline(), timelineScope: null });
+    renderTimeline();
+    expect(screen.queryByRole('combobox', { name: 'Timeline' })).toBeNull();
+  });
+
   it('doesn’t redraw while a layer is dragged, only when a name or the order changes', () => {
     let graph: SceneGraph | undefined;
     function CaptureGraph() {

@@ -80,7 +80,8 @@ export function useProjectActions(options: UseProjectActionsOptions = {}): Proje
     return {
       timeline: state.timeline,
       animationSequence: state.animationSequence,
-      timelineDuration: state.timelineDuration,
+      // The page's own length (an artboard's timeline may be the one in view)
+      timelineDuration: state.timeline.duration,
       frameRate: state.frameRate,
       autoKeyframe: state.autoKeyframe,
       onionSkin: state.onionSkin,

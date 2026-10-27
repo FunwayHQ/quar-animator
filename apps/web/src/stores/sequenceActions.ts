@@ -30,6 +30,7 @@ import {
 } from '@quar/animation';
 import type { Keyframe, Node, PropertyTrack, Timeline } from '@quar/types';
 import type { EditorStore, SceneGraphLike } from './editorStore';
+import { lengthenedToFit } from './timelineLength';
 
 export interface SequenceStepOptions {
   /** Frames per run of the effect. */
@@ -112,7 +113,7 @@ export function noteSequenceShown(
 
 type SequenceState = Pick<
   EditorStore,
-  'timeline' | 'timelineDuration' | 'currentFrame' | 'animationSequence'
+  'timeline' | 'timelineDuration' | 'timelineScope' | 'currentFrame' | 'animationSequence'
 >;
 
 type SequenceUpdate = Pick<
@@ -171,8 +172,8 @@ export function applySequence(
 
   return {
     animationSequence: sequence,
-    timeline,
-    timelineDuration: Math.max(state.timelineDuration, timeline.duration),
+    // Long enough for the steps: the timeline in view (an artboard's, or the page's)
+    ...lengthenedToFit(state, timeline, sceneGraph),
     isDirty: true,
   };
 }

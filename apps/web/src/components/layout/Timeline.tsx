@@ -93,6 +93,9 @@ export function Timeline({ playback }: TimelineProps = {}) {
   const setIsPlaying = useEditorStore((s) => s.setIsPlaying);
   const setIsLooping = useEditorStore((s) => s.setIsLooping);
   const setTimelineDuration = useEditorStore((s) => s.setTimelineDuration);
+  // The timeline in view: an artboard's (its id), or the page's own (null)
+  const timelineScope = useEditorStore((s) => s.timelineScope);
+  const setTimelineScope = useEditorStore((s) => s.setTimelineScope);
   const setFrameRate = useEditorStore((s) => s.setFrameRate);
   const toggleTimelineExpanded = useEditorStore((s) => s.toggleTimelineExpanded);
   const toggleAutoKeyframe = useEditorStore((s) => s.toggleAutoKeyframe);
@@ -405,11 +408,14 @@ export function Timeline({ playback }: TimelineProps = {}) {
 
   // Track scene graph changes for layer labels
   const [nodes, setNodes] = useState<Node[]>([]);
+  // The page's artboards (Layers panel order), each with a timeline of its own
+  const [artboards, setArtboards] = useState<Array<{ id: string; name: string }>>([]);
   useEffect(() => {
     // The rows show only each layer's name, in tree order: an edit that keeps
     // both (dragging or recoloring a shape) doesn't redraw the timeline. Nodes
     // change in place, so what was shown is kept as ids and names
     let shown: Array<{ id: string; name: string | undefined }> | null = null;
+    let shownBoards = '';
     const update = () => {
       const rows: Node[] = [];
       const visit = (node: Node) => {
@@ -419,7 +425,22 @@ export function Timeline({ playback }: TimelineProps = {}) {
           if (child) visit(child);
         }
       };
-      for (const root of [...sceneGraph.getRootNodes()].reverse()) visit(root);
+      const roots = [...sceneGraph.getRootNodes()].reverse();
+      // The timeline in view's layers: an artboard and all in it, or the
+      // page's own, outside every artboard
+      for (const root of roots) {
+        const inView =
+          timelineScope === null ? root.type !== 'artboard' : root.id === timelineScope;
+        if (inView) visit(root);
+      }
+      const boards = roots
+        .filter((root) => root.type === 'artboard')
+        .map((root) => ({ id: root.id, name: root.name || 'Artboard' }));
+      const boardsKey = JSON.stringify(boards);
+      if (boardsKey !== shownBoards) {
+        shownBoards = boardsKey;
+        setArtboards(boards);
+      }
       const before = shown;
       const unchanged =
         before !== null &&
@@ -440,7 +461,7 @@ export function Timeline({ playback }: TimelineProps = {}) {
       ['nodeAdded', 'nodeRemoved', 'nodeMoved', 'nodeChanged', 'graphReplaced'] as const
     ).map((type) => sceneGraph.on(type, changed));
     return () => off.forEach((unsubscribe) => unsubscribe());
-  }, [sceneGraph]);
+  }, [sceneGraph, timelineScope]);
 
   // Build a lookup from keyframe ID -> { nodeId, property } for store operations
   const keyframeMap = useMemo(() => {
@@ -1465,6 +1486,26 @@ export function Timeline({ playback }: TimelineProps = {}) {
         <div className={styles.timelineArea}>
           {/* Layer Labels */}
           <div className={styles.layerLabels}>
+            {/* Which timeline is in view: the page's, or one of its artboards' */}
+            <div className={styles.scopeCell}>
+              {artboards.length > 0 && (
+                <select
+                  className={styles.scopeSelect}
+                  value={timelineScope ?? ''}
+                  onChange={(e) => setTimelineScope(e.target.value || null)}
+                  aria-label="Timeline"
+                  title="Each artboard has a timeline of its own; the page's is for layers outside them"
+                  data-testid="timeline-scope"
+                >
+                  {artboards.map((board) => (
+                    <option key={board.id} value={board.id}>
+                      {board.name}
+                    </option>
+                  ))}
+                  <option value="">Page (outside artboards)</option>
+                </select>
+              )}
+            </div>
             {nodes.length > 0 ? (
               nodes.map((node) => (
                 <div

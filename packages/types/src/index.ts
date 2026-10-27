@@ -674,13 +674,27 @@ export interface Marker {
   color: string;
 }
 
+/**
+ * An artboard's own timeline: its layers play on it, apart from the page's
+ * and every other artboard's. Their keyframes stay in the page's tracks
+ * (keyed by layer), so a layer moved into another artboard takes its
+ * animation along, played on that artboard's timeline.
+ */
+export interface ArtboardTimeline {
+  /** In frames; the page's when an artboard has none yet */
+  duration: number;
+}
+
 export interface Timeline {
   id: string;
   name: string;
-  duration: number; // In frames
+  /** In frames: the page's own timeline, which layers outside every artboard play on */
+  duration: number;
   frameRate: number;
   tracks: PropertyTrack[];
   markers: Marker[];
+  /** Each artboard's timeline, by artboard id */
+  artboards?: Record<string, ArtboardTimeline>;
 }
 
 // ============================================================================

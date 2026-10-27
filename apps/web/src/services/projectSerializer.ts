@@ -118,6 +118,8 @@ export interface EditorStateSnapshot {
   timeline: Timeline;
   animationSequence?: AnimationSequence;
   timelineDuration: number;
+  /** The timeline in view (loading shows the page's own: null) */
+  timelineScope?: string | null;
   frameRate: number;
   autoKeyframe: boolean;
   onionSkin: OnionSkinSettings;
@@ -510,7 +512,9 @@ export function deserializeProject(
   const editorState: Parameters<typeof applyEditorState>[0] = {
     timeline: structuredClone(activePage.timeline),
     animationSequence: readAnimationSequence(activePage.animationSequence),
-    timelineDuration: v2.settings.timelineDuration,
+    // The page's own timeline in view to begin with
+    timelineDuration: activePage.timeline.duration,
+    timelineScope: null,
     frameRate: v2.settings.frameRate,
     autoKeyframe: v2.settings.autoKeyframe,
     onionSkin: { ...DEFAULT_ONION_SKIN_SETTINGS, ...v2.settings.onionSkin },

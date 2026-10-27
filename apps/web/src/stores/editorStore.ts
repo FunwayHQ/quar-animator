@@ -44,8 +44,10 @@ import {
   createAnimationSequence,
   createTimeline,
   KeyframeManager,
+  scopeDuration,
   tangentsToEasing,
   tracksAfterListItemRemoved,
+  withScopeDuration,
 } from '@quar/animation';
 import {
   applySequence,
@@ -279,7 +281,7 @@ function pageScoped<T>(
 /** Store fields to restore from a popped history snapshot (F026). */
 function restoredFieldsFrom(
   snapshot: HistorySnapshot,
-  current: HistoryCapturable,
+  current: HistoryCapturable & { timelineScope: string | null },
   currentScene: { nodes: Node[] }
 ) {
   const timeline = structuredClone(snapshot.timeline);
@@ -290,7 +292,8 @@ function restoredFieldsFrom(
   return {
     selectedNodeIds: new Set(snapshot.selectedNodeIds),
     timeline,
-    timelineDuration: timeline.duration,
+    // The timeline in view stays so; its length as it was then
+    timelineDuration: scopeDuration(timeline, current.timelineScope),
     frameRate: timeline.frameRate,
     animationSequence: structuredClone(snapshot.animationSequence ?? createAnimationSequence()),
     ikChains: pageScoped(
@@ -493,9 +496,14 @@ function workAreaFor(
 function pageTimelineFields(
   timeline: Timeline,
   state: Pick<EditorStore, 'frameRate' | 'timelineDuration' | 'workAreaStart' | 'workAreaEnd'>
-): Pick<EditorStore, 'timeline' | 'timelineDuration' | 'workAreaStart' | 'workAreaEnd'> {
+): Pick<
+  EditorStore,
+  'timeline' | 'timelineDuration' | 'timelineScope' | 'workAreaStart' | 'workAreaEnd'
+> {
   return {
     timeline: { ...structuredClone(timeline), frameRate: state.frameRate },
+    // The page's own timeline first (selecting a layer brings its artboard's)
+    timelineScope: null,
     timelineDuration: timeline.duration,
     ...workAreaFor(timeline.duration, state),
   };
@@ -797,7 +805,14 @@ export interface EditorStore extends SequenceActions {
   currentFrame: number;
   isPlaying: boolean;
   isLooping: boolean;
+  /** The length of the timeline in view (the page's, or an artboard's) */
   timelineDuration: number;
+  /**
+   * The timeline in view, played and edited: an artboard's (its id), or the
+   * page's own (null), which layers outside every artboard play on
+   */
+  timelineScope: string | null;
+  setTimelineScope: (scope: string | null) => void;
   frameRate: number;
   timelineExpanded: boolean;
   setCurrentFrame: (frame: number) => void;
@@ -2657,6 +2672,22 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   isPlaying: false,
   isLooping: true,
   timelineDuration: 300,
+  timelineScope: null,
+  setTimelineScope: (scope: string | null) =>
+    set((state) => {
+      if (scope === state.timelineScope) return {};
+      const duration = scopeDuration(state.timeline, scope);
+      return {
+        timelineScope: scope,
+        timelineDuration: duration,
+        currentFrame: Math.min(state.currentFrame, duration - 1),
+        isPlaying: false,
+        // The new timeline's whole length
+        workAreaEnabled: false,
+        workAreaStart: 0,
+        workAreaEnd: duration - 1,
+      };
+    }),
   frameRate: 30,
   timelineExpanded: true,
   setCurrentFrame: (frame: number) =>
@@ -2673,7 +2704,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       if (d === state.timelineDuration) return {};
       return {
         timelineDuration: d,
-        timeline: { ...state.timeline, duration: d },
+        timeline: withScopeDuration(state.timeline, state.timelineScope, d),
         currentFrame: Math.min(state.currentFrame, d - 1),
         ...workAreaFor(d, state),
         isDirty: true,
@@ -3913,6 +3944,7 @@ function createHistoryActions(
         timeline: createTimeline({ duration: 300, frameRate: 30 }),
         animationSequence: createAnimationSequence(),
         timelineDuration: 300,
+        timelineScope: null,
         frameRate: 30,
         autoKeyframe: false,
         selectedNodeIds: new Set<string>(),

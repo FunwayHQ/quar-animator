@@ -373,7 +373,8 @@ function StepRow({
 export function AnimationSequenceWindow() {
   const sceneGraph = useSceneGraph();
   const sequence = useEditorStore((s) => s.animationSequence);
-  const timelineDuration = useEditorStore((s) => s.timeline.duration);
+  // The timeline in view's (an artboard's, or the page's)
+  const timelineDuration = useEditorStore((s) => s.timelineDuration);
   const frameRate = useEditorStore((s) => s.frameRate);
   const currentFrame = useEditorStore((s) => s.currentFrame);
   const selectedNodeIds = useEditorStore((s) => s.selectedNodeIds);

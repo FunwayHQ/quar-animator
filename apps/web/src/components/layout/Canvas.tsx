@@ -12,9 +12,11 @@ import {
   keepTextInPlace,
   gridColorsFor,
   toGlColor,
+  inTimelineScope,
 } from '@quar/core';
+import { scopedTimeline } from '@quar/animation';
 import type { SceneGraph, SceneGraphEvent } from '@quar/core';
-import type { Color, Node, PathNode, Vector2 } from '@quar/types';
+import type { Color, Node, PathNode, Timeline, Vector2 } from '@quar/types';
 import {
   evaluateIKChains,
   evaluateSmartBones,
@@ -163,6 +165,8 @@ export function Canvas({
   // Onion-skin ghosts: posed copies of the scene, kept while it doesn't change
   const ghostScenesRef = useRef(new GhostSceneCache());
   const sceneVersionRef = useRef(0);
+  // The timeline in view on its own, for the ghosts (other artboards aren't at these frames)
+  const ghostTimelineRef = useRef<{ inputs: unknown[]; timeline: Timeline } | null>(null);
   const animationFrameRef = useRef<number>(0);
 
   // Selection infrastructure (initialized immediately, doesn't depend on WebGL)
@@ -711,12 +715,21 @@ export function Canvas({
           const {
             onionSkin,
             isPlaying: playing,
-            timeline: tl,
+            timeline: pageTimeline,
+            timelineScope: ghostScope,
             currentFrame: frame,
             timelineDuration: tlDuration,
           } = useEditorStore.getState();
           if (onionSkin.enabled && (!playing || onionSkin.showDuringPlayback)) {
             const sg = sceneGraphRef.current;
+            // Ghosts of the timeline in view: the other artboards stay as they are
+            const ghostInputs = [pageTimeline, ghostScope, sceneVersionRef.current];
+            const known = ghostTimelineRef.current;
+            const tl =
+              known && known.inputs.every((v, i) => v === ghostInputs[i])
+                ? known.timeline
+                : scopedTimeline(pageTimeline, ghostScope, inTimelineScope(sg, ghostScope));
+            ghostTimelineRef.current = { inputs: ghostInputs, timeline: tl };
             const { ikChains: ghostIK, vitruvianControllers: ghostVit } = useEditorStore.getState();
             // Ghosts show bones as the canvas does
             shapeRenderer.setHiddenBones(

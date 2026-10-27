@@ -14,6 +14,7 @@ import type {
 import type { Node } from '@quar/types';
 import { useSceneGraph } from '../../contexts/SceneGraphContext';
 import { useEditorStore } from '../../stores/editorStore';
+import { lengthenedToFit } from '../../stores/timelineLength';
 import styles from './AnimationPresetsPanel.module.css';
 
 const CATEGORIES: AnimationPresetCategory[] = ['Entrance', 'Emphasis', 'Loop', 'Exit'];
@@ -83,8 +84,8 @@ export function AnimationPresetsPanel({ nodeIds }: AnimationPresetsPanelProps) {
       }
 
       useEditorStore.setState({
-        timeline,
-        timelineDuration: Math.max(state.timelineDuration, timeline.duration),
+        // Long enough for the preset: the timeline in view (an artboard's, or the page's)
+        ...lengthenedToFit(state, timeline, sceneGraph),
         isDirty: true,
       });
 
