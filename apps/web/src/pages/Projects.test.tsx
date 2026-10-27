@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '../test/utils';
+import { render, screen, fireEvent, waitFor, within } from '../test/utils';
 import { Projects } from './Projects';
 import type { ProjectListItem } from '../services/projectStorage';
 import { parseQuarFile, writeQuarFile } from '@quar/core';
@@ -82,6 +82,28 @@ describe('Projects', () => {
       expect(screen.getByAltText('Quar Animator')).toBeInTheDocument();
     });
     expect(screen.getByTestId('import-button')).toBeInTheDocument();
+    // From the build, not the unversioned /logo.svg a browser could keep for days
+    expect(screen.getByAltText('Quar Animator').getAttribute('src')).not.toMatch(
+      /^\.?\/logo\.svg$/
+    );
+  });
+
+  it('links to Quar Animator on GitHub, TikTok and Facebook, each in a new tab', async () => {
+    render(<Projects />);
+    const links = within(
+      await screen.findByRole('navigation', { name: 'Quar Animator elsewhere' })
+    ).getAllByRole('link');
+    expect(
+      links.map((link) => [link.getAttribute('aria-label'), link.getAttribute('href')])
+    ).toEqual([
+      ['Quar Animator on GitHub', 'https://github.com/FunwayHQ/quar-animator'],
+      ['Quar Animator on TikTok', 'https://www.tiktok.com/@quar.animator'],
+      ['Quar Animator on Facebook', 'https://www.facebook.com/funwayhq'],
+    ]);
+    for (const link of links) {
+      expect(link).toHaveAttribute('target', '_blank');
+      expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+    }
   });
 
   it('should switch appearance from the projects header', async () => {

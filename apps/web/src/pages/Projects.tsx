@@ -24,6 +24,9 @@ import type { ThumbnailView } from '../hooks/useProjectThumbnails';
 import type { ProjectListItem } from '../services/projectStorage';
 import { BetaBadge } from '../components/common/BetaBadge';
 import styles from './Projects.module.css';
+import { SocialLinks } from '../components/common/SocialLinks';
+// Bundled with the build (inlined or hashed), so a browser never keeps an old logo
+import logoUrl from '../assets/logo.svg';
 
 // ============================================================================
 // Helpers
@@ -285,14 +288,11 @@ export function Projects() {
       {/* Header */}
       <header className={styles.header}>
         <div className={styles.brand}>
-          <img
-            src={window.location.protocol === 'file:' ? './logo.svg' : '/logo.svg'}
-            alt="Quar Animator"
-            className={styles.logoImage}
-          />
+          <img src={logoUrl} alt="Quar Animator" className={styles.logoImage} />
           <BetaBadge />
         </div>
         <div className={styles.headerActions}>
+          <SocialLinks />
           <button
             className={styles.appearanceButton}
             onClick={() => setUiTheme(uiTheme === 'light' ? 'dark' : 'light')}

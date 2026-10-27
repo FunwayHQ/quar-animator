@@ -1,0 +1,33 @@
+.links {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  /* A gap and a hairline between them and the bar's own buttons */
+  padding-right: 10px;
+  margin-right: 4px;
+  border-right: 1px solid var(--color-border-subtle);
+}
+
+.link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  color: var(--color-text-secondary);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  transition: all var(--duration-fast) var(--easing-default);
+}
+
+.link:hover {
+  color: var(--color-text-primary);
+  background: var(--color-bg-elevated);
+  border-color: var(--color-border-default);
+}
+
+.link:focus-visible {
+  outline: 2px solid var(--color-accent-primary);
+  outline-offset: 2px;
+}
