@@ -81,6 +81,7 @@ export function applyOverrides(nodes: Node[], overrides: SymbolOverride[]): Node
     const props: Record<string, unknown> = override.properties;
     for (const key of Object.keys(props)) {
       if (key === 'id' || key === 'type' || key === 'parent' || key === 'children') continue;
+      if (key === '__proto__') continue; // assigned, it would replace the node's prototype
       (target as unknown as Record<string, unknown>)[key] = props[key];
     }
   }

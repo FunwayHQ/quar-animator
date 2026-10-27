@@ -124,6 +124,8 @@ export function extractImageBuffers(json: unknown): {
     if (typeof obj === 'object') {
       const result: Record<string, unknown> = {};
       for (const [key, value] of Object.entries(obj as Record<string, unknown>)) {
+        // Assigned, a file's "__proto__" would become the object's prototype
+        if (key === '__proto__') continue;
         if (key === 'src' && typeof value === 'string') {
           const match = DATA_URI_REGEX.exec(value);
           if (match) {
@@ -176,6 +178,8 @@ export function restoreImageBuffers(json: unknown, buffers: QuarBuffer[]): unkno
     if (typeof obj === 'object') {
       const result: Record<string, unknown> = {};
       for (const [key, value] of Object.entries(obj as Record<string, unknown>)) {
+        // Assigned, a file's "__proto__" would become the object's prototype
+        if (key === '__proto__') continue;
         if (key === 'src' && typeof value === 'string') {
           const match = BUFFER_REF_REGEX.exec(value);
           if (match) {

@@ -484,3 +484,15 @@ describe('quarFormat', () => {
     });
   });
 });
+
+describe('a file’s __proto__ key', () => {
+  it('stays data: it never becomes an object’s prototype', () => {
+    const json = JSON.parse('{"node":{"id":"a","__proto__":{"locked":true}}}') as unknown;
+    for (const read of [restoreImageBuffers(json, []), extractImageBuffers(json).json]) {
+      const node = (read as { node: Record<string, unknown> }).node;
+      expect(Object.getPrototypeOf(node)).toBe(Object.prototype);
+      expect(node.locked).toBeUndefined();
+      expect(node.id).toBe('a');
+    }
+  });
+});
