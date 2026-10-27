@@ -86,6 +86,19 @@ describe('importSvg', () => {
     expect(node.height).toBe(200);
   });
 
+  it('scales outlines and corner radii with the artwork', () => {
+    const svg =
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2" stroke-dasharray="3 1"><path d="M2 2L22 22"/><rect x="2" y="2" width="20" height="20" rx="4"/></svg>';
+    const result = importSvg(svg, sceneGraph, generateId, { scale: 2.5 });
+    const path = result.nodes.find((n) => n.type === 'path') as PathNode;
+    const rect = result.nodes.find((n) => n.type === 'rectangle') as RectangleNode;
+
+    expect(path.strokes[0]!.width).toBe(5);
+    expect(path.strokes[0]!.dashArray).toEqual([7.5, 2.5]);
+    expect(rect.strokes[0]!.width).toBe(5);
+    expect(rect.cornerRadius).toEqual([10, 10, 10, 10]);
+  });
+
   it('scales about the point it imports to, not the origin', () => {
     const result = importSvg(simpleSvg, sceneGraph, generateId, {
       position: { x: 500, y: 300 },

@@ -220,10 +220,22 @@ function computeNodesBounds(nodes: Node[]): Bounds | null {
 }
 
 function scaleNodeDimensions(node: Node, scale: number): void {
+  // Outlines grow with the artwork (an icon's 2-unit stroke, drawn at twice the size, is 4)
+  if ('strokes' in node && node.strokes) {
+    node.strokes = node.strokes.map((stroke) => ({
+      ...stroke,
+      width: stroke.width * scale,
+      ...(stroke.dashArray && { dashArray: stroke.dashArray.map((dash) => dash * scale) }),
+      ...(stroke.dashOffset !== undefined && { dashOffset: stroke.dashOffset * scale }),
+    }));
+  }
   switch (node.type) {
     case 'rectangle':
       node.width *= scale;
       node.height *= scale;
+      node.cornerRadius = node.cornerRadius.map(
+        (radius) => radius * scale
+      ) as typeof node.cornerRadius;
       break;
     case 'ellipse':
       node.radiusX *= scale;
