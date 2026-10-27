@@ -308,8 +308,8 @@ describe('skinBinding', () => {
 
       it('blends where the body meets the limb', () => {
         const weights = rig();
-        // At the arm's top edge where it meets the body: about as far into each envelope
-        const at = weights(-95, 168, true);
+        // Inside the body at the shoulder: about as far into each envelope
+        const at = weights(-75, 165, true);
         expect(at.map((inf) => inf.boneId).sort()).toEqual(['arm', 'spine']);
       });
 
@@ -336,6 +336,24 @@ describe('skinBinding', () => {
         expect(owner[5]).toEqual(owner[0]);
         expect(owner[0]).toEqual([{ boneId: 'arm', weight: 1 }]);
         expect(owner[4]).toEqual([{ boneId: 'spine', weight: 1 }]);
+      });
+
+      it('measures a trunk bone by the widest circle round it, not out along the limbs', () => {
+        // A T-pose: arms out either side at the neck's height
+        const tPose = (x: number, y: number) =>
+          (Math.abs(x) <= 100 && y >= -50 && y <= 250) ||
+          (Math.abs(x) <= 300 && y >= 140 && y <= 200);
+        sceneGraph.addNode(createBoneNode('neck', 'Neck', { x: 0, y: 150 }, 80, 90));
+        sceneGraph.addNode(createBoneNode('arm', 'Arm', { x: -110, y: 170 }, 180, 180));
+        const skin = createSkinBinding('neck', ['neck', 'arm'], 1, sceneGraph)!;
+        const states = [
+          ...computeFKChain('neck', sceneGraph),
+          ...computeFKChain('arm', sceneGraph),
+        ];
+        // The arm's top edge: across the neck it's all shape out to the hands,
+        // so measured sideways the neck reached past it
+        const edge = computeAutoWeights(skin, new Float32Array([-200, 198]), states, tPose);
+        expect(edge.vertices[0]!.influences).toEqual([{ boneId: 'arm', weight: 1 }]);
       });
 
       it('weighs a bone outside the shape by the others’ envelopes', () => {

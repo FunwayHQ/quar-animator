@@ -274,32 +274,37 @@ const ENVELOPE_SAMPLES = 9;
 /** Where two bones' envelopes are about as close, as a share of an envelope */
 const ENVELOPE_BLEND = 0.25;
 
+/** Directions searched for the nearest edge */
+const EDGE_DIRECTIONS = Array.from({ length: 24 }, (_, i) => {
+  const a = (i / 24) * 2 * Math.PI;
+  return { x: Math.cos(a), y: Math.sin(a) };
+});
+
 /**
- * How far the shape reaches to the side of a bone — the radius of its
- * envelope: at places along the bone, the distance to the nearer edge, and
- * the median of those (a limb's half-thickness; a trunk's half-width). Null
- * when the bone runs outside the shape.
+ * How far the shape reaches round a bone — the radius of its envelope: at
+ * places along the bone, the distance to the nearest edge in any direction
+ * (the widest circle that fits there), and the median of those: a limb's
+ * half-thickness, a trunk's half-width. Measured only across the bone, a
+ * neck in a T-pose reached out along both arms. Null when the bone runs
+ * outside the shape.
  */
 function envelopeRadius(bone: WeightBone, inside: ShapeTest, reach: number): number | null {
   const step = Math.max(reach / 800, 0.25);
-  const nx = -bone.dir.y;
-  const ny = bone.dir.x;
-  const widths: number[] = [];
+  const radii: number[] = [];
   for (let k = 1; k <= ENVELOPE_SAMPLES; k++) {
     const t = k / (ENVELOPE_SAMPLES + 1);
     const px = bone.head.x + (bone.tip.x - bone.head.x) * t;
     const py = bone.head.y + (bone.tip.y - bone.head.y) * t;
     if (!inside(px, py)) continue;
-    const toEdge = (side: number) => {
-      let d = step;
-      while (d < reach && inside(px + nx * d * side, py + ny * d * side)) d += step;
-      return d;
-    };
-    widths.push(Math.min(toEdge(1), toEdge(-1)));
+    // Out in every direction at once: the first that leaves the shape
+    let d = step;
+    while (d < reach && EDGE_DIRECTIONS.every(({ x, y }) => inside(px + x * d, py + y * d)))
+      d += step;
+    radii.push(d);
   }
-  if (widths.length === 0) return null;
-  widths.sort((a, b) => a - b);
-  return widths[Math.floor(widths.length / 2)]!;
+  if (radii.length === 0) return null;
+  radii.sort((a, b) => a - b);
+  return radii[Math.floor(radii.length / 2)]!;
 }
 
 /**
