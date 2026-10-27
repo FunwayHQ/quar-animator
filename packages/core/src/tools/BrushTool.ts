@@ -292,7 +292,7 @@ export class BrushTool extends BaseTool {
 
     // Add to scene graph
     this.context.onTransformStart?.();
-    this.context.sceneGraph.addNode(node);
+    this.addDrawnNode(node);
 
     // Select the new node
     this.context.setSelectedIds([node.id]);

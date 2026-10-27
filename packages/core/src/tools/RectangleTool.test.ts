@@ -4,7 +4,8 @@
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import { RectangleTool } from './RectangleTool';
-import type { RectangleNode } from '@quar/types';
+import type { Node, RectangleNode } from '@quar/types';
+import { createDefaultTransform } from '../SceneGraph';
 import type { ToolContext } from './BaseTool';
 import { createMockToolContext, createMockPointerEvent } from '../test/setup';
 
@@ -49,6 +50,42 @@ describe('RectangleTool', () => {
       const [node] = Array.from(context.sceneGraph.getNodes()) as RectangleNode[];
       expect(asked.at(-1)).toEqual({ x: 50, y: 25 });
       expect(node!.strokes[0]!.color.r).toBe(244);
+    });
+
+    it('goes into the artboard it’s drawn on, else onto the page', () => {
+      const sceneGraph = context.sceneGraph;
+      sceneGraph.addNode({
+        id: 'slide',
+        name: 'Slide',
+        type: 'artboard',
+        parent: null,
+        children: [],
+        transform: { ...createDefaultTransform(), position: { x: 100, y: 100 } },
+        visible: true,
+        locked: false,
+        opacity: 1,
+        blendMode: 'normal',
+        width: 200,
+        height: 200,
+        fills: [],
+        clipContent: true,
+      } as unknown as Node);
+      // As the editor does it: into the new parent, keeping its place on screen
+      context.moveNodeKeepingPlacement = (id, parentId) => sceneGraph.moveNode(id, parentId);
+      const draw = (from: number, to: number) => {
+        tool.onPointerDown(
+          createMockPointerEvent({ worldPosition: { x: from, y: from }, button: 0 })
+        );
+        tool.onPointerMove(createMockPointerEvent({ worldPosition: { x: to, y: to } }));
+        tool.onPointerUp(createMockPointerEvent({ worldPosition: { x: to, y: to }, button: 0 }));
+        const [drawn] = context.getSelectedIds();
+        return drawn!;
+      };
+      const onSlide = draw(60, 120);
+      expect(sceneGraph.getParent(onSlide)?.id).toBe('slide');
+      tool = new RectangleTool(context);
+      const offPage = draw(400, 460);
+      expect(sceneGraph.getParent(offPage)).toBeUndefined();
     });
 
     it('should create rectangle on drag', () => {

@@ -568,7 +568,7 @@ export class PenTool extends BaseTool {
 
     // Add to scene graph
     this.context.onTransformStart?.();
-    this.context.sceneGraph.addNode(node);
+    this.addDrawnNode(node);
 
     // Reset state BEFORE switching tools to prevent recursive finalizePath
     // (setActiveTool triggers onDeactivate, which would call finalizePath again

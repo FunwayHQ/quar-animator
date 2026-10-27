@@ -17,6 +17,7 @@ import type {
 import type { SceneGraph } from '../SceneGraph';
 import type { Camera } from '../Camera';
 import type { SmartGuide } from './smartGuides';
+import { SelectionManager } from '../selection';
 
 // ============================================================================
 // Types
@@ -258,6 +259,18 @@ export abstract class BaseTool {
   /**
    * Reset tool state
    */
+  /**
+   * Add a layer the tool drew: into the topmost artboard it's drawn on (its
+   * position on the artboard), keeping its place on screen, as a layer drawn
+   * on a frame goes into it — else on the page, on top.
+   */
+  protected addDrawnNode(node: Node): void {
+    const sceneGraph = this.context.sceneGraph;
+    sceneGraph.addNode(node);
+    const artboard = artboardAt(sceneGraph, node.transform.position);
+    if (artboard) this.context.moveNodeKeepingPlacement?.(node.id, artboard.id);
+  }
+
   protected resetState(): void {
     this.state = {
       isActive: false,
@@ -266,4 +279,20 @@ export abstract class BaseTool {
       currentWorldPos: null,
     };
   }
+}
+
+/** The topmost visible artboard at `point` (on the page, in world space), if any. */
+export function artboardAt(sceneGraph: SceneGraph, point: Vector2): Node | undefined {
+  const bounds = new SelectionManager();
+  return [...sceneGraph.getRootNodes()].reverse().find((node) => {
+    if (node.type !== 'artboard' || !node.visible) return false;
+    const rect = bounds.getSelectionBounds(new Set([node.id]), sceneGraph)?.rect;
+    return (
+      rect !== undefined &&
+      point.x >= rect.x &&
+      point.y >= rect.y &&
+      point.x <= rect.x + rect.width &&
+      point.y <= rect.y + rect.height
+    );
+  });
 }

@@ -28,6 +28,7 @@ import {
 } from '@quar/rigging';
 import type { DynamicChainState } from '@quar/types';
 import type { PointMagnetTool, WeightPaintTool } from '@quar/core';
+import { intoArtboardBeneath } from '../../services/intoArtboard';
 import { useCanvasTools } from '../../hooks/useCanvasTools';
 import { useToolShortcuts } from '../../hooks/useToolShortcuts';
 import { useEditorStore } from '../../stores/editorStore';
@@ -134,8 +135,10 @@ function importSvgAt(svgString: string, sg: SceneGraph, position: Vector2): void
       for (const rootId of result.rootIds) {
         sg.moveNode(rootId, groupId);
       }
+      intoArtboardBeneath(sg, groupId);
       useEditorStore.setState({ selectedNodeIds: new Set([groupId]) });
     } else {
+      for (const rootId of result.rootIds) intoArtboardBeneath(sg, rootId);
       useEditorStore.setState({ selectedNodeIds: new Set(result.rootIds) });
     }
   } catch {
@@ -1352,6 +1355,7 @@ export function Canvas({
 
           useEditorStore.getState().pushUndo(sg);
           sg.addNode(imageNode);
+          intoArtboardBeneath(sg, nodeId);
           useEditorStore.setState({ selectedNodeIds: new Set([nodeId]) });
         };
         img.src = dataUri;
@@ -2462,6 +2466,7 @@ export function Canvas({
 
             useEditorStore.getState().pushUndo(sg);
             sg.addNode(imageNode);
+            intoArtboardBeneath(sg, nodeId);
             useEditorStore.setState({ selectedNodeIds: new Set([nodeId]) });
           };
           img.src = dataUri;

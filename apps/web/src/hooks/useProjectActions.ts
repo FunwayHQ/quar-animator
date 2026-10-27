@@ -5,6 +5,7 @@
 
 import { useCallback, useEffect, useRef } from 'react';
 import { useSceneGraph } from '../contexts/SceneGraphContext';
+import { intoArtboardBeneath } from '../services/intoArtboard';
 import { useEditorStore } from '../stores/editorStore';
 import { toast } from '../components/common/Toast';
 import {
@@ -363,6 +364,7 @@ export function useProjectActions(options: UseProjectActionsOptions = {}): Proje
 
           useEditorStore.getState().pushUndo(sceneGraph);
           sceneGraph.addNode(imageNode);
+          intoArtboardBeneath(sceneGraph, nodeId);
           useEditorStore.setState({ selectedNodeIds: new Set([nodeId]) });
           toast.success(`Imported image "${file.name}"`);
         };

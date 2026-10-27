@@ -53,7 +53,7 @@ export class TextTool extends BaseTool {
 
     // Add to scene graph
     this.context.onTransformStart?.();
-    this.context.sceneGraph.addNode(node);
+    this.addDrawnNode(node);
     this.context.setSelectedIds([node.id]);
 
     // Trigger inline text editing
