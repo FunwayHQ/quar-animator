@@ -23,6 +23,7 @@ import { useViewShortcuts } from '../hooks/useViewShortcuts';
 import { useEditorStore } from '../stores/editorStore';
 import { useSceneGraph } from '../contexts/SceneGraphContext';
 import { useDirtyTracking } from '../hooks/useDirtyTracking';
+import { useDocumentFonts } from '../hooks/useDocumentFonts';
 import styles from './Editor.module.css';
 
 function EditorInner() {
@@ -38,6 +39,7 @@ function EditorInner() {
   useViewShortcuts();
   // Unsaved changes: any scene edit, but not an export posing frames
   useDirtyTracking(sceneGraph);
+  useDocumentFonts(sceneGraph);
 
   const [searchParams] = useSearchParams();
   const projectId = searchParams.get('project');
