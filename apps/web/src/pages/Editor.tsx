@@ -14,6 +14,7 @@ import { AnimationSequenceWindow } from '../components/common/AnimationSequenceW
 import { SceneGraphProvider } from '../contexts/SceneGraphContext';
 import { useTimelineScope } from '../hooks/useTimelineScope';
 import { usePlayback } from '../hooks/usePlayback';
+import { useSoundPlayback } from '../hooks/useSoundPlayback';
 import { useTimelineShortcuts } from '../hooks/useTimelineShortcuts';
 import { useProjectActions } from '../hooks/useProjectActions';
 import { useProjectShortcuts } from '../hooks/useProjectShortcuts';
@@ -29,6 +30,8 @@ import styles from './Editor.module.css';
 
 function EditorInner() {
   const playback = usePlayback();
+  // The timeline's sound clips play with it
+  useSoundPlayback();
   useTimelineShortcuts(playback);
   useTimelineScope();
 

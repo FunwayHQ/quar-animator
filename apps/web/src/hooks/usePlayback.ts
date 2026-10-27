@@ -9,6 +9,7 @@ import {
   evaluateTimelineAtFrame,
   applyAnimatedValues,
   scopedTimeline,
+  lastSoundFrame,
 } from '@quar/animation';
 import { inTimelineScope } from '@quar/core';
 import { evaluateIKChains } from '@quar/rigging';
@@ -18,9 +19,10 @@ import { useSceneGraph } from '../contexts/SceneGraphContext';
 import { poseScene } from '../stores/scenePosing';
 
 /**
- * Where playing stops or loops: the last keyframe, when the animation reaches
- * past frame 0; otherwise the end of the timeline. Stepping and seeking aren't
- * limited by it, so new keyframes can be set after the last one.
+ * Where playing stops or loops: the last keyframe, or the last frame a sound
+ * plays on if that's later, when they reach past frame 0; otherwise the end
+ * of the timeline. Stepping and seeking aren't limited by it, so new
+ * keyframes can be set after the last one.
  */
 export function getPlayEnd(timeline: ReturnType<typeof useEditorStore.getState>['timeline']) {
   const lastKeyframe =
@@ -32,7 +34,8 @@ export function getPlayEnd(timeline: ReturnType<typeof useEditorStore.getState>[
         ) ?? lastFrame,
       -1
     ) ?? -1;
-  return lastKeyframe >= 1 ? Math.ceil(lastKeyframe) : null;
+  const last = Math.max(lastKeyframe, lastSoundFrame(timeline.sounds, timeline.frameRate));
+  return last >= 1 ? Math.ceil(last) : null;
 }
 
 type EditorState = ReturnType<typeof useEditorStore.getState>;
