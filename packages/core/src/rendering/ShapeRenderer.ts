@@ -24,6 +24,7 @@ import type {
   Gradient,
   BooleanOp,
   SkinData,
+  Vector2,
 } from '@quar/types';
 import { resolveSymbolInstance, getResolvedRootNodes } from '../symbols/symbolResolver';
 import {
@@ -58,6 +59,7 @@ import {
 } from '../path/pathUtils';
 import { trimPathToProgress } from '../path/pathReveal';
 import { isDocumentImage } from './imageSource';
+import { clockwiseFrom, dashPolyline, pieceAlign } from '../path/dashes';
 import earcut from 'earcut';
 import {
   triangulateContours,
@@ -653,6 +655,32 @@ function buildGeometryKey(node: Node): string {
     default:
       return '';
   }
+}
+
+/**
+ * The pieces a dashed stroke draws, as SVG's stroke-dasharray has them; null
+ * when it's drawn whole (no pattern, or one too fine to see). A round or
+ * square cap reaches half the width past each dash's ends (the canvas draws
+ * both as square), so a dotted line of zero-length dashes shows its dots.
+ */
+function dashPieces(
+  vertices: Float32Array,
+  stroke: Stroke,
+  closed: boolean
+): Float32Array[] | null {
+  if (!stroke.dashArray?.length) return null;
+  const capReach = stroke.cap === 'butt' ? 0 : stroke.width / 2;
+  return dashPolyline(vertices, closed, stroke.dashArray, stroke.dashOffset, capReach);
+}
+
+/** How each dash of a stroke is drawn: on the side the whole stroke would be, its own width. */
+function dashStroke(vertices: Float32Array, stroke: Stroke, closed: boolean): Stroke {
+  return {
+    ...stroke,
+    align: pieceAlign(vertices, closed, stroke.align ?? 'center'),
+    dashArray: undefined,
+    widthProfile: undefined,
+  };
 }
 
 export class ShapeRenderer {
@@ -2290,7 +2318,8 @@ export class ShapeRenderer {
     fills: Fill[],
     strokes: Stroke[],
     closed: boolean,
-    nodeOpacity: number = 1
+    nodeOpacity: number = 1,
+    dashStart?: Vector2
   ): void {
     for (const fill of fills) {
       if (fill.visible && fill.type !== 'none') {
@@ -2299,7 +2328,7 @@ export class ShapeRenderer {
     }
     for (const stroke of strokes) {
       if (stroke.visible && stroke.width > 0) {
-        this.renderStroke(nodeId, tessellated, stroke, closed, nodeOpacity);
+        this.renderStroke(nodeId, tessellated, stroke, closed, nodeOpacity, '', dashStart);
       }
     }
   }
@@ -2371,6 +2400,9 @@ export class ShapeRenderer {
     this.currentModelMatrix = modelArray;
     gl.uniformMatrix3fv(this.program.uniforms.u_model ?? null, false, modelArray);
 
+    // SVG runs round a rectangle from its top-left corner (past its rounding)
+    const left = -node.width * node.transform.anchor.x;
+    const top = node.height * (1 - node.transform.anchor.y);
     this.renderFillsAndStrokes(
       node.id,
       tessellated,
@@ -2378,7 +2410,8 @@ export class ShapeRenderer {
       node.fills,
       node.strokes,
       true,
-      this.currentEffectiveOpacity
+      this.currentEffectiveOpacity,
+      { x: left + Math.max(0, node.cornerRadius[3] ?? 0), y: top }
     );
   }
 
@@ -2449,6 +2482,7 @@ export class ShapeRenderer {
     this.currentModelMatrix = modelArray;
     gl.uniformMatrix3fv(this.program.uniforms.u_model ?? null, false, modelArray);
 
+    // …and round an ellipse from its rightmost point
     this.renderFillsAndStrokes(
       node.id,
       tessellated,
@@ -2456,7 +2490,8 @@ export class ShapeRenderer {
       node.fills,
       node.strokes,
       true,
-      this.currentEffectiveOpacity
+      this.currentEffectiveOpacity,
+      { x: node.radiusX, y: 0 }
     );
   }
 
@@ -3194,7 +3229,32 @@ export class ShapeRenderer {
     stroke: Stroke,
     closed: boolean,
     nodeOpacity: number = 1,
-    part: string = ''
+    part: string = '',
+    dashStart?: Vector2
+  ): void {
+    // A rectangle's or an ellipse's dashes start where SVG's do
+    const outline =
+      dashStart && stroke.dashArray?.length ? clockwiseFrom(vertices, dashStart) : vertices;
+    const dashes = dashPieces(outline, stroke, closed);
+    if (dashes) {
+      // Each dash its own open piece, with its own cached outline
+      const pattern = `${part}|d${stroke.dashArray?.join(',')}@${stroke.dashOffset ?? 0}:${stroke.cap}`;
+      const piece = dashStroke(outline, stroke, closed);
+      dashes.forEach((dash, i) => {
+        this.renderWholeStroke(nodeId, dash, piece, false, nodeOpacity, `${pattern}#${i}`);
+      });
+      return;
+    }
+    this.renderWholeStroke(nodeId, vertices, stroke, closed, nodeOpacity, part);
+  }
+
+  private renderWholeStroke(
+    nodeId: string,
+    vertices: Float32Array,
+    stroke: Stroke,
+    closed: boolean,
+    nodeOpacity: number,
+    part: string
   ): void {
     const align = stroke.align ?? 'center';
     const outlineVertices = this.getCachedStrokeOutline(
@@ -4925,6 +4985,12 @@ export class ShapeRenderer {
     color: Float32Array
   ): void {
     if (!this.program) return;
+    const dashes = dashPieces(vertices, stroke, closed);
+    if (dashes) {
+      const piece = dashStroke(vertices, stroke, closed);
+      for (const dash of dashes) this.renderStrokeWithColor(dash, piece, false, color);
+      return;
+    }
     const numVertices = vertices.length / 2;
     if (numVertices < 2) return;
     const outlineVertices = generateStrokeOutlineVertices(

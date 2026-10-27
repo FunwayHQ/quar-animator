@@ -635,6 +635,42 @@ describe('ShapeRenderer', () => {
   });
 
   // ==========================================================================
+  // Dashed strokes
+  // ==========================================================================
+
+  describe('dashed strokes', () => {
+    const strips = () =>
+      vi.mocked(gl.drawArrays).mock.calls.filter(([mode]) => mode === gl.TRIANGLE_STRIP).length;
+    const drawn = (stroke: Partial<Stroke>) => {
+      const rect = createRectangleNode('rect1', 100, 100); // 400 round
+      rect.fills = [{ type: 'none', opacity: 0, visible: true }];
+      rect.strokes = [{ ...createDefaultStroke(), ...stroke }];
+      sceneGraph.addNode(rect);
+      vi.clearAllMocks();
+      shapeRenderer.render(sceneGraph, mat3.identity());
+      sceneGraph.removeNode('rect1');
+      shapeRenderer.invalidateCache('rect1');
+      return strips();
+    };
+
+    it('draws each dash, as SVG export does', () => {
+      expect(drawn({})).toBe(1);
+      // 40 on, 10 off round a 400 outline: 8 dashes
+      expect(drawn({ dashArray: [40, 10] })).toBe(8);
+    });
+
+    it('shows the dots of a dotted line (zero-length dashes, round caps)', () => {
+      expect(drawn({ dashArray: [0, 20], cap: 'round', width: 4 })).toBeGreaterThanOrEqual(20);
+      expect(drawn({ dashArray: [0, 20], cap: 'butt', width: 4 })).toBe(0);
+    });
+
+    it('draws solid a pattern SVG would ignore', () => {
+      expect(drawn({ dashArray: [10, -2] })).toBe(1);
+      expect(drawn({ dashArray: [0, 0] })).toBe(1);
+    });
+  });
+
+  // ==========================================================================
   // Polygon Rendering
   // ==========================================================================
 
