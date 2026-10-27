@@ -316,6 +316,16 @@ describe('quarFormat', () => {
       expect((result.json as any).nodes[0].src).toBe('data:text/plain;base64,SGVsbG8=');
     });
 
+    it('keeps a sound as a buffer too, and gives it back as it was', () => {
+      const sound = 'data:audio/mpeg;base64,SUQzBAAAAAAA';
+      const json = { sounds: [{ id: 's1', src: sound }] };
+      const result = extractImageBuffers(json);
+      expect(result.buffers).toHaveLength(1);
+      expect(result.buffers[0]!.mimeType).toBe('audio/mpeg');
+      expect((result.json as any).sounds[0].src).toBe('buffer:0');
+      expect((restoreImageBuffers(result.json, result.buffers) as any).sounds[0].src).toBe(sound);
+    });
+
     it('should dedup identical data URIs', () => {
       const json = {
         nodes: [

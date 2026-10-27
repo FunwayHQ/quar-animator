@@ -94,7 +94,8 @@ function bytesToBase64(bytes: Uint8Array): string {
 // Data URI regex
 // ============================================================================
 
-const DATA_URI_REGEX = /^data:(image\/[^;]+);base64,(.+)$/;
+// Pictures and sounds: kept in the file as binary buffers, not base64 text
+const DATA_URI_REGEX = /^data:((?:image|audio)\/[^;]+);base64,(.+)$/;
 
 // ============================================================================
 // Image Extraction / Restoration
