@@ -26,6 +26,7 @@ import type {
   Matrix3,
   Transform,
 } from '@quar/types';
+import { trimPathToProgress } from '../path/pathReveal';
 import {
   forEachSegment,
   getAbsoluteControlPoints,
@@ -473,6 +474,18 @@ function polygonToSvg(node: PolygonNode, defs: string[]): string {
 function pathToSvg(node: PathNode, defs: string[]): string {
   const tfAttr = transformToSvgAttr(node.transform);
   const opacityAttr = node.opacity < 1 ? ` opacity="${fmt(node.opacity)}"` : '';
+
+  // Drawing on: as on the canvas, each contour's stroke trimmed to the
+  // progress, open, and no fill
+  if (node.strokeProgress !== undefined && node.strokeProgress < 1) {
+    const progress = Math.max(0, Math.min(1, node.strokeProgress));
+    const drawn = [node.points, ...(node.subpaths ?? [])]
+      .map((points) => trimPathToProgress(points, node.closed, progress))
+      .filter((points) => points.length >= 2);
+    if (drawn.length === 0) return '';
+    const d = drawn.map((points) => pathPointsToSvgD(points, false)).join(' ');
+    return paintedShape('path', ` d="${d}"`, [], node.strokes, tfAttr, opacityAttr, defs);
+  }
 
   // Build d from primary contour + subpaths
   let d = pathPointsToSvgD(node.points, node.closed);

@@ -628,6 +628,39 @@ describe('nodeToSvgElement', () => {
     expect(svg).toContain('d="M0,0L50,50"');
   });
 
+  it('draws a drawing-on path as the canvas does: its stroke trimmed, open, unfilled', () => {
+    const corner = (x: number, y: number): PathPoint => ({
+      position: { x, y },
+      handleIn: null,
+      handleOut: null,
+      type: 'corner',
+    });
+    const square: PathNode = {
+      ...makeBaseNodeFields('draw-on', 'path'),
+      type: 'path',
+      points: [corner(0, 0), corner(100, 0), corner(100, 100), corner(0, 100)],
+      closed: true,
+      strokeProgress: 0.375,
+      fills: [makeSolidFill()],
+      strokes: [makeStroke()],
+    };
+    sceneGraph.addNode(square);
+    const svg = nodeToSvgElement(square, sceneGraph, []);
+    expect(svg).toContain('fill="none"');
+    expect(svg).toContain('stroke="#000000"');
+    const d = svg.match(/d="([^"]+)"/)?.[1] ?? '';
+    expect(d).not.toContain('Z');
+    // 37.5% of the way round: along the bottom, then half way up the right side
+    const numbers = (d.match(/-?\d+(\.\d+)?/g) ?? []).map(Number);
+    expect(numbers.slice(0, 4)).toEqual([0, 0, 100, 0]);
+    expect(numbers.at(-2)).toBeCloseTo(100, 0);
+    expect(numbers.at(-1)).toBeCloseTo(50, 0);
+
+    expect(nodeToSvgElement({ ...square, strokeProgress: 0 }, sceneGraph, [])).toBe('');
+    // Fully drawn, it's the filled, closed shape again
+    expect(nodeToSvgElement({ ...square, strokeProgress: 1 }, sceneGraph, [])).toContain('Z');
+  });
+
   it('handles PathNode with subpaths', () => {
     const node: PathNode = {
       ...makeBaseNodeFields('path2', 'path'),
