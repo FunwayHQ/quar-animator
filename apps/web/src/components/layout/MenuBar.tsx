@@ -25,6 +25,8 @@ import { restoreTutorials } from '../../tutorials/seedTutorials';
 import { setUiTheme, useUiTheme } from '../../hooks/useUiTheme';
 import { BetaBadge, REPORT_ISSUES_URL } from '../common/BetaBadge';
 import styles from './MenuBar.module.css';
+// Bundled with the build (inlined or hashed), so a browser never keeps an old logo
+import logoUrl from '../../assets/logo.svg';
 
 // ============================================================================
 // Types
@@ -540,11 +542,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
       <header className={styles.menuBar} ref={menuBarRef}>
         <div className={styles.leading}>
           <div className={styles.logo}>
-            <img
-              src={window.location.protocol === 'file:' ? './logo.svg' : '/logo.svg'}
-              alt="Quar Animator"
-              className={styles.logoImage}
-            />
+            <img src={logoUrl} alt="Quar Animator" className={styles.logoImage} />
           </div>
           <BetaBadge />
 
