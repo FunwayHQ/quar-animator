@@ -6,7 +6,7 @@
  * scope's timeline is the tracks of the layers in it, at its own length.
  */
 
-import type { Timeline } from '@quar/types';
+import type { SoundClip, Timeline } from '@quar/types';
 
 /** The page's timeline (null), or an artboard's (its id). */
 export type TimelineScope = string | null;
@@ -30,10 +30,31 @@ export function withScopeDuration(
   };
 }
 
+/** The sounds on a scope's timeline. */
+export function scopeSounds(timeline: Timeline, scope: TimelineScope): SoundClip[] {
+  return (scope === null ? timeline.sounds : timeline.artboards?.[scope]?.sounds) ?? [];
+}
+
+/** The timeline with a scope's sounds set (an artboard with no timing yet gets the page's length). */
+export function withScopeSounds(
+  timeline: Timeline,
+  scope: TimelineScope,
+  sounds: SoundClip[]
+): Timeline {
+  if (scope === null) return { ...timeline, sounds };
+  return {
+    ...timeline,
+    artboards: {
+      ...timeline.artboards,
+      [scope]: { duration: scopeDuration(timeline, scope), ...timeline.artboards?.[scope], sounds },
+    },
+  };
+}
+
 /**
  * A scope's timeline on its own: the tracks of its layers (`inScope`), at
- * its length, as the page's timeline is for everything — to play, scrub or
- * export it.
+ * its length, with its sounds, as the page's timeline is for everything —
+ * to play, scrub or export it.
  */
 export function scopedTimeline(
   timeline: Timeline,
@@ -44,6 +65,7 @@ export function scopedTimeline(
     ...timeline,
     duration: scopeDuration(timeline, scope),
     tracks: timeline.tracks.filter((track) => inScope(track.nodeId)),
+    sounds: scope === null ? timeline.sounds : timeline.artboards?.[scope]?.sounds,
   };
 }
 

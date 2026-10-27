@@ -5,6 +5,7 @@
 
 export * from './Timeline';
 export * from './TimelineScope';
+export * from './SoundClips';
 export * from './AnimationPresets';
 export * from './AnimationSequence';
 export * from './AnimationSpans';
@@ -25,4 +26,6 @@ export type {
   EasingFunction,
   Marker,
   TangentMode,
+  Sound,
+  SoundClip,
 } from '@quar/types';

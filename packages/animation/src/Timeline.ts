@@ -28,6 +28,7 @@ export function createTimeline(options: Partial<Timeline> = {}): Timeline {
     tracks: options.tracks ?? [],
     markers: options.markers ?? [],
     ...(options.artboards ? { artboards: options.artboards } : {}),
+    ...(options.sounds ? { sounds: options.sounds } : {}),
   };
 }
 

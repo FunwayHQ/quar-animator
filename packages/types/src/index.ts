@@ -683,6 +683,8 @@ export interface Marker {
 export interface ArtboardTimeline {
   /** In frames; the page's when an artboard has none yet */
   duration: number;
+  /** The sounds on its timeline */
+  sounds?: SoundClip[];
 }
 
 export interface Timeline {
@@ -695,6 +697,36 @@ export interface Timeline {
   markers: Marker[];
   /** Each artboard's timeline, by artboard id */
   artboards?: Record<string, ArtboardTimeline>;
+  /** The sounds on the page's own timeline (an artboard's are in its `artboards` entry) */
+  sounds?: SoundClip[];
+}
+
+/**
+ * A sound in the document's library, played by the clips that use it on
+ * any page's or artboard's timeline.
+ */
+export interface Sound {
+  id: string;
+  name: string;
+  /** The sound file as a data URI (data:audio/…;base64,…), a binary buffer in a .quar */
+  src: string;
+  /** Its length, in seconds */
+  duration: number;
+}
+
+/** A sound placed on a timeline: where it starts, the part of it that plays, how loud. */
+export interface SoundClip {
+  id: string;
+  soundId: string;
+  /** The frame it starts on */
+  start: number;
+  /** Where in the sound it starts, in seconds (what's trimmed off its beginning) */
+  offset: number;
+  /** How much of the sound it plays from there, in seconds */
+  duration: number;
+  /** 1 plays it as recorded, 0.5 at half the amplitude */
+  gain: number;
+  muted?: boolean;
 }
 
 // ============================================================================
