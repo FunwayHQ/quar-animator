@@ -723,3 +723,27 @@ describe('convertSvgToNodes', () => {
     });
   });
 });
+
+describe('layer names from SVG ids', () => {
+  const named = (id: string) =>
+    convert(
+      `<svg xmlns="http://www.w3.org/2000/svg"><rect id="${id}" width="10" height="10"/></svg>`
+    ).nodes[0]?.name;
+
+  it('reads as it is: no characters that turn the text around or hide it', () => {
+    // Right-to-left override: "Logo‮fdp.exe" shows as "Logoexe.pdf"
+    expect(named('Logo‮fdp.exe')).toBe('Logofdp.exe');
+    expect(named('Hero​‍banner﻿')).toBe('Herobanner');
+    expect(named('Two&#9;words&#10;here')).toBe('Two words here');
+  });
+
+  it('is cut at 100 characters', () => {
+    const name = named('x'.repeat(50_000));
+    expect(name).toHaveLength(100);
+    expect(named('ab '.repeat(40))).toBe('ab '.repeat(40).slice(0, 100));
+  });
+
+  it('is the shape’s kind when the id leaves nothing', () => {
+    expect(named('‮​')).toBe('Rectangle');
+  });
+});

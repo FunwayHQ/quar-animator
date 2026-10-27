@@ -156,6 +156,25 @@ interface ConvertContext {
 // Element Dispatch
 // ============================================================================
 
+/** The longest layer name an SVG element's id gives. */
+const MAX_LAYER_NAME = 100;
+
+/**
+ * A layer's name from an SVG element's id, which is anyone's to write:
+ * control characters become spaces, and invisible formatting ones (those
+ * that turn text around or hide it) are left out, so a name reads as it is;
+ * runs of space are made one, and it's cut at 100 characters. The shape's
+ * kind when nothing's left.
+ */
+function layerName(id: string | undefined, fallback: string): string {
+  const name = (id ?? '')
+    .replace(/\p{Cc}/gu, ' ')
+    .replace(/\p{Cf}/gu, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return name ? Array.from(name).slice(0, MAX_LAYER_NAME).join('').trimEnd() : fallback;
+}
+
 function convertElement(element: SvgElement, ctx: ConvertContext): Node[] {
   switch (element.tag) {
     case 'rect':
@@ -198,7 +217,7 @@ function convertRect(el: SvgRect, ctx: ConvertContext): RectangleNode {
 
   const node: RectangleNode = {
     id: ctx.generateId(),
-    name: el.id || 'Rectangle',
+    name: layerName(el.id, 'Rectangle'),
     type: 'rectangle',
     parent: null,
     children: [],
@@ -224,7 +243,7 @@ function convertEllipse(el: SvgEllipse, ctx: ConvertContext): EllipseNode {
 
   const node: EllipseNode = {
     id: ctx.generateId(),
-    name: el.id || 'Ellipse',
+    name: layerName(el.id, 'Ellipse'),
     type: 'ellipse',
     parent: null,
     children: [],
@@ -249,7 +268,7 @@ function convertCircle(el: SvgCircle, ctx: ConvertContext): EllipseNode {
 
   const node: EllipseNode = {
     id: ctx.generateId(),
-    name: el.id || 'Circle',
+    name: layerName(el.id, 'Circle'),
     type: 'ellipse',
     parent: null,
     children: [],
@@ -292,7 +311,7 @@ function convertLine(el: SvgLine, ctx: ConvertContext): PathNode {
 
   const node: PathNode = {
     id: ctx.generateId(),
-    name: el.id || 'Line',
+    name: layerName(el.id, 'Line'),
     type: 'path',
     parent: null,
     children: [],
@@ -327,7 +346,7 @@ function convertPolygon(el: SvgPolygon, ctx: ConvertContext): PathNode {
 
   const node: PathNode = {
     id: ctx.generateId(),
-    name: el.id || 'Polygon',
+    name: layerName(el.id, 'Polygon'),
     type: 'path',
     parent: null,
     children: [],
@@ -355,7 +374,7 @@ function convertPolyline(el: SvgPolyline, ctx: ConvertContext): PathNode[] {
     type: 'corner' as const,
   }));
 
-  return convertContour(el, rawPoints, false, el.id || 'Polyline', ctx);
+  return convertContour(el, rawPoints, false, layerName(el.id, 'Polyline'), ctx);
 }
 
 function convertPath(el: SvgPath, ctx: ConvertContext): PathNode[] {
@@ -385,7 +404,7 @@ function convertPath(el: SvgPath, ctx: ConvertContext): PathNode[] {
 
   // Simple path(s): one node per subpath, centered
   return flippedSubpaths.flatMap((sp) =>
-    convertContour(el, sp.points, sp.closed, el.id || 'Path', ctx)
+    convertContour(el, sp.points, sp.closed, layerName(el.id, 'Path'), ctx)
   );
 }
 
@@ -523,7 +542,7 @@ function convertCompoundPath(
 
   const node: PathNode = {
     id: ctx.generateId(),
-    name: el.id || 'Path',
+    name: layerName(el.id, 'Path'),
     type: 'path',
     parent: null,
     children: [],
@@ -558,7 +577,7 @@ function convertGroup(el: SvgGroup, ctx: ConvertContext): GroupNode {
 
   const group: GroupNode = {
     id: ctx.generateId(),
-    name: el.id || 'Group',
+    name: layerName(el.id, 'Group'),
     type: 'group',
     parent: null,
     children: [],
