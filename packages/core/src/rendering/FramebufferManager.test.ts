@@ -1,5 +1,5 @@
 /**
- * Tests for FramebufferManager — pooling and stale-size eviction (F036)
+ * Tests for FramebufferManager — pooling sizes side by side, within a budget
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
@@ -27,16 +27,26 @@ describe('FramebufferManager', () => {
     manager.release(b);
   });
 
-  it('destroys stale-size pooled entries when the requested size changes (F036)', () => {
-    // Populate the 100x100 bucket.
-    const small = manager.acquire(100, 100);
-    manager.release(small);
+  it('keeps sizes side by side: effects alternating between them reuse their own', () => {
+    for (let frame = 0; frame < 3; frame++) {
+      manager.release(manager.acquire(96, 64));
+      manager.release(manager.acquire(384, 384));
+      manager.release(manager.acquire(48, 32));
+    }
+    expect(gl.createTexture).toHaveBeenCalledTimes(3);
+    expect(gl.deleteTexture).not.toHaveBeenCalled();
+  });
 
-    // Acquire a different size — the 100x100 entry must be freed.
-    manager.acquire(200, 200);
+  it('frees the longest released past its budget, as after a resize (F036)', () => {
+    // 64 MB each: the fourth takes the pool past 192 MB
+    const sizes = [4096, 4095, 4094, 4093];
+    const entries = sizes.map((side) => manager.acquire(side, 4096));
+    entries.forEach((entry) => manager.release(entry));
 
-    expect(gl.deleteFramebuffer).toHaveBeenCalledWith(small.fbo);
-    expect(gl.deleteTexture).toHaveBeenCalledWith(small.texture);
+    expect(gl.deleteTexture).toHaveBeenCalledTimes(1);
+    expect(gl.deleteTexture).toHaveBeenCalledWith(entries[0]!.texture);
+    // The rest are still there to reuse
+    expect(manager.acquire(4093, 4096)).toBe(entries[3]);
   });
 
   it('does not churn: a stable size reuses the pool across frames after a resize', () => {

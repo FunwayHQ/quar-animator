@@ -32,7 +32,7 @@ import {
   setNormalBlending,
   type ShaderProgram,
 } from './WebGLRenderer';
-import { EffectRenderer, effectScaleOf } from './EffectRenderer';
+import { EffectRenderer, effectScaleOf, type PixelRect } from './EffectRenderer';
 import { FramebufferManager } from './FramebufferManager';
 import { createGhostComposite, type GhostComposite } from './PostProcessShaders';
 import type { FramebufferEntry } from './FramebufferManager';
@@ -41,6 +41,7 @@ import {
   normalizeGradientStops,
   linearGradientFromAngle,
   clampFocalPoint,
+  getNodeLocalBounds,
 } from '../gradient/gradientUtils';
 import { SceneGraph } from '../SceneGraph';
 import { mat3 } from '../math';
@@ -73,6 +74,7 @@ import {
 import { getFontManager } from '../font/FontManager';
 import { textToSubpaths, type GlyphSubpathGroup } from '../font/glyphConverter';
 import { getTextNodeBounds } from '../font/textMetrics';
+import { getTextLocalBounds } from '../font/textPlacement';
 import { getTextBox } from '../font/textLayout';
 import { getVisibleTextContent } from '../font/textReveal';
 import { hexToRgbNormalized } from '../color/colorHex';
@@ -97,10 +99,11 @@ uniform sampler2D u_maskTexture;
 uniform int u_maskMode; // 0=clip, 1=alpha, 2=luminance
 uniform int u_maskPass; // Writes a solid silhouette while creating a clip mask
 uniform int u_useMask;
+uniform vec2 u_maskOrigin; // where the canvas starts, drawing into an effect's region
 
 float sampleMaskCoverage() {
   if (u_useMask == 0) return 1.0;
-  vec2 uv = gl_FragCoord.xy / vec2(textureSize(u_maskTexture, 0));
+  vec2 uv = (gl_FragCoord.xy + u_maskOrigin) / vec2(textureSize(u_maskTexture, 0));
   vec4 maskColor = texture(u_maskTexture, uv);
   if (u_maskMode == 1) return maskColor.a;
   if (u_maskMode == 2) return dot(maskColor.rgb, vec3(0.2126, 0.7152, 0.0722));
@@ -116,7 +119,13 @@ vec4 applyNodeMask(vec4 color) {
   return color;
 }
 `;
-const MASK_UNIFORM_NAMES = ['u_maskTexture', 'u_maskMode', 'u_maskPass', 'u_useMask'];
+const MASK_UNIFORM_NAMES = [
+  'u_maskTexture',
+  'u_maskMode',
+  'u_maskPass',
+  'u_useMask',
+  'u_maskOrigin',
+];
 /** Texture unit reserved for the active mask (images and effects use 0-1). */
 const MASK_TEXTURE_UNIT = 3;
 
@@ -726,6 +735,8 @@ export class ShapeRenderer {
   // mask uniforms when they are stale, not on every useProgram call.
   private maskStateVersion = 0;
   private maskUniformVersions = new WeakMap<ShaderProgram, number>();
+  /** The canvas's origin in the framebuffer drawn into (an effect's region: see EffectRenderer) */
+  private maskOrigin = { x: 0, y: 0 };
   private readonly programUseHook = (program: ShaderProgram) => this.applyMaskUniforms(program);
 
   // Symbol definitions registry (set by Canvas component)
@@ -748,6 +759,10 @@ export class ShapeRenderer {
     this.initializeTextureBuffers();
     this.maskFramebufferManager = new FramebufferManager(renderer.context);
     this.effectRenderer = new EffectRenderer(renderer);
+    this.effectRenderer.onDrawOrigin = (x, y) => {
+      this.maskOrigin = { x, y };
+      this.maskStateVersion++;
+    };
     this.renderer.setProgramUseHook(this.programUseHook);
   }
 
@@ -971,6 +986,77 @@ export class ShapeRenderer {
     this.hiddenBones = boneIds;
   }
 
+  /**
+   * Where a node is on the canvas, in device pixels the GL way up, grown by
+   * its strokes: its effects are worked out round it (EffectRenderer). None
+   * when its box doesn't say (skinned or distorted geometry, groups, symbols):
+   * they're worked out over the whole canvas.
+   */
+  private effectBounds(
+    node: Node,
+    world: Matrix3,
+    viewProjection: Matrix3,
+    canvasWidth: number,
+    canvasHeight: number
+  ): PixelRect | undefined {
+    if ('skinData' in node && node.skinData) return undefined;
+    let box: [number, number, number, number];
+    switch (node.type) {
+      case 'rectangle':
+      case 'ellipse':
+      case 'polygon':
+      case 'path':
+        box = getNodeLocalBounds(node);
+        break;
+      case 'image': {
+        if (node.vertexOffsets) return undefined;
+        const { x: ax, y: ay } = node.transform.anchor;
+        box = [-node.width * ax, -node.height * ay, node.width * (1 - ax), node.height * (1 - ay)];
+        break;
+      }
+      case 'text': {
+        const b = getTextLocalBounds(node);
+        // Glyphs reach past their advance box: italics, accents, swashes
+        const over = node.fontSize * 0.3;
+        box = [b.x - over, b.y - over, b.x + b.width + over, b.y + b.height + over];
+        break;
+      }
+      default:
+        return undefined;
+    }
+    // A stroke reaches out to its width, a miter at a sharp corner further
+    let stroke = 0;
+    for (const s of node.type === 'image' ? [] : node.strokes) {
+      if (s.visible) stroke = Math.max(stroke, s.width * 2);
+    }
+    const [bx0, by0, bx1, by1] = [
+      box[0] - stroke,
+      box[1] - stroke,
+      box[2] + stroke,
+      box[3] + stroke,
+    ];
+    let x0 = Infinity;
+    let y0 = Infinity;
+    let x1 = -Infinity;
+    let y1 = -Infinity;
+    for (const [x, y] of [
+      [bx0, by0],
+      [bx1, by0],
+      [bx1, by1],
+      [bx0, by1],
+    ] as const) {
+      const ndc = mat3.transformPoint(viewProjection, mat3.transformPoint(world, { x, y }));
+      const px = (ndc.x * 0.5 + 0.5) * canvasWidth;
+      const py = (ndc.y * 0.5 + 0.5) * canvasHeight;
+      x0 = Math.min(x0, px);
+      y0 = Math.min(y0, py);
+      x1 = Math.max(x1, px);
+      y1 = Math.max(y1, py);
+    }
+    if (!Number.isFinite(x0 + y0 + x1 + y1)) return undefined;
+    return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+  }
+
   private applyMaskUniforms(program: ShaderProgram): void {
     // Programs without mask support (effects, grid, overlays) carry no mask state.
     if (!program.uniforms.u_useMask) return;
@@ -986,6 +1072,7 @@ export class ShapeRenderer {
     );
     gl.uniform1i(program.uniforms.u_maskPass ?? null, this.maskPassMode);
     gl.uniform1i(program.uniforms.u_maskTexture ?? null, MASK_TEXTURE_UNIT);
+    gl.uniform2f(program.uniforms.u_maskOrigin ?? null, this.maskOrigin.x, this.maskOrigin.y);
   }
 
   /** Switch the mask sampled by subsequent draws, and whether they write a clip silhouette. */
@@ -1978,7 +2065,8 @@ export class ShapeRenderer {
             },
             canvasWidth,
             canvasHeight,
-            effectScale
+            effectScale,
+            this.effectBounds(node, worldTransform, viewProjectionMatrix, canvasWidth, canvasHeight)
           );
           // Restore shader state for next node
           this.renderer.useProgram(program);

@@ -98,6 +98,7 @@ export function createMockWebGL2Context(): WebGL2RenderingContext {
     uniform1i: vi.fn(),
     uniform1f: vi.fn(),
     uniform2fv: vi.fn(),
+    uniform2f: vi.fn(),
     uniform3fv: vi.fn(),
     uniform4fv: vi.fn(),
     uniformMatrix3fv: vi.fn(),

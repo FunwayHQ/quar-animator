@@ -53,6 +53,62 @@ export function effectAtScale(effect: Effect, scale: number): Effect {
   }
 }
 
+/** A rectangle of the canvas in device pixels, the GL way up (y from the bottom). */
+export interface PixelRect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/** Framebuffers come in sizes rounded up to this, so the same few get reused. */
+const REGION_STEP = 32;
+
+/**
+ * The part of the canvas a node's effects can reach: its box grown by the
+ * furthest any of them spreads (a blur's reach, a shadow's offset), cut to
+ * the canvas, then sized up to whole steps. Null when it's all off the canvas:
+ * nothing of it shows, so nothing need be drawn.
+ */
+export function effectRegion(
+  bounds: PixelRect,
+  effects: Effect[],
+  canvasWidth: number,
+  canvasHeight: number
+): PixelRect | null {
+  let padX = 2;
+  let padY = 2;
+  for (const effect of effects) {
+    if (effect.type === 'drop-shadow') {
+      const reach = Math.ceil(effect.blur) + Math.max(0, effect.spread) + 2;
+      padX = Math.max(padX, reach + Math.abs(effect.offsetX));
+      padY = Math.max(padY, reach + Math.abs(effect.offsetY));
+    } else if (effect.type === 'layer-blur') {
+      padX = Math.max(padX, Math.ceil(effect.radius) + 2);
+      padY = Math.max(padY, Math.ceil(effect.radius) + 2);
+    }
+  }
+  const x0 = Math.max(0, Math.floor(bounds.x - padX));
+  const y0 = Math.max(0, Math.floor(bounds.y - padY));
+  const x1 = Math.min(canvasWidth, Math.ceil(bounds.x + bounds.w + padX));
+  const y1 = Math.min(canvasHeight, Math.ceil(bounds.y + bounds.h + padY));
+  if (x1 <= x0 || y1 <= y0) return null;
+  const up = (n: number) => Math.ceil(n / REGION_STEP) * REGION_STEP;
+  return { x: x0, y: y0, w: up(x1 - x0), h: up(y1 - y0) };
+}
+
+/**
+ * How many times smaller a blur of `radius` px is worked out: halved while its
+ * spread (σ = radius / 3) stays at least 2 px there, at most 8 times. A wide
+ * blur loses nothing to it, and costs a fraction: fewer pixels, fewer taps.
+ */
+export function blurDownsample(radius: number): number {
+  const sigma = radius / 3;
+  let factor = 1;
+  while (factor < 8 && sigma / (factor * 2) >= 2) factor *= 2;
+  return factor;
+}
+
 export class EffectRenderer {
   private gl: WebGL2RenderingContext;
   private renderer: WebGLRenderer;
@@ -70,6 +126,12 @@ export class EffectRenderer {
    * the canvas, or an off-screen pass such as an onion-skin ghost.
    */
   private target: WebGLFramebuffer | null = null;
+  /**
+   * Told where the canvas's origin is while a node is drawn into a region's
+   * framebuffer (and (0, 0) after): what reads the canvas by fragment
+   * position, a mask, has to look that much further along.
+   */
+  onDrawOrigin: ((x: number, y: number) => void) | null = null;
 
   constructor(renderer: WebGLRenderer) {
     this.renderer = renderer;
@@ -96,6 +158,8 @@ export class EffectRenderer {
    * @param canvasWidth - Canvas pixel width
    * @param canvasHeight - Canvas pixel height
    * @param scale - Device pixels to one document unit (effectScaleOf)
+   * @param bounds - Where the node is on the canvas (device pixels), when
+   *   known: its effects are then worked out only round it (effectRegion)
    */
   renderNodeWithEffects(
     effects: Effect[] | undefined,
@@ -103,12 +167,19 @@ export class EffectRenderer {
     renderNodeFn: () => void,
     canvasWidth: number,
     canvasHeight: number,
-    scale = 1
+    scale = 1,
+    bounds?: PixelRect
   ): void {
     const gl = this.gl;
     const visibleEffects = (effects ?? [])
       .filter((e) => e.visible)
       .map((e) => effectAtScale(e, scale));
+    // A blend mode reads what's under the whole layer: that pass keeps the canvas
+    const region =
+      blendMode === 'normal' && bounds
+        ? effectRegion(bounds, visibleEffects, canvasWidth, canvasHeight)
+        : { x: 0, y: 0, w: canvasWidth, h: canvasHeight };
+    if (!region) return; // all of it off the canvas
     const target = gl.getParameter(gl.FRAMEBUFFER_BINDING) as WebGLFramebuffer | null;
     this.target = target;
 
@@ -117,17 +188,20 @@ export class EffectRenderer {
     const scissorWasEnabled = gl.isEnabled(gl.SCISSOR_TEST);
     if (scissorWasEnabled) gl.disable(gl.SCISSOR_TEST);
 
-    // Render the node shape to an off-screen FBO
-    const shapeFBO = this.fbManager.acquire(canvasWidth, canvasHeight);
+    // Render the node shape to an off-screen FBO the region's size: the canvas
+    // shifted so the region's corner is the framebuffer's
+    const shapeFBO = this.fbManager.acquire(region.w, region.h);
     gl.bindFramebuffer(gl.FRAMEBUFFER, shapeFBO.fbo);
-    gl.viewport(0, 0, canvasWidth, canvasHeight);
+    gl.viewport(-region.x, -region.y, canvasWidth, canvasHeight);
     gl.clearColor(0, 0, 0, 0);
     gl.clear(gl.COLOR_BUFFER_BIT);
 
     // Use blendFuncSeparate so alpha in the FBO is correct (A, not A²)
     // RGB: standard src-over premultiplied; Alpha: additive src-over
     gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+    if (region.x !== 0 || region.y !== 0) this.onDrawOrigin?.(region.x, region.y);
     renderNodeFn();
+    if (region.x !== 0 || region.y !== 0) this.onDrawOrigin?.(0, 0);
     // A node's own effect pass inside renderNodeFn had a target of its own
     this.target = target;
     // Restore standard blend func
@@ -148,7 +222,7 @@ export class EffectRenderer {
     // Render drop shadows first (they appear behind the shape)
     for (const effect of visibleEffects) {
       if (effect.type === 'drop-shadow') {
-        this.renderDropShadow(effect, shapeFBO, canvasWidth, canvasHeight);
+        this.renderDropShadow(effect, shapeFBO, region);
       }
     }
 
@@ -159,7 +233,7 @@ export class EffectRenderer {
       if (scissorWasEnabled) gl.disable(gl.SCISSOR_TEST);
       for (const effect of visibleEffects) {
         if (effect.type === 'layer-blur') {
-          this.renderLayerBlur(effect, shapeFBO, canvasWidth, canvasHeight);
+          this.renderLayerBlur(effect, shapeFBO);
         }
       }
       if (scissorWasEnabled) gl.enable(gl.SCISSOR_TEST);
@@ -169,13 +243,14 @@ export class EffectRenderer {
     if (blendMode !== 'normal') {
       this.compositeWithBlendMode(shapeFBO, blendMode, 1.0, canvasWidth, canvasHeight);
     } else {
-      this.compositeToScreen(shapeFBO, canvasWidth, canvasHeight);
+      this.compositeToScreen(shapeFBO, region);
     }
+    gl.viewport(0, 0, canvasWidth, canvasHeight);
 
     // Render inner shadows (on top of the shape, masked by shape alpha)
     for (const effect of visibleEffects) {
       if (effect.type === 'inner-shadow') {
-        this.renderInnerShadow(effect, shapeFBO, canvasWidth, canvasHeight);
+        this.renderInnerShadow(effect, shapeFBO);
       }
     }
 
@@ -284,8 +359,7 @@ export class EffectRenderer {
   private renderDropShadow(
     effect: DropShadowEffect,
     shapeFBO: FramebufferEntry,
-    canvasWidth: number,
-    canvasHeight: number
+    region: PixelRect
   ): void {
     const gl = this.gl;
 
@@ -294,14 +368,14 @@ export class EffectRenderer {
     if (scissorWasEnabled) gl.disable(gl.SCISSOR_TEST);
 
     // Blur the shape's alpha to create the shadow
-    const blurredFBO = this.applyGaussianBlur(shapeFBO, effect.blur, canvasWidth, canvasHeight);
+    const blurredFBO = this.applyGaussianBlur(shapeFBO, effect.blur);
 
     // Re-enable scissor for compositing to canvas
     if (scissorWasEnabled) gl.enable(gl.SCISSOR_TEST);
 
-    // Composite the blurred shadow with offset + color
+    // Composite the blurred shadow with offset + color, over the region
     gl.bindFramebuffer(gl.FRAMEBUFFER, this.target);
-    gl.viewport(0, 0, canvasWidth, canvasHeight);
+    gl.viewport(region.x, region.y, region.w, region.h);
 
     const { shadow, quadVAO } = this.programs;
     this.renderer.useProgram(shadow);
@@ -323,8 +397,8 @@ export class EffectRenderer {
     // Shadow offset in UV space (Y is inverted: positive offsetY = down in screen = negative in UV)
     gl.uniform2f(
       shadow.uniforms.u_offset ?? null,
-      effect.offsetX / canvasWidth,
-      -effect.offsetY / canvasHeight
+      effect.offsetX / region.w,
+      -effect.offsetY / region.h
     );
 
     gl.enable(gl.BLEND);
@@ -336,43 +410,34 @@ export class EffectRenderer {
     this.fbManager.release(blurredFBO);
   }
 
-  private renderInnerShadow(
-    _effect: InnerShadowEffect,
-    _shapeFBO: FramebufferEntry,
-    _canvasWidth: number,
-    _canvasHeight: number
-  ): void {
+  private renderInnerShadow(_effect: InnerShadowEffect, _shapeFBO: FramebufferEntry): void {
     // Inner shadow requires alpha inversion + blur + masking
     // This is a simplified implementation - full implementation would need
     // an additional shader pass to invert alpha and mask the result
     // TODO: Full inner shadow implementation with alpha inversion shader
   }
 
-  private renderLayerBlur(
-    effect: LayerBlurEffect,
-    shapeFBO: FramebufferEntry,
-    canvasWidth: number,
-    canvasHeight: number
-  ): void {
+  private renderLayerBlur(effect: LayerBlurEffect, shapeFBO: FramebufferEntry): void {
     if (effect.radius <= 0) return;
 
-    const blurredFBO = this.applyGaussianBlur(shapeFBO, effect.radius, canvasWidth, canvasHeight);
+    const blurredFBO = this.applyGaussianBlur(shapeFBO, effect.radius);
 
-    // Copy blurred result back into shapeFBO so the caller composites the blurred version
+    // Copy the blurred result back into shapeFBO (scaled up, if it was worked
+    // out smaller) so the caller composites the blurred version
     const gl = this.gl;
     gl.bindFramebuffer(gl.READ_FRAMEBUFFER, blurredFBO.fbo);
     gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, shapeFBO.fbo);
     gl.blitFramebuffer(
       0,
       0,
-      canvasWidth,
-      canvasHeight,
+      blurredFBO.width,
+      blurredFBO.height,
       0,
       0,
-      canvasWidth,
-      canvasHeight,
+      shapeFBO.width,
+      shapeFBO.height,
       gl.COLOR_BUFFER_BIT,
-      gl.NEAREST
+      blurredFBO.width === shapeFBO.width ? gl.NEAREST : gl.LINEAR
     );
     gl.bindFramebuffer(gl.FRAMEBUFFER, this.target);
 
@@ -380,22 +445,46 @@ export class EffectRenderer {
   }
 
   /**
-   * Apply 2-pass separable Gaussian blur.
-   * Returns a new FBO with the blurred result. Caller must release it.
+   * A 2-pass separable Gaussian blur of a framebuffer, worked out at a reduced
+   * size when it's wide (blurDownsample): halved by filtered blits first.
+   * Returns a new FBO with the blurred result, maybe smaller than the source,
+   * to be sampled with filtering. Caller must release it.
    */
-  private applyGaussianBlur(
-    source: FramebufferEntry,
-    radius: number,
-    canvasWidth: number,
-    canvasHeight: number
-  ): FramebufferEntry {
+  private applyGaussianBlur(source: FramebufferEntry, radius: number): FramebufferEntry {
     const gl = this.gl;
     const { blur, quadVAO } = this.programs;
 
+    let current = source;
+    for (let factor = blurDownsample(radius); factor > 1; factor /= 2) {
+      const half = this.fbManager.acquire(
+        Math.max(1, Math.ceil(current.width / 2)),
+        Math.max(1, Math.ceil(current.height / 2))
+      );
+      gl.bindFramebuffer(gl.READ_FRAMEBUFFER, current.fbo);
+      gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, half.fbo);
+      gl.blitFramebuffer(
+        0,
+        0,
+        current.width,
+        current.height,
+        0,
+        0,
+        half.width,
+        half.height,
+        gl.COLOR_BUFFER_BIT,
+        gl.LINEAR
+      );
+      if (current !== source) this.fbManager.release(current);
+      current = half;
+    }
+    const width = current.width;
+    const height = current.height;
+    const scaledRadius = radius * (width / source.width);
+
     // Pass 1: horizontal blur
-    const tempFBO = this.fbManager.acquire(canvasWidth, canvasHeight);
+    const tempFBO = this.fbManager.acquire(width, height);
     gl.bindFramebuffer(gl.FRAMEBUFFER, tempFBO.fbo);
-    gl.viewport(0, 0, canvasWidth, canvasHeight);
+    gl.viewport(0, 0, width, height);
     gl.clearColor(0, 0, 0, 0);
     gl.clear(gl.COLOR_BUFFER_BIT);
 
@@ -403,23 +492,23 @@ export class EffectRenderer {
     this.renderer.bindVAO(quadVAO);
 
     gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, source.texture);
+    gl.bindTexture(gl.TEXTURE_2D, current.texture);
     gl.uniform1i(blur.uniforms.u_texture ?? null, 0);
-    gl.uniform2f(blur.uniforms.u_direction ?? null, 1.0 / canvasWidth, 0);
-    gl.uniform1f(blur.uniforms.u_radius ?? null, radius);
+    gl.uniform2f(blur.uniforms.u_direction ?? null, 1.0 / width, 0);
+    gl.uniform1f(blur.uniforms.u_radius ?? null, scaledRadius);
 
     gl.disable(gl.BLEND);
     gl.drawArrays(gl.TRIANGLES, 0, 6);
 
     // Pass 2: vertical blur
-    const resultFBO = this.fbManager.acquire(canvasWidth, canvasHeight);
+    const resultFBO = this.fbManager.acquire(width, height);
     gl.bindFramebuffer(gl.FRAMEBUFFER, resultFBO.fbo);
-    gl.viewport(0, 0, canvasWidth, canvasHeight);
+    gl.viewport(0, 0, width, height);
     gl.clearColor(0, 0, 0, 0);
     gl.clear(gl.COLOR_BUFFER_BIT);
 
     gl.bindTexture(gl.TEXTURE_2D, tempFBO.texture);
-    gl.uniform2f(blur.uniforms.u_direction ?? null, 0, 1.0 / canvasHeight);
+    gl.uniform2f(blur.uniforms.u_direction ?? null, 0, 1.0 / height);
 
     gl.drawArrays(gl.TRIANGLES, 0, 6);
     gl.enable(gl.BLEND);
@@ -428,6 +517,7 @@ export class EffectRenderer {
     gl.bindFramebuffer(gl.FRAMEBUFFER, this.target);
 
     this.fbManager.release(tempFBO);
+    if (current !== source) this.fbManager.release(current);
 
     return resultFBO;
   }
@@ -437,12 +527,9 @@ export class EffectRenderer {
    * The FBO content is premultiplied (rendered with blendFuncSeparate), so we use
    * ONE/ONE_MINUS_SRC_ALPHA to avoid double-multiplying by alpha.
    */
-  private compositeToScreen(
-    fbo: FramebufferEntry,
-    _canvasWidth: number,
-    _canvasHeight: number
-  ): void {
+  private compositeToScreen(fbo: FramebufferEntry, region: PixelRect): void {
     const gl = this.gl;
+    gl.viewport(region.x, region.y, region.w, region.h);
 
     const { composite, quadVAO } = this.programs;
     this.renderer.useProgram(composite);

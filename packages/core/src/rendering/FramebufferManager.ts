@@ -12,14 +12,23 @@ export interface FramebufferEntry {
   height: number;
 }
 
-const MAX_POOL_SIZE = 8;
+/**
+ * How much the pool keeps, in bytes: past it, the framebuffers released
+ * longest ago go first. Effects draw in framebuffers the size of what they
+ * reach, many sizes a frame, so the pool keeps sizes side by side; one the
+ * canvas no longer uses (after a resize) ages out the same way.
+ */
+const POOL_BYTES = 192 * 1024 * 1024;
+
+const bytesOf = (entry: FramebufferEntry) => entry.width * entry.height * 4;
 
 export class FramebufferManager {
   private gl: WebGL2RenderingContext;
   private pool: Map<string, FramebufferEntry[]> = new Map();
   private active: Set<FramebufferEntry> = new Set();
-  /** Size key of the most recent acquire, used to detect a size change. */
-  private lastKey: string | null = null;
+  /** The pooled entries, the longest released first. */
+  private order: FramebufferEntry[] = [];
+  private pooledBytes = 0;
 
   constructor(gl: WebGL2RenderingContext) {
     this.gl = gl;
@@ -29,51 +38,23 @@ export class FramebufferManager {
     return `${width}x${height}`;
   }
 
-  /**
-   * Acquire a framebuffer of the given size from the pool, or create a new one.
-   */
   acquire(width: number, height: number): FramebufferEntry {
-    const key = this.sizeKey(width, height);
-
-    // When the requested size changes, purge pooled entries of every other size.
-    // EffectRenderer acquires at exactly one (canvasWidth, canvasHeight) per
-    // frame, so a size transition is a clean signal: without this, a canvas
-    // resize leaves the pool full of dead-size FBOs, the global cap forces every
-    // new-size release() to destroy its entry, and we alloc/free full-canvas GPU
-    // textures every frame indefinitely.
-    if (this.lastKey !== null && key !== this.lastKey) {
-      const staleKeys: string[] = [];
-      for (const [bucketKey, bucket] of this.pool) {
-        if (bucketKey === key) continue;
-        for (const entry of bucket) this.destroyEntry(entry);
-        staleKeys.push(bucketKey);
-      }
-      for (const k of staleKeys) this.pool.delete(k);
-    }
-    this.lastKey = key;
-
-    const bucket = this.pool.get(key);
-
-    const pooled = bucket?.pop();
+    const pooled = this.pool.get(this.sizeKey(width, height))?.pop();
     if (pooled) {
-      const entry = pooled;
-      this.active.add(entry);
-      // Clear the FBO
-      this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, entry.fbo);
+      this.order.splice(this.order.indexOf(pooled), 1);
+      this.pooledBytes -= bytesOf(pooled);
+      this.active.add(pooled);
+      this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, pooled.fbo);
       this.gl.clearColor(0, 0, 0, 0);
       this.gl.clear(this.gl.COLOR_BUFFER_BIT);
-      return entry;
+      return pooled;
     }
 
-    // Create new
     const entry = this.createFramebuffer(width, height);
     this.active.add(entry);
     return entry;
   }
 
-  /**
-   * Release a framebuffer back to the pool.
-   */
   release(entry: FramebufferEntry): void {
     this.active.delete(entry);
 
@@ -83,19 +64,20 @@ export class FramebufferManager {
       bucket = [];
       this.pool.set(key, bucket);
     }
-
-    // Limit pool size to prevent memory bloat
-    if (this.getTotalPoolSize() >= MAX_POOL_SIZE) {
-      this.destroyEntry(entry);
-      return;
-    }
-
     bucket.push(entry);
+    this.order.push(entry);
+    this.pooledBytes += bytesOf(entry);
+
+    while (this.pooledBytes > POOL_BYTES) {
+      const oldest = this.order.shift();
+      if (!oldest) break;
+      const oldBucket = this.pool.get(this.sizeKey(oldest.width, oldest.height));
+      oldBucket?.splice(oldBucket.indexOf(oldest), 1);
+      this.pooledBytes -= bytesOf(oldest);
+      this.destroyEntry(oldest);
+    }
   }
 
-  /**
-   * Dispose all framebuffers (both pooled and active).
-   */
   dispose(): void {
     for (const entry of this.active) {
       this.destroyEntry(entry);
@@ -108,6 +90,8 @@ export class FramebufferManager {
       }
     }
     this.pool.clear();
+    this.order = [];
+    this.pooledBytes = 0;
   }
 
   private createFramebuffer(width: number, height: number): FramebufferEntry {
@@ -145,13 +129,5 @@ export class FramebufferManager {
     const gl = this.gl;
     gl.deleteFramebuffer(entry.fbo);
     gl.deleteTexture(entry.texture);
-  }
-
-  private getTotalPoolSize(): number {
-    let total = 0;
-    for (const [, bucket] of this.pool) {
-      total += bucket.length;
-    }
-    return total;
   }
 }
