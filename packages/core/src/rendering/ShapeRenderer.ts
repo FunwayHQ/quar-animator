@@ -52,7 +52,11 @@ import {
 } from '../path/pathUtils';
 import { trimPathToProgress } from '../path/pathReveal';
 import earcut from 'earcut';
-import { triangulateContours } from './contourTriangulation';
+import {
+  triangulateContours,
+  triangulateGlyphContours,
+  type ContourTriangulation,
+} from './contourTriangulation';
 import {
   bendGeometry,
   imageBindMesh,
@@ -62,7 +66,7 @@ import {
   type LayerShape,
 } from './bindVertices';
 import { getFontManager } from '../font/FontManager';
-import { textToSubpaths } from '../font/glyphConverter';
+import { textToSubpaths, type GlyphSubpathGroup } from '../font/glyphConverter';
 import { getTextNodeBounds } from '../font/textMetrics';
 import { getTextBox } from '../font/textLayout';
 import { getVisibleTextContent } from '../font/textReveal';
@@ -448,6 +452,28 @@ const MAX_VERTICES = 10000;
 /** How long an image that failed to load waits before it's tried again (ms) */
 const IMAGE_RETRY_MS = 10_000;
 const DEFAULT_TESSELLATION_TOLERANCE = 1.0;
+
+/** Each glyph's contours as vertices, and all of them in order (for strokes). */
+function tessellateGlyphs(glyphs: GlyphSubpathGroup[]): {
+  glyphContours: Float32Array[][];
+  contourArrays: Float32Array[];
+} {
+  const glyphContours: Float32Array[][] = [];
+  const contourArrays: Float32Array[] = [];
+  for (const glyph of glyphs) {
+    const own: Float32Array[] = [];
+    for (const sp of glyph.subpaths) {
+      if (sp.length < 2) continue;
+      const verts = tessellatePathToVertices(sp, true, DEFAULT_TESSELLATION_TOLERANCE);
+      if (verts.length >= 6) own.push(verts); // at least 3 points
+    }
+    if (own.length > 0) {
+      glyphContours.push(own);
+      contourArrays.push(...own);
+    }
+  }
+  return { glyphContours, contourArrays };
+}
 const ELLIPSE_TESSELLATION_TOLERANCE = 0.5;
 
 // ============================================================================
@@ -2672,24 +2698,11 @@ export class ShapeRenderer {
 
     if (result.subpaths.length === 0) return;
 
-    // Tessellate all glyph contours
-    const contourArrays: Float32Array[] = [];
-    for (const sp of result.subpaths) {
-      if (sp.length < 2) continue;
-      const verts = tessellatePathToVertices(sp, true, DEFAULT_TESSELLATION_TOLERANCE);
-      if (verts.length >= 6) {
-        // At least 3 points
-        contourArrays.push(verts);
-      }
-    }
-
+    const { glyphContours, contourArrays } = tessellateGlyphs(result.glyphs);
     if (contourArrays.length === 0) return;
 
-    // Glyph contours with holes ('o', 'a', ...) — text keeps the evenodd rule
-    const { vertices: combined, indices: fillIndices } = triangulateContours(
-      contourArrays,
-      'evenodd'
-    );
+    // Glyphs filled by the nonzero rule, as fonts are
+    const { vertices: combined, indices: fillIndices } = triangulateGlyphContours(glyphContours);
 
     // Cache tessellation with original contours for stroke rendering
     this.geometryCache.set(node.id, {
@@ -4638,18 +4651,17 @@ export class ShapeRenderer {
 
     if (result.subpaths.length === 0) return;
 
-    // Tessellate all glyph contours
-    const contourArrays: Float32Array[] = [];
-    for (const sp of result.subpaths) {
-      if (sp.length < 2) continue;
-      const verts = tessellatePathToVertices(sp, true, DEFAULT_TESSELLATION_TOLERANCE);
-      if (verts.length >= 6) contourArrays.push(verts);
-    }
-
+    const { glyphContours, contourArrays } = tessellateGlyphs(result.glyphs);
     if (contourArrays.length === 0) return;
 
-    // Glyphs with holes, as renderText draws them
-    this.renderContoursGhost(contourArrays, 'evenodd', node, adjustedMatrix, colorOverride);
+    // Glyphs filled as renderText fills them
+    this.renderContoursGhost(
+      contourArrays,
+      triangulateGlyphContours(glyphContours),
+      node,
+      adjustedMatrix,
+      colorOverride
+    );
   }
 
   /**
@@ -4659,16 +4671,14 @@ export class ShapeRenderer {
    */
   private renderContoursGhost(
     contourArrays: Float32Array[],
-    fillRule: 'nonzero' | 'evenodd',
+    fill: 'nonzero' | 'evenodd' | ContourTriangulation,
     paint: { fills: Fill[]; strokes: Stroke[] },
     matrix: Matrix3,
     colorOverride: { tint: [number, number, number]; alpha: number }
   ): void {
     if (!this.program) return;
-    const { vertices: combined, indices: ghostFillIndices } = triangulateContours(
-      contourArrays,
-      fillRule
-    );
+    const { vertices: combined, indices: ghostFillIndices } =
+      typeof fill === 'string' ? triangulateContours(contourArrays, fill) : fill;
 
     const gl = this.renderer.context;
     gl.uniformMatrix3fv(this.program.uniforms.u_model ?? null, false, mat3.toFloat32Array(matrix));

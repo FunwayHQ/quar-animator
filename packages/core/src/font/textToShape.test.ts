@@ -190,7 +190,7 @@ describe('textToShape conversion behavior', () => {
       name: 'Test Text (Path)',
       parent: 'group-1',
       type: 'path',
-      fillRule: 'evenodd',
+      fillRule: 'nonzero',
       closed: true,
       effects,
       transform: { position: { x: 100, y: 200 }, anchor: { x: 0.5, y: 0.5 } },

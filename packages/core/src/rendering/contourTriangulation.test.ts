@@ -4,7 +4,11 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { triangulateContours, contoursInteract } from './contourTriangulation';
+import {
+  triangulateContours,
+  triangulateGlyphContours,
+  contoursInteract,
+} from './contourTriangulation';
 import { parseSvgPath } from '../svg/svgPathParser';
 import { tessellatePathToVertices } from '../path/pathUtils';
 
@@ -67,8 +71,11 @@ function insideTriangles(px: number, py: number, vertices: Float32Array, indices
 }
 
 /** Sample a grid over the contours and count points where coverage ≠ nonzero rule. */
-function nonzeroMismatches(contours: Float32Array[], step = 0.37): number {
-  const { vertices, indices } = triangulateContours(contours, 'nonzero');
+function nonzeroMismatches(
+  contours: Float32Array[],
+  step = 0.37,
+  { vertices, indices } = triangulateContours(contours, 'nonzero')
+): number {
   let minX = Infinity;
   let minY = Infinity;
   let maxX = -Infinity;
@@ -145,6 +152,31 @@ describe('triangulateContours', () => {
     const contours = [square(0, 0, 10), square(5, 5, 10)];
     const { vertices } = triangulateContours(contours, 'evenodd');
     expect(vertices.length).toBe(16);
+  });
+});
+
+describe('triangulateGlyphContours', () => {
+  it('fills each glyph by the nonzero rule: self-crossing, overlapping and with a counter', () => {
+    // A w-like single contour crossing itself: a pentagram, its middle wound twice
+    const star = new Float32Array(
+      [0, 2, 4, 1, 3].flatMap((k) => {
+        const angle = Math.PI / 2 + (k * 2 * Math.PI) / 5;
+        return [20 + 10 * Math.cos(angle), 10 + 10 * Math.sin(angle)];
+      })
+    );
+    // An A-like crossbar over a leg, both wound the same way; an a-like counter
+    const overlapping = [square(40, 0, 10), square(45, 5, 10)];
+    const withCounter = [square(70, 0, 12), square(73, 3, 4, true)];
+    const glyphs = [[star], overlapping, withCounter];
+
+    const triangulated = triangulateGlyphContours(glyphs);
+
+    expect(nonzeroMismatches(glyphs.flat(), 0.37, triangulated)).toBe(0);
+    // Glyphs that don't interact keep their vertices as given
+    expect(Array.from(triangulated.vertices.slice(-16))).toEqual([
+      ...Array.from(withCounter[0]!),
+      ...Array.from(withCounter[1]!),
+    ]);
   });
 });
 

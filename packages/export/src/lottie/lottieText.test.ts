@@ -66,13 +66,15 @@ const groupOpacity = (group: LottieShapeGroup) =>
 describe('text → Lottie', () => {
   const empty: Timeline = createTimeline({ duration: 60, frameRate: 30 });
 
-  it('exports glyph outlines as one group with an even-odd fill', () => {
+  it('exports glyph outlines as one group with a nonzero fill, as fonts fill', () => {
     const [group] = groups(
       nodeToLottieShapes(makeText(), empty, 1000, undefined, { textOutlines: outlines })
     );
     expect(group!.nm).toBe('Text');
     expect(group!.it.filter((item) => item.ty === 'sh')).toHaveLength(2);
-    expect(group!.it.find((item) => item.ty === 'fl')).toMatchObject({ r: 2 });
+    const fill = group!.it.find((item) => item.ty === 'fl');
+    expect(fill).toBeDefined();
+    expect(fill).not.toHaveProperty('r', 2);
   });
 
   it('flips glyph outlines to Lottie’s Y-down space', () => {

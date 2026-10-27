@@ -107,7 +107,7 @@ export function convertTextToPath(textNode: TextNode, generateId: () => string):
     points: primaryPoints,
     subpaths: additionalSubpaths.length > 0 ? additionalSubpaths : undefined,
     closed: true,
-    fillRule: 'evenodd',
+    fillRule: 'nonzero', // as fonts fill their glyphs
     fills: textNode.fills.map((f) => ({ ...f })),
     strokes: textNode.strokes.map((s) => ({ ...s })),
   };
@@ -228,7 +228,7 @@ export function convertTextToPathGroup(
       points: primaryPoints,
       subpaths: additionalSubpaths.length > 0 ? additionalSubpaths : undefined,
       closed: true,
-      fillRule: 'evenodd',
+      fillRule: 'nonzero', // as fonts fill their glyphs
       fills: textNode.fills.map((f) => ({ ...f })),
       strokes: textNode.strokes.map((s) => ({ ...s })),
     };

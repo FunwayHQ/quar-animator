@@ -455,8 +455,8 @@ function textNodeToLottieShapes(
         })
       ),
       ...strokesToLottie(node.strokes, node.id, timeline),
-      // The editor fills glyph contours even-odd
-      ...fillsToLottie(node.fills, node.id, timeline, 'evenodd', pointsBounds(subpaths.flat())),
+      // Glyphs fill by the nonzero rule, as in the editor
+      ...fillsToLottie(node.fills, node.id, timeline, 'nonzero', pointsBounds(subpaths.flat())),
     ],
   });
 }

@@ -49,6 +49,31 @@ export function triangulateContours(
   return { vertices: combined, indices: triangulateByContainment(contourArrays, fillRule) };
 }
 
+/**
+ * Triangulate text: each glyph's contours by the nonzero rule fonts are drawn
+ * with, one glyph at a time. A glyph's own contours may overlap (a w drawn as
+ * one self-crossing contour, an A's crossbar laid over its legs); resolving
+ * them glyph by glyph keeps the rest of a paragraph on the fast path. The
+ * vertices are each glyph's in turn, as triangulateContours lays them out.
+ */
+export function triangulateGlyphContours(glyphs: Float32Array[][]): ContourTriangulation {
+  const parts = glyphs
+    .filter((contours) => contours.length > 0)
+    .map((contours) => triangulateContours(contours, 'nonzero'));
+  let total = 0;
+  for (const part of parts) total += part.vertices.length;
+  const vertices = new Float32Array(total);
+  const indices: number[] = [];
+  let offset = 0;
+  for (const part of parts) {
+    vertices.set(part.vertices, offset);
+    const first = offset / 2;
+    for (const index of part.indices) indices.push(index + first);
+    offset += part.vertices.length;
+  }
+  return { vertices, indices };
+}
+
 // ============================================================================
 // Containment Grouping (non-interacting contours)
 // ============================================================================
