@@ -459,10 +459,45 @@ export function computeAutoWeights(
     );
   }
 
+  if (shape) followNearestInside(newVertices, vertexPositions, shape);
+
   return {
     ...skinData,
     vertices: newVertices,
   };
+}
+
+/**
+ * Vertices outside the shape (an image's transparent cells) take the weights
+ * of the nearest vertex inside it. Weighed on their own, the cells beside a
+ * limb went with the trunk (they're far outside the limb's thickness), and
+ * every cell across the limb's edge stretched between the two as it moved.
+ */
+function followNearestInside(
+  vertices: VertexSkinEntry[],
+  positions: Float32Array,
+  shape: ShapeTest
+): void {
+  const inside: number[] = [];
+  const outside: number[] = [];
+  for (let i = 0; i < vertices.length; i++) {
+    (shape(positions[i * 2]!, positions[i * 2 + 1]!) ? inside : outside).push(i);
+  }
+  if (inside.length === 0) return;
+  for (const i of outside) {
+    const x = positions[i * 2]!;
+    const y = positions[i * 2 + 1]!;
+    let best = inside[0]!;
+    let bestDist = Infinity;
+    for (const j of inside) {
+      const d = (positions[j * 2]! - x) ** 2 + (positions[j * 2 + 1]! - y) ** 2;
+      if (d < bestDist) {
+        bestDist = d;
+        best = j;
+      }
+    }
+    vertices[i] = { influences: vertices[best]!.influences.map((inf) => ({ ...inf })) };
+  }
 }
 
 /**

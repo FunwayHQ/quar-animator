@@ -313,6 +313,31 @@ describe('skinBinding', () => {
         expect(at.map((inf) => inf.boneId).sort()).toEqual(['arm', 'spine']);
       });
 
+      it('gives the cells round the shape the weights of the nearest part inside it', () => {
+        sceneGraph.addNode(createBoneNode('spine', 'Spine', { x: 0, y: 0 }, 200, 90));
+        sceneGraph.addNode(createBoneNode('arm', 'Arm', { x: -90, y: 150 }, 150, 180));
+        const skin = createSkinBinding('spine', ['spine', 'arm'], 6, sceneGraph)!;
+        const states = [
+          ...computeFKChain('spine', sceneGraph),
+          ...computeFKChain('arm', sceneGraph),
+        ];
+        // Inside: on the arm, on the body. Outside: above the arm (by its own place it
+        // would go to the spine, stretching the arm's top edge as it moved), below
+        // it, and beside the body
+        const points = [-180, 160, -60, 60, -180, 185, -140, 115, -115, 20, -130, 175];
+        const owner = computeAutoWeights(
+          skin,
+          new Float32Array(points),
+          states,
+          shape
+        ).vertices.map((v) => v.influences);
+        expect(owner[2]).toEqual(owner[0]);
+        expect(owner[3]).toEqual(owner[0]);
+        expect(owner[5]).toEqual(owner[0]);
+        expect(owner[0]).toEqual([{ boneId: 'arm', weight: 1 }]);
+        expect(owner[4]).toEqual([{ boneId: 'spine', weight: 1 }]);
+      });
+
       it('weighs a bone outside the shape by the others’ envelopes', () => {
         sceneGraph.addNode(createBoneNode('inside', 'Inside', { x: 0, y: 0 }, 100));
         sceneGraph.addNode(createBoneNode('outside', 'Outside', { x: 0, y: 500 }, 100));
@@ -321,8 +346,10 @@ describe('skinBinding', () => {
           ...computeFKChain('inside', sceneGraph),
           ...computeFKChain('outside', sceneGraph),
         ];
-        const band = (x: number, y: number) => x >= 0 && x <= 100 && Math.abs(y) <= 20;
-        const result = computeAutoWeights(skin, new Float32Array([50, 10, 50, 490]), states, band);
+        // The band round one bone, and a patch near the other (which runs outside the shape)
+        const band = (x: number, y: number) =>
+          x >= 0 && x <= 100 && (Math.abs(y) <= 20 || (y >= 455 && y <= 480));
+        const result = computeAutoWeights(skin, new Float32Array([50, 10, 50, 478]), states, band);
         expect(result.vertices[0]!.influences).toEqual([{ boneId: 'inside', weight: 1 }]);
         expect(result.vertices[1]!.influences).toEqual([{ boneId: 'outside', weight: 1 }]);
       });
