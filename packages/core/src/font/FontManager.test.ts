@@ -261,6 +261,20 @@ describe('FontManager cache and lookup behavior', () => {
     }
   });
 
+  it('offers Outfit at every weight, from its own files', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue({ ok: true, arrayBuffer: async () => new ArrayBuffer(8) });
+    vi.stubGlobal('fetch', fetchMock);
+    const outfit = GOOGLE_FONTS_CATALOG.find((entry) => entry.family === 'Outfit');
+
+    expect(outfit?.weights).toEqual([100, 200, 300, 400, 500, 600, 700, 800, 900]);
+    expect(new Set(outfit?.weights.map((weight) => outfit.url(weight))).size).toBe(9);
+    await fm.loadGoogleFont('Outfit', 800);
+    expect(fetchMock).toHaveBeenCalledWith(outfit?.url(800));
+    expect(outfit?.url(800)).toContain('/s/outfit/');
+  });
+
   it('provides a stable singleton font manager', () => {
     expect(getFontManager()).toBe(getFontManager());
   });
