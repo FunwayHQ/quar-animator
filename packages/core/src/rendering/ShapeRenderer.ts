@@ -32,7 +32,7 @@ import {
   setNormalBlending,
   type ShaderProgram,
 } from './WebGLRenderer';
-import { EffectRenderer } from './EffectRenderer';
+import { EffectRenderer, effectScaleOf } from './EffectRenderer';
 import { FramebufferManager } from './FramebufferManager';
 import { createGhostComposite, type GhostComposite } from './PostProcessShaders';
 import type { FramebufferEntry } from './FramebufferManager';
@@ -1757,6 +1757,8 @@ export class ShapeRenderer {
     // Get canvas dimensions for effect rendering
     const canvasWidth = gl.drawingBufferWidth;
     const canvasHeight = gl.drawingBufferHeight;
+    // Effects are sized in document units: this many device pixels to one
+    const effectScale = effectScaleOf(viewProjectionMatrix, canvasWidth);
 
     // Scissor stack for artboard clipping
     const scissorStack: { x: number; y: number; w: number; h: number }[] = [];
@@ -1841,7 +1843,8 @@ export class ShapeRenderer {
                 renderSymbolChildren();
               },
               canvasWidth,
-              canvasHeight
+              canvasHeight,
+              effectScale
             );
             this.renderer.useProgram(program);
             this.renderer.bindVAO(this.vao);
@@ -1927,7 +1930,8 @@ export class ShapeRenderer {
                 renderBoolGroup();
               },
               canvasWidth,
-              canvasHeight
+              canvasHeight,
+              effectScale
             );
             this.renderer.useProgram(program);
             this.renderer.bindVAO(this.vao);
@@ -1973,7 +1977,8 @@ export class ShapeRenderer {
               renderShape();
             },
             canvasWidth,
-            canvasHeight
+            canvasHeight,
+            effectScale
           );
           // Restore shader state for next node
           this.renderer.useProgram(program);

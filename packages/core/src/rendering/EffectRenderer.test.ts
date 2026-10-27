@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Effect } from '@quar/types';
 import type { WebGLRenderer } from './WebGLRenderer';
-import { EffectRenderer } from './EffectRenderer';
+import { EffectRenderer, effectAtScale, effectScaleOf } from './EffectRenderer';
 import { createMockWebGL2Context } from '../test/setup';
 
 function createEffectRenderer() {
@@ -121,6 +121,29 @@ describe('EffectRenderer', () => {
     it('uses multi-pass rendering for visible effects or a non-normal blend mode', () => {
       expect(effectRenderer.needsMultiPass([layerBlur()], 'normal')).toBe(true);
       expect(effectRenderer.needsMultiPass(undefined, 'multiply')).toBe(true);
+    });
+  });
+
+  describe('sizes', () => {
+    it('are in document units: device pixels to one unit are the zoom times the pixel ratio', () => {
+      // 50% zoom on a 2x screen, a 1600 px wide canvas: NDC x = 2·0.5·2/1600 per unit
+      const vp = { a: (2 * 0.5 * 2) / 1600, b: 0, c: 0, d: (2 * 0.5 * 2) / 1000, tx: 0, ty: 0 };
+      expect(effectScaleOf(vp, 1600)).toBeCloseTo(1);
+      expect(effectScaleOf({ ...vp, a: vp.a * 2 }, 1600)).toBeCloseTo(2);
+
+      expect(effectAtScale(dropShadow(), 2)).toMatchObject({
+        blur: 8,
+        offsetX: 4,
+        offsetY: 6,
+        spread: 0,
+      });
+      expect(effectAtScale(layerBlur(), 0.5)).toMatchObject({ radius: 3 });
+    });
+
+    it('are drawn at the view’s scale', () => {
+      const blur = vi.spyOn(effectRenderer as any, 'applyGaussianBlur');
+      effectRenderer.renderNodeWithEffects([layerBlur()], 'normal', () => undefined, 64, 48, 0.25);
+      expect(blur).toHaveBeenCalledWith(expect.anything(), 1.5, 64, 48);
     });
   });
 

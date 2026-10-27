@@ -11,6 +11,7 @@ import type {
   InnerShadowEffect,
   LayerBlurEffect,
   BlendMode,
+  Matrix3,
 } from '@quar/types';
 import { setNormalBlending, type WebGLRenderer } from './WebGLRenderer';
 import { FramebufferManager } from './FramebufferManager';
@@ -21,6 +22,36 @@ import {
   getBlendModeIndex,
 } from './PostProcessShaders';
 import type { PostProcessPrograms } from './PostProcessShaders';
+
+/**
+ * Device pixels to one document unit through a view-projection onto a canvas
+ * `canvasWidth` pixels wide: the zoom, times the pixel ratio.
+ */
+export function effectScaleOf(viewProjection: Matrix3, canvasWidth: number): number {
+  return (Math.hypot(viewProjection.a, viewProjection.b) * canvasWidth) / 2;
+}
+
+/**
+ * An effect's sizes on screen. Effects are set in the document's units, as
+ * shapes are, so they grow and shrink with the zoom (and stay their size on a
+ * high-density screen) instead of keeping a fixed number of device pixels.
+ */
+export function effectAtScale(effect: Effect, scale: number): Effect {
+  if (scale === 1) return effect;
+  switch (effect.type) {
+    case 'drop-shadow':
+    case 'inner-shadow':
+      return {
+        ...effect,
+        offsetX: effect.offsetX * scale,
+        offsetY: effect.offsetY * scale,
+        blur: effect.blur * scale,
+        spread: effect.spread * scale,
+      };
+    case 'layer-blur':
+      return { ...effect, radius: effect.radius * scale };
+  }
+}
 
 export class EffectRenderer {
   private gl: WebGL2RenderingContext;
@@ -64,16 +95,20 @@ export class EffectRenderer {
    * @param renderNodeFn - Callback that renders the node geometry (to the currently bound FBO)
    * @param canvasWidth - Canvas pixel width
    * @param canvasHeight - Canvas pixel height
+   * @param scale - Device pixels to one document unit (effectScaleOf)
    */
   renderNodeWithEffects(
     effects: Effect[] | undefined,
     blendMode: BlendMode,
     renderNodeFn: () => void,
     canvasWidth: number,
-    canvasHeight: number
+    canvasHeight: number,
+    scale = 1
   ): void {
     const gl = this.gl;
-    const visibleEffects = (effects ?? []).filter((e) => e.visible);
+    const visibleEffects = (effects ?? [])
+      .filter((e) => e.visible)
+      .map((e) => effectAtScale(e, scale));
     const target = gl.getParameter(gl.FRAMEBUFFER_BINDING) as WebGLFramebuffer | null;
     this.target = target;
 
