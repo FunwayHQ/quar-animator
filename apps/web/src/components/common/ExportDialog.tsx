@@ -43,7 +43,15 @@ import styles from './ExportDialog.module.css';
 // Types
 // ============================================================================
 
-export type ExportTab = 'png-sequence' | 'sprite-sheet' | 'gif' | 'mp4' | 'webm' | 'lottie' | 'svg';
+export type ExportTab =
+  | 'png-sequence'
+  | 'sprite-sheet'
+  | 'gif'
+  | 'mp4'
+  | 'webm'
+  | 'lottie'
+  | 'svg'
+  | 'pdf';
 
 interface ExportDialogState {
   tab: ExportTab;
@@ -96,6 +104,7 @@ const TABS: { id: ExportTab; label: string }[] = [
   { id: 'webm', label: 'WebM' },
   { id: 'lottie', label: 'Lottie JSON' },
   { id: 'svg', label: 'SVG' },
+  { id: 'pdf', label: 'PDF' },
 ];
 
 const COMMON_FRAME_RATES = [60, 50, 30, 25, 24, 20, 15, 12, 10];
@@ -308,6 +317,8 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
 
   // This export is of the slides: an animated format, and two or more of them
   const slidesExport = slides.length > 1 && SLIDE_TABS.includes(state.tab);
+  // …or a PDF of them, a page a slide
+  const slidesPdf = slides.length > 1 && state.tab === 'pdf';
   const slidesSeconds =
     slides.reduce((sum, slide) => sum + slide.frameCount, 0) / timeline.frameRate;
 
@@ -386,6 +397,7 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
     }
     if (
       !slidesExport &&
+      state.tab !== 'pdf' &&
       (!Number.isInteger(state.startFrame) ||
         !Number.isInteger(state.endFrame) ||
         state.startFrame < 0 ||
@@ -399,12 +411,13 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
       return;
     }
     if (
-      !Number.isInteger(state.width) ||
-      !Number.isInteger(state.height) ||
-      state.width < 1 ||
-      state.height < 1 ||
-      state.width > 8192 ||
-      state.height > 8192
+      state.tab !== 'pdf' &&
+      (!Number.isInteger(state.width) ||
+        !Number.isInteger(state.height) ||
+        state.width < 1 ||
+        state.height < 1 ||
+        state.width > 8192 ||
+        state.height > 8192)
     ) {
       setState((s) => ({ ...s, error: 'Export dimensions must be between 1 and 8192 pixels.' }));
       return;
@@ -416,7 +429,53 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
     useEditorStore.getState().setExporting(true);
 
     try {
-      if (state.tab === 'lottie') {
+      if (state.tab === 'pdf') {
+        const { exportPdf } = await import('@quar/export');
+        const page = {
+          sceneGraph,
+          rig: frameRenderContext.rig,
+          symbols: frameRenderContext.symbols,
+          background: documentBackground,
+        };
+        // A page a slide, each at its own timeline's last frame; else the
+        // artboard, or all the artwork, at the timeline's last frame
+        const pages = selectedArtboard
+          ? [
+              {
+                ...page,
+                timeline: frameRenderContext.timeline,
+                rootIds: [selectedArtboard.node.id],
+                viewport: selectedArtboard.bounds,
+                frame: lastFrame,
+              },
+            ]
+          : slides.length > 1
+            ? slides.map((slide) => ({
+                ...page,
+                timeline: scopedTimeline(
+                  timeline,
+                  slide.node.id,
+                  inTimelineScope(sceneGraph, slide.node.id)
+                ),
+                rootIds: [slide.node.id],
+                viewport: slide.bounds,
+                frame: Math.max(0, slide.frameCount - 1),
+              }))
+            : sceneScope
+              ? [{ ...page, timeline, viewport: sceneScope, frame: lastFrame }]
+              : [];
+        if (pages.length === 0) throw new Error('There’s nothing on the page to export.');
+        const blob = await exportPdf(
+          pages,
+          { title: useEditorStore.getState().projectName },
+          (progress) => setState((s) => ({ ...s, progress })),
+          () => cancelledRef.current
+        );
+        if (blob && !cancelledRef.current) {
+          downloadBlob(blob, pages.length > 1 ? 'slides.pdf' : `frame_${pages[0]!.frame}.pdf`);
+          close();
+        }
+      } else if (state.tab === 'lottie') {
         // Lottie export is synchronous
         const blob = exportLottieBlob(
           lottieExportScene.nodes,
@@ -767,13 +826,15 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
         {state.exporting && state.progress ? (
           <div className={styles.progress} data-testid="export-progress">
             <div className={styles.progressLabel}>
-              {state.progress.phase === 'preparing'
-                ? `Preparing palette from frame ${state.progress.current} / ${state.progress.total}...`
-                : state.progress.phase === 'rendering'
-                  ? `Rendering frame ${state.progress.current} / ${state.progress.total}...`
-                  : state.progress.phase === 'encoding'
-                    ? `Encoding frame ${state.progress.current} / ${state.progress.total}...`
-                    : 'Finalizing...'}
+              {state.tab === 'pdf' && state.progress.phase === 'rendering'
+                ? `Drawing page ${state.progress.current + 1} / ${state.progress.total}...`
+                : state.progress.phase === 'preparing'
+                  ? `Preparing palette from frame ${state.progress.current} / ${state.progress.total}...`
+                  : state.progress.phase === 'rendering'
+                    ? `Rendering frame ${state.progress.current} / ${state.progress.total}...`
+                    : state.progress.phase === 'encoding'
+                      ? `Encoding frame ${state.progress.current} / ${state.progress.total}...`
+                      : 'Finalizing...'}
             </div>
             <div className={styles.progressBar}>
               <div
@@ -795,7 +856,7 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
         ) : (
           <div className={styles.body}>
             {/* Common settings */}
-            {state.tab !== 'svg' && (
+            {state.tab !== 'svg' && state.tab !== 'pdf' && (
               <div className={styles.formRow}>
                 <span className={styles.label}>Size</span>
                 <input
@@ -834,7 +895,13 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
                 to export just that.
               </div>
             )}
-            {!selectedArtboard && sceneScope && !slidesExport && (
+            {slidesPdf && (
+              <div className={styles.scopeNote} data-testid="export-pdf-slides-scope">
+                {slides.length} pages, a slide each: every artboard at its own size, in the Layers
+                panel’s order. Select an artboard to export just that.
+              </div>
+            )}
+            {!selectedArtboard && sceneScope && !slidesExport && !slidesPdf && (
               <div className={styles.scopeNote} data-testid="export-scene-scope">
                 Everything on the page is included, framed to fit its whole animation. Select an
                 artboard to export just that.
@@ -865,6 +932,11 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
                   bones are written as their bent outlines; images bound to bones aren’t bent.
                 </p>
               </>
+            ) : state.tab === 'pdf' ? (
+              <p className={styles.scopeNote} data-testid="export-pdf-note">
+                Vector pages, each at its timeline’s last frame, as the canvas draws it. Layers with
+                a blur or a drop shadow, and pictures bent by bones or adjusted, go in as pictures.
+              </p>
             ) : slidesExport ? null : (
               <div className={styles.formRow}>
                 <span className={styles.label}>Frame Range</span>

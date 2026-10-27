@@ -1290,6 +1290,13 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                       showExportDialog('svg');
                     }}
                   />
+                  <MenuItem
+                    label="Export as PDF..."
+                    onClick={() => {
+                      closeMenu();
+                      showExportDialog('pdf');
+                    }}
+                  />
                 </div>
               )}
             </div>

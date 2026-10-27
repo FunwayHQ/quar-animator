@@ -12,3 +12,4 @@ export * from './outlineStroke';
 export * from './schneider';
 export * from './kalmanFilter';
 export * from './brushOutline';
+export * from './dashes';

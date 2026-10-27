@@ -9,6 +9,7 @@ import {
   exportGif,
   exportLottieBlob,
   exportMp4,
+  exportPdf,
   exportSvgFrame,
   exportWebm,
 } from '@quar/export';
@@ -27,6 +28,7 @@ const mockStore = {
   },
   timelineDuration: 60,
   currentFrame: 12,
+  projectName: 'Deck',
   setExporting: vi.fn(),
   selectedNodeIds: new Set<string>(),
   ikChains: [{ id: 'arm-ik' }],
@@ -64,6 +66,7 @@ vi.mock('@quar/export', async () => {
     exportMp4: vi.fn().mockResolvedValue(new Blob(['mp4'], { type: 'video/mp4' })),
     exportWebm: vi.fn().mockResolvedValue(new Blob(['webm'], { type: 'video/webm' })),
     exportSvgFrame: vi.fn().mockReturnValue('<svg xmlns="http://www.w3.org/2000/svg"></svg>'),
+    exportPdf: vi.fn().mockResolvedValue(new Blob(['%PDF-1.4'], { type: 'application/pdf' })),
     MAX_GIF_FPS: 50,
     sampleTimeline: (
       o: { frameRate: number; startFrame: number; endFrame: number; fps?: number; speed?: number },
@@ -595,6 +598,58 @@ describe('ExportDialog', () => {
     expect(vi.mocked(exportSvgFrame).mock.calls[0]![3]).toMatchObject({ frame: 20 });
     expect(vi.mocked(exportSvgFrame).mock.calls[0]![2]).toMatchObject({ frameRate: 30 });
     expect(downloadBlob).toHaveBeenCalledWith(expect.any(Blob), 'frame_20.svg');
+  });
+
+  it('exports the slides as a PDF: a page a slide, each at its own timeline’s last frame', async () => {
+    // Intro runs 1 s (its own timeline), Outro the page's 2 s
+    (mockStore.timeline as { artboards?: object }).artboards = { intro: { duration: 30 } };
+    baseRender(
+      <SceneGraphProvider>
+        <SlidesSeeder />
+        <ExportDialogHost />
+      </SceneGraphProvider>
+    );
+    act(() => showExportDialog('pdf'));
+    expect(screen.getByTestId('export-pdf-slides-scope')).toHaveTextContent(
+      '2 pages, a slide each'
+    );
+    expect(screen.getByTestId('export-pdf-note')).toHaveTextContent('Vector pages');
+    // Each page its artboard's own size, at its last frame: no size, no range
+    expect(screen.queryByTestId('export-width')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('export-start-frame')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('export-scene-scope')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('export-dialog-export'));
+    await waitFor(() => expect(exportPdf).toHaveBeenCalledOnce());
+    const [pages, options] = vi.mocked(exportPdf).mock.calls[0]!;
+    expect(pages.map((page) => [page.rootIds, page.frame, page.viewport.width])).toEqual([
+      [['intro'], 29, 640],
+      [['outro'], 59, 1280],
+    ]);
+    // Each page plays its own artboard's timeline
+    expect(pages[0]!.timeline.duration).toBe(30);
+    expect(options).toMatchObject({ title: 'Deck' });
+    await waitFor(() => expect(downloadBlob).toHaveBeenCalledWith(expect.any(Blob), 'slides.pdf'));
+    delete (mockStore.timeline as { artboards?: object }).artboards;
+  });
+
+  it('exports a page’s only artboard as a one-page PDF', async () => {
+    render(
+      <>
+        <ArtboardSeeder />
+        <ExportDialogHost />
+      </>
+    );
+    act(() => showExportDialog('pdf'));
+    fireEvent.click(screen.getByTestId('export-dialog-export'));
+    await waitFor(() => expect(exportPdf).toHaveBeenCalledOnce());
+    const [pages] = vi.mocked(exportPdf).mock.calls[0]!;
+    expect(pages).toHaveLength(1);
+    expect(pages[0]).toMatchObject({ rootIds: ['artboard-1'], frame: 59 });
+    expect(pages[0]!.viewport).toMatchObject({ width: 640, height: 360 });
+    await waitFor(() =>
+      expect(downloadBlob).toHaveBeenCalledWith(expect.any(Blob), 'frame_59.pdf')
+    );
   });
 
   it('rejects an SVG frame outside the timeline', async () => {

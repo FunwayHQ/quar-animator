@@ -88,6 +88,18 @@ export { getAnimatedArtworkBounds, sampleFrames } from './sceneExtent';
 export { exportSvgFrame, type SvgFrameOptions } from './svgFrame';
 
 // ============================================================================
+// PDF (vector pages: slides, or the artwork, at a frame)
+// ============================================================================
+
+export {
+  exportPdf,
+  POINTS_PER_UNIT,
+  type PdfExportOptions,
+  type PdfPageSource,
+} from './pdf/pdfExport';
+export type { PdfRasterizer } from './pdf/pdfScene';
+
+// ============================================================================
 // PNG Sequence
 // ============================================================================
 
