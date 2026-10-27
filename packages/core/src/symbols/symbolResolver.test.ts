@@ -227,6 +227,27 @@ describe('symbolResolver', () => {
       expect(resolved1).toBe(resolved2); // Same reference = cache hit
     });
 
+    it('keeps documents apart: a symbol of the same id in another resolves its own', () => {
+      const mine = makeDefinition('sym-1', [makeRect('mine')]);
+      const theirs = makeDefinition('sym-1', [makeRect('theirs')]);
+      const inst = makeInstance('sym-1');
+
+      expect(resolveSymbolInstance(inst, mine)[0]!.id).toBe('mine');
+      expect(resolveSymbolInstance(inst, theirs)[0]!.id).toBe('theirs');
+      expect(resolveSymbolInstance(inst, mine)[0]!.id).toBe('mine');
+    });
+
+    it('resolves a definition edited in place again once its symbol is invalidated', () => {
+      const def = makeDefinition('sym-1', [makeRect('before')]);
+      const inst = makeInstance('sym-1');
+      resolveSymbolInstance(inst, def);
+
+      def.sceneGraphJSON.nodes = [makeRect('after')];
+      expect(resolveSymbolInstance(inst, def)[0]!.id).toBe('before'); // still cached
+      invalidateSymbolCache('sym-1');
+      expect(resolveSymbolInstance(inst, def)[0]!.id).toBe('after');
+    });
+
     it('invalidates cache when overrides differ', () => {
       const rect = makeRect('r1');
       const def = makeDefinition('sym-1', [rect]);

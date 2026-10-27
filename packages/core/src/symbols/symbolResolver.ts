@@ -23,23 +23,35 @@ interface CacheEntry {
   nodes: Node[];
 }
 
-const resolvedSymbolCache = new Map<string, CacheEntry>();
+/**
+ * What's been resolved, per definition: a definition from another document
+ * (the server draws many users' in one engine, where ids alone could match)
+ * or one an edit replaced never shares another's. A definition edited in
+ * place keeps its object: invalidateSymbolCache drops what it had.
+ */
+let resolvedSymbolCache = new WeakMap<
+  SymbolDefinition,
+  { generation: number; entries: Map<string, CacheEntry> }
+>();
+/** Bumped for a symbol by invalidateSymbolCache */
+const generations = new Map<string, number>();
 
-function buildCacheKey(symbolId: string, overrides: SymbolOverride[]): string {
-  return symbolId + '|' + JSON.stringify(overrides);
+function cacheFor(definition: SymbolDefinition): Map<string, CacheEntry> {
+  const generation = generations.get(definition.id) ?? 0;
+  let cache = resolvedSymbolCache.get(definition);
+  if (cache?.generation !== generation) {
+    cache = { generation, entries: new Map() };
+    resolvedSymbolCache.set(definition, cache);
+  }
+  return cache.entries;
 }
 
-/** Clear the entire resolver cache (call when a symbol definition changes). */
+/** Forget what was resolved: a symbol's (when its definition changes), or all. */
 export function invalidateSymbolCache(symbolId?: string): void {
   if (symbolId) {
-    // Remove all entries for this symbol
-    for (const [key] of resolvedSymbolCache) {
-      if (key.startsWith(symbolId + '|')) {
-        resolvedSymbolCache.delete(key);
-      }
-    }
+    generations.set(symbolId, (generations.get(symbolId) ?? 0) + 1);
   } else {
-    resolvedSymbolCache.clear();
+    resolvedSymbolCache = new WeakMap();
   }
 }
 
@@ -84,9 +96,10 @@ export function resolveSymbolInstance(
   instance: SymbolInstanceNode,
   definition: SymbolDefinition
 ): Node[] {
-  const cacheKey = buildCacheKey(instance.symbolId, instance.overrides);
+  const cache = cacheFor(definition);
+  const cacheKey = JSON.stringify(instance.overrides);
 
-  const cached = resolvedSymbolCache.get(cacheKey);
+  const cached = cache.get(cacheKey);
   if (cached) {
     return cached.nodes;
   }
@@ -98,7 +111,7 @@ export function resolveSymbolInstance(
   const resolved = applyOverrides(clonedNodes, instance.overrides);
 
   // Cache result
-  resolvedSymbolCache.set(cacheKey, { nodes: resolved });
+  cache.set(cacheKey, { nodes: resolved });
 
   return resolved;
 }
