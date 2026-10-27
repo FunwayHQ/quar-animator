@@ -112,6 +112,35 @@ describe('skinBinding', () => {
     expect(Object.keys(skin.inverseBindMatrices).sort()).toEqual(['b1', 'b2']);
   });
 
+  it('keeps what’s under a limb with the body, given the layer’s shape', () => {
+    // A layer moved to (300, 50) and drawn twice its size: in its own space a
+    // body 100 wide with an arm 20 thick out to the left; in the world, a spine
+    // up the body's middle and an arm bone out from its side
+    const graph = new SceneGraph();
+    const layer = rect('figure');
+    layer.transform.position = { x: 300, y: 50 };
+    layer.transform.scale = { x: 2, y: 2 };
+    graph.addNode(layer);
+    const spine = bone('spine');
+    spine.transform.position = { x: 300, y: -50 };
+    spine.transform.rotation = 90;
+    (spine as unknown as { length: number }).length = 200;
+    graph.addNode(spine);
+    const armBone = bone('arm');
+    armBone.transform.position = { x: 200, y: 150 };
+    armBone.transform.rotation = 180;
+    (armBone as unknown as { length: number }).length = 150;
+    graph.addNode(armBone);
+    const shape = (x: number, y: number) =>
+      (x >= -50 && x <= 50 && y >= -50 && y <= 75) || (x >= -125 && x <= -50 && y >= 40 && y <= 60);
+    // A vertex on the body's side under the arm: world (210, 100) — nearer the arm bone than the spine
+    const under = new Float32Array([-45, 25]);
+    const plain = skinBinding(graph, 'figure', ['spine', 'arm'], under)!;
+    expect(plain.vertices[0]!.influences[0]!.boneId).toBe('arm');
+    const shaped = skinBinding(graph, 'figure', ['spine', 'arm'], under, { shape })!;
+    expect(shaped.vertices[0]!.influences).toEqual([{ boneId: 'spine', weight: 1 }]);
+  });
+
   it('binds nothing without bones or a node', () => {
     expect(skinBinding(arm(), 'sleeve', [], mesh)).toBeNull();
     expect(skinBinding(arm(), 'missing', ['b1'], mesh)).toBeNull();

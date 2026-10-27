@@ -264,16 +264,103 @@ function jointShare(v: { x: number; y: number }, from: WeightBone, to: WeightBon
 }
 
 /**
+ * Whether a place (world space, as the vertices and bones are) is part of what
+ * a layer shows: inside a shape's outline, or on an image's opaque pixels.
+ */
+export type ShapeTest = (x: number, y: number) => boolean;
+
+/** The places along a bone its envelope is measured at */
+const ENVELOPE_SAMPLES = 9;
+/** Where two bones' envelopes are about as close, as a share of an envelope */
+const ENVELOPE_BLEND = 0.25;
+
+/**
+ * How far the shape reaches to the side of a bone — the radius of its
+ * envelope: at places along the bone, the distance to the nearer edge, and
+ * the median of those (a limb's half-thickness; a trunk's half-width). Null
+ * when the bone runs outside the shape.
+ */
+function envelopeRadius(bone: WeightBone, inside: ShapeTest, reach: number): number | null {
+  const step = Math.max(reach / 800, 0.25);
+  const nx = -bone.dir.y;
+  const ny = bone.dir.x;
+  const widths: number[] = [];
+  for (let k = 1; k <= ENVELOPE_SAMPLES; k++) {
+    const t = k / (ENVELOPE_SAMPLES + 1);
+    const px = bone.head.x + (bone.tip.x - bone.head.x) * t;
+    const py = bone.head.y + (bone.tip.y - bone.head.y) * t;
+    if (!inside(px, py)) continue;
+    const toEdge = (side: number) => {
+      let d = step;
+      while (d < reach && inside(px + nx * d * side, py + ny * d * side)) d += step;
+      return d;
+    };
+    widths.push(Math.min(toEdge(1), toEdge(-1)));
+  }
+  if (widths.length === 0) return null;
+  widths.sort((a, b) => a - b);
+  return widths[Math.floor(widths.length / 2)]!;
+}
+
+/**
+ * Each bone's envelope radius against the shape. Bones outside it take the
+ * median of the others'; none is thinner than a sixth of its length.
+ */
+function envelopeRadii(
+  bones: WeightBone[],
+  inside: ShapeTest,
+  vertexPositions: Float32Array
+): Map<string, number> {
+  // How far to look for an edge: past everything there is (the mesh and the bones)
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  const extend = (x: number, y: number) => {
+    if (x < minX) minX = x;
+    if (x > maxX) maxX = x;
+    if (y < minY) minY = y;
+    if (y > maxY) maxY = y;
+  };
+  for (let i = 0; i < vertexPositions.length; i += 2) {
+    extend(vertexPositions[i]!, vertexPositions[i + 1]!);
+  }
+  for (const bone of bones) {
+    extend(bone.head.x, bone.head.y);
+    extend(bone.tip.x, bone.tip.y);
+  }
+  const reach = 2 * Math.max(Math.hypot(maxX - minX, maxY - minY), 1);
+  const measured = new Map<string, number>();
+  for (const bone of bones) {
+    const radius = envelopeRadius(bone, inside, reach);
+    if (radius !== null) measured.set(bone.id, radius);
+  }
+  const known = [...measured.values()].sort((a, b) => a - b);
+  const fallback = known.length > 0 ? known[Math.floor(known.length / 2)]! : reach / 4;
+  const radii = new Map<string, number>();
+  for (const bone of bones) {
+    radii.set(bone.id, Math.max(measured.get(bone.id) ?? fallback, bone.length / 6, 1e-6));
+  }
+  return radii;
+}
+
+/**
  * Compute automatic weights from where each vertex sits along the bones.
  * A vertex belongs to its nearest bone; near a joint it bends smoothly over
  * to the bone on the other side (connected bones: one's tip at the other's
  * head). Near a bone it isn't connected to, it blends where the two are
  * about as close.
+ *
+ * Given the layer's shape, nearness is measured against each bone's envelope
+ * — how far the shape reaches to its side — so a trunk keeps what's under a
+ * limb: the fur under a raised arm is nearer the arm bone than the spine, but
+ * well outside the arm's thickness and inside the body's width.
  */
 export function computeAutoWeights(
   skinData: SkinData,
   vertexPositions: Float32Array, // xy pairs in world space
-  boneStates: FKBoneState[]
+  boneStates: FKBoneState[],
+  shape?: ShapeTest
 ): SkinData {
   const bones: WeightBone[] = [];
   for (const state of boneStates) {
@@ -306,13 +393,17 @@ export function computeAutoWeights(
 
   const numVertices = vertexPositions.length / 2;
   const newVertices: VertexSkinEntry[] = [];
+  // Without a shape, plain distance (each envelope 1)
+  const radii = shape ? envelopeRadii(bones, shape, vertexPositions) : null;
 
   for (let i = 0; i < numVertices; i++) {
     const v = { x: vertexPositions[i * 2]!, y: vertexPositions[i * 2 + 1]! };
     const distances = bones
       .map((bone) => ({
         bone,
-        dist: pointToSegmentDistance(v.x, v.y, bone.head.x, bone.head.y, bone.tip.x, bone.tip.y),
+        dist:
+          pointToSegmentDistance(v.x, v.y, bone.head.x, bone.head.y, bone.tip.x, bone.tip.y) /
+          (radii?.get(bone.id) ?? 1),
       }))
       .sort((a, b) => a.dist - b.dist);
     const nearest = distances[0];
@@ -350,7 +441,8 @@ export function computeAutoWeights(
     // Blend with a nearby bone it isn't connected to, where both are about as close
     const other = distances.find((entry) => !related.has(entry.bone.id));
     if (other) {
-      const r = JOINT_BLEND * Math.min(own.length, other.bone.length);
+      // (Against envelopes, distances are in envelopes, not world units)
+      const r = radii ? ENVELOPE_BLEND : JOINT_BLEND * Math.min(own.length, other.bone.length);
       const share = 0.5 * (1 - smoothstep(0, Math.max(r, 1e-9), other.dist - nearest.dist));
       if (share > 0) {
         for (const [boneId, weight] of weights) weights.set(boneId, weight * (1 - share));

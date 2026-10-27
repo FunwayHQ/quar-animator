@@ -112,7 +112,7 @@ import {
 import type { OnionSkinSettings, BooleanOp } from '@quar/core';
 import { applySkinSnapshots, DEFAULT_WIND_SETTINGS } from '@quar/rigging';
 import { toast } from '../components/common/Toast';
-import { skinBinding } from '../components/canvas/bindToBones';
+import { skinBinding, type BindOptions } from '../components/canvas/bindToBones';
 
 // ============================================================================
 // SceneGraph Interface (subset used by store operations)
@@ -629,7 +629,7 @@ export interface EditorStore extends SequenceActions {
     nodeId: string,
     boneIds: string[],
     tessellatedVertices?: Float32Array,
-    options?: { bendMesh?: boolean }
+    options?: BindOptions
   ) => void;
   unbindMesh: (sceneGraph: SceneGraphLike, nodeId: string) => void;
 
@@ -1441,7 +1441,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     nodeId: string,
     boneIds: string[],
     tessellatedVertices?: Float32Array,
-    options?: { bendMesh?: boolean }
+    options?: BindOptions
   ) => {
     const node = sceneGraph.getNode(nodeId);
     if (!node) return;

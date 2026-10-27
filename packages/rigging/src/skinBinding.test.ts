@@ -271,6 +271,63 @@ describe('skinBinding', () => {
       expect(nearLeft!.influences).toEqual([{ boneId: 'left', weight: 1 }]);
     });
 
+    describe('against the shape', () => {
+      // A body 200 wide with an arm 40 thick out to its left (y up): the spine
+      // runs up the middle, the arm bone from the body's side out along the arm
+      const inBody = (x: number, y: number) => x >= -100 && x <= 100 && y >= -50 && y <= 200;
+      const inArm = (x: number, y: number) => x >= -250 && x <= -100 && y >= 130 && y <= 170;
+      const shape = (x: number, y: number) => inBody(x, y) || inArm(x, y);
+      const rig = () => {
+        sceneGraph.addNode(createBoneNode('spine', 'Spine', { x: 0, y: 0 }, 200, 90));
+        sceneGraph.addNode(createBoneNode('arm', 'Arm', { x: -90, y: 150 }, 150, 180));
+        const skin = createSkinBinding('spine', ['spine', 'arm'], 1, sceneGraph)!;
+        const states = [
+          ...computeFKChain('spine', sceneGraph),
+          ...computeFKChain('arm', sceneGraph),
+        ];
+        return (x: number, y: number, withShape: boolean) =>
+          computeAutoWeights(skin, new Float32Array([x, y]), states, withShape ? shape : undefined)
+            .vertices[0]!.influences;
+      };
+
+      it('gives the body under a limb to the trunk, not to the nearer limb bone', () => {
+        const weights = rig();
+        // 50 from the arm bone, 90 from the spine: by plain distance it's mostly the arm's
+        expect(weights(-90, 100, false)[0]?.boneId).toBe('arm');
+        // but it's well outside the arm's thickness (20) and inside the body's width (100)
+        expect(weights(-90, 100, true)).toEqual([{ boneId: 'spine', weight: 1 }]);
+      });
+
+      it('still gives the limb its own', () => {
+        const weights = rig();
+        expect(weights(-180, 160, true)).toEqual([{ boneId: 'arm', weight: 1 }]);
+        expect(weights(-120, 140, true)).toEqual([{ boneId: 'arm', weight: 1 }]);
+        // and the body's middle stays the spine's
+        expect(weights(-20, 120, true)).toEqual([{ boneId: 'spine', weight: 1 }]);
+      });
+
+      it('blends where the body meets the limb', () => {
+        const weights = rig();
+        // At the arm's top edge where it meets the body: about as far into each envelope
+        const at = weights(-95, 168, true);
+        expect(at.map((inf) => inf.boneId).sort()).toEqual(['arm', 'spine']);
+      });
+
+      it('weighs a bone outside the shape by the others’ envelopes', () => {
+        sceneGraph.addNode(createBoneNode('inside', 'Inside', { x: 0, y: 0 }, 100));
+        sceneGraph.addNode(createBoneNode('outside', 'Outside', { x: 0, y: 500 }, 100));
+        const skin = createSkinBinding('inside', ['inside', 'outside'], 1, sceneGraph)!;
+        const states = [
+          ...computeFKChain('inside', sceneGraph),
+          ...computeFKChain('outside', sceneGraph),
+        ];
+        const band = (x: number, y: number) => x >= 0 && x <= 100 && Math.abs(y) <= 20;
+        const result = computeAutoWeights(skin, new Float32Array([50, 10, 50, 490]), states, band);
+        expect(result.vertices[0]!.influences).toEqual([{ boneId: 'inside', weight: 1 }]);
+        expect(result.vertices[1]!.influences).toEqual([{ boneId: 'outside', weight: 1 }]);
+      });
+    });
+
     it('respects max 2 bones per vertex', () => {
       const bone1 = createBoneNode('b1', 'B1', { x: 0, y: 0 }, 30);
       const bone2 = createBoneNode('b2', 'B2', { x: 50, y: 0 }, 30);

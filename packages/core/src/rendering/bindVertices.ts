@@ -71,6 +71,91 @@ export function imageBindMesh(node: ImageNode): ImageMesh {
 }
 
 /**
+ * An image's opacity, sampled on a grid: `data` row by row from the image's
+ * top, one byte (0–255) per sample.
+ */
+export interface AlphaMask {
+  width: number;
+  height: number;
+  data: Uint8Array;
+}
+
+/** The longest side, in samples, of an image's opacity mask */
+const ALPHA_MASK_SIZE = 256;
+
+/**
+ * An image's opacity, read by drawing it small: null where there's no 2D
+ * canvas to draw it on (tests, the server).
+ */
+export function readAlphaMask(image: HTMLImageElement): AlphaMask | null {
+  const w = image.naturalWidth || image.width;
+  const h = image.naturalHeight || image.height;
+  if (!(w > 0 && h > 0) || typeof document === 'undefined') return null;
+  const k = Math.min(1, ALPHA_MASK_SIZE / Math.max(w, h));
+  const width = Math.max(1, Math.round(w * k));
+  const height = Math.max(1, Math.round(h * k));
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext('2d', { willReadFrequently: true });
+  if (!context) return null;
+  try {
+    context.drawImage(image, 0, 0, width, height);
+    const rgba = context.getImageData(0, 0, width, height).data;
+    const data = new Uint8Array(width * height);
+    for (let i = 0; i < data.length; i++) data[i] = rgba[i * 4 + 3]!;
+    return { width, height, data };
+  } catch {
+    return null; // a cross-origin image that won't be read
+  }
+}
+
+/** A place (the layer's own space) the layer shows something at. */
+export type LayerShape = (x: number, y: number) => boolean;
+
+/** Even-odd point in polygon (xy pairs). */
+function insidePolygon(x: number, y: number, vertices: ArrayLike<number>): boolean {
+  let inside = false;
+  const n = vertices.length / 2;
+  for (let i = 0, j = n - 1; i < n; j = i++) {
+    const xi = vertices[i * 2]!;
+    const yi = vertices[i * 2 + 1]!;
+    const xj = vertices[j * 2]!;
+    const yj = vertices[j * 2 + 1]!;
+    if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+
+/**
+ * Where a layer shows something, in its own space: inside a closed shape's
+ * outline, or on an image's opaque pixels (given their mask). Bindings weigh
+ * bones against it (each bone's reach is as wide as the shape around it).
+ * Null when there's no telling: an open path, an image without a mask.
+ */
+export function layerShape(node: Node, alpha?: AlphaMask | null): LayerShape | null {
+  if (node.type === 'image') {
+    if (!alpha || alpha.width < 1 || alpha.height < 1) return null;
+    // Opaque all over (a photo): its rectangle says nothing about what's in it
+    if (alpha.data.every((value) => value >= 128)) return null;
+    const x0 = -node.width * node.transform.anchor.x;
+    const y0 = -node.height * node.transform.anchor.y;
+    const { width, height, data } = alpha;
+    return (x, y) => {
+      const u = (x - x0) / node.width;
+      // The mask's first row is the image's top (Y up)
+      const v = 1 - (y - y0) / node.height;
+      if (!(u >= 0 && u < 1 && v >= 0 && v < 1)) return false;
+      return data[Math.floor(v * height) * width + Math.floor(u * width)]! >= 128;
+    };
+  }
+  const outline = shapeOutline(node);
+  if (!outline?.closed || outline.vertices.length < 6) return null;
+  const vertices = outline.vertices;
+  return (x, y) => insidePolygon(x, y, vertices);
+}
+
+/**
  * The vertices to bind a layer with: a shape's bending mesh (`bendMesh`:
  * true) or an unbound image's cell mesh. Null for anything else (a layer the
  * renderer binds by its tessellation, which only a renderer has).

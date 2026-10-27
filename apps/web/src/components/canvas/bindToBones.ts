@@ -4,6 +4,7 @@
  */
 
 import type { Node, SkinData } from '@quar/types';
+import type { LayerShape } from '@quar/core';
 import {
   bindVertexPositions,
   computeAutoWeights,
@@ -20,17 +21,26 @@ export interface BindGraph {
   traverse(callback: (node: Node) => void): void;
 }
 
-/** The vertices a layer binds with, and whether they form its bending mesh. */
+/**
+ * The vertices a layer binds with, whether they form its bending mesh, and
+ * where the layer shows something (its own space), when that's known.
+ */
 export type GetBindVertices = (
   node: Node
-) => { vertices: Float32Array; bendMesh: boolean } | null | undefined;
+) => { vertices: Float32Array; bendMesh: boolean; shape?: LayerShape | null } | null | undefined;
+
+/** How a layer is bound: `shape` (its own space) widens each bone's reach to the shape around it */
+export interface BindOptions {
+  bendMesh?: boolean;
+  shape?: LayerShape | null;
+}
 
 export type BindMesh<G> = (
   graph: G,
   nodeId: string,
   boneIds: string[],
   vertices?: Float32Array,
-  options?: { bendMesh?: boolean }
+  options?: BindOptions
 ) => void;
 
 /** The layers binding `node` binds: a shape or image itself, or a group's shapes and images. */
@@ -58,7 +68,10 @@ export function bindLayersToBones<G extends BindGraph>(
     if (!node) continue;
     for (const layer of bindableLayers(graph, node)) {
       const mesh = getBindVertices(layer);
-      bind(graph, layer.id, boneIds, mesh?.vertices, { bendMesh: mesh?.bendMesh });
+      bind(graph, layer.id, boneIds, mesh?.vertices, {
+        bendMesh: mesh?.bendMesh,
+        shape: mesh?.shape,
+      });
     }
   }
 }
@@ -72,14 +85,15 @@ export type SkinGraph = Parameters<typeof createSkinBinding>[3] &
  * Bind to Bones gives a layer (the editor's, and the cloud server's).
  * `vertices` are the layer's bind mesh in its own space (`bendMesh`: its
  * bending mesh); without them the vertices are guessed from the node's type.
- * Null when there's nothing to bind.
+ * With the layer's `shape`, each bone reaches as far as the shape around it,
+ * so a body keeps what's under a limb. Null when there's nothing to bind.
  */
 export function skinBinding(
   graph: SkinGraph,
   nodeId: string,
   boneIds: string[],
   vertices?: Float32Array,
-  options?: { bendMesh?: boolean }
+  options?: BindOptions
 ): SkinData | null {
   const node = graph.getNode(nodeId);
   if (!node || boneIds.length === 0) return null;
@@ -133,9 +147,29 @@ export function skinBinding(
     }
   }
 
-  const weighted = computeAutoWeights(skin, positions, states);
+  const weighted = computeAutoWeights(
+    skin,
+    positions,
+    states,
+    worldShape(meshWorld, options?.shape)
+  );
   // The geometry the weights belong to, so they can follow later shape edits
   if (vertices) weighted.bindVertices = bindVertexPositions(vertices);
   if (options?.bendMesh) weighted.bendMesh = true;
   return weighted;
+}
+
+/** A layer's shape (its own space) tested at world places: the world matrix undone. */
+function worldShape(
+  world: ReturnType<SkinGraph['getWorldTransform']>,
+  shape: LayerShape | null | undefined
+): ((x: number, y: number) => boolean) | undefined {
+  if (!shape) return undefined;
+  const det = world.a * world.d - world.b * world.c;
+  if (Math.abs(det) < 1e-12) return undefined;
+  return (x, y) => {
+    const dx = x - world.tx;
+    const dy = y - world.ty;
+    return shape((world.d * dx - world.c * dy) / det, (world.a * dy - world.b * dx) / det);
+  };
 }

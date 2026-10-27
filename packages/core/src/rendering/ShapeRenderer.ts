@@ -53,7 +53,14 @@ import {
 import { trimPathToProgress } from '../path/pathReveal';
 import earcut from 'earcut';
 import { triangulateContours } from './contourTriangulation';
-import { bendGeometry, imageBindMesh } from './bindVertices';
+import {
+  bendGeometry,
+  imageBindMesh,
+  layerShape,
+  readAlphaMask,
+  type AlphaMask,
+  type LayerShape,
+} from './bindVertices';
 import { getFontManager } from '../font/FontManager';
 import { textToSubpaths } from '../font/glyphConverter';
 import { getTextNodeBounds } from '../font/textMetrics';
@@ -646,6 +653,10 @@ export class ShapeRenderer {
   /** Triangle indices of the bound image being drawn */
   private imageMeshIndexBuffer: WebGLBuffer | null = null;
   private textureCache: Map<string, WebGLTexture> = new Map();
+  /** Decoded images by src, so binding can read their opacity (see bindShape) */
+  private loadedImages = new Map<string, HTMLImageElement>();
+  /** Opacity masks of images that were bound, by src */
+  private alphaMasks = new Map<string, AlphaMask | null>();
   private pendingImages: Map<string, Promise<HTMLImageElement>> = new Map();
   /** When each image that failed to load last failed (it's tried again after a pause) */
   private failedImages = new Map<string, number>();
@@ -1416,6 +1427,7 @@ export class ShapeRenderer {
         gl.bindTexture(gl.TEXTURE_2D, null);
 
         this.textureCache.set(src, texture);
+        this.loadedImages.set(src, img);
       })
       .catch(() => {
         if (!stillWanted()) return;
@@ -1452,6 +1464,7 @@ export class ShapeRenderer {
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
       gl.bindTexture(gl.TEXTURE_2D, null);
       this.textureCache.set(src, texture);
+      this.loadedImages.set(src, img);
       return texture;
     }
 
@@ -1511,6 +1524,7 @@ export class ShapeRenderer {
               gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
               gl.bindTexture(gl.TEXTURE_2D, null);
               this.textureCache.set(src, texture);
+              this.loadedImages.set(src, img);
             }
             resolve();
           };
@@ -1536,6 +1550,8 @@ export class ShapeRenderer {
     }
     this.pendingImages.delete(src);
     this.failedImages.delete(src);
+    this.loadedImages.delete(src);
+    this.alphaMasks.delete(src);
   }
 
   /** Delete every cached GPU texture (e.g. when the whole scene is replaced). */
@@ -1547,6 +1563,8 @@ export class ShapeRenderer {
     this.textureCache.clear();
     this.pendingImages.clear();
     this.failedImages.clear();
+    this.loadedImages.clear();
+    this.alphaMasks.clear();
   }
 
   // --------------------------------------------------------------------------
@@ -3811,15 +3829,29 @@ export class ShapeRenderer {
    * The vertices to bind a layer to bones with: a shape's bending mesh
    * (`bendMesh`: true), an image's mesh, or else its tessellation.
    */
-  getBindVertices(node: Node): { vertices: Float32Array; bendMesh: boolean } | null {
+  getBindVertices(
+    node: Node
+  ): { vertices: Float32Array; bendMesh: boolean; shape?: LayerShape | null } | null {
     const bend = this.createBendGeometry(node);
-    if (bend) return { vertices: bend.vertices, bendMesh: true };
+    if (bend) return { vertices: bend.vertices, bendMesh: true, shape: layerShape(node) };
     if (node.type === 'image' && !node.skinData) {
       const mesh = this.ensureBindPoseImageGeometry(node);
-      return mesh ? { vertices: mesh.vertices, bendMesh: false } : null;
+      return mesh
+        ? { vertices: mesh.vertices, bendMesh: false, shape: this.bindShape(node) }
+        : null;
     }
     const vertices = this.getTessellatedVertices(node.id);
-    return vertices ? { vertices, bendMesh: false } : null;
+    return vertices ? { vertices, bendMesh: false, shape: layerShape(node) } : null;
+  }
+
+  /** Where an image is opaque, from its decoded pixels (null until it's loaded). */
+  private bindShape(node: ImageNode): LayerShape | null {
+    if (!this.alphaMasks.has(node.src)) {
+      const img = this.loadedImages.get(node.src);
+      if (!img) return null;
+      this.alphaMasks.set(node.src, readAlphaMask(img));
+    }
+    return layerShape(node, this.alphaMasks.get(node.src));
   }
 
   /**
@@ -4879,6 +4911,8 @@ export class ShapeRenderer {
     this.textureCache.clear();
     this.pendingImages.clear();
     this.failedImages.clear();
+    this.loadedImages.clear();
+    this.alphaMasks.clear();
 
     // Weight visualization resources
     if (this.weightVertexBuffer) {
