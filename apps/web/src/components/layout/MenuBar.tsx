@@ -25,6 +25,7 @@ import { restoreTutorials } from '../../tutorials/seedTutorials';
 import { setUiTheme, useUiTheme } from '../../hooks/useUiTheme';
 import { BetaBadge, REPORT_ISSUES_URL } from '../common/BetaBadge';
 import styles from './MenuBar.module.css';
+import { useToolsBelowMenus } from './useToolsBelowMenus';
 // Bundled with the build (inlined or hashed), so a browser never keeps an old logo
 import logoUrl from '../../assets/logo.svg';
 
@@ -150,7 +151,7 @@ function ProjectNameField({
       onClick={() => setDraft(projectName)}
     >
       {isDirty && <span className={styles.dirtyDot} data-testid="dirty-indicator" />}
-      {projectName}
+      <span className={styles.projectNameText}>{projectName}</span>
     </button>
   );
 }
@@ -180,6 +181,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
   const [saveAsName, setSaveAsName] = useState('');
   const [projects, setProjects] = useState<ProjectListItem[]>([]);
   const menuBarRef = useRef<HTMLElement>(null);
+  const toolsBelow = useToolsBelowMenus(menuBarRef, Boolean(toolbar));
 
   const sceneGraph = useSceneGraph() as unknown as SceneGraphLike;
 
@@ -539,7 +541,11 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
 
   return (
     <>
-      <header className={styles.menuBar} ref={menuBarRef}>
+      <header
+        className={`${styles.menuBar} ${toolsBelow ? styles.toolsBelow : ''}`}
+        ref={menuBarRef}
+        data-tools-below={toolsBelow || undefined}
+      >
         <div className={styles.leading}>
           <div className={styles.logo}>
             <img src={logoUrl} alt="Quar Animator" className={styles.logoImage} />
