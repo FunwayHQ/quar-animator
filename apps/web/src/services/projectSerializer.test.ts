@@ -4,7 +4,7 @@
 
 import { describe, it, expect, vi } from 'vitest';
 import { SceneGraph, createGroupNode } from '@quar/core';
-import { createTimeline } from '@quar/animation';
+import { createAnimationSequence, createTimeline } from '@quar/animation';
 import { DEFAULT_ONION_SKIN_SETTINGS } from '@quar/core';
 import {
   serializeProject,
@@ -1398,6 +1398,145 @@ describe('ProjectSerializer', () => {
         applied = s;
       });
       expect(applied.documentBackground).toEqual({ r: 26, g: 26, b: 26, a: 1 });
+    });
+  });
+
+  // ============================================================================
+  // Sounds
+  // ============================================================================
+
+  describe('sounds', () => {
+    const sound = (id: string) => ({
+      id,
+      name: `${id} name`,
+      src: `data:audio/wav;base64,${btoa(`bytes of ${id}`)}`,
+      duration: 2.5,
+    });
+    const clip = (id: string, soundId: string) => ({
+      id,
+      soundId,
+      start: 12,
+      offset: 0.5,
+      duration: 1.5,
+      gain: 0.8,
+    });
+    const page = (id: string, timeline: ReturnType<typeof createTimeline>) => ({
+      id,
+      name: id,
+      sceneGraphJSON: { nodes: [], rootNodeIds: [] },
+      timeline,
+      animationSequence: createAnimationSequence(),
+      selectedNodeIds: [],
+      undoStack: [],
+      redoStack: [],
+    });
+
+    it('keeps the clips on every timeline, and the sounds they play, through a .quar file', () => {
+      const active = createTimeline({
+        sounds: [clip('c1', 'voice')],
+        artboards: { board: { duration: 90, sounds: [clip('c2', 'music')] } },
+      });
+      const other = createTimeline({ sounds: [{ ...clip('c3', 'bell'), muted: true }] });
+      const editorState: EditorStateSnapshot = {
+        timeline: active,
+        timelineDuration: 300,
+        frameRate: 30,
+        autoKeyframe: false,
+        onionSkin: { ...DEFAULT_ONION_SKIN_SETTINGS },
+        pages: [page('p1', active), page('p2', other)],
+        activePageId: 'p1',
+        sounds: [sound('voice'), sound('music'), sound('bell'), sound('unused')],
+      };
+
+      // Each sound is a binary buffer in the file, not base64 text
+      const binary = serializeProjectToBinary('Talk', new SceneGraph(), editorState);
+      const text = new TextDecoder('latin1').decode(binary);
+      expect(text).not.toContain(btoa('bytes of voice'));
+      expect(text).toContain('bytes of voice');
+
+      let applied: Record<string, unknown> = {};
+      deserializeProjectFromBinary(binary, new SceneGraph(), (s) => {
+        applied = s;
+      });
+      // One no clip plays isn't kept
+      expect(applied.sounds).toEqual([sound('voice'), sound('music'), sound('bell')]);
+      const timeline = applied.timeline as ReturnType<typeof createTimeline>;
+      expect(timeline.sounds).toEqual([clip('c1', 'voice')]);
+      expect(timeline.artboards?.board?.sounds).toEqual([clip('c2', 'music')]);
+      const pages = applied.pages as Array<{ timeline: ReturnType<typeof createTimeline> }>;
+      expect(pages[1]!.timeline.sounds).toEqual([{ ...clip('c3', 'bell'), muted: true }]);
+    });
+
+    it('leaves out clips and sounds a damaged file got wrong', () => {
+      const data = {
+        version: '2.0',
+        name: 'Damaged',
+        createdAt: '',
+        updatedAt: '',
+        pages: [
+          {
+            id: 'p1',
+            name: 'Page 1',
+            sceneGraph: { nodes: [], rootNodeIds: [] },
+            timeline: {
+              ...createTimeline(),
+              sounds: [
+                { id: 'ok', soundId: 's', start: 3.4, duration: 1 },
+                { id: 'no-length', soundId: 's', start: 0 },
+                { soundId: 's', start: 0, duration: 1 },
+                null,
+              ],
+              artboards: { a: { duration: 60, sounds: 'not a list' } },
+            },
+          },
+        ],
+        activePageId: 'p1',
+        settings: {
+          timelineDuration: 300,
+          frameRate: 30,
+          autoKeyframe: false,
+          onionSkin: { ...DEFAULT_ONION_SKIN_SETTINGS },
+        },
+        sounds: [
+          sound('s'),
+          { id: 'picture', src: 'data:image/png;base64,AAAA', duration: 1 },
+          { id: 'no-length', src: 'data:audio/wav;base64,AAAA' },
+          { src: 'data:audio/wav;base64,AAAA', duration: 1 },
+        ],
+      } as unknown as ProjectData;
+
+      let applied: Record<string, unknown> = {};
+      deserializeProject(data, new SceneGraph(), (s) => {
+        applied = s;
+      });
+      const timeline = applied.timeline as ReturnType<typeof createTimeline>;
+      // Whole frames; an offset and a volume where they're missing
+      expect(timeline.sounds).toEqual([
+        { id: 'ok', soundId: 's', start: 3, offset: 0, duration: 1, gain: 1 },
+      ]);
+      expect(timeline.artboards?.a?.sounds).toEqual([]);
+      expect(applied.sounds).toEqual([sound('s')]);
+    });
+
+    it('opens an older file with no sounds', () => {
+      const data = JSON.parse(
+        JSON.stringify(
+          serializeProject('Old', new SceneGraph(), {
+            timeline: createTimeline(),
+            timelineDuration: 300,
+            frameRate: 30,
+            autoKeyframe: false,
+            onionSkin: { ...DEFAULT_ONION_SKIN_SETTINGS },
+          })
+        )
+      ) as ProjectDataV2;
+      delete data.sounds;
+
+      let applied: Record<string, unknown> = {};
+      deserializeProject(data, new SceneGraph(), (s) => {
+        applied = s;
+      });
+      expect(applied.sounds).toEqual([]);
     });
   });
 });

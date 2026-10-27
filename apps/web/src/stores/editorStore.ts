@@ -55,6 +55,7 @@ import {
   pruneSequenceSteps,
   type SequenceActions,
 } from './sequenceActions';
+import { createSoundActions, type SoundActions } from './soundActions';
 import {
   captureClipboardExtras,
   cleanupAfterRemoval,
@@ -539,7 +540,7 @@ export const DEFAULT_STROKE: Stroke = {
 // Store Interface
 // ============================================================================
 
-export interface EditorStore extends SequenceActions {
+export interface EditorStore extends SequenceActions, SoundActions {
   // Project state
   projectId: string | null;
   projectName: string;
@@ -2917,13 +2918,19 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   selectedKeyframeIds: new Set<string>(),
   keyframeClipboard: null,
   toggleAutoKeyframe: () => set((state) => ({ autoKeyframe: !state.autoKeyframe })),
-  selectKeyframe: (id: string) => set({ selectedKeyframeIds: new Set([id]) }),
+  selectKeyframe: (id: string) =>
+    set({ selectedKeyframeIds: new Set([id]), selectedSoundClipId: null }),
   addKeyframeToSelection: (id: string) =>
     set((state) => ({
       selectedKeyframeIds: new Set([...state.selectedKeyframeIds, id]),
+      selectedSoundClipId: null,
     })),
   clearKeyframeSelection: () => set({ selectedKeyframeIds: new Set<string>() }),
-  setSelectedKeyframeIds: (ids: string[]) => set({ selectedKeyframeIds: new Set(ids) }),
+  setSelectedKeyframeIds: (ids: string[]) =>
+    set({
+      selectedKeyframeIds: new Set(ids),
+      ...(ids.length > 0 ? { selectedSoundClipId: null } : {}),
+    }),
   addKeyframeAtFrame: (
     nodeId: string,
     property: string,
@@ -3152,6 +3159,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
   // Animation Sequence (PowerPoint-style numbered steps)
   ...createSequenceActions(set, get),
+  ...createSoundActions(set, get),
 }));
 
 // ============================================================================
@@ -3956,6 +3964,8 @@ function createHistoryActions(
         editingSymbolId: null,
         editingSymbolPrevState: null,
         symbols: [],
+        sounds: [],
+        selectedSoundClipId: null,
         guides: [],
         documentBackground: { ...DEFAULT_DOCUMENT_BACKGROUND },
         ikChains: [],

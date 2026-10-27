@@ -96,6 +96,7 @@ export function useProjectActions(options: UseProjectActionsOptions = {}): Proje
       pages: state.pages,
       activePageId: state.activePageId,
       symbols: state.symbols,
+      sounds: state.sounds,
     };
   }, [sceneGraph]);
 

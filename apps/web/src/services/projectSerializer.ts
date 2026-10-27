@@ -17,10 +17,12 @@ import type {
   SmartBoneAction,
   SkinData,
   Color,
+  Sound,
+  SoundClip,
 } from '@quar/types';
 import type { OnionSkinSettings } from '@quar/core';
 import type { SceneGraph } from '@quar/core';
-import { createAnimationSequence, createTimeline } from '@quar/animation';
+import { createAnimationSequence, createTimeline, soundIdsUsed } from '@quar/animation';
 import { DEFAULT_WIND_SETTINGS } from '@quar/rigging';
 import type { AnimationSequence } from '@quar/animation';
 import {
@@ -104,6 +106,8 @@ export interface ProjectDataV2 {
     smartBoneActions?: SmartBoneAction[];
   };
   symbols?: SymbolDefinition[];
+  /** The sounds the pages' timelines play (each clip names one) */
+  sounds?: Sound[];
 }
 
 /** v3.0 binary format (same structure as v2.0, different version tag) */
@@ -133,6 +137,7 @@ export interface EditorStateSnapshot {
   pages?: PageData[];
   activePageId?: string;
   symbols?: SymbolDefinition[];
+  sounds?: Sound[];
 }
 
 // ============================================================================
@@ -223,7 +228,16 @@ export function serializeProject(
         : [],
     },
     symbols: editorState.symbols ? structuredClone(editorState.symbols) : [],
+    // Only the sounds some clip plays: one taken off the timeline goes with it
+    sounds: soundsPlayedOn(pages, editorState.sounds ?? []),
   };
+}
+
+/** The library's sounds that clips on the pages' timelines play. */
+function soundsPlayedOn(pages: SerializedPage[], sounds: Sound[]): Sound[] {
+  const used = new Set<string>();
+  for (const page of pages) for (const id of soundIdsUsed(page.timeline)) used.add(id);
+  return sounds.filter((sound) => used.has(sound.id)).map((sound) => ({ ...sound }));
 }
 
 /**
@@ -443,7 +457,54 @@ function migrateTimeline(
     }
   }
 
+  // Clips a hand-edited or tool-made file got wrong are left out
+  if (result.sounds !== undefined) result.sounds = readSoundClips(result.sounds);
+  for (const board of Object.values(result.artboards ?? {})) {
+    if (board.sounds !== undefined) board.sounds = readSoundClips(board.sounds);
+  }
+
   return result;
+}
+
+const isNumber = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isFinite(value);
+
+/** The usable clips: each names its sound and has a place and a length. */
+function readSoundClips(clips: unknown): SoundClip[] {
+  if (!Array.isArray(clips)) return [];
+  return clips.flatMap((clip: Partial<Record<keyof SoundClip, unknown>>) => {
+    if (!clip || typeof clip.id !== 'string' || typeof clip.soundId !== 'string') return [];
+    if (!isNumber(clip.start) || !isNumber(clip.duration) || !(clip.duration > 0)) return [];
+    return [
+      {
+        id: clip.id,
+        soundId: clip.soundId,
+        start: Math.max(0, Math.round(clip.start)),
+        offset: isNumber(clip.offset) ? Math.max(0, clip.offset) : 0,
+        duration: clip.duration,
+        gain: isNumber(clip.gain) ? Math.max(0, clip.gain) : 1,
+        ...(clip.muted === true ? { muted: true } : {}),
+      },
+    ];
+  });
+}
+
+/** The usable sounds of a file's library: sound data, with a length. */
+function readSounds(sounds: unknown): Sound[] {
+  if (!Array.isArray(sounds)) return [];
+  return sounds.flatMap((sound: Partial<Record<keyof Sound, unknown>>) => {
+    if (!sound || typeof sound.id !== 'string' || typeof sound.src !== 'string') return [];
+    if (!sound.src.startsWith('data:audio/')) return [];
+    if (!isNumber(sound.duration) || !(sound.duration > 0)) return [];
+    return [
+      {
+        id: sound.id,
+        name: typeof sound.name === 'string' ? sound.name : 'Sound',
+        src: sound.src,
+        duration: sound.duration,
+      },
+    ];
+  });
 }
 
 // ============================================================================
@@ -530,6 +591,7 @@ export function deserializeProject(
     pages,
     activePageId: activePage.id,
     symbols: v2.symbols ?? [],
+    sounds: readSounds(v2.sounds),
   };
 
   // Load the active page's scene graph, then restore the editor state
