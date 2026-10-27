@@ -7,6 +7,7 @@ import type { AnimationSpan } from '@quar/animation';
 import { getRulerScale } from './timelineRuler';
 import type { Node, EasingFunction } from '@quar/types';
 import { ContextMenu } from '../common/ContextMenu';
+import { SoundLaneLabel, SoundLaneTrack, useSoundDrop } from '../timeline/SoundLane';
 import type { ContextMenuEntry } from '../common/ContextMenu';
 import { OnionSkinPanel } from '../common/OnionSkinPanel';
 import { EasingEditor } from '../common/EasingEditor';
@@ -149,6 +150,15 @@ export function Timeline({ playback }: TimelineProps = {}) {
   const rulerRef = useRef<HTMLDivElement>(null);
   const tracksAreaRef = useRef<HTMLDivElement>(null);
   const tracksRef = useRef<HTMLDivElement>(null);
+  // Sound files dropped on the tracks land at the frame they're dropped on
+  const frameAtTracks = useCallback(
+    (clientX: number) => {
+      const rect = tracksRef.current?.getBoundingClientRect();
+      return rect && rect.width > 0 ? ((clientX - rect.left) / rect.width) * duration : 0;
+    },
+    [duration]
+  );
+  const { dropFrame: soundDropFrame, handlers: soundDrop } = useSoundDrop(frameAtTracks);
   const previousZoomPercentRef = useRef(zoomPercent);
   const [contextMenu, setContextMenu] = useState<{
     x: number;
@@ -1527,6 +1537,7 @@ export function Timeline({ playback }: TimelineProps = {}) {
             ) : (
               <div className={styles.layerLabel}>No layers</div>
             )}
+            <SoundLaneLabel />
           </div>
 
           {/* Tracks Area */}
@@ -1631,6 +1642,7 @@ export function Timeline({ playback }: TimelineProps = {}) {
                 ref={tracksRef}
                 onClick={handleTrackClick}
                 onContextMenu={handleTimelineContextMenu}
+                {...soundDrop}
                 data-testid="timeline-tracks"
               >
                 {nodes.map((node) => {
@@ -1699,6 +1711,7 @@ export function Timeline({ playback }: TimelineProps = {}) {
                   );
                 })}
                 {nodes.length === 0 && <div className={styles.track} />}
+                <SoundLaneTrack duration={duration} dropFrame={soundDropFrame} />
               </div>
 
               {/* Work Area overlays follow the zoomed, scrollable timeline content. */}

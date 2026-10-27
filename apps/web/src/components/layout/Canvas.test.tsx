@@ -10,6 +10,9 @@ import { Canvas } from './Canvas';
 
 // Counts the canvas's renders: the smart guides are drawn on every one
 const smartGuides = vi.hoisted(() => ({ renders: 0 }));
+const importSoundFiles = vi.hoisted(() => vi.fn(async () => {}));
+vi.mock('../../services/soundImport', () => ({ importSoundFiles }));
+
 vi.mock('../canvas/SmartGuidesOverlay', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../canvas/SmartGuidesOverlay')>();
   return {
@@ -188,7 +191,9 @@ describe('Canvas', () => {
 
     fireEvent.dragOver(dropZone, { dataTransfer: { types: ['Files'] } });
 
-    expect(screen.getByText('Drop an image, SVG, or project file to import')).toBeInTheDocument();
+    expect(
+      screen.getByText('Drop an image, SVG, sound, or project file to import')
+    ).toBeInTheDocument();
   });
 
   it('forwards a dropped project file to the project importer', () => {
@@ -200,5 +205,17 @@ describe('Canvas', () => {
     fireEvent.drop(dropZone, { dataTransfer: { files: [file], types: ['Files'] } });
 
     expect(onProjectFileDrop).toHaveBeenCalledWith(file);
+  });
+
+  it('puts dropped sound files on the timeline, at the playhead', () => {
+    renderCanvas();
+    const dropZone = screen.getByTestId('canvas-drop-zone');
+    const voice = new File(['RIFF'], 'voice.wav', { type: 'audio/wav' });
+    // Some systems give no type: known by its name
+    const music = new File(['ID3'], 'music.mp3', { type: '' });
+
+    fireEvent.drop(dropZone, { dataTransfer: { files: [voice, music], types: ['Files'] } });
+
+    expect(importSoundFiles).toHaveBeenCalledWith(expect.anything(), [voice, music]);
   });
 });

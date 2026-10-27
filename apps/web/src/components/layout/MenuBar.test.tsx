@@ -58,6 +58,7 @@ function createMockProjectActions(): ProjectActions {
     listProjects: vi.fn().mockResolvedValue([]),
     importSvg: vi.fn(),
     importImage: vi.fn(),
+    importSound: vi.fn(),
   };
 }
 
@@ -277,6 +278,14 @@ describe('MenuBar', () => {
     fireEvent.click(screen.getByTestId('menu-file'));
     fireEvent.click(screen.getByText('Import .quar...'));
     expect(actions.importProject).toHaveBeenCalledOnce();
+  });
+
+  it('imports sounds from File > Import Sound', () => {
+    const actions = createMockProjectActions();
+    render(<MenuBar projectActions={actions} />);
+    fireEvent.click(screen.getByTestId('menu-file'));
+    fireEvent.click(screen.getByText('Import Sound...'));
+    expect(actions.importSound).toHaveBeenCalledOnce();
   });
 
   it('closes dropdown after clicking a menu item', () => {

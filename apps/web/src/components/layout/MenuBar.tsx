@@ -503,6 +503,12 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
     projectActions.importImage();
   }, [projectActions, closeMenu]);
 
+  const handleImportSound = useCallback(() => {
+    closeMenu();
+    if (!projectActions) return;
+    projectActions.importSound();
+  }, [projectActions, closeMenu]);
+
   // --- Project list dialog actions ---
   const handleOpenProject = useCallback(
     async (id: string) => {
@@ -572,6 +578,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                   <MenuItem label="Import .quar..." onClick={handleImport} />
                   <MenuItem label="Import SVG..." shortcut="Ctrl+I" onClick={handleImportSvg} />
                   <MenuItem label="Import Image..." onClick={handleImportImage} />
+                  <MenuItem label="Import Sound..." onClick={handleImportSound} />
                 </div>
               )}
             </div>

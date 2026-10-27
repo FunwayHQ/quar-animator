@@ -29,6 +29,8 @@ import {
 import type { DynamicChainState } from '@quar/types';
 import type { PointMagnetTool, WeightPaintTool } from '@quar/core';
 import { intoArtboardBeneath } from '../../services/intoArtboard';
+import { isSoundFile } from '../../services/soundFiles';
+import { importSoundFiles } from '../../services/soundImport';
 import { useCanvasTools } from '../../hooks/useCanvasTools';
 import { useToolShortcuts } from '../../hooks/useToolShortcuts';
 import { useEditorStore } from '../../stores/editorStore';
@@ -2396,11 +2398,20 @@ export function Canvas({
         return;
       }
 
+      // Sounds go on the timeline in view, at the playhead
+      const soundFiles = files.filter(isSoundFile);
+      const sceneForSounds = sceneGraphRef.current;
+      if (soundFiles.length > 0 && sceneForSounds) {
+        void importSoundFiles(sceneForSounds, soundFiles);
+      }
+
       const isSvgFile = (file: File) =>
         file.type === 'image/svg+xml' || file.name.toLowerCase().endsWith('.svg');
       const imageFile = files.find((file) => file.type.startsWith('image/') || isSvgFile(file));
       if (!imageFile) {
-        toast.info('Drop an image, SVG, or .quar project file onto the canvas');
+        if (soundFiles.length === 0) {
+          toast.info('Drop an image, SVG, sound, or .quar project file onto the canvas');
+        }
         return;
       }
 
@@ -2492,7 +2503,7 @@ export function Canvas({
     >
       {isFileDragOver && (
         <div className={styles.fileDropOverlay} role="status" aria-live="polite">
-          Drop an image, SVG, or project file to import
+          Drop an image, SVG, sound, or project file to import
         </div>
       )}
       {/* Symbol editing banner */}

@@ -81,6 +81,11 @@ export const colors = {
     workArea: 'rgba(168, 85, 247, 0.15)',
     workAreaBorder: 'rgba(168, 85, 247, 0.6)',
     workAreaBar: 'rgba(168, 85, 247, 0.35)',
+    // Sound clips: teal, apart from the violet keyframes
+    sound: '#2dd4bf',
+    soundFill: 'rgba(45, 212, 191, 0.13)',
+    soundFillSelected: 'rgba(45, 212, 191, 0.24)',
+    soundWave: 'rgba(94, 234, 212, 0.62)',
   },
 
   // Keyframe indicators in the properties panel
@@ -154,6 +159,10 @@ export const lightColors: ColorTokens = {
     workArea: 'rgba(124, 58, 237, 0.12)',
     workAreaBorder: 'rgba(124, 58, 237, 0.55)',
     workAreaBar: 'rgba(124, 58, 237, 0.32)',
+    sound: '#0f766e',
+    soundFill: 'rgba(13, 148, 136, 0.11)',
+    soundFillSelected: 'rgba(13, 148, 136, 0.22)',
+    soundWave: 'rgba(15, 118, 110, 0.55)',
   },
   keyframe: {
     active: '#b45309',
@@ -349,6 +358,10 @@ function colorVariables(c: ColorTokens): string {
   --color-timeline-work-area: ${c.timeline.workArea};
   --color-timeline-work-area-border: ${c.timeline.workAreaBorder};
   --color-timeline-work-area-bar: ${c.timeline.workAreaBar};
+  --color-timeline-sound: ${c.timeline.sound};
+  --color-timeline-sound-fill: ${c.timeline.soundFill};
+  --color-timeline-sound-fill-selected: ${c.timeline.soundFillSelected};
+  --color-timeline-sound-wave: ${c.timeline.soundWave};
 
   /* Colors - Keyframe indicators */
   --color-keyframe-active: ${c.keyframe.active};`;

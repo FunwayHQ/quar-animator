@@ -6,6 +6,7 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { useSceneGraph } from '../contexts/SceneGraphContext';
 import { intoArtboardBeneath } from '../services/intoArtboard';
+import { chooseSoundFiles, importSoundFiles } from '../services/soundImport';
 import { useEditorStore } from '../stores/editorStore';
 import { toast } from '../components/common/Toast';
 import {
@@ -59,6 +60,8 @@ export interface ProjectActions {
   importProjectFile: (file: File) => Promise<void>;
   importSvg: () => void;
   importImage: () => void;
+  /** Pick sound files and put them on the timeline in view, at the playhead */
+  importSound: () => void;
   deleteProject: (id: string) => Promise<void>;
   listProjects: () => Promise<ProjectListItem[]>;
 }
@@ -379,6 +382,11 @@ export function useProjectActions(options: UseProjectActionsOptions = {}): Proje
     input.click();
   }, [sceneGraph]);
 
+  // ------ Import Sound files ------
+  const importSoundFile = useCallback(() => {
+    chooseSoundFiles((files) => void importSoundFiles(sceneGraph, files));
+  }, [sceneGraph]);
+
   // ------ Delete Project ------
   const deleteProjectAction = useCallback(async (id: string) => {
     await dbDelete(id);
@@ -475,6 +483,7 @@ export function useProjectActions(options: UseProjectActionsOptions = {}): Proje
     importProjectFile,
     importSvg: importSvgFile,
     importImage: importImageFile,
+    importSound: importSoundFile,
     deleteProject: deleteProjectAction,
     listProjects: listProjectsAction,
   };
