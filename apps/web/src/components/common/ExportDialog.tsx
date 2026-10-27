@@ -15,7 +15,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { X, AlertTriangle } from 'lucide-react';
 import { inTimelineScope, widenToAspect } from '@quar/core';
-import { scopeDuration, scopedTimeline } from '@quar/animation';
+import { scopeDuration, scopeSounds, scopedTimeline } from '@quar/animation';
 import { useSceneGraph } from '../../contexts/SceneGraphContext';
 import { useEditorStore } from '../../stores/editorStore';
 import {
@@ -28,6 +28,7 @@ import {
 } from '@quar/export';
 import type { ExportProgress } from '@quar/export';
 import { downloadBlob } from '../../services/exportService';
+import { decodedSound } from '../../services/soundFiles';
 import {
   defaultExportSize,
   exportRig,
@@ -77,6 +78,8 @@ interface ExportDialogState {
   webmFps: number;
   webmSpeed: number;
   webmTransparent: boolean;
+  /** MP4 and WebM: with the sound clips the export plays */
+  videoSound: boolean;
   // SVG: one frame
   svgFrame: number;
   /** 0 (best quality) … 100 (smallest file) */
@@ -204,6 +207,34 @@ function describeGifCompression(compression: number): string {
     : `${colors} colors; subtle color changes between frames are skipped. Smaller file, lower quality.`;
 }
 
+/** Whether a video has the sound clips it plays. */
+function SoundField({
+  format,
+  clips,
+  checked,
+  onChange,
+}: {
+  format: 'mp4' | 'webm';
+  clips: number;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+}) {
+  return (
+    <div className={styles.formRow}>
+      <span className={styles.label}>Sound</span>
+      <label className={styles.checkbox}>
+        <input
+          type="checkbox"
+          checked={checked}
+          onChange={(e) => onChange(e.target.checked)}
+          data-testid={`export-${format}-sound`}
+        />
+        <span>{clips === 1 ? 'With its sound clip' : `With its ${clips} sound clips`}</span>
+      </label>
+    </div>
+  );
+}
+
 /** The formats that play the page's artboards as slides, one after another. */
 const SLIDE_TABS: ExportTab[] = ['mp4', 'webm', 'gif', 'png-sequence'];
 
@@ -268,6 +299,7 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
     webmFps: timeline.frameRate,
     webmSpeed: 1,
     webmTransparent: false,
+    videoSound: true,
     svgFrame: Math.min(
       Math.max(0, timelineDuration - 1),
       Math.max(0, Math.round(useEditorStore.getState().currentFrame ?? 0))
@@ -321,6 +353,12 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
   const slidesPdf = slides.length > 1 && state.tab === 'pdf';
   const slidesSeconds =
     slides.reduce((sum, slide) => sum + slide.frameCount, 0) / timeline.frameRate;
+
+  // The sound clips a video of this has: each slide's, the artboard's, or the page's
+  const soundClipCount = slidesExport
+    ? slides.reduce((sum, slide) => sum + scopeSounds(timeline, slide.node.id).length, 0)
+    : scopeSounds(timeline, selectedArtboard ? selectedArtboard.node.id : null).length;
+  const withSound = state.videoSound && soundClipCount > 0;
 
   // What the timing lines count: the range, or all the slides
   const slidesFrames = slides.reduce((sum, slide) => sum + slide.frameCount, 0);
@@ -532,6 +570,10 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
             speed: state.mp4Speed,
             backgroundColor: documentBackground,
             slides: slideFrames,
+            ...(withSound && {
+              sounds: useEditorStore.getState().sounds,
+              decodeSound: decodedSound,
+            }),
           },
           (progress) => setState((s) => ({ ...s, progress })),
           () => cancelledRef.current
@@ -555,6 +597,10 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
             transparent: state.webmTransparent,
             backgroundColor: documentBackground,
             slides: slideFrames,
+            ...(withSound && {
+              sounds: useEditorStore.getState().sounds,
+              decodeSound: decodedSound,
+            }),
           },
           (progress) => setState((s) => ({ ...s, progress })),
           () => cancelledRef.current
@@ -775,6 +821,7 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
     sceneScope,
     slides,
     slidesExport,
+    withSound,
     close,
   ]);
 
@@ -1069,6 +1116,14 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
 
             {state.tab === 'mp4' && (
               <>
+                {soundClipCount > 0 && (
+                  <SoundField
+                    format="mp4"
+                    clips={soundClipCount}
+                    checked={state.videoSound}
+                    onChange={(checked) => update('videoSound', checked)}
+                  />
+                )}
                 <TimingFields
                   format="mp4"
                   rates={frameRateChoices(timeline.frameRate)}
@@ -1109,6 +1164,14 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
                     <span>Transparent</span>
                   </label>
                 </div>
+                {soundClipCount > 0 && (
+                  <SoundField
+                    format="webm"
+                    clips={soundClipCount}
+                    checked={state.videoSound}
+                    onChange={(checked) => update('videoSound', checked)}
+                  />
+                )}
                 <TimingFields
                   format="webm"
                   rates={frameRateChoices(timeline.frameRate)}

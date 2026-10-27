@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render as baseRender, screen, fireEvent, act, waitFor } from '@testing-library/react';
 import { useEffect } from 'react';
 import type { ReactElement } from 'react';
@@ -538,6 +538,48 @@ describe('ExportDialog', () => {
     fireEvent.click(screen.getByTestId('export-dialog-export'));
     await waitFor(() => expect(exportMp4).toHaveBeenCalledOnce());
     expect(vi.mocked(exportMp4).mock.calls[0]![1]).toMatchObject({ fps: 60, speed: 0.5 });
+  });
+
+  describe('a video’s sound', () => {
+    const voice = { id: 'voice', name: 'Voice', src: 'data:audio/wav;base64,AAAA', duration: 1 };
+    const clip = { id: 'c', soundId: 'voice', start: 0, offset: 0, duration: 1, gain: 1 };
+    const store = mockStore as unknown as { sounds?: unknown[]; timeline: { sounds?: unknown[] } };
+    beforeEach(() => {
+      store.sounds = [voice];
+      store.timeline.sounds = [clip];
+    });
+    afterEach(() => {
+      delete store.sounds;
+      delete store.timeline.sounds;
+    });
+
+    it('has the sound clips the video plays', async () => {
+      render(<ExportDialogHost />);
+      act(() => showExportDialog('mp4'));
+      expect(screen.getByTestId('export-mp4-sound')).toBeChecked();
+      expect(screen.getByText('With its sound clip')).toBeInTheDocument();
+      fireEvent.click(screen.getByTestId('export-dialog-export'));
+      await waitFor(() => expect(exportMp4).toHaveBeenCalledOnce());
+      expect(vi.mocked(exportMp4).mock.calls[0]![1]).toMatchObject({
+        sounds: [voice],
+        decodeSound: expect.any(Function),
+      });
+    });
+
+    it('is left out with Sound turned off', async () => {
+      render(<ExportDialogHost />);
+      act(() => showExportDialog('webm'));
+      fireEvent.click(screen.getByTestId('export-webm-sound'));
+      fireEvent.click(screen.getByTestId('export-dialog-export'));
+      await waitFor(() => expect(exportWebm).toHaveBeenCalledOnce());
+      expect(vi.mocked(exportWebm).mock.calls[0]![1]).not.toHaveProperty('sounds');
+    });
+  });
+
+  it('offers no Sound option when nothing in the video has sound', () => {
+    render(<ExportDialogHost />);
+    act(() => showExportDialog('mp4'));
+    expect(screen.queryByTestId('export-mp4-sound')).toBeNull();
   });
 
   it('shows an MP4 capability error returned by the encoder', async () => {
