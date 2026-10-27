@@ -257,6 +257,15 @@
   margin-inline: auto;
 }
 
+/* The menus and what's beside them share the first row: on the narrowest
+   windows the project name gives way (only far below where the tools change
+   rows, so the two never set each other off) */
+.menuBar.toolsBelow > .actions,
+.menuBar.toolsBelow .projectNameDisplay,
+.menuBar.toolsBelow .projectNameText {
+  min-width: 0;
+}
+
 .actions {
   flex: 1 0 0;
   min-width: max-content;
