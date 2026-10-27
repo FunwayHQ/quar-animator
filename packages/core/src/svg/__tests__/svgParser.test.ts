@@ -342,6 +342,22 @@ describe('parseSvg', () => {
   // Transforms
   // --------------------------------------------------------------------------
 
+  it('inherits the paint the <svg> element sets, as icon sets draw their strokes', () => {
+    const result = parseSvg(
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#d4a03c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 16 4-4-4-4"/><circle cx="12" cy="12" r="3" fill="#ffffff"/></svg>'
+    );
+    const [path, circle] = result.elements;
+    expect(path!.style).toMatchObject({
+      fill: null,
+      stroke: '#d4a03c',
+      strokeWidth: 2,
+      strokeLinecap: 'round',
+      strokeLinejoin: 'round',
+    });
+    // A child's own paint still wins
+    expect(circle!.style).toMatchObject({ fill: '#ffffff', stroke: '#d4a03c' });
+  });
+
   it('captures transform attribute', () => {
     const svg = `<svg xmlns="http://www.w3.org/2000/svg">
       <rect transform="translate(50, 100)" width="10" height="10" />

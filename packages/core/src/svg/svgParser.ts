@@ -149,8 +149,9 @@ export function parseSvg(svgString: string): ParsedSvg {
     height: viewBox?.height ?? height,
   });
 
-  // Walk children (excluding defs)
-  const elements = walkChildren(svgEl, defs, undefined);
+  // Walk children (excluding defs), inheriting what the <svg> itself sets —
+  // icon sets put fill="none" and the stroke there
+  const elements = walkChildren(svgEl, defs, resolveStyle(svgEl));
 
   return { viewBox, width, height, defs, elements };
 }
