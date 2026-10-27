@@ -3841,7 +3841,9 @@ export class ShapeRenderer {
         : null;
     }
     const vertices = this.getTessellatedVertices(node.id);
-    return vertices ? { vertices, bendMesh: false, shape: layerShape(node) } : null;
+    // (A bound image binding again is weighed by its picture too)
+    const shape = node.type === 'image' ? this.bindShape(node) : layerShape(node);
+    return vertices ? { vertices, bendMesh: false, shape } : null;
   }
 
   /** Where an image is opaque, from its decoded pixels (null until it's loaded). */

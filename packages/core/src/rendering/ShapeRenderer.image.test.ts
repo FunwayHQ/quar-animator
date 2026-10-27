@@ -717,4 +717,47 @@ describe('ShapeRenderer - Image Rendering', () => {
       expect(() => shapeRenderer.renderNode(imageNode, vpMatrix)).not.toThrow();
     });
   });
+
+  // ==========================================================================
+  // Binding images by their picture
+  // ==========================================================================
+
+  describe('getBindVertices', () => {
+    /** An image as if loaded, opaque on its left half (a 2D canvas reads its pixels). */
+    function loadedLeftHalf(node: ImageNode) {
+      const img = { naturalWidth: 4, naturalHeight: 2, width: 4, height: 2 } as HTMLImageElement;
+      (
+        shapeRenderer as unknown as { loadedImages: Map<string, HTMLImageElement> }
+      ).loadedImages.set(node.src, img);
+      const pixels = new Uint8ClampedArray(4 * 2 * 4);
+      for (let y = 0; y < 2; y++) for (let x = 0; x < 2; x++) pixels[(y * 4 + x) * 4 + 3] = 255;
+      const context = { drawImage: vi.fn(), getImageData: vi.fn(() => ({ data: pixels })) };
+      const create = document.createElement.bind(document);
+      vi.spyOn(document, 'createElement').mockImplementation((tag: string) => {
+        const el = create(tag);
+        if (tag === 'canvas') (el as HTMLCanvasElement).getContext = vi.fn(() => context) as never;
+        return el;
+      });
+    }
+    afterEach(() => vi.restoreAllMocks());
+
+    it('gives an image’s opaque pixels as its shape, bound already or not', () => {
+      const node = createImageNode('photo', 'data:image/png;base64,abc', 100, 50);
+      loadedLeftHalf(node);
+      for (const n of [node, { ...node, skinData: { vertexCount: 4 } } as unknown as ImageNode]) {
+        const shape = shapeRenderer.getBindVertices(n)?.shape;
+        expect(shape?.(-25, 0)).toBe(true);
+        expect(shape?.(25, 0)).toBe(false);
+      }
+    });
+
+    it('has no shape for an image that isn’t loaded, nor once its texture is gone', () => {
+      const node = createImageNode('photo', 'data:image/png;base64,abc', 100, 50);
+      expect(shapeRenderer.getBindVertices(node)?.shape).toBeNull();
+      loadedLeftHalf(node);
+      expect(shapeRenderer.getBindVertices(node)?.shape).toBeTruthy();
+      shapeRenderer.disposeTexture(node.src);
+      expect(shapeRenderer.getBindVertices(node)?.shape).toBeNull();
+    });
+  });
 });

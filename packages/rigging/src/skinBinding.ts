@@ -271,8 +271,8 @@ export type ShapeTest = (x: number, y: number) => boolean;
 
 /** The places along a bone its envelope is measured at */
 const ENVELOPE_SAMPLES = 9;
-/** Where two bones' envelopes are about as close, as a share of an envelope */
-const ENVELOPE_BLEND = 0.25;
+/** How far two bones' influence blends, as a share of the thinner one's envelope */
+const ENVELOPE_BLEND = 0.5;
 
 /** Directions searched for the nearest edge */
 const EDGE_DIRECTIONS = Array.from({ length: 24 }, (_, i) => {
@@ -356,10 +356,12 @@ function envelopeRadii(
  * head). Near a bone it isn't connected to, it blends where the two are
  * about as close.
  *
- * Given the layer's shape, nearness is measured against each bone's envelope
- * — how far the shape reaches to its side — so a trunk keeps what's under a
- * limb: the fur under a raised arm is nearer the arm bone than the spine, but
- * well outside the arm's thickness and inside the body's width.
+ * Given the layer's shape, nearness is the distance beyond each bone's
+ * envelope — how far the shape reaches round it — so a trunk keeps what's
+ * under a limb: the fur under a raised arm is nearer the arm bone than the
+ * spine, but well outside the arm's thickness and inside the body's width.
+ * (Beyond, not in envelopes: as a ratio a wide trunk took a hoof's tip from
+ * across the picture, away from the thin bone right beside it.)
  */
 export function computeAutoWeights(
   skinData: SkinData,
@@ -398,7 +400,7 @@ export function computeAutoWeights(
 
   const numVertices = vertexPositions.length / 2;
   const newVertices: VertexSkinEntry[] = [];
-  // Without a shape, plain distance (each envelope 1)
+  // Without a shape, plain distance (each envelope 0)
   const radii = shape ? envelopeRadii(bones, shape, vertexPositions) : null;
 
   for (let i = 0; i < numVertices; i++) {
@@ -407,8 +409,8 @@ export function computeAutoWeights(
       .map((bone) => ({
         bone,
         dist:
-          pointToSegmentDistance(v.x, v.y, bone.head.x, bone.head.y, bone.tip.x, bone.tip.y) /
-          (radii?.get(bone.id) ?? 1),
+          pointToSegmentDistance(v.x, v.y, bone.head.x, bone.head.y, bone.tip.x, bone.tip.y) -
+          (radii?.get(bone.id) ?? 0),
       }))
       .sort((a, b) => a.dist - b.dist);
     const nearest = distances[0];
@@ -446,8 +448,10 @@ export function computeAutoWeights(
     // Blend with a nearby bone it isn't connected to, where both are about as close
     const other = distances.find((entry) => !related.has(entry.bone.id));
     if (other) {
-      // (Against envelopes, distances are in envelopes, not world units)
-      const r = radii ? ENVELOPE_BLEND : JOINT_BLEND * Math.min(own.length, other.bone.length);
+      // (With a shape, about half the thinner part's thickness)
+      const r = radii
+        ? ENVELOPE_BLEND * Math.min(radii.get(own.id) ?? 0, radii.get(other.bone.id) ?? 0)
+        : JOINT_BLEND * Math.min(own.length, other.bone.length);
       const share = 0.5 * (1 - smoothstep(0, Math.max(r, 1e-9), other.dist - nearest.dist));
       if (share > 0) {
         for (const [boneId, weight] of weights) weights.set(boneId, weight * (1 - share));

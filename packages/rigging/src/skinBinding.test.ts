@@ -356,6 +356,24 @@ describe('skinBinding', () => {
         expect(edge.vertices[0]!.influences).toEqual([{ boneId: 'arm', weight: 1 }]);
       });
 
+      it('gives a limb’s far end to the limb, not to a wide trunk across the picture', () => {
+        // A thin hand bone at the end of an arm, a wide body far away: the hoof's
+        // tip is 30 beyond the hand's reach, the body's middle 400 away
+        sceneGraph.addNode(createBoneNode('spine', 'Spine', { x: 0, y: 0 }, 200, 90));
+        sceneGraph.addNode(createBoneNode('hand', 'Hand', { x: -400, y: 150 }, 60, 180));
+        const skin = createSkinBinding('spine', ['spine', 'hand'], 1, sceneGraph)!;
+        const states = [
+          ...computeFKChain('spine', sceneGraph),
+          ...computeFKChain('hand', sceneGraph),
+        ];
+        const figure = (x: number, y: number) =>
+          (Math.abs(x) <= 150 && y >= -50 && y <= 250) ||
+          (x >= -470 && x <= -150 && y >= 140 && y <= 160);
+        // A tip of the hoof, off the hand's thin line
+        const tip = computeAutoWeights(skin, new Float32Array([-465, 159]), states, figure);
+        expect(tip.vertices[0]!.influences).toEqual([{ boneId: 'hand', weight: 1 }]);
+      });
+
       it('weighs a bone outside the shape by the others’ envelopes', () => {
         sceneGraph.addNode(createBoneNode('inside', 'Inside', { x: 0, y: 0 }, 100));
         sceneGraph.addNode(createBoneNode('outside', 'Outside', { x: 0, y: 500 }, 100));
