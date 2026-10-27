@@ -1,0 +1,102 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<!--
+  The video's cards, captions and window frame, for both cuts:
+  body[data-format] is "wide" (1920×1080) or "tall" (1080×1920);
+  body[data-card] is intro | outro (animated, add class "go") | cap | frame.
+  record.mjs fills FONTS and LOGO_URL, and for a caption #title / #sub.
+-->
+<style>
+  @font-face { font-family: 'DM Sans'; font-weight: 400; src: url('FONTS/dm-sans/files/dm-sans-latin-400-normal.woff2'); }
+  @font-face { font-family: 'DM Sans'; font-weight: 700; src: url('FONTS/dm-sans/files/dm-sans-latin-700-normal.woff2'); }
+  @font-face { font-family: 'DM Sans'; font-weight: 800; src: url('FONTS/dm-sans/files/dm-sans-latin-800-normal.woff2'); }
+  @font-face { font-family: 'IBM Plex Mono'; font-weight: 500; src: url('FONTS/ibm-plex-mono/files/ibm-plex-mono-latin-500-normal.woff2'); }
+  :root { --violet: #a855f7; --pink: #ec4899; --sun: #ffb35c; --ink: #0d0b14; }
+  html, body { margin: 0; overflow: hidden; }
+  body[data-format="wide"] { width: 1920px; height: 1080px; }
+  body[data-format="tall"] { width: 1080px; height: 1920px; }
+  body {
+    font-family: 'DM Sans', sans-serif; color: #fff;
+    background:
+      radial-gradient(900px 800px at 12% 10%, rgba(168, 85, 247, 0.42), transparent 70%),
+      radial-gradient(800px 760px at 92% 92%, rgba(255, 140, 80, 0.22), transparent 70%),
+      radial-gradient(600px 560px at 90% 6%, rgba(236, 72, 153, 0.26), transparent 70%),
+      var(--ink);
+    display: flex; align-items: center; justify-content: center;
+  }
+  body.overlay { background: transparent; display: block; }
+  body[data-card="frame"] { display: block; }
+  .card { display: none; text-align: center; }
+  body[data-card="intro"] .intro, body[data-card="outro"] .outro,
+  body[data-card="cap"] .cap, body[data-card="frame"] .frame { display: block; }
+
+  .logo img { height: 104px; filter: drop-shadow(0 12px 40px rgba(168, 85, 247, 0.5)); }
+  .logo { opacity: 0; transform: translateY(24px) scale(0.92); }
+  h1 { font-weight: 800; letter-spacing: -3px; margin: 40px 0 0; line-height: 1; }
+  [data-format="wide"] h1 { font-size: 124px; }
+  [data-format="tall"] h1 { font-size: 132px; }
+  h1 span { display: block; opacity: 0; transform: translateY(40px); }
+  .grad { background: linear-gradient(90deg, var(--violet), var(--pink) 55%, var(--sun)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  p.lede { font-size: 46px; line-height: 1.3; color: #d6c9f5; margin: 40px auto 0; max-width: 900px; opacity: 0; transform: translateY(20px); }
+  .steps { margin: 56px auto 0; display: flex; gap: 18px; justify-content: center; flex-wrap: wrap; max-width: 960px; }
+  .step { font: 500 34px 'IBM Plex Mono', monospace; padding: 14px 30px; border-radius: 999px; color: #e9d5ff;
+    background: rgba(168, 85, 247, 0.12); border: 2px solid rgba(168, 85, 247, 0.45); opacity: 0; transform: translateY(20px); }
+  .step b { color: var(--violet); font-weight: 500; margin-right: 12px; }
+  .chips { margin: 64px auto 0; display: flex; gap: 20px; justify-content: center; flex-wrap: wrap; }
+  .chip { font-size: 40px; padding: 16px 36px; border-radius: 999px; border: 2px solid rgba(214, 201, 245, 0.4); background: rgba(255, 255, 255, 0.06); opacity: 0; transform: translateY(20px); }
+  .url { margin-top: 72px; font-size: 64px; font-weight: 700; opacity: 0; transform: translateY(20px); }
+  .gh { margin-top: 16px; font: 500 30px 'IBM Plex Mono', monospace; color: #a99fc6; opacity: 0; }
+
+  .go .logo { animation: up 0.9s cubic-bezier(.2,.9,.25,1.2) 0.1s forwards; }
+  .go h1 span { animation: up 0.8s cubic-bezier(.2,.8,.2,1) forwards; }
+  .go h1 span:nth-child(1) { animation-delay: 0.35s; }
+  .go h1 span:nth-child(2) { animation-delay: 0.55s; }
+  .go p.lede { animation: up 0.8s ease-out 1.0s forwards; }
+  .go .step, .go .chip { animation: up 0.6s cubic-bezier(.2,.9,.25,1.3) forwards; }
+  .go .step:nth-child(1), .go .chip:nth-child(1) { animation-delay: 1.3s; }
+  .go .step:nth-child(2), .go .chip:nth-child(2) { animation-delay: 1.42s; }
+  .go .step:nth-child(3), .go .chip:nth-child(3) { animation-delay: 1.54s; }
+  .go .chip:nth-child(4) { animation-delay: 1.66s; }
+  .go .url { animation: up 0.8s ease-out 1.8s forwards; }
+  .go .gh { animation: up 0.8s ease-out 2.0s forwards; }
+  @keyframes up { to { opacity: 1; transform: none; } }
+
+  /* A caption over a shot: a title and a line under it, placed by the format */
+  .cap { position: absolute; left: 0; right: 0; text-align: center; }
+  [data-format="wide"] .cap { top: 22px; }
+  [data-format="tall"] .cap { top: 190px; padding: 0 60px; }
+  .cap #title { font-weight: 800; letter-spacing: -1.5px; line-height: 1.02; }
+  [data-format="wide"] .cap #title { font-size: 58px; display: inline; }
+  [data-format="tall"] .cap #title { font-size: 92px; display: block; }
+  .cap #sub { font: 500 30px 'IBM Plex Mono', monospace; color: #d8b4fe; }
+  [data-format="wide"] .cap #sub { display: inline; margin-left: 22px; }
+  [data-format="tall"] .cap #sub { display: block; margin-top: 26px; font-size: 34px; line-height: 1.4; }
+  .cap #title .grad { display: inline; }
+
+  /* The window a shot plays in: a title bar with its address, the rest left clear */
+  .frame { position: absolute; border-radius: 22px; box-shadow: 0 40px 120px rgba(0, 0, 0, 0.55), 0 0 0 1.5px rgba(255, 255, 255, 0.12); }
+  .frame .bar { height: 44px; border-radius: 22px 22px 0 0; background: #1b1922; display: flex; align-items: center; padding: 0 20px; gap: 9px; border-bottom: 1px solid rgba(255, 255, 255, 0.07); }
+  .frame .bar i { width: 13px; height: 13px; border-radius: 50%; background: #3a3744; }
+  .frame .bar i:nth-child(1) { background: #ff5f57; } .frame .bar i:nth-child(2) { background: #febc2e; } .frame .bar i:nth-child(3) { background: #28c840; }
+  .frame .bar span { margin: 0 auto; font: 500 18px 'IBM Plex Mono', monospace; color: #b3acc6; background: rgba(255, 255, 255, 0.06); padding: 5px 26px; border-radius: 999px; transform: translateX(-30px); }
+</style>
+</head>
+<body data-format="wide">
+  <div class="card intro">
+    <div class="logo"><img src="LOGO_URL" alt=""></div>
+    <h1><span>Redesign your site</span><span class="grad">in Quar Animator.</span></h1>
+    <div class="steps"><span class="step"><b>1</b>Rebuild</span><span class="step"><b>2</b>Animate</span><span class="step"><b>3</b>Export</span></div>
+  </div>
+  <div class="card outro">
+    <div class="logo"><img src="LOGO_URL" alt=""></div>
+    <h1><span>Free &amp; open</span><span class="grad">source.</span></h1>
+    <div class="chips"><span class="chip">MP4</span><span class="chip">GIF</span><span class="chip">Lottie</span><span class="chip">WebM</span></div>
+    <div class="url">animator.quar.pro</div>
+    <div class="gh">github.com/FunwayHQ/quar-animator</div>
+  </div>
+  <div class="card cap"><div id="title"></div><div id="sub"></div></div>
+  <div class="card frame"><div class="bar"><i></i><i></i><i></i><span id="address"></span></div></div>
+</body>
+</html>

@@ -29,3 +29,10 @@ The sources are in `source/`. With the dev server running (`pnpm dev`):
 3. **Cut** — `node layouts.cjs` renders the backdrops for the square and vertical cuts,
    then `python3 assemble.py` builds all three videos with ffmpeg (fades between the
    parts, the editor session sped up until its playback).
+
+## "Redesign your site in Quar Animator"
+
+`quar-website-redesign-16x9.mp4` and `-9x16.mp4` (36 s, with "Pool Table Panic" under it) plus
+`-cover.jpg`: funwayinteractive.com's home page rebuilt in the editor as one animated artboard,
+then exported. The sources, and how to make it again, are in
+[`source/website-redesign/`](source/website-redesign/README.md).
