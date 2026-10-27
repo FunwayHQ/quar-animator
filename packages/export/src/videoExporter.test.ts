@@ -25,15 +25,21 @@ const mocks = vi.hoisted(() => ({
 
 const createFrameRendererMock = vi.hoisted(() => vi.fn());
 
-vi.mock('./frameRenderer', () => ({
-  createFrameRenderer: (options: unknown) => {
-    createFrameRendererMock(options);
-    return mocks.renderer;
-  },
-  getFrameCount: (start: number, end: number) => Math.max(0, end - start + 1),
-  getFrameRenderRoots: (ctx: { sceneGraph: { getRootNodes: () => unknown[] } }) =>
-    ctx.sceneGraph.getRootNodes(),
-}));
+vi.mock('./frameRenderer', async (importOriginal) => {
+  // The shot plan as it is: only the renderer is stood in for
+  const actual = await importOriginal<typeof import('./frameRenderer')>();
+  return {
+    framePlan: actual.framePlan,
+    preloadShots: actual.preloadShots,
+    createFrameRenderer: (options: unknown) => {
+      createFrameRendererMock(options);
+      return mocks.renderer;
+    },
+    getFrameCount: (start: number, end: number) => Math.max(0, end - start + 1),
+    getFrameRenderRoots: (ctx: { sceneGraph: { getRootNodes: () => unknown[] } }) =>
+      ctx.sceneGraph.getRootNodes(),
+  };
+});
 
 vi.mock('mediabunny', () => ({
   canEncodeVideo: mocks.canEncodeVideo,
@@ -124,6 +130,32 @@ describe('exportMp4', () => {
     expect(mocks.output?.state).toBe('finalized');
     expect(progress.mock.calls.at(-1)?.[0]).toMatchObject({ phase: 'finalizing', percentage: 100 });
     expect(mocks.renderer.dispose).toHaveBeenCalledOnce();
+  });
+
+  it('plays slides one after another in one video, each its whole timeline', async () => {
+    mocks.canEncodeVideo.mockResolvedValue(true);
+    const slide = (name: string) =>
+      ({ name, sceneGraph: { getRootNodes: () => [] }, timeline: { tracks: [] } }) as never;
+    const intro = slide('intro');
+    const outro = slide('outro');
+    await exportMp4(intro, {
+      width: 64,
+      height: 48,
+      frameRate: 24,
+      startFrame: 0,
+      endFrame: 0,
+      slides: [
+        { ctx: intro, frameCount: 2 },
+        { ctx: outro, frameCount: 3 },
+      ],
+    });
+    const drawn = mocks.renderer.renderFrame.mock.calls.map(
+      ([ctx, frame]) => `${(ctx as { name: string }).name}@${frame}`
+    );
+    expect(drawn).toEqual(['intro@0', 'intro@1', 'outro@0', 'outro@1', 'outro@2']);
+    expect(mocks.source?.frames).toHaveLength(5);
+    // Each slide's pictures loaded before any frame
+    expect(mocks.renderer.preloadTextures).toHaveBeenCalledTimes(2);
   });
 
   it('sets the video on the document background, opaque', async () => {

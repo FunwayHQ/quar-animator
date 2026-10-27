@@ -5,9 +5,9 @@
 
 import type { Color } from '@quar/types';
 import { DEFAULT_DOCUMENT_BACKGROUND } from '@quar/core';
-import type { FrameRenderContext } from './frameRenderer';
-import { createFrameRenderer, getFrameCount, getFrameRenderRoots } from './frameRenderer';
-import { sampleTimeline, type PlaybackTiming } from './exportUtils';
+import type { FrameRenderContext, FrameSlide } from './frameRenderer';
+import { createFrameRenderer, framePlan, getFrameCount, preloadShots } from './frameRenderer';
+import type { PlaybackTiming } from './exportUtils';
 import type { ExportProgress } from './index';
 
 export type VideoFormat = 'mp4' | 'webm';
@@ -20,6 +20,8 @@ export interface VideoExportOptions extends PlaybackTiming {
   backgroundColor?: Color;
   /** WebM only: nothing behind the artwork, kept as the video's alpha. */
   transparent?: boolean;
+  /** One video of these slides, each its whole timeline (the range is then theirs) */
+  slides?: FrameSlide[];
 }
 
 export type Mp4ExportOptions = Omit<VideoExportOptions, 'transparent'>;
@@ -52,7 +54,7 @@ export async function exportVideo(
   isCancelled: () => boolean = () => false
 ): Promise<Blob | null> {
   const { width, height, startFrame, endFrame } = options;
-  if (getFrameCount(startFrame, endFrame) === 0) {
+  if (!options.slides?.length && getFrameCount(startFrame, endFrame) === 0) {
     throw new Error('Choose a valid frame range to export.');
   }
   if (width < 1 || height < 1) throw new Error('Export width and height must be at least 1 pixel.');
@@ -70,8 +72,8 @@ export async function exportVideo(
     canEncodeVideo,
     getFirstEncodableVideoCodec,
   } = await import('mediabunny');
-  const { fps, frames } = sampleTimeline(options);
-  const frameCount = frames.length;
+  const { fps, shots } = framePlan(ctx, options);
+  const frameCount = shots.length;
   const quality = new Quality('high');
   const codecOptions = { width, height, frameRate: fps, quality };
   const codec =
@@ -100,10 +102,11 @@ export async function exportVideo(
   let finalized = false;
 
   try {
-    await renderer.preloadTextures(getFrameRenderRoots(ctx), ctx.sceneGraph, ctx.symbols);
+    await preloadShots(renderer, shots);
     if (isCancelled()) return null;
 
-    const canvas = renderer.renderFrame(ctx, frames[0]!);
+    const first = shots[0]!;
+    const canvas = renderer.renderFrame(first.ctx, first.frame);
     const target = new BufferTarget();
     output = new Output({
       format:
@@ -124,7 +127,7 @@ export async function exportVideo(
         await output.cancel();
         return null;
       }
-      if (i > 0) renderer.renderFrame(ctx, frames[i]!);
+      if (i > 0) renderer.renderFrame(shots[i]!.ctx, shots[i]!.frame);
       await source.add(i / fps, 1 / fps);
       onProgress?.({
         phase: 'rendering',

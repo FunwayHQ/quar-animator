@@ -46,6 +46,42 @@ export function sampleTimeline(
   };
 }
 
+/** One slide of a slides export: what it draws, over its own timeline's whole length. */
+export interface ExportSlide<Context> {
+  ctx: Context;
+  /** Its timeline's length, in frames */
+  frameCount: number;
+}
+
+/** What an output frame shows: which slide's drawing, at which of its timeline's frames. */
+export interface Shot<Context> {
+  ctx: Context;
+  frame: number;
+}
+
+/**
+ * The output frames of slides played one after another, each its whole
+ * timeline, at the same frame rate and speed (as `sampleTimeline` plays one).
+ */
+export function sampleSlides<Context>(
+  slides: ExportSlide<Context>[],
+  timing: Omit<PlaybackTiming, 'startFrame' | 'endFrame'>,
+  maxFps = Infinity
+): { fps: number; shots: Shot<Context>[] } {
+  let fps = Math.min(maxFps, Math.max(1, timing.fps ?? timing.frameRate));
+  const shots: Shot<Context>[] = [];
+  for (const slide of slides) {
+    if (slide.frameCount < 1) continue;
+    const sampled = sampleTimeline(
+      { ...timing, startFrame: 0, endFrame: slide.frameCount - 1 },
+      maxFps
+    );
+    fps = sampled.fps;
+    for (const frame of sampled.frames) shots.push({ ctx: slide.ctx, frame });
+  }
+  return { fps, shots };
+}
+
 /**
  * Generate filenames for a frame sequence.
  *

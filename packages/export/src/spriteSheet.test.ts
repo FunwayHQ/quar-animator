@@ -12,11 +12,17 @@ const mockFrameRenderer = vi.hoisted(() => ({
   dispose: vi.fn(),
 }));
 
-vi.mock('./frameRenderer', () => ({
-  createFrameRenderer: () => mockFrameRenderer,
-  getFrameRenderRoots: (ctx: { sceneGraph: { getRootNodes: () => unknown[] } }) =>
-    ctx.sceneGraph.getRootNodes(),
-}));
+vi.mock('./frameRenderer', async (importOriginal) => {
+  // The shot plan as it is: only the renderer is stood in for
+  const actual = await importOriginal<typeof import('./frameRenderer')>();
+  return {
+    framePlan: actual.framePlan,
+    preloadShots: actual.preloadShots,
+    createFrameRenderer: () => mockFrameRenderer,
+    getFrameRenderRoots: (ctx: { sceneGraph: { getRootNodes: () => unknown[] } }) =>
+      ctx.sceneGraph.getRootNodes(),
+  };
+});
 
 // ============================================================================
 // generateSpriteSheetMetadata

@@ -8,15 +8,21 @@ const rendererMock = vi.hoisted(() => ({
   dispose: vi.fn(),
 }));
 
-vi.mock('./frameRenderer', () => ({
-  createFrameRenderer: (options: unknown) => {
-    createFrameRendererMock(options);
-    return rendererMock;
-  },
-  getFrameCount: (start: number, end: number) => Math.max(0, end - start + 1),
-  getFrameRenderRoots: (ctx: { sceneGraph: { getRootNodes: () => unknown[] } }) =>
-    ctx.sceneGraph.getRootNodes(),
-}));
+vi.mock('./frameRenderer', async (importOriginal) => {
+  // The shot plan as it is: only the renderer is stood in for
+  const actual = await importOriginal<typeof import('./frameRenderer')>();
+  return {
+    framePlan: actual.framePlan,
+    preloadShots: actual.preloadShots,
+    createFrameRenderer: (options: unknown) => {
+      createFrameRendererMock(options);
+      return rendererMock;
+    },
+    getFrameCount: (start: number, end: number) => Math.max(0, end - start + 1),
+    getFrameRenderRoots: (ctx: { sceneGraph: { getRootNodes: () => unknown[] } }) =>
+      ctx.sceneGraph.getRootNodes(),
+  };
+});
 
 describe('exportGif', () => {
   let drawFrame = 0;
@@ -66,6 +72,30 @@ describe('exportGif', () => {
     expect(progress.mock.calls.some(([item]) => item.phase === 'encoding')).toBe(true);
     expect(progress.mock.calls.at(-1)?.[0]).toMatchObject({ phase: 'finalizing', percentage: 100 });
     expect(rendererMock.dispose).toHaveBeenCalledOnce();
+  });
+
+  it('plays slides one after another in one GIF', async () => {
+    const slide = (name: string) =>
+      ({ name, sceneGraph: { getRootNodes: () => [] }, timeline: { tracks: [] } }) as never;
+    const intro = slide('intro');
+    const outro = slide('outro');
+    const blob = await exportGif(intro, {
+      width: 2,
+      height: 1,
+      frameRate: 12,
+      startFrame: 0,
+      endFrame: 0,
+      slides: [
+        { ctx: intro, frameCount: 1 },
+        { ctx: outro, frameCount: 2 },
+      ],
+    });
+    expect(blob?.type).toBe('image/gif');
+    // Twice over (the palette pass, then the encoding pass): each slide's frames in turn
+    const drawn = rendererMock.renderFrame.mock.calls.map(
+      ([ctx, frame]) => `${(ctx as { name: string }).name}@${frame}`
+    );
+    expect(drawn).toEqual(['intro@0', 'outro@0', 'outro@1', 'intro@0', 'outro@0', 'outro@1']);
   });
 
   it('flattens frames onto the document background, unless transparent', async () => {

@@ -2,8 +2,8 @@
 
 import type { Color } from '@quar/types';
 import { DEFAULT_DOCUMENT_BACKGROUND } from '@quar/core';
-import type { FrameRenderContext } from './frameRenderer';
-import { createFrameRenderer, getFrameCount, getFrameRenderRoots } from './frameRenderer';
+import type { FrameRenderContext, FrameSlide } from './frameRenderer';
+import { createFrameRenderer, framePlan, getFrameCount, preloadShots } from './frameRenderer';
 import { sampleTimeline, type PlaybackTiming } from './exportUtils';
 import type { ExportProgress } from './index';
 
@@ -19,6 +19,8 @@ export interface GifExportOptions extends PlaybackTiming {
    * whose color barely changed from what's on screen are left as they are.
    */
   compression?: number;
+  /** One GIF of these slides, each its whole timeline (the range is then theirs) */
+  slides?: FrameSlide[];
 }
 
 export interface GifCompressionSettings {
@@ -54,8 +56,13 @@ export interface GifTiming {
  */
 export function gifTiming(options: PlaybackTiming): GifTiming {
   const { fps, frames } = sampleTimeline(options, MAX_GIF_FPS);
+  return { frames, delays: gifDelays(frames.length, fps) };
+}
+
+/** Each of `count` frames' delay at `fps`, in hundredths, adding up exactly. */
+function gifDelays(count: number, fps: number): number[] {
   const at = (k: number) => Math.round((k * 100) / fps);
-  return { frames, delays: frames.map((_, k) => at(k + 1) - at(k)) };
+  return Array.from({ length: count }, (_, k) => at(k + 1) - at(k));
 }
 
 const MAX_PALETTE_SAMPLE_PIXELS = 250_000;
@@ -127,12 +134,14 @@ export async function exportGif(
   isCancelled: () => boolean = () => false
 ): Promise<Blob | null> {
   const { width, height, startFrame, endFrame, transparent = false } = options;
-  if (getFrameCount(startFrame, endFrame) === 0) {
+  if (!options.slides?.length && getFrameCount(startFrame, endFrame) === 0) {
     throw new Error('Choose a valid frame range to export.');
   }
   if (width < 1 || height < 1) throw new Error('Export width and height must be at least 1 pixel.');
-  const timing = gifTiming(options);
-  const frameCount = timing.frames.length;
+  const plan = framePlan(ctx, options, MAX_GIF_FPS);
+  const shots = plan.shots;
+  const timing = { delays: gifDelays(shots.length, plan.fps) };
+  const frameCount = shots.length;
   const { colors, tolerance } = gifCompressionSettings(options.compression);
 
   const { GIFEncoder, quantize, applyPalette } = await import('gifenc');
@@ -150,7 +159,7 @@ export async function exportGif(
   }
 
   try {
-    await renderer.preloadTextures(getFrameRenderRoots(ctx), ctx.sceneGraph, ctx.symbols);
+    await preloadShots(renderer, shots);
 
     const pixelCount = width * height;
     const samplesPerFrame = Math.max(1, Math.floor(MAX_PALETTE_SAMPLE_PIXELS / frameCount));
@@ -162,7 +171,7 @@ export async function exportGif(
 
     for (let i = 0; i < frameCount; i++) {
       if (isCancelled()) return null;
-      const canvas = renderer.renderFrame(ctx, timing.frames[i]!);
+      const canvas = renderer.renderFrame(shots[i]!.ctx, shots[i]!.frame);
       sampleContext.clearRect(0, 0, width, height);
       sampleContext.drawImage(canvas, 0, 0, width, height);
       const pixels = sampleContext.getImageData(0, 0, width, height).data;
@@ -236,7 +245,7 @@ export async function exportGif(
 
     for (let i = 0; i < frameCount; i++) {
       if (isCancelled()) return null;
-      const canvas = renderer.renderFrame(ctx, timing.frames[i]!);
+      const canvas = renderer.renderFrame(shots[i]!.ctx, shots[i]!.frame);
       sampleContext.clearRect(0, 0, width, height);
       sampleContext.drawImage(canvas, 0, 0, width, height);
       const pixels = sampleContext.getImageData(0, 0, width, height).data;

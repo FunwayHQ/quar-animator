@@ -17,13 +17,19 @@ const mocks = vi.hoisted(() => ({
   ),
 }));
 
-vi.mock('./frameRenderer', () => ({
-  createFrameRenderer: mocks.createFrameRenderer,
-  getFrameCount: mocks.getFrameCount,
-  generateFrameFilenames: mocks.generateFrameFilenames,
-  getFrameRenderRoots: (ctx: { sceneGraph: { getRootNodes: () => unknown[] } }) =>
-    ctx.sceneGraph.getRootNodes(),
-}));
+vi.mock('./frameRenderer', async (importOriginal) => {
+  // The shot plan as it is: only the renderer is stood in for
+  const actual = await importOriginal<typeof import('./frameRenderer')>();
+  return {
+    framePlan: actual.framePlan,
+    preloadShots: actual.preloadShots,
+    createFrameRenderer: mocks.createFrameRenderer,
+    getFrameCount: mocks.getFrameCount,
+    generateFrameFilenames: mocks.generateFrameFilenames,
+    getFrameRenderRoots: (ctx: { sceneGraph: { getRootNodes: () => unknown[] } }) =>
+      ctx.sceneGraph.getRootNodes(),
+  };
+});
 
 import { exportPngSequence } from './pngSequence';
 
@@ -94,6 +100,31 @@ describe('exportPngSequence', () => {
       { phase: 'finalizing', current: 2, total: 2, percentage: 100 },
     ]);
     expect(renderer.dispose).toHaveBeenCalledOnce();
+  });
+
+  it('numbers every frame of the slides, one after another', async () => {
+    renderer.renderFrameAsBlob.mockResolvedValue(
+      new TextEncoder().encode('png') as unknown as Blob
+    );
+    const outro = { ...context, name: 'outro' } as FrameRenderContext;
+    const archive = await exportPngSequence(context, {
+      startFrame: 0,
+      endFrame: 0,
+      width: 64,
+      height: 36,
+      filenamePattern: 'slide_{N}',
+      slides: [
+        { ctx: context, frameCount: 2 },
+        { ctx: outro, frameCount: 1 },
+      ],
+    });
+    const zip = await JSZip.loadAsync(await archive.arrayBuffer());
+    expect(renderer.renderFrameAsBlob.mock.calls).toEqual([
+      [context, 0],
+      [context, 1],
+      [outro, 0],
+    ]);
+    expect(Object.keys(zip.files).sort()).toEqual(['slide_0.png', 'slide_1.png', 'slide_2.png']);
   });
 
   it('skips null frame blobs and always disposes after a rendering failure', async () => {

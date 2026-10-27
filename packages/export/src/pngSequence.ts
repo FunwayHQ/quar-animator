@@ -5,13 +5,14 @@
  */
 
 import type { Color } from '@quar/types';
-import type { FrameRenderContext } from './frameRenderer';
+import type { FrameRenderContext, FrameSlide } from './frameRenderer';
 import {
   createFrameRenderer,
   getFrameCount,
   generateFrameFilenames,
-  getFrameRenderRoots,
+  preloadShots,
 } from './frameRenderer';
+import type { Shot } from './exportUtils';
 import type { ExportProgress } from './index';
 
 // ============================================================================
@@ -26,6 +27,8 @@ export interface PngSequenceOptions {
   multiplier?: number;
   backgroundColor?: Color | null;
   filenamePattern?: string; // default "frame_{N}"
+  /** Every frame of these slides' timelines, one after another (the range is then theirs) */
+  slides?: FrameSlide[];
 }
 
 // ============================================================================
@@ -55,8 +58,19 @@ export async function exportPngSequence(
     filenamePattern = 'frame_{N}',
   } = options;
 
-  const frameCount = getFrameCount(startFrame, endFrame);
-  const filenames = generateFrameFilenames(filenamePattern, startFrame, endFrame, 'png');
+  // Every frame of the range — or of each slide's timeline, one after another
+  const shots: Shot<FrameRenderContext>[] = options.slides?.length
+    ? options.slides.flatMap((slide) =>
+        Array.from({ length: slide.frameCount }, (_, frame) => ({ ctx: slide.ctx, frame }))
+      )
+    : Array.from({ length: getFrameCount(startFrame, endFrame) }, (_, i) => ({
+        ctx,
+        frame: startFrame + i,
+      }));
+  const frameCount = shots.length;
+  const filenames = options.slides?.length
+    ? generateFrameFilenames(filenamePattern, 0, frameCount - 1, 'png')
+    : generateFrameFilenames(filenamePattern, startFrame, endFrame, 'png');
 
   // Lazy-import JSZip to keep bundle size down when not exporting
   const JSZip = (await import('jszip')).default;
@@ -67,10 +81,10 @@ export async function exportPngSequence(
   try {
     // Pre-load image textures so they render correctly in the fresh WebGL context.
     // Keep this inside the cleanup boundary because preloading allocates GPU resources too.
-    await renderer.preloadTextures(getFrameRenderRoots(ctx), ctx.sceneGraph, ctx.symbols);
+    await preloadShots(renderer, shots);
 
     for (let i = 0; i < frameCount; i++) {
-      const frame = startFrame + i;
+      const shot = shots[i]!;
 
       // Report progress
       onProgress?.({
@@ -81,7 +95,7 @@ export async function exportPngSequence(
       });
 
       // Render frame
-      const blob = await renderer.renderFrameAsBlob(ctx, frame);
+      const blob = await renderer.renderFrameAsBlob(shot.ctx, shot.frame);
       if (blob) {
         zip.file(filenames[i]!, blob);
       }

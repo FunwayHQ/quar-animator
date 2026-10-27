@@ -14,7 +14,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { X, AlertTriangle } from 'lucide-react';
-import { widenToAspect } from '@quar/core';
+import { inTimelineScope, widenToAspect } from '@quar/core';
+import { scopeDuration, scopedTimeline } from '@quar/animation';
 import { useSceneGraph } from '../../contexts/SceneGraphContext';
 import { useEditorStore } from '../../stores/editorStore';
 import {
@@ -33,6 +34,8 @@ import {
   getArtboardScope,
   getLottieExportScene,
   getSceneExportScope,
+  getSlides,
+  slideShow,
 } from '../../services/exportScene';
 import styles from './ExportDialog.module.css';
 
@@ -192,6 +195,14 @@ function describeGifCompression(compression: number): string {
     : `${colors} colors; subtle color changes between frames are skipped. Smaller file, lower quality.`;
 }
 
+/** The formats that play the page's artboards as slides, one after another. */
+const SLIDE_TABS: ExportTab[] = ['mp4', 'webm', 'gif', 'png-sequence'];
+
+/** "1.5 s", "12 s". */
+function formatSeconds(seconds: number): string {
+  return `${Number.isInteger(seconds) ? seconds : seconds.toFixed(1)} s`;
+}
+
 // ============================================================================
 // Component
 // ============================================================================
@@ -199,11 +210,19 @@ function describeGifCompression(compression: number): string {
 function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose: () => void }) {
   const sceneGraph = useSceneGraph();
   const timeline = useEditorStore((s) => s.timeline);
-  const timelineDuration = useEditorStore((s) => s.timelineDuration);
+  // The timeline in view's length (an artboard's, or the page's)
+  const viewDuration = useEditorStore((s) => s.timelineDuration);
   const selectedNodeIds = useEditorStore((s) => s.selectedNodeIds);
   // What shows behind the art in formats without transparency (or with it off)
   const documentBackground = useEditorStore((s) => s.documentBackground);
   const selectedArtboard = getArtboardScope(sceneGraph, selectedNodeIds);
+  // An artboard exports its own timeline (the page's only one may not be the one in view)
+  const timelineDuration = selectedArtboard
+    ? scopeDuration(timeline, selectedArtboard.node.id)
+    : viewDuration;
+  // With no artboard chosen, the page's artboards are slides: an animated
+  // export plays each over its own timeline, one after another
+  const [slides] = useState(() => (selectedArtboard ? [] : getSlides(sceneGraph, timeline)));
   // With no artboard chosen, the export frames all the artwork, wherever it
   // moves — the rig's motion (IK, physics, bent shapes) included
   const [sceneScope] = useState(() =>
@@ -217,7 +236,10 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
           exportRig(useEditorStore.getState(), timeline.frameRate)
         )
   );
-  const defaultSize = defaultExportSize(selectedArtboard?.bounds ?? sceneScope);
+  // The first slide's size, when there are slides
+  const defaultSize = defaultExportSize(
+    selectedArtboard?.bounds ?? (slides.length > 1 ? slides[0]!.bounds : sceneScope)
+  );
 
   const [exiting, setExiting] = useState(false);
   const [state, setState] = useState<ExportDialogState>(() => ({
@@ -284,6 +306,17 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [close, state.exporting]);
 
+  // This export is of the slides: an animated format, and two or more of them
+  const slidesExport = slides.length > 1 && SLIDE_TABS.includes(state.tab);
+  const slidesSeconds =
+    slides.reduce((sum, slide) => sum + slide.frameCount, 0) / timeline.frameRate;
+
+  // What the timing lines count: the range, or all the slides
+  const slidesFrames = slides.reduce((sum, slide) => sum + slide.frameCount, 0);
+  const timingRange = slidesExport
+    ? { startFrame: 0, endFrame: Math.max(0, slidesFrames - 1) }
+    : { startFrame: state.startFrame, endFrame: state.endFrame };
+
   const update = <K extends keyof ExportDialogState>(key: K, value: ExportDialogState[K]) => {
     setState((s) => ({ ...s, [key]: value, error: null }));
   };
@@ -307,7 +340,14 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
 
     const frameRenderContext = {
       sceneGraph,
-      timeline,
+      // A chosen artboard plays its own timeline
+      timeline: selectedArtboard
+        ? scopedTimeline(
+            timeline,
+            selectedArtboard.node.id,
+            inTimelineScope(sceneGraph, selectedArtboard.node.id)
+          )
+        : timeline,
       // Pose rigs like the editor: IK, physics chains and Smart Bone morphs
       rig: exportRig(useEditorStore.getState(), timeline.frameRate),
       // Symbol instances are drawn from their definitions
@@ -323,6 +363,10 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
           : {}),
     };
     const frameRenderRoots = selectedArtboard ? [selectedArtboard.node] : sceneGraph.getRootNodes();
+    // Each artboard over its own timeline, fitted into the export's size
+    const slideFrames = slidesExport
+      ? slideShow(slides, frameRenderContext, state.width, state.height)
+      : undefined;
 
     const lastFrame = Math.max(0, timelineDuration - 1);
     if (state.tab === 'svg') {
@@ -341,11 +385,12 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
       return;
     }
     if (
-      !Number.isInteger(state.startFrame) ||
-      !Number.isInteger(state.endFrame) ||
-      state.startFrame < 0 ||
-      state.endFrame < state.startFrame ||
-      state.endFrame > lastFrame
+      !slidesExport &&
+      (!Number.isInteger(state.startFrame) ||
+        !Number.isInteger(state.endFrame) ||
+        state.startFrame < 0 ||
+        state.endFrame < state.startFrame ||
+        state.endFrame > lastFrame)
     ) {
       setState((s) => ({
         ...s,
@@ -405,6 +450,7 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
             transparent: state.gifTransparent,
             backgroundColor: documentBackground,
             compression: state.gifCompression,
+            slides: slideFrames,
           },
           (progress) => setState((s) => ({ ...s, progress })),
           () => cancelledRef.current
@@ -426,6 +472,7 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
             fps: state.mp4Fps,
             speed: state.mp4Speed,
             backgroundColor: documentBackground,
+            slides: slideFrames,
           },
           (progress) => setState((s) => ({ ...s, progress })),
           () => cancelledRef.current
@@ -448,6 +495,7 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
             speed: state.webmSpeed,
             transparent: state.webmTransparent,
             backgroundColor: documentBackground,
+            slides: slideFrames,
           },
           (progress) => setState((s) => ({ ...s, progress })),
           () => cancelledRef.current
@@ -462,13 +510,19 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
           await import('@quar/export');
         const JSZip = (await import('jszip')).default;
 
-        const frameCount = getFrameCount(state.startFrame, state.endFrame);
-        const filenames = generateFrameFilenames(
-          state.pngPattern,
-          state.startFrame,
-          state.endFrame,
-          'png'
-        );
+        // Every frame of the range — or of each slide's timeline, one after another
+        const shots = slideFrames
+          ? slideFrames.flatMap((slide) =>
+              Array.from({ length: slide.frameCount }, (_, frame) => ({ ctx: slide.ctx, frame }))
+            )
+          : Array.from({ length: getFrameCount(state.startFrame, state.endFrame) }, (_, i) => ({
+              ctx: frameRenderContext,
+              frame: state.startFrame + i,
+            }));
+        const frameCount = shots.length;
+        const filenames = slideFrames
+          ? generateFrameFilenames(state.pngPattern, 0, frameCount - 1, 'png')
+          : generateFrameFilenames(state.pngPattern, state.startFrame, state.endFrame, 'png');
         const zip = new JSZip();
 
         const renderer = createFrameRenderer({
@@ -485,7 +539,7 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
           for (let i = 0; i < frameCount; i++) {
             if (cancelledRef.current) break;
 
-            const _frame = state.startFrame + i;
+            const shot = shots[i]!;
             const progress: ExportProgress = {
               phase: 'rendering',
               current: i + 1,
@@ -494,7 +548,7 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
             };
             setState((s) => ({ ...s, progress }));
 
-            const blob = await renderer.renderFrameAsBlob(frameRenderContext, _frame);
+            const blob = await renderer.renderFrameAsBlob(shot.ctx, shot.frame);
             if (blob) {
               zip.file(filenames[i]!, blob);
             }
@@ -660,6 +714,8 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
     lottieExportScene,
     documentBackground,
     sceneScope,
+    slides,
+    slidesExport,
     close,
   ]);
 
@@ -771,7 +827,14 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
                   ' It’s the page’s only artboard: select everything (Ctrl+A) first to export the whole page.'}
               </div>
             )}
-            {!selectedArtboard && sceneScope && (
+            {slidesExport && (
+              <div className={styles.scopeNote} data-testid="export-slides-scope">
+                {slides.length} slides, one after another: each artboard over its own timeline, in
+                the Layers panel’s order ({formatSeconds(slidesSeconds)} in all). Select an artboard
+                to export just that.
+              </div>
+            )}
+            {!selectedArtboard && sceneScope && !slidesExport && (
               <div className={styles.scopeNote} data-testid="export-scene-scope">
                 Everything on the page is included, framed to fit its whole animation. Select an
                 artboard to export just that.
@@ -802,7 +865,7 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
                   bones are written as their bent outlines; images bound to bones aren’t bent.
                 </p>
               </>
-            ) : (
+            ) : slidesExport ? null : (
               <div className={styles.formRow}>
                 <span className={styles.label}>Frame Range</span>
                 <input
@@ -901,8 +964,7 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
                   summary={describeGifTiming(
                     gifTiming({
                       frameRate: timeline.frameRate,
-                      startFrame: state.startFrame,
-                      endFrame: state.endFrame,
+                      ...timingRange,
                       fps: state.gifFps,
                       speed: state.gifSpeed,
                     })
@@ -946,8 +1008,7 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
                   summary={describeVideoTiming(
                     sampleTimeline({
                       frameRate: timeline.frameRate,
-                      startFrame: state.startFrame,
-                      endFrame: state.endFrame,
+                      ...timingRange,
                       fps: state.mp4Fps,
                       speed: state.mp4Speed,
                     })
@@ -987,8 +1048,7 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
                   summary={describeVideoTiming(
                     sampleTimeline({
                       frameRate: timeline.frameRate,
-                      startFrame: state.startFrame,
-                      endFrame: state.endFrame,
+                      ...timingRange,
                       fps: state.webmFps,
                       speed: state.webmSpeed,
                     })

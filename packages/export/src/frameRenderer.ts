@@ -30,6 +30,8 @@ import {
 
 // Re-export pure utilities from exportUtils for convenience
 export { getFrameCount, generateFrameFilenames } from './exportUtils';
+import { sampleSlides, sampleTimeline } from './exportUtils';
+import type { ExportSlide, PlaybackTiming, Shot } from './exportUtils';
 
 // ============================================================================
 // Types
@@ -268,4 +270,40 @@ export function getFrameRenderRoots(ctx: FrameRenderContext): Node[] {
   return ctx.exportRootIds
     .map((id) => ctx.sceneGraph.getNode(id))
     .filter((node): node is Node => node !== undefined && node !== null);
+}
+
+/** A slide of a slides export: one artboard, over its own timeline. */
+export type FrameSlide = ExportSlide<FrameRenderContext>;
+
+/** An export's frames: what each draws, at which timeline frame, and the rate. */
+export interface FramePlan {
+  fps: number;
+  shots: Shot<FrameRenderContext>[];
+}
+
+/**
+ * What each output frame of an animated export shows: `ctx` over the range
+ * the options give — or, given `slides`, each slide's whole timeline, one
+ * after another.
+ */
+export function framePlan(
+  ctx: FrameRenderContext,
+  options: PlaybackTiming & { slides?: FrameSlide[] },
+  maxFps = Infinity
+): FramePlan {
+  if (options.slides && options.slides.length > 0) {
+    return sampleSlides(options.slides, options, maxFps);
+  }
+  const { fps, frames } = sampleTimeline(options, maxFps);
+  return { fps, shots: frames.map((frame) => ({ ctx, frame })) };
+}
+
+/** Load the pictures every shot draws (each slide's), before rendering any. */
+export async function preloadShots(
+  renderer: Pick<FrameRendererHandle, 'preloadTextures'>,
+  shots: Shot<FrameRenderContext>[]
+): Promise<void> {
+  for (const ctx of new Set(shots.map((shot) => shot.ctx))) {
+    await renderer.preloadTextures(getFrameRenderRoots(ctx), ctx.sceneGraph, ctx.symbols);
+  }
 }

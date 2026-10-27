@@ -56,7 +56,10 @@ export {
   getFrameCount,
   generateFrameFilenames,
   sampleTimeline,
+  sampleSlides,
+  type ExportSlide,
   type PlaybackTiming,
+  type Shot,
 } from './exportUtils';
 
 // ============================================================================
@@ -69,6 +72,9 @@ export {
   type FrameRenderContext,
   type FrameRendererHandle,
   type FrameRig,
+  type FrameSlide,
+  type FramePlan,
+  framePlan,
 } from './frameRenderer';
 
 // ============================================================================

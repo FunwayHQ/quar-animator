@@ -5,8 +5,9 @@
  * the same way.
  */
 
-import { SelectionManager } from '@quar/core';
+import { SelectionManager, artboardsInOrder, inTimelineScope, widenToAspect } from '@quar/core';
 import type { SceneGraph } from '@quar/core';
+import { scopeDuration, scopedTimeline } from '@quar/animation';
 import type {
   DynamicChain,
   IKChain,
@@ -18,7 +19,7 @@ import type {
   WindSettings,
 } from '@quar/types';
 import { getAnimatedArtworkBounds, sampleFrames } from '@quar/export';
-import type { FrameRig } from '@quar/export';
+import type { FrameRenderContext, FrameRig, FrameSlide } from '@quar/export';
 
 /**
  * The artboard an export is of: the one selected — or, with nothing
@@ -45,6 +46,46 @@ export function getArtboardScope(sceneGraph: SceneGraph, selectedIds: Set<string
 
   const bounds = new SelectionManager().getSelectionBounds(new Set([node.id]), sceneGraph)?.rect;
   return bounds ? { node, bounds, implicit } : null;
+}
+
+/**
+ * The page's slides: its visible artboards, in the Layers panel's order
+ * (the topmost first), each with its bounds and its own timeline's length.
+ */
+export function getSlides(sceneGraph: SceneGraph, timeline: Timeline) {
+  const bounds = new SelectionManager();
+  return artboardsInOrder(sceneGraph)
+    .filter((node) => node.visible)
+    .flatMap((node) => {
+      const rect = bounds.getSelectionBounds(new Set([node.id]), sceneGraph)?.rect;
+      return rect ? [{ node, bounds: rect, frameCount: scopeDuration(timeline, node.id) }] : [];
+    });
+}
+
+/**
+ * The slides of a slides export, each its artboard over its own timeline,
+ * fitted (centred, not stretched) into the export's `width` × `height`: the
+ * first slide's size, unless changed.
+ */
+export function slideShow(
+  slides: ReturnType<typeof getSlides>,
+  base: Pick<FrameRenderContext, 'sceneGraph' | 'timeline' | 'rig' | 'symbols'>,
+  width: number,
+  height: number
+): FrameSlide[] {
+  return slides.map((slide) => ({
+    ctx: {
+      ...base,
+      timeline: scopedTimeline(
+        base.timeline,
+        slide.node.id,
+        inTimelineScope(base.sceneGraph, slide.node.id)
+      ),
+      exportRootIds: [slide.node.id],
+      viewportBounds: widenToAspect(slide.bounds, width / height),
+    },
+    frameCount: slide.frameCount,
+  }));
 }
 
 /** Exports are at most this many pixels a side. */

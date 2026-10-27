@@ -171,6 +171,32 @@ function renderWithArtboard(ui: ReactElement, fills?: ArtboardNode['fills']) {
   );
 }
 
+/** Two slides: "Intro" (on top in the Layers panel) and "Outro". */
+function SlidesSeeder() {
+  const sceneGraph = useSceneGraph();
+  useEffect(() => {
+    const board = (id: string, name: string, x: number, width: number): ArtboardNode => ({
+      id,
+      name,
+      type: 'artboard',
+      parent: null,
+      children: [],
+      transform: { ...createDefaultTransform(), position: { x, y: 0 } },
+      visible: true,
+      locked: false,
+      opacity: 1,
+      blendMode: 'normal',
+      width,
+      height: 360,
+      fills: [],
+      clipContent: true,
+    });
+    sceneGraph.addNode(board('outro', 'Outro', 1000, 1280));
+    sceneGraph.addNode(board('intro', 'Intro', 0, 640));
+  }, [sceneGraph]);
+  return null;
+}
+
 describe('ExportDialog', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -443,6 +469,55 @@ describe('ExportDialog', () => {
     });
     // The artboard's fill animation moves with it
     expect(timeline.tracks[0]?.nodeId).toBe('artboard-1:background');
+  });
+
+  it('with no artboard chosen, plays the artboards as slides in one video', async () => {
+    // Intro runs 1 s (its own timeline), Outro the page's 2 s
+    (mockStore.timeline as { artboards?: object }).artboards = { intro: { duration: 30 } };
+    baseRender(
+      <SceneGraphProvider>
+        <SlidesSeeder />
+        <ExportDialogHost />
+      </SceneGraphProvider>
+    );
+    act(() => showExportDialog('mp4'));
+    expect(screen.getByTestId('export-slides-scope')).toHaveTextContent(
+      '2 slides, one after another'
+    );
+    expect(screen.getByTestId('export-slides-scope')).toHaveTextContent('(3 s in all)');
+    expect(screen.queryByTestId('export-start-frame')).toBeNull();
+    // The first slide's size
+    expect(screen.getByTestId('export-width')).toHaveValue(640);
+    expect(screen.getByTestId('export-mp4-timing')).toHaveTextContent('90 frames · 3.0 s');
+
+    fireEvent.click(screen.getByTestId('export-dialog-export'));
+    await waitFor(() => expect(exportMp4).toHaveBeenCalledOnce());
+    const { slides } = vi.mocked(exportMp4).mock.calls[0]![1] as {
+      slides: Array<{
+        ctx: { exportRootIds: string[]; viewportBounds: { width: number; height: number } };
+        frameCount: number;
+      }>;
+    };
+    expect(slides.map((s) => [s.ctx.exportRootIds, s.frameCount])).toEqual([
+      [['intro'], 30],
+      [['outro'], 60],
+    ]);
+    // The wider slide fitted into the first's shape, not stretched
+    const outro = slides[1]!.ctx.viewportBounds;
+    expect(outro.width / outro.height).toBeCloseTo(640 / 360);
+    delete (mockStore.timeline as { artboards?: object }).artboards;
+  });
+
+  it('keeps a whole-page export for the formats that aren’t slides', () => {
+    baseRender(
+      <SceneGraphProvider>
+        <SlidesSeeder />
+        <ExportDialogHost />
+      </SceneGraphProvider>
+    );
+    act(() => showExportDialog('lottie'));
+    expect(screen.queryByTestId('export-slides-scope')).toBeNull();
+    expect(screen.getByTestId('export-start-frame')).toBeInTheDocument();
   });
 
   it('passes the chosen MP4 frame rate and speed to the exporter', async () => {
