@@ -258,8 +258,14 @@ describe('EffectRenderer', () => {
     (effectRenderer as any).compositeToScreen(source, 32, 24);
 
     expect(gl.activeTexture).toHaveBeenCalledWith(gl.TEXTURE0);
-    expect(gl.blendFunc).toHaveBeenNthCalledWith(1, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
-    expect(gl.blendFunc).toHaveBeenNthCalledWith(2, gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    expect(gl.blendFunc).toHaveBeenCalledTimes(1);
+    expect(gl.blendFunc).toHaveBeenCalledWith(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+    expect(gl.blendFuncSeparate).toHaveBeenLastCalledWith(
+      gl.SRC_ALPHA,
+      gl.ONE_MINUS_SRC_ALPHA,
+      gl.ONE,
+      gl.ONE_MINUS_SRC_ALPHA
+    );
     expect(gl.drawArrays).toHaveBeenCalledWith(gl.TRIANGLES, 0, 6);
     expect(renderer.bindVAO).toHaveBeenLastCalledWith(null);
   });

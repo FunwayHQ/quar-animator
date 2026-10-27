@@ -24,6 +24,16 @@ export interface ShaderProgram {
 }
 
 /** Where a program's attribute is bound: -1, as WebGL reports one it lacks, if it has none. */
+/**
+ * Normal "over" blending: colour weighted by the source's alpha, alpha built
+ * up as coverage (srcA + dstA·(1 − srcA)). The plain blendFunc squared the
+ * alpha of everything translucent, so a frame read back (an export, a
+ * thumbnail) came out partly see-through, its translucent paint too bright.
+ */
+export function setNormalBlending(gl: WebGL2RenderingContext): void {
+  gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+}
+
 export function attributeLocation(program: ShaderProgram, name: string): number {
   return program.attributes[name] ?? -1;
 }
@@ -101,7 +111,7 @@ export class WebGLRenderer {
 
     // Enable blending
     gl.enable(gl.BLEND);
-    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    setNormalBlending(gl);
 
     // Enable depth testing (for later 2.5D effects)
     gl.enable(gl.DEPTH_TEST);

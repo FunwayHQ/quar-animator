@@ -36,6 +36,7 @@ export function createMockWebGL2Context(): WebGL2RenderingContext {
     DEPTH_TEST: 2929,
     SRC_ALPHA: 770,
     ONE_MINUS_SRC_ALPHA: 771,
+    ONE: 1,
     LEQUAL: 515,
     FLOAT: 5126,
     UNSIGNED_SHORT: 5123,

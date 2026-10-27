@@ -28,10 +28,16 @@ describe('WebGLRenderer', () => {
       expect(() => new WebGLRenderer({ canvas: badCanvas })).toThrow('WebGL 2 is not supported');
     });
 
-    it('enables blending by default', () => {
+    it('blends over by default, building alpha up as coverage (an opaque frame stays opaque)', () => {
       new WebGLRenderer({ canvas });
       expect(mockGL.enable).toHaveBeenCalledWith(mockGL.BLEND);
-      expect(mockGL.blendFunc).toHaveBeenCalledWith(mockGL.SRC_ALPHA, mockGL.ONE_MINUS_SRC_ALPHA);
+      expect(mockGL.blendFuncSeparate).toHaveBeenCalledWith(
+        mockGL.SRC_ALPHA,
+        mockGL.ONE_MINUS_SRC_ALPHA,
+        mockGL.ONE,
+        mockGL.ONE_MINUS_SRC_ALPHA
+      );
+      expect(mockGL.blendFunc).not.toHaveBeenCalled();
     });
 
     it('enables depth testing by default', () => {

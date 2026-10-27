@@ -12,7 +12,7 @@ import type {
   LayerBlurEffect,
   BlendMode,
 } from '@quar/types';
-import type { WebGLRenderer } from './WebGLRenderer';
+import { setNormalBlending, type WebGLRenderer } from './WebGLRenderer';
 import { FramebufferManager } from './FramebufferManager';
 import type { FramebufferEntry } from './FramebufferManager';
 import {
@@ -96,7 +96,7 @@ export class EffectRenderer {
     // A node's own effect pass inside renderNodeFn had a target of its own
     this.target = target;
     // Restore standard blend func
-    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    setNormalBlending(gl);
 
     // Restore default framebuffer for compositing
     gl.bindFramebuffer(gl.FRAMEBUFFER, this.target);
@@ -293,7 +293,7 @@ export class EffectRenderer {
     );
 
     gl.enable(gl.BLEND);
-    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    setNormalBlending(gl);
     gl.drawArrays(gl.TRIANGLES, 0, 6);
 
     this.renderer.bindVAO(null);
@@ -423,7 +423,7 @@ export class EffectRenderer {
     gl.drawArrays(gl.TRIANGLES, 0, 6);
 
     // Restore standard blend func for subsequent rendering
-    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    setNormalBlending(gl);
     this.renderer.bindVAO(null);
   }
 

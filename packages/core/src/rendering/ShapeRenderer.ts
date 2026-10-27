@@ -26,7 +26,12 @@ import type {
   SkinData,
 } from '@quar/types';
 import { resolveSymbolInstance, getResolvedRootNodes } from '../symbols/symbolResolver';
-import { WebGLRenderer, attributeLocation, type ShaderProgram } from './WebGLRenderer';
+import {
+  WebGLRenderer,
+  attributeLocation,
+  setNormalBlending,
+  type ShaderProgram,
+} from './WebGLRenderer';
 import { EffectRenderer } from './EffectRenderer';
 import { FramebufferManager } from './FramebufferManager';
 import { createGhostComposite, type GhostComposite } from './PostProcessShaders';
@@ -933,10 +938,10 @@ export class ShapeRenderer {
       gl.clearColor(0, 0, 0, 0);
       gl.clear(gl.COLOR_BUFFER_BIT);
       // Alpha builds up as coverage, so the pass can be laid over cleanly
-      gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+      setNormalBlending(gl);
       this.render(sceneGraph, viewProjectionMatrix);
     } finally {
-      gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+      setNormalBlending(gl);
       gl.bindFramebuffer(gl.FRAMEBUFFER, previous);
       gl.viewport(0, 0, width, height);
     }
@@ -1039,13 +1044,13 @@ export class ShapeRenderer {
       if (scissorWasEnabled) gl.enable(gl.SCISSOR_TEST);
 
       // Separate alpha blending keeps the mask texture's alpha channel correct.
-      gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+      setNormalBlending(gl);
       // A nested mask source is itself limited by the enclosing mask.
       this.setMaskState(previous, mode === 'clip' ? 1 : 0);
       drawMaskSource();
     } finally {
       this.currentEffectiveOpacity = savedOpacity;
-      gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+      setNormalBlending(gl);
       gl.bindFramebuffer(gl.FRAMEBUFFER, previousFramebuffer);
       gl.viewport(0, 0, width, height);
     }
