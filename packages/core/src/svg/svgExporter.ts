@@ -27,6 +27,7 @@ import type {
   Transform,
 } from '@quar/types';
 import { trimPathToProgress } from '../path/pathReveal';
+import { isDocumentImage } from '../rendering/imageSource';
 import {
   forEachSegment,
   getAbsoluteControlPoints,
@@ -615,6 +616,8 @@ function textAlignToAnchor(align: string): string {
 }
 
 function imageToSvg(node: ImageNode, _defs: string[]): string {
+  // Not a link to a picture elsewhere, for the SVG's viewers to fetch
+  if (!isDocumentImage(node.src)) return '';
   const opacityAttr = node.opacity < 1 ? ` opacity="${fmt(node.opacity)}"` : '';
 
   const anchorX = node.transform.anchor.x * node.width;

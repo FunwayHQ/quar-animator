@@ -47,7 +47,8 @@ export function encodeClipboard(payload: ClipboardPayload): { text: string; html
   return { text, html };
 }
 
-const IMAGE_SOURCE = /^(data:image\/|https?:)/i;
+// A picture comes with the layers it's in: a link to one elsewhere doesn't paste
+const IMAGE_SOURCE = /^data:image\//i;
 
 /**
  * Layers copied from Quar Animator, from the clipboard's HTML or text; null

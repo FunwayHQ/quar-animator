@@ -661,6 +661,23 @@ describe('nodeToSvgElement', () => {
     expect(nodeToSvgElement({ ...square, strokeProgress: 1 }, sceneGraph, [])).toContain('Z');
   });
 
+  it('writes a picture only when it’s the document’s own, never a link to one elsewhere', () => {
+    const image = (src: string): ImageNode => ({
+      ...makeBaseNodeFields('pic', 'image'),
+      type: 'image',
+      src,
+      width: 10,
+      height: 10,
+      naturalWidth: 10,
+      naturalHeight: 10,
+      cornerRadius: [0, 0, 0, 0],
+    });
+    expect(nodeToSvgElement(image('data:image/png;base64,abc'), sceneGraph, [])).toContain(
+      '<image'
+    );
+    expect(nodeToSvgElement(image('https://tracker.example/pixel.png'), sceneGraph, [])).toBe('');
+  });
+
   it('handles PathNode with subpaths', () => {
     const node: PathNode = {
       ...makeBaseNodeFields('path2', 'path'),

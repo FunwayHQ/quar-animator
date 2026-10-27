@@ -184,7 +184,7 @@ describe('ShapeRenderer - Image Rendering', () => {
       vi.stubGlobal('Image', FailingImage);
       vi.useFakeTimers({ toFake: ['Date'] });
       try {
-        const src = 'https://example.invalid/missing.png';
+        const src = 'data:image/png;base64,broken';
         const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
         expect(shapeRenderer.getTexture(src)).toBeNull();
         await settle(); // the load fails
@@ -201,6 +201,37 @@ describe('ShapeRenderer - Image Rendering', () => {
         expect(loads).toBe(3);
       } finally {
         vi.useRealTimers();
+        vi.unstubAllGlobals();
+      }
+    });
+
+    it('loads only the document’s own pictures, never one from elsewhere', () => {
+      const loads: string[] = [];
+      class RecordingImage {
+        crossOrigin = '';
+        onload: (() => void) | null = null;
+        onerror: (() => void) | null = null;
+        complete = false;
+        naturalWidth = 0;
+        set src(value: string) {
+          loads.push(value);
+        }
+      }
+      vi.stubGlobal('Image', RecordingImage);
+      try {
+        for (const src of [
+          'https://tracker.example/pixel.png',
+          '//tracker.example/p.png',
+          'file:///etc/hosts',
+          'javascript:alert(1)',
+        ]) {
+          expect(shapeRenderer.getTexture(src)).toBeNull();
+          expect(shapeRenderer.loadTextureSync(src)).toBeNull();
+        }
+        expect(loads).toEqual([]);
+        shapeRenderer.getTexture('data:image/png;base64,abc');
+        expect(loads).toEqual(['data:image/png;base64,abc']);
+      } finally {
         vi.unstubAllGlobals();
       }
     });
@@ -249,7 +280,7 @@ describe('ShapeRenderer - Image Rendering', () => {
   });
 
   describe('images that finish loading after they were dropped (F182)', () => {
-    const src = 'https://example.test/photo.png';
+    const src = 'data:image/png;base64,photo';
     const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
     /** Images started so far; call one to finish loading it. */
     let loads: (() => void)[];
@@ -285,7 +316,7 @@ describe('ShapeRenderer - Image Rendering', () => {
     it('makes no texture for an image disposed or cleared while loading', async () => {
       shapeRenderer.getTexture(src);
       shapeRenderer.disposeTexture(src);
-      shapeRenderer.getTexture('https://example.test/other.png');
+      shapeRenderer.getTexture('data:image/png;base64,other');
       shapeRenderer.clearTextures();
 
       loads[0]!();

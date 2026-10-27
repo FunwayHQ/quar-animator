@@ -57,6 +57,7 @@ import {
   applyCornerRadius,
 } from '../path/pathUtils';
 import { trimPathToProgress } from '../path/pathReveal';
+import { isDocumentImage } from './imageSource';
 import earcut from 'earcut';
 import {
   triangulateContours,
@@ -1503,6 +1504,7 @@ export class ShapeRenderer {
   getTexture(src: string): WebGLTexture | null {
     const cached = this.textureCache.get(src);
     if (cached) return cached;
+    if (!isDocumentImage(src)) return null;
 
     // Already loading?
     if (this.pendingImages.has(src)) return null;
@@ -1563,6 +1565,7 @@ export class ShapeRenderer {
   loadTextureSync(src: string): WebGLTexture | null {
     const known = this.textureCache.get(src);
     if (known !== undefined) return known;
+    if (!isDocumentImage(src)) return null;
 
     const gl = this.renderer.context;
     const img = new Image();
@@ -1619,7 +1622,7 @@ export class ShapeRenderer {
     const promises: Promise<void>[] = [];
 
     for (const src of imageSrcs) {
-      if (this.textureCache.has(src)) continue;
+      if (this.textureCache.has(src) || !isDocumentImage(src)) continue;
 
       // Try sync first (works for data URIs)
       if (this.loadTextureSync(src)) continue;
