@@ -101,4 +101,18 @@ describe('waveforms', () => {
     expect(waveformPath(peaks, 0, 0.04, 1)).toBe('M0 0.5L0.5 0.000L1.0 0.5L0.5 1.000Z');
     expect(waveformPath(peaks, 1, 0.5, 10)).toBe('');
   });
+
+  it('draws it as loud as the clip plays it, no louder than full scale', () => {
+    const peaks = Float32Array.from([0.2, 1, 0.4, 0.6]);
+    expect(waveformPath(peaks, 0.01, 0.02, 2, 0.5)).toBe(
+      'M0 0.5L0.5 0.250L1.5 0.400L2.0 0.5L1.5 0.600L0.5 0.750Z'
+    );
+    // At 200% the peak of 1 stays at full scale, 0.4 doubles
+    expect(waveformPath(peaks, 0.01, 0.02, 2, 2)).toBe(
+      'M0 0.5L0.5 0.000L1.5 0.100L2.0 0.5L1.5 0.900L0.5 1.000Z'
+    );
+    expect(waveformPath(peaks, 0.01, 0.02, 2, 0)).toBe(
+      'M0 0.5L0.5 0.500L1.5 0.500L2.0 0.5L1.5 0.500L0.5 0.500Z'
+    );
+  });
 });

@@ -113,6 +113,10 @@ describe('the sound lane', () => {
     expect(clip.style.width).toBe('40%');
     expect(clip).toHaveAccessibleName('Sound Voice, frames 30 to 149');
     await waitFor(() => expect(clip.querySelector('path')?.getAttribute('d')).toMatch(/^M0 0.5L/));
+    // Turned down, the waveform is drawn as quietly as it plays: 0.9 at half volume
+    expect(clip.querySelector('path')?.getAttribute('d')).toContain(' 0.050L');
+    act(() => store().updateSoundClip(sceneGraph!, id, (c) => ({ ...c, gain: 0.5 })));
+    expect(clip.querySelector('path')?.getAttribute('d')).toContain(' 0.275L');
     decodedSound.mockImplementation(() => new Promise<AudioBuffer>(() => {}));
   });
 

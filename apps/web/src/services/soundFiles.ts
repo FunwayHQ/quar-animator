@@ -122,13 +122,15 @@ export function soundPeaks(audio: AudioBuffer): Float32Array {
 /**
  * The waveform of a stretch of a sound (`offset` to `offset + duration`
  * seconds) as an SVG path in a 0–`width` × 0–1 box, mirrored about its
- * middle, from at most `width` peaks.
+ * middle, from at most `width` peaks — as loud as it plays at `gain` (what's
+ * louder than full scale is drawn at full scale, as it's heard).
  */
 export function waveformPath(
   peaks: Float32Array,
   offset: number,
   duration: number,
-  width: number
+  width: number,
+  gain = 1
 ): string {
   const from = Math.max(0, Math.floor(offset * PEAKS_PER_SECOND));
   const to = Math.min(peaks.length, Math.ceil((offset + duration) * PEAKS_PER_SECOND));
@@ -141,7 +143,7 @@ export function waveformPath(
     const end = Math.max(start + 1, from + Math.floor(((column + 1) * count) / columns));
     let peak = 0;
     for (let i = start; i < end; i++) peak = Math.max(peak, peaks[i]!);
-    levels.push(peak);
+    levels.push(Math.min(1, peak * Math.max(0, gain)));
   }
   // Through each column's middle, out along the top and back along the bottom
   const x = (column: number) => (((column + 0.5) / columns) * width).toFixed(1);

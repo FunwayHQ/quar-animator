@@ -417,8 +417,9 @@ const SoundClipBar = memo(function SoundClipBar({
   const audio = useDecodedSound(sound);
   const columns = Math.max(1, Math.min(WAVE_COLUMNS, Math.ceil(clip.duration * 100)));
   const wave = useMemo(
-    () => (audio ? waveformPath(soundPeaks(audio), clip.offset, clip.duration, columns) : ''),
-    [audio, clip.offset, clip.duration, columns]
+    () =>
+      audio ? waveformPath(soundPeaks(audio), clip.offset, clip.duration, columns, clip.gain) : '',
+    [audio, clip.offset, clip.duration, columns, clip.gain]
   );
   const end = clipEndFrame(clip, frameRate);
   const name = sound?.name ?? 'Missing sound';
