@@ -961,7 +961,12 @@ export function exportNodesToSvg(
 
   for (const node of nodes) {
     if (!node.visible) continue;
-    elements.push(nodeToSvgElement(node, sceneGraph, defs, symbolDefs));
+    const element = nodeToSvgElement(node, sceneGraph, defs, symbolDefs);
+    // Where it is on the page, as its bounds were measured: a node inside a
+    // group or artboard is drawn in their space, not at the page's origin
+    elements.push(
+      node.parent ? inSpaceOf(element, sceneGraph.getWorldTransform(node.parent)) : element
+    );
   }
 
   const defsBlock = defs.length > 0 ? `<defs>${defs.join('')}</defs>` : '';
@@ -989,6 +994,14 @@ interface ExportBounds {
   minY: number;
   maxX: number;
   maxY: number;
+}
+
+/** An element drawn in a space (a parent's world transform), unless that's the page's own. */
+function inSpaceOf(element: string, m: Matrix3): string {
+  if (m.a === 1 && m.b === 0 && m.c === 0 && m.d === 1 && m.tx === 0 && m.ty === 0) {
+    return element;
+  }
+  return `<g transform="matrix(${[m.a, m.b, m.c, m.d, m.tx, m.ty].map(fmt).join(',')})">${element}</g>`;
 }
 
 function computeExportBounds(

@@ -1003,6 +1003,56 @@ describe('exportNodesToSvg', () => {
     expect(svg).toContain('</svg>');
   });
 
+  it('draws a node inside a moved artboard and group where it is on the page', () => {
+    // An artboard far to the right, a group in it, a rectangle in that
+    const artboard: ArtboardNode = {
+      ...makeBaseNodeFields('ab-far', 'artboard', {
+        transform: makeTransform({ position: { x: 4040, y: 0 } }),
+      }),
+      type: 'artboard',
+      width: 1040,
+      height: 480,
+      fills: [],
+      clipContent: true,
+    };
+    const group: GroupNode = {
+      ...makeBaseNodeFields('g-far', 'group', {
+        transform: makeTransform({ position: { x: 0, y: 70 }, scale: { x: 2, y: 2 } }),
+      }),
+      type: 'group',
+    };
+    const rect: RectangleNode = {
+      ...makeBaseNodeFields('r-far', 'rectangle', {
+        transform: makeTransform({ position: { x: 10, y: 0 } }),
+      }),
+      type: 'rectangle',
+      width: 100,
+      height: 50,
+      cornerRadius: [0, 0, 0, 0],
+      fills: [makeSolidFill()],
+      strokes: [],
+    };
+    sceneGraph.addNode(artboard);
+    sceneGraph.addNode(group, 'ab-far');
+    sceneGraph.addNode(rect, 'g-far');
+
+    // The group chosen: framed by its place on the page (the rectangle drawn
+    // from its corner: x 4040 + 2 × (10…110), y 70 + 2 × (0…50))…
+    const svg = exportNodesToSvg([group], sceneGraph);
+    expect(svg).toContain('viewBox="0 0 200 100"');
+    expect(svg).toContain('translate(-4060,-170)');
+    // …and drawn there, in the artboard's space
+    expect(svg).toContain('<g transform="matrix(1,0,0,1,4040,0)">');
+
+    // The rectangle on its own: in the group's space inside the artboard
+    const alone = exportNodesToSvg([rect], sceneGraph);
+    expect(alone).toContain('<g transform="matrix(2,0,0,2,4040,70)">');
+    expect(alone).toContain('translate(-4060,-170)');
+
+    // A node at the top of the page has no wrapper
+    expect(exportNodesToSvg([artboard], sceneGraph)).not.toContain('matrix(');
+  });
+
   it('returns minimal SVG for empty node list', () => {
     const svg = exportNodesToSvg([], sceneGraph);
     expect(svg).toContain('<svg');
