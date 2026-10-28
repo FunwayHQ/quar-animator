@@ -143,6 +143,11 @@ export interface EditorStateSnapshot {
   activePageId?: string;
   symbols?: SymbolDefinition[];
   sounds?: Sound[];
+  /**
+   * The active page's layers, when the scene graph doesn't hold them: while
+   * a symbol is edited, it holds the symbol's
+   */
+  pageScene?: { nodes: Node[]; rootNodeIds: string[] };
 }
 
 // ============================================================================
@@ -156,6 +161,8 @@ export function serializeProject(
   existingCreatedAt?: string
 ): ProjectDataV2 {
   const now = new Date().toISOString();
+  const activeScene = () =>
+    editorState.pageScene ? structuredClone(editorState.pageScene) : sceneGraph.toJSON();
 
   // Build pages array from editor state
   let pages: SerializedPage[];
@@ -169,7 +176,7 @@ export function serializeProject(
         return {
           id: page.id,
           name: page.name,
-          sceneGraph: sceneGraph.toJSON(),
+          sceneGraph: activeScene(),
           timeline: structuredClone(editorState.timeline),
           animationSequence: structuredClone(
             editorState.animationSequence ?? createAnimationSequence()
@@ -194,7 +201,7 @@ export function serializeProject(
       {
         id: pageId,
         name: 'Page 1',
-        sceneGraph: sceneGraph.toJSON(),
+        sceneGraph: activeScene(),
         timeline: structuredClone(editorState.timeline),
         animationSequence: structuredClone(
           editorState.animationSequence ?? createAnimationSequence()

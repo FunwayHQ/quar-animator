@@ -347,6 +347,39 @@ describe('useProjectActions', () => {
       expect(mockEditorState.projectCreatedAt).toBe('B created');
     });
 
+    it('saves the page’s own layers while a symbol is edited, and the symbol as it is', async () => {
+      const symbolLayers = { nodes: [{ id: 'in-symbol' }], rootNodeIds: ['in-symbol'] };
+      const pageLayers = { nodes: [{ id: 'on-page' }], rootNodeIds: ['on-page'] };
+      mockSceneGraph.toJSON.mockReturnValue(symbolLayers);
+      Object.assign(mockEditorState, {
+        projectId: 'existing-id',
+        editingSymbolId: 'badge',
+        editingSymbolPrevState: { sceneData: pageLayers, selectedNodeIds: [] },
+        symbols: [
+          { id: 'badge', name: 'Badge', sceneGraphJSON: { nodes: [], rootNodeIds: [] } },
+          { id: 'other', name: 'Other', sceneGraphJSON: { nodes: [], rootNodeIds: [] } },
+        ],
+      });
+      const { result } = renderProjectActions();
+      try {
+        await act(async () => {
+          await result.current.saveProject();
+        });
+        const snapshot = mockSerialize.mock.calls[0]![2] as {
+          pageScene: unknown;
+          symbols: Array<{ id: string; sceneGraphJSON: unknown }>;
+        };
+        expect(snapshot.pageScene).toEqual(pageLayers);
+        expect(snapshot.symbols.map((symbol) => [symbol.id, symbol.sceneGraphJSON])).toEqual([
+          ['badge', symbolLayers],
+          ['other', { nodes: [], rootNodeIds: [] }],
+        ]);
+      } finally {
+        mockSceneGraph.toJSON.mockReturnValue({ nodes: [] });
+        Object.assign(mockEditorState, { editingSymbolId: null, editingSymbolPrevState: null });
+      }
+    });
+
     it('marks project as not dirty after save', async () => {
       const { result } = renderProjectActions();
       mockEditorState.projectId = 'existing-id';

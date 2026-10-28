@@ -81,6 +81,12 @@ export function useProjectActions(options: UseProjectActionsOptions = {}): Proje
     // Keep a just-made edit to a sequenced object (it moves the object's animation)
     useEditorStore.getState().flushSequenceEdits(sceneGraph);
     const state = useEditorStore.getState();
+    // Editing a symbol, the scene holds its layers: they're the symbol's,
+    // and the page's are those put aside when the editing began
+    const editing =
+      state.editingSymbolId && state.editingSymbolPrevState
+        ? { symbolId: state.editingSymbolId, page: state.editingSymbolPrevState.sceneData }
+        : null;
     return {
       timeline: state.timeline,
       animationSequence: state.animationSequence,
@@ -98,8 +104,15 @@ export function useProjectActions(options: UseProjectActionsOptions = {}): Proje
       smartBoneActions: state.smartBoneActions,
       pages: state.pages,
       activePageId: state.activePageId,
-      symbols: state.symbols,
+      symbols: editing
+        ? state.symbols.map((symbol) =>
+            symbol.id === editing.symbolId
+              ? { ...symbol, sceneGraphJSON: structuredClone(sceneGraph.toJSON()) }
+              : symbol
+          )
+        : state.symbols,
       sounds: state.sounds,
+      ...(editing && { pageScene: editing.page }),
     };
   }, [sceneGraph]);
 

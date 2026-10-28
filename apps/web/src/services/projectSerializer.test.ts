@@ -911,6 +911,20 @@ describe('ProjectSerializer', () => {
   // ============================================================================
 
   describe('symbol serialization', () => {
+    it('saves the page’s layers it’s given, when the scene graph holds a symbol’s', () => {
+      const sg = new SceneGraph();
+      sg.addNode(makeTestNode('in-symbol'));
+      const data = serializeProject('Test', sg, {
+        timeline: createTimeline({ duration: 300, frameRate: 30 }),
+        timelineDuration: 300,
+        frameRate: 30,
+        autoKeyframe: false,
+        onionSkin: { ...DEFAULT_ONION_SKIN_SETTINGS },
+        pageScene: { nodes: [makeTestNode('on-page')], rootNodeIds: ['on-page'] },
+      });
+      expect(data.pages[0]!.sceneGraph.rootNodeIds).toEqual(['on-page']);
+    });
+
     const testSymbol = {
       id: 'sym-1',
       name: 'Button',
