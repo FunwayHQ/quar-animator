@@ -3,10 +3,25 @@
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
-import { SceneGraph, createDefaultTransform, mat3 } from '@quar/core';
-import { createKeyframe, createTimeline, createTrack, evaluateTrack } from '@quar/animation';
-import type { Node, PropertyTrack, RectangleNode, Timeline } from '@quar/types';
-import { captureTracks, pastedTracks } from './clipboardAnimation';
+import { SceneGraph, createDefaultTransform, createGroupNode, mat3 } from '@quar/core';
+import {
+  createKeyframe,
+  createTimeline,
+  createTrack,
+  evaluateTrack,
+  scopeDuration,
+  scopeSounds,
+} from '@quar/animation';
+import type {
+  ArtboardNode,
+  Node,
+  PropertyTrack,
+  RectangleNode,
+  Sound,
+  SoundClip,
+  Timeline,
+} from '@quar/types';
+import { captureTracks, pastedArtboardTimelines, pastedTracks } from './clipboardAnimation';
 import { placementOf } from './reparent';
 import { useEditorStore } from './editorStore';
 import { decodeClipboard, encodeClipboard } from '../services/systemClipboard';
@@ -171,5 +186,142 @@ describe('copy and paste with animation (store)', () => {
     const [pasted] = useEditorStore.getState().timeline.tracks;
     expect(pasted!.keyframes.map((k) => k.time)).toEqual([0, 60]);
     expect(useEditorStore.getState().timelineDuration).toBe(61);
+  });
+});
+
+const voice: Sound = { id: 'voice', name: 'Voice', src: 'data:audio/wav;base64,AAAA', duration: 2 };
+const clip = (id: string, start: number, soundId = 'voice'): SoundClip => ({
+  id,
+  soundId,
+  start,
+  offset: 0.5,
+  duration: 1,
+  gain: 0.6,
+});
+
+describe('pastedArtboardTimelines', () => {
+  it('gives each pasted artboard its length and clips, timed for the frame rate, new ids', () => {
+    const pasted = pastedArtboardTimelines(
+      { a: { duration: 90, sounds: [clip('c', 15)] }, gone: { duration: 10 } },
+      new Map([['a', 'a2']]),
+      2,
+      () => true,
+      newId
+    );
+    expect(Object.keys(pasted)).toEqual(['a2']);
+    expect(pasted.a2!.duration).toBe(180);
+    const [moved] = pasted.a2!.sounds!;
+    expect(moved).toMatchObject({
+      soundId: 'voice',
+      start: 30,
+      offset: 0.5,
+      duration: 1,
+      gain: 0.6,
+    });
+    expect(moved!.id).not.toBe('c');
+  });
+
+  it('leaves out clips whose sound isn’t to be had', () => {
+    const pasted = pastedArtboardTimelines(
+      { a: { duration: 90, sounds: [clip('c', 0, 'lost')] } },
+      new Map([['a', 'a2']]),
+      1,
+      (soundId) => soundId === 'voice',
+      newId
+    );
+    expect(pasted.a2).toEqual({ duration: 90 });
+  });
+});
+
+describe('copy and paste of an artboard with its own timeline (store)', () => {
+  let sceneGraph: SceneGraph;
+
+  beforeEach(() => {
+    useEditorStore.getState().resetProject();
+    sceneGraph = new SceneGraph();
+    sceneGraph.addNode({
+      ...createGroupNode('slide', 'Slide'),
+      type: 'artboard',
+      width: 400,
+      height: 300,
+      fills: [],
+    } as unknown as ArtboardNode);
+    useEditorStore.setState({
+      selectedNodeIds: new Set(['slide']),
+      sounds: [voice],
+      timeline: createTimeline({
+        duration: 300,
+        frameRate: 30,
+        artboards: { slide: { duration: 90, sounds: [clip('c', 15)] } },
+      }),
+      timelineDuration: 300,
+    });
+  });
+
+  it('a duplicated artboard has the same length and sound clips as the original', () => {
+    useEditorStore.getState().duplicateSelection(sceneGraph);
+
+    const { timeline, selectedNodeIds, sounds } = useEditorStore.getState();
+    const copy = [...selectedNodeIds][0]!;
+    expect(copy).not.toBe('slide');
+    expect(scopeDuration(timeline, copy)).toBe(90);
+    const [copied] = scopeSounds(timeline, copy);
+    expect(copied).toMatchObject({ soundId: 'voice', start: 15, offset: 0.5, gain: 0.6 });
+    expect(copied!.id).not.toBe('c');
+    // The original keeps its own; the library has the sound once
+    expect(scopeSounds(timeline, 'slide').map((c) => c.id)).toEqual(['c']);
+    expect(sounds).toEqual([voice]);
+  });
+
+  it('undoing the paste takes the copy’s timeline away', () => {
+    useEditorStore.getState().duplicateSelection(sceneGraph);
+    useEditorStore.getState().undo(sceneGraph);
+    expect(Object.keys(useEditorStore.getState().timeline.artboards ?? {})).toEqual(['slide']);
+  });
+
+  it('into another project at 60 fps: the timeline timed for it, the sound brought along', () => {
+    useEditorStore.getState().copySelection(sceneGraph);
+    const payload = decodeClipboard(
+      encodeClipboard(useEditorStore.getState().clipboardPayload()!).text
+    )!;
+
+    const other = new SceneGraph();
+    useEditorStore.getState().resetProject();
+    useEditorStore.setState({
+      frameRate: 60,
+      timeline: createTimeline({ duration: 300, frameRate: 60 }),
+    });
+    useEditorStore.getState().pastePayload(other, payload);
+
+    const { timeline, selectedNodeIds, sounds } = useEditorStore.getState();
+    const copy = [...selectedNodeIds][0]!;
+    expect(scopeDuration(timeline, copy)).toBe(180);
+    expect(scopeSounds(timeline, copy)[0]).toMatchObject({ soundId: 'voice', start: 30 });
+    expect(sounds).toEqual([voice]);
+  });
+
+  it('from another window, only real sounds come in, and clips without one are left out', () => {
+    useEditorStore.getState().copySelection(sceneGraph);
+    const payload = useEditorStore.getState().clipboardPayload()!;
+    const tampered = {
+      ...payload,
+      extras: {
+        ...payload.extras!,
+        artboardTimelines: {
+          slide: { duration: 90, sounds: [clip('c', 15), clip('d', 0, 'script'), { id: 1 }] },
+        },
+        sounds: [voice, { ...voice, id: 'script', src: 'javascript:alert(1)' }],
+      },
+    };
+    const decoded = decodeClipboard(encodeClipboard(tampered as typeof payload).text)!;
+    expect(decoded.extras!.sounds).toEqual([voice]);
+
+    const other = new SceneGraph();
+    useEditorStore.getState().resetProject();
+    useEditorStore.getState().pastePayload(other, decoded);
+    const { timeline, selectedNodeIds, sounds } = useEditorStore.getState();
+    const copy = [...selectedNodeIds][0]!;
+    expect(scopeSounds(timeline, copy).map((c) => c.soundId)).toEqual(['voice']);
+    expect(sounds.map((sound) => sound.id)).toEqual(['voice']);
   });
 });

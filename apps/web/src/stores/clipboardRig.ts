@@ -9,6 +9,7 @@
 
 import { normalizeWeights } from '@quar/rigging';
 import type {
+  ArtboardTimeline,
   DynamicChain,
   IKChain,
   Matrix3,
@@ -16,12 +17,13 @@ import type {
   PropertyTrack,
   SkinData,
   SmartBoneAction,
+  Sound,
   Timeline,
   Transform,
   VitruvianController,
 } from '@quar/types';
 import { applyPlacement, mapPlacement, placementOf, reparentMatrix } from './reparent';
-import { captureTracks } from './clipboardAnimation';
+import { captureArtboardTimelines, captureTracks } from './clipboardAnimation';
 
 export interface ClipboardExtras {
   /**
@@ -38,6 +40,10 @@ export interface ClipboardExtras {
   /** The copied layers' animation, and the frame rate it was made at. */
   tracks?: PropertyTrack[];
   frameRate?: number;
+  /** Each copied artboard's own timeline (its length, its sound clips), by its id. */
+  artboardTimelines?: Record<string, ArtboardTimeline>;
+  /** The sounds those clips play. */
+  sounds?: Sound[];
 }
 
 interface Rigging {
@@ -56,7 +62,7 @@ export function captureClipboardExtras(
   sceneGraph: GraphLike,
   clones: Node[],
   copied: Set<string>,
-  rigging: Rigging & { timeline?: Timeline; frameRate?: number }
+  rigging: Rigging & { timeline?: Timeline; frameRate?: number; sounds?: readonly Sound[] }
 ): ClipboardExtras {
   const roots: ClipboardExtras['roots'] = {};
   for (const clone of clones) {
@@ -74,6 +80,9 @@ export function captureClipboardExtras(
     roots,
     tracks: rigging.timeline ? captureTracks(rigging.timeline, copied) : [],
     frameRate: rigging.frameRate,
+    ...(rigging.timeline
+      ? captureArtboardTimelines(rigging.timeline, copied, rigging.sounds ?? [])
+      : {}),
     ikChains: structuredClone(
       rigging.ikChains.filter(
         (chain) =>

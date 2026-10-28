@@ -18,7 +18,6 @@ import type {
   SkinData,
   Color,
   Sound,
-  SoundClip,
 } from '@quar/types';
 import type { OnionSkinSettings } from '@quar/core';
 import type { SceneGraph } from '@quar/core';
@@ -39,6 +38,7 @@ import {
   mat3,
 } from '@quar/core';
 import type { Guide, PageData } from '../stores/editorStore';
+import { readSoundClips, readSounds } from './soundData';
 
 // ============================================================================
 // Types
@@ -487,47 +487,6 @@ function migrateTimeline(
   }
 
   return result;
-}
-
-const isNumber = (value: unknown): value is number =>
-  typeof value === 'number' && Number.isFinite(value);
-
-/** The usable clips: each names its sound and has a place and a length. */
-function readSoundClips(clips: unknown): SoundClip[] {
-  if (!Array.isArray(clips)) return [];
-  return clips.flatMap((clip: Partial<Record<keyof SoundClip, unknown>>) => {
-    if (!clip || typeof clip.id !== 'string' || typeof clip.soundId !== 'string') return [];
-    if (!isNumber(clip.start) || !isNumber(clip.duration) || !(clip.duration > 0)) return [];
-    return [
-      {
-        id: clip.id,
-        soundId: clip.soundId,
-        start: Math.max(0, Math.round(clip.start)),
-        offset: isNumber(clip.offset) ? Math.max(0, clip.offset) : 0,
-        duration: clip.duration,
-        gain: isNumber(clip.gain) ? Math.max(0, clip.gain) : 1,
-        ...(clip.muted === true ? { muted: true } : {}),
-      },
-    ];
-  });
-}
-
-/** The usable sounds of a file's library: sound data, with a length. */
-function readSounds(sounds: unknown): Sound[] {
-  if (!Array.isArray(sounds)) return [];
-  return sounds.flatMap((sound: Partial<Record<keyof Sound, unknown>>) => {
-    if (!sound || typeof sound.id !== 'string' || typeof sound.src !== 'string') return [];
-    if (!sound.src.startsWith('data:audio/')) return [];
-    if (!isNumber(sound.duration) || !(sound.duration > 0)) return [];
-    return [
-      {
-        id: sound.id,
-        name: typeof sound.name === 'string' ? sound.name : 'Sound',
-        src: sound.src,
-        duration: sound.duration,
-      },
-    ];
-  });
 }
 
 // ============================================================================

@@ -77,7 +77,7 @@ import {
 } from './reparent';
 import { flipInParentSpace, flipMatrix, flipPlacement, type FlipAxis } from './flip';
 import { symbolsUsedBy, type ClipboardPayload } from '../services/systemClipboard';
-import { pastedTracks, type RootMove } from './clipboardAnimation';
+import { pastedArtboardTimelines, pastedTracks, type RootMove } from './clipboardAnimation';
 import {
   closedContour,
   closedShapeTracks,
@@ -2189,15 +2189,30 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     }
 
     // The copied animation, for the pasted layers (timed for this project's frame rate)
+    const newIds = new Map([...oldToNewId].filter(([oldId]) => !skipped.has(oldId)));
+    const frameScale = get().frameRate / (clipboardExtras?.frameRate ?? get().frameRate);
     const tracks = clipboardExtras?.tracks?.length
-      ? pastedTracks(
-          clipboardExtras.tracks,
-          new Map([...oldToNewId].filter(([oldId]) => !skipped.has(oldId))),
-          rootMoves,
-          get().frameRate / (clipboardExtras.frameRate ?? get().frameRate),
-          nextId
-        )
+      ? pastedTracks(clipboardExtras.tracks, newIds, rootMoves, frameScale, nextId)
       : [];
+
+    // Pasted artboards bring their own timelines, and the sounds on them
+    const library = get().sounds;
+    const known = new Set(library.map((sound) => sound.id));
+    const brought = (clipboardExtras?.sounds ?? []).filter((sound) => !known.has(sound.id));
+    const playable = new Set([...known, ...brought.map((sound) => sound.id)]);
+    const artboardTimelines = pastedArtboardTimelines(
+      clipboardExtras?.artboardTimelines,
+      newIds,
+      frameScale,
+      (soundId) => playable.has(soundId),
+      nextId
+    );
+    const played = new Set(
+      Object.values(artboardTimelines)
+        .flatMap((entry) => entry.sounds ?? [])
+        .map((c) => c.soundId)
+    );
+    const soundsAdded = brought.filter((sound) => played.has(sound.id));
 
     // Add nodes in parent-first order (roots first, then children)
     const byId = new Map(newNodes.map((node) => [node.id, node]));
@@ -2215,14 +2230,24 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       if (pastedRoots.has(node.id)) addRecursive(node);
     }
 
+    const timeline = get().timeline;
     set({
       selectedNodeIds: new Set(pastedRoots),
       ikChains: [...get().ikChains, ...rig.ikChains],
       dynamicChains: [...get().dynamicChains, ...rig.dynamicChains],
       smartBoneActions: [...get().smartBoneActions, ...rig.smartBoneActions],
-      ...(tracks.length > 0
-        ? { timeline: { ...get().timeline, tracks: [...get().timeline.tracks, ...tracks] } }
+      ...(tracks.length > 0 || Object.keys(artboardTimelines).length > 0
+        ? {
+            timeline: {
+              ...timeline,
+              tracks: [...timeline.tracks, ...tracks],
+              ...(Object.keys(artboardTimelines).length > 0
+                ? { artboards: { ...timeline.artboards, ...artboardTimelines } }
+                : {}),
+            },
+          }
         : {}),
+      ...(soundsAdded.length > 0 ? { sounds: [...library, ...soundsAdded] } : {}),
       isDirty: true,
     });
     // A longer animation than this timeline holds: the timeline grows to fit it

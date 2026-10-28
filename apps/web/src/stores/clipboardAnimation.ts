@@ -1,9 +1,18 @@
 /**
  * Animation on the clipboard: copied layers keep their keyframes when pasted
- * — in this project, another window or another browser.
+ * — in this project, another window or another browser — and copied
+ * artboards their own timelines, with the sounds on them.
  */
 
-import type { Keyframe, Matrix3, PropertyTrack, Timeline, Vector2 } from '@quar/types';
+import type {
+  ArtboardTimeline,
+  Keyframe,
+  Matrix3,
+  PropertyTrack,
+  Sound,
+  Timeline,
+  Vector2,
+} from '@quar/types';
 import { mapPlacement, remapPlacementTimeline, type Placement } from './reparent';
 
 /**
@@ -17,6 +26,53 @@ export function captureTracks(timeline: Timeline, copied: Set<string>): Property
     ...track,
     keyframes: track.keyframes.map(({ sequenceStepId: _step, ...keyframe }) => keyframe),
   }));
+}
+
+/** The copied artboards' own timelines, and the sounds their clips play. */
+export function captureArtboardTimelines(
+  timeline: Timeline,
+  copied: Set<string>,
+  library: readonly Sound[]
+): { artboardTimelines: Record<string, ArtboardTimeline>; sounds: Sound[] } {
+  const artboardTimelines = Object.fromEntries(
+    Object.entries(timeline.artboards ?? {})
+      .filter(([id]) => copied.has(id))
+      .map(([id, entry]) => [id, structuredClone(entry)])
+  );
+  const played = new Set(
+    Object.values(artboardTimelines)
+      .flatMap((entry) => entry.sounds ?? [])
+      .map((c) => c.soundId)
+  );
+  return { artboardTimelines, sounds: library.filter((sound) => played.has(sound.id)) };
+}
+
+/**
+ * The copied artboards' timelines for the pasted artboards: their lengths
+ * and clips timed for this project's frame rate, each clip with a new id.
+ * Clips whose sound isn't to be had (`playable`) are left out.
+ */
+export function pastedArtboardTimelines(
+  timelines: Record<string, ArtboardTimeline> | undefined,
+  newIds: Map<string, string>,
+  frameScale: number,
+  playable: (soundId: string) => boolean,
+  newId: (prefix: string) => string
+): Record<string, ArtboardTimeline> {
+  const scale = Number.isFinite(frameScale) && frameScale > 0 ? frameScale : 1;
+  const pasted: Record<string, ArtboardTimeline> = {};
+  for (const [oldId, entry] of Object.entries(timelines ?? {})) {
+    const id = newIds.get(oldId);
+    if (!id) continue;
+    const sounds = (entry.sounds ?? [])
+      .filter((clip) => playable(clip.soundId))
+      .map((clip) => ({ ...clip, id: newId('sound'), start: Math.round(clip.start * scale) }));
+    pasted[id] = {
+      duration: Math.max(1, Math.round(entry.duration * scale)),
+      ...(sounds.length > 0 ? { sounds } : {}),
+    };
+  }
+  return pasted;
 }
 
 /** How a pasted root moved from where it was copied. */

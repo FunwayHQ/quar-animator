@@ -7,8 +7,9 @@
  * they use. Images travel inside them, as data URIs.
  */
 
-import type { Node, SymbolDefinition } from '@quar/types';
+import type { ArtboardTimeline, Node, SymbolDefinition } from '@quar/types';
 import type { ClipboardExtras } from '../stores/clipboardRig';
+import { readSoundClips, readSounds } from './soundData';
 
 /** Marks clipboard text as Quar Animator layers. */
 export const CLIPBOARD_TYPE = 'quar-animator/clipboard';
@@ -101,8 +102,29 @@ export function decodeClipboard(
     : [];
   return {
     nodes,
-    extras: isRecord(data.extras) ? (data.extras as unknown as ClipboardExtras) : null,
+    extras: isRecord(data.extras) ? readExtras(data.extras) : null,
     symbols,
+  };
+}
+
+/** The extras, their artboard timelines and sounds as the editor can use them. */
+function readExtras(extras: Record<string, unknown>): ClipboardExtras {
+  const timelines: Record<string, ArtboardTimeline> = {};
+  if (isRecord(extras.artboardTimelines)) {
+    for (const [id, entry] of Object.entries(extras.artboardTimelines)) {
+      if (!isRecord(entry) || typeof entry.duration !== 'number') continue;
+      if (!Number.isFinite(entry.duration) || entry.duration < 1) continue;
+      const sounds = readSoundClips(entry.sounds);
+      timelines[id] = {
+        duration: Math.round(entry.duration),
+        ...(sounds.length > 0 ? { sounds } : {}),
+      };
+    }
+  }
+  return {
+    ...(extras as unknown as ClipboardExtras),
+    artboardTimelines: timelines,
+    sounds: readSounds(extras.sounds),
   };
 }
 
