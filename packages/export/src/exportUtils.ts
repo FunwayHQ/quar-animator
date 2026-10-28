@@ -5,6 +5,8 @@
  * No DOM or WebGL dependencies.
  */
 
+import type { SlideTransitionDirection, SlideTransitionType } from '@quar/types';
+
 /**
  * Get the number of frames in a range (inclusive).
  */
@@ -53,10 +55,27 @@ export interface ExportSlide<Context> {
   frameCount: number;
 }
 
-/** What an output frame shows: which slide's drawing, at which of its timeline's frames. */
+/**
+ * Partway through the transition into a slide: the outgoing slide held on
+ * the frame it ended on, the incoming one (the shot's own) on its first.
+ */
+export interface ShotTransition<Context> {
+  /** The outgoing slide, and the frame it holds */
+  from: { ctx: Context; frame: number };
+  type: SlideTransitionType;
+  direction: SlideTransitionDirection;
+  /** How far it has got, eased: 0 shows all the outgoing slide, 1 all the incoming one */
+  progress: number;
+}
+
+/**
+ * What an output frame shows: which slide's drawing, at which of its
+ * timeline's frames — or, with `transition`, that slide on its way in.
+ */
 export interface Shot<Context> {
   ctx: Context;
   frame: number;
+  transition?: ShotTransition<Context>;
 }
 
 /**

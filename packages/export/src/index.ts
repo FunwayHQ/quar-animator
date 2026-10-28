@@ -60,7 +60,24 @@ export {
   type ExportSlide,
   type PlaybackTiming,
   type Shot,
+  type ShotTransition,
 } from './exportUtils';
+
+// ============================================================================
+// Slide Transitions (one compositor for every output)
+// ============================================================================
+
+export {
+  createShotRenderer,
+  drawTransition,
+  transitionDraw,
+  type PixelRect,
+  type ShotRenderer,
+  type ShotRendererOptions,
+  type TransitionDraw,
+  type TransitionLayer,
+  type TransitionTarget,
+} from './slideTransition';
 
 // ============================================================================
 // Frame Renderer
