@@ -6,6 +6,8 @@
  * scope's timeline is the tracks of the layers in it, at its own length.
  */
 
+import { artboardsInOrder, inTimelineScope } from '@quar/core';
+import type { ScopeLookup } from '@quar/core';
 import type { SoundClip, Timeline } from '@quar/types';
 
 /** The page's timeline (null), or an artboard's (its id). */
@@ -78,4 +80,29 @@ export function withoutGoneArtboards(
   const kept = Object.entries(timeline.artboards).filter(([id]) => artboardIds.has(id));
   if (kept.length === Object.keys(timeline.artboards).length) return timeline;
   return { ...timeline, artboards: Object.fromEntries(kept) };
+}
+
+/**
+ * The timeline to put in view when a page opens: the page's own — unless
+ * nothing outside the artboards plays (no keyframes, no sounds) while an
+ * artboard does, as on every page made before artboards had timelines of
+ * their own. Then the first such artboard's (in the Layers panel's order),
+ * so Play plays what the page animates.
+ */
+export function openingScope(
+  sceneGraph: ScopeLookup & { getNode(id: string): unknown },
+  timeline: Timeline
+): TimelineScope {
+  const animated = timeline.tracks
+    .filter((track) => track.keyframes.length > 0 && sceneGraph.getNode(track.nodeId))
+    .map((track) => track.nodeId);
+  if ((timeline.sounds?.length ?? 0) > 0 || animated.some(inTimelineScope(sceneGraph, null))) {
+    return null;
+  }
+  const first = artboardsInOrder(sceneGraph).find(
+    (artboard) =>
+      (timeline.artboards?.[artboard.id]?.sounds?.length ?? 0) > 0 ||
+      animated.some(inTimelineScope(sceneGraph, artboard.id))
+  );
+  return first?.id ?? null;
 }

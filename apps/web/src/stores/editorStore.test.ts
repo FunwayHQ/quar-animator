@@ -3770,3 +3770,50 @@ describe('EditorStore', () => {
     });
   });
 });
+
+describe('the timeline a page opens on', () => {
+  const layer = (id: string, type: 'artboard' | 'rectangle', parent: string | null = null) =>
+    ({
+      id,
+      name: id,
+      type,
+      parent,
+      children: [],
+      transform: {
+        position: { x: 0, y: 0 },
+        rotation: 0,
+        scale: { x: 1, y: 1 },
+        anchor: { x: 0.5, y: 0.5 },
+        skew: { x: 0, y: 0 },
+      },
+      visible: true,
+      locked: false,
+      opacity: 1,
+      blendMode: 'normal',
+      width: 100,
+      height: 100,
+      fills: [],
+      strokes: [],
+      ...(type === 'artboard' ? { clipContent: true } : { cornerRadius: [0, 0, 0, 0] }),
+    }) as unknown as RectangleNode;
+
+  it('is the artboard’s that animates, when nothing outside it does', () => {
+    useEditorStore.getState().resetProject();
+    const sg = new SceneGraph();
+    sg.addNode(layer('slide', 'artboard'));
+    sg.addNode(layer('ball', 'rectangle', 'slide'), 'slide');
+    const track = createTrack('ball', 'opacity');
+    addKeyframe(track, 0, 0);
+    addKeyframe(track, 30, 1);
+    useEditorStore.setState({ timeline: createTimeline({ duration: 120, tracks: [track] }) });
+    const first = useEditorStore.getState().activePageId;
+
+    // A new, empty page: its own timeline
+    useEditorStore.getState().addPage(sg);
+    expect(useEditorStore.getState().timelineScope).toBeNull();
+    // Back on the first: the artboard's, so Play plays the ball
+    useEditorStore.getState().switchPage(first, sg);
+    expect(useEditorStore.getState().timelineScope).toBe('slide');
+    expect(useEditorStore.getState().timelineDuration).toBe(120);
+  });
+});

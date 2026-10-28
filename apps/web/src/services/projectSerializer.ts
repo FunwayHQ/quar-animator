@@ -24,6 +24,8 @@ import type { SceneGraph } from '@quar/core';
 import {
   createAnimationSequence,
   createTimeline,
+  openingScope,
+  scopeDuration,
   soundIdsUsed,
   withoutGoneArtboards,
 } from '@quar/animation';
@@ -555,7 +557,7 @@ export function deserializeProject(
   const editorState: Parameters<typeof applyEditorState>[0] = {
     timeline: structuredClone(activePage.timeline),
     animationSequence: readAnimationSequence(activePage.animationSequence),
-    // The page's own timeline in view to begin with
+    // The page's own timeline in view to begin with (see below)
     timelineDuration: activePage.timeline.duration,
     timelineScope: null,
     frameRate: v2.settings.frameRate,
@@ -576,9 +578,17 @@ export function deserializeProject(
     sounds: readSounds(v2.sounds),
   };
 
-  // Load the active page's scene graph, then restore the editor state
+  // Load the active page's scene graph, then restore the editor state —
+  // with the first artboard's timeline in view when only artboards animate
+  // (every file made before they had timelines of their own), so Play plays
+  // the animation
   sceneGraph.fromJSON(activePage.sceneGraph);
-  applyEditorState(editorState);
+  const scope = openingScope(sceneGraph, activePage.timeline);
+  applyEditorState({
+    ...editorState,
+    timelineScope: scope,
+    timelineDuration: scopeDuration(activePage.timeline, scope),
+  });
 }
 
 // ============================================================================

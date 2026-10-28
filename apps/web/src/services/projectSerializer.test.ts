@@ -500,6 +500,66 @@ describe('ProjectSerializer', () => {
       expect(appliedState.activePageId).toBe('page-a');
     });
 
+    it('opens on the artboard that animates when nothing outside one does (older files)', () => {
+      const artboard = {
+        ...makeTestNode('slide'),
+        type: 'artboard' as const,
+        clipContent: true,
+        children: ['ball'],
+      };
+      const ball = { ...makeTestNode('ball'), parent: 'slide' };
+      const open = (rootNodeIds: string[], nodes: object[], tracked: string) => {
+        const data = {
+          version: '2.0',
+          name: 'Banner',
+          createdAt: '2026-10-24',
+          updatedAt: '2026-10-24',
+          pages: [
+            {
+              id: 'page-a',
+              name: 'Page 1',
+              sceneGraph: { nodes, rootNodeIds },
+              // Saved before artboards had timelines of their own: one page timeline
+              timeline: createTimeline({
+                duration: 330,
+                frameRate: 30,
+                tracks: [
+                  {
+                    id: 't',
+                    nodeId: tracked,
+                    property: 'opacity',
+                    keyframes: [
+                      { id: 'k0', time: 0, value: 0, easing: 'linear' },
+                      { id: 'k1', time: 30, value: 1, easing: 'linear' },
+                    ],
+                  },
+                ],
+              }),
+            },
+          ],
+          activePageId: 'page-a',
+          settings: {
+            timelineDuration: 330,
+            frameRate: 30,
+            autoKeyframe: false,
+            onionSkin: { ...DEFAULT_ONION_SKIN_SETTINGS },
+          },
+        } as unknown as ProjectDataV2;
+        let applied: Record<string, unknown> = {};
+        deserializeProject(data, new SceneGraph(), (state) => {
+          applied = state;
+        });
+        return applied;
+      };
+      // All the animation is in the artboard: its timeline is in view, at the page's length
+      const opened = open(['slide'], [artboard, ball], 'ball');
+      expect(opened.timelineScope).toBe('slide');
+      expect(opened.timelineDuration).toBe(330);
+      // A layer outside it animates: the page's own
+      const loose = makeTestNode('loose');
+      expect(open(['slide', 'loose'], [artboard, ball, loose], 'loose').timelineScope).toBeNull();
+    });
+
     it('should fallback to first page if activePageId is invalid', () => {
       const v2Data: ProjectDataV2 = {
         version: '2.0',

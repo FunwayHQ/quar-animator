@@ -44,6 +44,7 @@ import {
   createAnimationSequence,
   createTimeline,
   KeyframeManager,
+  openingScope,
   scopeDuration,
   tangentsToEasing,
   tracksAfterListItemRemoved,
@@ -496,17 +497,21 @@ function workAreaFor(
  */
 function pageTimelineFields(
   timeline: Timeline,
-  state: Pick<EditorStore, 'frameRate' | 'timelineDuration' | 'workAreaStart' | 'workAreaEnd'>
+  state: Pick<EditorStore, 'frameRate' | 'timelineDuration' | 'workAreaStart' | 'workAreaEnd'>,
+  sceneGraph: SceneGraphLike
 ): Pick<
   EditorStore,
   'timeline' | 'timelineDuration' | 'timelineScope' | 'workAreaStart' | 'workAreaEnd'
 > {
+  // The page's own timeline first — or, when only artboards animate, the
+  // first one's (selecting a layer brings its artboard's)
+  const scope = openingScope(sceneGraph, timeline);
+  const duration = scopeDuration(timeline, scope);
   return {
     timeline: { ...structuredClone(timeline), frameRate: state.frameRate },
-    // The page's own timeline first (selecting a layer brings its artboard's)
-    timelineScope: null,
-    timelineDuration: timeline.duration,
-    ...workAreaFor(timeline.duration, state),
+    timelineScope: scope,
+    timelineDuration: duration,
+    ...workAreaFor(duration, state),
   };
 }
 
@@ -4070,7 +4075,7 @@ function createPageActions(
       set({
         pages: [...updatedPages, newPage],
         activePageId: newPage.id,
-        ...pageTimelineFields(newPage.timeline, state),
+        ...pageTimelineFields(newPage.timeline, state, sceneGraph),
         animationSequence: structuredClone(newPage.animationSequence ?? createAnimationSequence()),
         selectedNodeIds: new Set<string>(),
         selectedKeyframeIds: new Set<string>(),
@@ -4109,7 +4114,7 @@ function createPageActions(
         set({
           pages: newPages,
           activePageId: switchTo.id,
-          ...pageTimelineFields(switchTo.timeline, state),
+          ...pageTimelineFields(switchTo.timeline, state, sceneGraph),
           animationSequence: structuredClone(
             switchTo.animationSequence ?? createAnimationSequence()
           ),
@@ -4236,7 +4241,7 @@ function createPageActions(
       set({
         pages: updatedPages,
         activePageId: pageId,
-        ...pageTimelineFields(targetPage.timeline, state),
+        ...pageTimelineFields(targetPage.timeline, state, sceneGraph),
         animationSequence: structuredClone(
           targetPage.animationSequence ?? createAnimationSequence()
         ),
