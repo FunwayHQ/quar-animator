@@ -10,6 +10,7 @@ import { PageTabs } from '../components/layout/PageTabs';
 import SymbolLibraryPanel from '../components/layout/SymbolLibraryPanel';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 import { ExportDialogHost } from '../components/common/ExportDialog';
+import { PresentationHost } from '../components/presentation/PresentationPlayer';
 import { AnimationSequenceWindow } from '../components/common/AnimationSequenceWindow';
 import { SceneGraphProvider } from '../contexts/SceneGraphContext';
 import { useTimelineScope } from '../hooks/useTimelineScope';
@@ -123,6 +124,7 @@ export function Editor() {
       <>
         <EditorInner />
         <ExportDialogHost />
+        <PresentationHost />
       </>
     </SceneGraphProvider>
   );

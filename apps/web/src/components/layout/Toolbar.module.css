@@ -92,6 +92,21 @@
   opacity: 0.6;
 }
 
+/* Present: the one button that isn't a tool, in the accent */
+.toolButton.present {
+  color: var(--color-accent-primary);
+}
+
+.toolButton.present svg {
+  fill: currentColor;
+  fill-opacity: 0.18;
+}
+
+.toolButton.present:hover {
+  color: var(--color-accent-primary-hover);
+  background: var(--color-accent-primary-glow, rgba(168, 85, 247, 0.14));
+}
+
 /* Icon styling */
 .toolButton svg {
   width: 18px;

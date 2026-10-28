@@ -39,8 +39,8 @@ export interface ScenePoser {
   boundOutlines(): Map<string, PosedOutline>;
 }
 
-/** A copy of the scene to pose without touching it. */
-function copyScene(scene: SceneGraph): SceneGraph {
+/** A copy of the scene to pose (or play) without touching it. */
+export function copyScene(scene: SceneGraph): SceneGraph {
   const data = scene.toJSON();
   const copy = new SceneGraph();
   copy.fromJSON({

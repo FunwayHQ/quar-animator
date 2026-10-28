@@ -23,6 +23,8 @@ const NON_TEXT_INPUTS = new Set([
 function takesSpace(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
   if (target.isContentEditable) return true;
+  // A place that keeps its keys (the presentation)
+  if (target.closest('[data-own-keys]')) return true;
   const tag = target.tagName.toLowerCase();
   if (tag === 'textarea' || tag === 'select') return true;
   return tag === 'input' && !NON_TEXT_INPUTS.has((target as HTMLInputElement).type);

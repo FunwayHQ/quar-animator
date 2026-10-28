@@ -1,0 +1,110 @@
+/* The slide fills the screen; the only things over it are two quiet pills
+   (which slide, and the keys at the start) that fade on their own. */
+
+.stage {
+  position: fixed;
+  inset: 0;
+  z-index: calc(var(--z-tooltip, 1050) + 10);
+  overflow: hidden;
+  outline: none;
+  cursor: default;
+  user-select: none;
+}
+
+.stage[data-idle] {
+  cursor: none;
+}
+
+.frame {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.count,
+.hint {
+  position: absolute;
+  bottom: 24px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(14, 12, 16, 0.58);
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  color: rgba(255, 255, 255, 0.88);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.28);
+  pointer-events: none;
+}
+
+/* Which slide: in the corner for a moment each time one starts */
+.count {
+  right: 28px;
+  font: 500 12px/1 var(--font-family-mono);
+  letter-spacing: 0.08em;
+  font-variant-numeric: tabular-nums;
+  animation: flash 1800ms var(--easing-out, ease-out) forwards;
+}
+
+/* The keys, centred, for the first few seconds */
+.hint {
+  left: 50%;
+  translate: -50% 0;
+  font: 500 12.5px/1 var(--font-family-ui);
+  animation: flash 3500ms var(--easing-out, ease-out) forwards;
+}
+
+.hint kbd {
+  min-width: 22px;
+  padding: 3px 6px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.08);
+  font: 500 11px/1 var(--font-family-mono);
+  text-align: center;
+}
+
+.dot {
+  width: 3px;
+  height: 3px;
+  margin: 0 2px;
+  border-radius: 50%;
+  background: var(--color-accent-primary, #a855f7);
+}
+
+@keyframes flash {
+  0% {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  10% {
+    opacity: 1;
+    transform: none;
+  }
+  80% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .count,
+  .hint {
+    animation-name: fade;
+  }
+}
+
+@keyframes fade {
+  0%,
+  80% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}

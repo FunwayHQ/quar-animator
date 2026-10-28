@@ -1,7 +1,25 @@
 import { describe, it, expect } from 'vitest';
-import { render, screen } from '../../test/utils';
+import { act, render as renderWith, screen } from '../../test/utils';
 import userEvent from '@testing-library/user-event';
+import { createDefaultTransform } from '@quar/core';
+import type { SceneGraph } from '@quar/core';
+import { SceneGraphProvider, useSceneGraph } from '../../contexts/SceneGraphContext';
+import { usePresentation } from '../presentation/presentation';
 import { Toolbar } from './Toolbar';
+
+/** The toolbar in the editor's scene (`scene` gets it). */
+function render(ui: React.ReactElement, scene?: (sg: SceneGraph) => void) {
+  function Capture() {
+    scene?.(useSceneGraph());
+    return null;
+  }
+  return renderWith(
+    <SceneGraphProvider>
+      <Capture />
+      {ui}
+    </SceneGraphProvider>
+  );
+}
 
 describe('Toolbar', () => {
   it('renders all tool buttons', () => {
@@ -78,5 +96,35 @@ describe('Toolbar', () => {
     render(<Toolbar />);
     const aside = screen.getByRole('complementary');
     expect(aside).toBeInTheDocument();
+  });
+
+  it('offers to present the page’s artboards, once it has one', async () => {
+    let sg: SceneGraph | null = null;
+    render(<Toolbar />, (graph) => (sg = graph));
+    expect(screen.queryByTestId('present-button')).toBeNull();
+    act(() =>
+      sg?.addNode({
+        id: 'slide',
+        name: 'Slide',
+        type: 'artboard',
+        parent: null,
+        children: [],
+        transform: createDefaultTransform(),
+        visible: true,
+        locked: false,
+        opacity: 1,
+        blendMode: 'normal',
+        width: 100,
+        height: 100,
+        fills: [],
+        clipContent: true,
+      } as never)
+    );
+    await userEvent.click(screen.getByTestId('present-button'));
+    expect(usePresentation.getState().open).toBe(true);
+    usePresentation.setState({ open: false });
+    // A hidden artboard isn't a slide
+    act(() => sg?.updateNode('slide', { visible: false }));
+    expect(screen.queryByTestId('present-button')).toBeNull();
   });
 });

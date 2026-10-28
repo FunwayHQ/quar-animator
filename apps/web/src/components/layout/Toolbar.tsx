@@ -1,5 +1,11 @@
+import { useEffect, useState } from 'react';
+import { Play } from 'lucide-react';
+import type { SceneGraph } from '@quar/core';
 import type { ToolType } from '@quar/types';
-import { useActiveTool, useSetActiveTool } from '../../stores/editorStore';
+import { useSceneGraph } from '../../contexts/SceneGraphContext';
+import { useActiveTool, useEditorStore, useSetActiveTool } from '../../stores/editorStore';
+import { isPosingScene } from '../../stores/scenePosing';
+import { startPresentation } from '../presentation/presentation';
 import styles from './Toolbar.module.css';
 
 interface ToolButtonProps {
@@ -220,6 +226,44 @@ const tools: Array<{ type: ToolType; icon: React.ReactNode; label: string; short
   { type: 'bone', icon: icons.bone, label: 'Bone', shortcut: 'J' },
 ];
 
+/** Whether the page has slides to present: a visible artboard at its top level. */
+function hasSlides(sceneGraph: SceneGraph): boolean {
+  return sceneGraph.getRootNodes().some((node) => node.type === 'artboard' && node.visible);
+}
+
+/** Plays the page's artboards full screen, one by one; there while it has some. */
+function PresentButton() {
+  const sceneGraph = useSceneGraph();
+  const editingSymbol = useEditorStore((state) => state.editingSymbolId !== null);
+  const [slides, setSlides] = useState(() => hasSlides(sceneGraph));
+  useEffect(() => {
+    // Showing the animation never adds, hides or moves an artboard
+    const check = () => {
+      if (!isPosingScene()) setSlides(hasSlides(sceneGraph));
+    };
+    check();
+    const off = (
+      ['nodeAdded', 'nodeRemoved', 'nodeChanged', 'nodeMoved', 'graphReplaced'] as const
+    ).map((type) => sceneGraph.on(type, check));
+    return () => off.forEach((unsubscribe) => unsubscribe());
+  }, [sceneGraph]);
+  if (!slides || editingSymbol) return null;
+  return (
+    <div className={styles.toolGroup}>
+      <button
+        type="button"
+        className={`${styles.toolButton} ${styles.present}`}
+        onClick={startPresentation}
+        title="Present: play the artboards full screen (↑ ↓ to move between them, Esc to leave)"
+        aria-label="Present"
+        data-testid="present-button"
+      >
+        <Play />
+      </button>
+    </div>
+  );
+}
+
 export function Toolbar() {
   const activeTool = useActiveTool();
   const setActiveTool = useSetActiveTool();
@@ -239,6 +283,7 @@ export function Toolbar() {
           />
         ))}
       </div>
+      <PresentButton />
     </aside>
   );
 }

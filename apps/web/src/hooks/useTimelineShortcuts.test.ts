@@ -150,6 +150,20 @@ describe('useTimelineShortcuts', () => {
       for (const element of [checkbox, text, area]) element.remove();
     });
 
+    it('leaves Space to a place that keeps its keys (the presentation)', () => {
+      const callbacks = createCallbacks();
+      renderHook(() => useTimelineShortcuts(callbacks));
+      const stage = mount(document.createElement('div'));
+      stage.setAttribute('data-own-keys', '');
+      stage.tabIndex = -1;
+
+      spaceOn(stage, 'keydown');
+      spaceOn(stage, 'keyup');
+
+      expect(callbacks.togglePlay).not.toHaveBeenCalled();
+      stage.remove();
+    });
+
     it('leaves Space with a modifier alone', () => {
       const callbacks = createCallbacks();
       renderHook(() => useTimelineShortcuts(callbacks));

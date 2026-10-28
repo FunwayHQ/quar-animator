@@ -75,13 +75,20 @@ export {
   type FrameSlide,
   type FramePlan,
   framePlan,
+  preloadShots,
 } from './frameRenderer';
 
 // ============================================================================
 // Scene Posing (the rig, for exports that can't skin)
 // ============================================================================
 
-export { createScenePoser, rigHasPhysics, type PosedOutline, type ScenePoser } from './scenePosing';
+export {
+  copyScene,
+  createScenePoser,
+  rigHasPhysics,
+  type PosedOutline,
+  type ScenePoser,
+} from './scenePosing';
 
 export { getAnimatedArtworkBounds, sampleFrames } from './sceneExtent';
 
