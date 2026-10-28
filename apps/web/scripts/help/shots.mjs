@@ -194,6 +194,17 @@ async function takeShot(browser, shot, baseUrl) {
     await context.addInitScript((entries) => {
       for (const [key, value] of Object.entries(entries)) window.localStorage.setItem(key, value);
     }, storage);
+    // The editor's grain (a noise texture at 1.5%) can't be seen at the size the
+    // guide shows its pictures, but it makes every pixel different: without it
+    // a screenshot is a fraction of the size
+    await context.addInitScript(() => {
+      if (window.top !== window) return;
+      document.addEventListener('DOMContentLoaded', () => {
+        const style = document.createElement('style');
+        style.textContent = 'body::before { display: none !important; }';
+        document.head.appendChild(style);
+      });
+    });
     const page = await context.newPage();
     // Dates on the page (a project's "last saved") stay the same from one take to the next
     if (shot.date) await page.clock.setFixedTime(new Date(shot.date));

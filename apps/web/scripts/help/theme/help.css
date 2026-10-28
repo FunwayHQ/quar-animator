@@ -858,9 +858,10 @@ pre code {
   margin: 26px 0 30px;
 }
 
+/* A whole window fills the column; a detail keeps its own size */
 .text figure img {
   display: block;
-  width: 100%;
+  width: auto;
   max-width: 100%;
   height: auto;
   border: 1px solid var(--rule-strong);
