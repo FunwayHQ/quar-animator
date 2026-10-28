@@ -25,6 +25,7 @@ import {
   createAnimationSequence,
   createTimeline,
   openingScope,
+  readSlideTransition,
   scopeDuration,
   soundIdsUsed,
   withoutGoneArtboards,
@@ -482,10 +483,15 @@ function migrateTimeline(
     }
   }
 
-  // Clips a hand-edited or tool-made file got wrong are left out
+  // Clips (and slide transitions) a hand-edited or tool-made file got wrong are left out
   if (result.sounds !== undefined) result.sounds = readSoundClips(result.sounds);
   for (const board of Object.values(result.artboards ?? {})) {
     if (board.sounds !== undefined) board.sounds = readSoundClips(board.sounds);
+    if (board.transition !== undefined) {
+      const transition = readSlideTransition(board.transition);
+      if (transition) board.transition = transition;
+      else delete board.transition;
+    }
   }
 
   return result;

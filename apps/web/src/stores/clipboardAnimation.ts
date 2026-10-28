@@ -49,7 +49,8 @@ export function captureArtboardTimelines(
 
 /**
  * The copied artboards' timelines for the pasted artboards: their lengths
- * and clips timed for this project's frame rate, each clip with a new id.
+ * and clips timed for this project's frame rate, each clip with a new id,
+ * and the transitions into their slides.
  * Clips whose sound isn't to be had (`playable`) are left out.
  */
 export function pastedArtboardTimelines(
@@ -70,6 +71,8 @@ export function pastedArtboardTimelines(
     pasted[id] = {
       duration: Math.max(1, Math.round(entry.duration * scale)),
       ...(sounds.length > 0 ? { sounds } : {}),
+      // The transition into its slide is in seconds: it lasts as long at any frame rate
+      ...(entry.transition ? { transition: { ...entry.transition } } : {}),
     };
   }
   return pasted;

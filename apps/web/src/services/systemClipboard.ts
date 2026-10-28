@@ -7,6 +7,7 @@
  * they use. Images travel inside them, as data URIs.
  */
 
+import { readSlideTransition } from '@quar/animation';
 import type { ArtboardTimeline, Node, SymbolDefinition } from '@quar/types';
 import type { ClipboardExtras } from '../stores/clipboardRig';
 import { readSoundClips, readSounds } from './soundData';
@@ -115,9 +116,11 @@ function readExtras(extras: Record<string, unknown>): ClipboardExtras {
       if (!isRecord(entry) || typeof entry.duration !== 'number') continue;
       if (!Number.isFinite(entry.duration) || entry.duration < 1) continue;
       const sounds = readSoundClips(entry.sounds);
+      const transition = readSlideTransition(entry.transition);
       timelines[id] = {
         duration: Math.round(entry.duration),
         ...(sounds.length > 0 ? { sounds } : {}),
+        ...(transition ? { transition } : {}),
       };
     }
   }

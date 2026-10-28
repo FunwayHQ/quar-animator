@@ -685,6 +685,37 @@ export interface ArtboardTimeline {
   duration: number;
   /** The sounds on its timeline */
   sounds?: SoundClip[];
+  /**
+   * How its slide comes on after the one before, when the page's artboards
+   * play as slides (none: a cut; the first slide's plays no part)
+   */
+  transition?: SlideTransition;
+}
+
+/**
+ * How a slide gives way to the next: a cross-dissolve (`fade`), out to the
+ * document background and in again (`fade-through`), both moving (`push`),
+ * the incoming one moving over the outgoing (`slide-over`), or the incoming
+ * one revealed by a moving edge (`wipe`).
+ */
+export type SlideTransitionType = 'fade' | 'fade-through' | 'push' | 'slide-over' | 'wipe';
+
+/** The way a push, slide-over or wipe moves on screen (left: the incoming slide comes in from the right). */
+export type SlideTransitionDirection = 'left' | 'right' | 'up' | 'down';
+
+/**
+ * The transition into a slide. It plays while the outgoing slide holds its
+ * last frame and the incoming one its first; then the incoming slide's
+ * timeline (and its sounds) starts.
+ */
+export interface SlideTransition {
+  type: SlideTransitionType;
+  /** Push, slide-over and wipe: the way they move (left when absent) */
+  direction?: SlideTransitionDirection;
+  /** In seconds */
+  duration: number;
+  /** How its progress eases (easeInOutCubic when absent) */
+  easing?: EasingType;
 }
 
 export interface Timeline {

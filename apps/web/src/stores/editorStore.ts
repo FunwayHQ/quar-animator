@@ -57,6 +57,7 @@ import {
   type SequenceActions,
 } from './sequenceActions';
 import { createSoundActions, type SoundActions } from './soundActions';
+import { createTransitionActions, type TransitionActions } from './transitionActions';
 import {
   captureClipboardExtras,
   cleanupAfterRemoval,
@@ -545,7 +546,7 @@ export const DEFAULT_STROKE: Stroke = {
 // Store Interface
 // ============================================================================
 
-export interface EditorStore extends SequenceActions, SoundActions {
+export interface EditorStore extends SequenceActions, SoundActions, TransitionActions {
   // Project state
   projectId: string | null;
   projectName: string;
@@ -3190,6 +3191,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   // Animation Sequence (PowerPoint-style numbered steps)
   ...createSequenceActions(set, get),
   ...createSoundActions(set, get),
+  ...createTransitionActions(set, get),
 }));
 
 // ============================================================================

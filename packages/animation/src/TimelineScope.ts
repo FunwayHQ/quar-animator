@@ -8,7 +8,7 @@
 
 import { artboardsInOrder, inTimelineScope } from '@quar/core';
 import type { ScopeLookup } from '@quar/core';
-import type { SoundClip, Timeline } from '@quar/types';
+import type { SlideTransition, SoundClip, Timeline } from '@quar/types';
 
 /** The page's timeline (null), or an artboard's (its id). */
 export type TimelineScope = string | null;
@@ -49,6 +49,38 @@ export function withScopeSounds(
     artboards: {
       ...timeline.artboards,
       [scope]: { duration: scopeDuration(timeline, scope), ...timeline.artboards?.[scope], sounds },
+    },
+  };
+}
+
+/**
+ * The transition into an artboard's slide from the one before it (null:
+ * a cut). The page's own timeline isn't a slide, and has none.
+ */
+export function scopeTransition(timeline: Timeline, scope: TimelineScope): SlideTransition | null {
+  if (scope === null) return null;
+  return timeline.artboards?.[scope]?.transition ?? null;
+}
+
+/**
+ * The timeline with the transition into an artboard's slide set, or taken
+ * off (null). An artboard with no timing yet gets the page's length; the
+ * page's own timeline has no transition, and stays as it is.
+ */
+export function withScopeTransition(
+  timeline: Timeline,
+  scope: TimelineScope,
+  transition: SlideTransition | null
+): Timeline {
+  if (scope === null) return timeline;
+  const { transition: _was, ...entry } = timeline.artboards?.[scope] ?? {
+    duration: scopeDuration(timeline, scope),
+  };
+  return {
+    ...timeline,
+    artboards: {
+      ...timeline.artboards,
+      [scope]: transition ? { ...entry, transition: { ...transition } } : entry,
     },
   };
 }

@@ -6,6 +6,7 @@
 export * from './Timeline';
 export * from './TimelineScope';
 export * from './SoundClips';
+export * from './SlideTransitions';
 export * from './AnimationPresets';
 export * from './AnimationSequence';
 export * from './AnimationSpans';
@@ -28,4 +29,7 @@ export type {
   TangentMode,
   Sound,
   SoundClip,
+  SlideTransition,
+  SlideTransitionType,
+  SlideTransitionDirection,
 } from '@quar/types';

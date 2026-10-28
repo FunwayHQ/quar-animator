@@ -1650,4 +1650,96 @@ describe('ProjectSerializer', () => {
       expect(applied.sounds).toEqual([]);
     });
   });
+
+  // ============================================================================
+  // Slide transitions
+  // ============================================================================
+
+  describe('slide transitions', () => {
+    const snapshot = (timeline: ReturnType<typeof createTimeline>): EditorStateSnapshot => ({
+      timeline,
+      timelineDuration: 300,
+      frameRate: 30,
+      autoKeyframe: false,
+      onionSkin: { ...DEFAULT_ONION_SKIN_SETTINGS },
+    });
+    const artboards = (...ids: string[]) => {
+      const scene = new SceneGraph();
+      for (const id of ids) {
+        scene.addNode({
+          ...makeTestNode(id),
+          type: 'artboard',
+          fills: [],
+          clipContent: true,
+        } as never);
+      }
+      return scene;
+    };
+
+    it('keeps the transition into each slide through a .quar file', () => {
+      const timeline = createTimeline({
+        artboards: {
+          intro: { duration: 60 },
+          middle: { duration: 90, transition: { type: 'fade', duration: 0.5 } },
+          outro: {
+            duration: 30,
+            transition: { type: 'push', direction: 'up', duration: 1.25, easing: 'linear' },
+          },
+        },
+      });
+      const binary = serializeProjectToBinary(
+        'Deck',
+        artboards('intro', 'middle', 'outro'),
+        snapshot(timeline)
+      );
+      let applied: Record<string, unknown> = {};
+      deserializeProjectFromBinary(binary, new SceneGraph(), (s) => {
+        applied = s;
+      });
+      const read = applied.timeline as ReturnType<typeof createTimeline>;
+      expect(read.artboards).toEqual(timeline.artboards);
+    });
+
+    it('opens an older file, with none, as cuts', () => {
+      const data = JSON.parse(
+        JSON.stringify(
+          serializeProject(
+            'Old',
+            artboards('intro', 'outro'),
+            snapshot(createTimeline({ artboards: { intro: { duration: 60 } } }))
+          )
+        )
+      ) as ProjectDataV2;
+      let applied: Record<string, unknown> = {};
+      deserializeProject(data, new SceneGraph(), (s) => {
+        applied = s;
+      });
+      const read = applied.timeline as ReturnType<typeof createTimeline>;
+      expect(read.artboards).toEqual({ intro: { duration: 60 } });
+      expect(read.artboards?.intro).not.toHaveProperty('transition');
+    });
+
+    it('leaves out a transition a damaged file got wrong, and mends what it can', () => {
+      const data = JSON.parse(
+        JSON.stringify(
+          serializeProject('Damaged', artboards('a', 'b', 'c'), snapshot(createTimeline()))
+        )
+      ) as ProjectDataV2;
+      data.pages[0]!.timeline.artboards = {
+        a: { duration: 60, transition: { type: 'spin', duration: 1 } },
+        b: { duration: 60, transition: { type: 'wipe', direction: 'diagonal', duration: 0.4 } },
+        c: { duration: 60, transition: 'fade' },
+      } as never;
+      let applied: Record<string, unknown> = {};
+      deserializeProject(data, new SceneGraph(), (s) => {
+        applied = s;
+      });
+      const read = applied.timeline as ReturnType<typeof createTimeline>;
+      expect(read.artboards).toEqual({
+        a: { duration: 60 },
+        b: { duration: 60, transition: { type: 'wipe', direction: 'left', duration: 0.4 } },
+        c: { duration: 60 },
+      });
+    });
+  });
 });

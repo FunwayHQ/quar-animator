@@ -11,6 +11,7 @@ import {
   evaluateTrack,
   scopeDuration,
   scopeSounds,
+  scopeTransition,
 } from '@quar/animation';
 import type {
   ArtboardNode,
@@ -231,6 +232,19 @@ describe('pastedArtboardTimelines', () => {
     );
     expect(pasted.a2).toEqual({ duration: 90 });
   });
+
+  it('keeps the transition into each pasted slide, in seconds at any frame rate', () => {
+    const transition = { type: 'push', direction: 'up', duration: 0.75 } as const;
+    const pasted = pastedArtboardTimelines(
+      { a: { duration: 90, transition } },
+      new Map([['a', 'a2']]),
+      2,
+      () => true,
+      newId
+    );
+    expect(pasted.a2).toEqual({ duration: 180, transition });
+    expect(pasted.a2!.transition).not.toBe(transition);
+  });
 });
 
 describe('copy and paste of an artboard with its own timeline (store)', () => {
@@ -252,7 +266,13 @@ describe('copy and paste of an artboard with its own timeline (store)', () => {
       timeline: createTimeline({
         duration: 300,
         frameRate: 30,
-        artboards: { slide: { duration: 90, sounds: [clip('c', 15)] } },
+        artboards: {
+          slide: {
+            duration: 90,
+            sounds: [clip('c', 15)],
+            transition: { type: 'wipe', direction: 'down', duration: 0.8 },
+          },
+        },
       }),
       timelineDuration: 300,
     });
@@ -271,6 +291,12 @@ describe('copy and paste of an artboard with its own timeline (store)', () => {
     // The original keeps its own; the library has the sound once
     expect(scopeSounds(timeline, 'slide').map((c) => c.id)).toEqual(['c']);
     expect(sounds).toEqual([voice]);
+    // And the transition into its slide
+    expect(scopeTransition(timeline, copy)).toEqual({
+      type: 'wipe',
+      direction: 'down',
+      duration: 0.8,
+    });
   });
 
   it('undoing the paste takes the copy’s timeline away', () => {
@@ -298,6 +324,11 @@ describe('copy and paste of an artboard with its own timeline (store)', () => {
     expect(scopeDuration(timeline, copy)).toBe(180);
     expect(scopeSounds(timeline, copy)[0]).toMatchObject({ soundId: 'voice', start: 30 });
     expect(sounds).toEqual([voice]);
+    expect(scopeTransition(timeline, copy)).toEqual({
+      type: 'wipe',
+      direction: 'down',
+      duration: 0.8,
+    });
   });
 
   it('from another window, only real sounds come in, and clips without one are left out', () => {
@@ -308,7 +339,11 @@ describe('copy and paste of an artboard with its own timeline (store)', () => {
       extras: {
         ...payload.extras!,
         artboardTimelines: {
-          slide: { duration: 90, sounds: [clip('c', 15), clip('d', 0, 'script'), { id: 1 }] },
+          slide: {
+            duration: 90,
+            sounds: [clip('c', 15), clip('d', 0, 'script'), { id: 1 }],
+            transition: { type: 'explode', duration: 1 },
+          },
         },
         sounds: [voice, { ...voice, id: 'script', src: 'javascript:alert(1)' }],
       },
@@ -323,5 +358,7 @@ describe('copy and paste of an artboard with its own timeline (store)', () => {
     const copy = [...selectedNodeIds][0]!;
     expect(scopeSounds(timeline, copy).map((c) => c.soundId)).toEqual(['voice']);
     expect(sounds.map((sound) => sound.id)).toEqual(['voice']);
+    // A transition there isn't: a cut
+    expect(scopeTransition(timeline, copy)).toBeNull();
   });
 });
