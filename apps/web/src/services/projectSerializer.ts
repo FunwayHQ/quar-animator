@@ -22,7 +22,12 @@ import type {
 } from '@quar/types';
 import type { OnionSkinSettings } from '@quar/core';
 import type { SceneGraph } from '@quar/core';
-import { createAnimationSequence, createTimeline, soundIdsUsed } from '@quar/animation';
+import {
+  createAnimationSequence,
+  createTimeline,
+  soundIdsUsed,
+  withoutGoneArtboards,
+} from '@quar/animation';
 import { DEFAULT_WIND_SETTINGS } from '@quar/rigging';
 import type { AnimationSequence } from '@quar/animation';
 import {
@@ -198,6 +203,17 @@ export function serializeProject(
     ];
     activePageId = pageId;
   }
+
+  // A deleted artboard's timeline (its length, its clips) goes with it
+  pages = pages.map((page) => ({
+    ...page,
+    timeline: withoutGoneArtboards(
+      page.timeline,
+      new Set(
+        page.sceneGraph.nodes.filter((node) => node.type === 'artboard').map((node) => node.id)
+      )
+    ),
+  }));
 
   return {
     version: '2.0',

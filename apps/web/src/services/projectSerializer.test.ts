@@ -1448,8 +1448,15 @@ describe('ProjectSerializer', () => {
         sounds: [sound('voice'), sound('music'), sound('bell'), sound('unused')],
       };
 
+      const scene = new SceneGraph();
+      scene.addNode({
+        ...makeTestNode('board'),
+        type: 'artboard',
+        fills: [],
+        clipContent: true,
+      } as never);
       // Each sound is a binary buffer in the file, not base64 text
-      const binary = serializeProjectToBinary('Talk', new SceneGraph(), editorState);
+      const binary = serializeProjectToBinary('Talk', scene, editorState);
       const text = new TextDecoder('latin1').decode(binary);
       expect(text).not.toContain(btoa('bytes of voice'));
       expect(text).toContain('bytes of voice');
@@ -1465,6 +1472,32 @@ describe('ProjectSerializer', () => {
       expect(timeline.artboards?.board?.sounds).toEqual([clip('c2', 'music')]);
       const pages = applied.pages as Array<{ timeline: ReturnType<typeof createTimeline> }>;
       expect(pages[1]!.timeline.sounds).toEqual([{ ...clip('c3', 'bell'), muted: true }]);
+    });
+
+    it('drops a deleted artboard’s timeline, and the sounds only it played', () => {
+      const sg = new SceneGraph();
+      sg.addNode({
+        ...makeTestNode('kept'),
+        type: 'artboard',
+        fills: [],
+        clipContent: true,
+      } as never);
+      const timeline = createTimeline({
+        artboards: {
+          kept: { duration: 60, sounds: [clip('c1', 'voice')] },
+          deleted: { duration: 90, sounds: [clip('c2', 'music')] },
+        },
+      });
+      const data = serializeProject('Deck', sg, {
+        timeline,
+        timelineDuration: 300,
+        frameRate: 30,
+        autoKeyframe: false,
+        onionSkin: { ...DEFAULT_ONION_SKIN_SETTINGS },
+        sounds: [sound('voice'), sound('music')],
+      });
+      expect(Object.keys(data.pages[0]!.timeline.artboards ?? {})).toEqual(['kept']);
+      expect(data.sounds?.map((s) => s.id)).toEqual(['voice']);
     });
 
     it('leaves out clips and sounds a damaged file got wrong', () => {
