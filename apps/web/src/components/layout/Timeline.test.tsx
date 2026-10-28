@@ -638,6 +638,29 @@ describe('Timeline', () => {
     expect(state.currentFrame).toBe(10);
   });
 
+  it('scrubs as the playhead’s head is dragged, selecting no range', () => {
+    useEditorStore.setState({ workAreaEnabled: false, currentFrame: 10 });
+    renderTimeline();
+    Object.defineProperty(screen.getByTestId('timeline-ruler'), 'getBoundingClientRect', {
+      configurable: true,
+      value: () => ({ left: 0, top: 0, width: 300, height: 28 }) as DOMRect,
+    });
+    const head = screen.getByTestId('timeline-playhead');
+    Object.defineProperty(head, 'setPointerCapture', { value: vi.fn() });
+    const frames: number[] = [];
+    const stop = useEditorStore.subscribe((state) => frames.push(state.currentFrame));
+
+    fireEvent.pointerDown(head, { button: 0, clientX: 10, pointerId: 1 });
+    fireEvent.pointerMove(head, { clientX: 40.4, pointerId: 1 });
+    fireEvent.pointerMove(head, { clientX: 90, pointerId: 1 });
+    fireEvent.pointerUp(head, { clientX: 90, pointerId: 1 });
+    fireEvent.click(head, { clientX: 90 });
+    stop();
+
+    expect(frames).toEqual([40, 90]);
+    expect(useEditorStore.getState().workAreaEnabled).toBe(false);
+  });
+
   it('keeps the work area’s length when it is dragged against either end', () => {
     useEditorStore.setState({ workAreaEnabled: true, workAreaStart: 50, workAreaEnd: 100 });
     renderTimeline();

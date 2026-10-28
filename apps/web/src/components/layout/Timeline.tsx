@@ -74,10 +74,31 @@ function CurrentTimecode({ className }: { className?: string }) {
   return <span className={className}>{formatTimecode(currentFrame, frameRate)}</span>;
 }
 
+/** What dragging the playhead's head does (the one in the ruler). */
+type PlayheadDrag = Pick<
+  React.HTMLAttributes<HTMLDivElement>,
+  'onPointerDown' | 'onPointerMove' | 'onPointerUp' | 'onPointerCancel' | 'onClick' | 'title'
+>;
+
 /** A playhead mark at the frame on screen (on its own, like CurrentTimecode). */
-function PlayheadMark({ className, duration }: { className?: string; duration: number }) {
+function PlayheadMark({
+  className,
+  duration,
+  drag,
+}: {
+  className?: string;
+  duration: number;
+  drag?: PlayheadDrag;
+}) {
   const currentFrame = useEditorStore((s) => s.currentFrame);
-  return <div className={className} style={{ left: `${(currentFrame / duration) * 100}%` }} />;
+  return (
+    <div
+      className={className}
+      style={{ left: `${(currentFrame / duration) * 100}%` }}
+      {...drag}
+      data-testid={drag ? 'timeline-playhead' : undefined}
+    />
+  );
 }
 
 export function Timeline({ playback }: TimelineProps = {}) {
@@ -603,6 +624,36 @@ export function Timeline({ playback }: TimelineProps = {}) {
   const handleRulerPointerUp = useCallback(() => {
     rangeSelectionRef.current = null;
   }, []);
+
+  // Dragging the playhead's head scrubs (a drag on the rest of the ruler selects a range)
+  const playheadDragRef = useRef<{ left: number; width: number } | null>(null);
+  const playheadDrag = useMemo<PlayheadDrag>(() => {
+    const end = (e: React.PointerEvent<HTMLDivElement>) => {
+      e.stopPropagation();
+      playheadDragRef.current = null;
+    };
+    return {
+      title: 'Drag to scrub',
+      onPointerDown: (e) => {
+        if (e.button !== 0) return;
+        const rect = rulerRef.current?.getBoundingClientRect();
+        if (!rect || rect.width <= 0) return;
+        e.stopPropagation();
+        playheadDragRef.current = { left: rect.left, width: rect.width };
+        e.currentTarget.setPointerCapture?.(e.pointerId);
+      },
+      onPointerMove: (e) => {
+        const drag = playheadDragRef.current;
+        if (!drag) return;
+        e.stopPropagation();
+        setCurrentFrame(Math.round(((e.clientX - drag.left) / drag.width) * duration));
+      },
+      onPointerUp: end,
+      onPointerCancel: end,
+      // Not also a click on the ruler
+      onClick: (e) => e.stopPropagation(),
+    };
+  }, [duration, setCurrentFrame]);
 
   const togglePlay = useCallback(() => {
     if (playback) {
@@ -1631,8 +1682,8 @@ export function Timeline({ playback }: TimelineProps = {}) {
                     />
                   </>
                 )}
-                {/* Playhead */}
-                <PlayheadMark className={styles.playhead} duration={duration} />
+                {/* Playhead: its head dragged to scrub */}
+                <PlayheadMark className={styles.playhead} duration={duration} drag={playheadDrag} />
               </div>
 
               {/* Tracks */}

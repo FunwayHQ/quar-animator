@@ -424,6 +424,9 @@
   background: linear-gradient(180deg, var(--color-timeline-playhead) 0%, #dc2626 100%);
   clip-path: polygon(50% 100%, 0 0, 100% 0);
   box-shadow: 0 2px 6px rgba(248, 113, 113, 0.4);
+  /* Grabbed to scrub */
+  pointer-events: auto;
+  cursor: ew-resize;
 }
 
 /* Playhead line in ruler */
