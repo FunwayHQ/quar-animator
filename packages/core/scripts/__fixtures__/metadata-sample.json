@@ -1,0 +1,698 @@
+{
+  "familyMetadataList": [
+    {
+      "family": "Bebas Neue",
+      "category": "Sans Serif",
+      "popularity": 19,
+      "fonts": {
+        "400": {
+          "thickness": null,
+          "slant": null,
+          "width": null,
+          "lineHeight": 1.2
+        }
+      },
+      "isOpenSource": true,
+      "colorCapabilities": [],
+      "axes": [],
+      "subsets": ["menu", "latin", "latin-ext"]
+    },
+    {
+      "family": "DM Sans",
+      "category": "Sans Serif",
+      "popularity": 8,
+      "fonts": {
+        "100": {
+          "thickness": null,
+          "slant": null,
+          "width": null,
+          "lineHeight": 1.302
+        },
+        "1000": {
+          "thickness": null,
+          "slant": null,
+          "width": null,
+          "lineHeight": 1.0
+        },
+        "1000i": {
+          "thickness": null,
+          "slant": null,
+          "width": null,
+          "lineHeight": 1.0
+        },
+        "100i": {
+          "thickness": null,
+          "slant": null,
+          "width": null,
+          "lineHeight": 1.302
+        },
+        "200": {
+          "thickness": null,
+          "slant": null,
+          "width": null,
+          "lineHeight": 1.302
+        },
+        "200i": {
+          "thickness": null,
+          "slant": null,
+          "width": null,
+          "lineHeight": 1.302
+        },
+        "300": {
+          "thickness": null,
+          "slant": null,
+          "width": null,
+          "lineHeight": 1.302
+        },
+        "300i": {
+          "thickness": null,
+          "slant": null,
+          "width": null,
+          "lineHeight": 1.302
+        },
+        "400": {
+          "thickness": null,
+          "slant": null,
+          "width": null,
+          "lineHeight": 1.302
+        },
+        "400i": {
+          "thickness": null,
+          "slant": null,
+          "width": null,
+          "lineHeight": 1.302
+        },
+        "500": {
+          "thickness": null,
+          "slant": null,
+          "width": null,
+          "lineHeight": 1.302
+        },
+        "500i": {
+          "thickness": null,
+          "slant": null,
+          "width": null,
+          "lineHeight": 1.302
+        },
+        "600": {
+          "thickness": null,
+          "slant": null,
+          "width": null,
+          "lineHeight": 1.302
+        },
+        "600i": {
+          "thickness": null,
+          "slant": null,
+          "width": null,
+          "lineHeight": 1.302
+        },
+        "700": {
+          "thickness": null,
+          "slant": null,
+          "width": null,
+          "lineHeight": 1.302
+        },
+        "700i": {
+          "thickness": null,
+          "slant": null,
+          "width": null,
+          "lineHeight": 1.302
+        },
+        "800": {
+          "thickness": null,
+          "slant": null,
+          "width": null,
+          "lineHeight": 1.302
+        },
+        "800i": {
+          "thickness": null,
+          "slant": null,
+          "width": null,
+          "lineHeight": 1.302
+        },
+        "900": {
+          "thickness": null,
+          "slant": null,
+          "width": null,
+          "lineHeight": 1.302
+        },
+        "900i": {
+          "thickness": null,
+          "slant": null,
+          "width": null,
+          "lineHeight": 1.302
+        }
+      },
+      "isOpenSource": true,
+      "colorCapabilities": [],
+      "axes": [
+        {
+          "tag": "opsz",
+          "min": 9.0,
+          "max": 40.0,
+          "defaultValue": 14.0
+        },
+        {
+          "tag": "wght",
+          "min": 100.0,
+          "max": 1000.0,
+          "defaultValue": 400.0
+        }
+      ],
+      "subsets": ["menu", "latin", "latin-ext"]
+    },
+    {
+      "family": "Dancing Script",
+      "category": "Handwriting",
+      "popularity": 39,
+      "fonts": {
+        "400": {
+          "thickness": 4,
+          "slant": 7,
+          "width": 6,
+          "lineHeight": 1.2
+        },
+        "500": {
+          "thickness": null,
+          "slant": null,
+          "width": null,
+          "lineHeight": 1.2
+        },
+        "600": {
+          "thickness": null,
+          "slant": null,
+          "width": null,
+          "lineHeight": 1.2
+        },
+        "700": {
+          "thickness": 4,
+          "slant": 7,
+          "width": 6,
+          "lineHeight": 1.2
+        }
+      },
+      "isOpenSource": true,
+      "colorCapabilities": [],
+      "axes": [
+        {
+          "tag": "wght",
+          "min": 400.0,
+          "max": 700.0,
+          "defaultValue": 400.0
+        }
+      ],
+      "subsets": ["menu", "latin", "latin-ext", "vietnamese"]
+    },
+    {
+      "family": "Inter",
+      "category": "Sans Serif",
+      "popularity": 5,
+      "fonts": {
+        "100": {
+          "thickness": null,
+          "slant": null,
+          "width": null,
+          "lineHeight": 1.2099609375
+        },
+        "100i": {
+          "thickness": null,
+          "slant": null,
+          "width": null,
+          "lineHeight": 1.2099609375
+        },
+        "200": {
+          "thickness": null,
+          "slant": null,
+          "width": null,
+          "lineHeight": 1.2099609375
+        },
+        "200i": {
+          "thickness": null,
+          "slant": null,
+          "width": null,
+          "lineHeight": 1.2099609375
+        },
+        "300": {
+          "thickness": null,
+          "slant": null,
+          "width": null,
+          "lineHeight": 1.2099609375
+        },
+        "300i": {
+          "thickness": null,
+          "slant": null,
+          "width": null,
+          "lineHeight": 1.2099609375
+        },
+        "400": {
+          "thickness": null,
+          "slant": null,
+          "width": null,
+          "lineHeight": 1.2099609375
+        },
+        "400i": {
+          "thickness": null,
+          "slant": null,
+          "width": null,
+          "lineHeight": 1.2099609375
+        },
+        "500": {
+          "thickness": null,
+          "slant": null,
+          "width": null,
+          "lineHeight": 1.2099609375
+        },
+        "500i": {
+          "thickness": null,
+          "slant": null,
+          "width": null,
+          "lineHeight": 1.2099609375
+        },
+        "600": {
+          "thickness": null,
+          "slant": null,
+          "width": null,
+          "lineHeight": 1.2099609375
+        },
+        "600i": {
+          "thickness": null,
+          "slant": null,
+          "width": null,
+          "lineHeight": 1.2099609375
+        },
+        "700": {
+          "thickness": null,
+          "slant": null,
+          "width": null,
+          "lineHeight": 1.2099609375
+        },
+        "700i": {
+          "thickness": null,
+          "slant": null,
+          "width": null,
+          "lineHeight": 1.2099609375
+        },
+        "800": {
+          "thickness": null,
+          "slant": null,
+          "width": null,
+          "lineHeight": 1.2099609375
+        },
+        "800i": {
+          "thickness": null,
+          "slant": null,
+          "width": null,
+          "lineHeight": 1.2099609375
+        },
+        "900": {
+          "thickness": null,
+          "slant": null,
+          "width": null,
+          "lineHeight": 1.2099609375
+        },
+        "900i": {
+          "thickness": null,
+          "slant": null,
+          "width": null,
+          "lineHeight": 1.2099609375
+        }
+      },
+      "isOpenSource": true,
+      "colorCapabilities": [],
+      "axes": [
+        {
+          "tag": "opsz",
+          "min": 14.0,
+          "max": 32.0,
+          "defaultValue": 14.0
+        },
+        {
+          "tag": "wght",
+          "min": 100.0,
+          "max": 900.0,
+          "defaultValue": 400.0
+        }
+      ],
+      "subsets": [
+        "menu",
+        "cyrillic",
+        "cyrillic-ext",
+        "greek",
+        "greek-ext",
+        "latin",
+        "latin-ext",
+        "vietnamese"
+      ]
+    },
+    {
+      "family": "Lato",
+      "category": "Sans Serif",
+      "popularity": 4,
+      "fonts": {
+        "100": {
+          "thickness": 1,
+          "slant": 1,
+          "width": 6,
+          "lineHeight": 1.2
+        },
+        "100i": {
+          "thickness": 1,
+          "slant": 6,
+          "width": 6,
+          "lineHeight": 1.2
+        },
+        "300": {
+          "thickness": 3,
+          "slant": 1,
+          "width": 7,
+          "lineHeight": 1.2
+        },
+        "300i": {
+          "thickness": 3,
+          "slant": 4,
+          "width": 6,
+          "lineHeight": 1.2
+        },
+        "400": {
+          "thickness": 5,
+          "slant": 1,
+          "width": 7,
+          "lineHeight": 1.2
+        },
+        "400i": {
+          "thickness": 5,
+          "slant": 3,
+          "width": 6,
+          "lineHeight": 1.2
+        },
+        "700": {
+          "thickness": 6,
+          "slant": 1,
+          "width": 7,
+          "lineHeight": 1.2
+        },
+        "700i": {
+          "thickness": 6,
+          "slant": 3,
+          "width": 7,
+          "lineHeight": 1.2
+        },
+        "900": {
+          "thickness": 7,
+          "slant": 1,
+          "width": 7,
+          "lineHeight": 1.2
+        },
+        "900i": {
+          "thickness": 7,
+          "slant": 3,
+          "width": 7,
+          "lineHeight": 1.2
+        }
+      },
+      "isOpenSource": true,
+      "colorCapabilities": [],
+      "axes": [],
+      "subsets": ["menu", "latin", "latin-ext"]
+    },
+    {
+      "family": "Noto Color Emoji",
+      "category": "Sans Serif",
+      "popularity": 36,
+      "fonts": {
+        "400": {
+          "thickness": null,
+          "slant": null,
+          "width": null,
+          "lineHeight": 1.171875
+        }
+      },
+      "isOpenSource": true,
+      "colorCapabilities": ["OTSVG", "COLRV1"],
+      "axes": [],
+      "subsets": ["menu", "emoji"]
+    },
+    {
+      "family": "Poppins",
+      "category": "Sans Serif",
+      "popularity": 2,
+      "fonts": {
+        "100": {
+          "thickness": null,
+          "slant": null,
+          "width": null,
+          "lineHeight": 1.5
+        },
+        "100i": {
+          "thickness": null,
+          "slant": null,
+          "width": null,
+          "lineHeight": 1.5
+        },
+        "200": {
+          "thickness": null,
+          "slant": null,
+          "width": null,
+          "lineHeight": 1.5
+        },
+        "200i": {
+          "thickness": null,
+          "slant": null,
+          "width": null,
+          "lineHeight": 1.5
+        },
+        "300": {
+          "thickness": 4,
+          "slant": 1,
+          "width": 8,
+          "lineHeight": 1.5
+        },
+        "300i": {
+          "thickness": null,
+          "slant": null,
+          "width": null,
+          "lineHeight": 1.5
+        },
+        "400": {
+          "thickness": 5,
+          "slant": 1,
+          "width": 8,
+          "lineHeight": 1.5
+        },
+        "400i": {
+          "thickness": null,
+          "slant": null,
+          "width": null,
+          "lineHeight": 1.5
+        },
+        "500": {
+          "thickness": 6,
+          "slant": 1,
+          "width": 8,
+          "lineHeight": 1.5
+        },
+        "500i": {
+          "thickness": null,
+          "slant": null,
+          "width": null,
+          "lineHeight": 1.5
+        },
+        "600": {
+          "thickness": 6,
+          "slant": 1,
+          "width": 8,
+          "lineHeight": 1.5
+        },
+        "600i": {
+          "thickness": null,
+          "slant": null,
+          "width": null,
+          "lineHeight": 1.5
+        },
+        "700": {
+          "thickness": null,
+          "slant": null,
+          "width": null,
+          "lineHeight": 1.5
+        },
+        "700i": {
+          "thickness": null,
+          "slant": null,
+          "width": null,
+          "lineHeight": 1.5
+        },
+        "800": {
+          "thickness": null,
+          "slant": null,
+          "width": null,
+          "lineHeight": 1.5
+        },
+        "800i": {
+          "thickness": null,
+          "slant": null,
+          "width": null,
+          "lineHeight": 1.5
+        },
+        "900": {
+          "thickness": null,
+          "slant": null,
+          "width": null,
+          "lineHeight": 1.5
+        },
+        "900i": {
+          "thickness": null,
+          "slant": null,
+          "width": null,
+          "lineHeight": 1.5
+        }
+      },
+      "isOpenSource": true,
+      "colorCapabilities": [],
+      "axes": [],
+      "subsets": ["menu", "devanagari", "latin", "latin-ext"]
+    },
+    {
+      "family": "Roboto",
+      "category": "Sans Serif",
+      "popularity": 2,
+      "fonts": {
+        "100": {
+          "thickness": 2,
+          "slant": 1,
+          "width": 7,
+          "lineHeight": 1.171875
+        },
+        "100i": {
+          "thickness": 2,
+          "slant": 4,
+          "width": 7,
+          "lineHeight": 1.171875
+        },
+        "200": {
+          "thickness": null,
+          "slant": null,
+          "width": null,
+          "lineHeight": 1.171875
+        },
+        "200i": {
+          "thickness": null,
+          "slant": null,
+          "width": null,
+          "lineHeight": 1.171875
+        },
+        "300": {
+          "thickness": 4,
+          "slant": 1,
+          "width": 7,
+          "lineHeight": 1.171875
+        },
+        "300i": {
+          "thickness": 4,
+          "slant": 4,
+          "width": 7,
+          "lineHeight": 1.171875
+        },
+        "400": {
+          "thickness": 5,
+          "slant": 1,
+          "width": 7,
+          "lineHeight": 1.171875
+        },
+        "400i": {
+          "thickness": 5,
+          "slant": 4,
+          "width": 7,
+          "lineHeight": 1.171875
+        },
+        "500": {
+          "thickness": 6,
+          "slant": 1,
+          "width": 7,
+          "lineHeight": 1.171875
+        },
+        "500i": {
+          "thickness": 6,
+          "slant": 4,
+          "width": 7,
+          "lineHeight": 1.171875
+        },
+        "600": {
+          "thickness": null,
+          "slant": null,
+          "width": null,
+          "lineHeight": 1.171875
+        },
+        "600i": {
+          "thickness": null,
+          "slant": null,
+          "width": null,
+          "lineHeight": 1.171875
+        },
+        "700": {
+          "thickness": 6,
+          "slant": 1,
+          "width": 7,
+          "lineHeight": 1.171875
+        },
+        "700i": {
+          "thickness": 6,
+          "slant": 4,
+          "width": 7,
+          "lineHeight": 1.171875
+        },
+        "800": {
+          "thickness": null,
+          "slant": null,
+          "width": null,
+          "lineHeight": 1.171875
+        },
+        "800i": {
+          "thickness": null,
+          "slant": null,
+          "width": null,
+          "lineHeight": 1.171875
+        },
+        "900": {
+          "thickness": 7,
+          "slant": 1,
+          "width": 7,
+          "lineHeight": 1.171875
+        },
+        "900i": {
+          "thickness": 7,
+          "slant": 4,
+          "width": 7,
+          "lineHeight": 1.171875
+        }
+      },
+      "isOpenSource": true,
+      "colorCapabilities": [],
+      "axes": [
+        {
+          "tag": "wdth",
+          "min": 75.0,
+          "max": 100.0,
+          "defaultValue": 100.0
+        },
+        {
+          "tag": "wght",
+          "min": 100.0,
+          "max": 900.0,
+          "defaultValue": 400.0
+        }
+      ],
+      "subsets": [
+        "menu",
+        "cyrillic",
+        "cyrillic-ext",
+        "greek",
+        "greek-ext",
+        "latin",
+        "latin-ext",
+        "math",
+        "symbols",
+        "vietnamese"
+      ]
+    }
+  ]
+}

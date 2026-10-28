@@ -12,7 +12,8 @@
     "build": "tsup",
     "typecheck": "tsc --noEmit",
     "test": "vitest",
-    "clean": "rimraf dist"
+    "clean": "rimraf dist",
+    "fonts:catalog": "node scripts/google-fonts.mjs"
   },
   "dependencies": {
     "@quar/rigging": "workspace:*",
