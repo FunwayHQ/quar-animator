@@ -103,6 +103,18 @@ describe('the sound lane', () => {
     expect(mocks.chooseSoundFiles).toHaveBeenCalledOnce();
   });
 
+  it('turns hearing sounds while scrubbing off and on', () => {
+    act(() => store().setScrubSounds(true));
+    renderTimeline();
+    const toggle = screen.getByTestId('sound-lane-scrub');
+    expect(toggle).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(toggle);
+    expect(store().scrubSounds).toBe(false);
+    expect(toggle).toHaveAttribute('aria-pressed', 'false');
+    fireEvent.click(toggle);
+    expect(store().scrubSounds).toBe(true);
+  });
+
   it('draws a clip where it plays, with its name and waveform', async () => {
     decodedSound.mockResolvedValue(decodedVoice());
     renderTimeline();

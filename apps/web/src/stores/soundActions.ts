@@ -1,7 +1,8 @@
 /**
  * Sound store actions: the document's sound library, and the clips on the
  * timeline in view: placed, moved, trimmed, made louder or quieter, muted
- * and taken off again, each an undoable step.
+ * and taken off again, each an undoable step. Also whether sounds are heard
+ * while scrubbing, a preference of this browser's.
  */
 
 import {
@@ -13,6 +14,16 @@ import {
 } from '@quar/animation';
 import type { Sound, SoundClip } from '@quar/types';
 import type { EditorStore, SceneGraphLike } from './editorStore';
+
+const SCRUB_STORAGE_KEY = 'quar-animator-scrub-sounds';
+
+function readScrubSounds(): boolean {
+  try {
+    return window.localStorage.getItem(SCRUB_STORAGE_KEY) !== 'off';
+  } catch {
+    return true;
+  }
+}
 
 export interface SoundActions {
   /** The document's sounds, which the clips on every page's timelines play */
@@ -38,6 +49,10 @@ export interface SoundActions {
   ) => void;
   /** Take a clip off its timeline (its sound stays in the library). Undoable. */
   removeSoundClip: (sceneGraph: SceneGraphLike, clipId: string) => void;
+  /** Whether the sounds at a frame are heard as the playhead is dragged or stepped there */
+  scrubSounds: boolean;
+  /** Hear sounds while scrubbing, or not (remembered in this browser) */
+  setScrubSounds: (on: boolean) => void;
 }
 
 export function createSoundActions(
@@ -47,6 +62,15 @@ export function createSoundActions(
   return {
     sounds: [],
     selectedSoundClipId: null,
+    scrubSounds: readScrubSounds(),
+    setScrubSounds: (on) => {
+      set({ scrubSounds: on });
+      try {
+        window.localStorage.setItem(SCRUB_STORAGE_KEY, on ? 'on' : 'off');
+      } catch {
+        // Storage can be unavailable (private mode, blocked site data).
+      }
+    },
     selectSoundClip: (clipId) =>
       set((state) =>
         clipId === state.selectedSoundClipId

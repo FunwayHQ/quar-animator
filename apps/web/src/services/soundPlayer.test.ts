@@ -179,6 +179,53 @@ describe('SoundPlayer', () => {
     expect(createContext).toHaveBeenCalledOnce();
   });
 
+  it('scrubs: a moment of what sounds at a frame, from where it has got to, edges softened', async () => {
+    const { player: p, context } = player();
+    p.prepare([sound('voice')]);
+    await settle();
+    // Frame 45: clip a is half a second in (and fading in to 0.8); b starts later, so isn't heard
+    p.scrub(45, what([clip('a', 30, { gain: 0.8, fadeIn: 1 }), clip('b', 46)]));
+    const rounded = (value: unknown): unknown =>
+      typeof value === 'number'
+        ? Math.round(value * 1e6) / 1e6
+        : Array.isArray(value)
+          ? value.map(rounded)
+          : value && typeof value === 'object'
+            ? Object.fromEntries(Object.entries(value).map(([k, v]) => [k, rounded(v)]))
+            : value;
+    expect(rounded(context.started)).toEqual([
+      {
+        buffer: { decoded: 'voice' },
+        gain: 1,
+        when: 10.005,
+        offset: 0.5,
+        duration: 0.1,
+        ramps: [
+          ['set', 0, 10.005],
+          ['ramp', 0.4, 10.01],
+          ['set', 0.4, 10.1],
+          ['ramp', 0, 10.105],
+        ],
+      },
+    ]);
+    // The next frame cuts it off
+    p.scrub(46, what([clip('a', 30)]));
+    expect(context.stopped).toBe(1);
+    expect(context.started).toHaveLength(2);
+  });
+
+  it('scrubs only sounds decoded already, getting the rest ready', async () => {
+    const decode = vi.fn(async (s: Sound) => ({ decoded: s.id }) as unknown as AudioBuffer);
+    const { player: p, context } = player(decode);
+    p.scrub(0, what([clip('a', 0)]));
+    expect(context.started).toEqual([]);
+    expect(decode).toHaveBeenCalledOnce();
+    await settle();
+    p.scrub(1, what([clip('a', 0)]));
+    expect(context.started).toHaveLength(1);
+    expect(decode).toHaveBeenCalledOnce();
+  });
+
   it('wakes a suspended context, and closes it when done', () => {
     const { player: p, context } = player();
     context.state = 'suspended';

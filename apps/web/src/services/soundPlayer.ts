@@ -4,9 +4,11 @@
  * from a frame, each clip from where it has got to, and told each frame
  * shown so the timeline's playback can start it again from the frame it's
  * on when the two part (a loop, a jump of the playhead, a stalled tab).
+ * Stopped, it plays a moment of the sounds at a frame as the playhead is
+ * dragged or stepped there (scrubbing).
  */
 
-import { schedulePlayGain, soundsPlayed } from '@quar/animation';
+import { playLevel, schedulePlayGain, soundsPlayed } from '@quar/animation';
 import type { Sound, SoundClip } from '@quar/types';
 import { decodedSound } from './soundFiles';
 
@@ -22,6 +24,11 @@ export interface SoundsToPlay {
 /** A moment to set the sounds going in (so they all start together, in time). */
 const LEAD_SECONDS = 0.03;
 
+/** How much of the sounds a frame scrubbed to plays, at least (shorter is a click). */
+export const SCRUB_SECONDS = 0.08;
+/** How long a scrubbed moment takes to rise and fall (no click at either end). */
+const SCRUB_EDGE = 0.005;
+
 export interface SoundPlayerOptions {
   createContext?: () => AudioContext;
   decode?: (sound: Sound) => Promise<AudioBuffer>;
@@ -34,6 +41,8 @@ export class SoundPlayer {
   private run = 0;
   /** The frame playing started from, when (on the audio clock), at what rate */
   private origin: { frame: number; time: number; rate: number } | null = null;
+  /** The sounds decoded so far, to scrub at once */
+  private ready = new Map<string, AudioBuffer>();
   private readonly createContext: () => AudioContext;
   private readonly decode: (sound: Sound) => Promise<AudioBuffer>;
 
@@ -49,6 +58,66 @@ export class SoundPlayer {
   warm(): void {
     this.context ??= this.createContext();
     if (this.context.state === 'suspended') void this.context.resume();
+  }
+
+  /** Decodes the library's sounds ahead, so they play (and scrub) at once; lets go of the rest. */
+  prepare(sounds: readonly Sound[]): void {
+    const kept = new Set(sounds.map((sound) => sound.id));
+    for (const id of this.ready.keys()) if (!kept.has(id)) this.ready.delete(id);
+    for (const sound of sounds) this.prepared(sound);
+  }
+
+  private prepared(sound: Sound): void {
+    if (this.ready.has(sound.id)) return;
+    this.decode(sound).then(
+      (buffer) => this.ready.set(sound.id, buffer),
+      // A sound that can't be decoded stays silent
+      () => undefined
+    );
+  }
+
+  /**
+   * Plays a frame's worth of the clips sounding at `frame` (at least
+   * SCRUB_SECONDS of them), cutting off the last frame's. Only sounds already
+   * decoded are heard: one decoded late would be heard after the playhead
+   * has moved on.
+   */
+  scrub(frame: number, what: SoundsToPlay): void {
+    this.stop();
+    const library = new Map(what.sounds.map((sound) => [sound.id, sound]));
+    const rate = Math.max(1, what.frameRate);
+    const last = frame + Math.max(1, Math.ceil(SCRUB_SECONDS * rate)) - 1;
+    // Only what sounds at the frame itself
+    const plays = soundsPlayed(what.clips, rate, frame, last).filter(
+      (play) => play.at === 0 && library.has(play.soundId)
+    );
+    if (plays.length === 0) return;
+
+    this.warm();
+    const context = this.context;
+    if (!context) return;
+    const begin = context.currentTime + SCRUB_EDGE;
+    for (const play of plays) {
+      const buffer = this.ready.get(play.soundId);
+      const sound = library.get(play.soundId);
+      if (!buffer) {
+        if (sound) this.prepared(sound);
+        continue;
+      }
+      const source = context.createBufferSource();
+      source.buffer = buffer;
+      const gain = context.createGain();
+      const level = play.gain * playLevel(play, 0);
+      const end = begin + play.duration;
+      const edge = Math.min(SCRUB_EDGE, play.duration / 2);
+      gain.gain.setValueAtTime(0, begin);
+      gain.gain.linearRampToValueAtTime(level, begin + edge);
+      gain.gain.setValueAtTime(level, end - edge);
+      gain.gain.linearRampToValueAtTime(0, end);
+      source.connect(gain).connect(context.destination);
+      source.start(begin, play.offset, play.duration);
+      this.playing.push({ source, gain });
+    }
   }
 
   /** Plays the clips from `frame` on (whatever was playing stops). */
@@ -72,6 +141,7 @@ export class SoundPlayer {
       if (!sound) continue;
       this.decode(sound).then(
         (buffer) => {
+          this.ready.set(sound.id, buffer);
           if (run !== this.run) return;
           // Decoded after it was due: from where it has got to
           const late = Math.max(0, context.currentTime - (begin + play.at));
@@ -121,5 +191,6 @@ export class SoundPlayer {
     this.stop();
     void this.context?.close();
     this.context = null;
+    this.ready.clear();
   }
 }

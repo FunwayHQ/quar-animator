@@ -26,6 +26,8 @@ function fakePlayer() {
   return {
     play: vi.fn(),
     stop: vi.fn(),
+    scrub: vi.fn(),
+    prepare: vi.fn(),
     inStep: vi.fn(() => true),
     warm: vi.fn(),
     dispose: vi.fn(),
@@ -97,6 +99,62 @@ describe('useSoundPlayback', () => {
     expect(player.play).toHaveBeenCalledOnce();
     set({ isExporting: false });
     expect(player.play).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('useSoundPlayback scrubbing', () => {
+  let player: ReturnType<typeof fakePlayer>;
+  beforeEach(() => {
+    useEditorStore.getState().resetProject();
+    useEditorStore.setState({
+      sounds: [voice],
+      timeline: createTimeline({ duration: 300, sounds: [clip('a', 30)] }),
+      timelineDuration: 300,
+      scrubSounds: true,
+    });
+    player = fakePlayer();
+    renderHook(() => useSoundPlayback(() => player as unknown as SoundPlayer));
+  });
+
+  it('gets the library ready, and again as it changes', () => {
+    expect(player.prepare).toHaveBeenCalledWith([voice]);
+    set({ sounds: [] });
+    expect(player.prepare).toHaveBeenLastCalledWith([]);
+  });
+
+  it('plays the frame the playhead is dragged or stepped to, stopped', () => {
+    set({ currentFrame: 40 });
+    set({ currentFrame: 41 });
+    expect(player.scrub.mock.calls.map(([frame]) => frame)).toEqual([40, 41]);
+    expect(player.scrub).toHaveBeenLastCalledWith(
+      41,
+      expect.objectContaining({ clips: [clip('a', 30)] })
+    );
+  });
+
+  it('is quiet while playing, exporting, turned off, or when another timeline comes into view', () => {
+    set({ isPlaying: true });
+    set({ currentFrame: 5 });
+    set({ isPlaying: false });
+    set({ isExporting: true, currentFrame: 6 });
+    set({ isExporting: false });
+    act(() => useEditorStore.getState().setScrubSounds(false));
+    set({ currentFrame: 7 });
+    act(() => useEditorStore.getState().setScrubSounds(true));
+    // A project opened, a page switched to: its frame isn't scrubbed to
+    set({ timeline: createTimeline({ duration: 300, sounds: [clip('b', 0)] }), currentFrame: 0 });
+    set({ timelineScope: 'slide', currentFrame: 1 });
+    expect(player.scrub).not.toHaveBeenCalled();
+  });
+});
+
+describe('the scrubbing preference', () => {
+  it('is remembered in this browser', () => {
+    useEditorStore.getState().setScrubSounds(false);
+    expect(window.localStorage.getItem('quar-animator-scrub-sounds')).toBe('off');
+    useEditorStore.getState().setScrubSounds(true);
+    expect(window.localStorage.getItem('quar-animator-scrub-sounds')).toBe('on');
+    expect(useEditorStore.getState().scrubSounds).toBe(true);
   });
 });
 

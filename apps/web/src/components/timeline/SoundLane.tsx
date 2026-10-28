@@ -9,7 +9,7 @@
 
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Music, Plus, Trash2, VolumeX } from 'lucide-react';
+import { HeadphoneOff, Headphones, Music, Plus, Trash2, VolumeX } from 'lucide-react';
 import {
   clipEndFrame,
   clipFades,
@@ -54,6 +54,8 @@ function seconds(value: number): string {
 export function SoundLaneLabel() {
   const sceneGraph = useSceneGraph();
   const { count } = useLaneClips();
+  const scrubSounds = useEditorStore((s) => s.scrubSounds);
+  const setScrubSounds = useEditorStore((s) => s.setScrubSounds);
   return (
     <div
       className={styles.label}
@@ -62,6 +64,21 @@ export function SoundLaneLabel() {
     >
       <Music className={styles.labelIcon} aria-hidden="true" />
       <span className={styles.labelText}>Sound</span>
+      <button
+        type="button"
+        className={`${styles.addButton} ${scrubSounds ? styles.scrubOn : ''}`}
+        onClick={() => setScrubSounds(!scrubSounds)}
+        aria-label="Hear sounds while scrubbing"
+        aria-pressed={scrubSounds}
+        title={
+          scrubSounds
+            ? 'Sounds are heard as you drag or step the playhead. Click to turn this off.'
+            : 'Hear the sounds at the playhead as you drag or step it'
+        }
+        data-testid="sound-lane-scrub"
+      >
+        {scrubSounds ? <Headphones aria-hidden="true" /> : <HeadphoneOff aria-hidden="true" />}
+      </button>
       <button
         type="button"
         className={styles.addButton}

@@ -66,6 +66,10 @@
   background: var(--color-bg-hover);
 }
 
+.addButton.scrubOn {
+  color: var(--color-timeline-sound);
+}
+
 .addButton:focus-visible {
   outline: 1px solid var(--color-accent-primary);
   outline-offset: 1px;
