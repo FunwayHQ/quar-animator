@@ -58,7 +58,7 @@ vi.mock('@quar/rigging', () => ({
   resetDynamicChainStates: mocks.resetDynamicChainStates,
 }));
 
-import { createFrameRenderer, getFrameRenderRoots } from './frameRenderer';
+import { createFrameRenderer, getFrameRenderRoots, preloadShots } from './frameRenderer';
 
 function createSceneGraph(node: Record<string, unknown>) {
   return {
@@ -249,6 +249,46 @@ describe('getFrameRenderRoots', () => {
     expect(
       getFrameRenderRoots({ sceneGraph: sceneGraph as any, timeline: {} as Timeline })
     ).toEqual([artboard, outsideNode]);
+  });
+});
+
+describe('preloadShots', () => {
+  it('loads each drawing’s pictures once, saying how many of how many are in', async () => {
+    const sceneGraph = { getNode: (id: string) => ({ id }), getRootNodes: () => [] };
+    const slide = (id: string) => ({
+      sceneGraph: sceneGraph as any,
+      timeline: {} as Timeline,
+      exportRootIds: [id],
+    });
+    const intro = slide('intro');
+    const outro = slide('outro');
+    const loaded: string[] = [];
+    const renderer = {
+      preloadTextures: vi.fn(async (nodes: Node[]) => {
+        await Promise.resolve();
+        loaded.push(nodes[0]!.id);
+      }),
+    };
+    const progress = vi.fn();
+
+    await preloadShots(
+      renderer,
+      [
+        { ctx: intro, frame: 0 },
+        { ctx: intro, frame: 1 },
+        { ctx: outro, frame: 0 },
+      ],
+      progress
+    );
+
+    expect(loaded).toEqual(['intro', 'outro']);
+    expect(progress.mock.calls).toEqual([
+      [1, 2],
+      [2, 2],
+    ]);
+    // Told nothing, it loads them all the same
+    await preloadShots(renderer, [{ ctx: outro, frame: 0 }]);
+    expect(loaded).toEqual(['intro', 'outro', 'outro']);
   });
 });
 

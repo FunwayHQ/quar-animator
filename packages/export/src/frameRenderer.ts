@@ -298,12 +298,18 @@ export function framePlan(
   return { fps, shots: frames.map((frame) => ({ ctx, frame })) };
 }
 
-/** Load the pictures every shot draws (each slide's), before rendering any. */
+/**
+ * Load the pictures every shot draws (each slide's), before rendering any;
+ * `progress` is told, as each drawing's are in, how many of how many are.
+ */
 export async function preloadShots(
   renderer: Pick<FrameRendererHandle, 'preloadTextures'>,
-  shots: Shot<FrameRenderContext>[]
+  shots: Shot<FrameRenderContext>[],
+  progress?: (done: number, total: number) => void
 ): Promise<void> {
-  for (const ctx of new Set(shots.map((shot) => shot.ctx))) {
+  const drawings = [...new Set(shots.map((shot) => shot.ctx))];
+  for (const [done, ctx] of drawings.entries()) {
     await renderer.preloadTextures(getFrameRenderRoots(ctx), ctx.sceneGraph, ctx.symbols);
+    progress?.(done + 1, drawings.length);
   }
 }

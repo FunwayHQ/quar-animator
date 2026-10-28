@@ -1,12 +1,17 @@
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SceneGraph, createDefaultTransform } from '@quar/core';
 import { createTimeline, withScopeDuration, withScopeSounds } from '@quar/animation';
 import type { FrameRenderContext, FrameRendererHandle } from '@quar/export';
+import type { Sound } from '@quar/types';
 
 import { SceneGraphProvider, useSceneGraph } from '../../contexts/SceneGraphContext';
+import type { FontUse } from '../../services/documentFonts';
 import { useEditorStore } from '../../stores/editorStore';
-import { PresentationHost } from './PresentationPlayer';
+import { textIn } from '../../test/textNode';
+import { setGoogleFontsConsent } from '../common/ConsentBanner';
+import { LOADER_DELAY_MS, PresentationHost } from './PresentationPlayer';
+import { percentReady } from './PresentationLoader';
 import { startPresentation, usePresentation } from './presentation';
 
 function layer(id: string, type: 'artboard' | 'rectangle', name = id) {
@@ -59,24 +64,40 @@ function fakeRenderer() {
 }
 
 function fakeSounds() {
-  return { play: vi.fn(), stop: vi.fn(), prepare: vi.fn(), warm: vi.fn(), dispose: vi.fn() };
+  return {
+    play: vi.fn(),
+    stop: vi.fn(),
+    prepare: vi.fn(async (_sounds: Sound[], _decoded?: (sound: Sound) => void) => undefined),
+    warm: vi.fn(),
+    dispose: vi.fn(),
+  };
+}
+
+/** A promise settled when the test says. */
+function later<T = void>() {
+  let settle: (value: T) => void = () => undefined;
+  const promise = new Promise<T>((resolve) => (settle = resolve));
+  return { promise, settle };
 }
 
 describe('the presentation', () => {
   let renderer: ReturnType<typeof fakeRenderer>;
   let sounds: ReturnType<typeof fakeSounds>;
+  let fonts: ReturnType<typeof vi.fn<[FontUse], Promise<unknown>>>;
   let sg: SceneGraph;
 
   beforeEach(() => {
     useEditorStore.getState().resetProject();
     renderer = fakeRenderer();
     sounds = fakeSounds();
+    fonts = vi.fn(async (_font: FontUse): Promise<unknown> => null);
     render(
       <SceneGraphProvider>
         <Capture onCapture={(graph) => (sg = graph)} />
         <PresentationHost
           createRenderer={() => renderer as unknown as FrameRendererHandle}
           createSoundPlayer={() => sounds as never}
+          loadFont={(font) => fonts(font)}
         />
       </SceneGraphProvider>
     );
@@ -84,6 +105,7 @@ describe('the presentation', () => {
   });
   afterEach(() => {
     act(() => usePresentation.setState({ open: false }));
+    setGoogleFontsConsent(false);
     cleanup();
   });
 
@@ -147,6 +169,7 @@ describe('the presentation', () => {
 
   it('keeps the last slide as it is with ↓ or End', async () => {
     act(() => startPresentation());
+    await waitFor(() => expect(lastSlide()).toBe('intro'));
     fireEvent.keyDown(window, { key: 'End' });
     await waitFor(() => expect(lastSlide()).toBe('outro'));
     const plays = sounds.play.mock.calls.length;
@@ -180,5 +203,110 @@ describe('the presentation', () => {
     const drawn = renderer.renderFrame.mock.calls.at(-1)?.[0];
     expect(drawn?.sceneGraph).not.toBe(sg);
     expect(JSON.stringify(sg.toJSON())).toBe(before);
+  });
+
+  describe('getting ready', () => {
+    const voice: Sound = {
+      id: 'voice',
+      name: 'Voice',
+      src: 'data:audio/wav;base64,AA',
+      duration: 1,
+    };
+    const loader = () => screen.queryByTestId('presentation-loading');
+
+    it('starts straight away, with no loading screen, when it’s ready in a moment', async () => {
+      act(() => startPresentation());
+      await waitFor(() => expect(lastSlide()).toBe('intro'));
+      await new Promise((resolve) => setTimeout(resolve, LOADER_DELAY_MS + 120));
+      expect(loader()).toBeNull();
+      // The keys come up as the first slide starts
+      expect(screen.getByText('↓')).toBeTruthy();
+    });
+
+    it('shows how far the slides have got, then plays the first from its start', async () => {
+      // A Google font allowed but not loaded yet, a sound to decode, the second slide's pictures slow
+      setGoogleFontsConsent(true);
+      sg.addNode(textIn('title', 'Outfit', 700), 'intro');
+      useEditorStore.setState({ sounds: [voice] });
+      const font = later<unknown>();
+      fonts.mockImplementation(() => font.promise);
+      const decoded = later();
+      sounds.prepare.mockImplementation(async (list, each) => {
+        await decoded.promise;
+        list.forEach((one) => each?.(one));
+      });
+      const pictures = later();
+      renderer.preloadTextures
+        .mockImplementationOnce(async () => undefined)
+        .mockImplementationOnce(() => pictures.promise);
+
+      act(() => startPresentation());
+      // Not in a moment: the loading screen, the first slide's name on it
+      expect(loader()).toBeNull();
+      const screenUp = await screen.findByTestId('presentation-loading');
+      const up = within(screenUp);
+      expect(up.getByText('Intro')).toBeTruthy();
+      expect(up.getByText('2 slides')).toBeTruthy();
+      expect(up.getByText('1/2')).toBeTruthy();
+      expect(sounds.prepare).toHaveBeenCalledWith([voice], expect.any(Function));
+      expect(fonts).toHaveBeenCalledWith({ family: 'Outfit', weight: 700 });
+      expect(up.getByRole('progressbar').getAttribute('aria-valuenow')).toBe('25');
+      // Nothing drawn or heard yet, the keys not shown, and the slides don't move
+      fireEvent.keyDown(window, { key: 'ArrowDown' });
+      expect(renderer.renderFrame).not.toHaveBeenCalled();
+      expect(sounds.play).not.toHaveBeenCalled();
+      expect(screen.queryByText('↓')).toBeNull();
+
+      await act(async () => pictures.settle());
+      expect(up.getByText('2/2')).toBeTruthy();
+      await act(async () => decoded.settle());
+      expect(up.getAllByText('1/1')).toHaveLength(1);
+      expect(up.getByRole('progressbar').getAttribute('aria-valuenow')).toBe('75');
+      expect(renderer.renderFrame).not.toHaveBeenCalled();
+      await act(async () => font.settle(null));
+      expect(up.getAllByText('1/1')).toHaveLength(2);
+      expect(up.getByRole('progressbar').getAttribute('aria-valuenow')).toBe('100');
+
+      // Ready: it fades over the first slide's first frame, waiting…
+      await waitFor(() => expect(screenUp.hasAttribute('data-leaving')).toBe(true));
+      await waitFor(() => expect(renderer.renderFrame).toHaveBeenCalled());
+      expect(renderer.renderFrame.mock.calls[0]?.[0].exportRootIds).toEqual(['intro']);
+      expect(renderer.renderFrame.mock.calls[0]?.[1]).toBe(0);
+      expect(sounds.play).not.toHaveBeenCalled();
+      // …then it plays, from its start, its sounds with it, the keys up
+      await waitFor(() => expect(loader()).toBeNull());
+      await waitFor(() => expect(sounds.play).toHaveBeenCalledTimes(1));
+      expect(sounds.play).toHaveBeenCalledWith(0, expect.objectContaining({ lastFrame: 44 }));
+      expect(screen.getByText('Slide 1 of 2: Intro')).toBeTruthy();
+      expect(screen.getByText('↓')).toBeTruthy();
+    });
+
+    it('can be left with Escape while it loads', async () => {
+      renderer.preloadTextures.mockImplementation(() => new Promise(() => undefined));
+      act(() => startPresentation());
+      await screen.findByTestId('presentation-loading');
+      fireEvent.keyDown(window, { key: 'Escape' });
+      expect(usePresentation.getState().open).toBe(false);
+      expect(screen.queryByTestId('presentation')).toBeNull();
+      expect(renderer.dispose).toHaveBeenCalled();
+      expect(sounds.dispose).toHaveBeenCalled();
+      expect(sounds.play).not.toHaveBeenCalled();
+    });
+
+    it('asks for no fonts it isn’t allowed to load, and waits for none', async () => {
+      sg.addNode(textIn('title', 'Outfit', 700), 'intro');
+      act(() => startPresentation());
+      await waitFor(() => expect(lastSlide()).toBe('intro'));
+      expect(fonts).not.toHaveBeenCalled();
+    });
+  });
+});
+
+describe('how much is ready', () => {
+  it('counts every part alike, whole percent', () => {
+    const part = (done: number, total: number) => ({ done, total });
+    expect(percentReady({ slides: part(1, 2), sounds: part(0, 1), fonts: part(0, 0) })).toBe(33);
+    expect(percentReady({ slides: part(3, 2), sounds: part(1, 1), fonts: part(1, 1) })).toBe(100);
+    expect(percentReady({ slides: part(0, 0), sounds: part(0, 0), fonts: part(0, 0) })).toBe(100);
   });
 });

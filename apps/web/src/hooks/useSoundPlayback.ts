@@ -32,7 +32,7 @@ function toPlay(state: EditorState): SoundsToPlay {
 /** Each sound decoded ahead (failures are silent: the clip just doesn't sound). */
 function decodeAhead(state: EditorState, player: SoundPlayer) {
   keepDecodedSounds(state.sounds);
-  player.prepare(state.sounds);
+  void player.prepare(state.sounds);
 }
 
 /** The playhead moved to another frame of the same timeline, with it stopped. */

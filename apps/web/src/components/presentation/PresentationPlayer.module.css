@@ -1,5 +1,7 @@
 /* The slide fills the screen; the only things over it are two quiet pills
-   (which slide, and the keys at the start) that fade on their own. */
+   (which slide, and the keys at the start) that fade on their own — and,
+   before the first starts, the loading screen, if getting ready takes a
+   while (see the end of the file). */
 
 .stage {
   position: fixed;
@@ -92,13 +94,6 @@
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .count,
-  .hint {
-    animation-name: fade;
-  }
-}
-
 @keyframes fade {
   0%,
   80% {
@@ -106,5 +101,291 @@
   }
   100% {
     opacity: 0;
+  }
+}
+
+/* The loading screen, while the slides get ready: an outline of the first
+   slide at its shape, a violet line filling under it, and what's ready of
+   what. Warm charcoal whatever the editor's theme (the player is always
+   dark), so its colours are its own. */
+
+.loader {
+  --loader-ink: #f4f1ee;
+  --loader-ink-soft: rgba(244, 241, 238, 0.64);
+  --loader-ink-faint: rgba(244, 241, 238, 0.4);
+  --loader-line: rgba(244, 241, 238, 0.1);
+  --loader-violet: #a855f7;
+  --loader-violet-glow: rgba(168, 85, 247, 0.55);
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  padding: 32px 16px 88px;
+  color: var(--loader-ink);
+  background:
+    radial-gradient(54% 48% at 50% 42%, rgba(168, 85, 247, 0.08), transparent 72%),
+    radial-gradient(40% 44% at 100% 100%, rgba(159, 18, 57, 0.17), transparent 70%),
+    radial-gradient(32% 36% at 0% 0%, rgba(159, 18, 57, 0.07), transparent 70%), #121013;
+  animation: loader-in 240ms var(--easing-out, ease-out) both;
+}
+
+/* Going: it fades, the first slide's first frame under it */
+.loader[data-leaving] {
+  animation: loader-out 280ms var(--easing-in-out, ease-in-out) forwards;
+  pointer-events: none;
+}
+
+.loaderBody {
+  --slate-width: min(46vw, 540px, calc(38vh * var(--aspect, 1.78)));
+  width: max(var(--slate-width), min(300px, 100vw - 32px));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  animation: loader-rise 560ms var(--easing-default, ease-out) both;
+}
+
+/* The first slide's outline, framed at the corners like a viewfinder */
+.slate {
+  position: relative;
+  width: var(--slate-width);
+  aspect-ratio: var(--aspect, 1.78);
+  margin-bottom: 28px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  border: 1px solid var(--loader-line);
+  border-radius: 2px;
+  background: linear-gradient(180deg, rgba(244, 241, 238, 0.03), rgba(244, 241, 238, 0.008));
+  overflow: hidden;
+}
+
+/* A soft band of light passing over it, now and then: still at work */
+.slate::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    100deg,
+    transparent 32%,
+    rgba(168, 85, 247, 0.1) 50%,
+    transparent 68%
+  );
+  transform: translateX(-100%);
+  animation: pass 2600ms var(--easing-in-out, ease-in-out) 300ms infinite;
+}
+
+.corner {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border: 0 solid rgba(244, 241, 238, 0.55);
+}
+
+.corner[data-at='top-left'] {
+  top: 0;
+  left: 0;
+  border-top-width: 1.5px;
+  border-left-width: 1.5px;
+}
+
+.corner[data-at='top-right'] {
+  top: 0;
+  right: 0;
+  border-top-width: 1.5px;
+  border-right-width: 1.5px;
+}
+
+.corner[data-at='bottom-left'] {
+  bottom: 0;
+  left: 0;
+  border-bottom-width: 1.5px;
+  border-left-width: 1.5px;
+}
+
+.corner[data-at='bottom-right'] {
+  right: 0;
+  bottom: 0;
+  border-right-width: 1.5px;
+  border-bottom-width: 1.5px;
+}
+
+.slateName {
+  max-width: 82%;
+  overflow: hidden;
+  font: 500 15px/1.25 var(--font-family-ui);
+  letter-spacing: -0.005em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.slateCount {
+  font: 500 10.5px/1 var(--font-family-mono);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--loader-ink-faint);
+}
+
+/* How much is ready: a hairline, filling violet */
+.meter {
+  position: relative;
+  width: 100%;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--loader-line);
+}
+
+.meterFill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: inherit;
+  background: var(--loader-violet);
+  box-shadow: 0 0 12px var(--loader-violet-glow);
+  transition: width 320ms var(--easing-default, ease-out);
+}
+
+.status {
+  width: 100%;
+  margin-top: 14px;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  font: 500 13px/1.3 var(--font-family-ui);
+  color: var(--loader-ink-soft);
+}
+
+.percent {
+  font: 500 12px/1 var(--font-family-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--loader-ink);
+}
+
+/* What of what: a dot that fills violet as each kind is all in */
+.parts {
+  width: 100%;
+  margin: 12px 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  list-style: none;
+  font: 500 10.5px/1 var(--font-family-mono);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--loader-ink-faint);
+}
+
+.parts li {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  transition: color 240ms var(--easing-out, ease-out);
+}
+
+.parts li::before {
+  content: '';
+  box-sizing: border-box;
+  width: 6px;
+  height: 6px;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  transition:
+    background-color 240ms var(--easing-out, ease-out),
+    border-color 240ms var(--easing-out, ease-out),
+    box-shadow 240ms var(--easing-out, ease-out);
+}
+
+.parts li span {
+  letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+  color: var(--loader-ink-soft);
+}
+
+.parts li[data-done] {
+  color: var(--loader-ink-soft);
+}
+
+.parts li[data-done]::before {
+  border-color: var(--loader-violet);
+  background: var(--loader-violet);
+  box-shadow: 0 0 8px var(--loader-violet-glow);
+}
+
+/* Escape works while it loads too */
+.leave {
+  position: absolute;
+  bottom: 28px;
+  left: 50%;
+  translate: -50% 0;
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font: 500 12px/1 var(--font-family-ui);
+  white-space: nowrap;
+  color: var(--loader-ink-faint);
+}
+
+.leave kbd {
+  min-width: 22px;
+  padding: 3px 6px;
+  border-radius: 6px;
+  border: 1px solid rgba(244, 241, 238, 0.16);
+  background: rgba(244, 241, 238, 0.05);
+  font: 500 11px/1 var(--font-family-mono);
+  text-align: center;
+  color: var(--loader-ink-soft);
+}
+
+@keyframes loader-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes loader-out {
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes loader-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+@keyframes pass {
+  0% {
+    transform: translateX(-100%);
+  }
+  65%,
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+/* Less movement: the pills and the loading screen only fade; nothing
+   passes over the outline, rises or slides */
+@media (prefers-reduced-motion: reduce) {
+  .count,
+  .hint {
+    animation-name: fade;
+  }
+
+  .loaderBody {
+    animation: none;
+  }
+
+  .slate::after {
+    display: none;
+  }
+
+  .meterFill {
+    transition: none;
   }
 }

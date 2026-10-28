@@ -60,17 +60,25 @@ export class SoundPlayer {
     if (this.context.state === 'suspended') void this.context.resume();
   }
 
-  /** Decodes the library's sounds ahead, so they play (and scrub) at once; lets go of the rest. */
-  prepare(sounds: readonly Sound[]): void {
+  /**
+   * Decodes the library's sounds ahead, so they play (and scrub) at once;
+   * lets go of the rest. Settles once each is decoded (or found not to
+   * decode), `decoded` told as each one is.
+   */
+  prepare(sounds: readonly Sound[], decoded?: (sound: Sound) => void): Promise<void> {
     const kept = new Set(sounds.map((sound) => sound.id));
     for (const id of this.ready.keys()) if (!kept.has(id)) this.ready.delete(id);
-    for (const sound of sounds) this.prepared(sound);
+    return Promise.all(
+      sounds.map((sound) => this.prepared(sound).then(() => decoded?.(sound)))
+    ).then(() => undefined);
   }
 
-  private prepared(sound: Sound): void {
-    if (this.ready.has(sound.id)) return;
-    this.decode(sound).then(
-      (buffer) => this.ready.set(sound.id, buffer),
+  private prepared(sound: Sound): Promise<void> {
+    if (this.ready.has(sound.id)) return Promise.resolve();
+    return this.decode(sound).then(
+      (buffer) => {
+        this.ready.set(sound.id, buffer);
+      },
       // A sound that can't be decoded stays silent
       () => undefined
     );
@@ -101,7 +109,7 @@ export class SoundPlayer {
       const buffer = this.ready.get(play.soundId);
       const sound = library.get(play.soundId);
       if (!buffer) {
-        if (sound) this.prepared(sound);
+        if (sound) void this.prepared(sound);
         continue;
       }
       const source = context.createBufferSource();

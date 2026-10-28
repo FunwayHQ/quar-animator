@@ -7,7 +7,10 @@
 
 import type { Node, SymbolDefinition } from '@quar/types';
 import { getFontManager, GOOGLE_FONTS_CATALOG } from '@quar/core';
-import { ensureGoogleFontsConsent } from '../components/common/ConsentBanner';
+import {
+  ensureGoogleFontsConsent,
+  hasGoogleFontsConsent,
+} from '../components/common/ConsentBanner';
 
 export interface FontUse {
   family: string;
@@ -39,6 +42,31 @@ function catalogWeight(family: string, weight: number): number {
   );
 }
 
+/** The fonts of `uses` not loaded yet. */
+function notLoaded(uses: readonly FontUse[]): FontUse[] {
+  const fm = getFontManager();
+  return uses.filter(
+    ({ family, weight }) => !fm.hasFontWeight(family, catalogWeight(family, weight))
+  );
+}
+
+/**
+ * The fonts of `uses` not loaded yet that may be without asking (Google
+ * Fonts allowed): what a presentation waits for. None when they aren't
+ * allowed, since it never asks (the editor does, as the document opens).
+ */
+export function fontsToLoad(
+  uses: readonly FontUse[],
+  allowed: boolean = hasGoogleFontsConsent()
+): FontUse[] {
+  return allowed ? notLoaded(uses) : [];
+}
+
+/** Loads one of the catalog's fonts (or joins its load under way). */
+export function loadFont({ family, weight }: FontUse): Promise<unknown> {
+  return getFontManager().loadGoogleFont(family, weight);
+}
+
 // Asked once a session: declining isn't stored, and shouldn't ask again on every paste
 let declined = false;
 
@@ -51,9 +79,7 @@ export async function loadDocumentFonts(
   allow: () => Promise<boolean> = ensureGoogleFontsConsent
 ): Promise<number> {
   const fm = getFontManager();
-  const missing = uses.filter(
-    ({ family, weight }) => !fm.hasFontWeight(family, catalogWeight(family, weight))
-  );
+  const missing = notLoaded(uses);
   if (missing.length === 0 || declined) return 0;
   if (!(await allow())) {
     declined = true;

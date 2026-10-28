@@ -226,6 +226,32 @@ describe('SoundPlayer', () => {
     expect(decode).toHaveBeenCalledOnce();
   });
 
+  it('decodes the sounds ahead, settling once each is ready or found not to decode', async () => {
+    const pending = new Map<string, { resolve: (b: AudioBuffer) => void; reject: () => void }>();
+    const decode = vi.fn(
+      (s: Sound) =>
+        new Promise<AudioBuffer>((resolve, reject) => pending.set(s.id, { resolve, reject }))
+    );
+    const { player: p } = player(decode);
+    const each = vi.fn();
+    let settled = false;
+    void p.prepare([sound('voice'), sound('drums')], each).then(() => (settled = true));
+
+    pending.get('voice')?.resolve({} as AudioBuffer);
+    await settle();
+    expect(each.mock.calls.map(([s]) => (s as Sound).id)).toEqual(['voice']);
+    expect(settled).toBe(false);
+    // One that can't be decoded counts as done (it stays silent)
+    pending.get('drums')?.reject();
+    await settle();
+    expect(each).toHaveBeenCalledTimes(2);
+    expect(settled).toBe(true);
+    // Ready already: settled at once, decoded no more
+    await p.prepare([sound('voice')], each);
+    expect(each).toHaveBeenCalledTimes(3);
+    expect(decode).toHaveBeenCalledTimes(2);
+  });
+
   it('wakes a suspended context, and closes it when done', () => {
     const { player: p, context } = player();
     context.state = 'suspended';

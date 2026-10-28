@@ -5,7 +5,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { Node, SymbolDefinition } from '@quar/types';
 import { getFontManager, GOOGLE_FONTS_CATALOG } from '@quar/core';
-import { googleFontsUsed, loadDocumentFonts, resetDocumentFontsForTests } from './documentFonts';
+import {
+  fontsToLoad,
+  googleFontsUsed,
+  loadDocumentFonts,
+  resetDocumentFontsForTests,
+} from './documentFonts';
 import { textIn } from '../test/textNode';
 
 const urlOf = (family: string, weight: number) =>
@@ -72,6 +77,20 @@ describe('loadDocumentFonts', () => {
 
     expect(allow).toHaveBeenCalledTimes(1);
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('lists, without asking, the fonts still to load when Google Fonts are allowed', () => {
+    const fm = getFontManager();
+    vi.spyOn(fm, 'hasFontWeight').mockImplementation((_family, weight) => weight === 400);
+    const uses = [
+      { family: 'Outfit', weight: 800 },
+      { family: 'Outfit', weight: 400 },
+    ];
+
+    expect(fontsToLoad(uses, true)).toEqual([{ family: 'Outfit', weight: 800 }]);
+    // Not allowed: nothing to wait for (and nobody asked)
+    expect(fontsToLoad(uses, false)).toEqual([]);
+    vi.restoreAllMocks();
   });
 
   it('asks nothing when the fonts are loaded already', async () => {
