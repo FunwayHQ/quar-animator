@@ -875,3 +875,209 @@
   padding: 0 6px;
   font-size: var(--font-size-xs, 11px);
 }
+
+/* ============================================================================
+   Slide section: the transition into an artboard's slide
+   ============================================================================ */
+
+/* Which slide it is, of how many (or Hidden) */
+.slideNumber {
+  margin-left: auto;
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-2xs);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-disabled);
+  letter-spacing: 0.04em;
+}
+
+/* Direction arrows: the toggle's buttons share the row */
+.slideDirections {
+  flex: 1;
+}
+
+.slideDirection {
+  flex: 1;
+  width: auto;
+}
+
+.alignOption:disabled,
+.booleanOpButton:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.booleanOpButton:disabled:hover {
+  border-color: var(--color-border-subtle);
+  color: var(--color-text-secondary);
+  background: var(--color-bg-tertiary);
+}
+
+.select:disabled,
+.input:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* A unit after a value (seconds) */
+.inputUnit {
+  flex-shrink: 0;
+  padding-right: var(--space-sm);
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-2xs);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-disabled);
+}
+
+.slideApplyAll {
+  width: 100%;
+}
+
+.slideNote {
+  margin: 0;
+  font-size: var(--font-size-2xs);
+  line-height: 1.45;
+  color: var(--color-text-tertiary);
+}
+
+/* The transition in miniature: one slide number giving way to the next */
+.slidePreview {
+  --preview-time: 1.4s;
+  --preview-ease: cubic-bezier(0.65, 0, 0.35, 1);
+  position: relative;
+  flex-shrink: 0;
+  width: 44px;
+  height: 28px;
+  overflow: hidden;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  /* What a fade through shows between them: the page behind */
+  background: var(--color-bg-primary);
+}
+
+.slidePane {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-family-mono);
+  font-size: 10px;
+  font-weight: var(--font-weight-semibold);
+  font-variant-numeric: tabular-nums;
+}
+
+.slidePaneFrom {
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-tertiary);
+}
+
+.slidePaneTo {
+  /* Violet over the panel's own colour: opaque, so the outgoing one doesn't show through */
+  background:
+    linear-gradient(rgba(168, 85, 247, 0.22), rgba(168, 85, 247, 0.22)), var(--color-bg-secondary);
+  box-shadow: inset 0 0 0 1px rgba(168, 85, 247, 0.45);
+  color: var(--color-accent-primary);
+}
+
+/* A cut, or none chosen: the incoming slide, still */
+.slidePreview[data-type='none'] .slidePaneFrom {
+  visibility: hidden;
+}
+
+.slidePreview[data-type='fade'] .slidePaneTo {
+  animation: slidePreviewFadeIn var(--preview-time) var(--preview-ease) both;
+}
+
+.slidePreview[data-type='fade-through'] .slidePaneFrom {
+  animation: slidePreviewThroughOut var(--preview-time) var(--preview-ease) both;
+}
+
+.slidePreview[data-type='fade-through'] .slidePaneTo {
+  animation: slidePreviewThroughIn var(--preview-time) var(--preview-ease) both;
+}
+
+.slidePreview[data-type='push'] .slidePaneFrom {
+  animation: slidePreviewMoveOut var(--preview-time) var(--preview-ease) both;
+}
+
+.slidePreview[data-type='push'] .slidePaneTo,
+.slidePreview[data-type='slide-over'] .slidePaneTo {
+  animation: slidePreviewMoveIn var(--preview-time) var(--preview-ease) both;
+}
+
+.slidePreview[data-type='wipe'] .slidePaneTo {
+  animation: slidePreviewWipe var(--preview-time) var(--preview-ease) both;
+}
+
+/* Each holds a moment, changes over the middle half, then holds */
+@keyframes slidePreviewFadeIn {
+  0%,
+  25% {
+    opacity: 0;
+  }
+  75%,
+  100% {
+    opacity: 1;
+  }
+}
+
+@keyframes slidePreviewThroughOut {
+  0%,
+  25% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes slidePreviewThroughIn {
+  0%,
+  50% {
+    opacity: 0;
+  }
+  75%,
+  100% {
+    opacity: 1;
+  }
+}
+
+@keyframes slidePreviewMoveOut {
+  0%,
+  25% {
+    transform: translate(0, 0);
+  }
+  75%,
+  100% {
+    transform: translate(calc(var(--dx) * 100%), calc(var(--dy) * 100%));
+  }
+}
+
+@keyframes slidePreviewMoveIn {
+  0%,
+  25% {
+    transform: translate(calc(var(--dx) * -100%), calc(var(--dy) * -100%));
+  }
+  75%,
+  100% {
+    transform: translate(0, 0);
+  }
+}
+
+@keyframes slidePreviewWipe {
+  0%,
+  25% {
+    clip-path: inset(var(--wipe-top) var(--wipe-right) var(--wipe-bottom) var(--wipe-left));
+  }
+  75%,
+  100% {
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .slidePreview .slidePane {
+    animation: none !important;
+  }
+}

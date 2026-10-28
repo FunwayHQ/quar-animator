@@ -40,6 +40,7 @@ import { useSceneGraph } from '../../contexts/SceneGraphContext';
 import { useEditorStore, DEFAULT_FILL, DEFAULT_STROKE } from '../../stores/editorStore';
 import { isPosingScene } from '../../stores/scenePosing';
 import { ScrubLabel } from '../common/ScrubLabel';
+import { SlideSection } from './SlideSection';
 import { setBoneLength } from '../../stores/boneLength';
 import { AnimationPresetsPanel } from '../common/AnimationPresetsPanel';
 import { KeyframeIndicator } from '../common/KeyframeIndicator';
@@ -3281,6 +3282,11 @@ export function PropertiesPanel() {
               </div>
             );
           })()}
+
+        {/* An artboard at the top of the page is a slide: how it comes on after the one before */}
+        {node.type === 'artboard' && node.parent === null && selectedNodeIds.size === 1 && (
+          <SlideSection artboard={node} sceneGraph={sceneGraph} />
+        )}
 
         <div className={styles.section}>
           <div className={styles.sectionHeader}>
