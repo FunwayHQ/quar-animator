@@ -1450,7 +1450,9 @@ describe('ProjectSerializer', () => {
         sounds: [clip('c1', 'voice')],
         artboards: { board: { duration: 90, sounds: [clip('c2', 'music')] } },
       });
-      const other = createTimeline({ sounds: [{ ...clip('c3', 'bell'), muted: true }] });
+      const other = createTimeline({
+        sounds: [{ ...clip('c3', 'bell'), muted: true, fadeIn: 0.5, fadeOut: 1 }],
+      });
       const editorState: EditorStateSnapshot = {
         timeline: active,
         timelineDuration: 300,
@@ -1485,7 +1487,9 @@ describe('ProjectSerializer', () => {
       expect(timeline.sounds).toEqual([clip('c1', 'voice')]);
       expect(timeline.artboards?.board?.sounds).toEqual([clip('c2', 'music')]);
       const pages = applied.pages as Array<{ timeline: ReturnType<typeof createTimeline> }>;
-      expect(pages[1]!.timeline.sounds).toEqual([{ ...clip('c3', 'bell'), muted: true }]);
+      expect(pages[1]!.timeline.sounds).toEqual([
+        { ...clip('c3', 'bell'), muted: true, fadeIn: 0.5, fadeOut: 1 },
+      ]);
     });
 
     it('drops a deleted artboard’s timeline, and the sounds only it played', () => {
@@ -1528,7 +1532,7 @@ describe('ProjectSerializer', () => {
             timeline: {
               ...createTimeline(),
               sounds: [
-                { id: 'ok', soundId: 's', start: 3.4, duration: 1 },
+                { id: 'ok', soundId: 's', start: 3.4, duration: 1, fadeIn: -1, fadeOut: 'long' },
                 { id: 'no-length', soundId: 's', start: 0 },
                 { soundId: 's', start: 0, duration: 1 },
                 null,

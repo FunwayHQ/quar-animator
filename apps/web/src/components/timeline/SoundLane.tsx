@@ -2,8 +2,9 @@
  * Sound Lane
  * The timeline's row of sound clips, kept in view below the layers: each
  * clip a bar with its waveform, dragged to move it, its ends dragged to
- * trim it, its volume and mute in a small settings card. Sound files
- * dropped on the timeline land where they're dropped.
+ * trim it, its top corners dragged to fade it in and out, its volume, fades
+ * and mute in a small settings card. Sound files dropped on the timeline
+ * land where they're dropped.
  */
 
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -11,6 +12,9 @@ import { createPortal } from 'react-dom';
 import { Music, Plus, Trash2, VolumeX } from 'lucide-react';
 import {
   clipEndFrame,
+  clipFades,
+  clipLevel,
+  fadedClip,
   movedClip,
   scopeSounds,
   soundRows,
@@ -122,10 +126,36 @@ export function useSoundDrop(frameAt: (clientX: number) => number) {
 
 interface Drag {
   clipId: string;
-  mode: 'move' | 'start' | 'end';
+  mode: 'move' | 'start' | 'end' | 'fade-in' | 'fade-out';
   original: SoundClip;
   downFrame: number;
   changed: boolean;
+}
+
+const DRAG_MODES = new Set<string>(['start', 'end', 'fade-in', 'fade-out']);
+
+/** The clip as a drag `delta` frames on has made it: moved, trimmed or faded, a frame at a time. */
+function dragged(drag: Drag, delta: number, frameRate: number, soundDuration?: number): SoundClip {
+  const { original } = drag;
+  const rate = Math.max(1, frameRate);
+  const fades = clipFades(original);
+  switch (drag.mode) {
+    case 'move':
+      return movedClip(original, original.start + delta);
+    case 'start':
+      return trimmedStart(original, original.start + delta, rate);
+    case 'end':
+      return trimmedEnd(
+        original,
+        clipEndFrame(original, rate) + delta,
+        rate,
+        soundDuration ?? original.offset + original.duration
+      );
+    case 'fade-in':
+      return fadedClip(original, { fadeIn: Math.round(fades.fadeIn * rate + delta) / rate });
+    case 'fade-out':
+      return fadedClip(original, { fadeOut: Math.round(fades.fadeOut * rate - delta) / rate });
+  }
 }
 
 export function SoundLaneTrack({
@@ -171,10 +201,10 @@ export function SoundLaneTrack({
     (event: React.PointerEvent, clip: SoundClip) => {
       if (event.button !== 0) return;
       event.stopPropagation();
-      const edge = (event.target as HTMLElement).dataset.edge;
+      const edge = (event.target as HTMLElement).dataset.edge ?? '';
       dragRef.current = {
         clipId: clip.id,
-        mode: edge === 'start' ? 'start' : edge === 'end' ? 'end' : 'move',
+        mode: DRAG_MODES.has(edge) ? (edge as Drag['mode']) : 'move',
         original: clip,
         downFrame: frameAt(event.clientX),
         changed: false,
@@ -190,19 +220,8 @@ export function SoundLaneTrack({
       const drag = dragRef.current;
       if (!drag) return;
       const delta = frameAt(event.clientX) - drag.downFrame;
-      const { original } = drag;
-      const sound = library.get(original.soundId);
-      const next =
-        drag.mode === 'move'
-          ? movedClip(original, original.start + delta)
-          : drag.mode === 'start'
-            ? trimmedStart(original, original.start + delta, frameRate)
-            : trimmedEnd(
-                original,
-                clipEndFrame(original, frameRate) + delta,
-                frameRate,
-                sound?.duration ?? original.offset + original.duration
-              );
+      const sound = library.get(drag.original.soundId);
+      const next = dragged(drag, delta, frameRate, sound?.duration);
       // One undo step for the whole drag, recorded as it first changes something
       const before = useEditorStore.getState().timeline;
       store().updateSoundClip(sceneGraph, drag.clipId, () => next, !drag.changed);
@@ -416,14 +435,26 @@ const SoundClipBar = memo(function SoundClipBar({
 }: SoundClipBarProps) {
   const audio = useDecodedSound(sound);
   const columns = Math.max(1, Math.min(WAVE_COLUMNS, Math.ceil(clip.duration * 100)));
-  const wave = useMemo(
-    () =>
-      audio ? waveformPath(soundPeaks(audio), clip.offset, clip.duration, columns, clip.gain) : '',
-    [audio, clip.offset, clip.duration, columns, clip.gain]
-  );
+  const { offset, duration: length, gain, fadeIn: fadeInSet, fadeOut: fadeOutSet } = clip;
+  const wave = useMemo(() => {
+    if (!audio) return '';
+    // As loud as it plays: its volume, through its fades
+    const shape = { duration: length, fadeIn: fadeInSet, fadeOut: fadeOutSet };
+    const level = (t: number) => gain * clipLevel(shape, t);
+    return waveformPath(soundPeaks(audio), offset, length, columns, level);
+  }, [audio, offset, length, gain, fadeInSet, fadeOutSet, columns]);
   const end = clipEndFrame(clip, frameRate);
   const name = sound?.name ?? 'Missing sound';
   const lastFrame = Math.max(clip.start, Math.ceil(end) - 1);
+  const { fadeIn, fadeOut } = clipFades(clip);
+  const inAt = clip.duration > 0 ? (fadeIn / clip.duration) * 100 : 0;
+  const outAt = clip.duration > 0 ? 100 - (fadeOut / clip.duration) * 100 : 100;
+  const described = [
+    clip.muted ? 'muted' : '',
+    clip.gain !== 1 ? `volume ${Math.round(clip.gain * 100)}%` : '',
+    fadeIn > 0 ? `fades in over ${seconds(fadeIn)}` : '',
+    fadeOut > 0 ? `fades out over ${seconds(fadeOut)}` : '',
+  ].filter(Boolean);
   return (
     <div
       role="button"
@@ -442,9 +473,9 @@ const SoundClipBar = memo(function SoundClipBar({
       onKeyDown={(event) => onKeyDown(event, clip)}
       onDoubleClick={(event) => onOpenSettings(clip.id, event.currentTarget)}
       onContextMenu={onContextMenu}
-      aria-label={`Sound ${name}, frames ${clip.start} to ${lastFrame}${clip.muted ? ', muted' : ''}${clip.gain !== 1 ? `, volume ${Math.round(clip.gain * 100)}%` : ''}`}
+      aria-label={[`Sound ${name}, frames ${clip.start} to ${lastFrame}`, ...described].join(', ')}
       aria-pressed={selected}
-      title={`${name}: frames ${clip.start}–${lastFrame} (${seconds(clip.duration)}). Drag to move, drag its ends to trim; double-click for volume.`}
+      title={`${name}: frames ${clip.start}–${lastFrame} (${seconds(clip.duration)}). Drag to move, its ends to trim, its top corners to fade; double-click for volume and fades.`}
       data-testid={`sound-clip-${clip.id}`}
     >
       {wave && (
@@ -461,8 +492,47 @@ const SoundClipBar = memo(function SoundClipBar({
         {clip.muted && <VolumeX className={styles.mutedIcon} aria-hidden="true" />}
         {name}
       </span>
+      {(fadeIn > 0 || fadeOut > 0) && (
+        <svg
+          className={styles.fades}
+          viewBox="0 0 100 1"
+          preserveAspectRatio="none"
+          aria-hidden="true"
+          data-testid={`sound-clip-fades-${clip.id}`}
+        >
+          {fadeIn > 0 && (
+            <>
+              <path className={styles.fadeShade} d={`M0 0L${inAt} 0L0 1Z`} />
+              <path className={styles.fadeLine} d={`M0 1L${inAt} 0`} />
+            </>
+          )}
+          {fadeOut > 0 && (
+            <>
+              <path className={styles.fadeShade} d={`M${outAt} 0L100 0L100 1Z`} />
+              <path className={styles.fadeLine} d={`M${outAt} 0L100 1`} />
+            </>
+          )}
+        </svg>
+      )}
       <span className={styles.edgeStart} data-edge="start" aria-hidden="true" />
       <span className={styles.edgeEnd} data-edge="end" aria-hidden="true" />
+      {/* Grabbed to fade: where each fade ends, in the top corners when there's none */}
+      <span
+        className={`${styles.fadeHandle} ${fadeIn > 0 ? styles.fadeSet : ''}`}
+        style={{ left: `${inAt}%` }}
+        data-edge="fade-in"
+        title="Drag to fade in"
+        aria-hidden="true"
+        data-testid={`sound-clip-fade-in-${clip.id}`}
+      />
+      <span
+        className={`${styles.fadeHandle} ${styles.fadeOutHandle} ${fadeOut > 0 ? styles.fadeSet : ''}`}
+        style={{ left: `${outAt}%` }}
+        data-edge="fade-out"
+        title="Drag to fade out"
+        aria-hidden="true"
+        data-testid={`sound-clip-fade-out-${clip.id}`}
+      />
     </div>
   );
 });
@@ -557,6 +627,20 @@ function SoundClipSettings({ clip, sound, frameRate, x, y, onClose }: SoundClipS
           />
           <output className={styles.volumeValue}>{volume}%</output>
         </label>
+        <div className={styles.fadeRow}>
+          <FadeField
+            label="Fade in"
+            value={clipFades(clip).fadeIn}
+            onCommit={(fadeIn) => update((c) => fadedClip(c, { fadeIn }))}
+            testId="sound-clip-fade-in"
+          />
+          <FadeField
+            label="Fade out"
+            value={clipFades(clip).fadeOut}
+            onCommit={(fadeOut) => update((c) => fadedClip(c, { fadeOut }))}
+            testId="sound-clip-fade-out"
+          />
+        </div>
         <div className={styles.settingsActions}>
           <label className={styles.muteToggle}>
             <input
@@ -586,5 +670,46 @@ function SoundClipSettings({ clip, sound, frameRate, x, y, onClose }: SoundClipS
       </div>
     </>,
     document.body
+  );
+}
+
+/** A fade's length in seconds, set when it's entered (Enter or leaving the field): one undo step. */
+function FadeField({
+  label,
+  value,
+  onCommit,
+  testId,
+}: {
+  label: string;
+  value: number;
+  onCommit: (seconds: number) => void;
+  testId: string;
+}) {
+  const shown = String(Math.round(value * 100) / 100);
+  const [draft, setDraft] = useState(shown);
+  useEffect(() => setDraft(shown), [shown]);
+  const commit = () => {
+    const seconds = Number(draft);
+    if (draft.trim() !== '' && Number.isFinite(seconds)) onCommit(Math.max(0, seconds));
+    else setDraft(shown);
+  };
+  return (
+    <label className={styles.fadeField}>
+      <span>{label}</span>
+      <input
+        type="number"
+        min={0}
+        step={0.1}
+        value={draft}
+        onChange={(event) => setDraft(event.target.value)}
+        onBlur={commit}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') commit();
+        }}
+        aria-label={`${label}, in seconds`}
+        data-testid={testId}
+      />
+      <span className={styles.fadeUnit}>s</span>
+    </label>
   );
 }

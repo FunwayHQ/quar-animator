@@ -23,6 +23,8 @@ export function readSoundClips(clips: unknown): SoundClip[] {
         duration: clip.duration,
         gain: isNumber(clip.gain) ? Math.max(0, clip.gain) : 1,
         ...(clip.muted === true ? { muted: true } : {}),
+        ...(isNumber(clip.fadeIn) && clip.fadeIn > 0 ? { fadeIn: clip.fadeIn } : {}),
+        ...(isNumber(clip.fadeOut) && clip.fadeOut > 0 ? { fadeOut: clip.fadeOut } : {}),
       },
     ];
   });

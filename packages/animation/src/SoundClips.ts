@@ -25,11 +25,14 @@ export function lastSoundFrame(clips: readonly SoundClip[] | undefined, frameRat
   return last;
 }
 
+/** What a clip's loudness through it depends on (its length and fades). */
+export type ClipShape = Pick<SoundClip, 'duration' | 'fadeIn' | 'fadeOut'>;
+
 /**
  * A clip's fades, in seconds, made to fit it: together no longer than the
  * clip (both shortened alike when they'd overlap, as when it's trimmed).
  */
-export function clipFades(clip: SoundClip): { fadeIn: number; fadeOut: number } {
+export function clipFades(clip: ClipShape): { fadeIn: number; fadeOut: number } {
   const fadeIn = Math.max(0, clip.fadeIn ?? 0) || 0;
   const fadeOut = Math.max(0, clip.fadeOut ?? 0) || 0;
   const both = fadeIn + fadeOut;
@@ -37,8 +40,30 @@ export function clipFades(clip: SoundClip): { fadeIn: number; fadeOut: number } 
   return { fadeIn: fadeIn * fit, fadeOut: fadeOut * fit };
 }
 
+/**
+ * The clip with a fade set (seconds): kept within what the other fade leaves
+ * of it, and taken off at 0. The same clip when nothing changes.
+ */
+export function fadedClip(
+  clip: SoundClip,
+  fades: { fadeIn?: number; fadeOut?: number }
+): SoundClip {
+  let { fadeIn, fadeOut } = clipFades(clip);
+  const fit = (value: number, room: number) =>
+    Math.min(Math.max(0, room), Math.max(0, Number.isFinite(value) ? value : 0));
+  if (fades.fadeIn !== undefined) fadeIn = fit(fades.fadeIn, clip.duration - fadeOut);
+  if (fades.fadeOut !== undefined) fadeOut = fit(fades.fadeOut, clip.duration - fadeIn);
+  if (fadeIn === (clip.fadeIn ?? 0) && fadeOut === (clip.fadeOut ?? 0)) return clip;
+  const { fadeIn: _in, fadeOut: _out, ...rest } = clip;
+  return {
+    ...rest,
+    ...(fadeIn > 0 ? { fadeIn } : {}),
+    ...(fadeOut > 0 ? { fadeOut } : {}),
+  };
+}
+
 /** How loud a clip is `seconds` into it, before its volume: 0–1, its fades rising and falling straight. */
-export function clipLevel(clip: SoundClip, seconds: number): number {
+export function clipLevel(clip: ClipShape, seconds: number): number {
   const { fadeIn, fadeOut } = clipFades(clip);
   let level = 1;
   if (seconds < fadeIn) level = Math.max(0, seconds / fadeIn);

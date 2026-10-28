@@ -6,6 +6,7 @@ import {
   clipEndFrame,
   clipFades,
   clipLevel,
+  fadedClip,
   findSoundClip,
   lastSoundFrame,
   movedClip,
@@ -112,6 +113,16 @@ describe('fades', () => {
     expect(playLevel(part!, 1)).toBe(0.75);
     // Without fades, nothing to ramp
     expect(soundsPlayed([clip('b', 0, 1)], 30, 0, 29)[0]).not.toHaveProperty('levels');
+  });
+
+  it('are set within what the other fade leaves, and taken off at 0', () => {
+    const plain = clip('a', 0, 4);
+    expect(fadedClip(plain, { fadeIn: 1 })).toMatchObject({ fadeIn: 1 });
+    const both = fadedClip(fadedClip(plain, { fadeIn: 1 }), { fadeOut: 5 });
+    expect(both).toMatchObject({ fadeIn: 1, fadeOut: 3 });
+    expect(fadedClip(both, { fadeIn: 0 })).not.toHaveProperty('fadeIn');
+    expect(fadedClip(plain, { fadeIn: -2 })).toBe(plain);
+    expect(fadedClip(both, { fadeIn: 1 })).toBe(both);
   });
 
   it('are set on a gain as ramps, at the pace it plays, from where it starts', () => {

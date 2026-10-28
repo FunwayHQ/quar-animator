@@ -6,7 +6,7 @@
  * on when the two part (a loop, a jump of the playhead, a stalled tab).
  */
 
-import { soundsPlayed } from '@quar/animation';
+import { schedulePlayGain, soundsPlayed } from '@quar/animation';
 import type { Sound, SoundClip } from '@quar/types';
 import { decodedSound } from './soundFiles';
 
@@ -79,7 +79,7 @@ export class SoundPlayer {
           const source = context.createBufferSource();
           source.buffer = buffer;
           const gain = context.createGain();
-          gain.gain.value = play.gain;
+          schedulePlayGain(gain.gain, play, begin + play.at + late, late);
           source.connect(gain).connect(context.destination);
           source.start(begin + play.at + late, play.offset + late, play.duration - late);
           this.playing.push({ source, gain });

@@ -153,6 +153,40 @@ describe('the sound lane', () => {
     expect(clips()[0]).toMatchObject({ start: 60, offset: 1, duration: 2 });
   });
 
+  it('fades a clip in and out by its top corners, a frame at a time, a step a drag', () => {
+    renderTimeline();
+    const id = placed(30);
+    laneOfWidth();
+    const fadeIn = screen.getByTestId(`sound-clip-fade-in-${id}`);
+    const fadeOut = screen.getByTestId(`sound-clip-fade-out-${id}`);
+    const steps = store().undoStack.length;
+    // 15 frames in: half a second
+    fireEvent.pointerDown(fadeIn, { button: 0, clientX: 30, pointerId: 1 });
+    fireEvent.pointerMove(fadeIn, { clientX: 40.4, pointerId: 1 });
+    fireEvent.pointerMove(fadeIn, { clientX: 45, pointerId: 1 });
+    fireEvent.pointerUp(fadeIn, { pointerId: 1 });
+    expect(clips()[0]).toMatchObject({ start: 30, offset: 0, duration: 4, fadeIn: 0.5 });
+    expect(store().undoStack.length).toBe(steps + 1);
+    // From the end, 30 frames back: a second; no further than the fade in leaves
+    fireEvent.pointerDown(fadeOut, { button: 0, clientX: 150, pointerId: 2 });
+    fireEvent.pointerMove(fadeOut, { clientX: 120, pointerId: 2 });
+    fireEvent.pointerUp(fadeOut, { pointerId: 2 });
+    expect(clips()[0]).toMatchObject({ fadeIn: 0.5, fadeOut: 1 });
+    fireEvent.pointerDown(fadeOut, { button: 0, clientX: 120, pointerId: 3 });
+    fireEvent.pointerMove(fadeOut, { clientX: 0, pointerId: 3 });
+    fireEvent.pointerUp(fadeOut, { pointerId: 3 });
+    expect(clips()[0]?.fadeOut).toBe(3.5);
+
+    const clip = screen.getByTestId(`sound-clip-${id}`);
+    expect(clip).toHaveAccessibleName(
+      'Sound Voice, frames 30 to 149, fades in over 0.5 s, fades out over 3.5 s'
+    );
+    expect(screen.getByTestId(`sound-clip-fades-${id}`)).toBeInTheDocument();
+    // Its handles where the fades end: an eighth in, and an eighth from the start
+    expect(fadeIn.style.left).toBe('12.5%');
+    expect(fadeOut.style.left).toBe('12.5%');
+  });
+
   it('takes keys of its own: Delete takes it off (not the selected layers), M mutes, arrows nudge', () => {
     renderTimeline();
     const id = placed(30);
@@ -194,6 +228,24 @@ describe('the sound lane', () => {
     expect(settings).toHaveTextContent('40%');
     fireEvent.click(screen.getByTestId('sound-clip-mute'));
     expect(clips()[0]?.muted).toBe(true);
+
+    // Fades in seconds, each entered one step, kept within the clip
+    const fadeIn = screen.getByTestId('sound-clip-fade-in');
+    fireEvent.change(fadeIn, { target: { value: '1.5' } });
+    expect(clips()[0]?.fadeIn).toBeUndefined();
+    const before = store().undoStack.length;
+    fireEvent.keyDown(fadeIn, { key: 'Enter' });
+    expect(clips()[0]?.fadeIn).toBe(1.5);
+    expect(store().undoStack.length).toBe(before + 1);
+    const fadeOut = screen.getByTestId('sound-clip-fade-out');
+    fireEvent.change(fadeOut, { target: { value: '9' } });
+    fireEvent.blur(fadeOut);
+    expect(clips()[0]?.fadeOut).toBe(2.5);
+    expect(fadeOut).toHaveValue(2.5);
+    // Nonsense goes back to what it was
+    fireEvent.change(fadeIn, { target: { value: '' } });
+    fireEvent.blur(fadeIn);
+    expect(fadeIn).toHaveValue(1.5);
 
     fireEvent.keyDown(document, { key: 'Escape' });
     expect(screen.queryByTestId('sound-clip-settings')).not.toBeInTheDocument();

@@ -214,6 +214,69 @@
   background: linear-gradient(270deg, var(--color-timeline-sound) 0 2px, transparent 2px);
 }
 
+/* Fades: the quiet part shaded, the ramp drawn over the waveform */
+.fades {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.fadeShade {
+  fill: color-mix(in srgb, var(--color-bg-primary) 50%, transparent);
+}
+
+.fadeLine {
+  fill: none;
+  stroke: var(--color-timeline-sound);
+  stroke-width: 1.25;
+  vector-effect: non-scaling-stroke;
+}
+
+.clip.muted .fadeLine {
+  stroke: var(--color-text-disabled);
+}
+
+/* Grab a top corner (or where a fade ends) to fade */
+.fadeHandle {
+  position: absolute;
+  top: 1px;
+  width: 8px;
+  height: 8px;
+  box-sizing: border-box;
+  border: 1px solid var(--color-bg-primary);
+  border-radius: 2px;
+  background: var(--color-timeline-sound);
+  cursor: ew-resize;
+  opacity: 0;
+  transition:
+    opacity var(--duration-fast),
+    transform var(--duration-fast);
+}
+
+.fadeOutHandle {
+  transform: translateX(-100%);
+}
+
+.clip:hover .fadeHandle,
+.clip.selected .fadeHandle {
+  opacity: 1;
+}
+
+.clip:hover .fadeHandle.fadeSet,
+.clip.selected .fadeHandle.fadeSet {
+  border-radius: 50%;
+}
+
+.fadeHandle:hover {
+  transform: scale(1.25);
+}
+
+.fadeOutHandle:hover {
+  transform: translateX(-100%) scale(1.25);
+}
+
 /* Where dropped files will land */
 .dropMarker {
   position: absolute;
@@ -326,6 +389,57 @@
   font-family: var(--font-family-mono);
   font-size: var(--font-size-2xs);
   text-align: right;
+}
+
+.fadeRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.fadeField {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.fadeField input {
+  width: 0;
+  flex: 1;
+  min-width: 0;
+  padding: 3px 6px;
+  appearance: textfield;
+  -moz-appearance: textfield;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-secondary);
+  color: var(--color-text-primary);
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-2xs);
+  text-align: right;
+}
+
+.fadeField input::-webkit-inner-spin-button,
+.fadeField input::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.fadeField input:focus-visible {
+  outline: none;
+  border-color: var(--color-timeline-sound);
+  box-shadow: 0 0 0 1px var(--color-timeline-sound);
+}
+
+.fadeField > span:first-child {
+  white-space: nowrap;
+}
+
+.fadeUnit {
+  color: var(--color-text-tertiary);
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-2xs);
 }
 
 .settingsActions {

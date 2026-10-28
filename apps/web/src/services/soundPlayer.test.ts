@@ -8,7 +8,11 @@ interface Started {
   when: number;
   offset: number;
   duration: number;
+  /** Its fades, when it has any */
+  ramps?: [string, number, number][];
 }
+
+type FakeGain = { gain: { value: number; ramps: [string, number, number][] } };
 
 /** An audio context that notes what's set going and stopped. */
 class FakeContext {
@@ -23,16 +27,25 @@ class FakeContext {
     const context = this;
     let buffer: unknown = null;
     let gain = 1;
+    let ramps: [string, number, number][] = [];
     return {
       set buffer(value: unknown) {
         buffer = value;
       },
-      connect(node: { gain: { value: number } }) {
+      connect(node: FakeGain) {
         gain = node.gain.value;
+        ramps = node.gain.ramps;
         return node;
       },
       start(when: number, offset: number, duration: number) {
-        context.started.push({ buffer, gain, when, offset, duration });
+        context.started.push({
+          buffer,
+          gain,
+          when,
+          offset,
+          duration,
+          ...(ramps.length > 0 ? { ramps } : {}),
+        });
       },
       stop() {
         context.stopped++;
@@ -41,7 +54,17 @@ class FakeContext {
     };
   }
   createGain() {
-    return { gain: { value: 1 }, connect: (node: unknown) => node, disconnect() {} };
+    const ramps: [string, number, number][] = [];
+    return {
+      gain: {
+        value: 1,
+        ramps,
+        setValueAtTime: (value: number, time: number) => ramps.push(['set', value, time]),
+        linearRampToValueAtTime: (value: number, time: number) => ramps.push(['ramp', value, time]),
+      },
+      connect: (node: unknown) => node,
+      disconnect() {},
+    };
   }
 }
 
@@ -96,6 +119,19 @@ describe('SoundPlayer', () => {
     decoded({} as AudioBuffer);
     await settle();
     expect(context.started[0]).toMatchObject({ when: 10.53, offset: 0.5, duration: 1.5 });
+  });
+
+  it('fades a clip in and out, from wherever in its fade it starts', async () => {
+    const { player: p, context } = player();
+    // Frame 15 is half a second into a clip fading in over a second and out over one
+    p.play(15, what([clip('a', 0, { gain: 0.8, fadeIn: 1, fadeOut: 1 })]));
+    await settle();
+    expect(context.started[0]).toMatchObject({ when: 10.03, offset: 0.5, duration: 1.5 });
+    expect(context.started[0]!.ramps).toEqual([
+      ['set', 0.4, 10.03],
+      ['ramp', 0.8, 10.53],
+      ['ramp', 0, 11.53],
+    ]);
   });
 
   it('stops what it plays, and plays nothing decoded after it stopped', async () => {
