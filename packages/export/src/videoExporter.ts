@@ -9,7 +9,14 @@ import { DEFAULT_DOCUMENT_BACKGROUND } from '@quar/core';
 import type { FrameRenderContext, FrameSlide } from './frameRenderer';
 import { createFrameRenderer, framePlan, getFrameCount, preloadShots } from './frameRenderer';
 import type { PlaybackTiming } from './exportUtils';
-import { SOUNDTRACK_RATE, mixSoundtrack, soundtrackPlays } from './soundtrack';
+import {
+  SOUNDTRACK_RATE,
+  mixSoundtrack,
+  slideSoundtrackParts,
+  soundtrackPlays,
+} from './soundtrack';
+import { createShotRenderer } from './slideTransition';
+import { hasTransitions } from './exportUtils';
 import type { SoundtrackPart } from './soundtrack';
 import type { ExportProgress } from './index';
 
@@ -23,7 +30,10 @@ export interface VideoExportOptions extends PlaybackTiming {
   backgroundColor?: Color;
   /** WebM only: nothing behind the artwork, kept as the video's alpha. */
   transparent?: boolean;
-  /** One video of these slides, each its whole timeline (the range is then theirs) */
+  /**
+   * One video of these slides, each its whole timeline (the range is then
+   * theirs), with the transitions into them between
+   */
   slides?: FrameSlide[];
   /** The document's sounds: the video has the sound of the clips it plays (none without) */
   sounds?: readonly Sound[];
@@ -116,12 +126,7 @@ export async function exportVideo(
 
     // The clips each stretch of the video plays: the range's, or each slide's from where it starts
     const parts: SoundtrackPart[] = options.slides?.length
-      ? options.slides.flatMap((slide) => {
-          const first = shots.findIndex((shot) => shot.ctx === slide.ctx);
-          if (first < 0) return [];
-          const part = { at: first / fps, startFrame: 0, endFrame: slide.frameCount - 1 };
-          return [{ ...part, clips: slide.ctx.timeline?.sounds }];
-        })
+      ? slideSoundtrackParts(options.slides, shots, fps)
       : [{ clips: ctx.timeline?.sounds, at: 0, startFrame, endFrame }];
     const soundtrack = options.sounds?.length
       ? await mixSoundtrack(
@@ -146,8 +151,12 @@ export async function exportVideo(
       );
     }
 
-    const first = shots[0]!;
-    const canvas = renderer.renderFrame(first.ctx, first.frame);
+    // Transitions are drawn on a canvas of their own: then every frame is, the video's one source
+    const draw = createShotRenderer(renderer, {
+      background: backgroundColor,
+      fixed: hasTransitions(shots),
+    });
+    const canvas = draw.render(shots[0]!);
     const target = new BufferTarget();
     output = new Output({
       format:
@@ -175,7 +184,7 @@ export async function exportVideo(
         await output.cancel();
         return null;
       }
-      if (i > 0) renderer.renderFrame(shots[i]!.ctx, shots[i]!.frame);
+      if (i > 0) draw.render(shots[i]!);
       await source.add(i / fps, 1 / fps);
       onProgress?.({
         phase: 'rendering',

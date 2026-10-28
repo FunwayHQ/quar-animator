@@ -7,7 +7,7 @@
 
 import { SelectionManager, artboardsInOrder, inTimelineScope, widenToAspect } from '@quar/core';
 import type { SceneGraph } from '@quar/core';
-import { scopeDuration, scopedTimeline } from '@quar/animation';
+import { scopeDuration, scopeTransition, scopedTimeline } from '@quar/animation';
 import type {
   DynamicChain,
   IKChain,
@@ -50,7 +50,8 @@ export function getArtboardScope(sceneGraph: SceneGraph, selectedIds: Set<string
 
 /**
  * The page's slides: its visible artboards, in the Layers panel's order
- * (the topmost first), each with its bounds and its own timeline's length.
+ * (the topmost first), each with its bounds, its own timeline's length and
+ * the transition into it (none on the first: nothing comes before it).
  */
 export function getSlides(sceneGraph: SceneGraph, timeline: Timeline) {
   const bounds = new SelectionManager();
@@ -58,14 +59,39 @@ export function getSlides(sceneGraph: SceneGraph, timeline: Timeline) {
     .filter((node) => node.visible)
     .flatMap((node) => {
       const rect = bounds.getSelectionBounds(new Set([node.id]), sceneGraph)?.rect;
-      return rect ? [{ node, bounds: rect, frameCount: scopeDuration(timeline, node.id) }] : [];
-    });
+      if (!rect) return [];
+      return [
+        {
+          node,
+          bounds: rect,
+          frameCount: scopeDuration(timeline, node.id),
+          transition: scopeTransition(timeline, node.id),
+        },
+      ];
+    })
+    .map((slide, index) => (index === 0 ? { ...slide, transition: null } : slide));
+}
+
+/**
+ * How long the slides play one after another, in seconds: each its whole
+ * timeline, and the transitions between them.
+ */
+export function slidesSeconds(slides: ReturnType<typeof getSlides>, frameRate: number): number {
+  const rate = Math.max(1, frameRate);
+  return slides.reduce(
+    (sum, slide, index) =>
+      sum +
+      slide.frameCount / rate +
+      (index > 0 && slide.transition ? slide.transition.duration : 0),
+    0
+  );
 }
 
 /**
  * The slides of a slides export, each its artboard over its own timeline,
  * fitted (centred, not stretched) into the export's `width` × `height`: the
- * first slide's size, unless changed.
+ * first slide's size, unless changed — so the transitions between them
+ * blend frames of one size.
  */
 export function slideShow(
   slides: ReturnType<typeof getSlides>,
@@ -85,6 +111,7 @@ export function slideShow(
       viewportBounds: widenToAspect(slide.bounds, width / height),
     },
     frameCount: slide.frameCount,
+    transition: slide.transition,
   }));
 }
 

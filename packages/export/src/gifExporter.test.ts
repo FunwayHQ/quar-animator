@@ -98,6 +98,74 @@ describe('exportGif', () => {
     expect(drawn).toEqual(['intro@0', 'outro@0', 'outro@1', 'intro@0', 'outro@0', 'outro@1']);
   });
 
+  it('plays the transition into a slide between the two, from their held frames', async () => {
+    // 2D canvases that can blend: the transition frames are drawn on one
+    const context = () => ({
+      canvas: null as unknown,
+      save: vi.fn(),
+      restore: vi.fn(),
+      setTransform: vi.fn(),
+      clearRect: vi.fn(),
+      fillRect: vi.fn(),
+      beginPath: vi.fn(),
+      rect: vi.fn(),
+      clip: vi.fn(),
+      globalAlpha: 1,
+      globalCompositeOperation: 'source-over',
+      fillStyle: '',
+      drawImage: vi.fn(),
+      getImageData: vi.fn(() => ({
+        data: new Uint8ClampedArray([255, 0, 0, 255, 0, 255, 0, 255]),
+      })),
+    });
+    vi.stubGlobal('document', {
+      createElement: () => {
+        const drawing = context();
+        const canvas = { width: 0, height: 0, getContext: () => drawing };
+        drawing.canvas = canvas;
+        return canvas;
+      },
+    });
+    const slide = (name: string) =>
+      ({ name, sceneGraph: { getRootNodes: () => [] }, timeline: { tracks: [] } }) as never;
+    const intro = slide('intro');
+    const outro = slide('outro');
+    const progress = vi.fn();
+    const blob = await exportGif(
+      intro,
+      {
+        width: 2,
+        height: 1,
+        frameRate: 12,
+        startFrame: 0,
+        endFrame: 0,
+        slides: [
+          { ctx: intro, frameCount: 1 },
+          { ctx: outro, frameCount: 2, transition: { type: 'fade', duration: 0.25 } },
+        ],
+      },
+      progress
+    );
+    expect(blob?.type).toBe('image/gif');
+    // 1 + 3 transition frames (a quarter second at 12 fps) + 2
+    expect(progress.mock.calls.find(([item]) => item.phase === 'preparing')?.[0].total).toBe(6);
+    // Each pass draws the incoming slide's first frame once for the transition (the outgoing
+    // one is the frame just drawn), then plays it
+    const drawn = rendererMock.renderFrame.mock.calls.map(
+      ([ctx, frame]) => `${(ctx as { name: string }).name}@${frame}`
+    );
+    expect(drawn).toEqual([
+      'intro@0',
+      'outro@0',
+      'outro@0',
+      'outro@1',
+      'intro@0',
+      'outro@0',
+      'outro@0',
+      'outro@1',
+    ]);
+  });
+
   it('flattens frames onto the document background, unless transparent', async () => {
     const ctx = {
       sceneGraph: { getRootNodes: () => [] } as never,
@@ -472,5 +540,21 @@ describe('GIF timing', () => {
   it('never samples past the end of the range', () => {
     const { frames } = gifTiming({ frameRate: 30, startFrame: 10, endFrame: 12, fps: 24 });
     expect(Math.max(...frames)).toBeLessThanOrEqual(12);
+  });
+
+  it('counts the slides and the transitions between them', () => {
+    const { frames, delays } = gifTiming({
+      frameRate: 30,
+      startFrame: 0,
+      endFrame: 0,
+      fps: 25,
+      slides: [
+        { ctx: 'intro', frameCount: 30 },
+        { ctx: 'outro', frameCount: 30, transition: { type: 'push', duration: 0.4 } },
+      ],
+    });
+    // 1 s + 0.4 s + 1 s at 25 fps
+    expect(frames).toHaveLength(60);
+    expect(delays.reduce((sum, delay) => sum + delay, 0)).toBe(240);
   });
 });

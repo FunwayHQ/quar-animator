@@ -7,6 +7,9 @@ import {
   getArtboardScope,
   getLottieExportScene,
   getSceneExportScope,
+  getSlides,
+  slideShow,
+  slidesSeconds,
 } from './exportScene';
 
 const white = {
@@ -105,5 +108,34 @@ describe('exportScene', () => {
       height: 4096,
     });
     expect(defaultExportSize(null)).toEqual({ width: 800, height: 600 });
+  });
+
+  it('gives each slide the transition into it (none into the first), through to the export', () => {
+    const graph = new SceneGraph();
+    graph.fromJSON({
+      nodes: [artboard('third'), artboard('second'), artboard('first')],
+      // The topmost in the Layers panel (the last) is the first slide
+      rootNodeIds: ['third', 'second', 'first'],
+    });
+    const fade = { type: 'fade' as const, duration: 0.5 };
+    const wipe = { type: 'wipe' as const, direction: 'up' as const, duration: 1 };
+    const deck: Timeline = {
+      ...timeline(),
+      artboards: {
+        first: { duration: 30, transition: fade },
+        second: { duration: 60 },
+        third: { duration: 15, transition: wipe },
+      },
+    };
+    const slides = getSlides(graph, deck);
+    expect(slides.map((slide) => [slide.node.id, slide.transition])).toEqual([
+      ['first', null],
+      ['second', null],
+      ['third', wipe],
+    ]);
+    // 1 s + 2 s + a second's wipe + half a second
+    expect(slidesSeconds(slides, 30)).toBe(4.5);
+    const show = slideShow(slides, { sceneGraph: graph, timeline: deck }, 200, 100);
+    expect(show.map((slide) => slide.transition)).toEqual([null, null, wipe]);
   });
 });

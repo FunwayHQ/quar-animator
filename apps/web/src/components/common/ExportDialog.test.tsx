@@ -60,6 +60,9 @@ vi.mock('@quar/export', async () => {
     sampleFrames: actual.sampleFrames,
     getFrameCount: actual.getFrameCount,
     generateFrameFilenames: actual.generateFrameFilenames,
+    // The slides' plan as it is: their frames and the transitions between them
+    sampleSlides: actual.sampleSlides,
+    createShotRenderer: actual.createShotRenderer,
     createFrameRenderer: vi.fn(() => frameRenderer),
     exportLottieBlob: vi.fn().mockReturnValue(new Blob(['{}'], { type: 'application/json' })),
     exportGif: vi.fn().mockResolvedValue(new Blob(['gif'], { type: 'image/gif' })),
@@ -508,6 +511,38 @@ describe('ExportDialog', () => {
     // The wider slide fitted into the first's shape, not stretched
     const outro = slides[1]!.ctx.viewportBounds;
     expect(outro.width / outro.height).toBeCloseTo(640 / 360);
+    delete (mockStore.timeline as { artboards?: object }).artboards;
+  });
+
+  it('counts the transitions between the slides, and hands them to the export', async () => {
+    // Intro 1 s, then half a second's fade into Outro's 2 s
+    (mockStore.timeline as { artboards?: object }).artboards = {
+      intro: { duration: 30, transition: { type: 'push', duration: 2 } },
+      outro: { duration: 60, transition: { type: 'fade', duration: 0.5 } },
+    };
+    baseRender(
+      <SceneGraphProvider>
+        <SlidesSeeder />
+        <ExportDialogHost />
+      </SceneGraphProvider>
+    );
+    act(() => showExportDialog('mp4'));
+    expect(screen.getByTestId('export-slides-scope')).toHaveTextContent('(3.5 s in all)');
+    expect(screen.getByTestId('export-mp4-timing')).toHaveTextContent('105 frames · 3.5 s');
+    // At 60 fps: the fade is 30 frames of it
+    fireEvent.change(screen.getByTestId('export-mp4-fps'), { target: { value: '60' } });
+    expect(screen.getByTestId('export-mp4-timing')).toHaveTextContent('210 frames · 3.5 s');
+
+    fireEvent.click(screen.getByTestId('export-dialog-export'));
+    await waitFor(() => expect(exportMp4).toHaveBeenCalledOnce());
+    const { slides } = vi.mocked(exportMp4).mock.calls[0]![1] as {
+      slides: Array<{ transition: unknown }>;
+    };
+    // None into the first slide: nothing comes before it
+    expect(slides.map((slide) => slide.transition)).toEqual([
+      null,
+      { type: 'fade', duration: 0.5 },
+    ]);
     delete (mockStore.timeline as { artboards?: object }).artboards;
   });
 

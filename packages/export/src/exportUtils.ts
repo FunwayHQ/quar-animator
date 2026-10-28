@@ -5,7 +5,8 @@
  * No DOM or WebGL dependencies.
  */
 
-import type { SlideTransitionDirection, SlideTransitionType } from '@quar/types';
+import { transitionDirection, transitionFrameCount, transitionProgress } from '@quar/animation';
+import type { SlideTransition, SlideTransitionDirection, SlideTransitionType } from '@quar/types';
 
 /**
  * Get the number of frames in a range (inclusive).
@@ -53,6 +54,8 @@ export interface ExportSlide<Context> {
   ctx: Context;
   /** Its timeline's length, in frames */
   frameCount: number;
+  /** How it comes on after the slide before (none: a cut; the first slide's plays no part) */
+  transition?: SlideTransition | null;
 }
 
 /**
@@ -81,24 +84,51 @@ export interface Shot<Context> {
 /**
  * The output frames of slides played one after another, each its whole
  * timeline, at the same frame rate and speed (as `sampleTimeline` plays one).
+ * Between two slides, the transition into the second (if it has one) plays
+ * over its length at that rate and speed: the outgoing slide held on the
+ * frame it ended on, the incoming one on its first, its progress stepping
+ * evenly from the one to the other (neither end repeated); then the
+ * incoming slide's timeline starts.
  */
 export function sampleSlides<Context>(
-  slides: ExportSlide<Context>[],
+  slides: readonly ExportSlide<Context>[],
   timing: Omit<PlaybackTiming, 'startFrame' | 'endFrame'>,
   maxFps = Infinity
 ): { fps: number; shots: Shot<Context>[] } {
-  let fps = Math.min(maxFps, Math.max(1, timing.fps ?? timing.frameRate));
+  const fps = Math.min(maxFps, Math.max(1, timing.fps ?? timing.frameRate));
   const shots: Shot<Context>[] = [];
+  let before: { ctx: Context; frame: number } | null = null;
   for (const slide of slides) {
     if (slide.frameCount < 1) continue;
     const sampled = sampleTimeline(
       { ...timing, startFrame: 0, endFrame: slide.frameCount - 1 },
       maxFps
     );
-    fps = sampled.fps;
+    const transition = before ? slide.transition : null;
+    const count = transitionFrameCount(transition, fps, timing.speed);
+    if (transition && before) {
+      for (let k = 0; k < count; k++) {
+        shots.push({
+          ctx: slide.ctx,
+          frame: 0,
+          transition: {
+            from: before,
+            type: transition.type,
+            direction: transitionDirection(transition),
+            progress: transitionProgress(transition, (k + 1) / (count + 1)),
+          },
+        });
+      }
+    }
     for (const frame of sampled.frames) shots.push({ ctx: slide.ctx, frame });
+    before = { ctx: slide.ctx, frame: sampled.frames.at(-1) ?? slide.frameCount - 1 };
   }
   return { fps, shots };
+}
+
+/** Whether any of the shots is partway through a transition. */
+export function hasTransitions<Context>(shots: readonly Shot<Context>[]): boolean {
+  return shots.some((shot) => shot.transition);
 }
 
 /**

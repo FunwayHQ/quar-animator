@@ -1,6 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Sound, SoundClip } from '@quar/types';
-import { decodeSound, mixSoundtrack, soundBytes, soundtrackPlays } from './soundtrack';
+import { sampleSlides } from './exportUtils';
+import {
+  decodeSound,
+  mixSoundtrack,
+  slideSoundtrackParts,
+  soundBytes,
+  soundtrackPlays,
+} from './soundtrack';
 
 /** What the mix asked the audio context to play */
 interface Played {
@@ -119,6 +126,58 @@ describe('soundtrackPlays', () => {
       ['a', 1, 1],
       ['b', 2, 2],
     ]);
+  });
+});
+
+describe('slideSoundtrackParts', () => {
+  const clip = (id: string): SoundClip => ({
+    id,
+    soundId: id,
+    start: 0,
+    offset: 0,
+    duration: 1,
+    gain: 1,
+  });
+  const slide = (name: string, frameCount: number, transition?: { duration: number }) => ({
+    ctx: { name, timeline: { sounds: [clip(name)] } },
+    frameCount,
+    ...(transition && { transition: { type: 'fade' as const, ...transition } }),
+  });
+
+  it('starts each slide’s sounds where its own timeline starts', () => {
+    const slides = [slide('intro', 30), slide('outro', 60)];
+    const { fps, shots } = sampleSlides(slides, { frameRate: 30 });
+    expect(slideSoundtrackParts(slides, shots, fps)).toEqual([
+      { clips: [clip('intro')], at: 0, startFrame: 0, endFrame: 29 },
+      { clips: [clip('outro')], at: 1, startFrame: 0, endFrame: 59 },
+    ]);
+  });
+
+  it('after the transitions before it: they play no slide’s sounds', () => {
+    const slides = [
+      slide('intro', 30),
+      slide('middle', 60, { duration: 0.5 }),
+      slide('outro', 30, { duration: 1 }),
+    ];
+    const { fps, shots } = sampleSlides(slides, { frameRate: 30 });
+    expect(slideSoundtrackParts(slides, shots, fps).map((part) => part.at)).toEqual([
+      0,
+      // 1 s of the intro, then half a second of fade
+      1.5,
+      // …then 2 s of the middle slide and a second's fade
+      4.5,
+    ]);
+    // At another rate and speed, the same seconds of the video
+    const fast = sampleSlides(slides, { frameRate: 30, fps: 60, speed: 2 });
+    expect(slideSoundtrackParts(slides, fast.shots, fast.fps).map((part) => part.at)).toEqual([
+      0, 0.75, 2.25,
+    ]);
+  });
+
+  it('leaves out a slide that plays no frames', () => {
+    const slides = [slide('intro', 30), slide('empty', 0, { duration: 1 })];
+    const { fps, shots } = sampleSlides(slides, { frameRate: 30 });
+    expect(slideSoundtrackParts(slides, shots, fps)).toHaveLength(1);
   });
 });
 

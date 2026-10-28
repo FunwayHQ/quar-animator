@@ -4,7 +4,8 @@ import type { Color } from '@quar/types';
 import { DEFAULT_DOCUMENT_BACKGROUND } from '@quar/core';
 import type { FrameRenderContext, FrameSlide } from './frameRenderer';
 import { createFrameRenderer, framePlan, getFrameCount, preloadShots } from './frameRenderer';
-import { sampleTimeline, type PlaybackTiming } from './exportUtils';
+import { sampleSlides, sampleTimeline, type ExportSlide, type PlaybackTiming } from './exportUtils';
+import { createShotRenderer } from './slideTransition';
 import type { ExportProgress } from './index';
 
 /** `fps` defaults to the timeline's, at most 50. */
@@ -19,7 +20,10 @@ export interface GifExportOptions extends PlaybackTiming {
    * whose color barely changed from what's on screen are left as they are.
    */
   compression?: number;
-  /** One GIF of these slides, each its whole timeline (the range is then theirs) */
+  /**
+   * One GIF of these slides, each its whole timeline (the range is then
+   * theirs), with the transitions into them between
+   */
   slides?: FrameSlide[];
 }
 
@@ -54,7 +58,14 @@ export interface GifTiming {
  * whole hundredths of a second, so they're spread to add up exactly (30 fps:
  * 3, 3, 4, 3, 3, 4…) instead of each being rounded (30 fps playing 11% fast).
  */
-export function gifTiming(options: PlaybackTiming): GifTiming {
+export function gifTiming(
+  options: PlaybackTiming & { slides?: readonly ExportSlide<unknown>[] }
+): GifTiming {
+  if (options.slides?.length) {
+    // Slides one after another, the transitions between them too
+    const { fps, shots } = sampleSlides(options.slides, options, MAX_GIF_FPS);
+    return { frames: shots.map((shot) => shot.frame), delays: gifDelays(shots.length, fps) };
+  }
   const { fps, frames } = sampleTimeline(options, MAX_GIF_FPS);
   return { frames, delays: gifDelays(frames.length, fps) };
 }
@@ -158,6 +169,9 @@ export async function exportGif(
     throw new Error('Could not create a canvas for GIF color conversion.');
   }
 
+  // Transitions drawn from the slides' held frames; the rest as the renderer draws them
+  const draw = createShotRenderer(renderer, { background: backgroundColor });
+
   try {
     await preloadShots(renderer, shots);
 
@@ -171,7 +185,7 @@ export async function exportGif(
 
     for (let i = 0; i < frameCount; i++) {
       if (isCancelled()) return null;
-      const canvas = renderer.renderFrame(shots[i]!.ctx, shots[i]!.frame);
+      const canvas = draw.render(shots[i]!);
       sampleContext.clearRect(0, 0, width, height);
       sampleContext.drawImage(canvas, 0, 0, width, height);
       const pixels = sampleContext.getImageData(0, 0, width, height).data;
@@ -245,7 +259,7 @@ export async function exportGif(
 
     for (let i = 0; i < frameCount; i++) {
       if (isCancelled()) return null;
-      const canvas = renderer.renderFrame(shots[i]!.ctx, shots[i]!.frame);
+      const canvas = draw.render(shots[i]!);
       sampleContext.clearRect(0, 0, width, height);
       sampleContext.drawImage(canvas, 0, 0, width, height);
       const pixels = sampleContext.getImageData(0, 0, width, height).data;

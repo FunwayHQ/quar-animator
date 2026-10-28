@@ -1,13 +1,15 @@
 /**
  * Soundtrack
  * The sound of a video export: the clips on the timeline it plays (or on
- * each slide's, as each slide plays), mixed into one stereo track timed to
- * the video, as the editor plays them — fades too.
+ * each slide's, as each slide plays, once the transition into it is over),
+ * mixed into one stereo track timed to the video, as the editor plays
+ * them — fades too.
  */
 
 import { schedulePlayGain, soundsPlayed } from '@quar/animation';
 import type { SoundPlay } from '@quar/animation';
 import type { Sound, SoundClip } from '@quar/types';
+import type { ExportSlide, Shot } from './exportUtils';
 
 /** The soundtrack's sample rate (sounds are resampled to it as they're decoded). */
 export const SOUNDTRACK_RATE = 48000;
@@ -32,6 +34,30 @@ export interface SoundtrackPart {
   at: number;
   startFrame: number;
   endFrame: number;
+}
+
+/**
+ * The stretches of a slides video: each slide's clips from where its own
+ * timeline starts among the shots — after the transition into it, which
+ * plays no slide's sounds.
+ */
+export function slideSoundtrackParts<Context extends { timeline?: { sounds?: SoundClip[] } }>(
+  slides: readonly ExportSlide<Context>[],
+  shots: readonly Shot<Context>[],
+  fps: number
+): SoundtrackPart[] {
+  return slides.flatMap((slide) => {
+    const first = shots.findIndex((shot) => shot.ctx === slide.ctx && !shot.transition);
+    if (first < 0) return [];
+    return [
+      {
+        clips: slide.ctx.timeline?.sounds,
+        at: first / fps,
+        startFrame: 0,
+        endFrame: slide.frameCount - 1,
+      },
+    ];
+  });
 }
 
 /** What plays in the video: each part's clips, at their times in it, at `speed`. */

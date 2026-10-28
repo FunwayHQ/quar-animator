@@ -57,6 +57,7 @@ export {
   generateFrameFilenames,
   sampleTimeline,
   sampleSlides,
+  hasTransitions,
   type ExportSlide,
   type PlaybackTiming,
   type Shot,
@@ -127,7 +128,7 @@ export type { PdfRasterizer } from './pdf/pdfScene';
 // PNG Sequence
 // ============================================================================
 
-export { exportPngSequence, type PngSequenceOptions } from './pngSequence';
+export { exportPngSequence, slideFrames, type PngSequenceOptions } from './pngSequence';
 
 export {
   exportGif,
@@ -151,6 +152,7 @@ export {
 export {
   decodeSound,
   mixSoundtrack,
+  slideSoundtrackParts,
   soundBytes,
   soundtrackPlays,
   SOUNDTRACK_RATE,

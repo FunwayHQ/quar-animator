@@ -24,9 +24,10 @@ import {
   gifCompressionSettings,
   gifTiming,
   MAX_GIF_FPS,
+  sampleSlides,
   sampleTimeline,
 } from '@quar/export';
-import type { ExportProgress } from '@quar/export';
+import type { ExportProgress, FrameRenderContext, Shot } from '@quar/export';
 import { downloadBlob } from '../../services/exportService';
 import { decodedSound } from '../../services/soundFiles';
 import {
@@ -37,6 +38,7 @@ import {
   getSceneExportScope,
   getSlides,
   slideShow,
+  slidesSeconds as slidesLength,
 } from '../../services/exportScene';
 import styles from './ExportDialog.module.css';
 
@@ -351,8 +353,8 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
   const slidesExport = slides.length > 1 && SLIDE_TABS.includes(state.tab);
   // …or a PDF of them, a page a slide
   const slidesPdf = slides.length > 1 && state.tab === 'pdf';
-  const slidesSeconds =
-    slides.reduce((sum, slide) => sum + slide.frameCount, 0) / timeline.frameRate;
+  // How long they play, the transitions between them too
+  const slidesSeconds = slidesLength(slides, timeline.frameRate);
 
   // The sound clips a video of this has: each slide's, the artboard's, or the page's
   const soundClipCount = slidesExport
@@ -360,11 +362,25 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
     : scopeSounds(timeline, selectedArtboard ? selectedArtboard.node.id : null).length;
   const withSound = state.videoSound && soundClipCount > 0;
 
-  // What the timing lines count: the range, or all the slides
+  // What the timing lines count: the range, or all the slides (and the transitions between them)
   const slidesFrames = slides.reduce((sum, slide) => sum + slide.frameCount, 0);
   const timingRange = slidesExport
     ? { startFrame: 0, endFrame: Math.max(0, slidesFrames - 1) }
     : { startFrame: state.startFrame, endFrame: state.endFrame };
+  const timedSlides = slidesExport
+    ? slides.map((slide) => ({
+        ctx: slide.node.id,
+        frameCount: slide.frameCount,
+        transition: slide.transition,
+      }))
+    : undefined;
+  /** The frames a video of this has at `fps` and `speed`, and its rate. */
+  const videoTiming = (fps: number, speed: number) => {
+    const timing = { frameRate: timeline.frameRate, fps, speed };
+    if (!timedSlides) return sampleTimeline({ ...timing, ...timingRange });
+    const plan = sampleSlides(timedSlides, timing);
+    return { fps: plan.fps, frames: plan.shots.map((shot) => shot.frame) };
+  };
 
   const update = <K extends keyof ExportDialogState>(key: K, value: ExportDialogState[K]) => {
     setState((s) => ({ ...s, [key]: value, error: null }));
@@ -611,15 +627,14 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
         }
       } else if (state.tab === 'png-sequence') {
         // PNG Sequence requires dynamic import of frameRenderer (WebGL)
-        const { createFrameRenderer, getFrameCount, generateFrameFilenames } =
+        const { createFrameRenderer, createShotRenderer, getFrameCount, generateFrameFilenames } =
           await import('@quar/export');
         const JSZip = (await import('jszip')).default;
 
-        // Every frame of the range — or of each slide's timeline, one after another
-        const shots = slideFrames
-          ? slideFrames.flatMap((slide) =>
-              Array.from({ length: slide.frameCount }, (_, frame) => ({ ctx: slide.ctx, frame }))
-            )
+        // Every frame of the range — or of each slide's timeline, one after
+        // another, the transitions between them at the timeline's rate
+        const shots: Shot<FrameRenderContext>[] = slideFrames
+          ? sampleSlides(slideFrames, { frameRate: timeline.frameRate }).shots
           : Array.from({ length: getFrameCount(state.startFrame, state.endFrame) }, (_, i) => ({
               ctx: frameRenderContext,
               frame: state.startFrame + i,
@@ -635,6 +650,9 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
           height: state.height,
           multiplier: state.pngMultiplier,
           backgroundColor: state.pngTransparent ? null : documentBackground,
+        });
+        const draw = createShotRenderer(renderer, {
+          background: state.pngTransparent ? null : documentBackground,
         });
 
         try {
@@ -653,7 +671,7 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
             };
             setState((s) => ({ ...s, progress }));
 
-            const blob = await renderer.renderFrameAsBlob(shot.ctx, shot.frame);
+            const blob = await draw.renderAsBlob(shot);
             if (blob) {
               zip.file(filenames[i]!, blob);
             }
@@ -1086,6 +1104,7 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
                       ...timingRange,
                       fps: state.gifFps,
                       speed: state.gifSpeed,
+                      ...(timedSlides && { slides: timedSlides }),
                     })
                   )}
                 />
@@ -1132,14 +1151,7 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
                   speed={state.mp4Speed}
                   onFps={(fps) => update('mp4Fps', fps)}
                   onSpeed={(speed) => update('mp4Speed', speed)}
-                  summary={describeVideoTiming(
-                    sampleTimeline({
-                      frameRate: timeline.frameRate,
-                      ...timingRange,
-                      fps: state.mp4Fps,
-                      speed: state.mp4Speed,
-                    })
-                  )}
+                  summary={describeVideoTiming(videoTiming(state.mp4Fps, state.mp4Speed))}
                 />
                 <div className={styles.warning} role="note">
                   <span className={styles.warningText}>
@@ -1180,14 +1192,7 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
                   speed={state.webmSpeed}
                   onFps={(fps) => update('webmFps', fps)}
                   onSpeed={(speed) => update('webmSpeed', speed)}
-                  summary={describeVideoTiming(
-                    sampleTimeline({
-                      frameRate: timeline.frameRate,
-                      ...timingRange,
-                      fps: state.webmFps,
-                      speed: state.webmSpeed,
-                    })
-                  )}
+                  summary={describeVideoTiming(videoTiming(state.webmFps, state.webmSpeed))}
                 />
                 <div className={styles.warning} role="note">
                   <span className={styles.warningText}>

@@ -432,6 +432,58 @@ describe('a video’s sound', () => {
     expect(duration).toBe(2.5);
   });
 
+  it('starts a slide’s sounds once the transition into it is over, from its own canvas', async () => {
+    // Canvases the transition frames are blended on
+    const drawn: string[] = [];
+    vi.stubGlobal('document', {
+      createElement: () => {
+        const canvas = { width: 0, height: 0, getContext: () => context };
+        const context = {
+          canvas,
+          save: vi.fn(),
+          restore: vi.fn(),
+          setTransform: vi.fn(),
+          clearRect: vi.fn(),
+          fillRect: vi.fn(),
+          beginPath: vi.fn(),
+          rect: vi.fn(),
+          clip: vi.fn(),
+          drawImage: vi.fn((source: { frame?: number }) => drawn.push(String(source.frame))),
+          globalAlpha: 1,
+          globalCompositeOperation: 'source-over',
+          fillStyle: '',
+        };
+        return canvas;
+      },
+    });
+    const intro = scene([clip('a', 0)], 'intro');
+    const outro = scene([clip('b', 0)], 'outro');
+    await exportMp4(intro, {
+      width: 64,
+      height: 48,
+      frameRate: 30,
+      startFrame: 0,
+      endFrame: 0,
+      sounds: [voice],
+      slides: [
+        { ctx: intro, frameCount: 30 },
+        { ctx: outro, frameCount: 45, transition: { type: 'fade', duration: 0.5 } },
+      ],
+    });
+    vi.unstubAllGlobals();
+    // 1 s, half a second of fade, 1.5 s
+    expect(mocks.source?.frames).toHaveLength(90);
+    const [plays, , duration] = mocks.mixSoundtrack.mock.calls[0]!;
+    expect((plays as Array<{ clipId: string; at: number }>).map((p) => [p.clipId, p.at])).toEqual([
+      ['a', 0],
+      ['b', 1.5],
+    ]);
+    expect(duration).toBe(3);
+    // Every frame goes through the one canvas the video's source reads (not the renderer's)
+    expect(typeof (mocks.source?.canvas as { getContext?: unknown }).getContext).toBe('function');
+    expect(drawn.length).toBeGreaterThan(90);
+  });
+
   it('is Opus in WebM', async () => {
     await exportWebm(scene([clip('a', 0)]), {
       width: 64,

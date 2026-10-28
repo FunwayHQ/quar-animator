@@ -12,7 +12,8 @@ import {
   generateFrameFilenames,
   preloadShots,
 } from './frameRenderer';
-import type { Shot } from './exportUtils';
+import { sampleSlides, type Shot } from './exportUtils';
+import { createShotRenderer } from './slideTransition';
 import type { ExportProgress } from './index';
 
 // ============================================================================
@@ -27,8 +28,13 @@ export interface PngSequenceOptions {
   multiplier?: number;
   backgroundColor?: Color | null;
   filenamePattern?: string; // default "frame_{N}"
-  /** Every frame of these slides' timelines, one after another (the range is then theirs) */
+  /**
+   * Every frame of these slides' timelines, one after another (the range is
+   * then theirs), with the transitions into them between
+   */
   slides?: FrameSlide[];
+  /** The timeline's frame rate: the slides' transitions last their seconds at it (default: the context timeline's) */
+  frameRate?: number;
 }
 
 // ============================================================================
@@ -59,10 +65,9 @@ export async function exportPngSequence(
   } = options;
 
   // Every frame of the range — or of each slide's timeline, one after another
+  // (the transitions between them at the timeline's rate)
   const shots: Shot<FrameRenderContext>[] = options.slides?.length
-    ? options.slides.flatMap((slide) =>
-        Array.from({ length: slide.frameCount }, (_, frame) => ({ ctx: slide.ctx, frame }))
-      )
+    ? slideFrames(options.slides, options.frameRate ?? ctx.timeline?.frameRate ?? 30)
     : Array.from({ length: getFrameCount(startFrame, endFrame) }, (_, i) => ({
         ctx,
         frame: startFrame + i,
@@ -77,6 +82,7 @@ export async function exportPngSequence(
   const zip = new JSZip();
 
   const renderer = createFrameRenderer({ width, height, multiplier, backgroundColor });
+  const draw = createShotRenderer(renderer, { background: backgroundColor });
 
   try {
     // Pre-load image textures so they render correctly in the fresh WebGL context.
@@ -95,7 +101,7 @@ export async function exportPngSequence(
       });
 
       // Render frame
-      const blob = await renderer.renderFrameAsBlob(shot.ctx, shot.frame);
+      const blob = await draw.renderAsBlob(shot);
       if (blob) {
         zip.file(filenames[i]!, blob);
       }
@@ -117,4 +123,16 @@ export async function exportPngSequence(
   } finally {
     renderer.dispose();
   }
+}
+
+/**
+ * Every frame of each slide's timeline, one after another, with the
+ * transition into each between (as many frames as its seconds take at
+ * `frameRate`).
+ */
+export function slideFrames(
+  slides: readonly FrameSlide[],
+  frameRate: number
+): Shot<FrameRenderContext>[] {
+  return sampleSlides(slides, { frameRate }).shots;
 }
