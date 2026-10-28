@@ -273,6 +273,6 @@ MIT License — Copyright © 2026 Funway Interactive SRL. See [LICENSE](LICENSE)
 
 **Built with passion by the QUAR Team**
 
-[Website](https://quar.dev) | [Discord](https://discord.gg/quar) | [Twitter](https://twitter.com/quardev)
+[GitHub](https://github.com/FunwayHQ/quar-animator) | [TikTok](https://www.tiktok.com/@quar.animator) | [Facebook](https://www.facebook.com/funwayhq)
 
 </div>
