@@ -70,3 +70,6 @@ marketing/source/out/
 marketing/mcp/
 # Blog post drafts, published on funwayinteractive.com rather than from here
 marketing/blog.md
+
+# Local secrets, never committed
+.google-secret
