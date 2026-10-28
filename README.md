@@ -13,9 +13,9 @@
 
 _A free, actively developed alternative to Adobe Animate, which Adobe now keeps in maintenance mode_
 
-**[▶ Try it live at animator.quar.pro](https://animator.quar.pro)**
+**[▶ Try it live at free.quar.pro](https://free.quar.pro)**
 
-[Live App](https://animator.quar.pro) | [Getting Started](#getting-started) | [Features](#features) | [Documentation](#documentation) | [Contributing](#contributing)
+[Live App](https://free.quar.pro) | [Getting Started](#getting-started) | [Features](#features) | [Documentation](#documentation) | [Contributing](#contributing)
 
 </div>
 

@@ -31,7 +31,7 @@ This document breaks down the PRD roadmap into actionable sprints with detailed 
 | Phase 4: Ecosystem      | 37-48    | Planned                          |
 
 **Current test count**: 2862 tests passing (1497 core + 396 animation + 728 web + 241 rigging)
-**Production URL**: https://animator.quar.pro
+**Production URL**: https://free.quar.pro
 
 ---
 

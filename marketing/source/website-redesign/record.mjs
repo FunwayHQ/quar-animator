@@ -49,7 +49,7 @@ export const LAYOUT = {
   },
 };
 const BAR = 44;
-const ADDRESSES = { site: 'funwayinteractive.com', quar: 'animator.quar.pro', export: 'funway-home.mp4' };
+const ADDRESSES = { site: 'funwayinteractive.com', quar: 'free.quar.pro', export: 'funway-home.mp4' };
 const CAPTIONS = {
   site: ['Your website.', 'funwayinteractive.com, as it is today'],
   overview: ['Rebuilt as <span class="grad">one artboard.</span>', '200 layers · real fonts · every one editable'],

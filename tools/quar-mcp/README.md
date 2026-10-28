@@ -1,6 +1,6 @@
 # Quar Animator MCP Server
 
-MCP (Model Context Protocol) server for [Quar Animator](https://animator.quar.pro) — enables AI assistants to read, modify, and create `.quar` animation projects programmatically.
+MCP (Model Context Protocol) server for [Quar Animator](https://free.quar.pro) — enables AI assistants to read, modify, and create `.quar` animation projects programmatically.
 
 ## Features
 
