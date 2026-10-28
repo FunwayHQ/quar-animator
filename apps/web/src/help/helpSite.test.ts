@@ -417,6 +417,15 @@ describe('building the guide', () => {
     ]);
   });
 
+  it('swaps the new build in whole, leaving nothing aside', () => {
+    buildHelp({ outDir: out, sourceDirs: sources() });
+    fs.writeFileSync(path.join(out, 'stale.html'), 'from an earlier build');
+    buildHelp({ outDir: out, sourceDirs: sources() });
+    expect(fs.existsSync(path.join(out, 'stale.html'))).toBe(false);
+    expect(fs.existsSync(path.join(out, 'index.html'))).toBe(true);
+    expect(fs.readdirSync(base).filter((name) => name.startsWith('.help-'))).toEqual([]);
+  });
+
   it('only ever clears a folder named help', () => {
     expect(() => buildHelp({ outDir: path.join(base, 'public'), sourceDirs: sources() })).toThrow(
       /Refusing to clear/
@@ -431,6 +440,10 @@ describe('the dev server', () => {
     fs.mkdirSync(path.join(out, 'getting-started'), { recursive: true });
     fs.writeFileSync(path.join(out, 'index.html'), 'contents');
     fs.writeFileSync(path.join(out, 'getting-started/index.html'), 'chapter');
+  });
+
+  afterEach(() => {
+    fs.rmSync(path.dirname(out), { recursive: true, force: true });
   });
 
   it('opens a folder’s index.html, and adds the slash its relative links need', () => {

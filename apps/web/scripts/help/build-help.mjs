@@ -262,15 +262,20 @@ export function buildHelp({ outDir = OUT_DIR, sourceDirs = SOURCE_DIRS } = {}) {
   const problems = [...loaded.problems, ...rendered.problems];
   const { chapters } = rendered;
 
-  // Generated, so it's rebuilt from nothing (only ever a folder named help, or a test's)
+  // Generated, so it's rebuilt from nothing (only ever a folder named help)
   if (path.basename(outDir) !== 'help') {
     throw new Error(`Refusing to clear ${outDir}: the guide is built into a folder named help`);
   }
-  fs.rmSync(outDir, { recursive: true, force: true });
-  fs.mkdirSync(outDir, { recursive: true });
+  // Built aside and swapped in whole, so a page is never read half-built (the
+  // dev server rebuilds while pictures are being taken, say). Aside is beside
+  // the public folder, not in it: a build interrupted there isn't published.
+  const unique = `${process.pid}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  const aside = path.dirname(path.dirname(outDir));
+  const building = path.join(aside, `.help-building-${unique}`);
+  fs.mkdirSync(building, { recursive: true });
 
   const write = (name, content) => {
-    const file = path.join(outDir, name);
+    const file = path.join(building, name);
     fs.mkdirSync(path.dirname(file), { recursive: true });
     fs.writeFileSync(file, content);
   };
@@ -290,14 +295,14 @@ export function buildHelp({ outDir = OUT_DIR, sourceDirs = SOURCE_DIRS } = {}) {
   });
   write('search-index.js', `self.QUAR_HELP_INDEX = ${JSON.stringify(searchIndex(chapters))};\n`);
 
-  copyDir(THEME_DIR, path.join(outDir, 'assets'));
-  fs.copyFileSync(FAVICON, path.join(outDir, 'assets/mark.svg'));
+  copyDir(THEME_DIR, path.join(building, 'assets'));
+  fs.copyFileSync(FAVICON, path.join(building, 'assets/mark.svg'));
 
   // Every folder's pictures, side by side in help/img/
   const copied = new Map();
   for (const source of sourceDirs) {
-    copyDir(path.join(source.dir, 'img'), path.join(outDir, 'img'), (from, to) => {
-      const name = path.relative(path.join(outDir, 'img'), to);
+    copyDir(path.join(source.dir, 'img'), path.join(building, 'img'), (from, to) => {
+      const name = path.relative(path.join(building, 'img'), to);
       if (copied.has(name)) {
         problems.push({
           file: relative(from),
@@ -308,6 +313,12 @@ export function buildHelp({ outDir = OUT_DIR, sourceDirs = SOURCE_DIRS } = {}) {
       copied.set(name, relative(from));
     });
   }
+
+  const retired = path.join(aside, `.help-old-${unique}`);
+  fs.mkdirSync(path.dirname(outDir), { recursive: true });
+  if (fs.existsSync(outDir)) fs.renameSync(outDir, retired);
+  fs.renameSync(building, outDir);
+  fs.rmSync(retired, { recursive: true, force: true });
 
   return { chapters, problems, outDir };
 }

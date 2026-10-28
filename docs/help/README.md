@@ -58,6 +58,62 @@ inline styles or scripts.
 - Keep words out of pictures: number the parts of a screenshot and name them
   in the text (it keeps the pictures right when the guide is translated).
 
+## Pictures
+
+Every picture is a screenshot taken by a script, so they can all be taken
+again when the editor changes. They're described in `shots.mjs` beside the
+chapters and written to `img/<name>.png` (committed: the guide is built
+without a browser).
+
+```sh
+pnpm --filter @quar/web exec playwright install chromium   # once
+pnpm help:shots                    # every shot
+pnpm help:shots editor-layout      # one (or several; projects-* for a family)
+pnpm help:shots --list             # what there is
+pnpm help:shots --url http://localhost:3000   # use a dev server that's running
+```
+
+By default it starts a dev server of its own for this checkout. Each shot
+runs in a fresh browser (its own storage, so the tutorials are seeded as on a
+first visit), 1280 × 800 at twice the size (DPR 2), dark unless it says
+otherwise. On a Mac it draws the canvas on the GPU; elsewhere in software.
+
+A shot:
+
+```js
+{
+  name: 'editor-layout',              // img/editor-layout.png
+  about: 'The editor, its parts numbered',
+  theme: 'dark',                      // or 'light'
+  viewport: { width: 1280, height: 800 },
+  steps: [
+    { open: 'tutorial-draw-and-animate' },   // 'projects', 'new', or a project's id
+    { press: 'Control+0' },                  // Fit to Window
+    { layer: 'Ball' },                       // click a layer by name
+  ],
+  markers: [{ target: '[data-testid="page-tabs"]', label: 2, at: 'left', dx: 414 }],
+  capture: { selectors: ['…', '…'], padding: 8 },   // or 'viewport' (the default), { clip }
+}
+```
+
+Steps, one action each: `open`, `goto`, `seed` (`{ id, name, file }`: a
+`.quar` from beside the shot list, put among the projects), `click`,
+`dblclick`, `rightClick`, `hover`, `press` (Playwright key names; use
+`Control`, which the editor takes on a Mac too), `type`, `fill`
+(`[selector, text]`), `waitFor`, `wait` (ms), `page` (a page tab by name),
+`layer`, `drag` (`{ from: [x, y], to: [x, y], within?, shift?, alt? }`, in the
+canvas's own pixels by default), `evaluate` and `run` (`async (page, kit) =>
+{…}`, for anything else). `date` fixes the clock (for dates shown on the
+Projects page), `storage` adds localStorage, `keepPointer` leaves the pointer
+hovering where the steps left it.
+
+Markers are numbered badges drawn over the picture (`at`: `center`, `top`,
+`top-left` and so on, nudged by `dx`/`dy`; `outline: true` rings the target).
+Name what each number points at in the text, not in the picture.
+
+Pictures are shown at half their pixel size; a picture made another way can
+end its name in `@1x` to be shown at its own size.
+
 ## The cloud edition's chapters
 
 The cloud edition (the private fork) adds its own chapters — accounts, sync,
