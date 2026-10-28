@@ -25,6 +25,8 @@ import { restoreTutorials } from '../../tutorials/seedTutorials';
 import { setUiTheme, useUiTheme } from '../../hooks/useUiTheme';
 import { BetaBadge, REPORT_ISSUES_URL } from '../common/BetaBadge';
 import { PRIVACY_URL, TERMS_URL } from '../common/legalLinks';
+import { HelpHost } from '../help/HelpWindow';
+import { openHelp } from '../help/helpPanel';
 import styles from './MenuBar.module.css';
 import { useToolsBelowMenus } from './useToolsBelowMenus';
 import { QuarLogo } from '../common/QuarLogo';
@@ -1314,6 +1316,14 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
               {openMenu === 'help' && (
                 <div className={styles.dropdown} role="menu" data-testid="help-menu-dropdown">
                   <MenuItem
+                    label="User Guide"
+                    shortcut="F1"
+                    onClick={() => {
+                      closeMenu();
+                      openHelp();
+                    }}
+                  />
+                  <MenuItem
                     label="Keyboard Shortcuts"
                     onClick={() => {
                       closeMenu();
@@ -1386,6 +1396,9 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
           <ProjectNameField isDirty={isDirty} onRename={handleRename} />
         </div>
       </header>
+
+      {/* The user guide beside the canvas (Help > User Guide, F1) */}
+      <HelpHost />
 
       {/* Project List Dialog */}
       {showProjectList && (
@@ -1510,6 +1523,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                 <ShortcutRow keys="Shift+R" label="Toggle Rulers" />
                 <ShortcutRow keys="Shift+O" label="Onion Skinning" />
                 <ShortcutRow keys="Shift+A" label="Animation Sequence" />
+                <ShortcutRow keys="F1" label="User Guide" />
               </div>
               <div className={styles.shortcutsColumn}>
                 <h4 className={styles.shortcutsCategoryTitle}>Edit</h4>

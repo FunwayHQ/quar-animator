@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render as baseRender, screen, fireEvent, act } from '../../test/utils';
+import { render as baseRender, screen, fireEvent, act, within } from '../../test/utils';
 import { useEditorStore, DEFAULT_FILL, DEFAULT_STROKE } from '../../stores/editorStore';
 import { createTimeline } from '@quar/animation';
 import { DEFAULT_ONION_SKIN_SETTINGS } from '@quar/core';
@@ -454,6 +454,28 @@ describe('MenuBar', () => {
       ['https://free.quar.pro/terms/', '_blank', 'noopener'],
     ]);
     open.mockRestore();
+  });
+
+  it('Help > User Guide opens the guide beside the canvas, and F1 does too', () => {
+    render(<MenuBar />);
+    expect(screen.queryByRole('dialog', { name: 'User Guide' })).toBeNull();
+
+    fireEvent.click(screen.getByTestId('menu-help'));
+    const item = screen.getByRole('menuitem', { name: /User Guide/ });
+    expect(item).toHaveTextContent('F1');
+    fireEvent.click(item);
+    expect(screen.queryByTestId('help-menu-dropdown')).toBeNull();
+    const guide = screen.getByRole('dialog', { name: 'User Guide' });
+    expect(within(guide).getByTitle('User Guide')).toHaveAttribute(
+      'src',
+      new URL('help/', document.baseURI).href
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close the User Guide' }));
+    expect(screen.queryByRole('dialog', { name: 'User Guide' })).toBeNull();
+    fireEvent.keyDown(window, { key: 'F1' });
+    expect(screen.getByRole('dialog', { name: 'User Guide' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Close the User Guide' }));
   });
 
   it('Help > Report Issues opens the project on GitHub', () => {

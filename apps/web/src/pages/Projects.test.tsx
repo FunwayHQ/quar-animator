@@ -113,6 +113,14 @@ describe('Projects', () => {
     expect(privacy).toHaveAttribute('target', '_blank');
   });
 
+  it('links to the user guide at the foot of the page, in a new tab', async () => {
+    render(<Projects />);
+    const guide = await screen.findByRole('link', { name: 'User Guide' });
+    expect(guide).toHaveAttribute('href', new URL('help/', document.baseURI).href);
+    expect(guide).toHaveAttribute('target', '_blank');
+    expect(guide).toHaveAttribute('rel', 'noopener noreferrer');
+  });
+
   it('should switch appearance from the projects header', async () => {
     render(<Projects />);
     const toggle = await screen.findByTestId('appearance-toggle');

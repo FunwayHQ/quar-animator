@@ -66,3 +66,20 @@ their pictures in `docs/help-cloud/img/`. The generator reads that folder when
 it's there and builds both into one guide: chapters are ordered by `order`
 across both folders, the cloud ones marked "Cloud edition". A chapter's name
 must be unique across the two folders, and so must a picture's.
+
+## Linking from the editor
+
+**Help › User Guide** (or <kbd>F1</kbd>) opens the guide in the help panel, a
+floating window beside the canvas (`apps/web/src/components/help/`). To open
+it at the page about a feature, call:
+
+```ts
+import { openHelp } from '../help/helpPanel';
+
+openHelp('getting-started', 'saving'); // the chapter's file name, a heading's id
+```
+
+or mark the part of the editor with `data-help="getting-started#saving"`: F1
+opens the page of whatever has the focus, or else of what's under the
+pointer, and the guide's contents when nothing says. Choose the heading's id
+with `{#…}` so it stays put when the heading is reworded.

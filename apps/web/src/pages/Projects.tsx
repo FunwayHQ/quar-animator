@@ -27,6 +27,7 @@ import styles from './Projects.module.css';
 import { SocialLinks } from '../components/common/SocialLinks';
 import { PRIVACY_URL, TERMS_URL } from '../components/common/legalLinks';
 import { QuarLogo } from '../components/common/QuarLogo';
+import { helpUrl } from '../components/help/helpPanel';
 
 // ============================================================================
 // Helpers
@@ -362,6 +363,10 @@ export function Projects() {
       </div>
 
       <footer className={styles.footer}>
+        <a href={helpUrl()} target="_blank" rel="noopener noreferrer" data-testid="user-guide-link">
+          User Guide
+        </a>
+        <span aria-hidden="true">·</span>
         <a href={PRIVACY_URL} target="_blank" rel="noopener noreferrer">
           Privacy Policy
         </a>
