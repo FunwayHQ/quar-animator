@@ -6,7 +6,7 @@
  */
 
 import type { Node, SymbolDefinition } from '@quar/types';
-import { getFontManager, GOOGLE_FONTS_CATALOG } from '@quar/core';
+import { findGoogleFont, getFontManager, nearestWeight } from '@quar/core';
 import {
   ensureGoogleFontsConsent,
   hasGoogleFontsConsent,
@@ -22,10 +22,9 @@ export function googleFontsUsed(
   nodes: Iterable<Node>,
   symbols: readonly SymbolDefinition[] = []
 ): FontUse[] {
-  const catalog = new Set(GOOGLE_FONTS_CATALOG.map((entry) => entry.family));
   const uses = new Map<string, FontUse>();
   const visit = (node: Node) => {
-    if (node.type !== 'text' || !catalog.has(node.fontFamily)) return;
+    if (node.type !== 'text' || !findGoogleFont(node.fontFamily)) return;
     const weight = Number(node.fontWeight) || 400;
     uses.set(`${node.fontFamily}:${weight}`, { family: node.fontFamily, weight });
   };
@@ -36,10 +35,7 @@ export function googleFontsUsed(
 
 /** The weight the catalog has closest to the one asked for, as loadGoogleFont picks it. */
 function catalogWeight(family: string, weight: number): number {
-  const weights = GOOGLE_FONTS_CATALOG.find((entry) => entry.family === family)?.weights ?? [400];
-  return weights.reduce((best, candidate) =>
-    Math.abs(candidate - weight) < Math.abs(best - weight) ? candidate : best
-  );
+  return nearestWeight(findGoogleFont(family)?.weights ?? [400], weight);
 }
 
 /** The fonts of `uses` not loaded yet. */

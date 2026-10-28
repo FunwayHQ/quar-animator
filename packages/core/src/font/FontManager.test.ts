@@ -9,7 +9,14 @@ vi.mock('opentype.js', () => ({
   default: { parse: vi.fn(() => ({ mock: 'font' })) },
 }));
 
-import { FontManager, getFontManager, GOOGLE_FONTS_CATALOG } from './FontManager';
+import {
+  FontManager,
+  getFontManager,
+  GOOGLE_FONTS_CATALOG,
+  findGoogleFont,
+  nearestWeight,
+} from './FontManager';
+import googleFonts from './googleFonts.json';
 
 // Flush pending microtasks + macrotasks so the .finally cleanup runs.
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
@@ -237,28 +244,56 @@ describe('FontManager cache and lookup behavior', () => {
     expect(fm.getAvailableFonts()).toEqual([]);
   });
 
-  it('loads the nearest catalog weight and falls back to regular URLs for unsupported weights', async () => {
+  it('loads the nearest catalog weight', async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValue({ ok: true, arrayBuffer: async () => new ArrayBuffer(8) });
     vi.stubGlobal('fetch', fetchMock);
+    // Lato has 100, 300, 400, 700 and 900: 600 is nearest 700
+    const lato = findGoogleFont('Lato');
+    expect(lato?.weights).toEqual([100, 300, 400, 700, 900]);
 
-    const font = await fm.loadGoogleFont('Roboto', 600);
+    const font = await fm.loadGoogleFont('Lato', 600);
 
     expect(font).toBeTruthy();
-    expect(fetchMock).toHaveBeenCalledWith(
-      GOOGLE_FONTS_CATALOG.find((entry) => entry.family === 'Roboto')!.url(500)
-    );
-    expect(fm.getLoadedWeights('Roboto')).toEqual([500]);
-    expect(fm.getAvailableFonts()).toEqual([{ family: 'Roboto', source: 'google' }]);
+    expect(fetchMock).toHaveBeenCalledWith(lato?.url(700));
+    expect(fm.getLoadedWeights('Lato')).toEqual([700]);
+    expect(fm.getAvailableFonts()).toEqual([{ family: 'Lato', source: 'google' }]);
+  });
 
+  it('gives every weight of the catalog its own file, and the nearest for others', () => {
     for (const entry of GOOGLE_FONTS_CATALOG) {
       expect(entry.weights.length).toBeGreaterThan(0);
-      expect(
-        entry.weights.every((weight) => entry.url(weight).startsWith('https://fonts.gstatic.com/'))
-      ).toBe(true);
-      expect(entry.url(999)).toBe(entry.url(400));
+      for (const weight of entry.weights) {
+        expect(entry.url(weight)).toMatch(/^https:\/\/fonts\.gstatic\.com\/.+\.ttf$/);
+      }
+      expect(new Set(entry.weights.map((weight) => entry.url(weight))).size).toBe(
+        entry.weights.length
+      );
+      expect(entry.url(999)).toBe(entry.url(entry.weights[entry.weights.length - 1]!));
+      expect(entry.url(-5)).toBe(entry.url(entry.weights[0]!));
     }
+    // Bebas Neue has 400 alone: every weight is that file
+    const bebas = findGoogleFont('Bebas Neue');
+    expect(bebas?.weights).toEqual([400]);
+    expect(bebas?.url(700)).toBe(bebas?.url(400));
+  });
+
+  it('builds the catalog from googleFonts.json, in its order, with categories', () => {
+    expect(GOOGLE_FONTS_CATALOG.map((entry) => entry.family)).toEqual(
+      googleFonts.map((record) => record.family)
+    );
+    const roboto = findGoogleFont('Roboto');
+    const record = googleFonts.find((entry) => entry.family === 'Roboto');
+    expect(roboto?.category).toBe('sans-serif');
+    expect(roboto?.weights).toEqual(record?.weights);
+    expect(roboto?.url(400)).toBe((record?.files as Record<string, string> | undefined)?.['400']);
+    expect(findGoogleFont('Playfair Display')?.category).toBe('serif');
+    expect(findGoogleFont('Dancing Script')?.category).toBe('handwriting');
+    expect(findGoogleFont('Roboto Mono')?.category).toBe('monospace');
+    expect(findGoogleFont('Lobster')?.category).toBe('display');
+    expect(findGoogleFont('Inter')).toBeUndefined();
+    expect(findGoogleFont('Not a Google Font')).toBeUndefined();
   });
 
   it('offers Outfit at every weight, from its own files', async () => {
@@ -277,5 +312,24 @@ describe('FontManager cache and lookup behavior', () => {
 
   it('provides a stable singleton font manager', () => {
     expect(getFontManager()).toBe(getFontManager());
+  });
+});
+
+describe('nearestWeight', () => {
+  it('picks the weight nearest to the one asked for', () => {
+    expect(nearestWeight([100, 300, 400, 700, 900], 600)).toBe(700);
+    expect(nearestWeight([100, 300, 400, 700, 900], 350)).toBe(300);
+    expect(nearestWeight([400], 900)).toBe(400);
+    expect(nearestWeight([300, 700], 1000)).toBe(700);
+  });
+
+  it('takes the lighter of two as near', () => {
+    expect(nearestWeight([400, 600], 500)).toBe(400);
+    expect(nearestWeight([100, 300], 200)).toBe(100);
+  });
+
+  it('reads a non-number as 400, and falls back to 400 with no weights', () => {
+    expect(nearestWeight([100, 400, 900], NaN)).toBe(400);
+    expect(nearestWeight([], 700)).toBe(400);
   });
 });
