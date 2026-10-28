@@ -114,6 +114,23 @@ Name what each number points at in the text, not in the picture.
 Pictures are shown at half their pixel size; a picture made another way can
 end its name in `@1x` to be shown at its own size.
 
+## Checks
+
+`pnpm help:check` (also a test in the normal run, `src/help/helpCheck.test.ts`)
+fails when:
+
+- a chapter has no frontmatter, or is missing its title, order or summary;
+- a picture isn't in `img/`, isn't there, has no description, or (a PNG) has
+  no shot to take it again;
+- a link to a chapter, or to a heading's `#id`, goes nowhere;
+- the editor asks for a page or part that isn't there (`openHelp('page',
+'anchor')`, `helpUrl(…)` or `data-help="page#anchor"` in `apps/web/src/`);
+- a built page has a tag left open, anything the pages' policy refuses (inline
+  styles, scripts or handlers), a picture without its size, or a local link,
+  picture or `#anchor` that isn't there.
+
+It warns about pictures no chapter shows.
+
 ## The cloud edition's chapters
 
 The cloud edition (the private fork) adds its own chapters — accounts, sync,
