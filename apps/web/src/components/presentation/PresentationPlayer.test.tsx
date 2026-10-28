@@ -121,6 +121,43 @@ describe('the presentation', () => {
     await waitFor(() => expect(lastSlide()).toBe('intro'));
   });
 
+  it('starts the first slide over with ↑, Page Up or Home: its animation and its sounds', async () => {
+    act(() => startPresentation());
+    const lastFrame = () => renderer.renderFrame.mock.calls.at(-1)?.[1] ?? 0;
+    for (const key of ['ArrowUp', 'PageUp', 'Home']) {
+      // Under way…
+      await waitFor(() => expect(lastFrame()).toBeGreaterThan(0));
+      const plays = sounds.play.mock.calls.length;
+      const stops = sounds.stop.mock.calls.length;
+      const drawn = renderer.renderFrame.mock.calls.length;
+      // …then from the start again
+      fireEvent.keyDown(window, { key });
+      expect(sounds.stop.mock.calls.length).toBeGreaterThan(stops);
+      await waitFor(() => expect(sounds.play.mock.calls.length).toBe(plays + 1));
+      expect(sounds.play).toHaveBeenLastCalledWith(
+        0,
+        expect.objectContaining({ clips: [], lastFrame: 44 })
+      );
+      const again = renderer.renderFrame.mock.calls[drawn];
+      expect(again?.[0].exportRootIds).toEqual(['intro']);
+      expect(again?.[1]).toBe(0);
+      expect(screen.getByText('Slide 1 of 2: Intro')).toBeTruthy();
+    }
+  });
+
+  it('keeps the last slide as it is with ↓ or End', async () => {
+    act(() => startPresentation());
+    fireEvent.keyDown(window, { key: 'End' });
+    await waitFor(() => expect(lastSlide()).toBe('outro'));
+    const plays = sounds.play.mock.calls.length;
+    fireEvent.keyDown(window, { key: 'ArrowDown' });
+    fireEvent.keyDown(window, { key: 'End' });
+    // A while later: not started over
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(sounds.play.mock.calls.length).toBe(plays);
+    expect(renderer.renderFrame.mock.calls.at(-1)?.[1]).toBeGreaterThan(0);
+  });
+
   it('keeps the editor’s shortcuts out of it, and Escape leaves', () => {
     const editor = vi.fn();
     window.addEventListener('keydown', editor);

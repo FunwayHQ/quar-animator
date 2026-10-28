@@ -2,7 +2,8 @@
  * The presentation player: the page's artboards full screen, one at a
  * time, each playing its own timeline (and sounds) once from the start and
  * holding on its last frame. ↓ / Page Down for the next, ↑ / Page Up for
- * the one before, Escape (or leaving full screen) to go back to editing.
+ * the one before (on the first, to start it over), Escape (or leaving full
+ * screen) to go back to editing.
  * It draws a copy of the page as it was when it began, so the editor
  * behind it doesn't move.
  */
@@ -17,7 +18,7 @@ import { useSceneGraph } from '../../contexts/SceneGraphContext';
 import { exportRig, getSlides, slideShow } from '../../services/exportScene';
 import { SoundPlayer } from '../../services/soundPlayer';
 import { useEditorStore } from '../../stores/editorStore';
-import { frameAt, slideFor, stopPresentation, usePresentation } from './presentation';
+import { frameAt, moveFor, stopPresentation, usePresentation } from './presentation';
 import styles from './PresentationPlayer.module.css';
 
 type Sounds = Pick<SoundPlayer, 'play' | 'stop' | 'prepare' | 'warm' | 'dispose'>;
@@ -67,7 +68,8 @@ function PresentationPlayer({
 }: PlayerProps) {
   const deck = useDeck();
   const stage = useRef<HTMLDivElement>(null);
-  const [index, setIndex] = useState(0);
+  // The slide shown, and how many times it has been started over
+  const [{ index, take }, setShown] = useState({ index: 0, take: 0 });
   const [size, setSize] = useState<{ width: number; height: number } | null>(null);
   const [sound] = useState(createSoundPlayer);
   const [hint, setHint] = useState(true);
@@ -167,11 +169,12 @@ function PresentationPlayer({
     return () => sound.dispose();
   }, [sound, deck]);
 
-  // A slide starts over from its first frame (its sounds stop with it)
+  // A slide starts from its first frame, shown or started over (the sounds
+  // playing stop with the one before, and start again with it)
   useEffect(() => {
     showing.current = { index, began: null };
     return () => sound.stop();
-  }, [index, sound]);
+  }, [index, take, sound]);
 
   // Each screen refresh: the frame the slide has got to, drawn when it changes
   useEffect(() => {
@@ -225,9 +228,13 @@ function PresentationPlayer({
         stopPresentation();
         return;
       }
-      if (slideFor(event.key, 0, count) === null) return;
+      if (moveFor(event.key, 0, count) === null) return;
       event.preventDefault();
-      setIndex((at) => slideFor(event.key, at, count) ?? at);
+      setShown((at) => {
+        const move = moveFor(event.key, at.index, count);
+        if (move?.again) return { index: at.index, take: at.take + 1 };
+        return move && move.to !== at.index ? { index: move.to, take: 0 } : at;
+      });
     };
     window.addEventListener('keydown', key, true);
     window.addEventListener('keyup', key, true);
@@ -260,7 +267,7 @@ function PresentationPlayer({
       data-testid="presentation"
     >
       {slide && (
-        <span key={index} className={styles.count} aria-hidden="true">
+        <span key={`${index}:${take}`} className={styles.count} aria-hidden="true">
           {index + 1} / {count}
         </span>
       )}

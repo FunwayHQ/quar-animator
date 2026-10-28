@@ -3,7 +3,7 @@
  * Plays the page's artboards as slides, full screen, one after another in
  * the Layers panel's order: each plays its own timeline (and sounds) once,
  * then holds on its last frame until ↓ (or Page Down) moves on, ↑ (or Page
- * Up) back. Escape leaves.
+ * Up) back — on the first slide, ↑ starts it over. Escape leaves.
  */
 
 import { create } from 'zustand';
@@ -39,4 +39,25 @@ export function slideFor(key: string, index: number, count: number): number | nu
     default:
       return null;
   }
+}
+
+/** The keys that go back: on the first slide, with nothing before it, they start it over. */
+const BACK = new Set(['ArrowUp', 'PageUp', 'Home']);
+
+/** What a key does: shows slide `to` — from its start again, when `again`, though it's showing. */
+export interface SlideMove {
+  to: number;
+  again: boolean;
+}
+
+/**
+ * What a key does on slide `index` of `count`: moves to another slide (see
+ * slideFor) or, ↑, Page Up or Home on the first, starts the first over (its
+ * animation and its sounds). ↓ or End on the last keeps it as it is. Null
+ * for a key that does nothing.
+ */
+export function moveFor(key: string, index: number, count: number): SlideMove | null {
+  const to = slideFor(key, index, count);
+  if (to === null) return null;
+  return { to, again: to === 0 && index === 0 && BACK.has(key) };
 }
