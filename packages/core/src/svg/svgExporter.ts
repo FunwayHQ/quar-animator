@@ -40,6 +40,7 @@ import { mat3 } from '../math';
 import { nodeToPolygon, performBoolean } from '../boolean/booleanOps';
 import { getTextBox } from '../font/textLayout';
 import { getTextNodeBounds, getTextNodeLines } from '../font/textMetrics';
+import { getVisibleTextContent } from '../font/textReveal';
 import { getTextLocalBounds } from '../font/textPlacement';
 import { linearGradientFromAngle } from '../gradient/gradientUtils';
 import { colorToHex as colorToUpperHex } from '../color/colorHex';
@@ -561,11 +562,34 @@ function textLinesToSvg(node: TextNode): string {
   const alignX = node.textAlign === 'center' ? width / 2 : node.textAlign === 'right' ? width : 0;
   const lineHeight = node.fontSize * node.lineHeight;
 
+  // A typewriter reveal shows the first characters only, laid out as the
+  // whole text is: a line shown in part keeps its place (from its full
+  // line's start), so it types in place as on the canvas
+  const shown =
+    node.visibleCharacters === undefined ? undefined : getVisibleTextContent(node).length;
+  let cursor = 0;
   return lines
-    .map(
-      (line, i) =>
-        `<tspan x="${fmt(alignX + offsetX)}" y="${fmt(i * lineHeight - offsetY)}">${escapeXml(line.text)}</tspan>`
-    )
+    .map((line, i) => {
+      const y = fmt(i * lineHeight - offsetY);
+      if (shown === undefined) {
+        return `<tspan x="${fmt(alignX + offsetX)}" y="${y}">${escapeXml(line.text)}</tspan>`;
+      }
+      const found = node.content.indexOf(line.text, cursor);
+      const start = found < 0 ? cursor : found;
+      cursor = start + line.text.length;
+      const count = Math.max(0, Math.min(line.text.length, shown - start));
+      if (count === 0) return '';
+      if (count === line.text.length) {
+        return `<tspan x="${fmt(alignX + offsetX)}" y="${y}">${escapeXml(line.text)}</tspan>`;
+      }
+      const from =
+        node.textAlign === 'center'
+          ? alignX - line.width / 2
+          : node.textAlign === 'right'
+            ? alignX - line.width
+            : alignX;
+      return `<tspan x="${fmt(from + offsetX)}" y="${y}" text-anchor="start">${escapeXml(line.text.slice(0, count))}</tspan>`;
+    })
     .join('');
 }
 

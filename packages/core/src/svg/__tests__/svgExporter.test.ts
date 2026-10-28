@@ -8,6 +8,7 @@ import {
   exportNodesToSvg,
 } from '../svgExporter';
 import { SceneGraph } from '../../SceneGraph';
+import { getTextNodeLines } from '../../font/textMetrics';
 import type {
   PathPoint,
   PathNode,
@@ -713,6 +714,43 @@ describe('nodeToSvgElement', () => {
   // --------------------------------------------------------------------------
   // Text
   // --------------------------------------------------------------------------
+
+  it('shows only the characters a typewriter reveal has reached, each line in place', () => {
+    const text = (visibleCharacters?: number): TextNode => ({
+      ...makeBaseNodeFields('t-reveal', 'text'),
+      type: 'text',
+      content: 'Hello\nthere',
+      fontFamily: 'Arial',
+      fontSize: 20,
+      fontWeight: 400,
+      fontStyle: 'normal',
+      textAlign: 'center',
+      lineHeight: 1.5,
+      letterSpacing: 0,
+      fills: [makeSolidFill(makeColor(0, 0, 0))],
+      strokes: [],
+      ...(visibleCharacters === undefined ? {} : { visibleCharacters }),
+    });
+    const tspans = (node: TextNode) =>
+      [...nodeToSvgElement(node, sceneGraph, []).matchAll(/<tspan([^>]*)>([^<]*)<\/tspan>/g)].map(
+        (m) => ({ attrs: m[1] ?? '', text: m[2] ?? '' })
+      );
+
+    // The first line whole, as without a reveal; the second typed to "th",
+    // from where its full line starts
+    const whole = tspans(text());
+    const typed = tspans(text(8));
+    expect(typed.map((t) => t.text)).toEqual(['Hello', 'th']);
+    expect(typed[0]?.attrs).toBe(whole[0]?.attrs);
+    const [, second] = getTextNodeLines(text());
+    const width = Math.max(...getTextNodeLines(text()).map((line) => line.width));
+    const x = Number(/x="([^"]+)"/.exec(typed[1]?.attrs ?? '')?.[1]);
+    expect(x).toBeCloseTo(width / 2 - (second?.width ?? 0) / 2, 2);
+    expect(typed[1]?.attrs).toContain('text-anchor="start"');
+    // Nothing typed yet: no letters; all of it: as without a reveal
+    expect(tspans(text(0))).toEqual([]);
+    expect(tspans(text(11))).toEqual(whole);
+  });
 
   it('converts TextNode to <text>', () => {
     const node: TextNode = {
