@@ -106,6 +106,17 @@ describe('Projects', () => {
     }
   });
 
+  it('links to the privacy policy and the terms at the foot of the page', async () => {
+    render(<Projects />);
+    const privacy = await screen.findByRole('link', { name: 'Privacy Policy' });
+    expect(privacy).toHaveAttribute('href', 'https://free.quar.pro/privacy/');
+    expect(screen.getByRole('link', { name: 'Terms of Service' })).toHaveAttribute(
+      'href',
+      'https://free.quar.pro/terms/'
+    );
+    expect(privacy).toHaveAttribute('target', '_blank');
+  });
+
   it('should switch appearance from the projects header', async () => {
     render(<Projects />);
     const toggle = await screen.findByTestId('appearance-toggle');

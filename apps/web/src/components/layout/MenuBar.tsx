@@ -24,6 +24,7 @@ import { toast } from '../common/Toast';
 import { restoreTutorials } from '../../tutorials/seedTutorials';
 import { setUiTheme, useUiTheme } from '../../hooks/useUiTheme';
 import { BetaBadge, REPORT_ISSUES_URL } from '../common/BetaBadge';
+import { PRIVACY_URL, TERMS_URL } from '../common/legalLinks';
 import styles from './MenuBar.module.css';
 import { useToolsBelowMenus } from './useToolsBelowMenus';
 // Bundled with the build (inlined or hashed), so a browser never keeps an old logo
@@ -1347,6 +1348,20 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                     onClick={() => {
                       closeMenu();
                       setShowAboutDialog(true);
+                    }}
+                  />
+                  <MenuItem
+                    label="Privacy Policy"
+                    onClick={() => {
+                      closeMenu();
+                      window.open(PRIVACY_URL, '_blank', 'noopener');
+                    }}
+                  />
+                  <MenuItem
+                    label="Terms of Service"
+                    onClick={() => {
+                      closeMenu();
+                      window.open(TERMS_URL, '_blank', 'noopener');
                     }}
                   />
                   <MenuItem

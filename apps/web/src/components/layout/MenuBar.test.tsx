@@ -442,6 +442,22 @@ describe('MenuBar', () => {
     expect(localStorage.getItem('quar-google-fonts-consent')).toBe('true');
   });
 
+  it('Help opens the privacy policy and the terms in new tabs', () => {
+    const open = vi.spyOn(window, 'open').mockReturnValue(null);
+    render(<MenuBar />);
+
+    fireEvent.click(screen.getByTestId('menu-help'));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Privacy Policy' }));
+    fireEvent.click(screen.getByTestId('menu-help'));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Terms of Service' }));
+
+    expect(open.mock.calls).toEqual([
+      ['https://free.quar.pro/privacy/', '_blank', 'noopener'],
+      ['https://free.quar.pro/terms/', '_blank', 'noopener'],
+    ]);
+    open.mockRestore();
+  });
+
   it('Help > Report Issues opens the project on GitHub', () => {
     const open = vi.spyOn(window, 'open').mockReturnValue(null);
     render(<MenuBar />);

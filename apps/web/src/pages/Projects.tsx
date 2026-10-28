@@ -25,6 +25,7 @@ import type { ProjectListItem } from '../services/projectStorage';
 import { BetaBadge } from '../components/common/BetaBadge';
 import styles from './Projects.module.css';
 import { SocialLinks } from '../components/common/SocialLinks';
+import { PRIVACY_URL, TERMS_URL } from '../components/common/legalLinks';
 // Bundled with the build (inlined or hashed), so a browser never keeps an old logo
 import logoUrl from '../assets/logo.svg';
 
@@ -360,6 +361,16 @@ export function Projects() {
           </>
         )}
       </div>
+
+      <footer className={styles.footer}>
+        <a href={PRIVACY_URL} target="_blank" rel="noopener noreferrer">
+          Privacy Policy
+        </a>
+        <span aria-hidden="true">·</span>
+        <a href={TERMS_URL} target="_blank" rel="noopener noreferrer">
+          Terms of Service
+        </a>
+      </footer>
     </div>
   );
 }
