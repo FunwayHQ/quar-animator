@@ -59,6 +59,7 @@ import type { FillType } from '../common/GradientEditor';
 import { ImageAdjustments, DEFAULT_ADJUSTMENTS } from '../common/ImageAdjustments';
 import type { ImageAdjustments as ImageAdjustmentsType } from '@quar/types';
 import { ensureGoogleFontsConsent } from '../common/ConsentBanner';
+import { FontPicker } from '../common/FontPicker';
 import { toast } from '../common/Toast';
 import {
   createDefaultGradient,
@@ -67,6 +68,7 @@ import {
   getTextNodeBounds,
   keepTextInPlace,
   getFontManager,
+  findGoogleFont,
   GOOGLE_FONTS_CATALOG,
   getAllPoints,
   setAllPoints,
@@ -85,6 +87,7 @@ import { getKeyframeState, getGroupKeyframeState } from '../../hooks/useKeyframe
 import { EasingCurvePreview } from '../common/EasingCurvePreview';
 import { EasingEditor } from '../common/EasingEditor';
 import { exportSelectionAsPng, exportSelectionAsSvg } from '../../services/exportService';
+import { documentFontFamilies } from '../../services/documentFonts';
 import styles from './PropertiesPanel.module.css';
 
 // ============================================================================
@@ -2397,10 +2400,6 @@ export function PropertiesPanel() {
               (() => {
                 const textNode = node;
                 const fm = getFontManager();
-                const loadedFonts = fm.getLoadedFamilies();
-                // Always show Google Fonts in dropdown; consent checked on select
-                const googleFamilies = GOOGLE_FONTS_CATALOG.map((e) => e.family);
-                const allFonts = [...new Set([...loadedFonts, ...googleFamilies])].sort();
                 // Text changes keep the box where it is, as in Figma
                 const setText = (patch: Partial<TextNode>) => {
                   const current = sceneGraph.getNode(nodeId);
@@ -2412,13 +2411,12 @@ export function PropertiesPanel() {
                     <div className={styles.propertyRow}>
                       <span className={styles.propertyLabel}>Font</span>
                       <div className={styles.propertyInputs}>
-                        <select
-                          className={styles.select}
+                        <FontPicker
                           value={textNode.fontFamily}
-                          onChange={(e) => {
-                            const family = e.target.value;
-                            // If font isn't loaded yet, load from Google Fonts
-                            if (!fm.hasFont(family)) {
+                          documentFamilies={() => documentFontFamilies(sceneGraph.getNodes())}
+                          onChange={(family) => {
+                            // A Google font not loaded yet loads first
+                            if (!fm.hasFont(family) && findGoogleFont(family)) {
                               // Asks to allow Google Fonts the first time
                               void ensureGoogleFontsConsent().then((allowed) => {
                                 if (!allowed) return;
@@ -2440,14 +2438,7 @@ export function PropertiesPanel() {
                             if (shouldKeyframe(autoKeyframe, nodeId, 'fontFamily'))
                               addKeyframeAtFrame(nodeId, 'fontFamily', liveFrame(), family);
                           }}
-                        >
-                          {allFonts.map((f) => (
-                            <option key={f} value={f}>
-                              {f}
-                              {!fm.hasFont(f) ? ' ⬇' : ''}
-                            </option>
-                          ))}
-                        </select>
+                        />
                       </div>
                     </div>
                     <div className={styles.propertyRow}>

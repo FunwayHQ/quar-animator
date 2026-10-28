@@ -11,6 +11,7 @@ import {
   ensureGoogleFontsConsent,
   hasGoogleFontsConsent,
 } from '../components/common/ConsentBanner';
+import { useEditorStore } from '../stores/editorStore';
 
 export interface FontUse {
   family: string;
@@ -31,6 +32,30 @@ export function googleFontsUsed(
   for (const node of nodes) visit(node);
   for (const symbol of symbols) symbol.sceneGraphJSON.nodes.forEach(visit);
   return [...uses.values()];
+}
+
+/** Every font family these nodes' text is set in, each once, in the order first met. */
+export function fontFamiliesUsed(nodeLists: Iterable<Iterable<Node>>): string[] {
+  const families = new Set<string>();
+  for (const nodes of nodeLists) {
+    for (const node of nodes) {
+      if (node.type === 'text' && node.fontFamily) families.add(node.fontFamily);
+    }
+  }
+  return [...families];
+}
+
+/**
+ * The families the open document's text is set in: the page shown (its live
+ * nodes, given), its other pages and its symbols. What the font picker lists first.
+ */
+export function documentFontFamilies(pageNodes: Iterable<Node>): string[] {
+  const { pages, activePageId, symbols } = useEditorStore.getState();
+  return fontFamiliesUsed([
+    pageNodes,
+    ...pages.filter((page) => page.id !== activePageId).map((page) => page.sceneGraphJSON.nodes),
+    ...symbols.map((symbol) => symbol.sceneGraphJSON.nodes),
+  ]);
 }
 
 /** The weight the catalog has closest to the one asked for, as loadGoogleFont picks it. */

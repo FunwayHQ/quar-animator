@@ -6,12 +6,16 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { Node, SymbolDefinition } from '@quar/types';
 import { getFontManager, GOOGLE_FONTS_CATALOG } from '@quar/core';
 import {
+  documentFontFamilies,
+  fontFamiliesUsed,
   fontsToLoad,
   googleFontsUsed,
   loadDocumentFonts,
   resetDocumentFontsForTests,
 } from './documentFonts';
 import { textIn } from '../test/textNode';
+import { useEditorStore } from '../stores/editorStore';
+import type { PageData } from '../stores/editorStore';
 
 const urlOf = (family: string, weight: number) =>
   GOOGLE_FONTS_CATALOG.find((entry) => entry.family === family)!.url(weight);
@@ -36,6 +40,49 @@ describe('googleFontsUsed', () => {
       { family: 'Outfit', weight: 400 },
       { family: 'DM Sans', weight: 500 },
     ]);
+  });
+});
+
+describe('fontFamiliesUsed', () => {
+  it('lists every family the text is set in, Google or not, each once', () => {
+    expect(
+      fontFamiliesUsed([
+        [textIn('a', 'Outfit'), textIn('b', 'Arial'), textIn('c', 'Outfit', 700)],
+        [textIn('d', 'Inter')],
+      ])
+    ).toEqual(['Outfit', 'Arial', 'Inter']);
+  });
+});
+
+describe('documentFontFamilies', () => {
+  afterEach(() => {
+    useEditorStore.setState({ symbols: [] });
+  });
+
+  it("takes the page shown live, the document's other pages and its symbols", () => {
+    const page = (id: string, nodes: Node[]) =>
+      ({
+        id,
+        name: id,
+        sceneGraphJSON: { nodes, rootNodeIds: nodes.map((n) => n.id) },
+      }) as PageData;
+    const { pages, activePageId } = useEditorStore.getState();
+    const symbol: SymbolDefinition = {
+      id: 's',
+      name: 'Badge',
+      sceneGraphJSON: { nodes: [textIn('in-symbol', 'Lobster')], rootNodeIds: ['in-symbol'] },
+    };
+    useEditorStore.setState({
+      pages: [
+        page(activePageId, [textIn('stale', 'Stale Font')]),
+        page('p2', [textIn('x', 'Lato')]),
+      ],
+      symbols: [symbol],
+    });
+
+    // The page shown comes from its scene, not its stored copy
+    expect(documentFontFamilies([textIn('live', 'Roboto')])).toEqual(['Roboto', 'Lato', 'Lobster']);
+    useEditorStore.setState({ pages });
   });
 });
 

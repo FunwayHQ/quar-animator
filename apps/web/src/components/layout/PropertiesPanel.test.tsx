@@ -1,8 +1,10 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { render, screen, act, fireEvent, within } from '../../test/utils';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { render, screen, act, fireEvent, within, waitFor } from '../../test/utils';
 import userEvent from '@testing-library/user-event';
 import { SceneGraphProvider, useSceneGraph } from '../../contexts/SceneGraphContext';
 import {
+  findGoogleFont,
+  getFontManager,
   createDefaultTransform,
   createPolygonPath,
   createStarPath,
@@ -24,6 +26,7 @@ import { PropertiesPanel, textSizeUpdate } from './PropertiesPanel';
 import { useEditorStore } from '../../stores/editorStore';
 import { Profiler, type ReactNode } from 'react';
 import { poseScene } from '../../stores/scenePosing';
+import { PromptDialogHost } from '../common/PromptDialog';
 
 // ============================================================================
 // Test Helpers
@@ -1936,6 +1939,100 @@ describe('PropertiesPanel', () => {
       expect(node.fontSize).toBe(48);
       expect(topLeft(node).x).toBeCloseTo(topLeft(initial).x);
       expect(topLeft(node).y).toBeCloseTo(topLeft(initial).y);
+    });
+  });
+
+  describe('font family', () => {
+    const fetchMock = vi.fn();
+
+    function addTextIn(sg: SceneGraph, fontFamily: string) {
+      act(() => {
+        sg.addNode({ ...createTestText('text1', 'Text 1'), fontFamily });
+        useEditorStore.getState().setSelection(['text1']);
+      });
+    }
+
+    const fontFamilyKeys = () =>
+      useEditorStore
+        .getState()
+        .timeline.tracks.find((t) => t.nodeId === 'text1' && t.property === 'fontFamily')
+        ?.keyframes.map((kf) => [kf.time, kf.value]);
+
+    /** Pick a family in the Font picker by typing its name. */
+    async function pick(family: string) {
+      const user = userEvent.setup();
+      await user.click(screen.getByRole('combobox', { name: 'Font' }));
+      await user.keyboard(`${family}{Enter}`);
+    }
+
+    beforeEach(async () => {
+      localStorage.clear();
+      fetchMock
+        .mockReset()
+        .mockResolvedValue({ ok: true, arrayBuffer: async () => new ArrayBuffer(8) });
+      vi.stubGlobal('fetch', fetchMock);
+      useEditorStore.setState({ autoKeyframe: false, currentFrame: 0, timeline: createTimeline() });
+      // Loaded already (as the document's fonts are once it opens)
+      await getFontManager().loadFontFromBuffer(new ArrayBuffer(8), 'Lato', 'local', 400);
+    });
+
+    afterEach(() => {
+      getFontManager().removeFont('Lato');
+      getFontManager().removeFont('Lobster');
+      useEditorStore.setState({ autoKeyframe: false });
+      vi.unstubAllGlobals();
+    });
+
+    it('sets the family picked', async () => {
+      const sg = renderWithSceneGraph();
+      addTextIn(sg, 'Inter');
+
+      await pick('Lato');
+
+      expect((sg.getNode('text1') as TextNode).fontFamily).toBe('Lato');
+      expect(fontFamilyKeys()).toBeUndefined();
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it('keys the family picked when auto-key is on', async () => {
+      const sg = renderWithSceneGraph();
+      addTextIn(sg, 'Inter');
+      act(() => useEditorStore.setState({ autoKeyframe: true, currentFrame: 12 }));
+
+      await pick('Lato');
+
+      expect((sg.getNode('text1') as TextNode).fontFamily).toBe('Lato');
+      expect(fontFamilyKeys()).toEqual([[12, 'Lato']]);
+    });
+
+    it('asks to allow Google Fonts before downloading one, and asks Google nothing before', async () => {
+      const sg = renderWithSceneGraph();
+      render(<PromptDialogHost />);
+      addTextIn(sg, 'Inter');
+
+      await pick('Lobster');
+
+      expect(await screen.findByRole('dialog', { name: 'Use Google Fonts?' })).toBeInTheDocument();
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect((sg.getNode('text1') as TextNode).fontFamily).toBe('Inter');
+
+      await userEvent.setup().click(screen.getByRole('button', { name: 'Allow Google Fonts' }));
+
+      await waitFor(() => expect((sg.getNode('text1') as TextNode).fontFamily).toBe('Lobster'));
+      expect(fetchMock).toHaveBeenCalledWith(findGoogleFont('Lobster')?.url(400));
+    });
+
+    it('leaves the family as it was when Google Fonts are declined', async () => {
+      const sg = renderWithSceneGraph();
+      render(<PromptDialogHost />);
+      addTextIn(sg, 'Inter');
+
+      await pick('Lobster');
+      await userEvent.setup().click(await screen.findByTestId('prompt-dialog-cancel'));
+      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+
+      expect((sg.getNode('text1') as TextNode).fontFamily).toBe('Inter');
+      expect(fetchMock).not.toHaveBeenCalled();
     });
   });
 
