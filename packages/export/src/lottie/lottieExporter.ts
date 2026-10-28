@@ -175,15 +175,30 @@ export function analyzeLottieExport(
   animatedTrackCount: number;
   /** Images bound to bones: Lottie can't warp them, so they export unbent */
   unbentImageCount: number;
+  /** Layers with effects (shadows, blurs): this export writes none, so they go without */
+  effectNodeCount: number;
+  /** The kinds of effect left out (drop-shadow, inner-shadow, layer-blur) */
+  droppedEffects: string[];
+  /** Layers in a blend mode other than normal: they export as normal */
+  blendModeNodeCount: number;
 } {
   let supportedCount = 0;
   let unsupportedCount = 0;
   let unbentImageCount = 0;
+  let effectNodeCount = 0;
+  let blendModeNodeCount = 0;
   const unsupportedTypeSet = new Set<string>();
+  const droppedEffectSet = new Set<string>();
 
   const visit = (node: Node) => {
     if (!node.visible) return;
     if (node.type === 'image' && node.skinData) unbentImageCount++;
+    const effects = (node.effects ?? []).filter((effect) => effect.visible);
+    if (effects.length > 0) {
+      effectNodeCount++;
+      for (const effect of effects) droppedEffectSet.add(effect.type);
+    }
+    if (node.blendMode && node.blendMode !== 'normal') blendModeNodeCount++;
     if (SUPPORTED_TYPES.has(node.type)) {
       supportedCount++;
     } else {
@@ -207,5 +222,8 @@ export function analyzeLottieExport(
     unsupportedTypes: Array.from(unsupportedTypeSet),
     animatedTrackCount: 0, // Populated by caller with timeline.tracks.length
     unbentImageCount,
+    effectNodeCount,
+    droppedEffects: Array.from(droppedEffectSet),
+    blendModeNodeCount,
   };
 }

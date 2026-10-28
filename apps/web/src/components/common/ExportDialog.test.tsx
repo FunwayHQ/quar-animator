@@ -713,6 +713,27 @@ describe('ExportDialog', () => {
     expect(analyzeLottieExport).toHaveBeenCalledWith([], expect.any(Function));
   });
 
+  it('says on the Lottie tab which effects and blend modes the export leaves out', () => {
+    vi.mocked(analyzeLottieExport).mockReturnValue({
+      supportedCount: 3,
+      unsupportedCount: 0,
+      unsupportedTypes: [],
+      animatedTrackCount: 0,
+      unbentImageCount: 0,
+      effectNodeCount: 2,
+      droppedEffects: ['layer-blur', 'drop-shadow'],
+      blendModeNodeCount: 1,
+    });
+    render(<ExportDialogHost />);
+    act(() => showExportDialog('lottie'));
+    expect(screen.getByTestId('lottie-dropped-effects')).toHaveTextContent(
+      '2 layers will export without blurs and drop shadows: Lottie doesn’t get effects.'
+    );
+    expect(screen.getByTestId('lottie-dropped-blend-modes')).toHaveTextContent(
+      '1 layer in a blend mode will export as normal.'
+    );
+  });
+
   it('closes on Cancel button click', async () => {
     render(<ExportDialogHost />);
     act(() => showExportDialog('png-sequence'));

@@ -1288,6 +1288,26 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
                     </span>
                   </div>
                 )}
+                {lottieAnalysis.effectNodeCount > 0 && (
+                  <div className={styles.warning} data-testid="lottie-dropped-effects">
+                    <AlertTriangle size={14} className={styles.warningIcon} />
+                    <span className={styles.warningText}>
+                      {lottieAnalysis.effectNodeCount} layer
+                      {lottieAnalysis.effectNodeCount === 1 ? '' : 's'} will export without{' '}
+                      {effectNames(lottieAnalysis.droppedEffects)}: Lottie doesn’t get effects.
+                    </span>
+                  </div>
+                )}
+                {lottieAnalysis.blendModeNodeCount > 0 && (
+                  <div className={styles.warning} data-testid="lottie-dropped-blend-modes">
+                    <AlertTriangle size={14} className={styles.warningIcon} />
+                    <span className={styles.warningText}>
+                      {lottieAnalysis.blendModeNodeCount} layer
+                      {lottieAnalysis.blendModeNodeCount === 1 ? '' : 's'} in a blend mode will
+                      export as normal.
+                    </span>
+                  </div>
+                )}
               </>
             )}
           </div>
@@ -1338,6 +1358,19 @@ export function showExportDialog(tab: ExportTab = 'png-sequence'): void {
 /**
  * Mount once in the app root to enable the `showExportDialog()` imperative API.
  */
+/** Effects by the names the Properties panel gives them, in a sentence. */
+function effectNames(types: readonly string[]): string {
+  const names: Record<string, string> = {
+    'drop-shadow': 'drop shadows',
+    'inner-shadow': 'inner shadows',
+    'layer-blur': 'blurs',
+  };
+  const list = types.map((type) => names[type] ?? type);
+  return list.length > 1
+    ? `${list.slice(0, -1).join(', ')} and ${list.at(-1)}`
+    : (list[0] ?? 'effects');
+}
+
 export function ExportDialogHost() {
   const [activeTab, setActiveTab] = useState<ExportTab | null>(null);
 

@@ -219,6 +219,26 @@ describe('analyzeLottieExport', () => {
     expect(analyzeLottieExport([text]).unsupportedCount).toBe(0);
   });
 
+  it('says which effects and blend modes it leaves out (Lottie gets none of them)', () => {
+    const blurred = {
+      ...makeRect('r1'),
+      effects: [
+        { id: 'e1', type: 'layer-blur', visible: true, radius: 8 },
+        { id: 'e2', type: 'drop-shadow', visible: false },
+      ],
+    } as unknown as Node;
+    const shadowed = {
+      ...makeEllipse(),
+      effects: [{ id: 'e3', type: 'drop-shadow', visible: true }],
+      blendMode: 'multiply',
+    } as unknown as Node;
+    const analysis = analyzeLottieExport([blurred, shadowed, makeRect('r2')]);
+    expect(analysis.effectNodeCount).toBe(2);
+    expect([...analysis.droppedEffects].sort()).toEqual(['drop-shadow', 'layer-blur']);
+    expect(analysis.blendModeNodeCount).toBe(1);
+    expect(analysis.unsupportedCount).toBe(0);
+  });
+
   it('returns empty counts for empty array', () => {
     const analysis = analyzeLottieExport([]);
     expect(analysis.supportedCount).toBe(0);
