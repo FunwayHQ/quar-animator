@@ -73,3 +73,9 @@ marketing/blog.md
 
 # Local secrets, never committed
 .google-secret
+
+# The user guide's pages, built from docs/help/ by apps/web/scripts/help (pnpm help:build)
+apps/web/public/help/
+# ...but its screenshots are kept: the pages need them in builds made without a browser
+!docs/help/img/**/*.png
+!docs/help-cloud/img/**/*.png

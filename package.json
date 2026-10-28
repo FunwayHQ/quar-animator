@@ -26,6 +26,7 @@
     "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md,css}\"",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
+    "help:build": "node apps/web/scripts/help/build-help.mjs",
     "storybook": "pnpm --filter @quar/ui storybook",
     "build:storybook": "pnpm --filter @quar/ui build-storybook",
     "clean": "pnpm -r clean && rimraf node_modules",

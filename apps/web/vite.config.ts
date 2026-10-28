@@ -2,10 +2,12 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
+// The user guide at /help/, built from docs/help/ before `vite` and `vite build`
+import { helpPages } from './scripts/help/vite-plugin.mjs';
 
 export default defineConfig({
   base: './',
-  plugins: [react()],
+  plugins: [react(), helpPages()],
   test: {
     globals: true,
     environment: 'jsdom',
