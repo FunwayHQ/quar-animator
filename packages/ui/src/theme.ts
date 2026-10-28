@@ -63,6 +63,8 @@ export const colors = {
     primaryHover: '#c084fc',
     primaryActive: '#9333ea',
     primaryGlow: 'rgba(168, 85, 247, 0.3)',
+    /** The logo's corner marks */
+    logoFrame: '#eef0ff',
     secondary: '#9f1239',
     secondaryGlow: 'rgba(159, 18, 57, 0.3)',
     success: '#34d399',
@@ -143,6 +145,7 @@ export const lightColors: ColorTokens = {
     primaryHover: '#6d28d9',
     primaryActive: '#5b21b6',
     primaryGlow: 'rgba(124, 58, 237, 0.2)',
+    logoFrame: '#1e1b2e',
     secondary: '#be123c',
     secondaryGlow: 'rgba(190, 18, 60, 0.18)',
     success: '#059669',
@@ -339,6 +342,7 @@ function colorVariables(c: ColorTokens): string {
 
   /* Colors - Accent */
   --color-accent-primary: ${c.accent.primary};
+  --color-logo-frame: ${c.accent.logoFrame};
   --color-accent-primary-hover: ${c.accent.primaryHover};
   --color-accent-primary-active: ${c.accent.primaryActive};
   --color-accent-primary-glow: ${c.accent.primaryGlow};
