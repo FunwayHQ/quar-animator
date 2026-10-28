@@ -4,9 +4,13 @@
  * the Layers panel's order: each plays its own timeline (and sounds) once,
  * then holds on its last frame until ↓ (or Page Down) moves on, ↑ (or Page
  * Up) back — on the first slide, ↑ starts it over. Escape leaves.
+ * Moving on plays the transition into the next slide, if it has one, before
+ * its timeline starts; going back (or jumping, Home and End) cuts.
  */
 
 import { create } from 'zustand';
+import { transitionProgress } from '@quar/animation';
+import type { SlideTransition } from '@quar/types';
 
 export const usePresentation = create<{ open: boolean }>(() => ({ open: false }));
 
@@ -60,4 +64,35 @@ export function moveFor(key: string, index: number, count: number): SlideMove | 
   const to = slideFor(key, index, count);
   if (to === null) return null;
   return { to, again: to === 0 && index === 0 && BACK.has(key) };
+}
+
+/** The keys that move on one slide, playing the transition into it (and skip one under way). */
+export const FORWARD = new Set(['ArrowDown', 'PageDown']);
+
+/**
+ * How far a transition has got `elapsedMs` after it began: its eased
+ * progress, and whether it's over (then the incoming slide starts).
+ */
+export function transitionAt(
+  elapsedMs: number,
+  transition: SlideTransition
+): { progress: number; done: boolean } {
+  const length = Math.max(0, transition.duration) * 1000;
+  const raw = length > 0 ? Math.max(0, elapsedMs) / length : 1;
+  return { progress: transitionProgress(transition, raw), done: raw >= 1 };
+}
+
+/**
+ * The transition a key plays going from slide `from` to `to`: the one into
+ * `to`, when it's ↓ or Page Down to the next slide. Going back, jumping
+ * (Home, End) or starting a slide over cuts: null.
+ */
+export function transitionFor(
+  key: string,
+  from: number,
+  to: number,
+  transition: SlideTransition | null | undefined
+): SlideTransition | null {
+  if (!FORWARD.has(key) || to !== from + 1 || !transition) return null;
+  return transition.duration > 0 ? transition : null;
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { frameAt, moveFor, slideFor } from './presentation';
+import { frameAt, moveFor, slideFor, transitionAt, transitionFor } from './presentation';
 
 describe('a slide’s frame', () => {
   it('follows the clock in whole frames, holding on the last', () => {
@@ -37,5 +37,31 @@ describe('moving between slides', () => {
     expect(moveFor('End', 2, 3)).toEqual({ to: 2, again: false });
     expect(moveFor('ArrowDown', 0, 1)).toEqual({ to: 0, again: false });
     expect(moveFor('ArrowLeft', 0, 3)).toBeNull();
+  });
+});
+
+describe('the transition into a slide', () => {
+  const fade = { type: 'fade', duration: 0.5 } as const;
+
+  it('plays going on to the next slide with ↓ or Page Down, and only then', () => {
+    expect(transitionFor('ArrowDown', 0, 1, fade)).toBe(fade);
+    expect(transitionFor('PageDown', 1, 2, fade)).toBe(fade);
+    // Back, a jump, or starting over: a cut
+    expect(transitionFor('ArrowUp', 2, 1, fade)).toBeNull();
+    expect(transitionFor('End', 0, 1, fade)).toBeNull();
+    expect(transitionFor('End', 0, 3, fade)).toBeNull();
+    expect(transitionFor('ArrowDown', 2, 2, fade)).toBeNull();
+    expect(transitionFor('ArrowDown', 0, 1, null)).toBeNull();
+    expect(transitionFor('ArrowDown', 0, 1, { ...fade, duration: 0 })).toBeNull();
+  });
+
+  it('runs its length, eased, then is over', () => {
+    expect(transitionAt(0, fade)).toEqual({ progress: 0, done: false });
+    expect(transitionAt(250, fade).progress).toBeCloseTo(0.5);
+    // easeInOutCubic: a quarter of the way through, a sixteenth of the change
+    expect(transitionAt(125, fade).progress).toBeCloseTo(0.0625);
+    expect(transitionAt(499, fade).done).toBe(false);
+    expect(transitionAt(500, fade)).toEqual({ progress: 1, done: true });
+    expect(transitionAt(-40, fade).progress).toBe(0);
   });
 });

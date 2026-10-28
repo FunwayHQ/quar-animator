@@ -124,6 +124,13 @@ HTMLCanvasElement.prototype.getContext = vi.fn().mockImplementation(function (
 
   // Return 2D context mock
   return {
+    canvas: this,
+    globalAlpha: 1,
+    globalCompositeOperation: 'source-over',
+    drawImage: vi.fn(),
+    setTransform: vi.fn(),
+    rect: vi.fn(),
+    clip: vi.fn(),
     fillStyle: '',
     strokeStyle: '',
     lineWidth: 1,

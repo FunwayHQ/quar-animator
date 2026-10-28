@@ -1,7 +1,12 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SceneGraph, createDefaultTransform } from '@quar/core';
-import { createTimeline, withScopeDuration, withScopeSounds } from '@quar/animation';
+import {
+  createTimeline,
+  withScopeDuration,
+  withScopeSounds,
+  withScopeTransition,
+} from '@quar/animation';
 import type { FrameRenderContext, FrameRendererHandle } from '@quar/export';
 import type { Sound } from '@quar/types';
 
@@ -203,6 +208,147 @@ describe('the presentation', () => {
     const drawn = renderer.renderFrame.mock.calls.at(-1)?.[0];
     expect(drawn?.sceneGraph).not.toBe(sg);
     expect(JSON.stringify(sg.toJSON())).toBe(before);
+  });
+
+  describe('transitions', () => {
+    const stageCanvas = () => screen.getByTestId('presentation').querySelector('canvas');
+    const lastDrawn = () => {
+      const call = renderer.renderFrame.mock.calls.at(-1);
+      return `${call?.[0].exportRootIds?.[0]}@${call?.[1]}`;
+    };
+    /**
+     * The clock moved on a screen refresh at a time, React committing
+     * between (as it would: timers and effects take turns)
+     */
+    const wait = async (ms: number) => {
+      for (let left = ms; left > 0; left -= 16) {
+        await act(() => vi.advanceTimersByTimeAsync(Math.min(16, left)));
+      }
+    };
+
+    beforeEach(() => {
+      vi.useFakeTimers({
+        toFake: [
+          'setTimeout',
+          'clearTimeout',
+          'requestAnimationFrame',
+          'cancelAnimationFrame',
+          'performance',
+          'Date',
+        ],
+      });
+      // Half a second's fade into the outro
+      const { timeline } = useEditorStore.getState();
+      useEditorStore.setState({
+        timeline: withScopeTransition(timeline, 'outro', { type: 'fade', duration: 0.5 }),
+      });
+    });
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    /** The presentation on, its first slide played through (1.5 s) and held. */
+    async function throughTheIntro() {
+      act(() => startPresentation());
+      await wait(1700);
+      expect(lastDrawn()).toBe('intro@44');
+    }
+
+    it('↓ plays the transition, both slides held, then the next slide and its sounds', async () => {
+      await throughTheIntro();
+      const drawn = renderer.renderFrame.mock.calls.length;
+      const plays = sounds.play.mock.calls.length;
+      const stops = sounds.stop.mock.calls.length;
+
+      fireEvent.keyDown(window, { key: 'ArrowDown' });
+      await wait(100);
+      // The intro's sounds stop; on screen, the blend of the two (not the renderer's canvas)
+      expect(sounds.stop.mock.calls.length).toBeGreaterThan(stops);
+      expect(stageCanvas()).not.toBe(renderer.canvas);
+      expect(stageCanvas()).toBeTruthy();
+      // The outro's first frame drawn once; the intro's held frame is the one on screen
+      expect(
+        renderer.renderFrame.mock.calls
+          .slice(drawn)
+          .map(([ctx, frame]) => [ctx.exportRootIds, frame])
+      ).toEqual([[['outro'], 0]]);
+      expect(screen.getByText('Slide 2 of 2: Outro')).toBeTruthy();
+      // Its timeline and sounds wait for the transition
+      await wait(300);
+      expect(sounds.play.mock.calls.length).toBe(plays);
+      expect(renderer.renderFrame.mock.calls.length).toBe(drawn + 1);
+
+      // Over: the outro from its start, its sounds with it
+      await wait(150);
+      expect(sounds.play.mock.calls.length).toBe(plays + 1);
+      expect(sounds.play).toHaveBeenLastCalledWith(
+        0,
+        expect.objectContaining({ clips: [expect.objectContaining({ id: 'c' })], lastFrame: 59 })
+      );
+      expect(stageCanvas()).toBe(renderer.canvas);
+      expect(lastDrawn()).toBe('outro@0');
+      await wait(1000);
+      // A second into its own timeline
+      expect(renderer.renderFrame.mock.calls.at(-1)?.[1]).toBeGreaterThanOrEqual(29);
+      expect(renderer.renderFrame.mock.calls.at(-1)?.[1]).toBeLessThanOrEqual(31);
+    });
+
+    it('holds the outgoing slide on the frame it got to, when ↓ comes early', async () => {
+      act(() => startPresentation());
+      await wait(500);
+      const shown = renderer.renderFrame.mock.calls.at(-1)?.[1] ?? 0;
+      expect(shown).toBeGreaterThan(0);
+      expect(shown).toBeLessThan(44);
+      const drawn = renderer.renderFrame.mock.calls.length;
+      fireEvent.keyDown(window, { key: 'PageDown' });
+      await wait(200);
+      // Not drawn again at its last frame: only the outro's first
+      expect(renderer.renderFrame.mock.calls.slice(drawn).map(([, frame]) => frame)).toEqual([0]);
+    });
+
+    it('↓ again during the transition skips to its end', async () => {
+      await throughTheIntro();
+      const plays = sounds.play.mock.calls.length;
+      fireEvent.keyDown(window, { key: 'ArrowDown' });
+      await wait(100);
+      expect(stageCanvas()).not.toBe(renderer.canvas);
+      fireEvent.keyDown(window, { key: 'ArrowDown' });
+      await wait(20);
+      expect(sounds.play.mock.calls.length).toBe(plays + 1);
+      expect(stageCanvas()).toBe(renderer.canvas);
+      expect(lastDrawn()).toBe('outro@0');
+      // Still the outro: the skip didn't move on (there's nothing after it anyway)
+      expect(screen.getByText('Slide 2 of 2: Outro')).toBeTruthy();
+    });
+
+    it('↑ cuts back, and End cuts forward: no transition', async () => {
+      await throughTheIntro();
+      fireEvent.keyDown(window, { key: 'ArrowDown' });
+      await wait(700);
+      expect(lastDrawn()).toMatch(/^outro@/);
+
+      fireEvent.keyDown(window, { key: 'ArrowUp' });
+      await wait(20);
+      expect(stageCanvas()).toBe(renderer.canvas);
+      expect(lastDrawn()).toBe('intro@0');
+      expect(screen.getByText('Slide 1 of 2: Intro')).toBeTruthy();
+
+      const plays = sounds.play.mock.calls.length;
+      fireEvent.keyDown(window, { key: 'End' });
+      await wait(20);
+      expect(stageCanvas()).toBe(renderer.canvas);
+      expect(lastDrawn()).toBe('outro@0');
+      expect(sounds.play.mock.calls.length).toBe(plays + 1);
+    });
+
+    it('Escape during a transition ends the presentation', async () => {
+      await throughTheIntro();
+      fireEvent.keyDown(window, { key: 'ArrowDown' });
+      await wait(100);
+      fireEvent.keyDown(window, { key: 'Escape' });
+      expect(usePresentation.getState().open).toBe(false);
+      expect(screen.queryByTestId('presentation')).toBeNull();
+    });
   });
 
   describe('getting ready', () => {

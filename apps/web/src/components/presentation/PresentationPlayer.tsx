@@ -4,6 +4,10 @@
  * holding on its last frame. ↓ / Page Down for the next, ↑ / Page Up for
  * the one before (on the first, to start it over), Escape (or leaving full
  * screen) to go back to editing.
+ * Moving on plays the transition into the next slide, if it has one: the
+ * outgoing slide held on the frame it got to, the incoming one on its
+ * first; then the incoming slide's timeline and sounds start. ↓ again
+ * during it skips to its end. Going back (and Home, End) cuts.
  * It draws a copy of the page as it was when it began, so the editor
  * behind it doesn't move. The first slide starts once all of them are
  * ready (their pictures, the sounds they play, their fonts); a loading
@@ -13,15 +17,30 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { scopeSounds } from '@quar/animation';
-import { copyScene, createFrameRenderer, preloadShots } from '@quar/export';
-import type { FrameRenderOptions, FrameRendererHandle, FrameSlide } from '@quar/export';
+import { copyScene, createFrameRenderer, createShotRenderer, preloadShots } from '@quar/export';
+import type {
+  FrameRenderOptions,
+  FrameRendererHandle,
+  FrameSlide,
+  ShotRenderer,
+} from '@quar/export';
+import { transitionDirection } from '@quar/animation';
+import type { SlideTransition } from '@quar/types';
 
 import { useSceneGraph } from '../../contexts/SceneGraphContext';
 import { fontsToLoad, googleFontsUsed, loadFont, type FontUse } from '../../services/documentFonts';
 import { exportRig, getSlides, slideShow } from '../../services/exportScene';
 import { SoundPlayer } from '../../services/soundPlayer';
 import { useEditorStore } from '../../stores/editorStore';
-import { frameAt, moveFor, stopPresentation, usePresentation } from './presentation';
+import {
+  FORWARD,
+  frameAt,
+  moveFor,
+  stopPresentation,
+  transitionAt,
+  transitionFor,
+  usePresentation,
+} from './presentation';
 import { PresentationLoader, type Preparing } from './PresentationLoader';
 import styles from './PresentationPlayer.module.css';
 
@@ -54,6 +73,24 @@ const FONT_WAIT_MS = 8000;
 type Phase = 'quiet' | 'loading' | 'leaving' | 'playing';
 
 const later = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+/** How a slide came on: through the transition into it from slide `from`, held on `frame`. */
+interface Entrance {
+  from: number;
+  frame: number;
+  transition: SlideTransition;
+}
+
+/** What the drawing loop is showing (it runs between React's renders). */
+interface Showing {
+  index: number;
+  /** When the slide's own timeline began (with its first frame drawn, once playing) */
+  began: number | null;
+  /** The frame of its timeline last drawn */
+  frame: number;
+  /** The transition it's coming on through, while it plays (when it began: on its first frame drawn) */
+  entering: (Entrance & { began: number | null }) | null;
+}
 
 export function PresentationHost(props: PlayerProps) {
   const open = usePresentation((state) => state.open);
@@ -98,8 +135,12 @@ function PresentationPlayer({
 }: PlayerProps) {
   const deck = useDeck();
   const stage = useRef<HTMLDivElement>(null);
-  // The slide shown, and how many times it has been started over
-  const [{ index, take }, setShown] = useState({ index: 0, take: 0 });
+  // The slide shown, how many times it has been started over, and how it came on
+  const [{ index, take, entrance }, setShown] = useState<{
+    index: number;
+    take: number;
+    entrance: Entrance | null;
+  }>({ index: 0, take: 0, entrance: null });
   const [size, setSize] = useState<{ width: number; height: number } | null>(null);
   const [sound] = useState(createSoundPlayer);
   const [load] = useState(() => loadEach);
@@ -118,8 +159,12 @@ function PresentationPlayer({
   // What the drawing loop reads (it runs between React's renders): the
   // slide, and when it began (with its first frame drawn, once playing),
   // the renderer whose pictures are in, and the phase
-  const showing = useRef<{ index: number; began: number | null }>({ index: 0, began: null });
-  const ready = useRef<{ renderer: FrameRendererHandle; show: FrameSlide[] } | null>(null);
+  const showing = useRef<Showing>({ index: 0, began: null, frame: 0, entering: null });
+  const ready = useRef<{
+    renderer: FrameRendererHandle;
+    shots: ShotRenderer;
+    show: FrameSlide[];
+  } | null>(null);
   const phaseNow = useRef<Phase>(phase);
   const loaderUp = useRef(0);
   const count = deck.slides.length;
@@ -235,7 +280,12 @@ function PresentationPlayer({
     // Its pictures first (a picture it can't load is drawn as it would be in an export)
     const loaded = () => {
       if (!alive) return;
-      ready.current = { renderer, show };
+      // Transitions drawn from the two slides' held frames, over the page's background
+      ready.current = {
+        renderer,
+        shots: createShotRenderer(renderer, { background: deck.background }),
+        show,
+      };
       setPictures(true);
     };
     // Told slide by slide (a renderer made again for a new size loads them
@@ -282,17 +332,37 @@ function PresentationPlayer({
     };
   }, [sound, deck, load]);
 
-  // A slide starts from its first frame, shown or started over (the sounds
-  // playing stop with the one before, and start again with it)
+  // A slide starts from its first frame, shown or started over — after the
+  // transition into it, if it came on through one (the sounds playing stop
+  // with the one before, and start again with it)
   useEffect(() => {
-    showing.current = { index, began: null };
+    showing.current = {
+      index,
+      began: null,
+      frame: 0,
+      entering: entrance ? { ...entrance, began: null } : null,
+    };
     return () => sound.stop();
-  }, [index, take, sound]);
+  }, [index, take, entrance, sound]);
 
   // Each screen refresh: the frame the slide has got to, drawn when it changes
   useEffect(() => {
     let frameRequest = 0;
-    let drawn: { renderer: FrameRendererHandle; index: number; frame: number } | null = null;
+    // What's on screen: a slide's frame, or a transition into it (how far it had got)
+    let drawn: {
+      renderer: FrameRendererHandle;
+      index: number;
+      frame: number;
+      progress: number | null;
+    } | null = null;
+    const put = (canvas: HTMLCanvasElement) => {
+      const element = stage.current;
+      if (element && canvas.parentElement !== element) {
+        element.querySelector('canvas')?.remove();
+        canvas.className = styles.frame ?? '';
+        element.prepend(canvas);
+      }
+    };
     const tick = () => {
       frameRequest = requestAnimationFrame(tick);
       const shown = ready.current;
@@ -302,6 +372,40 @@ function PresentationPlayer({
       const now = phaseNow.current;
       // Nothing while getting ready; as the loading screen goes, the first frame, waiting
       if (!shown || !current || !slide || now === 'quiet' || now === 'loading') return;
+      // Coming on through a transition: the two slides held, blended as far as it has got
+      const entering = at.entering;
+      const outgoing = entering ? shown.show[entering.from] : undefined;
+      if (entering && outgoing && now === 'playing') {
+        entering.began ??= performance.now();
+        const { progress, done } = transitionAt(
+          performance.now() - entering.began,
+          entering.transition
+        );
+        if (!done) {
+          if (
+            drawn?.renderer !== shown.renderer ||
+            drawn.index !== at.index ||
+            drawn.progress !== progress
+          ) {
+            put(
+              shown.shots.render({
+                ctx: current.ctx,
+                frame: 0,
+                transition: {
+                  from: { ctx: outgoing.ctx, frame: entering.frame },
+                  type: entering.transition.type,
+                  direction: transitionDirection(entering.transition),
+                  progress,
+                },
+              })
+            );
+            drawn = { renderer: shown.renderer, index: at.index, frame: 0, progress };
+          }
+          return;
+        }
+        // Over: the slide itself, from its start
+        at.entering = null;
+      }
       // Its clock and its sounds start together, with its first frame
       if (at.began === null && now === 'playing') {
         at.began = performance.now();
@@ -316,17 +420,17 @@ function PresentationPlayer({
         at.began === null
           ? 0
           : frameAt(performance.now() - at.began, deck.timeline.frameRate, current.frameCount);
-      if (drawn?.renderer === shown.renderer && drawn.index === at.index && drawn.frame === frame) {
+      if (
+        drawn?.renderer === shown.renderer &&
+        drawn.index === at.index &&
+        drawn.frame === frame &&
+        drawn.progress === null
+      ) {
         return;
       }
-      const canvas = shown.renderer.renderFrame(current.ctx, frame);
-      const element = stage.current;
-      if (element && canvas.parentElement !== element) {
-        element.querySelector('canvas')?.remove();
-        canvas.className = styles.frame ?? '';
-        element.prepend(canvas);
-      }
-      drawn = { renderer: shown.renderer, index: at.index, frame };
+      put(shown.shots.render({ ctx: current.ctx, frame }));
+      at.frame = frame;
+      drawn = { renderer: shown.renderer, index: at.index, frame, progress: null };
     };
     frameRequest = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frameRequest);
@@ -346,10 +450,28 @@ function PresentationPlayer({
       if (moveFor(event.key, 0, count) === null) return;
       event.preventDefault();
       if (!playing) return;
+      // ↓ during a transition: straight to its end, the slide under way
+      const live = showing.current;
+      if (live.entering && FORWARD.has(event.key)) {
+        live.entering = null;
+        return;
+      }
       setShown((at) => {
         const move = moveFor(event.key, at.index, count);
-        if (move?.again) return { index: at.index, take: at.take + 1 };
-        return move && move.to !== at.index ? { index: move.to, take: 0 } : at;
+        if (move?.again) return { index: at.index, take: at.take + 1, entrance: null };
+        if (!move || move.to === at.index) return at;
+        // On to the next: the transition into it, from the frame this one got to; else a cut
+        const transition = transitionFor(
+          event.key,
+          at.index,
+          move.to,
+          deck.slides[move.to]?.transition
+        );
+        return {
+          index: move.to,
+          take: 0,
+          entrance: transition ? { from: at.index, frame: live.frame, transition } : null,
+        };
       });
     };
     window.addEventListener('keydown', key, true);
@@ -358,7 +480,7 @@ function PresentationPlayer({
       window.removeEventListener('keydown', key, true);
       window.removeEventListener('keyup', key, true);
     };
-  }, [count, playing]);
+  }, [count, playing, deck]);
 
   // The pointer hides when it rests
   useEffect(() => {
