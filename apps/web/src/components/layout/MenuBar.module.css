@@ -37,8 +37,10 @@
 }
 
 .logoImage {
-  height: 33px;
+  height: 28px;
   width: auto;
+  aspect-ratio: 11 / 4;
+  flex-shrink: 0;
   opacity: 0.95;
   transition: opacity var(--duration-fast);
 }

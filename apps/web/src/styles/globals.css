@@ -44,6 +44,8 @@
 
   /* Colors - Accent (violet/bordeaux creative energy) */
   --color-accent-primary: #a855f7;
+  /* The logo's corner marks */
+  --color-logo-frame: #eef0ff;
   --color-accent-primary-hover: #c084fc;
   --color-accent-primary-active: #9333ea;
   --color-accent-primary-glow: rgba(168, 85, 247, 0.3);
@@ -172,6 +174,7 @@
   --color-border-focus: #b45309;
 
   --color-accent-primary: #7c3aed;
+  --color-logo-frame: #1e1b2e;
   --color-accent-primary-hover: #6d28d9;
   --color-accent-primary-active: #5b21b6;
   --color-accent-primary-glow: rgba(124, 58, 237, 0.2);

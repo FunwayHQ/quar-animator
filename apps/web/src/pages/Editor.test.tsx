@@ -7,7 +7,7 @@ describe('Editor Page', () => {
     render(<Editor />);
 
     // MenuBar should be present
-    expect(screen.getByAltText('Quar Animator')).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: 'Quar Animator' })).toBeInTheDocument();
 
     // Toolbar should be present
     expect(screen.getByTitle('Selection (V)')).toBeInTheDocument();

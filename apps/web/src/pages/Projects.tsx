@@ -26,8 +26,7 @@ import { BetaBadge } from '../components/common/BetaBadge';
 import styles from './Projects.module.css';
 import { SocialLinks } from '../components/common/SocialLinks';
 import { PRIVACY_URL, TERMS_URL } from '../components/common/legalLinks';
-// Bundled with the build (inlined or hashed), so a browser never keeps an old logo
-import logoUrl from '../assets/logo.svg';
+import { QuarLogo } from '../components/common/QuarLogo';
 
 // ============================================================================
 // Helpers
@@ -289,7 +288,7 @@ export function Projects() {
       {/* Header */}
       <header className={styles.header}>
         <div className={styles.brand}>
-          <img src={logoUrl} alt="Quar Animator" className={styles.logoImage} />
+          <QuarLogo className={styles.logoImage} />
           <BetaBadge />
         </div>
         <div className={styles.headerActions}>

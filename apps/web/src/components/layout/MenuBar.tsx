@@ -27,8 +27,7 @@ import { BetaBadge, REPORT_ISSUES_URL } from '../common/BetaBadge';
 import { PRIVACY_URL, TERMS_URL } from '../common/legalLinks';
 import styles from './MenuBar.module.css';
 import { useToolsBelowMenus } from './useToolsBelowMenus';
-// Bundled with the build (inlined or hashed), so a browser never keeps an old logo
-import logoUrl from '../../assets/logo.svg';
+import { QuarLogo } from '../common/QuarLogo';
 
 // ============================================================================
 // Types
@@ -555,7 +554,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
       >
         <div className={styles.leading}>
           <div className={styles.logo}>
-            <img src={logoUrl} alt="Quar Animator" className={styles.logoImage} />
+            <QuarLogo className={styles.logoImage} />
           </div>
           <BetaBadge />
 

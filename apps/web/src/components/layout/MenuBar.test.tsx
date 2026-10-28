@@ -101,10 +101,8 @@ describe('MenuBar', () => {
 
   it('renders the logo', () => {
     render(<MenuBar />);
-    const logo = screen.getByAltText('Quar Animator');
-    expect(logo).toBeInTheDocument();
-    // From the build, not the unversioned /logo.svg a browser could keep for days
-    expect(logo.getAttribute('src')).not.toMatch(/^\.?\/logo\.svg$/);
+    // Drawn inline: no file a browser could keep for days
+    expect(screen.getByRole('img', { name: 'Quar Animator' }).tagName).toBe('svg');
   });
 
   it('renders all menu items', () => {
@@ -150,7 +148,7 @@ describe('MenuBar', () => {
     expect(header.children).toHaveLength(3);
     const [leading, center, trailing] = Array.from(header.children);
     expect(center).toBe(slot);
-    expect(leading).toContainElement(screen.getByAltText('Quar Animator'));
+    expect(leading).toContainElement(screen.getByRole('img', { name: 'Quar Animator' }));
     expect(leading).toContainElement(screen.getByRole('button', { name: 'File' }));
     expect(trailing).toContainElement(screen.getByTestId('project-name'));
   });

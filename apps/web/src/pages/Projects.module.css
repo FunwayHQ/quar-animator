@@ -33,7 +33,9 @@
 
 .logoImage {
   width: auto;
-  height: 48px;
+  height: 40px;
+  aspect-ratio: 11 / 4;
+  flex-shrink: 0;
 }
 
 .appName {

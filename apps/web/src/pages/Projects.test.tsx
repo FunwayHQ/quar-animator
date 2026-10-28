@@ -79,13 +79,9 @@ describe('Projects', () => {
   it('should render the page logo and import button', async () => {
     render(<Projects />);
     await waitFor(() => {
-      expect(screen.getByAltText('Quar Animator')).toBeInTheDocument();
+      expect(screen.getByRole('img', { name: 'Quar Animator' })).toBeInTheDocument();
     });
     expect(screen.getByTestId('import-button')).toBeInTheDocument();
-    // From the build, not the unversioned /logo.svg a browser could keep for days
-    expect(screen.getByAltText('Quar Animator').getAttribute('src')).not.toMatch(
-      /^\.?\/logo\.svg$/
-    );
   });
 
   it('links to Quar Animator on GitHub, TikTok and Facebook, each in a new tab', async () => {
