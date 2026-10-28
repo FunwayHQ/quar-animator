@@ -4,9 +4,13 @@ import type { SoundClip } from '@quar/types';
 import { createTimeline } from './Timeline';
 import {
   clipEndFrame,
+  clipFades,
+  clipLevel,
   findSoundClip,
   lastSoundFrame,
   movedClip,
+  playLevel,
+  schedulePlayGain,
   soundIdsUsed,
   soundRows,
   soundsPlayed,
@@ -68,6 +72,73 @@ describe('soundsPlayed', () => {
 
   it('plays nothing without clips', () => {
     expect(soundsPlayed(undefined, 30, 0, 10)).toEqual([]);
+  });
+});
+
+describe('fades', () => {
+  it('rise from silence and fall to it, straight', () => {
+    const faded = clip('a', 0, 4, { fadeIn: 1, fadeOut: 2 });
+    expect([0, 0.5, 1, 2, 3, 4].map((t) => clipLevel(faded, t))).toEqual([0, 0.5, 1, 1, 0.5, 0]);
+    expect(clipLevel(clip('b', 0, 4), 0)).toBe(1);
+    expect(clipLevel(clip('b', 0, 4), 4)).toBe(1);
+  });
+
+  it('fit the clip: fades longer than it together are shortened alike', () => {
+    expect(clipFades(clip('a', 0, 2, { fadeIn: 3, fadeOut: 1 }))).toEqual({
+      fadeIn: 1.5,
+      fadeOut: 0.5,
+    });
+    expect(clipFades(clip('a', 0, 2, { fadeIn: -1, fadeOut: NaN }))).toEqual({
+      fadeIn: 0,
+      fadeOut: 0,
+    });
+  });
+
+  it('play as loudness through the part that plays', () => {
+    const [whole] = soundsPlayed([clip('a', 0, 4, { fadeIn: 1, fadeOut: 2 })], 30, 0, 299);
+    expect(whole!.levels).toEqual([
+      { time: 0, level: 0 },
+      { time: 1, level: 1 },
+      { time: 2, level: 1 },
+      { time: 4, level: 0 },
+    ]);
+    // Played from 1.5 s in to 3 s (frames 45–89): the fade out half done where it's cut
+    const [part] = soundsPlayed([clip('a', 0, 4, { fadeIn: 1, fadeOut: 2 })], 30, 45, 89);
+    expect(part!.levels).toEqual([
+      { time: 0, level: 1 },
+      { time: 0.5, level: 1 },
+      { time: 1.5, level: 0.5 },
+    ]);
+    expect(playLevel(part!, 1)).toBe(0.75);
+    // Without fades, nothing to ramp
+    expect(soundsPlayed([clip('b', 0, 1)], 30, 0, 29)[0]).not.toHaveProperty('levels');
+  });
+
+  it('are set on a gain as ramps, at the pace it plays, from where it starts', () => {
+    const calls: string[] = [];
+    const param = {
+      value: 1,
+      setValueAtTime: (v: number, t: number) => calls.push(`set ${v} @${t}`),
+      linearRampToValueAtTime: (v: number, t: number) => calls.push(`ramp ${v} @${t}`),
+    };
+    const [play] = soundsPlayed(
+      [clip('a', 0, 4, { fadeIn: 1, fadeOut: 2, gain: 0.5 })],
+      30,
+      0,
+      299,
+      2
+    );
+    schedulePlayGain(param, play!, 10);
+    // Twice as fast: the 4 s clip over 2 s
+    expect(calls).toEqual(['set 0 @10', 'ramp 0.5 @10.5', 'ramp 0.5 @11', 'ramp 0 @12']);
+
+    calls.length = 0;
+    schedulePlayGain(param, play!, 10, 3);
+    expect(calls).toEqual(['set 0.25 @10', 'ramp 0 @10.5']);
+
+    const plain = { ...param, value: 1 };
+    schedulePlayGain(plain, soundsPlayed([clip('b', 0, 1, { gain: 0.3 })], 30, 0, 29)[0]!, 0);
+    expect(plain.value).toBe(0.3);
   });
 });
 

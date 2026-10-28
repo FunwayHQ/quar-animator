@@ -8,7 +8,11 @@ interface Played {
   rate: number;
   gain: number;
   start: [number, number, number];
+  /** The gain's fades, when it has any */
+  ramps?: [string, number, number][];
 }
+
+type FakeGain = { gain: { value: number; ramps: [string, number, number][] } };
 
 /** An offline audio context that notes what it's asked to play. */
 class FakeOfflineContext {
@@ -33,8 +37,9 @@ class FakeOfflineContext {
           played.rate = rate;
         },
       },
-      connect: (gain: { gain: { value: number } }) => {
+      connect: (gain: FakeGain) => {
         played.gain = gain.gain.value;
+        if (gain.gain.ramps.length > 0) played.ramps = gain.gain.ramps;
         return gain;
       },
       start: (...args: [number, number, number]) => {
@@ -45,7 +50,16 @@ class FakeOfflineContext {
     return source;
   }
   createGain() {
-    return { gain: { value: 1 }, connect: (node: unknown) => node };
+    const ramps: [string, number, number][] = [];
+    return {
+      gain: {
+        value: 1,
+        ramps,
+        setValueAtTime: (value: number, time: number) => ramps.push(['set', value, time]),
+        linearRampToValueAtTime: (value: number, time: number) => ramps.push(['ramp', value, time]),
+      },
+      connect: (node: unknown) => node,
+    };
   }
   startRendering() {
     return Promise.resolve({ mixed: this.played.length, length: this.length });
@@ -130,6 +144,29 @@ describe('mixSoundtrack', () => {
     expect(context.played).toEqual([
       { buffer: { decodedBytes: 3, rate: 48000 }, rate: 2, gain: 0.5, start: [0, 0, 2] },
       { buffer: { decodedBytes: 3, rate: 48000 }, rate: 2, gain: 1, start: [0.25, 1, 2] },
+    ]);
+  });
+
+  it('fades each play in and out where it is in the video', async () => {
+    const plays = soundtrackPlays(
+      [
+        {
+          clips: [clip('a', 'one', 0, { gain: 0.8, fadeIn: 0.5, fadeOut: 1 })],
+          at: 3,
+          startFrame: 0,
+          endFrame: 89,
+        },
+      ],
+      30
+    );
+    await mixSoundtrack(plays, [sound('one')], 6);
+    const [played] = FakeOfflineContext.made.at(-1)!.played;
+    // The 2 s clip from 3 s into the video: up by 3.5 s, down from 4 s to 5 s
+    expect(played!.ramps).toEqual([
+      ['set', 0, 3],
+      ['ramp', 0.8, 3.5],
+      ['ramp', 0.8, 4],
+      ['ramp', 0, 5],
     ]);
   });
 

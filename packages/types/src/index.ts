@@ -727,6 +727,10 @@ export interface SoundClip {
   /** 1 plays it as recorded, 0.5 at half the amplitude */
   gain: number;
   muted?: boolean;
+  /** Seconds it takes to rise from silence at its start (none when absent) */
+  fadeIn?: number;
+  /** Seconds it takes to fall to silence at its end (none when absent) */
+  fadeOut?: number;
 }
 
 // ============================================================================

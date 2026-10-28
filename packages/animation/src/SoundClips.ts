@@ -1,7 +1,8 @@
 /**
  * Sound Clips
  * Sounds placed on a timeline: what of each plays when part of the timeline
- * plays (the editor's playback and video exports play them the same way),
+ * plays, and how loud through its fades (the editor's playback and video
+ * exports play them the same way),
  * moving and trimming them a frame at a time, the rows a sound lane shows
  * them in, and finding one on whichever timeline of a page it's on.
  */
@@ -24,6 +25,34 @@ export function lastSoundFrame(clips: readonly SoundClip[] | undefined, frameRat
   return last;
 }
 
+/**
+ * A clip's fades, in seconds, made to fit it: together no longer than the
+ * clip (both shortened alike when they'd overlap, as when it's trimmed).
+ */
+export function clipFades(clip: SoundClip): { fadeIn: number; fadeOut: number } {
+  const fadeIn = Math.max(0, clip.fadeIn ?? 0) || 0;
+  const fadeOut = Math.max(0, clip.fadeOut ?? 0) || 0;
+  const both = fadeIn + fadeOut;
+  const fit = both > clip.duration && both > 0 ? Math.max(0, clip.duration) / both : 1;
+  return { fadeIn: fadeIn * fit, fadeOut: fadeOut * fit };
+}
+
+/** How loud a clip is `seconds` into it, before its volume: 0–1, its fades rising and falling straight. */
+export function clipLevel(clip: SoundClip, seconds: number): number {
+  const { fadeIn, fadeOut } = clipFades(clip);
+  let level = 1;
+  if (seconds < fadeIn) level = Math.max(0, seconds / fadeIn);
+  const left = clip.duration - seconds;
+  if (left < fadeOut) level = Math.min(level, Math.max(0, left / fadeOut));
+  return level;
+}
+
+/** A clip's loudness (0–1, before its volume) `time` seconds of the sound into a play of it. */
+export interface SoundLevel {
+  time: number;
+  level: number;
+}
+
 /** The part of a clip that plays. */
 export interface SoundPlay {
   clipId: string;
@@ -37,6 +66,70 @@ export interface SoundPlay {
   gain: number;
   /** How fast the sound plays (the timeline's speed: 2 is an octave up) */
   rate: number;
+  /** Its fades, as loudness at points through it (straight between); absent without fades */
+  levels?: SoundLevel[];
+}
+
+/** The loudness through the part of a clip from `skipped` seconds into it, `duration` long. */
+function playLevels(clip: SoundClip, skipped: number, duration: number): SoundLevel[] | undefined {
+  const { fadeIn, fadeOut } = clipFades(clip);
+  if (fadeIn === 0 && fadeOut === 0) return undefined;
+  const end = skipped + duration;
+  const times = [skipped, fadeIn, clip.duration - fadeOut, end]
+    .filter((time) => time >= skipped && time <= end)
+    .sort((a, b) => a - b)
+    .filter((time, i, sorted) => i === 0 || time - sorted[i - 1]! > 1e-9);
+  return times.map((time) => ({ time: time - skipped, level: clipLevel(clip, time) }));
+}
+
+/** How loud a play is (0–1, before its volume) `seconds` of the sound into it. */
+export function playLevel(play: SoundPlay, seconds: number): number {
+  const levels = play.levels;
+  if (!levels || levels.length === 0) return 1;
+  const first = levels[0]!;
+  if (seconds <= first.time) return first.level;
+  for (let i = 1; i < levels.length; i++) {
+    const next = levels[i]!;
+    if (seconds <= next.time) {
+      const previous = levels[i - 1]!;
+      const span = next.time - previous.time;
+      const t = span > 0 ? (seconds - previous.time) / span : 1;
+      return previous.level + (next.level - previous.level) * t;
+    }
+  }
+  return levels[levels.length - 1]!.level;
+}
+
+/** A value set and ramped on the audio clock (a Web Audio AudioParam). */
+export interface RampedValue {
+  value: number;
+  setValueAtTime(value: number, time: number): unknown;
+  linearRampToValueAtTime(value: number, time: number): unknown;
+}
+
+/**
+ * A play's volume on `param` (a gain node's), for it starting at
+ * `startTime` on the audio clock `from` seconds of the sound into it: its
+ * fades as ramps, at the pace it plays.
+ */
+export function schedulePlayGain(
+  param: RampedValue,
+  play: SoundPlay,
+  startTime: number,
+  from = 0
+): void {
+  if (!play.levels) {
+    param.value = play.gain;
+    return;
+  }
+  param.setValueAtTime(play.gain * playLevel(play, from), startTime);
+  for (const point of play.levels) {
+    if (point.time <= from) continue;
+    param.linearRampToValueAtTime(
+      play.gain * point.level,
+      startTime + (point.time - from) / play.rate
+    );
+  }
 }
 
 /**
@@ -64,6 +157,7 @@ export function soundsPlayed(
     const start = Math.max(begins, from);
     const end = Math.min(begins + clip.duration, to);
     if (!(end > start)) continue;
+    const levels = playLevels(clip, start - begins, end - start);
     plays.push({
       clipId: clip.id,
       soundId: clip.soundId,
@@ -72,6 +166,7 @@ export function soundsPlayed(
       duration: end - start,
       gain: clip.gain,
       rate: pace,
+      ...(levels ? { levels } : {}),
     });
   }
   return plays;

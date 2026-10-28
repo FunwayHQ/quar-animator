@@ -2,10 +2,10 @@
  * Soundtrack
  * The sound of a video export: the clips on the timeline it plays (or on
  * each slide's, as each slide plays), mixed into one stereo track timed to
- * the video, as the editor plays them.
+ * the video, as the editor plays them — fades too.
  */
 
-import { soundsPlayed } from '@quar/animation';
+import { schedulePlayGain, soundsPlayed } from '@quar/animation';
 import type { SoundPlay } from '@quar/animation';
 import type { Sound, SoundClip } from '@quar/types';
 
@@ -85,7 +85,7 @@ export async function mixSoundtrack(
     source.buffer = buffer;
     source.playbackRate.value = play.rate;
     const gain = context.createGain();
-    gain.gain.value = play.gain;
+    schedulePlayGain(gain.gain, play, play.at);
     source.connect(gain).connect(context.destination);
     source.start(play.at, play.offset, play.duration);
   }
