@@ -1,7 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-import { InputAudioTrack, InputVideoTrack } from 'mediabunny';
+import { InputAudioTrack, InputVideoTrack, VideoSampleSink } from 'mediabunny';
+import type { VideoSample } from 'mediabunny';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { probeVideo } from './probe';
@@ -20,8 +21,45 @@ function decodes(video: boolean, audio = true) {
   vi.spyOn(InputAudioTrack.prototype, 'canDecode').mockResolvedValue(audio);
 }
 
+/** A transparent video's first frame as this browser decodes it, in this pixel format (Node can't decode). */
+function firstFrame(format: string | null) {
+  return vi
+    .spyOn(VideoSampleSink.prototype, 'getSample')
+    .mockResolvedValue({ format, close: vi.fn() } as unknown as VideoSample);
+}
+
+/**
+ * How this browser draws an RGBA frame of a grey 128 pixel at alpha 64:
+ * straight, as WebCodecs' frames are, or as if premultiplied (Firefox),
+ * read back wrapped round.
+ */
+function drawsRgbaFrames(how: 'straight' | 'premultiplied') {
+  class FakeFrame {
+    constructor(readonly data: Uint8Array) {}
+    close() {}
+  }
+  class FakeCanvas {
+    getContext() {
+      let drawn = new Uint8ClampedArray(4);
+      return {
+        drawImage: (frame: FakeFrame) => {
+          const [r = 0, g = 0, b = 0, a = 0] = frame.data;
+          const read = (c: number) => (how === 'straight' ? c : Math.round((c * 255) / a) % 256);
+          drawn = Uint8ClampedArray.from([read(r), read(g), read(b), a]);
+        },
+        getImageData: () => ({ data: drawn }),
+      };
+    }
+  }
+  vi.stubGlobal('VideoFrame', FakeFrame);
+  vi.stubGlobal('OffscreenCanvas', FakeCanvas);
+}
+
 describe('probeVideo', () => {
-  afterEach(() => vi.restoreAllMocks());
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
 
   it('reads an MP4: its size, length, frame rate and sound', async () => {
     decodes(true);
@@ -66,8 +104,55 @@ describe('probeVideo', () => {
 
   it('knows a video that can be transparent', async () => {
     decodes(true);
+    firstFrame('I420A');
     const probe = await probeVideo(fixture('clip-vp9-alpha.webm'));
     expect(probe).toMatchObject({ ok: true, info: { hasAlpha: true, duration: 1 } });
+  });
+
+  it('decodes no frame of a video that can’t be transparent', async () => {
+    decodes(true);
+    const decoded = firstFrame('I420');
+    expect(await probeVideo(fixture('clip-vp9-opus.webm'))).toMatchObject({ ok: true });
+    expect(decoded).not.toHaveBeenCalled();
+  });
+
+  describe('a transparent video this browser can’t show as it is', () => {
+    const cantShow = {
+      ok: false,
+      problem: 'transparency',
+      reason: 'This browser can’t show its transparency correctly.',
+    };
+
+    it('is turned away when its frames come out without their alpha', async () => {
+      decodes(true);
+      firstFrame('I420');
+      expect(await probeVideo(fixture('clip-vp9-alpha.webm'))).toEqual(cantShow);
+    });
+
+    it('is turned away when its first frame can’t be decoded with its alpha', async () => {
+      decodes(true);
+      vi.spyOn(VideoSampleSink.prototype, 'getSample').mockRejectedValue(
+        new Error('CPU color/alpha merging requires a known VideoFrame format.')
+      );
+      expect(await probeVideo(fixture('clip-vp9-alpha.webm'))).toEqual(cantShow);
+    });
+
+    it('is turned away when its frames are RGBA ones this browser draws as if premultiplied (Firefox)', async () => {
+      decodes(true);
+      firstFrame('BGRA');
+      drawsRgbaFrames('premultiplied');
+      expect(await probeVideo(fixture('clip-vp9-alpha.webm'))).toEqual(cantShow);
+    });
+
+    it('is taken when its RGBA frames are drawn as they are', async () => {
+      decodes(true);
+      firstFrame('BGRA');
+      drawsRgbaFrames('straight');
+      expect(await probeVideo(fixture('clip-vp9-alpha.webm'))).toMatchObject({
+        ok: true,
+        info: { hasAlpha: true },
+      });
+    });
   });
 
   it('knows a video without sound', async () => {

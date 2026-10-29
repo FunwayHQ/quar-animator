@@ -1,12 +1,12 @@
 /**
  * What's in a video file brought into the editor: its picture's size, its
  * length and frame rate, whether it can be transparent and has sound — and
- * whether this browser can decode it, or what stands in the way, said so
- * it can be told to whoever imports it.
+ * whether this browser can decode it (and show its transparency), or what
+ * stands in the way, said so it can be told to whoever imports it.
  */
 
 import type { InputVideoTrack } from 'mediabunny';
-import { openMedia } from './media';
+import { openMedia, type Mediabunny } from './media';
 
 export interface VideoInfo {
   /** The container, as people know it: MP4, MOV, WebM */
@@ -31,7 +31,7 @@ export interface VideoInfo {
 }
 
 /** Why a file can't be a video layer. */
-export type VideoProblem = 'not-a-video' | 'no-video-track' | 'undecodable';
+export type VideoProblem = 'not-a-video' | 'no-video-track' | 'undecodable' | 'transparency';
 
 export type VideoProbe =
   | { ok: true; info: VideoInfo }
@@ -93,13 +93,81 @@ async function frameRateOf(track: InputVideoTrack): Promise<number> {
     : 30;
 }
 
+/** Frames that keep an alpha channel, as WebCodecs names them */
+const ALPHA_FORMATS = new Set([
+  'I420A',
+  'I420AP10',
+  'I420AP12',
+  'I422A',
+  'I422AP10',
+  'I422AP12',
+  'I444A',
+  'I444AP10',
+  'I444AP12',
+  'RGBA',
+  'BGRA',
+]);
+
+/**
+ * Whether this browser draws an RGBA frame's colours as they are (WebCodecs'
+ * frames aren't premultiplied): a grey 128 pixel at alpha 64, drawn and read
+ * back. Firefox draws them as if premultiplied, so it reads back wrong.
+ */
+function drawsRgbaFramesAsTheyAre(): boolean {
+  if (typeof VideoFrame === 'undefined') return false;
+  let frame: VideoFrame | null = null;
+  try {
+    frame = new VideoFrame(Uint8Array.from([128, 128, 128, 64]), {
+      format: 'RGBA',
+      codedWidth: 1,
+      codedHeight: 1,
+      timestamp: 0,
+    });
+    const canvas =
+      typeof OffscreenCanvas !== 'undefined'
+        ? new OffscreenCanvas(1, 1)
+        : Object.assign(document.createElement('canvas'), { width: 1, height: 1 });
+    const context = canvas.getContext('2d');
+    if (!context) return false;
+    context.drawImage(frame, 0, 0);
+    const [red = 0, , , alpha = 0] = context.getImageData(0, 0, 1, 1).data;
+    return Math.abs(red - 128) <= 8 && Math.abs(alpha - 64) <= 8;
+  } catch {
+    return false;
+  } finally {
+    frame?.close();
+  }
+}
+
+/**
+ * Whether this browser shows a transparent video's see-through parts as they
+ * are: its first frame decodes with its alpha (mediabunny decodes a WebM's
+ * alpha stream and puts it in each frame), and frames like it are drawn
+ * right — Firefox's decoder gives RGBA frames, which it then draws wrongly.
+ */
+async function showsTransparency(mb: Mediabunny, track: InputVideoTrack): Promise<boolean> {
+  try {
+    const sample = await new mb.VideoSampleSink(track).getSample(await track.getFirstTimestamp());
+    if (!sample) return false;
+    try {
+      const format = sample.format;
+      if (!format || !ALPHA_FORMATS.has(format)) return false;
+      return (format !== 'RGBA' && format !== 'BGRA') || drawsRgbaFramesAsTheyAre();
+    } finally {
+      sample.close();
+    }
+  } catch {
+    return false;
+  }
+}
+
 /**
  * What a video file is and whether this browser can show it: a decodable
  * video track (its codec named when it isn't), its size, length, frame rate
  * and sound.
  */
 export async function probeVideo(file: Blob): Promise<VideoProbe> {
-  const { input } = await openMedia(file);
+  const { mb, input } = await openMedia(file);
   try {
     if (!(await input.canRead())) {
       return problem('not-a-video', 'It isn’t a video this editor can read (MP4, MOV or WebM).');
@@ -129,6 +197,10 @@ export async function probeVideo(file: Blob): Promise<VideoProbe> {
     if (!(width > 0 && height > 0 && duration > 0)) {
       return problem('no-video-track', 'Its video has no frames.');
     }
+    const hasAlpha = await track.canBeTransparent();
+    if (hasAlpha && !(await showsTransparency(mb, track))) {
+      return problem('transparency', 'This browser can’t show its transparency correctly.');
+    }
     const audioCodec = audio ? await audio.getCodec() : null;
     return {
       ok: true,
@@ -139,7 +211,7 @@ export async function probeVideo(file: Blob): Promise<VideoProbe> {
         height,
         duration,
         frameRate: await frameRateOf(track),
-        hasAlpha: await track.canBeTransparent(),
+        hasAlpha,
         videoCodec: codecName ?? 'an unknown codec',
         audioCodec: audio ? audioCodecName(audioCodec) : null,
         canDecodeAudio: audio ? await audio.canDecode() : false,

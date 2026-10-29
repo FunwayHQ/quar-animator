@@ -223,6 +223,22 @@ describe('importVideoFiles', () => {
     expect(progress.done).toHaveBeenCalledOnce();
   });
 
+  it('turns away a transparent video this browser can’t show as it is, naming browsers that can', async () => {
+    mocks.probeVideo.mockResolvedValue({
+      ok: false,
+      problem: 'transparency',
+      reason: 'This browser can’t show its transparency correctly.',
+    });
+    const sg = new SceneGraph();
+    await importVideoFiles(sg, [new File(['webm'], 'smoke.webm')]);
+    expect(toast.error).toHaveBeenCalledWith(
+      '“smoke.webm” can’t be imported. This browser can’t show its transparency correctly. Try it in Chrome or Edge.'
+    );
+    expect(mocks.makeVideoStrip).not.toHaveBeenCalled();
+    expect(store().videos).toEqual([]);
+    expect(videoNodes(sg)).toEqual([]);
+  });
+
   it('turns away what isn’t a video, and points a sound file the right way', async () => {
     mocks.probeVideo.mockResolvedValueOnce({
       ok: false,
