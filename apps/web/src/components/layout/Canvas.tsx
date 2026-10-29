@@ -59,7 +59,7 @@ import {
   type SystemPaste,
 } from '../../hooks/useSystemClipboard';
 import { decodeClipboard } from '../../services/systemClipboard';
-import { bindLayersToBones } from '../canvas/bindToBones';
+import { bindLayersToBones, bindableLayers } from '../canvas/bindToBones';
 import { ArtboardOverlay } from '../canvas/ArtboardOverlay';
 import { SequenceBadgesOverlay } from '../canvas/SequenceBadgesOverlay';
 import { GuideOverlay } from '../canvas/GuideOverlay';
@@ -2136,35 +2136,12 @@ export function Canvas({
             ];
           }
 
-          const isBindableShape =
-            selNode.type === 'rectangle' ||
-            selNode.type === 'ellipse' ||
-            selNode.type === 'polygon' ||
-            selNode.type === 'path' ||
-            selNode.type === 'image';
-          const isGroup = selNode.type === 'group';
-
-          if (!isBindableShape && !isGroup) return [];
-
-          // For groups: check if has shape/image children that can be bound
-          const getBindableChildren = (): import('@quar/types').Node[] => {
-            if (!isGroup) return [];
-            return sceneGraph
-              .getChildren(selNode.id)
-              .filter(
-                (c) =>
-                  c.type === 'rectangle' ||
-                  c.type === 'ellipse' ||
-                  c.type === 'polygon' ||
-                  c.type === 'path' ||
-                  c.type === 'image'
-              );
-          };
-
-          // hasSkinData: direct node or any group child
-          const hasSkinData = isBindableShape
-            ? (selNode as any).skinData != null
-            : getBindableChildren().some((c) => (c as any).skinData != null);
+          // What Bind to Bones binds, as the Rigging menu has it: a shape or
+          // picture, or a group's; a group with none of them offers nothing
+          const layers = bindableLayers(sceneGraph, selNode);
+          if (layers.length === 0) return [];
+          const isBound = (layer: Node) => 'skinData' in layer && layer.skinData != null;
+          const hasSkinData = layers.some(isBound);
 
           // Find bone nodes in scene
           const boneIds: string[] = [];
@@ -2193,15 +2170,9 @@ export function Canvas({
               id: 'unbind-mesh',
               label: 'Unbind Mesh',
               onClick: () => {
-                if (isGroup) {
-                  // Unbind all skinned children
-                  for (const child of getBindableChildren()) {
-                    if ((child as any).skinData) {
-                      unbindMesh(sceneGraph, child.id);
-                    }
-                  }
-                } else {
-                  unbindMesh(sceneGraph, selNode.id);
+                // A group's bound shapes and pictures, every one
+                for (const layer of layers) {
+                  if (isBound(layer)) unbindMesh(sceneGraph, layer.id);
                 }
               },
             });

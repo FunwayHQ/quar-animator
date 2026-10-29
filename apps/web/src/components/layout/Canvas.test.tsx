@@ -4,10 +4,12 @@ import { act, render, screen, fireEvent } from '../../test/utils';
 import { SceneGraphProvider, useSceneGraph } from '../../contexts/SceneGraphContext';
 import { useEditorStore } from '../../stores/editorStore';
 import { toast } from '../common/Toast';
-import { Camera } from '@quar/core';
+import { Camera, createGroupNode } from '@quar/core';
 import type { SceneGraph } from '@quar/core';
+import { createBoneNode } from '@quar/rigging';
 import { Canvas } from './Canvas';
 import { canvasViewCenter } from '../../services/canvasView';
+import { textIn } from '../../test/textNode';
 
 // Counts the canvas's renders: the smart guides are drawn on every one
 const smartGuides = vi.hoisted(() => ({ renders: 0 }));
@@ -351,5 +353,37 @@ describe('Canvas', () => {
       // Only the copy is selected after duplicating: nudged one unit, once
       expect(roots[1]!.transform.position.x - roots[0]!.transform.position.x).toBe(21);
     });
+  });
+
+  it('offers Bind to Bones for a group only when it holds shapes or pictures, as the Rigging menu', () => {
+    const sceneGraph = renderCanvasWithScene();
+    act(() => {
+      sceneGraph.addNode(createBoneNode('bone', 'Bone 1', { x: 0, y: 0 }, 80));
+      sceneGraph.addNode(createGroupNode('words', 'Words'));
+      sceneGraph.addNode(textIn('caption', 'Inter'), 'words');
+      sceneGraph.addNode(createGroupNode('body', 'Body'));
+      sceneGraph.addNode(
+        {
+          ...createGroupNode('torso', 'Torso'),
+          type: 'rectangle',
+          width: 40,
+          height: 100,
+          cornerRadius: [0, 0, 0, 0],
+          fills: [],
+          strokes: [],
+        },
+        'body'
+      );
+      useEditorStore.setState({ activeTool: 'selection', selectedNodeIds: new Set(['words']) });
+    });
+    const canvas = document.querySelector('canvas')!;
+    fireEvent.contextMenu(canvas);
+    expect(screen.getByRole('menuitem', { name: /Duplicate/ })).toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: 'Bind to Bones' })).toBeNull();
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' });
+
+    act(() => useEditorStore.setState({ selectedNodeIds: new Set(['body']) }));
+    fireEvent.contextMenu(canvas);
+    expect(screen.getByRole('menuitem', { name: 'Bind to Bones' })).toBeInTheDocument();
   });
 });
