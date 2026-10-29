@@ -170,6 +170,13 @@ export {
   type VideoSoundFile,
   type VideoSoundOptions,
 } from './video/sound';
+export {
+  createVideoFrameSource,
+  type DecodedFrame,
+  type FramePick,
+  type VideoFrameSource,
+  type VideoFrameSourceOptions,
+} from './video/frameSource';
 
 export {
   decodeSound,
