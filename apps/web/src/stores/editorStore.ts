@@ -184,6 +184,11 @@ interface HistorySnapshot {
    */
   symbolsAdded?: SymbolDefinition[];
   /**
+   * Symbols the step deleted from the library (Delete Symbol), and where in
+   * it they were: put back on undo, deleted again on redo.
+   */
+  symbolsRemoved?: Array<{ index: number; symbol: SymbolDefinition }>;
+  /**
    * Document-wide settings the step changed, as they were before it: put back
    * on undo, and the step that redoes it holds them as they were undone.
    * (Snapshots don't hold them: a page's history would undo another's.)
@@ -237,6 +242,48 @@ function restoredSettings(
   if (!snapshot.settings) return {};
   now.settings = settingsNow(state, settingKeys(snapshot.settings));
   return structuredClone(snapshot.settings);
+}
+
+/**
+ * The library as it was before a step: the symbols it brought in taken out,
+ * those it deleted put back where they were. Null when it changed neither.
+ */
+function libraryBefore(
+  symbols: SymbolDefinition[],
+  step: HistorySnapshot
+): SymbolDefinition[] | null {
+  const added = new Set((step.symbolsAdded ?? []).map((symbol) => symbol.id));
+  const removed = [...(step.symbolsRemoved ?? [])].sort((a, b) => a.index - b.index);
+  if (added.size === 0 && removed.length === 0) return null;
+  const library = symbols.filter((symbol) => !added.has(symbol.id));
+  for (const { index, symbol } of removed) {
+    if (library.some((s) => s.id === symbol.id)) continue;
+    library.splice(Math.min(index, library.length), 0, structuredClone(symbol));
+    invalidateSymbolCache(symbol.id);
+  }
+  return library;
+}
+
+/** The library as a step left it (its redo): what it deleted gone, what it brought in back. */
+function libraryAfter(
+  symbols: SymbolDefinition[],
+  step: HistorySnapshot
+): SymbolDefinition[] | null {
+  const removed = new Set((step.symbolsRemoved ?? []).map(({ symbol }) => symbol.id));
+  const added = step.symbolsAdded ?? [];
+  if (removed.size === 0 && added.length === 0) return null;
+  for (const id of removed) invalidateSymbolCache(id);
+  const present = new Set(symbols.map((symbol) => symbol.id));
+  return [
+    ...symbols.filter((symbol) => !removed.has(symbol.id)),
+    ...structuredClone(added.filter((symbol) => !present.has(symbol.id))),
+  ];
+}
+
+/** The step taking a step's place (redo for undo, and back) changes the library alike. */
+function carryLibraryChanges(step: HistorySnapshot, now: HistorySnapshot) {
+  if (step.symbolsAdded?.length) now.symbolsAdded = step.symbolsAdded;
+  if (step.symbolsRemoved?.length) now.symbolsRemoved = step.symbolsRemoved;
 }
 
 /** The step the code running now pushed (forgotten once it has run). */
@@ -4069,17 +4116,14 @@ function createHistoryActions(
       const snapshot = newUndoStack.pop();
       if (!snapshot) return;
       sceneGraph.fromJSON(structuredClone(snapshot.sceneData));
-      // Symbols that step brought in go, and come back on redo
-      const added = snapshot.symbolsAdded ?? [];
-      if (added.length > 0) now.symbolsAdded = added;
-      const addedIds = new Set(added.map((symbol) => symbol.id));
+      // Symbols that step brought in go, those it deleted come back (redo turns both round)
+      const symbols = libraryBefore(state.symbols, snapshot);
+      carryLibraryChanges(snapshot, now);
 
       set({
         undoStack: newUndoStack,
         redoStack: newRedoStack,
-        ...(added.length > 0
-          ? { symbols: state.symbols.filter((symbol) => !addedIds.has(symbol.id)) }
-          : {}),
+        ...(symbols ? { symbols } : {}),
         canUndo: newUndoStack.length > 0,
         canRedo: true,
         enteredGroupId: null,
@@ -4106,18 +4150,14 @@ function createHistoryActions(
       const snapshot = newRedoStack.pop();
       if (!snapshot) return;
       sceneGraph.fromJSON(structuredClone(snapshot.sceneData));
-      // Symbols the step brought in come back (and go again on undo)
-      const added = snapshot.symbolsAdded ?? [];
-      if (added.length > 0) now.symbolsAdded = added;
-      const present = new Set(state.symbols.map((symbol) => symbol.id));
-      const restored = added.filter((symbol) => !present.has(symbol.id));
+      // Symbols the step brought in come back, those it deleted go again
+      const symbols = libraryAfter(state.symbols, snapshot);
+      carryLibraryChanges(snapshot, now);
 
       set({
         undoStack: newUndoStack,
         redoStack: newRedoStack,
-        ...(restored.length > 0
-          ? { symbols: [...state.symbols, ...structuredClone(restored)] }
-          : {}),
+        ...(symbols ? { symbols } : {}),
         canUndo: true,
         canRedo: newRedoStack.length > 0,
         enteredGroupId: null,
@@ -4660,6 +4700,14 @@ function createSymbolActions(
       if (!definition) return;
 
       state.pushUndo(sceneGraph);
+      // Undo brings the symbol back as well as its instances (snapshots don't hold the library)
+      const step = get().undoStack[get().undoStack.length - 1];
+      if (step) {
+        step.symbolsRemoved = [
+          ...(step.symbolsRemoved ?? []),
+          { index: state.symbols.indexOf(definition), symbol: structuredClone(definition) },
+        ];
+      }
 
       // Find all instances referencing this symbol and detach them
       const instancesToDetach: string[] = [];

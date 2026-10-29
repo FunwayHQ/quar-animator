@@ -222,6 +222,43 @@ describe('SymbolLibraryPanel', () => {
     expect(screen.getByText('Delete Symbol')).toBeDefined();
   });
 
+  it('lists a deleted symbol again, with its instance, once the delete is undone', () => {
+    act(() => {
+      useEditorStore.getState().resetProject();
+      useEditorStore.setState({ symbols: [makeSymbolDef('sym-1', 'Button')] });
+    });
+    renderWithProvider(<SymbolLibraryPanel />);
+    act(() => {
+      const instance = {
+        id: 'inst-1',
+        name: 'Button',
+        type: 'symbol-instance',
+        parent: null,
+        children: [],
+        transform: makeSymbolDef('x', 'x').sceneGraphJSON.nodes[0]!.transform,
+        visible: true,
+        locked: false,
+        opacity: 1,
+        blendMode: 'normal',
+        symbolId: 'sym-1',
+        overrides: [],
+      } as SymbolInstanceNode;
+      testSceneGraphRef!.addNode(instance);
+    });
+
+    fireEvent.contextMenu(screen.getByTestId('symbol-item-sym-1'));
+    fireEvent.click(screen.getByText('Delete Symbol'));
+    expect(screen.getByTestId('symbol-empty-state')).toBeDefined();
+    expect(testSceneGraphRef!.getNode('inst-1')).toBeUndefined();
+
+    act(() => useEditorStore.getState().undo(testSceneGraphRef!));
+    expect(screen.getByTestId('symbol-item-sym-1')).toBeDefined();
+    expect(testSceneGraphRef!.getNode('inst-1')?.type).toBe('symbol-instance');
+
+    act(() => useEditorStore.getState().redo(testSceneGraphRef!));
+    expect(screen.getByTestId('symbol-empty-state')).toBeDefined();
+  });
+
   it('shows instance count per symbol', () => {
     useEditorStore.setState({
       symbols: [makeSymbolDef('sym-1', 'Button')],
