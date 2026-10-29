@@ -517,10 +517,11 @@ function graphPage(ids: TutorialNodes): TutorialPage {
   );
   const timeline = emptyTimeline();
   // Only easings a cubic bezier draws show handles in the graph editor: the
-  // in-out moves are custom curves drawn like Ease In/Out Cubic and Quad
+  // in-out moves are custom curves drawn like Ease In/Out Cubic and Quad.
+  // Up with an overshoot, a hover, and a smooth way down
   key(timeline, rocket.id, 'transform.position.y', [
-    [0, -120, 'easeInCubic'],
-    [70, 140, 'easeOutBack'],
+    [0, -120, 'easeOutBack'],
+    [70, 140, 'linear'],
     [110, 140, createCubicBezier(0.65, 0, 0.35, 1)],
     [149, -120],
   ]);
@@ -597,12 +598,13 @@ export const MORE_TUTORIALS: Tutorial[] = [
   },
   {
     // 2: the IK page says what's keyed (the target's position) and that a chain overrides the wave
+    // 3: each easing shapes the move it's written for
     ...build('tutorial-rigging', 'Tutorial 5 · Rigging', 't5', (ids) => [
       bonesPage(ids),
       bindPage(ids),
       ikPage(ids),
     ]),
-    version: 2,
+    version: 3,
   },
   {
     id: 'tutorial-groups-symbols-masks',
@@ -624,11 +626,12 @@ export const MORE_TUTORIALS: Tutorial[] = [
   {
     // 2: the rocket's every keyframe shows handles in the graph editor
     // 3: Ctrl/Cmd and Alt/Option, as on both keyboards
+    // 4: each easing shapes the move it's written for
     ...build('tutorial-timing', 'Tutorial 7 · Timing', 't7', (ids) => [
       easingPage(ids),
       graphPage(ids),
       onionPage(ids),
     ]),
-    version: 3,
+    version: 4,
   },
 ];

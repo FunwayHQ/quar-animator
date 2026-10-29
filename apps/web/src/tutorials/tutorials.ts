@@ -130,10 +130,11 @@ function keyframesPage(ids: TutorialNodes): TutorialPage {
     [60, -180, 'easeInOutCubic'],
     [120, -360],
   ]);
+  // A keyframe's easing shapes the move into it
   const color = getOrCreateTrack(timeline, square.id, 'fills.0.color');
-  addKeyframe(color, 0, { ...VIOLET }, 'easeInOutCubic');
+  addKeyframe(color, 0, { ...VIOLET });
   addKeyframe(color, 60, { ...TEAL }, 'easeInOutCubic');
-  addKeyframe(color, 120, { ...VIOLET });
+  addKeyframe(color, 120, { ...VIOLET }, 'easeInOutCubic');
   key(timeline, spinner.id, 'transform.rotation', [
     [0, 0],
     [149, -720],
@@ -278,7 +279,8 @@ export const TUTORIALS: Tutorial[] = [
     id: 'tutorial-draw-and-animate',
     name: 'Tutorial 1 · Draw & animate',
     // 2: Alt/Option, as on both keyboards
-    version: 2,
+    // 3: each easing shapes the move it's written for
+    version: 3,
     build: (createdAt) => {
       const ids = new TutorialNodes('t1');
       return tutorialProject(

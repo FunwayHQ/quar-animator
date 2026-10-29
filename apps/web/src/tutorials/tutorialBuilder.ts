@@ -368,6 +368,12 @@ export function lesson(
   };
 }
 
+/**
+ * Keyframes for one property, each easing written with the frame its move
+ * starts from: it shapes the move from there to the next frame. The editor
+ * keeps a move's easing on the keyframe the move ends at (a keyframe's easing
+ * is its incoming transition), so that's where it's stored.
+ */
 export function key(
   timeline: Timeline,
   nodeId: string,
@@ -375,7 +381,7 @@ export function key(
   frames: Array<[frame: number, value: number, easing?: EasingFunction]>
 ): void {
   const track = getOrCreateTrack<number>(timeline, nodeId, property);
-  for (const [frame, value, easing] of frames) addKeyframe(track, frame, value, easing);
+  frames.forEach(([frame, value], i) => addKeyframe(track, frame, value, frames[i - 1]?.[2]));
 }
 
 // ============================================================================

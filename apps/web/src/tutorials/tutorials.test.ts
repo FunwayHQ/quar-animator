@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import type { Node, TextNode } from '@quar/types';
+import type { Node, PropertyTrack, TextNode } from '@quar/types';
 import {
   SceneGraph,
   getTextLocalBounds,
@@ -13,7 +13,7 @@ import {
 } from '@quar/core';
 import { deserializeProject, validateProjectData } from '../services/projectSerializer';
 import type { ProjectData, ProjectDataV2 } from '../services/projectSerializer';
-import { isEasingEditable } from '@quar/animation';
+import { interpolateValue, interpolators, isEasingEditable } from '@quar/animation';
 import { TUTORIALS } from './tutorials';
 import { PAGE_HEIGHT, PAGE_WIDTH } from './tutorialBuilder';
 
@@ -226,13 +226,50 @@ describe('what the lessons say', () => {
     const tracks = page.timeline.tracks.filter((track) => track.nodeId === rocket.id);
     expect(tracks.length).toBeGreaterThan(0);
     for (const track of tracks) {
-      // A keyframe's easing shapes the curve after it: all but the last have one
-      for (const keyframe of track.keyframes.slice(0, -1)) {
+      // A move's easing is kept on the keyframe it ends at: all but the first have one
+      for (const keyframe of track.keyframes.slice(1)) {
         expect(isEasingEditable(keyframe.easing), `${track.property} @ ${keyframe.time}`).toBe(
           true
         );
       }
     }
+  });
+});
+
+describe('the easings the tutorials are written with', () => {
+  const page = built
+    .find(({ tutorial }) => tutorial.id === 'tutorial-timing')!
+    .data.pages.find((p) => p.name === '1 · Easing')!;
+  const xAt = (name: string, frame: number) => {
+    const ball = page.sceneGraph.nodes.find((n) => n.type === 'ellipse' && n.name === name)!;
+    const track = page.timeline.tracks.find(
+      (t) => t.nodeId === ball.id && t.property === 'transform.position.x'
+    )!;
+    return interpolateValue(track as PropertyTrack<number>, frame, interpolators.number)!;
+  };
+
+  it('shape the move from the frame they are written with, there and back', () => {
+    // Out from 80 to 360 in 60 frames, and back in the next 60: halfway back
+    // is where halfway out is, mirrored, for every ball
+    for (const name of ['Linear', 'Ease In', 'Ease Out', 'Ease In/Out', 'Bounce']) {
+      expect(xAt(name, 90), name).toBeCloseTo(80 + 360 - xAt(name, 30));
+    }
+    // ...and the balls differ on the way back too, not only on the way out
+    expect(xAt('Ease In', 90)).not.toBeCloseTo(xAt('Linear', 90));
+    expect(xAt('Ease Out', 90)).not.toBeCloseTo(xAt('Linear', 90));
+  });
+
+  it('ease the onion skin page’s ball up and down like a throw', () => {
+    const onion = built
+      .find(({ tutorial }) => tutorial.id === 'tutorial-timing')!
+      .data.pages.find((p) => p.name === '3 · Onion skin')!;
+    const track = onion.timeline.tracks.find((t) => t.property === 'transform.position.y')!;
+    const yAt = (frame: number) =>
+      interpolateValue(track as PropertyTrack<number>, frame, interpolators.number)!;
+    // Slowing on the way up, speeding up on the way down: the same height
+    // at the same time either side of the top
+    expect(yAt(5)).toBeCloseTo(yAt(35));
+    expect(yAt(10) - yAt(5)).toBeLessThan(yAt(5) - yAt(0));
   });
 });
 
