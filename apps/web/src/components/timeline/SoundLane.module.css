@@ -190,6 +190,45 @@
   flex-shrink: 0;
 }
 
+/* Its speed when it isn't 1×: a small tag, as on an editor's clip */
+.speed {
+  padding: 0 3px;
+  border-radius: 2px;
+  background: var(--color-timeline-sound);
+  color: var(--color-bg-primary);
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-2xs);
+  font-weight: var(--font-weight-semibold);
+  line-height: 12px;
+}
+
+/* Where a looped clip starts over: a notch through it, a tick at its top */
+.loopMark {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 0;
+  border-left: 1px solid var(--color-timeline-sound);
+  box-shadow:
+    -1px 0 0 color-mix(in srgb, var(--color-bg-primary) 55%, transparent),
+    1px 0 0 color-mix(in srgb, var(--color-bg-primary) 55%, transparent);
+  pointer-events: none;
+}
+
+.loopMark::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -4.5px;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 5px solid var(--color-timeline-sound);
+}
+
+.clip.muted .loopMark {
+  border-left-color: var(--color-text-disabled);
+}
+
 /* A video's sound: linked to it, in the videos' colour */
 .linkedIcon {
   width: 10px;
@@ -384,6 +423,87 @@
   font-size: var(--font-size-2xs);
 }
 
+.speedRow {
+  display: grid;
+  grid-template-columns: auto 1fr 64px;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.speedPresets {
+  display: flex;
+  padding: 2px;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-secondary);
+}
+
+.speedPreset {
+  flex: 1;
+  padding: 2px 0;
+  border: none;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--color-text-tertiary);
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-2xs);
+  cursor: pointer;
+  transition:
+    background var(--duration-fast),
+    color var(--duration-fast);
+}
+
+.speedPreset:hover {
+  color: var(--color-text-primary);
+  background: var(--color-bg-hover);
+}
+
+.speedPreset.speedPresetOn {
+  background: var(--color-timeline-sound);
+  color: var(--color-bg-primary);
+  font-weight: var(--font-weight-semibold);
+}
+
+.speedPreset:focus-visible {
+  outline: 1px solid var(--color-accent-primary);
+  outline-offset: 1px;
+}
+
+.speedField {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.speedField input {
+  width: 0;
+  flex: 1;
+  min-width: 0;
+  padding: 3px 6px;
+  appearance: textfield;
+  -moz-appearance: textfield;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-secondary);
+  color: var(--color-text-primary);
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-2xs);
+  text-align: right;
+}
+
+.speedField input::-webkit-inner-spin-button,
+.speedField input::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.speedField input:focus-visible {
+  outline: none;
+  border-color: var(--color-timeline-sound);
+  box-shadow: 0 0 0 1px var(--color-timeline-sound);
+}
+
 .volumeRow {
   display: grid;
   grid-template-columns: auto 1fr 40px;
@@ -472,6 +592,13 @@
 
 .muteToggle input {
   accent-color: var(--color-timeline-sound);
+}
+
+.settingsNote {
+  margin: 10px 0 0;
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-2xs);
+  line-height: 1.45;
 }
 
 .removeButton {

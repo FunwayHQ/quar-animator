@@ -12,7 +12,7 @@ import type { Sound, VideoNode } from '@quar/types';
 import { Timeline } from '../layout/Timeline';
 import { SceneGraphProvider, useSceneGraph } from '../../contexts/SceneGraphContext';
 import { useEditorStore } from '../../stores/editorStore';
-import { linkedSound, videoLayer } from '../../test/videoLayer';
+import { linkedSound, testVideo, videoLayer } from '../../test/videoLayer';
 
 const mocks = vi.hoisted(() => ({
   importSoundFiles: vi.fn(async () => {}),
@@ -337,7 +337,165 @@ describe('the sound lane', () => {
     expect(screen.getByTestId(`sound-clip-${onSlide}`)).toBeInTheDocument();
   });
 
-  it('moves a video’s sound with its video, untrimmed, until it’s unlinked', () => {
+  it('draws a sped-up clip as long as it plays, its speed on it', () => {
+    renderTimeline();
+    const id = placed(30);
+    act(() => store().updateSoundClip(sceneGraph!, id, (c) => ({ ...c, speed: 2 })));
+    const clip = screen.getByTestId(`sound-clip-${id}`);
+    // 4 s twice as fast: frames 30 to 89
+    expect(clip.style.width).toBe('20%');
+    expect(screen.getByTestId(`sound-clip-speed-${id}`)).toHaveTextContent('2×');
+    expect(clip).toHaveAccessibleName('Sound Voice, frames 30 to 89, at 2× speed');
+    act(() => store().updateSoundClip(sceneGraph!, id, (c) => ({ ...c, speed: 1 })));
+    expect(screen.queryByTestId(`sound-clip-speed-${id}`)).not.toBeInTheDocument();
+  });
+
+  it('draws a looped clip a pass at a time, marking where it starts over', async () => {
+    decodedSound.mockResolvedValue(decodedVoice());
+    laneOfWidth();
+    renderTimeline();
+    const id = placed(0);
+    // Its second of sound, looped for 2.5 s: passes from frames 0, 30 and 60
+    act(() =>
+      store().updateSoundClip(sceneGraph!, id, (c) => ({
+        ...c,
+        duration: 1,
+        loop: true,
+        loopFor: 2.5,
+      }))
+    );
+    const clip = screen.getByTestId(`sound-clip-${id}`);
+    expect(clip.style.width).toBe('25%');
+    expect(clip).toHaveAccessibleName('Sound Voice, frames 0 to 74, looped');
+    const marks = clip.querySelectorAll('[data-testid="sound-clip-loop-mark"]');
+    expect([...marks].map((mark) => (mark as HTMLElement).style.left)).toEqual(['40%', '80%']);
+    // A waveform for each pass, the last cut short
+    await waitFor(() => expect(clip.querySelectorAll('svg path[transform]')).toHaveLength(3));
+    decodedSound.mockImplementation(() => new Promise<AudioBuffer>(() => {}));
+  });
+
+  it('lengthens a looped clip by its right end past the sound’s end, the timeline with it', () => {
+    renderTimeline();
+    act(() => store().setTimelineDuration(300));
+    const id = placed(0);
+    act(() => store().updateSoundClip(sceneGraph!, id, (c) => ({ ...c, loop: true })));
+    laneOfWidth();
+    const end = screen.getByTestId(`sound-clip-${id}`).querySelector('[data-edge="end"]')!;
+    const steps = store().undoStack.length;
+    fireEvent.pointerDown(end, { button: 0, clientX: 120, pointerId: 1 });
+    fireEvent.pointerMove(end, { clientX: 250, pointerId: 1 });
+    fireEvent.pointerMove(end, { clientX: 330, pointerId: 1 });
+    // Not lengthened while it's dragged: the frame under the pointer stays put
+    expect(store().timelineDuration).toBe(300);
+    fireEvent.pointerUp(end, { pointerId: 1 });
+    expect(clips()[0]).toMatchObject({ duration: 4, loop: true, loopFor: 11 });
+    expect(store().timelineDuration).toBe(330);
+    expect(store().undoStack.length).toBe(steps + 1);
+  });
+
+  it('sets a clip’s speed and loop in its settings, a step each', () => {
+    renderTimeline();
+    const id = placed(0);
+    fireEvent.doubleClick(screen.getByTestId(`sound-clip-${id}`));
+    const steps = store().undoStack.length;
+    fireEvent.click(screen.getByTestId('sound-clip-speed-2'));
+    expect(clips()[0]?.speed).toBe(2);
+    expect(screen.getByTestId('sound-clip-speed-2')).toHaveAttribute('aria-pressed', 'true');
+    expect(store().undoStack.length).toBe(steps + 1);
+    // Typed in: set as it's entered, kept to 0.25×–4×
+    const field = screen.getByTestId('sound-clip-speed-field');
+    fireEvent.change(field, { target: { value: '0.75' } });
+    expect(clips()[0]?.speed).toBe(2);
+    fireEvent.keyDown(field, { key: 'Enter' });
+    expect(clips()[0]?.speed).toBe(0.75);
+    fireEvent.change(field, { target: { value: '9' } });
+    fireEvent.blur(field);
+    expect(clips()[0]?.speed).toBe(4);
+    expect(field).toHaveValue(4);
+    fireEvent.click(screen.getByTestId('sound-clip-speed-1'));
+    expect(clips()[0]).not.toHaveProperty('speed');
+
+    fireEvent.click(screen.getByTestId('sound-clip-loop'));
+    expect(clips()[0]?.loop).toBe(true);
+    expect(screen.getByTestId('sound-clip-settings')).toHaveTextContent('Looped');
+    fireEvent.click(screen.getByTestId('sound-clip-loop'));
+    expect(clips()[0]).not.toHaveProperty('loop');
+    act(() => store().undo(sceneGraph!));
+    expect(clips()[0]?.loop).toBe(true);
+  });
+
+  it('trims a video’s sound by its ends, its video with it', () => {
+    renderTimeline();
+    const layer = videoLayer('v', 'beach', { speed: 2 });
+    act(() => {
+      sceneGraph!.addNode(layer);
+      useEditorStore.setState({
+        videos: [testVideo('beach')],
+        sounds: [voice],
+        timeline: createTimeline({
+          duration: 300,
+          frameRate: 30,
+          sounds: [linkedSound('s', layer, 'voice')],
+        }),
+      });
+    });
+    laneOfWidth();
+    const clip = screen.getByTestId('sound-clip-s');
+    const [start, end] = clip.querySelectorAll('[data-edge="start"], [data-edge="end"]');
+    // 15 frames later at 2×: a second of the sound and the video skipped
+    fireEvent.pointerDown(start!, { button: 0, clientX: 30, pointerId: 1 });
+    fireEvent.pointerMove(start!, { clientX: 45, pointerId: 1 });
+    fireEvent.pointerUp(start!, { pointerId: 1 });
+    expect(clips()[0]).toMatchObject({ start: 45, offset: 1, duration: 3, speed: 2 });
+    expect((sceneGraph!.getNode('v') as VideoNode).clip).toEqual({
+      start: 45,
+      offset: 1,
+      duration: 3,
+      speed: 2,
+    });
+    // The end no further than the video and the sound both go
+    fireEvent.pointerDown(end!, { button: 0, clientX: 90, pointerId: 2 });
+    fireEvent.pointerMove(end!, { clientX: 290, pointerId: 2 });
+    fireEvent.pointerUp(end!, { pointerId: 2 });
+    expect(clips()[0]?.duration).toBe(3);
+    fireEvent.pointerDown(end!, { button: 0, clientX: 90, pointerId: 3 });
+    fireEvent.pointerMove(end!, { clientX: 75, pointerId: 3 });
+    fireEvent.pointerUp(end!, { pointerId: 3 });
+    expect((sceneGraph!.getNode('v') as VideoNode).clip.duration).toBe(2);
+  });
+
+  it('sets a video’s speed and loop with its sound’s, in its settings', () => {
+    renderTimeline();
+    const layer = videoLayer('v', 'beach');
+    act(() => {
+      sceneGraph!.addNode(layer);
+      useEditorStore.setState({
+        videos: [testVideo('beach')],
+        sounds: [voice],
+        timeline: createTimeline({
+          duration: 300,
+          frameRate: 30,
+          sounds: [linkedSound('s', layer, 'voice')],
+        }),
+      });
+    });
+    fireEvent.doubleClick(screen.getByTestId('sound-clip-s'));
+    expect(screen.getByTestId('sound-clip-settings')).toHaveTextContent('with its video');
+    fireEvent.click(screen.getByTestId('sound-clip-speed-0.5'));
+    fireEvent.click(screen.getByTestId('sound-clip-loop'));
+    expect((sceneGraph!.getNode('v') as VideoNode).clip).toMatchObject({ speed: 0.5, loop: true });
+    act(() => {
+      store().undo(sceneGraph!);
+      store().undo(sceneGraph!);
+    });
+    expect((sceneGraph!.getNode('v') as VideoNode).clip).toEqual({
+      start: 30,
+      offset: 0,
+      duration: 4,
+    });
+  });
+
+  it('moves a video’s sound with its video until it’s unlinked', () => {
     renderTimeline();
     const layer = videoLayer('v', 'beach');
     act(() => {
@@ -355,8 +513,8 @@ describe('the sound lane', () => {
     const clip = screen.getByTestId('sound-clip-s');
     expect(clip).toHaveAccessibleName('Sound Voice, frames 30 to 149, the sound of a video');
     expect(screen.getByTestId('sound-clip-linked-s')).toBeInTheDocument();
-    // Trimmed with its video, not here
-    expect(clip.querySelector('[data-edge="start"], [data-edge="end"]')).toBeNull();
+    // Trimmed here too, its video with it
+    expect(clip.querySelectorAll('[data-edge="start"], [data-edge="end"]')).toHaveLength(2);
 
     const steps = store().undoStack.length;
     fireEvent.pointerDown(clip, { button: 0, clientX: 40, pointerId: 1 });

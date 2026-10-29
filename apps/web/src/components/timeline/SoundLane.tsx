@@ -1,27 +1,44 @@
 /**
  * Sound Lane
  * The timeline's row of sound clips, kept in view below the layers: each
- * clip a bar with its waveform, dragged to move it, its ends dragged to
- * trim it, its top corners dragged to fade it in and out, its volume, fades
- * and mute in a small settings card. A video's sound moves with its video
- * (and isn't trimmed on its own) until it's unlinked. Sound files dropped
- * on the timeline land where they're dropped.
+ * clip a bar with its waveform as long as it plays (at its speed, a pass at
+ * a time when it's looped, where it starts over marked), dragged to move
+ * it, its ends dragged to trim it (a looped clip's right end to make it
+ * longer, past the sound's end), its top corners dragged to fade it in and
+ * out, its speed, loop, volume, fades and mute in a small settings card. A
+ * video's sound is moved, trimmed, sped up and looped with its video until
+ * it's unlinked. Sound files dropped on the timeline land where they're
+ * dropped.
  */
 
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { HeadphoneOff, Headphones, Link2, Music, Plus, Trash2, VolumeX } from 'lucide-react';
+import {
+  HeadphoneOff,
+  Headphones,
+  Link2,
+  Music,
+  Plus,
+  Repeat,
+  Trash2,
+  VolumeX,
+} from 'lucide-react';
 import {
   clipEndFrame,
   clipFades,
   clipLevel,
+  clipSeconds,
+  clipSpeed,
   fadedClip,
+  loopedClip,
   movedClip,
   scopeSounds,
   soundRows,
+  spedClip,
   trimmedEnd,
   trimmedStart,
 } from '@quar/animation';
+import type { ClipShape } from '@quar/animation';
 import type { Sound, SoundClip } from '@quar/types';
 import { useEditorStore } from '../../stores/editorStore';
 import { useSceneGraph } from '../../contexts/SceneGraphContext';
@@ -48,6 +65,14 @@ function useLaneClips() {
 function seconds(value: number): string {
   return `${(Math.round(value * 10) / 10).toFixed(1)} s`;
 }
+
+/** "2×", "0.5×", "1.41×" */
+function speedLabel(speed: number): string {
+  return `${Math.round(speed * 100) / 100}×`;
+}
+
+/** The speeds a clip's settings offer at a click. */
+const SPEED_PRESETS = [0.5, 1, 2] as const;
 
 // ============================================================================
 // The label beside the lane
@@ -213,6 +238,21 @@ export function SoundLaneTrack({
     [duration]
   );
 
+  // How wide a frame is, to tell when a looped clip's passes are too close to mark
+  const [laneWidth, setLaneWidth] = useState(0);
+  useLayoutEffect(() => {
+    const lane = laneRef.current;
+    if (!lane) return;
+    setLaneWidth(lane.getBoundingClientRect().width);
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(([entry]) => {
+      if (entry) setLaneWidth(entry.contentRect.width);
+    });
+    observer.observe(lane);
+    return () => observer.disconnect();
+  }, []);
+  const frameWidth = duration > 0 ? laneWidth / duration : 0;
+
   const store = useEditorStore.getState;
   const change = useCallback(
     (clipId: string, edit: (clip: SoundClip) => SoundClip) =>
@@ -238,24 +278,40 @@ export function SoundLaneTrack({
     [frameAt, store]
   );
 
+  /** How far into its sound a clip's end can go: the sound's end, and its video's when it's a video's sound. */
+  const soundLength = useCallback(
+    (clip: SoundClip): number | undefined => {
+      let longest = library.get(clip.soundId)?.duration;
+      const layer = clip.linkedTo !== undefined ? sceneGraph.getNode(clip.linkedTo) : undefined;
+      if (layer?.type === 'video') {
+        const video = store().videos.find((candidate) => candidate.id === layer.videoId);
+        if (video) longest = Math.min(longest ?? video.duration, video.duration);
+      }
+      return longest;
+    },
+    [library, sceneGraph, store]
+  );
+
   const onPointerMove = useCallback(
     (event: React.PointerEvent) => {
       const drag = dragRef.current;
       if (!drag) return;
       const delta = frameAt(event.clientX) - drag.downFrame;
-      const sound = library.get(drag.original.soundId);
-      const next = dragged(drag, delta, frameRate, sound?.duration);
-      // One undo step for the whole drag, recorded as it first changes something
+      const next = dragged(drag, delta, frameRate, soundLength(drag.original));
+      // One undo step for the whole drag, recorded as it first changes something;
+      // the timeline lengthened as it ends (now, the frame under the pointer would move)
       const before = useEditorStore.getState().timeline;
-      store().updateSoundClip(sceneGraph, drag.clipId, () => next, !drag.changed);
+      store().updateSoundClip(sceneGraph, drag.clipId, () => next, !drag.changed, false);
       if (useEditorStore.getState().timeline !== before) drag.changed = true;
     },
-    [frameAt, frameRate, library, sceneGraph, store]
+    [frameAt, frameRate, sceneGraph, soundLength, store]
   );
 
   const onPointerUp = useCallback(() => {
+    const drag = dragRef.current;
     dragRef.current = null;
-  }, []);
+    if (drag?.changed) store().fitTimelineToSoundClip(drag.clipId);
+  }, [store]);
 
   const openSettings = useCallback((clipId: string, element: HTMLElement) => {
     const rect = element.getBoundingClientRect();
@@ -370,6 +426,7 @@ export function SoundLaneTrack({
           row={rows.get(clip.id) ?? 0}
           duration={duration}
           frameRate={frameRate}
+          frameWidth={frameWidth}
           selected={clip.id === selectedId}
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
@@ -435,6 +492,69 @@ function useDecodedSound(sound: Sound | undefined): AudioBuffer | null {
 
 /** How many columns a clip's waveform is drawn in (stretched to the clip). */
 const WAVE_COLUMNS = 600;
+/** A looped clip's waveform is drawn for this many passes at most. */
+const MAX_WAVE_PASSES = 64;
+/** Where a looped clip starts over is marked when the marks are this far apart, in pixels. */
+const MIN_LOOP_MARK_GAP = 3;
+/** At most this many of those marks along a clip. */
+const MAX_LOOP_MARKS = 400;
+
+/** A pass of a clip's waveform: where it's drawn along the clip (in columns), and its path. */
+interface PassWave {
+  x: number;
+  d: string;
+}
+
+/**
+ * A clip's waveform as it plays on the timeline, in `columns` columns
+ * across it: its part of the sound at its speed, a pass at a time when it's
+ * looped (the last cut where it ends), each as loud as it plays there — its
+ * volume, through fades over the whole clip.
+ */
+function clipWaves(
+  peaks: Float32Array,
+  clip: ClipShape & Pick<SoundClip, 'offset' | 'gain'>,
+  columns: number
+): PassWave[] {
+  const length = clipSeconds(clip);
+  const speed = clipSpeed(clip);
+  const pass = clip.duration / speed;
+  if (!(length > 0) || !(pass > 0)) return [];
+  const count = Math.min(MAX_WAVE_PASSES, Math.ceil(length / pass - 1e-9));
+  const waves: PassWave[] = [];
+  for (let k = 0; k < count; k++) {
+    const from = k * pass;
+    const span = Math.min(pass, length - from);
+    // Seconds of the sound into the pass, as seconds of the clip on the timeline
+    const level = (s: number) => clip.gain * clipLevel(clip, from + s / speed);
+    const d = waveformPath(peaks, clip.offset, span * speed, (span / length) * columns, level);
+    if (d) waves.push({ x: (from / length) * columns, d });
+  }
+  return waves;
+}
+
+/**
+ * Where a looped clip starts over, as fractions of its length: none
+ * unlooped, nor when they'd be closer than the eye can tell apart on a
+ * timeline `frameWidth` pixels a frame.
+ */
+function loopMarks(clip: SoundClip, frameRate: number, frameWidth: number): number[] {
+  if (!clip.loop) return [];
+  const length = clipSeconds(clip);
+  const pass = clip.duration / clipSpeed(clip);
+  if (
+    !(pass > 0) ||
+    !(length > 0) ||
+    pass * Math.max(1, frameRate) * frameWidth < MIN_LOOP_MARK_GAP
+  ) {
+    return [];
+  }
+  const marks: number[] = [];
+  for (let at = pass; at < length - 1e-6 && marks.length < MAX_LOOP_MARKS; at += pass) {
+    marks.push(at / length);
+  }
+  return marks;
+}
 
 interface SoundClipBarProps {
   clip: SoundClip;
@@ -442,6 +562,8 @@ interface SoundClipBarProps {
   row: number;
   duration: number;
   frameRate: number;
+  /** How wide a frame of the timeline is, in pixels (0 before it's measured) */
+  frameWidth: number;
   selected: boolean;
   onPointerDown: (event: React.PointerEvent, clip: SoundClip) => void;
   onPointerMove: (event: React.PointerEvent) => void;
@@ -457,6 +579,7 @@ const SoundClipBar = memo(function SoundClipBar({
   row,
   duration,
   frameRate,
+  frameWidth,
   selected,
   onPointerDown,
   onPointerMove,
@@ -466,25 +589,30 @@ const SoundClipBar = memo(function SoundClipBar({
   onContextMenu,
 }: SoundClipBarProps) {
   const audio = useDecodedSound(sound);
-  const columns = Math.max(1, Math.min(WAVE_COLUMNS, Math.ceil(clip.duration * 100)));
-  const { offset, duration: length, gain, fadeIn: fadeInSet, fadeOut: fadeOutSet } = clip;
-  const wave = useMemo(() => {
-    if (!audio) return '';
-    // As loud as it plays: its volume, through its fades
-    const shape = { duration: length, fadeIn: fadeInSet, fadeOut: fadeOutSet };
-    const level = (t: number) => gain * clipLevel(shape, t);
-    return waveformPath(soundPeaks(audio), offset, length, columns, level);
-  }, [audio, offset, length, gain, fadeInSet, fadeOutSet, columns]);
+  const length = clipSeconds(clip);
+  const columns = Math.max(1, Math.min(WAVE_COLUMNS, Math.ceil(length * 100)));
+  const { offset, duration: part, gain, fadeIn: fadeInSet, fadeOut: fadeOutSet } = clip;
+  const { speed: speedSet, loop, loopFor } = clip;
+  // Drawn again as it changes how it sounds, not as it's moved
+  const waves = useMemo(() => {
+    if (!audio) return [];
+    const shape = { offset, duration: part, gain, fadeIn: fadeInSet, fadeOut: fadeOutSet };
+    return clipWaves(soundPeaks(audio), { ...shape, speed: speedSet, loop, loopFor }, columns);
+  }, [audio, offset, part, gain, fadeInSet, fadeOutSet, speedSet, loop, loopFor, columns]);
+  const marks = loopMarks(clip, frameRate, frameWidth);
   const end = clipEndFrame(clip, frameRate);
   const name = sound?.name ?? 'Missing sound';
-  // A video's sound: moved with its video, trimmed with it (not here) until unlinked
+  // A video's sound: moved, trimmed, sped up and looped with its video until unlinked
   const linked = clip.linkedTo !== undefined;
+  const speed = clipSpeed(clip);
   const lastFrame = Math.max(clip.start, Math.ceil(end) - 1);
   const { fadeIn, fadeOut } = clipFades(clip);
-  const inAt = clip.duration > 0 ? (fadeIn / clip.duration) * 100 : 0;
-  const outAt = clip.duration > 0 ? 100 - (fadeOut / clip.duration) * 100 : 100;
+  const inAt = length > 0 ? (fadeIn / length) * 100 : 0;
+  const outAt = length > 0 ? 100 - (fadeOut / length) * 100 : 100;
   const described = [
     linked ? 'the sound of a video' : '',
+    speed !== 1 ? `at ${speedLabel(speed)} speed` : '',
+    clip.loop ? 'looped' : '',
     clip.muted ? 'muted' : '',
     clip.gain !== 1 ? `volume ${Math.round(clip.gain * 100)}%` : '',
     fadeIn > 0 ? `fades in over ${seconds(fadeIn)}` : '',
@@ -512,21 +640,32 @@ const SoundClipBar = memo(function SoundClipBar({
       aria-pressed={selected}
       title={
         linked
-          ? `${name}: frames ${clip.start}–${lastFrame} (${seconds(clip.duration)}), the sound of a video. Drag to move it with its video, its top corners to fade; double-click for volume and fades; unlink it (right-click) to trim it on its own.`
-          : `${name}: frames ${clip.start}–${lastFrame} (${seconds(clip.duration)}). Drag to move, its ends to trim, its top corners to fade; double-click for volume and fades.`
+          ? `${name}: frames ${clip.start}–${lastFrame} (${seconds(length)}), the sound of a video. Drag to move it with its video, its ends to trim both, its top corners to fade; double-click for speed, loop, volume and fades; unlink it (right-click) to change it on its own.`
+          : `${name}: frames ${clip.start}–${lastFrame} (${seconds(length)}). Drag to move, its ends to trim${clip.loop ? ' (its right end loops it longer)' : ''}, its top corners to fade; double-click for speed, loop, volume and fades.`
       }
       data-testid={`sound-clip-${clip.id}`}
     >
-      {wave && (
+      {waves.length > 0 && (
         <svg
           className={styles.wave}
           viewBox={`0 0 ${columns} 1`}
           preserveAspectRatio="none"
           aria-hidden="true"
         >
-          <path d={wave} />
+          {waves.map((wave) => (
+            <path key={wave.x} d={wave.d} transform={`translate(${wave.x.toFixed(2)} 0)`} />
+          ))}
         </svg>
       )}
+      {marks.map((at) => (
+        <span
+          key={at}
+          className={styles.loopMark}
+          style={{ left: `${at * 100}%` }}
+          aria-hidden="true"
+          data-testid="sound-clip-loop-mark"
+        />
+      ))}
       <span className={styles.clipName}>
         {linked && (
           <Link2
@@ -537,6 +676,12 @@ const SoundClipBar = memo(function SoundClipBar({
         )}
         {clip.muted && <VolumeX className={styles.mutedIcon} aria-hidden="true" />}
         {name}
+        {clip.loop && <Repeat className={styles.mutedIcon} aria-hidden="true" />}
+        {speed !== 1 && (
+          <span className={styles.speed} data-testid={`sound-clip-speed-${clip.id}`}>
+            {speedLabel(speed)}
+          </span>
+        )}
       </span>
       {(fadeIn > 0 || fadeOut > 0) && (
         <svg
@@ -560,12 +705,8 @@ const SoundClipBar = memo(function SoundClipBar({
           )}
         </svg>
       )}
-      {!linked && (
-        <>
-          <span className={styles.edgeStart} data-edge="start" aria-hidden="true" />
-          <span className={styles.edgeEnd} data-edge="end" aria-hidden="true" />
-        </>
-      )}
+      <span className={styles.edgeStart} data-edge="start" aria-hidden="true" />
+      <span className={styles.edgeEnd} data-edge="end" aria-hidden="true" />
       {/* Grabbed to fade: where each fade ends, in the top corners when there's none */}
       <span
         className={`${styles.fadeHandle} ${fadeIn > 0 ? styles.fadeSet : ''}`}
@@ -633,6 +774,7 @@ function SoundClipSettings({ clip, sound, frameRate, x, y, onClose }: SoundClipS
 
   const volume = Math.round(clip.gain * 100);
   const lastFrame = Math.max(clip.start, Math.ceil(clipEndFrame(clip, frameRate)) - 1);
+  const speed = clipSpeed(clip);
 
   return createPortal(
     <>
@@ -654,7 +796,35 @@ function SoundClipSettings({ clip, sound, frameRate, x, y, onClose }: SoundClipS
               {seconds(clip.offset + clip.duration)}
               {sound ? ` of ${seconds(sound.duration)}` : ''}
             </span>
+            {(clip.loop || speed !== 1) && (
+              <span>
+                {[
+                  clip.loop ? `Looped for ${seconds(clipSeconds(clip))}` : '',
+                  speed !== 1 ? `at ${speedLabel(speed)}, keeping its pitch` : '',
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}
+              </span>
+            )}
           </div>
+        </div>
+        <div className={styles.speedRow}>
+          <span>Speed</span>
+          <div className={styles.speedPresets} role="group" aria-label="Speeds">
+            {SPEED_PRESETS.map((preset) => (
+              <button
+                type="button"
+                key={preset}
+                className={`${styles.speedPreset} ${speed === preset ? styles.speedPresetOn : ''}`}
+                onClick={() => update((c) => spedClip(c, preset))}
+                aria-pressed={speed === preset}
+                data-testid={`sound-clip-speed-${preset}`}
+              >
+                {speedLabel(preset)}
+              </button>
+            ))}
+          </div>
+          <SpeedField value={speed} onCommit={(value) => update((c) => spedClip(c, value))} />
         </div>
         <label className={styles.volumeRow}>
           <span>Volume</span>
@@ -704,6 +874,18 @@ function SoundClipSettings({ clip, sound, frameRate, x, y, onClose }: SoundClipS
             />
             Mute
           </label>
+          <label className={styles.muteToggle}>
+            <input
+              type="checkbox"
+              checked={clip.loop === true}
+              onChange={(event) => {
+                const on = event.target.checked;
+                update((c) => loopedClip(c, on));
+              }}
+              data-testid="sound-clip-loop"
+            />
+            Loop
+          </label>
           <button
             type="button"
             className={styles.removeButton}
@@ -717,9 +899,47 @@ function SoundClipSettings({ clip, sound, frameRate, x, y, onClose }: SoundClipS
             Remove
           </button>
         </div>
+        {clip.linkedTo !== undefined && (
+          <p className={styles.settingsNote}>
+            The sound of a video: its speed, loop and trims change with its video, its volume and
+            fades are its own.
+          </p>
+        )}
       </div>
     </>,
     document.body
+  );
+}
+
+/** A speed typed in (×), set when it's entered (Enter or leaving the field): one undo step. */
+function SpeedField({ value, onCommit }: { value: number; onCommit: (speed: number) => void }) {
+  const shown = String(Math.round(value * 100) / 100);
+  const [draft, setDraft] = useState(shown);
+  useEffect(() => setDraft(shown), [shown]);
+  const commit = () => {
+    const speed = Number(draft);
+    if (draft.trim() !== '' && Number.isFinite(speed) && speed > 0) onCommit(speed);
+    // What it's set to shows once it is (a speed out of range, as far as it goes)
+    setDraft(shown);
+  };
+  return (
+    <label className={styles.speedField}>
+      <input
+        type="number"
+        min={0.25}
+        max={4}
+        step={0.05}
+        value={draft}
+        onChange={(event) => setDraft(event.target.value)}
+        onBlur={commit}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') commit();
+        }}
+        aria-label="Speed, from 0.25× to 4×"
+        data-testid="sound-clip-speed-field"
+      />
+      <span className={styles.fadeUnit}>×</span>
+    </label>
   );
 }
 
