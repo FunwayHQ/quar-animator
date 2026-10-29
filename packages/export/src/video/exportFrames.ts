@@ -184,8 +184,11 @@ export function createExportVideoFrames(
           return null;
         }
         const { mb, input } = await openMedia(file);
+        if (disposed) {
+          input.dispose();
+          return null;
+        }
         inputs.push(input);
-        if (disposed) return null;
         const track = await videoTrackOf(input);
         return {
           mb,

@@ -36,11 +36,15 @@ const mocks = vi.hoisted(() => ({
   /** The frames drawn, in order */
   drawn: [] as number[],
   stopped: 0,
+  /** Hears each file being opened */
+  onOpen: null as null | (() => void),
 }));
 
 vi.mock('mediabunny', () => {
   class BlobSource {
-    constructor(readonly file: Blob) {}
+    constructor(readonly file: Blob) {
+      mocks.onOpen?.();
+    }
   }
   return {
     ALL_FORMATS: [],
@@ -227,6 +231,7 @@ describe('createExportVideoFrames', () => {
     mocks.runs = [];
     mocks.drawn = [];
     mocks.stopped = 0;
+    mocks.onOpen = null;
     vi.spyOn(console, 'warn').mockImplementation(() => {});
   });
 
@@ -501,6 +506,19 @@ describe('createExportVideoFrames', () => {
     // Nothing more is decoded
     await source.prepare(3);
     expect(mocks.drawn).toEqual([0, 1]);
+  });
+
+  it('lets a file go that opens only once it’s been disposed', async () => {
+    const layer = videoLayer('clip');
+    const ctx = context(scene([[layer]]));
+    const source = frames(rangeShots(ctx, 0, 2), { videoFile: () => file() });
+
+    // Disposed as the file opens
+    mocks.onOpen = () => source.dispose();
+    await source.prepare(0);
+    await vi.waitFor(() => expect(mocks.inputs).toBe(1));
+    expect(mocks.disposed).toBe(1);
+    expect(mocks.drawn).toEqual([]);
   });
 
   it('decodes nothing for hidden layers or an export without videos', async () => {
