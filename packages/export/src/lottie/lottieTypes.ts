@@ -75,6 +75,8 @@ export interface LottieMask {
   inv: boolean;
   pt: LottieAnimatedShape;
   o: LottieAnimatedValue;
+  /** How far it's grown (or shrunk); lottie-web reads it and draws nothing without */
+  x: LottieAnimatedValue;
 }
 
 // ============================================================================

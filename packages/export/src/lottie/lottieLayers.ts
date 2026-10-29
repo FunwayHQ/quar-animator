@@ -157,6 +157,7 @@ function imageLayer(
         inv: false,
         pt: { a: 0, k: toImageSpace(pathPointsToLottieVertices(rounded, true, true), node.height) },
         o: { a: 0, k: 100 },
+        x: { a: 0, k: 0 },
       },
     ];
   }
@@ -296,6 +297,7 @@ function precompLayer(node: Node, ind: number, frame: Frame, ctx: LayerBuildCont
           },
         },
         o: { a: 0, k: 100 },
+        x: { a: 0, k: 0 },
       },
     ];
   }

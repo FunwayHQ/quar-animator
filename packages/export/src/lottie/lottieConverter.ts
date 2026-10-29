@@ -707,6 +707,7 @@ function artboardClipMask(node: ArtboardNode): LottieMask {
     inv: false,
     pt: { a: 0, k: artboardRectVertices(node) },
     o: { a: 0, k: 100 },
+    x: { a: 0, k: 0 },
   };
 }
 

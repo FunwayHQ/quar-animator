@@ -89,6 +89,33 @@ describe('images → Lottie', () => {
     expect(animation.layers.map((layer) => layer.refId)).toEqual(['image_0', 'image_1', 'image_0']);
   });
 
+  it('gives every mask its expansion, which lottie-web reads (without, it draws nothing)', () => {
+    const board: ArtboardNode = {
+      ...base('board', 'Board'),
+      type: 'artboard',
+      children: ['i1'],
+      width: 400,
+      height: 300,
+      fills: [],
+      clipContent: true,
+    };
+    const inside = image('i1', { parent: 'board', cornerRadius: [8, 8, 8, 8] });
+    const resolve = resolverOf(board, inside);
+    const masks = (animation: ReturnType<typeof exportToLottieJson>) =>
+      [...animation.layers, ...animation.assets.flatMap((asset) => asset.layers ?? [])].flatMap(
+        (layer) => layer.masksProperties ?? []
+      );
+    // A rounded picture in a clipped artboard (a precomposition), and a clipped artboard of shapes
+    const withPicture = masks(exportToLottieJson([board], timeline, options, resolve));
+    const box = { ...rect('r1'), parent: 'board' };
+    const shapesOnly = masks(
+      exportToLottieJson([{ ...board, children: ['r1'] }], timeline, options, resolverOf(box))
+    );
+    expect(withPicture.map((mask) => mask.nm)).toEqual(['Clip', 'Corners']);
+    expect(shapesOnly.map((mask) => mask.nm)).toEqual(['Clip']);
+    for (const mask of [...withPicture, ...shapesOnly]) expect(mask.x).toEqual({ a: 0, k: 0 });
+  });
+
   it('clips rounded corners with a layer mask', () => {
     const [layer] = exportToLottieJson(
       [image('i1', { cornerRadius: [8, 8, 8, 8] })],
