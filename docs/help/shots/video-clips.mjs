@@ -6,14 +6,18 @@
  */
 
 import fs from 'node:fs';
+import path from 'node:path';
 
 import { PARTS } from './_kit.mjs';
 
-/** A file of media/, as the browser's file chooser is given it. */
-const media = (name, mimeType) => ({
+/**
+ * A file of media/, as the browser's file chooser is given it: read when a
+ * shot imports it (the guide's checks load this list without taking shots).
+ */
+const media = (name, mimeType) => (kit) => ({
   name,
   mimeType,
-  buffer: fs.readFileSync(new URL(`./media/${name}`, import.meta.url)),
+  buffer: fs.readFileSync(path.join(kit.shot.outDir, '..', 'shots', 'media', name)),
 });
 
 const SUNRISE = media('sunrise.mp4', 'video/mp4');
@@ -25,12 +29,12 @@ const barOf = (name) => `${BAR}[aria-label^="Video ${name},"]`;
 
 /** File › Import Video… with a file, waiting for its clip on the timeline. */
 const importVideo = (file) => ({
-  run: async (page) => {
+  run: async (page, kit) => {
     const before = await page.locator(BAR).count();
     await page.click('[data-testid="menu-file"]');
     const chooser = page.waitForEvent('filechooser');
     await page.getByRole('menuitem', { name: /Import Video/ }).click();
-    await (await chooser).setFiles(file);
+    await (await chooser).setFiles(file(kit));
     await page.locator(BAR).nth(before).waitFor({ timeout: 30000 });
     // Its strip of stills drawn, and its first picture decoded on the canvas
     await page.waitForTimeout(1500);
