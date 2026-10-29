@@ -94,8 +94,8 @@ export function nodeToLottieLayer(
   startFrame: number = 0,
   context: LottieConvertContext = {}
 ): LottieLayer | null {
-  const shapes = nodeToLottieShapes(node, timeline, canvasH, nodeResolver, context);
-  if (!shapes || shapes.length === 0) return null;
+  const shapes = layerShapes(nodeToLottieShapes(node, timeline, canvasH, nodeResolver, context));
+  if (shapes.length === 0) return null;
 
   // An artboard clipping its content: a layer mask over the artboard rectangle
   const clip = node.type === 'artboard' && node.clipContent ? [artboardClipMask(node)] : null;
@@ -114,6 +114,38 @@ export function nodeToLottieLayer(
     st: 0,
     shapes,
   };
+}
+
+/**
+ * A node's shape items as a layer's shapes. A layer's placement is its own
+ * transform (`ks`): a transform among its shapes must be inside a group, as
+ * After Effects writes them — lottie-web's SVG renderer puts one at the top
+ * level on the layer's element in place of the layer's, so an unmasked layer
+ * was drawn at the origin. The identity one each shape ends with is dropped;
+ * any other wraps the shapes in a group.
+ */
+export function layerShapes(shapes: LottieShapeItem[] | null): LottieShapeItem[] {
+  if (!shapes || shapes.length === 0) return [];
+  const last = shapes[shapes.length - 1]!;
+  if (last.ty !== 'tr') return shapes;
+  const own = shapes.slice(0, -1);
+  if (isIdentityTransform(last)) return own;
+  return [{ ty: 'gr', nm: 'Shapes', it: [...own, last] } as LottieShapeItem];
+}
+
+const isStatic = (value: { a: number; k: unknown }, still: number[]) =>
+  value.a === 0 &&
+  (Array.isArray(value.k) ? value.k : [value.k]).every((k, i) => k === (still[i] ?? 0));
+
+/** A shape transform that moves, turns, scales and fades nothing. */
+function isIdentityTransform(transform: LottieShapeTransform): boolean {
+  return (
+    (!transform.a || isStatic(transform.a, [0, 0])) &&
+    isStatic(transform.p, [0, 0]) &&
+    isStatic(transform.r, [0]) &&
+    isStatic(transform.s, [100, 100]) &&
+    isStatic(transform.o, [100])
+  );
 }
 
 /**

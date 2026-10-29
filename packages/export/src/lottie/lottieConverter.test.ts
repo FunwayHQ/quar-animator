@@ -16,6 +16,7 @@ import type {
   PathPoint,
 } from '@quar/types';
 import {
+  layerShapes,
   nodeToLottieLayer,
   nodeToLottieShapes,
   rectangleToLottieShapes,
@@ -38,6 +39,7 @@ import type {
   LottieShapeGroup,
   LottieShapeTrim,
   LottieShapeTransform,
+  LottieShapeItem,
 } from './lottieTypes';
 
 // ============================================================================
@@ -229,6 +231,30 @@ describe('nodeToLottieLayer', () => {
     const node = makeRect({ name: 'My Custom Rect' });
     const layer = nodeToLottieLayer(node, emptyTimeline, 5, CANVAS_H, 60);
     expect(layer!.nm).toBe('My Custom Rect');
+  });
+
+  // lottie-web's SVG renderer puts a top-level transform on the layer's
+  // element in place of the layer's own: the layer was drawn at the origin
+  it('leaves no transform at the top of a layer’s shapes, its placement being its own', () => {
+    for (const node of [makeRect(), makeEllipse(), makePath(), makePolygon()]) {
+      const layer = nodeToLottieLayer(node, emptyTimeline, 0, CANVAS_H, 60);
+      expect(layer!.shapes!.some((item) => item.ty === 'tr')).toBe(false);
+      expect(layer!.shapes!.some((item) => item.ty === 'fl')).toBe(true);
+    }
+  });
+
+  it('keeps a transform that does something, in a group of the layer’s shapes', () => {
+    const turn = {
+      ty: 'tr' as const,
+      p: { a: 0 as const, k: [0, 0] },
+      r: { a: 0 as const, k: 30 },
+      s: { a: 0 as const, k: [100, 100] },
+      o: { a: 0 as const, k: 100 },
+    };
+    const rect = { ty: 'rc', nm: 'Rectangle' } as LottieShapeItem;
+    expect(layerShapes([rect, turn])).toEqual([{ ty: 'gr', nm: 'Shapes', it: [rect, turn] }]);
+    expect(layerShapes([rect, { ...turn, r: { a: 0, k: 0 } }])).toEqual([rect]);
+    expect(layerShapes(null)).toEqual([]);
   });
 });
 
