@@ -27,6 +27,10 @@ export function readSoundClips(clips: unknown): SoundClip[] {
         ...(isNumber(clip.fadeOut) && clip.fadeOut > 0 ? { fadeOut: clip.fadeOut } : {}),
         // The video layer whose sound it is
         ...(typeof clip.linkedTo === 'string' ? { linkedTo: clip.linkedTo } : {}),
+        // Its speed and loop, where they're right
+        ...(isNumber(clip.speed) && clip.speed > 0 ? { speed: clip.speed } : {}),
+        ...(clip.loop === true ? { loop: true } : {}),
+        ...(isNumber(clip.loopFor) && clip.loopFor > 0 ? { loopFor: clip.loopFor } : {}),
       },
     ];
   });
