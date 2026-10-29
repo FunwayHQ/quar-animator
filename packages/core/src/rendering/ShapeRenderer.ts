@@ -775,6 +775,18 @@ export class ShapeRenderer {
   /** Onion-skin ghost passes (made on first use) */
   private ghostFramebuffers: FramebufferManager | null = null;
   private ghostComposite: GhostComposite | null = null;
+  /**
+   * The onion-skin ghosts gathered into one layer (beginGhostLayer): being
+   * drawn into, or `ready` to lay over each artboard's background in the
+   * next render, then let go
+   */
+  private ghostLayer: {
+    entry: FramebufferEntry;
+    previous: WebGLFramebuffer | null;
+    ready: boolean;
+  } | null = null;
+  /** Drawing a ghost scene: artboards' backgrounds are left out of it */
+  private drawingGhost = false;
 
   constructor(renderer: WebGLRenderer) {
     this.renderer = renderer;
@@ -958,8 +970,9 @@ export class ShapeRenderer {
 
   /**
    * Draw a whole scene as an onion-skin ghost: rendered as it looks —
-   * groups, child bones, masks, bound meshes — into an off-screen buffer,
-   * then laid over what's drawn so far, tinted and faded.
+   * groups, child bones, masks, bound meshes, but not artboards' backgrounds
+   * — into an off-screen buffer, then laid over what's drawn so far (the
+   * ghost layer, between beginGhostLayer and endGhostLayer), tinted and faded.
    */
   renderGhostScene(
     sceneGraph: SceneGraph,
@@ -972,7 +985,6 @@ export class ShapeRenderer {
     const width = gl.drawingBufferWidth;
     const height = gl.drawingBufferHeight;
     this.ghostFramebuffers ??= new FramebufferManager(gl);
-    this.ghostComposite ??= createGhostComposite(this.renderer);
 
     const previous = gl.getParameter(gl.FRAMEBUFFER_BINDING) as WebGLFramebuffer | null;
     const entry = this.ghostFramebuffers.acquire(width, height);
@@ -983,27 +995,84 @@ export class ShapeRenderer {
       gl.clear(gl.COLOR_BUFFER_BIT);
       // Alpha builds up as coverage, so the pass can be laid over cleanly
       setNormalBlending(gl);
+      this.drawingGhost = true;
       this.render(sceneGraph, viewProjectionMatrix);
     } finally {
+      this.drawingGhost = false;
       setNormalBlending(gl);
       gl.bindFramebuffer(gl.FRAMEBUFFER, previous);
       gl.viewport(0, 0, width, height);
     }
 
+    this.layGhostPass(entry.texture, tintColor, 0.5, alpha);
+    this.ghostFramebuffers.release(entry);
+  }
+
+  /**
+   * Gather the onion-skin ghosts drawn next (renderGhostScene) into one
+   * layer, until endGhostLayer.
+   */
+  beginGhostLayer(): void {
+    if (!this.program || !this.vao) return;
+    const gl = this.renderer.context;
+    const width = gl.drawingBufferWidth;
+    const height = gl.drawingBufferHeight;
+    this.ghostFramebuffers ??= new FramebufferManager(gl);
+    this.releaseGhostLayer();
+
+    const previous = gl.getParameter(gl.FRAMEBUFFER_BINDING) as WebGLFramebuffer | null;
+    const entry = this.ghostFramebuffers.acquire(width, height);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, entry.fbo);
+    gl.viewport(0, 0, width, height);
+    gl.clearColor(0, 0, 0, 0);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    this.ghostLayer = { entry, previous, ready: false };
+  }
+
+  /**
+   * The ghosts gathered: laid over what's drawn so far (the page), and kept
+   * to lay over each artboard's background in the next render too — under
+   * what's on it — so an artboard with a background doesn't hide them.
+   */
+  endGhostLayer(): void {
+    const layer = this.ghostLayer;
+    if (!layer || layer.ready) return;
+    const gl = this.renderer.context;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, layer.previous);
+    gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
+    layer.ready = true;
+    this.layGhostPass(layer.entry.texture, [0, 0, 0], 0, 1);
+  }
+
+  private releaseGhostLayer(): void {
+    if (this.ghostLayer) this.ghostFramebuffers?.release(this.ghostLayer.entry);
+    this.ghostLayer = null;
+  }
+
+  /** Lay an off-screen ghost pass over what's drawn so far, its colours `tintAmount` to the tint. */
+  private layGhostPass(
+    texture: WebGLTexture,
+    tintColor: [number, number, number],
+    tintAmount: number,
+    alpha: number
+  ): void {
+    if (!this.program || !this.vao) return;
+    const gl = this.renderer.context;
+    this.ghostComposite ??= createGhostComposite(this.renderer);
     const { program, quadVAO } = this.ghostComposite;
     const depthWasEnabled = gl.isEnabled(gl.DEPTH_TEST);
     if (depthWasEnabled) gl.disable(gl.DEPTH_TEST);
     this.renderer.useProgram(program);
     this.renderer.bindVAO(quadVAO);
     gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, entry.texture);
+    gl.bindTexture(gl.TEXTURE_2D, texture);
     gl.uniform1i(program.uniforms.u_texture ?? null, 0);
     gl.uniform3f(program.uniforms.u_tint ?? null, tintColor[0], tintColor[1], tintColor[2]);
+    gl.uniform1f(program.uniforms.u_tintAmount ?? null, tintAmount);
     gl.uniform1f(program.uniforms.u_alpha ?? null, alpha);
     gl.drawArrays(gl.TRIANGLES, 0, 6);
     gl.bindTexture(gl.TEXTURE_2D, null);
     if (depthWasEnabled) gl.enable(gl.DEPTH_TEST);
-    this.ghostFramebuffers.release(entry);
 
     // Back to the shape program for what's drawn next
     this.renderer.useProgram(this.program);
@@ -2000,9 +2069,10 @@ export class ShapeRenderer {
 
       // Artboard: render background and set up scissor clipping
       if (node.type === 'artboard') {
-        this.renderArtboardBackground(node, worldTransform);
-        if (node.clipContent) {
-          // Compute screen-space scissor rect from artboard bounds
+        // A ghost of it would cover the artboard: ghosts are of what's on it
+        if (!this.drawingGhost) this.renderArtboardBackground(node, worldTransform);
+        // Its screen-space scissor rect, from its bounds
+        const pushArtboardScissor = () => {
           const hw = node.width / 2;
           const hh = node.height / 2;
           // Artboard corners in local space (anchor 0.5,0.5)
@@ -2031,7 +2101,15 @@ export class ShapeRenderer {
             Math.ceil(maxX - minX),
             Math.ceil(maxY - minY)
           );
+        };
+        // The onion-skin ghosts show over its background, under what's on it
+        const layer = this.ghostLayer;
+        if (layer?.ready && !this.drawingGhost && node.fills.some((fill) => fill.visible)) {
+          pushArtboardScissor();
+          this.layGhostPass(layer.entry.texture, [0, 0, 0], 0, 1);
+          popScissor();
         }
+        if (node.clipContent) pushArtboardScissor();
         return; // continue into children
       }
 
@@ -2103,6 +2181,9 @@ export class ShapeRenderer {
       this.popMask(this.maskStack[this.maskStack.length - 1]!.groupId);
     }
     this.setMaskState(null, 0);
+
+    // The gathered ghosts were for this frame
+    if (this.ghostLayer?.ready && !this.drawingGhost) this.releaseGhostLayer();
 
     this.renderer.bindVAO(null);
   }
@@ -5014,6 +5095,7 @@ export class ShapeRenderer {
     this.renderer.clearProgramUseHook(this.programUseHook);
     this.sweepStaticGeometry(true);
     this.maskFramebufferManager.dispose();
+    this.ghostLayer = null;
     this.ghostFramebuffers?.dispose();
     this.ghostFramebuffers = null;
     if (this.ghostComposite) {

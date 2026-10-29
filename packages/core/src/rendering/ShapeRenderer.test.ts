@@ -11,6 +11,7 @@ import { SceneGraph, createDefaultTransform, createGroupNode } from '../SceneGra
 import { mat3 } from '../math';
 import { createMockWebGL2Context } from '../test/setup';
 import type {
+  ArtboardNode,
   RectangleNode,
   EllipseNode,
   PolygonNode,
@@ -1194,6 +1195,84 @@ describe('ShapeRenderer', () => {
 
       expect(gl.drawArrays).not.toHaveBeenCalled();
       expect(gl.drawElements).not.toHaveBeenCalled();
+    });
+
+    describe('on an artboard with a background', () => {
+      /** A white 400×300 artboard with a square on it. */
+      function artboardWithSquare(): void {
+        const artboard: ArtboardNode = {
+          id: 'art',
+          name: 'Artboard',
+          type: 'artboard',
+          parent: null,
+          children: [],
+          transform: createDefaultTransform(),
+          visible: true,
+          locked: false,
+          opacity: 1,
+          blendMode: 'normal',
+          width: 400,
+          height: 300,
+          fills: [createDefaultFill()],
+          clipContent: false,
+        };
+        sceneGraph.addNode(artboard);
+        sceneGraph.addNode(createRectangleNode('square', 50, 50), 'art');
+      }
+
+      /** The ghosts of a frame, gathered as the onion skin does: the layer's texture. */
+      function gatherGhosts(): unknown {
+        const made = vi.mocked(gl.createTexture).mock.results.length;
+        shapeRenderer.beginGhostLayer();
+        const layer = vi.mocked(gl.createTexture).mock.results[made]?.value as unknown;
+        shapeRenderer.renderGhostScene(sceneGraph, mat3.identity(), 0.5, [1, 0, 0]);
+        shapeRenderer.endGhostLayer();
+        return layer;
+      }
+
+      /** When the ghost layer was laid on the canvas (its texture bound to draw it). */
+      const laid = (layer: unknown) =>
+        vi
+          .mocked(gl.bindTexture)
+          .mock.calls.flatMap((call, i) =>
+            call[1] === layer ? [vi.mocked(gl.bindTexture).mock.invocationCallOrder[i]!] : []
+          );
+
+      it('lays the ghosts over its background, under what is on it, once', () => {
+        artboardWithSquare();
+        const layer = gatherGhosts();
+        expect(layer).toBeDefined();
+        const background = vi.spyOn(shapeRenderer, 'renderArtboardBackground');
+        vi.mocked(gl.bindTexture).mockClear();
+        vi.mocked(gl.drawElements).mockClear();
+        vi.mocked(gl.scissor).mockClear();
+
+        shapeRenderer.render(sceneGraph, mat3.identity());
+
+        // Laid once, cut to the artboard, after its background
+        const [quad, ...more] = laid(layer);
+        expect(quad).toBeDefined();
+        expect(more).toHaveLength(0);
+        expect(gl.scissor).toHaveBeenCalled();
+        expect(background.mock.invocationCallOrder[0]).toBeLessThan(quad!);
+        // The square is drawn after it, over it
+        const drawn = vi.mocked(gl.drawElements).mock.invocationCallOrder;
+        expect(drawn.some((order) => order > quad!)).toBe(true);
+
+        // Only in the frame it was gathered for
+        vi.mocked(gl.bindTexture).mockClear();
+        shapeRenderer.render(sceneGraph, mat3.identity());
+        expect(laid(layer)).toHaveLength(0);
+      });
+
+      it("leaves the artboard's background out of the ghosts", () => {
+        artboardWithSquare();
+        const background = vi.spyOn(shapeRenderer, 'renderArtboardBackground');
+
+        gatherGhosts();
+
+        expect(background).not.toHaveBeenCalled();
+      });
     });
   });
 

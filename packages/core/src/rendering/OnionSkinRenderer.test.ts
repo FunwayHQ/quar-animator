@@ -16,6 +16,8 @@ import type { SceneGraph } from '../SceneGraph';
 function createMockShapeRenderer(): ShapeRenderer {
   return {
     renderGhostScene: vi.fn(),
+    beginGhostLayer: vi.fn(),
+    endGhostLayer: vi.fn(),
   } as unknown as ShapeRenderer;
 }
 
@@ -37,6 +39,37 @@ function enabledSettings(overrides?: Partial<OnionSkinSettings>): OnionSkinSetti
 // ============================================================================
 
 describe('OnionSkinRenderer', () => {
+  it('gathers its ghosts into one layer, which a filled artboard then shows', () => {
+    const shapeRenderer = createMockShapeRenderer();
+    const renderer = new OnionSkinRenderer(shapeRenderer);
+    const getNodes = vi.fn().mockReturnValue(createTestScene('n1'));
+
+    renderer.render(
+      enabledSettings({ beforeCount: 1, afterCount: 1 }),
+      10,
+      getNodes,
+      mat3.identity()
+    );
+
+    const begin = vi.mocked(shapeRenderer.beginGhostLayer).mock.invocationCallOrder;
+    const ghosts = vi.mocked(shapeRenderer.renderGhostScene).mock.invocationCallOrder;
+    const end = vi.mocked(shapeRenderer.endGhostLayer).mock.invocationCallOrder;
+    expect(begin).toHaveLength(1);
+    expect(end).toHaveLength(1);
+    expect(ghosts).toHaveLength(2);
+    expect(ghosts.every((order) => order > begin[0]! && order < end[0]!)).toBe(true);
+  });
+
+  it('makes no layer when no frame has a ghost', () => {
+    const shapeRenderer = createMockShapeRenderer();
+    const renderer = new OnionSkinRenderer(shapeRenderer);
+
+    renderer.render(enabledSettings(), 10, () => null, mat3.identity());
+
+    expect(shapeRenderer.beginGhostLayer).not.toHaveBeenCalled();
+    expect(shapeRenderer.endGhostLayer).not.toHaveBeenCalled();
+  });
+
   it('does nothing when disabled', () => {
     const shapeRenderer = createMockShapeRenderer();
     const renderer = new OnionSkinRenderer(shapeRenderer);

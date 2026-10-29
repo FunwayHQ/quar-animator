@@ -57,6 +57,7 @@ export function createMockWebGL2Context(): WebGL2RenderingContext {
     clearColor: vi.fn(),
     clear: vi.fn(),
     viewport: vi.fn(),
+    scissor: vi.fn(),
 
     // Shader operations
     createShader: vi.fn().mockReturnValue(mockShader),
@@ -99,6 +100,7 @@ export function createMockWebGL2Context(): WebGL2RenderingContext {
     uniform1f: vi.fn(),
     uniform2fv: vi.fn(),
     uniform2f: vi.fn(),
+    uniform3f: vi.fn(),
     uniform3fv: vi.fn(),
     uniform4fv: vi.fn(),
     uniformMatrix3fv: vi.fn(),

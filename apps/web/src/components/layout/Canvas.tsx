@@ -716,7 +716,8 @@ export function Canvas({
         // Render grid
         grid.render(viewProjectionMatrix, visibleBounds, camera.zoom);
 
-        // Render onion skin ghost frames (before current frame shapes)
+        // Render onion skin ghost frames (before current frame shapes; the
+        // shape renderer lays them again over each artboard's background)
         if (sceneGraphRef.current && onionSkinRenderer) {
           const {
             onionSkin,

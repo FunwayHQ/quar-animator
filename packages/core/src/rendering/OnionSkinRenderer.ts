@@ -68,9 +68,15 @@ export class OnionSkinRenderer {
 
     const beforeColorRgb = hexToRgbNormalized(settings.beforeColor);
     const afterColorRgb = hexToRgbNormalized(settings.afterColor);
+    // The ghosts are gathered into one layer, laid over the page now and over
+    // each artboard's background as the scene is drawn: an artboard with a
+    // background doesn't hide them
+    let gathering = false;
     const ghost = (frame: number, distance: number, tint: [number, number, number]) => {
       const scene = getSceneAtFrame(frame);
       if (!scene) return;
+      if (!gathering) this.shapeRenderer.beginGhostLayer();
+      gathering = true;
       // The closest ghost (distance 1) gets the full base opacity; falloff
       // only fades the ones further away
       const frameOpacity = settings.opacity * Math.pow(1 - settings.opacityFalloff, distance - 1);
@@ -90,5 +96,7 @@ export class OnionSkinRenderer {
       if (timelineDuration !== undefined && frame >= timelineDuration) continue;
       ghost(frame, i, afterColorRgb);
     }
+
+    if (gathering) this.shapeRenderer.endGhostLayer();
   }
 }

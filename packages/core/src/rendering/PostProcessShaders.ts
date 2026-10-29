@@ -273,7 +273,11 @@ void main() {
 // Onion-skin Ghost Composite
 // ============================================================================
 
-/** A ghost pass laid over the canvas: its colours half-way to the tint, faded. */
+/**
+ * A ghost pass laid over the canvas: its colours half-way to the tint
+ * (u_tintAmount 0.5), faded. The ghosts gathered into one layer are laid
+ * with no more tint (0) and their own alpha (1).
+ */
 const GHOST_FRAGMENT = `#version 300 es
 precision highp float;
 
@@ -281,6 +285,7 @@ in vec2 v_texCoord;
 
 uniform sampler2D u_texture;
 uniform vec3 u_tint;
+uniform float u_tintAmount;
 uniform float u_alpha;
 
 out vec4 outColor;
@@ -290,7 +295,7 @@ void main() {
   if (c.a <= 0.0) discard;
   // The pass is drawn premultiplied
   vec3 color = clamp(c.rgb / c.a, 0.0, 1.0);
-  outColor = vec4(mix(color, u_tint, 0.5), c.a * u_alpha);
+  outColor = vec4(mix(color, u_tint, u_tintAmount), c.a * u_alpha);
 }
 `;
 
@@ -306,7 +311,7 @@ export function createGhostComposite(renderer: WebGLRenderer): GhostComposite {
     COMPOSITE_VERTEX,
     GHOST_FRAGMENT,
     ['a_position', 'a_texCoord'],
-    ['u_texture', 'u_tint', 'u_alpha']
+    ['u_texture', 'u_tint', 'u_tintAmount', 'u_alpha']
   );
   const { vao: quadVAO, vbo: quadVBO } = createFullscreenQuad(renderer.context);
   return { program, quadVAO, quadVBO };
