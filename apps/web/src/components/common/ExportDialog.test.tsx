@@ -1017,7 +1017,7 @@ describe('ExportDialog', () => {
     );
     act(() => showExportDialog('lottie'));
     expect(screen.getByTestId('export-video-stills')).toHaveTextContent(
-      '1 video layer will show as a still picture: Lottie doesn’t play video. MP4, WebM and GIF play it.'
+      '1 video layer will show as a still picture: Lottie doesn’t play video. MP4, WebM, GIF, PNG Sequence and Sprite Sheet play it.'
     );
     fireEvent.click(screen.getByTestId('export-tab-svg'));
     expect(screen.getByTestId('export-video-stills')).toHaveTextContent('SVG doesn’t play video');

@@ -1454,8 +1454,8 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
                   {stillVideoCount === 1
                     ? '1 video layer will show as a still picture'
                     : `${stillVideoCount} video layers will show as still pictures`}
-                  : {stillVideoFormat} doesn’t play video. MP4, WebM and GIF play{' '}
-                  {stillVideoCount === 1 ? 'it' : 'them'}.
+                  : {stillVideoFormat} doesn’t play video. MP4, WebM, GIF, PNG Sequence and Sprite
+                  Sheet play {stillVideoCount === 1 ? 'it' : 'them'}.
                 </span>
               </div>
             )}
