@@ -345,7 +345,7 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
             addKf(nodeId, 'transform.scale.x', frame, node.transform.scale.x);
           if (shouldKf(nodeId, 'transform.scale.y'))
             addKf(nodeId, 'transform.scale.y', frame, node.transform.scale.y);
-        } else if (node.type === 'image') {
+        } else if (node.type === 'image' || node.type === 'video') {
           if (shouldKf(nodeId, 'width')) addKf(nodeId, 'width', frame, node.width);
           if (shouldKf(nodeId, 'height')) addKf(nodeId, 'height', frame, node.height);
         }

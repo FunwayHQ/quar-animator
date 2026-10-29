@@ -9,6 +9,7 @@ import { useEditorStore, DEFAULT_FILL, DEFAULT_STROKE } from '../stores/editorSt
 import { Camera, SceneGraph } from '@quar/core';
 import { createKeyframe, createTimeline, createTrack } from '@quar/animation';
 import { toast } from '../components/common/Toast';
+import { videoLayer } from '../test/videoLayerFixture';
 import type React from 'react';
 
 // ============================================================================
@@ -450,6 +451,33 @@ describe('useCanvasTools', () => {
       );
       expect(scaleX?.keyframes[0]?.value).toBeCloseTo(1.5, 5);
       useEditorStore.setState({ symbols: [], autoKeyframe: false });
+    });
+  });
+
+  describe('resizing a video layer', () => {
+    it('keys its size, as a picture’s, when auto-keyframe is on', () => {
+      useEditorStore.setState({
+        autoKeyframe: true,
+        currentFrame: 0,
+        timeline: createTimeline(),
+        selectedNodeIds: new Set(['video']),
+      });
+      sceneGraph.addNode(videoLayer('video', { width: 100, height: 100 }));
+      const { result } = renderHook(() => useCanvasTools({ camera, sceneGraph }));
+
+      // Drag the (50, 50) corner of its -50..50 box out by 50
+      const at = (x: number, y: number) => [camera.worldToScreen({ x, y }), { x, y }] as const;
+      act(() => result.current.handlePointerDown(...at(50, 50), createMockPointerEvent()));
+      act(() => result.current.handlePointerMove(...at(100, 100), createMockPointerEvent()));
+      act(() => result.current.handlePointerUp(...at(100, 100), createMockPointerEvent()));
+
+      const { timeline } = useEditorStore.getState();
+      const keyed = (property: string) =>
+        timeline?.tracks.find((t) => t.nodeId === 'video' && t.property === property)?.keyframes[0]
+          ?.value;
+      expect(keyed('width')).toBe(150);
+      expect(keyed('height')).toBe(150);
+      useEditorStore.setState({ autoKeyframe: false });
     });
   });
 

@@ -178,6 +178,21 @@ describe('getAnimatableProperties', () => {
     expect(props.some((p) => p.path === 'radiusY')).toBe(true);
   });
 
+  it('animates a video layer as a picture: its size, corners and adjustments, not its clip', () => {
+    const props = getAnimatableProperties('video').map((p) => p.path);
+    const picture = getAnimatableProperties('image').map((p) => p.path);
+    for (const path of ['transform.position.x', 'opacity', 'width', 'height', 'cornerRadius.2']) {
+      expect(props).toContain(path);
+    }
+    // The picture's adjustments, every one
+    expect(props.filter((p) => p.startsWith('adjustments.'))).toEqual(
+      picture.filter((p) => p.startsWith('adjustments.'))
+    );
+    // Not pulled out of shape, and its timing isn't keyed
+    expect(props.some((p) => p.startsWith('vertexOffsets'))).toBe(false);
+    expect(props.some((p) => p.startsWith('clip'))).toBe(false);
+  });
+
   it('returns polygon-specific properties', () => {
     const props = getAnimatableProperties('polygon');
     expect(props.some((p) => p.path === 'radius')).toBe(true);

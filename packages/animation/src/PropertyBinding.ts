@@ -277,6 +277,27 @@ export const POLYGON_ANIMATABLE_PROPERTIES: AnimatableProperty[] = [
 ];
 
 /**
+ * A picture's animatable properties, an image's or a video's: its size,
+ * corners and adjustments.
+ */
+export const PICTURE_ANIMATABLE_PROPERTIES: AnimatableProperty[] = [
+  { path: 'width', displayName: 'Width', interpolationType: 'number' },
+  { path: 'height', displayName: 'Height', interpolationType: 'number' },
+  { path: 'cornerRadius.0', displayName: 'Corner TL', interpolationType: 'number' },
+  { path: 'cornerRadius.1', displayName: 'Corner TR', interpolationType: 'number' },
+  { path: 'cornerRadius.2', displayName: 'Corner BR', interpolationType: 'number' },
+  { path: 'cornerRadius.3', displayName: 'Corner BL', interpolationType: 'number' },
+  { path: 'adjustments.brightness', displayName: 'Brightness', interpolationType: 'number' },
+  { path: 'adjustments.contrast', displayName: 'Contrast', interpolationType: 'number' },
+  { path: 'adjustments.saturation', displayName: 'Saturation', interpolationType: 'number' },
+  { path: 'adjustments.hue', displayName: 'Hue', interpolationType: 'number' },
+  { path: 'adjustments.exposure', displayName: 'Exposure', interpolationType: 'number' },
+  { path: 'adjustments.temperature', displayName: 'Temperature', interpolationType: 'number' },
+  { path: 'adjustments.tint', displayName: 'Tint', interpolationType: 'number' },
+  { path: 'adjustments.blur', displayName: 'Blur', interpolationType: 'number' },
+];
+
+/**
  * Bone-specific animatable properties.
  */
 export const BONE_ANIMATABLE_PROPERTIES: AnimatableProperty[] = [
@@ -328,24 +349,7 @@ export function getAnimatableProperties(nodeType: string): AnimatableProperty[] 
       break;
     case 'image':
       props.push(
-        { path: 'width', displayName: 'Width', interpolationType: 'number' },
-        { path: 'height', displayName: 'Height', interpolationType: 'number' },
-        { path: 'cornerRadius.0', displayName: 'Corner TL', interpolationType: 'number' },
-        { path: 'cornerRadius.1', displayName: 'Corner TR', interpolationType: 'number' },
-        { path: 'cornerRadius.2', displayName: 'Corner BR', interpolationType: 'number' },
-        { path: 'cornerRadius.3', displayName: 'Corner BL', interpolationType: 'number' },
-        { path: 'adjustments.brightness', displayName: 'Brightness', interpolationType: 'number' },
-        { path: 'adjustments.contrast', displayName: 'Contrast', interpolationType: 'number' },
-        { path: 'adjustments.saturation', displayName: 'Saturation', interpolationType: 'number' },
-        { path: 'adjustments.hue', displayName: 'Hue', interpolationType: 'number' },
-        { path: 'adjustments.exposure', displayName: 'Exposure', interpolationType: 'number' },
-        {
-          path: 'adjustments.temperature',
-          displayName: 'Temperature',
-          interpolationType: 'number',
-        },
-        { path: 'adjustments.tint', displayName: 'Tint', interpolationType: 'number' },
-        { path: 'adjustments.blur', displayName: 'Blur', interpolationType: 'number' },
+        ...PICTURE_ANIMATABLE_PROPERTIES,
         // Vertex offsets for free-form distortion [BL, BR, TL, TR]
         { path: 'vertexOffsets.0.x', displayName: 'Vertex BL X', interpolationType: 'number' },
         { path: 'vertexOffsets.0.y', displayName: 'Vertex BL Y', interpolationType: 'number' },
@@ -356,6 +360,10 @@ export function getAnimatableProperties(nodeType: string): AnimatableProperty[] 
         { path: 'vertexOffsets.3.x', displayName: 'Vertex TR X', interpolationType: 'number' },
         { path: 'vertexOffsets.3.y', displayName: 'Vertex TR Y', interpolationType: 'number' }
       );
+      break;
+    case 'video':
+      // Placed and adjusted as a picture is; its clip's timing isn't keyed
+      props.push(...PICTURE_ANIMATABLE_PROPERTIES);
       break;
     case 'group':
       // Boolean groups also have fills/strokes animatable properties
