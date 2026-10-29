@@ -80,12 +80,20 @@ vi.mock('../components/common/Toast', () => ({
 }));
 
 // Mock @quar/core importSvg
+const mockImportSvg = vi.fn().mockReturnValue({
+  rootIds: [],
+  nodes: [],
+  warnings: [],
+});
 vi.mock('@quar/core', () => ({
-  importSvg: vi.fn().mockReturnValue({
-    rootIds: [],
-    nodes: [],
-    warnings: [],
-  }),
+  importSvg: (...args: unknown[]) => mockImportSvg(...args),
+  createGroupNode: (id: string, name: string) => ({ id, name, type: 'group', children: [] }),
+}));
+
+// Mock the artboard drop-in
+const mockIntoArtboard = vi.fn();
+vi.mock('../services/intoArtboard', () => ({
+  intoArtboardBeneath: (...args: unknown[]) => mockIntoArtboard(...args),
 }));
 
 // Mock @quar/animation
@@ -103,6 +111,7 @@ const mockSceneGraph = {
   fromJSON: vi.fn(),
   removeNode: vi.fn(),
   addNode: vi.fn(),
+  moveNode: vi.fn(),
 };
 
 vi.mock('../contexts/SceneGraphContext', () => ({
@@ -134,6 +143,7 @@ const mockEditorState: Record<string, unknown> = {
   clearHistory: vi.fn(),
   resetProject: vi.fn(),
   flushSequenceEdits: vi.fn(),
+  pushUndo: vi.fn(),
 };
 
 vi.mock('../stores/editorStore', () => ({
@@ -602,6 +612,44 @@ describe('useProjectActions', () => {
       });
 
       expect(list).toEqual(projectList);
+    });
+  });
+
+  describe('importSvg', () => {
+    /** Runs File › Import SVG… with `file` chosen in the file dialog. */
+    function importChosen(file: File) {
+      const createElement = document.createElement.bind(document);
+      let input: HTMLInputElement | undefined;
+      const spy = vi.spyOn(document, 'createElement').mockImplementation((tag: string) => {
+        const element = createElement(tag);
+        if (tag === 'input') {
+          input = element as HTMLInputElement;
+          input.click = () => {};
+        }
+        return element;
+      });
+      const { result } = renderProjectActions();
+      act(() => result.current.importSvg());
+      spy.mockRestore();
+      Object.defineProperty(input, 'files', { value: [file] });
+      input?.onchange?.(new Event('change'));
+    }
+    const svgFile = () => new File(['<svg/>'], 'art.svg', { type: 'image/svg+xml' });
+
+    it('puts the artwork into the artboard beneath it, as dropping does', async () => {
+      mockImportSvg.mockReturnValueOnce({ rootIds: ['star'], nodes: [{}], warnings: [] });
+      importChosen(svgFile());
+      await vi.waitFor(() => expect(mockIntoArtboard).toHaveBeenCalledWith(mockSceneGraph, 'star'));
+      expect(mockEditorState.selectedNodeIds).toEqual(new Set(['star']));
+    });
+
+    it('puts several shapes in as their group', async () => {
+      mockImportSvg.mockReturnValueOnce({ rootIds: ['a', 'b'], nodes: [{}, {}], warnings: [] });
+      importChosen(svgFile());
+      await vi.waitFor(() => expect(mockIntoArtboard).toHaveBeenCalledOnce());
+      const groupId = (mockSceneGraph.addNode.mock.calls[0]?.[0] as { id: string }).id;
+      expect(mockIntoArtboard).toHaveBeenCalledWith(mockSceneGraph, groupId);
+      expect(mockSceneGraph.moveNode).toHaveBeenCalledWith('a', groupId);
     });
   });
 

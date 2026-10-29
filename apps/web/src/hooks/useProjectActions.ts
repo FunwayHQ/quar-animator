@@ -307,11 +307,14 @@ export function useProjectActions(options: UseProjectActionsOptions = {}): Proje
             for (const rootId of result.rootIds) {
               sceneGraph.moveNode(rootId, groupId);
             }
+            // Into the artboard it lands on, as a dropped or pasted SVG goes
+            intoArtboardBeneath(sceneGraph, groupId);
             useEditorStore.setState({ selectedNodeIds: new Set([groupId]) });
             toast.success(
               `Imported ${result.nodes.length} element${result.nodes.length === 1 ? '' : 's'} from SVG`
             );
           } else if (result.rootIds.length === 1) {
+            for (const rootId of result.rootIds) intoArtboardBeneath(sceneGraph, rootId);
             useEditorStore.setState({ selectedNodeIds: new Set(result.rootIds) });
             toast.success(
               `Imported ${result.nodes.length} element${result.nodes.length === 1 ? '' : 's'} from SVG`
