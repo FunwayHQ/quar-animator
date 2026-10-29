@@ -345,7 +345,7 @@ describe('Timeline', () => {
     expect(screen.getByTestId('timeline-layer-logo')).toBeInTheDocument();
   });
 
-  it('tells artboards of the same name apart in the picker', () => {
+  it('names artboards as Layers does in the picker, numbering repeated names apart', () => {
     let graph: SceneGraph | undefined;
     function CaptureGraph() {
       graph = useSceneGraph();
@@ -358,17 +358,23 @@ describe('Timeline', () => {
         <Timeline />
       </SceneGraphProvider>
     );
+    const addBoard = (id: string, name: string) =>
+      graph!.addNode({ id, name, type: 'artboard', children: [] } as unknown as Node);
     act(() => {
-      for (const id of ['a', 'b']) {
-        graph!.addNode({ id, name: 'Artboard', type: 'artboard', children: [] } as unknown as Node);
-      }
+      addBoard('a', 'Artboard');
+      addBoard('b', 'Artboard');
     });
     const picker = screen.getByRole('combobox', { name: 'Timeline' });
-    expect([...picker.querySelectorAll('option')].map((o) => o.textContent)).toEqual([
-      'Artboard',
-      'Artboard 2',
-      'Page (outside artboards)',
-    ]);
+    const options = () => [...picker.querySelectorAll('option')].map((o) => o.textContent);
+    // Topmost in Layers first; numbered with a mark no name is taken for
+    expect(options()).toEqual(['Artboard · 1', 'Artboard · 2', 'Page (outside artboards)']);
+
+    // An artboard really called "Artboard 2", and one named apart: their own names
+    act(() => {
+      graph!.updateNode('a', { name: 'Intro' });
+      addBoard('c', 'Artboard 2');
+    });
+    expect(options()).toEqual(['Artboard 2', 'Artboard', 'Intro', 'Page (outside artboards)']);
   });
 
   it('has no picker on a page without artboards (it has the one timeline)', () => {

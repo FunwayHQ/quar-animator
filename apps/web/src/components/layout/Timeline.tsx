@@ -467,16 +467,21 @@ export function Timeline({ playback }: TimelineProps = {}) {
           timelineScope === null ? root.type !== 'artboard' : root.id === timelineScope;
         if (inView) visit(root);
       }
-      // Named apart where names repeat ("Artboard", "Artboard 2"), in the Layers order
-      const seen = new Map<string, number>();
-      const boards = roots
+      // Each by its own name, as Layers lists it; where names repeat, numbered
+      // in the Layers order ("Artboard · 1", "Artboard · 2"), a mark that
+      // can't be taken for a name ("Artboard 2" can be one)
+      const named = roots
         .filter((root) => root.type === 'artboard')
-        .map((root) => {
-          const name = root.name || 'Artboard';
-          const count = (seen.get(name) ?? 0) + 1;
-          seen.set(name, count);
-          return { id: root.id, name: count > 1 ? `${name} ${count}` : name };
-        });
+        .map((root) => ({ id: root.id, name: root.name || 'Artboard' }));
+      const total = new Map<string, number>();
+      for (const { name } of named) total.set(name, (total.get(name) ?? 0) + 1);
+      const seen = new Map<string, number>();
+      const boards = named.map(({ id, name }) => {
+        if (total.get(name) === 1) return { id, name };
+        const count = (seen.get(name) ?? 0) + 1;
+        seen.set(name, count);
+        return { id, name: `${name} · ${count}` };
+      });
       const boardsKey = JSON.stringify(boards);
       if (boardsKey !== shownBoards) {
         shownBoards = boardsKey;
