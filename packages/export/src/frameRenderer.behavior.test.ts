@@ -130,6 +130,34 @@ describe('createFrameRenderer', () => {
     });
   });
 
+  it('draws video layers with the pictures it’s given, nothing without them', () => {
+    const sceneGraph = createSceneGraph({ id: 'clip', opacity: 1 });
+    const timeline = { tracks: [] } as unknown as Timeline;
+    const provider = vi.fn(() => null);
+    createFrameRenderer({ width: 10, height: 10, videoFrames: provider }).renderFrame(
+      { sceneGraph: sceneGraph as any, timeline },
+      0
+    );
+    expect(mocks.setVideoFrames).toHaveBeenLastCalledWith(provider);
+    createFrameRenderer({ width: 10, height: 10 }).renderFrame(
+      { sceneGraph: sceneGraph as any, timeline },
+      0
+    );
+    expect(mocks.setVideoFrames).toHaveBeenLastCalledWith(null);
+  });
+
+  it('draws a drawing’s own video pictures over the export’s', () => {
+    const sceneGraph = createSceneGraph({ id: 'clip', opacity: 1 });
+    const timeline = { tracks: [] } as unknown as Timeline;
+    const picture = { source: {} as TexImageSource, key: 'own' };
+    const videoFrames = vi.fn(() => picture);
+    const handle = createFrameRenderer({ width: 10, height: 10, videoFrames: vi.fn(() => null) });
+
+    handle.renderFrame({ sceneGraph: sceneGraph as any, timeline, videoFrames }, 3);
+    const provider = mocks.setVideoFrames.mock.calls.at(-1)?.[0];
+    expect(provider({ id: 'clip', type: 'video' })).toBe(picture);
+  });
+
   it('restores node state if WebGL rendering throws', () => {
     const node = { id: 'shape-1', opacity: 1 };
     const sceneGraph = createSceneGraph(node);

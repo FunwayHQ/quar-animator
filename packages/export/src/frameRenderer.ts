@@ -17,7 +17,7 @@ import type {
   VideoNode,
   WindSettings,
 } from '@quar/types';
-import type { SceneGraph, VideoFrameImage } from '@quar/core';
+import type { SceneGraph, VideoFrameImage, VideoFrameProvider } from '@quar/core';
 import { WebGLRenderer, ShapeRenderer, mat3 } from '@quar/core';
 import { evaluateTimelineAtFrame, applyAnimatedValues } from '@quar/animation';
 import {
@@ -43,6 +43,8 @@ export interface FrameRenderOptions {
   height: number;
   multiplier?: number;
   backgroundColor?: Color | null; // null = transparent
+  /** The pictures video layers show in the frame drawn (an export's, prepared before each; none: nothing) */
+  videoFrames?: VideoFrameProvider;
 }
 
 /** The rig evaluated on top of the keyframes, in the editor's order. */
@@ -68,7 +70,7 @@ export interface FrameRenderContext {
   symbols?: SymbolDefinition[];
   /**
    * The picture each video layer shows at the frame drawn (null: nothing);
-   * without, video layers draw nothing.
+   * without, the renderer's `videoFrames`, else video layers draw nothing.
    */
   videoFrames?: (node: VideoNode, frame: number) => VideoFrameImage | null;
 }
@@ -183,9 +185,12 @@ export function createFrameRenderer(options: FrameRenderOptions): FrameRendererH
       }
       gl.clear(gl.COLOR_BUFFER_BIT);
 
-      // Video layers show this drawing's pictures of them at this frame
+      // Video layers show this drawing's pictures of them at this frame, else
+      // the export's (prepared before each frame)
       const videoFrames = ctx.videoFrames;
-      shapeRenderer.setVideoFrames(videoFrames ? (node) => videoFrames(node, frame) : null);
+      shapeRenderer.setVideoFrames(
+        videoFrames ? (node) => videoFrames(node, frame) : (options.videoFrames ?? null)
+      );
 
       // Render scene
       shapeRenderer.render(sceneGraph, vpMatrix, new Set(), null, morphOffsets, ctx.exportRootIds);
