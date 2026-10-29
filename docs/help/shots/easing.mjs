@@ -36,7 +36,8 @@ const rocketWithCustomEasing = [
       const id = await layerWithEasing(page, 'easeOutBack');
       await pointAt(
         page,
-        `[data-testid="timeline-track-${id}"] [data-testid^="keyframe-kf"] >> nth=5`,
+        // Its last diamond (one stands for all of a frame's keyframes)
+        `[data-testid="timeline-track-${id}"] [data-testid^="keyframe-kf"] >> nth=-1`,
         {
           button: 'right',
         }
