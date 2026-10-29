@@ -337,6 +337,11 @@ function getPlacedTopLeft(
   return { x, y };
 }
 
+/** Whether a node has a width and height to show: bones and IK targets don't. */
+function hasSize(node: Node): boolean {
+  return node.type !== 'bone' && node.type !== 'ik-target' && node.type !== 'vitruvian';
+}
+
 function isSizeEditable(node: Node): boolean {
   return (
     node.type === 'rectangle' ||
@@ -1749,83 +1754,86 @@ export function PropertiesPanel() {
                 </div>
               </div>
             </div>
-            <div className={styles.propertyRow}>
-              <div className={styles.propertyHeader}>
-                <label className={styles.propertyLabel} htmlFor="prop-size-w">
-                  Size
-                </label>
-                {/* Text's size is its box: keyframing it as scale would stretch the glyphs */}
-                {node.type !== 'text' && (
-                  <KeyframeIndicator
-                    state={getGroupKeyframeState(
-                      timeline,
-                      nodeId,
-                      [sizePaths.w, sizePaths.h],
-                      currentFrame
-                    )}
-                    onToggle={() =>
-                      toggleKeyframes([
-                        [sizePaths.w, getSizePropertyValue(sizePaths.w)],
-                        [sizePaths.h, getSizePropertyValue(sizePaths.h)],
-                      ])
-                    }
-                  />
-                )}
-              </div>
-              <div className={styles.propertyInputs}>
-                <div className={styles.inputGroup}>
-                  <ScrubLabel
-                    onScrubStart={handleScrubStart}
-                    label="W"
-                    value={Math.round(size.width) || 0}
-                    onChange={(v) => handleSizeChange('width', String(v))}
-                    min={1}
-                  />
-                  <input
-                    id="prop-size-w"
-                    type="text"
-                    className={styles.input}
-                    value={fmt1(size.width)}
-                    readOnly={!isSizeEditable(node)}
-                    onChange={(e) => handleSizeChange('width', e.target.value)}
-                    {...numericInputProps(
-                      () => Math.round(size.width),
-                      (v) => handleSizeChange('width', v)
-                    )}
-                  />
+            {/* Bones and IK targets have no width and height (a bone's Length is below) */}
+            {hasSize(node) && (
+              <div className={styles.propertyRow}>
+                <div className={styles.propertyHeader}>
+                  <label className={styles.propertyLabel} htmlFor="prop-size-w">
+                    Size
+                  </label>
+                  {/* Text's size is its box: keyframing it as scale would stretch the glyphs */}
+                  {node.type !== 'text' && (
+                    <KeyframeIndicator
+                      state={getGroupKeyframeState(
+                        timeline,
+                        nodeId,
+                        [sizePaths.w, sizePaths.h],
+                        currentFrame
+                      )}
+                      onToggle={() =>
+                        toggleKeyframes([
+                          [sizePaths.w, getSizePropertyValue(sizePaths.w)],
+                          [sizePaths.h, getSizePropertyValue(sizePaths.h)],
+                        ])
+                      }
+                    />
+                  )}
                 </div>
-                <button
-                  className={`${styles.lockButton} ${aspectRatioLocked ? styles.lockButtonActive : ''}`}
-                  onClick={toggleAspectRatioLock}
-                  title={aspectRatioLocked ? 'Unlock aspect ratio' : 'Lock aspect ratio'}
-                  aria-label={aspectRatioLocked ? 'Unlock aspect ratio' : 'Lock aspect ratio'}
-                  data-testid="aspect-ratio-lock"
-                >
-                  {aspectRatioLocked ? <Lock size={12} /> : <Unlock size={12} />}
-                </button>
-                <div className={styles.inputGroup}>
-                  <ScrubLabel
-                    onScrubStart={handleScrubStart}
-                    label="H"
-                    value={Math.round(size.height) || 0}
-                    onChange={(v) => handleSizeChange('height', String(v))}
-                    min={1}
-                  />
-                  <input
-                    id="prop-size-h"
-                    type="text"
-                    className={styles.input}
-                    value={fmt1(size.height)}
-                    readOnly={!isSizeEditable(node)}
-                    onChange={(e) => handleSizeChange('height', e.target.value)}
-                    {...numericInputProps(
-                      () => Math.round(size.height),
-                      (v) => handleSizeChange('height', v)
-                    )}
-                  />
+                <div className={styles.propertyInputs}>
+                  <div className={styles.inputGroup}>
+                    <ScrubLabel
+                      onScrubStart={handleScrubStart}
+                      label="W"
+                      value={Math.round(size.width) || 0}
+                      onChange={(v) => handleSizeChange('width', String(v))}
+                      min={1}
+                    />
+                    <input
+                      id="prop-size-w"
+                      type="text"
+                      className={styles.input}
+                      value={fmt1(size.width)}
+                      readOnly={!isSizeEditable(node)}
+                      onChange={(e) => handleSizeChange('width', e.target.value)}
+                      {...numericInputProps(
+                        () => Math.round(size.width),
+                        (v) => handleSizeChange('width', v)
+                      )}
+                    />
+                  </div>
+                  <button
+                    className={`${styles.lockButton} ${aspectRatioLocked ? styles.lockButtonActive : ''}`}
+                    onClick={toggleAspectRatioLock}
+                    title={aspectRatioLocked ? 'Unlock aspect ratio' : 'Lock aspect ratio'}
+                    aria-label={aspectRatioLocked ? 'Unlock aspect ratio' : 'Lock aspect ratio'}
+                    data-testid="aspect-ratio-lock"
+                  >
+                    {aspectRatioLocked ? <Lock size={12} /> : <Unlock size={12} />}
+                  </button>
+                  <div className={styles.inputGroup}>
+                    <ScrubLabel
+                      onScrubStart={handleScrubStart}
+                      label="H"
+                      value={Math.round(size.height) || 0}
+                      onChange={(v) => handleSizeChange('height', String(v))}
+                      min={1}
+                    />
+                    <input
+                      id="prop-size-h"
+                      type="text"
+                      className={styles.input}
+                      value={fmt1(size.height)}
+                      readOnly={!isSizeEditable(node)}
+                      onChange={(e) => handleSizeChange('height', e.target.value)}
+                      {...numericInputProps(
+                        () => Math.round(size.height),
+                        (v) => handleSizeChange('height', v)
+                      )}
+                    />
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
             {hasCornerRadius(node) &&
               (() => {
                 const cr = getCornerRadius(node);

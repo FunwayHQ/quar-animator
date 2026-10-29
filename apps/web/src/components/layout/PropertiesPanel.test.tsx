@@ -12,6 +12,7 @@ import {
   getTextNodeBounds,
 } from '@quar/core';
 import { applyAnimatedValues, createTimeline, evaluateNodeAtFrame } from '@quar/animation';
+import { createBoneNode } from '@quar/rigging';
 import type { SceneGraph } from '@quar/core';
 import type {
   RectangleNode,
@@ -226,6 +227,28 @@ describe('PropertiesPanel', () => {
 
     act(() => useEditorStore.getState().setSelection(['hex']));
     expect(header()).toHaveTextContent(/^PropertiesPolygon$/);
+  });
+
+  it('shows no width and height for a bone (its Length instead) or an IK target', () => {
+    const sg = renderWithSceneGraph();
+    act(() => {
+      sg.addNode(createBoneNode('bone', 'Bone 1', { x: 0, y: 0 }, 80));
+      sg.addNode({
+        ...createTestRect('target', 'IK Target'),
+        type: 'ik-target',
+        ikChainId: 'chain',
+        targetType: 'effector',
+      } as unknown as Node);
+      useEditorStore.getState().setSelection(['bone']);
+    });
+    expect(screen.getByText('Position')).toBeInTheDocument();
+    expect(screen.getByText('Length')).toBeInTheDocument();
+    expect(screen.queryByText('Size')).toBeNull();
+    expect(document.getElementById('prop-size-w')).toBeNull();
+
+    act(() => useEditorStore.getState().setSelection(['target']));
+    expect(screen.getByText('Position')).toBeInTheDocument();
+    expect(screen.queryByText('Size')).toBeNull();
   });
 
   it('adds presets as Animation Sequence steps while the sequence window is open', () => {
