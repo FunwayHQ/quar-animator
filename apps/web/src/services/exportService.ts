@@ -7,6 +7,8 @@
 import type { Node, ArtboardNode, SymbolDefinition } from '@quar/types';
 import { SceneGraph, SelectionManager, WebGLRenderer, ShapeRenderer, mat3 } from '@quar/core';
 import { exportNodesToSvg } from '@quar/core';
+import { copyScene, drawVideoStills } from '@quar/export';
+import { canvasVideoMoments, loadVideoStills } from './videoStills';
 
 // ============================================================================
 // Filename Generation
@@ -205,16 +207,26 @@ function canvasToBlob(canvas: HTMLCanvasElement, type: string): Promise<Blob | n
 // ============================================================================
 
 /**
- * Export selected nodes as an SVG file.
+ * Export selected nodes as an SVG file. A video layer is a picture of its
+ * still: the moment the canvas shows of it now.
  */
-export function exportSelectionAsSvg(
+export async function exportSelectionAsSvg(
   nodes: Node[],
   sceneGraph: SceneGraph,
   symbolDefinitions?: SymbolDefinition[]
-): void {
+): Promise<void> {
   if (nodes.length === 0) return;
 
-  const svgString = exportNodesToSvg(nodes, sceneGraph, symbolDefinitions);
+  const stills = await loadVideoStills(canvasVideoMoments(sceneGraph, nodes));
+  let scene = sceneGraph;
+  let roots = nodes;
+  if (stills.size > 0) {
+    // On a copy: the stills go in as pictures in the layers' places
+    scene = copyScene(sceneGraph);
+    drawVideoStills(scene, stills);
+    roots = nodes.flatMap((node) => scene.getNode(node.id) ?? []);
+  }
+  const svgString = exportNodesToSvg(roots, scene, symbolDefinitions);
   const blob = new Blob([svgString], { type: 'image/svg+xml' });
   downloadBlob(blob, getExportFilename(nodes, 'svg'));
 }

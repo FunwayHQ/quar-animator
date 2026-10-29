@@ -221,6 +221,80 @@ describe('video layers in Lottie, as stills', () => {
   });
 });
 
+describe('video layers in an SVG of a frame, as stills', () => {
+  it('draws each as the picture of its still, where it is, the scene untouched', () => {
+    const sg = scene();
+    const svg = exportSvgFrame(sg, createTimeline(), undefined, {
+      frame: 0,
+      videoStills: stillsFor('alone', 'in-group', 'on-board'),
+    });
+    for (const id of ['alone', 'in-group', 'on-board']) {
+      expect(svg).toContain(`href="data:image/jpeg;base64,${id}"`);
+    }
+    expect(svg.match(/<image /g)).toHaveLength(3);
+    expect(sg.getNode('alone')?.type).toBe('video');
+  });
+
+  it('keeps a video that masks its group the mask', () => {
+    const sg = scene();
+    const svg = exportSvgFrame(sg, createTimeline(), undefined, {
+      frame: 0,
+      rootIds: ['masked'],
+      videoStills: stillsFor('mask-video'),
+    });
+    expect(svg).toMatch(/<mask[^>]*>.*href="data:image\/jpeg;base64,mask-video".*<\/mask>/);
+  });
+
+  it('places it as its keyframes have it at that frame', () => {
+    const sg = new SceneGraph();
+    sg.addNode(video('v'));
+    const timeline = createTimeline({ duration: 60, frameRate: 30 });
+    timeline.tracks.push({
+      id: 'move',
+      nodeId: 'v',
+      property: 'transform.position.x',
+      enabled: true,
+      keyframes: [
+        { id: 'k0', time: 0, value: 0, easing: 'linear' },
+        { id: 'k1', time: 20, value: 200, easing: 'linear' },
+      ],
+    });
+    const svg = exportSvgFrame(sg, timeline, undefined, {
+      frame: 10,
+      videoStills: stillsFor('v'),
+      viewport: { x: -400, y: -300, width: 800, height: 600 },
+    });
+    expect(svg).toMatch(/<image [^>]*transform="translate\(100,0\)/);
+  });
+});
+
+describe('drawVideoStills', () => {
+  it('puts a still in as a picture of the layer, among the same siblings', () => {
+    const sg = scene();
+    drawVideoStills(sg, stillsFor('in-group', 'mask-video'));
+    expect(sg.getNode('in-group')).toMatchObject({
+      type: 'image',
+      src: 'data:image/jpeg;base64,in-group',
+      width: 160,
+      height: 90,
+      cornerRadius: [4, 4, 4, 4],
+      adjustments: { brightness: 10 },
+      effects: [{ id: 'shadow' }],
+    });
+    expect(sg.getNode('in-group')).not.toHaveProperty('clip');
+    expect(sg.getNode('grouped')?.children).toEqual(['in-group', 'shape']);
+    // The mask stays the mask
+    expect(sg.getNode('masked')).toMatchObject({ maskNodeId: 'mask-video', maskMode: 'alpha' });
+    expect(sg.getNode('mask-video')?.type).toBe('image');
+  });
+
+  it('leaves the layers it has no still for', () => {
+    const sg = scene();
+    drawVideoStills(sg, stillsFor('nowhere'));
+    expect(sg.getNode('alone')?.type).toBe('video');
+  });
+});
+
 describe('video layers in exports, without stills', () => {
   it('Lottie: leaves them out and keeps the rest', () => {
     const sg = scene();

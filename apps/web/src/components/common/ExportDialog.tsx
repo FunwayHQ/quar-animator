@@ -25,6 +25,7 @@ import {
   gifTiming,
   lottieVideoMoments,
   MAX_GIF_FPS,
+  videoMomentsAtFrame,
   sampleSlides,
   sampleTimeline,
 } from '@quar/export';
@@ -457,10 +458,20 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
         return;
       }
       const { exportSvgFrame } = await import('@quar/export');
+      // SVG plays no video: each video layer is a still of the frame
+      const videoStills = await loadVideoStills(
+        videoMomentsAtFrame(
+          frameRenderRoots,
+          (id) => sceneGraph.getNode(id),
+          state.svgFrame,
+          timeline.frameRate
+        )
+      );
       const svg = exportSvgFrame(sceneGraph, timeline, frameRenderContext.rig, {
         frame: state.svgFrame,
         rootIds: selectedArtboard ? [selectedArtboard.node.id] : undefined,
         symbols: frameRenderContext.symbols,
+        videoStills,
       });
       downloadBlob(new Blob([svg], { type: 'image/svg+xml' }), `frame_${state.svgFrame}.svg`);
       close();

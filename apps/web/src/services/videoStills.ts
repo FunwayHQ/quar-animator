@@ -6,9 +6,12 @@
  * no file or it won't decode, its strip's nearest still.
  */
 
-import { videoStillsAt } from '@quar/export';
+import type { SceneGraph } from '@quar/core';
+import { videoMoments, videoStillsAt } from '@quar/export';
 import type { VideoMoment, VideoStillLoader } from '@quar/export';
+import type { Node } from '@quar/types';
 
+import { shownMoment } from '../components/canvas/canvasVideoFrames';
 import { useEditorStore } from '../stores/editorStore';
 import { videoFile } from './videoFiles';
 
@@ -39,3 +42,19 @@ export const loadVideoStills: VideoStillLoader = async (moments) => {
   }
   return stills;
 };
+
+/**
+ * The moment each video layer among `nodes` (and in them) shows on the
+ * canvas now — of the timeline in view, its playhead's (none outside its
+ * clip); of another timeline, its clip's first — for an export of what's
+ * on the canvas (Export Selection as SVG).
+ */
+export function canvasVideoMoments(sceneGraph: SceneGraph, nodes: Node[]): VideoMoment[] {
+  const { timelineScope, currentFrame, frameRate } = useEditorStore.getState();
+  const moment = { scope: timelineScope, frame: currentFrame, frameRate };
+  return videoMoments(
+    nodes,
+    (id) => sceneGraph.getNode(id),
+    (node) => shownMoment(sceneGraph, node, moment)?.seconds ?? null
+  );
+}

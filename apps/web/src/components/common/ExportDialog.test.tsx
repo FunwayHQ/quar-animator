@@ -503,6 +503,25 @@ describe('ExportDialog', () => {
     expect(downloadBlob).toHaveBeenCalledWith(expect.any(Blob), 'animation.json');
   });
 
+  it('gives an SVG the still of each video layer at its frame', async () => {
+    render(
+      <>
+        <VideoSeeder />
+        <ExportDialogHost />
+      </>
+    );
+    act(() => showExportDialog('svg'));
+    fireEvent.click(screen.getByTestId('export-dialog-export'));
+
+    await waitFor(() => expect(exportSvgFrame).toHaveBeenCalledOnce());
+    const [, , , options] = vi.mocked(exportSvgFrame).mock.calls[0]!;
+    // Frame 12 (the playhead's), two frames into its clip: 1 s and two frames into its video
+    expect(options.frame).toBe(12);
+    const [[id, still]] = [...(options.videoStills ?? [])] as Array<[string, string]>;
+    expect(id).toBe('video-1');
+    expect(Number(still.split('@')[1])).toBeCloseTo(1 + 2 / 30);
+  });
+
   it('exports the artboard background under its children in Lottie JSON', async () => {
     mockStore.selectedNodeIds = new Set(['artboard-1']);
     mockStore.timeline.tracks = [

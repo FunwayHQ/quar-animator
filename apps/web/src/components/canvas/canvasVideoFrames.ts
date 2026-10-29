@@ -30,7 +30,7 @@ export interface CanvasVideoMoment {
  * it's of the timeline in view (else it's the clip's first, standing still).
  * Its timeline is found through its ancestors, not the whole scene.
  */
-function shownMoment(
+export function shownMoment(
   sceneGraph: Pick<SceneGraph, 'getNode'>,
   node: VideoNode,
   { scope, frame, frameRate }: Omit<CanvasVideoMoment, 'playing'>

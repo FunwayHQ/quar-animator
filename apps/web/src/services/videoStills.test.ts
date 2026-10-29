@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Video } from '@quar/types';
+import { SceneGraph, createDefaultTransform } from '@quar/core';
+import type { ArtboardNode, Video, VideoNode } from '@quar/types';
 
 import { useEditorStore } from '../stores/editorStore';
 import { keepVideoFiles, setVideoFile } from './videoFiles';
@@ -22,7 +23,7 @@ vi.mock('@quar/export', async (importOriginal) => {
   };
 });
 
-import { loadVideoStills } from './videoStills';
+import { canvasVideoMoments, loadVideoStills } from './videoStills';
 
 const video = (id: string, more: Partial<Video> = {}): Video => ({
   id,
@@ -81,5 +82,62 @@ describe('loadVideoStills', () => {
   it('decodes nothing with nothing asked', async () => {
     expect((await loadVideoStills([])).size).toBe(0);
     expect(decoded.calls).toEqual([]);
+  });
+});
+
+const layer = (id: string, offset: number): VideoNode => ({
+  id,
+  name: id,
+  type: 'video',
+  parent: null,
+  children: [],
+  transform: createDefaultTransform(),
+  visible: true,
+  locked: false,
+  opacity: 1,
+  blendMode: 'normal',
+  videoId: 'v1',
+  width: 160,
+  height: 90,
+  naturalWidth: 1280,
+  naturalHeight: 720,
+  cornerRadius: [0, 0, 0, 0],
+  clip: { start: 0, offset, duration: 2 },
+});
+
+describe('canvasVideoMoments', () => {
+  beforeEach(() => {
+    useEditorStore.getState().resetProject();
+  });
+
+  it('is what the canvas shows: the playhead’s moment in view, a clip’s first on another timeline', () => {
+    const sg = new SceneGraph();
+    const board: ArtboardNode = {
+      ...layer('board', 0),
+      type: 'artboard',
+      width: 400,
+      height: 300,
+      fills: [],
+      clipContent: true,
+    } as unknown as ArtboardNode;
+    sg.addNode(board);
+    sg.addNode(layer('on-page', 0));
+    sg.addNode(layer('on-board', 0.5), 'board');
+    useEditorStore.setState({ timelineScope: null, currentFrame: 15, frameRate: 30 });
+    expect(canvasVideoMoments(sg, sg.getRootNodes())).toEqual([
+      { nodeId: 'on-board', videoId: 'v1', seconds: 0.5 },
+      { nodeId: 'on-page', videoId: 'v1', seconds: 0.5 },
+    ]);
+    useEditorStore.setState({ timelineScope: 'board', currentFrame: 30 });
+    expect(canvasVideoMoments(sg, [sg.getNode('on-board')!])).toEqual([
+      { nodeId: 'on-board', videoId: 'v1', seconds: 1.5 },
+    ]);
+  });
+
+  it('has none for a layer outside its clip at the playhead', () => {
+    const sg = new SceneGraph();
+    sg.addNode(layer('v', 0));
+    useEditorStore.setState({ timelineScope: null, currentFrame: 90, frameRate: 30 });
+    expect(canvasVideoMoments(sg, sg.getRootNodes())).toEqual([]);
   });
 });

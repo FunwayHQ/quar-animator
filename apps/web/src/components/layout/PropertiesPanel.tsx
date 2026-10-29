@@ -4671,7 +4671,7 @@ function ExportSection({
             symbolDefinitions,
           });
         } else {
-          exportSelectionAsSvg(nodes, sceneGraph, symbolDefinitions);
+          await exportSelectionAsSvg(nodes, sceneGraph, symbolDefinitions);
         }
       }
     } finally {
