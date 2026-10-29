@@ -170,9 +170,12 @@ describe('the presentation', () => {
     // Drawn on the screen, from its first frame
     expect(screen.getByTestId('presentation').querySelector('canvas')).toBe(renderer.canvas);
     expect(renderer.renderFrame.mock.calls[0]?.[1]).toBe(0);
-    expect(sounds.play).toHaveBeenLastCalledWith(
-      0,
-      expect.objectContaining({ clips: [], lastFrame: 44 })
+    // Its sounds start with its first frame playing (a tick after it may first be drawn)
+    await waitFor(() =>
+      expect(sounds.play).toHaveBeenLastCalledWith(
+        0,
+        expect.objectContaining({ clips: [], lastFrame: 44 })
+      )
     );
   });
 
