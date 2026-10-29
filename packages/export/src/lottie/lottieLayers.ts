@@ -4,11 +4,14 @@
  * Shapes, text and groups of them become shape layers. Images need layers of
  * their own (image layers), so a group or artboard containing an image becomes
  * a precomposition: a precomp layer carrying the group's transform and opacity,
- * with the group's children as layers inside it.
+ * with the group's children as layers inside it. A video layer is an image
+ * layer of its still (Lottie plays no video), there while its clip is.
  */
 
-import type { ImageNode, Node, Timeline } from '@quar/types';
+import type { ImageNode, Node, Timeline, VideoNode } from '@quar/types';
 import { createRectanglePath } from '@quar/core';
+import { videoClipEndFrame } from '@quar/animation';
+import { videoStillPicture, type VideoStills } from '../videoStills';
 import type { LottieAsset, LottieLayer, LottieShapeVertices } from './lottieTypes';
 import {
   artboardRectVertices,
@@ -31,6 +34,8 @@ export interface LayerBuildContext {
   assets: LottieAsset[];
   /** Image src → asset id, so repeated images are embedded once. */
   imageAssets: Map<string, string>;
+  /** Video layers' stills, by layer id (one without shows nothing) */
+  videoStills?: VideoStills;
 }
 
 /** Where Quar's origin lands in the current composition. */
@@ -39,12 +44,13 @@ interface Frame {
   originY: number;
 }
 
-function hasImage(node: Node, resolver: LayerBuildContext['resolver']): boolean {
+function hasImage(node: Node, ctx: LayerBuildContext): boolean {
   if (node.type === 'image') return true;
+  if (node.type === 'video') return ctx.videoStills?.has(node.id) ?? false;
   if (node.type !== 'group' && node.type !== 'artboard') return false;
   return node.children.some((id) => {
-    const child = resolver(id);
-    return child !== undefined && child.visible && hasImage(child, resolver);
+    const child = ctx.resolver(id);
+    return child !== undefined && child.visible && hasImage(child, ctx);
   });
 }
 
@@ -64,7 +70,15 @@ export function buildLayers(nodes: Node[], frame: Frame, ctx: LayerBuildContext)
       layers.push(imageLayer(node, ind++, frame, ctx));
       continue;
     }
-    if ((node.type === 'group' || node.type === 'artboard') && hasImage(node, ctx.resolver)) {
+    if (node.type === 'video') {
+      const layer = videoLayer(node, ind, frame, ctx);
+      if (layer) {
+        layers.push(layer);
+        ind++;
+      }
+      continue;
+    }
+    if ((node.type === 'group' || node.type === 'artboard') && hasImage(node, ctx)) {
       layers.push(precompLayer(node, ind++, frame, ctx));
       continue;
     }
@@ -145,6 +159,29 @@ function imageLayer(
     ];
   }
   return layer;
+}
+
+/**
+ * A video layer as an image layer of its still, in from the frame its clip
+ * starts on and out where it ends — or, holding its last frame, at the
+ * export's end. None without a still, or with its clip outside the export.
+ */
+function videoLayer(
+  node: VideoNode,
+  ind: number,
+  frame: Frame,
+  ctx: LayerBuildContext
+): LottieLayer | null {
+  const src = ctx.videoStills?.get(node.id);
+  if (!src) return null;
+  const { op: end } = timing(ctx);
+  const ip = Math.max(ctx.startFrame, node.clip.start);
+  // The last frame it shows is the one before its end (which needn't be whole)
+  const clipEnd = Math.ceil(videoClipEndFrame(node.clip, ctx.timeline.frameRate) - 1e-6);
+  const op = node.clip.holdLastFrame ? end : Math.min(end, clipEnd);
+  if (!(op > ip)) return null;
+  const layer = imageLayer(videoStillPicture(node, src), ind, frame, ctx);
+  return { ...layer, nm: node.name || `Video ${ind}`, ip, op };
 }
 
 function addComp(layers: LottieLayer[], ctx: LayerBuildContext): string {

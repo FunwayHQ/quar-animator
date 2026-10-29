@@ -178,6 +178,16 @@ export {
   type VideoFrameSourceOptions,
 } from './video/frameSource';
 export {
+  countVideoLayers,
+  drawVideoStills,
+  videoMoments,
+  videoMomentsAtFrame,
+  videoStillPicture,
+  type VideoMoment,
+  type VideoStillLoader,
+  type VideoStills,
+} from './videoStills';
+export {
   decodeVideoStill,
   stillDataUri,
   stripStillAt,
@@ -229,6 +239,7 @@ export {
   exportToLottieJson,
   exportLottieBlob,
   analyzeLottieExport,
+  lottieVideoMoments,
   type LottieExportOptions,
 } from './lottie/lottieExporter';
 

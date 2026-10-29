@@ -8,6 +8,8 @@ import type { SceneGraph } from '@quar/core';
 import type { FrameRig } from '../frameRenderer';
 import { bakeSkinnedOutlines } from './lottieSkinning';
 import type { Node, Timeline } from '@quar/types';
+import { videoTimeAt } from '@quar/animation';
+import { videoMoments, type VideoMoment, type VideoStills } from '../videoStills';
 import type { LottieAnimation, LottieAsset, LottieLayer } from './lottieTypes';
 import type { LottieConvertContext } from './lottieConverter';
 import { buildLayers } from './lottieLayers';
@@ -32,6 +34,11 @@ export interface LottieExportOptions {
    * (Lottie has no skinning). Without them, bound shapes export unbent.
    */
   skinning?: { sceneGraph: SceneGraph; rig?: FrameRig };
+  /**
+   * Video layers' stills, by layer id (see lottieVideoMoments): each is an
+   * image layer of its still while its clip is on. Without, they're left out.
+   */
+  videoStills?: VideoStills;
 }
 
 // ============================================================================
@@ -99,6 +106,7 @@ export function exportToLottieJson(
       precompSize: Math.max(width, height) * 4,
       assets,
       imageAssets: new Map(),
+      videoStills: options.videoStills,
     }
   );
 
@@ -114,6 +122,32 @@ export function exportToLottieJson(
     assets,
     layers,
   };
+}
+
+/**
+ * The moment of its video each video layer's still shows in a Lottie of
+ * frames `startFrame`–`endFrame`: Lottie plays no video, so it's one
+ * picture, the first the layer shows in the export — its clip's first,
+ * when the clip starts in it; the one at the export's first frame, when
+ * it's under way there (its last, held, when it's over). None for a clip
+ * that doesn't show in the export.
+ */
+export function lottieVideoMoments(
+  nodes: Node[],
+  timeline: Pick<Timeline, 'frameRate'>,
+  startFrame: number,
+  endFrame: number,
+  nodeResolver?: (id: string) => Node | undefined
+): VideoMoment[] {
+  const resolver = nodeResolver ?? buildNodeResolver(nodes);
+  // As the export takes them: a node whose parent is given too is in it
+  const given = new Set(nodes.map((node) => node.id));
+  const topLevel = nodes.filter((node) => node.parent === null || !given.has(node.parent));
+  return videoMoments(topLevel, resolver, (node) =>
+    node.clip.start > endFrame
+      ? null
+      : videoTimeAt(node.clip, Math.max(node.clip.start, startFrame), timeline.frameRate)
+  );
 }
 
 /**
@@ -160,6 +194,8 @@ const SUPPORTED_TYPES = new Set([
   'artboard',
   'text',
   'image',
+  // A still picture of it
+  'video',
 ]);
 
 /**

@@ -23,6 +23,7 @@ import {
   analyzeLottieExport,
   gifCompressionSettings,
   gifTiming,
+  lottieVideoMoments,
   MAX_GIF_FPS,
   sampleSlides,
   sampleTimeline,
@@ -30,6 +31,7 @@ import {
 import type { ExportProgress, FrameRenderContext, Shot } from '@quar/export';
 import { downloadBlob } from '../../services/exportService';
 import { decodedSound } from '../../services/soundFiles';
+import { loadVideoStills } from '../../services/videoStills';
 import {
   defaultExportSize,
   exportRig,
@@ -545,7 +547,16 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
           close();
         }
       } else if (state.tab === 'lottie') {
-        // Lottie export is synchronous
+        // Lottie plays no video: each video layer is a still of the first moment it shows
+        const videoStills = await loadVideoStills(
+          lottieVideoMoments(
+            lottieExportScene.nodes,
+            lottieExportScene.timeline,
+            state.startFrame,
+            state.endFrame,
+            (id: string) => sceneGraph.getNode(id)
+          )
+        );
         const blob = exportLottieBlob(
           lottieExportScene.nodes,
           lottieExportScene.timeline,
@@ -558,11 +569,14 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
             name: 'Quar Animation',
             // Shapes bound to bones are baked as their bones move them
             skinning: { sceneGraph, rig: frameRenderContext.rig },
+            videoStills,
           },
           (id: string) => sceneGraph.getNode(id)
         );
-        downloadBlob(blob, 'animation.json');
-        close();
+        if (!cancelledRef.current) {
+          downloadBlob(blob, 'animation.json');
+          close();
+        }
       } else if (state.tab === 'gif') {
         const { exportGif } = await import('@quar/export');
         const blob = await exportGif(

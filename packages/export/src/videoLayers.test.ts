@@ -1,20 +1,26 @@
 /**
- * Video layers in the exports that don't draw them yet (Lottie, SVG, PDF:
- * a still of the moment comes later): left out, everything else exported,
- * nothing thrown — in a group, a mask group and an artboard too.
+ * Video layers in the exports that can't play video (Lottie, SVG, PDF): a
+ * still of the moment each shows, as a picture — and without stills, left
+ * out, everything else exported, nothing thrown — in a group, a mask group
+ * and an artboard too.
  */
 
 import { describe, it, expect } from 'vitest';
 import { SceneGraph, exportNodesToSvg } from '@quar/core';
 import { createTimeline } from '@quar/animation';
-import type { Node, VideoNode } from '@quar/types';
-import { exportToLottieJson, analyzeLottieExport } from './lottie/lottieExporter';
+import type { GroupNode, Node, VideoClip, VideoNode } from '@quar/types';
+import {
+  exportToLottieJson,
+  analyzeLottieExport,
+  lottieVideoMoments,
+} from './lottie/lottieExporter';
+import { countVideoLayers, drawVideoStills, videoMomentsAtFrame } from './videoStills';
 import { exportPdf } from './pdf/pdfExport';
 import { exportSvgFrame } from './svgFrame';
 import { readPdf } from './__fixtures__/pdfReader';
 import { BLUE, artboard, base, group, rect, solid } from './__fixtures__/pdfNodes';
 
-function video(id: string): VideoNode {
+function video(id: string, clip: Partial<VideoClip> = {}): VideoNode {
   return {
     ...base(id),
     type: 'video',
@@ -47,9 +53,13 @@ function video(id: string): VideoNode {
         spread: 0,
       },
     ],
-    clip: { start: 0, offset: 0, duration: 4 },
+    clip: { start: 0, offset: 0, duration: 4, ...clip },
   };
 }
+
+/** A still for each of these layers, named for it. */
+const stillsFor = (...ids: string[]) =>
+  new Map(ids.map((id) => [id, `data:image/jpeg;base64,${id}`] as const));
 
 /**
  * A page with video layers everywhere a layer can be: on its own, in a
@@ -72,8 +82,147 @@ function scene(): SceneGraph {
   return sg;
 }
 
-describe('video layers in exports that don’t draw them', () => {
-  it('Lottie: leaves them out, keeps the rest, and counts them as unsupported', () => {
+describe('which moment a video layer’s still shows', () => {
+  const at = (clip: Partial<VideoClip>, start: number, end: number) =>
+    lottieVideoMoments([video('v', clip)], { frameRate: 30 }, start, end)[0]?.seconds ?? null;
+
+  it('in a Lottie: its clip’s first picture, when the clip starts in the export', () => {
+    expect(at({ start: 10, offset: 1.5 }, 0, 59)).toBeCloseTo(1.5);
+  });
+
+  it('in a Lottie: the one at the export’s first frame, when the clip is under way there', () => {
+    expect(at({ start: 0, offset: 1 }, 15, 59)).toBeCloseTo(1.5);
+    expect(at({ start: 0, offset: 0, speed: 2 }, 15, 59)).toBeCloseTo(1);
+  });
+
+  it('in a Lottie: its last, held, when the clip is over before the export starts', () => {
+    expect(at({ start: 0, duration: 1, holdLastFrame: true }, 45, 59)).toBeCloseTo(1, 3);
+  });
+
+  it('in a Lottie: none for a clip outside the export', () => {
+    expect(at({ start: 0, duration: 1 }, 45, 59)).toBeNull();
+    expect(at({ start: 60 }, 0, 59)).toBeNull();
+  });
+
+  it('at a frame: the moment the clip is at there, none outside it', () => {
+    const nodes = [video('a', { start: 10, offset: 2 }), video('b', { start: 40 })];
+    const resolve = () => undefined;
+    expect(videoMomentsAtFrame(nodes, resolve, 25, 30)).toEqual([
+      { nodeId: 'a', videoId: 'file-a', seconds: 2.5 },
+    ]);
+  });
+
+  it('finds the visible ones in groups, mask groups and artboards', () => {
+    const sg = scene();
+    sg.addNode(structuredClone({ ...video('hidden'), visible: false }));
+    const resolve = (id: string) => sg.getNode(id);
+    const ids = videoMomentsAtFrame(sg.getRootNodes(), resolve, 0, 30).map((m) => m.nodeId);
+    expect(ids.sort()).toEqual(['alone', 'in-group', 'mask-video', 'on-board']);
+    expect(countVideoLayers(sg.getRootNodes(), resolve)).toBe(4);
+  });
+});
+
+describe('video layers in Lottie, as stills', () => {
+  const timeline = createTimeline({ duration: 60, frameRate: 30 });
+  const options = { width: 800, height: 600, startFrame: 0, endFrame: 59 };
+
+  it('is an image layer of its still, in and out with its clip', () => {
+    const node = video('v', { start: 10, duration: 1 });
+    const lottie = exportToLottieJson([node], timeline, {
+      ...options,
+      videoStills: stillsFor('v'),
+    });
+    const [layer] = lottie.layers;
+    expect(layer).toMatchObject({ ty: 2, nm: 'v', refId: 'image_0', ip: 10, op: 40, st: 0 });
+    expect(lottie.assets).toEqual([
+      { id: 'image_0', w: 160, h: 90, u: '', p: 'data:image/jpeg;base64,v', e: 1 },
+    ]);
+    // Placed as a picture is: its pivot at its anchor, rounded corners masked
+    expect(layer!.ks.a).toEqual({ a: 0, k: [80, 45] });
+    expect(layer!.masksProperties).toHaveLength(1);
+  });
+
+  it('ends where the clip does, a part-frame on', () => {
+    const [layer] = exportToLottieJson([video('v', { start: 0, duration: 1.01 })], timeline, {
+      ...options,
+      videoStills: stillsFor('v'),
+    }).layers;
+    expect(layer).toMatchObject({ ip: 0, op: 31 });
+  });
+
+  it('stays to the export’s end while it holds its last frame', () => {
+    const [layer] = exportToLottieJson(
+      [video('v', { start: 5, duration: 1, holdLastFrame: true })],
+      timeline,
+      { ...options, videoStills: stillsFor('v') }
+    ).layers;
+    expect(layer).toMatchObject({ ip: 5, op: 60 });
+  });
+
+  it('starts with the export when its clip began before it', () => {
+    const [layer] = exportToLottieJson([video('v', { start: 0, duration: 4 })], timeline, {
+      ...options,
+      startFrame: 20,
+      videoStills: stillsFor('v'),
+    }).layers;
+    expect(layer).toMatchObject({ ip: 20, op: 60 });
+  });
+
+  it('is left out with its clip outside the export, or without a still', () => {
+    const outside = exportToLottieJson([video('v', { start: 0, duration: 0.5 })], timeline, {
+      ...options,
+      startFrame: 30,
+      videoStills: stillsFor('v'),
+    });
+    expect(outside.layers).toEqual([]);
+    expect(exportToLottieJson([video('v')], timeline, options).layers).toEqual([]);
+  });
+
+  it('keeps its keyframed placement and fading, as a picture’s', () => {
+    const animated = createTimeline({ duration: 60, frameRate: 30 });
+    animated.tracks.push({
+      id: 'fade',
+      nodeId: 'v',
+      property: 'opacity',
+      enabled: true,
+      keyframes: [
+        { id: 'k0', time: 0, value: 0, easing: 'linear' },
+        { id: 'k1', time: 30, value: 1, easing: 'linear' },
+      ],
+    });
+    const [layer] = exportToLottieJson([video('v')], animated, {
+      ...options,
+      videoStills: stillsFor('v'),
+    }).layers;
+    expect(layer!.ks.o.a).toBe(1);
+  });
+
+  it('makes a group with a video in it a precomposition, the still inside', () => {
+    const sg = scene();
+    const resolve = (id: string) => sg.getNode(id);
+    const lottie = exportToLottieJson(
+      [sg.getNode<GroupNode>('grouped')!],
+      timeline,
+      { ...options, videoStills: stillsFor('in-group') },
+      resolve
+    );
+    expect(lottie.layers[0]).toMatchObject({ ty: 0, nm: 'grouped' });
+    const comp = lottie.assets.find((asset) => asset.layers);
+    expect(comp?.layers?.map((layer) => [layer.nm, layer.ty])).toEqual([
+      ['shape', 4],
+      ['in-group', 2],
+    ]);
+  });
+
+  it('is no longer counted as unsupported', () => {
+    const sg = scene();
+    const analysis = analyzeLottieExport(sg.getRootNodes(), (id) => sg.getNode(id));
+    expect(analysis.unsupportedTypes).toEqual([]);
+  });
+});
+
+describe('video layers in exports, without stills', () => {
+  it('Lottie: leaves them out and keeps the rest', () => {
     const sg = scene();
     const roots = sg.getRootNodes();
     const resolve = (id: string) => sg.getNode(id);
@@ -87,9 +236,6 @@ describe('video layers in exports that don’t draw them', () => {
     expect(names).not.toContain('"nm":"alone"');
     expect(names).not.toContain('"nm":"on-board"');
     expect(names).toContain('"nm":"shape"');
-
-    const analysis = analyzeLottieExport(roots, resolve);
-    expect(analysis.unsupportedTypes).toEqual(['video']);
   });
 
   it('SVG: writes no element for them', () => {

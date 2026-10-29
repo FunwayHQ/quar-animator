@@ -96,6 +96,10 @@ vi.mock('@quar/export', async () => {
       colors: Math.max(16, Math.round(256 * 2 ** (-compression / 25))),
       tolerance: (compression / 100) * 24,
     }),
+    // Which moment each video layer shows, as it is
+    lottieVideoMoments: actual.lottieVideoMoments,
+    videoMomentsAtFrame: actual.videoMomentsAtFrame,
+    countVideoLayers: actual.countVideoLayers,
     analyzeLottieExport: vi.fn().mockReturnValue({
       supportedCount: 2,
       unsupportedCount: 1,
@@ -108,6 +112,13 @@ vi.mock('@quar/export', async () => {
 // Mock download
 vi.mock('../../services/exportService', () => ({
   downloadBlob: vi.fn(),
+}));
+
+// Each video layer's still named for its layer and moment
+vi.mock('../../services/videoStills', () => ({
+  loadVideoStills: vi.fn((moments: Array<{ nodeId: string; seconds: number }>) =>
+    Promise.resolve(new Map(moments.map((m) => [m.nodeId, `still:${m.nodeId}@${m.seconds}`])))
+  ),
 }));
 
 // Mock jszip (used via dynamic import in PNG sequence handler)
@@ -175,6 +186,33 @@ function renderWithArtboard(ui: ReactElement, fills?: ArtboardNode['fills']) {
       {ui}
     </SceneGraphProvider>
   );
+}
+
+/** A video layer on the page, its clip from frame 10, 1 s into its video. */
+function VideoSeeder() {
+  const sceneGraph = useSceneGraph();
+  useEffect(() => {
+    sceneGraph.addNode({
+      id: 'video-1',
+      name: 'Clip',
+      type: 'video',
+      parent: null,
+      children: [],
+      transform: createDefaultTransform(),
+      visible: true,
+      locked: false,
+      opacity: 1,
+      blendMode: 'normal',
+      videoId: 'clip',
+      width: 320,
+      height: 180,
+      naturalWidth: 1280,
+      naturalHeight: 720,
+      cornerRadius: [0, 0, 0, 0],
+      clip: { start: 10, offset: 1, duration: 4 },
+    });
+  }, [sceneGraph]);
+  return null;
 }
 
 /** Two slides: "Intro" (on top in the Layers panel) and "Outro". */
@@ -446,6 +484,23 @@ describe('ExportDialog', () => {
     });
     expect(timeline.tracks[0]?.keyframes[0]?.value).toBe(350);
     expect(options).toMatchObject({ width: 640, height: 360 });
+  });
+
+  it('gives a Lottie the still of each video layer at the first moment it shows', async () => {
+    render(
+      <>
+        <VideoSeeder />
+        <ExportDialogHost />
+      </>
+    );
+    act(() => showExportDialog('lottie'));
+    fireEvent.click(screen.getByTestId('export-dialog-export'));
+
+    await waitFor(() => expect(exportLottieBlob).toHaveBeenCalledOnce());
+    const [, , options] = vi.mocked(exportLottieBlob).mock.calls[0]!;
+    // Its clip starts at frame 10 of the export: its first picture, 1 s in
+    expect([...(options.videoStills ?? [])]).toEqual([['video-1', 'still:video-1@1']]);
+    expect(downloadBlob).toHaveBeenCalledWith(expect.any(Blob), 'animation.json');
   });
 
   it('exports the artboard background under its children in Lottie JSON', async () => {
