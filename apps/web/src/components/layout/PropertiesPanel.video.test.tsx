@@ -4,7 +4,7 @@
  * shows.
  */
 
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, act, fireEvent, within } from '../../test/utils';
 import { SceneGraphProvider, useSceneGraph } from '../../contexts/SceneGraphContext';
 import type { SceneGraph } from '@quar/core';
@@ -12,6 +12,12 @@ import type { VideoClip, VideoNode } from '@quar/types';
 import { PropertiesPanel } from './PropertiesPanel';
 import { useEditorStore } from '../../stores/editorStore';
 import { linkedSound, testVideo, videoLayer } from '../../test/videoLayer';
+import { exportSelectionAsPng } from '../../services/exportService';
+
+vi.mock('../../services/exportService', () => ({
+  exportSelectionAsPng: vi.fn(async () => {}),
+  exportSelectionAsSvg: vi.fn(),
+}));
 
 function SceneGraphCapture({ onCapture }: { onCapture: (sg: SceneGraph) => void }) {
   const sg = useSceneGraph();
@@ -240,5 +246,28 @@ describe('PropertiesPanel - video layer', () => {
       });
       expect(screen.queryByTestId('video-section')).not.toBeInTheDocument();
     });
+  });
+
+  it('exports a PNG of it as it shows now, its video decoded', async () => {
+    const sg = renderWithSceneGraph();
+    act(() => {
+      sg.addNode(videoLayer('v', VIDEO.id, {}, { exports: [{ format: 'png', multiplier: 2 }] }));
+      useEditorStore.getState().setSelection(['v']);
+      useEditorStore.setState({ currentFrame: 7 });
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('export-button'));
+      await Promise.resolve();
+    });
+    expect(exportSelectionAsPng).toHaveBeenCalledWith(
+      [expect.objectContaining({ id: 'v' })],
+      sg,
+      expect.objectContaining({
+        multiplier: 2,
+        moment: { timeline: useEditorStore.getState().timeline, frame: 7 },
+        videos: [VIDEO],
+        videoFile: expect.any(Function),
+      })
+    );
   });
 });

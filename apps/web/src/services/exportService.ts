@@ -4,7 +4,8 @@
  */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access */
 
-import type { Node, ArtboardNode, SymbolDefinition } from '@quar/types';
+import type { Node, ArtboardNode, SymbolDefinition, Timeline } from '@quar/types';
+import type { VideoExportSources } from '@quar/export';
 import { SceneGraph, SelectionManager, WebGLRenderer, ShapeRenderer, mat3 } from '@quar/core';
 import { exportNodesToSvg } from '@quar/core';
 import { copyScene, drawVideoStills } from '@quar/export';
@@ -47,10 +48,12 @@ export function downloadBlob(blob: Blob, filename: string): void {
 // PNG Export
 // ============================================================================
 
-export interface PngExportOptions {
+export interface PngExportOptions extends VideoExportSources {
   multiplier?: number;
   includeBackground?: boolean;
   symbolDefinitions?: SymbolDefinition[];
+  /** The timeline in view and its playhead: video layers show that moment of their clips (none without) */
+  moment?: { timeline: Timeline; frame: number };
 }
 
 /**
@@ -65,7 +68,9 @@ export async function exportSelectionAsPng(
   // Support both old positional API and new options object
   let multiplier: number;
   let symbolDefs: SymbolDefinition[] | undefined;
+  let options: PngExportOptions = {};
   if (typeof multiplierOrOptions === 'object') {
+    options = multiplierOrOptions;
     multiplier = multiplierOrOptions.multiplier ?? 1;
     includeBackground = multiplierOrOptions.includeBackground ?? true;
     symbolDefs = multiplierOrOptions.symbolDefinitions;
@@ -145,6 +150,7 @@ export async function exportSelectionAsPng(
   });
   const gl = renderer.context;
   let shapeRenderer: ShapeRenderer | null = null;
+  let videoFrames: { dispose(): void } | null = null;
 
   try {
     shapeRenderer = new ShapeRenderer(renderer);
@@ -180,6 +186,28 @@ export async function exportSelectionAsPng(
     await shapeRenderer.preloadTextures(nodes, exportGraph);
 
     const exportNodeIds = nodes.map((n) => n.id);
+    // Video layers show the moment of their clips the playhead is at, decoded first
+    if (options.moment) {
+      const { createExportVideoFrames } = await import('@quar/export');
+      const frames = createExportVideoFrames(
+        [
+          {
+            ctx: {
+              sceneGraph: exportGraph,
+              timeline: options.moment.timeline,
+              exportRootIds: exportNodeIds,
+              viewportBounds: { x: cx - halfW, y: cy - halfH, width: halfW * 2, height: halfH * 2 },
+            },
+            frame: options.moment.frame,
+          },
+        ],
+        { width: pixelWidth, height: pixelHeight },
+        options
+      );
+      videoFrames = frames;
+      await frames.prepare(0);
+      shapeRenderer.setVideoFrames(frames.provider);
+    }
     shapeRenderer.render(exportGraph, vpMatrix, new Set(), null, undefined, exportNodeIds);
 
     const blob = await canvasToBlob(canvas, 'image/png');
@@ -187,6 +215,7 @@ export async function exportSelectionAsPng(
       downloadBlob(blob, getExportFilename(nodes, 'png'));
     }
   } finally {
+    videoFrames?.dispose();
     shapeRenderer?.dispose();
     renderer.dispose();
     // The canvas is ours alone: hand its context back now rather than at

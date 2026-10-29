@@ -9,6 +9,31 @@ const mocks = vi.hoisted(() => ({
   shapeDispose: vi.fn(),
   rendererDispose: vi.fn(),
   loseContext: vi.fn(),
+  setVideoFrames: vi.fn(),
+  /** The video pictures asked for, stood in for */
+  videoFrames: [] as Array<{ shots: Array<{ ctx: unknown; frame: number }>; size: unknown }>,
+  prepared: [] as number[],
+  disposed: 0,
+}));
+
+vi.mock('@quar/export', () => ({
+  createExportVideoFrames: (
+    shots: Array<{ ctx: unknown; frame: number }>,
+    size: unknown,
+    sources: unknown
+  ) => {
+    mocks.videoFrames.push({ shots, size, sources } as never);
+    return {
+      provider: () => null,
+      problems: [],
+      prepare: async (index: number) => {
+        mocks.prepared.push(index);
+      },
+      dispose: () => {
+        mocks.disposed++;
+      },
+    };
+  },
 }));
 
 vi.mock('@quar/core', async (importOriginal) => {
@@ -30,6 +55,7 @@ vi.mock('@quar/core', async (importOriginal) => {
       preloadTextures = mocks.preload;
       render = mocks.render;
       dispose = mocks.shapeDispose;
+      setVideoFrames = mocks.setVideoFrames;
     },
   };
 });
@@ -62,6 +88,9 @@ function makeArtboard(): ArtboardNode {
 describe('artboard PNG export', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.videoFrames = [];
+    mocks.prepared = [];
+    mocks.disposed = 0;
     vi.spyOn(HTMLCanvasElement.prototype, 'toBlob').mockImplementation((callback) =>
       callback(null)
     );
@@ -86,6 +115,37 @@ describe('artboard PNG export', () => {
     expect(updateNode).not.toHaveBeenCalled();
     expect(mocks.shapeDispose).toHaveBeenCalledOnce();
     expect(mocks.rendererDispose).toHaveBeenCalledOnce();
+  });
+
+  it('draws its video layers at the moment shown, decoded before it’s drawn', async () => {
+    const graph = new SceneGraph();
+    const artboard = makeArtboard();
+    graph.addNode(artboard);
+    const timeline = { id: 't', name: 'T', duration: 60, frameRate: 30, tracks: [], markers: [] };
+    const videoFile = () => new Blob(['video']);
+    mocks.render.mockImplementationOnce(() => expect(mocks.prepared).toEqual([0]));
+
+    await exportSelectionAsPng([artboard], graph, {
+      multiplier: 2,
+      moment: { timeline, frame: 12 },
+      videoFile,
+    });
+
+    expect(mocks.videoFrames).toHaveLength(1);
+    const [{ shots, size }] = mocks.videoFrames as [(typeof mocks.videoFrames)[number]];
+    expect(shots).toEqual([
+      {
+        ctx: expect.objectContaining({
+          timeline,
+          exportRootIds: ['artboard'],
+          viewportBounds: { x: -50, y: -50, width: 100, height: 100 },
+        }),
+        frame: 12,
+      },
+    ]);
+    expect(size).toEqual({ width: 200, height: 200 });
+    expect(mocks.setVideoFrames).toHaveBeenCalledWith(expect.any(Function));
+    expect(mocks.disposed).toBe(1);
   });
 
   it('hands its WebGL context back to the browser when done', async () => {

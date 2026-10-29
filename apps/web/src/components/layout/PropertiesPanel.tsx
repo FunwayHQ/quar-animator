@@ -94,6 +94,7 @@ import { EasingCurvePreview } from '../common/EasingCurvePreview';
 import { KEYS, formatShortcut } from '../common/shortcuts';
 import { EasingEditor } from '../common/EasingEditor';
 import { exportSelectionAsPng, exportSelectionAsSvg } from '../../services/exportService';
+import { videoFile } from '../../services/videoFiles';
 import { documentFontFamilies } from '../../services/documentFonts';
 import styles from './PropertiesPanel.module.css';
 
@@ -4662,13 +4663,22 @@ function ExportSection({
     if (exportSettings.length === 0) return;
     setExporting(true);
     try {
-      const symbolDefinitions = useEditorStore.getState().symbols;
+      const {
+        symbols: symbolDefinitions,
+        timeline,
+        currentFrame,
+        videos,
+      } = useEditorStore.getState();
       for (const setting of exportSettings) {
         if (setting.format === 'png') {
           await exportSelectionAsPng(nodes, sceneGraph, {
             multiplier: setting.multiplier,
             includeBackground: setting.includeBackground ?? true,
             symbolDefinitions,
+            // Video layers as they show now
+            moment: { timeline, frame: currentFrame },
+            videos,
+            videoFile,
           });
         } else {
           await exportSelectionAsSvg(nodes, sceneGraph, symbolDefinitions);
