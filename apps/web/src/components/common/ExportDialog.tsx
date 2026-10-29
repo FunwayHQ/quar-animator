@@ -40,6 +40,7 @@ import {
   slideShow,
   slidesSeconds as slidesLength,
 } from '../../services/exportScene';
+import { KEYS, formatShortcut } from './shortcuts';
 import styles from './ExportDialog.module.css';
 
 // ============================================================================
@@ -964,7 +965,7 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
               <div className={styles.scopeNote} data-testid="export-artboard-scope">
                 Only “{selectedArtboard.node.name || 'Artboard'}” and its contents will be included.
                 {selectedArtboard.implicit &&
-                  ' It’s the page’s only artboard: select everything (Ctrl+A) first to export the whole page.'}
+                  ` It’s the page’s only artboard: select everything (${formatShortcut(KEYS.selectAll)}) first to export the whole page.`}
               </div>
             )}
             {slidesExport && (

@@ -5,7 +5,9 @@
  * (docs/help/shortcuts.md; a test checks the two list the same keys).
  *
  * Keys are written as Windows and Linux show them ("Ctrl+Shift+Z", "Up",
- * "PageDown"); formatShortcut() shows them as they're printed.
+ * "PageDown"); formatShortcut() shows them as this computer's keyboard has
+ * them: on a Mac ⌘ for Ctrl (the editor takes either), ⌥ for Alt and ⇧ for
+ * Shift, as Mac apps print them ("⇧⌘Z").
  */
 
 /** The keys the menus show, so a menu and the list can't tell different keys. */
@@ -296,8 +298,39 @@ export function splitShortcut(keys: string): { modifiers: string[]; key: string 
   return { modifiers, key: rest };
 }
 
-/** A shortcut as it's shown: "Ctrl+Shift+Z", "Shift+↑". */
-export function formatShortcut(keys: string): string {
+/** Whether this is a Mac (or an iPad), whose keyboards have ⌘ and ⌥. */
+export function isMacPlatform(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  const { userAgentData } = navigator as Navigator & { userAgentData?: { platform?: string } };
+  // Chrome's userAgentData says "macOS"; navigator.platform "MacIntel"
+  return /mac|iphone|ipad|ipod/i.test(
+    userAgentData?.platform || navigator.platform || navigator.userAgent
+  );
+}
+
+/** A Mac's modifier symbols, in the order its menus print them. */
+const MAC_MODIFIERS: Array<[string, string]> = [
+  ['Alt', '⌥'],
+  ['Shift', '⇧'],
+  ['Ctrl', '⌘'],
+];
+
+/** Keys a Mac prints otherwise: its delete key is Backspace, Return is ↩. */
+const MAC_KEY_LABELS: Record<string, string> = {
+  Del: '⌫',
+  Delete: '⌫',
+  Backspace: '⌫',
+  Enter: '↩',
+};
+
+/**
+ * A shortcut as it's shown on this computer: "Ctrl+Shift+Z" and "Shift+↑",
+ * or on a Mac "⇧⌘Z" and "⇧↑".
+ */
+export function formatShortcut(keys: string, mac: boolean = isMacPlatform()): string {
   const { modifiers, key } = splitShortcut(keys);
-  return [...modifiers, KEY_LABELS[key] ?? key].join('+');
+  const label = (mac ? MAC_KEY_LABELS[key] : undefined) ?? KEY_LABELS[key] ?? key;
+  if (!mac) return [...modifiers, label].join('+');
+  const symbols = MAC_MODIFIERS.filter(([name]) => modifiers.includes(name)).map(([, s]) => s);
+  return symbols.join('') + label;
 }

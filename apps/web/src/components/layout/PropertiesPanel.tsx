@@ -88,6 +88,7 @@ import type { SceneGraph } from '@quar/core';
 import { getSymbolBounds } from '@quar/core';
 import { getKeyframeState, getGroupKeyframeState } from '../../hooks/useKeyframeState';
 import { EasingCurvePreview } from '../common/EasingCurvePreview';
+import { KEYS, formatShortcut } from '../common/shortcuts';
 import { EasingEditor } from '../common/EasingEditor';
 import { exportSelectionAsPng, exportSelectionAsSvg } from '../../services/exportService';
 import { documentFontFamilies } from '../../services/documentFonts';
@@ -1464,7 +1465,7 @@ export function PropertiesPanel() {
         <button
           className={styles.booleanOpButton}
           onClick={() => booleanUnion(sceneGraph)}
-          title="Union (Ctrl+Shift+U)"
+          title={`Union (${formatShortcut(KEYS.union)})`}
           aria-label="Boolean union"
           data-testid="boolean-union"
         >
@@ -1474,7 +1475,7 @@ export function PropertiesPanel() {
         <button
           className={styles.booleanOpButton}
           onClick={() => booleanSubtract(sceneGraph)}
-          title="Subtract (Ctrl+Shift+D)"
+          title={`Subtract (${formatShortcut(KEYS.subtract)})`}
           aria-label="Boolean subtract"
           data-testid="boolean-subtract"
         >
@@ -1484,7 +1485,7 @@ export function PropertiesPanel() {
         <button
           className={styles.booleanOpButton}
           onClick={() => booleanIntersect(sceneGraph)}
-          title="Intersect (Ctrl+Shift+I)"
+          title={`Intersect (${formatShortcut(KEYS.intersect)})`}
           aria-label="Boolean intersect"
           data-testid="boolean-intersect"
         >
@@ -1494,7 +1495,7 @@ export function PropertiesPanel() {
         <button
           className={styles.booleanOpButton}
           onClick={() => booleanExclude(sceneGraph)}
-          title="Exclude (Ctrl+Shift+X)"
+          title={`Exclude (${formatShortcut(KEYS.exclude)})`}
           aria-label="Boolean exclude"
           data-testid="boolean-exclude"
         >

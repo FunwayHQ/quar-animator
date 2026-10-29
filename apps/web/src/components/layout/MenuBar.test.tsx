@@ -704,6 +704,27 @@ describe('MenuBar', () => {
       ]);
     });
 
+    it('on a Mac, the menus and the dialog show ⌘, ⌥ and ⇧', () => {
+      const platform = vi.spyOn(navigator, 'platform', 'get').mockReturnValue('MacIntel');
+      try {
+        const dialog = openShortcuts();
+        expect(keysFor(dialog, 'Redo')).toBe('⇧⌘Z or ⌘Y');
+        expect(keysFor(dialog, 'Work area on or off (Windows, Linux)')).toBe('⌥W');
+        expect(keysFor(dialog, 'Flip Horizontal')).toBe('⇧H');
+        // Delete and Backspace are one key on a Mac
+        expect(keysFor(dialog, 'Delete')).toBe('⌫');
+        expect(within(dialog).queryByText(/Ctrl/)).toBeNull();
+        fireEvent.click(within(dialog).getByRole('button', { name: 'Close' }));
+
+        fireEvent.click(screen.getByTestId('menu-edit'));
+        expect(screen.getByRole('menuitem', { name: /^Undo/ })).toHaveTextContent('Undo⌘Z');
+        expect(screen.getByRole('menuitem', { name: /^Ungroup/ })).toHaveTextContent('Ungroup⇧⌘G');
+        expect(screen.getByTestId('edit-menu-dropdown')).not.toHaveTextContent(/Ctrl|Shift/);
+      } finally {
+        platform.mockRestore();
+      }
+    });
+
     it('the menus show the keys the dialog lists', () => {
       const dialog = openShortcuts();
       const save = keysFor(dialog, 'Save');

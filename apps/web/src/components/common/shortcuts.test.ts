@@ -4,8 +4,8 @@
 
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { describe, it, expect } from 'vitest';
-import { SHORTCUT_GROUPS, formatShortcut, splitShortcut } from './shortcuts';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { SHORTCUT_GROUPS, formatShortcut, isMacPlatform, splitShortcut } from './shortcuts';
 
 /** The keys the user guide's Keyboard shortcuts chapter names, as the list writes them. */
 function guideKeys(): string[] {
@@ -59,5 +59,58 @@ describe('formatShortcut', () => {
     expect(formatShortcut('Shift+Left')).toBe('Shift+←');
     expect(formatShortcut('PageDown')).toBe('Page Down');
     expect(formatShortcut('Ctrl+Shift+Z')).toBe('Ctrl+Shift+Z');
+  });
+
+  it('prints Ctrl, Alt and Shift elsewhere', () => {
+    expect(formatShortcut('Ctrl+Shift+Z', false)).toBe('Ctrl+Shift+Z');
+    expect(formatShortcut('Alt+W', false)).toBe('Alt+W');
+    expect(formatShortcut('Delete', false)).toBe('Delete');
+    expect(formatShortcut('Ctrl+Enter', false)).toBe('Ctrl+Enter');
+  });
+
+  it('prints ⌘, ⌥ and ⇧ on a Mac, in the order Mac menus have them', () => {
+    expect(formatShortcut('Ctrl+S', true)).toBe('⌘S');
+    expect(formatShortcut('Ctrl+Shift+Z', true)).toBe('⇧⌘Z');
+    expect(formatShortcut('Shift+H', true)).toBe('⇧H');
+    expect(formatShortcut('Alt+W', true)).toBe('⌥W');
+    expect(formatShortcut('Ctrl+=', true)).toBe('⌘=');
+    expect(formatShortcut('Ctrl+Shift+]', true)).toBe('⇧⌘]');
+    expect(formatShortcut('Shift+,', true)).toBe('⇧,');
+    expect(formatShortcut('Alt+Click', true)).toBe('⌥Click');
+    expect(formatShortcut('Shift+Up', true)).toBe('⇧↑');
+    // A Mac's delete key is Backspace; Return is ↩
+    expect(formatShortcut('Delete', true)).toBe('⌫');
+    expect(formatShortcut('Ctrl+Enter', true)).toBe('⌘↩');
+    expect(formatShortcut('Space', true)).toBe('Space');
+    expect(formatShortcut('F', true)).toBe('F');
+  });
+});
+
+describe('isMacPlatform', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it('tells a Mac by its platform', () => {
+    vi.spyOn(navigator, 'platform', 'get').mockReturnValue('MacIntel');
+    expect(isMacPlatform()).toBe(true);
+    expect(formatShortcut('Ctrl+Shift+S')).toBe('⇧⌘S');
+  });
+
+  it('or by the user agent data browsers have instead', () => {
+    vi.spyOn(navigator, 'platform', 'get').mockReturnValue('');
+    Object.defineProperty(navigator, 'userAgentData', {
+      configurable: true,
+      get: () => ({ platform: 'macOS' }),
+    });
+    try {
+      expect(isMacPlatform()).toBe(true);
+    } finally {
+      Reflect.deleteProperty(navigator, 'userAgentData');
+    }
+  });
+
+  it('and anything else by Ctrl', () => {
+    vi.spyOn(navigator, 'platform', 'get').mockReturnValue('Win32');
+    expect(isMacPlatform()).toBe(false);
+    expect(formatShortcut('Ctrl+Shift+S')).toBe('Ctrl+Shift+S');
   });
 });

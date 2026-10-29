@@ -15,6 +15,7 @@ import type { Node } from '@quar/types';
 import { useSceneGraph } from '../../contexts/SceneGraphContext';
 import { useEditorStore } from '../../stores/editorStore';
 import type { SequenceStepPatch } from '../../stores/sequenceActions';
+import { KEYS, formatShortcut } from './shortcuts';
 import styles from './AnimationSequenceWindow.module.css';
 
 const STORAGE_KEY = 'quar-animator-sequence-window';
@@ -271,7 +272,7 @@ function StepRow({
         draggable
         onDragStart={onDragStart}
         onDragEnd={onDragEnd}
-        title="Drag to reorder (Alt+↑/↓)"
+        title={`Drag to reorder (${formatShortcut('Alt+Up')}/↓)`}
         aria-hidden="true"
       >
         <GripVertical size={14} />
@@ -590,7 +591,7 @@ export function AnimationSequenceWindow() {
           className={styles.iconButton}
           onClick={close}
           aria-label="Close Animation Sequence"
-          title="Close (Shift+A)"
+          title={`Close (${formatShortcut(KEYS.animationSequence)})`}
         >
           <X size={14} />
         </button>

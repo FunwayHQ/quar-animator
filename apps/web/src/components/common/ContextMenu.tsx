@@ -1,5 +1,6 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
+import { formatShortcut } from './shortcuts';
 import styles from './ContextMenu.module.css';
 
 // ============================================================================
@@ -10,6 +11,7 @@ export interface ContextMenuItem {
   id: string;
   label: string;
   icon?: React.ReactNode;
+  /** As Windows writes it ("Ctrl+Shift+G"): shown with formatShortcut, ⇧⌘G on a Mac */
   shortcut?: string;
   disabled?: boolean;
   danger?: boolean;
@@ -194,7 +196,9 @@ export function ContextMenu({ x, y, items, onClose }: ContextMenuProps) {
             >
               {item.icon && <span className={styles.menuItemIcon}>{item.icon}</span>}
               <span className={styles.menuItemLabel}>{item.label}</span>
-              {item.shortcut && <span className={styles.menuItemShortcut}>{item.shortcut}</span>}
+              {item.shortcut && (
+                <span className={styles.menuItemShortcut}>{formatShortcut(item.shortcut)}</span>
+              )}
             </button>
           );
         })}

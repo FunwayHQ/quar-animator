@@ -27,6 +27,22 @@ describe('ContextMenu', () => {
     expect(screen.getByText('Ctrl+V')).toBeInTheDocument();
   });
 
+  it('shows the shortcuts as a Mac prints them, on a Mac', () => {
+    const platform = vi.spyOn(navigator, 'platform', 'get').mockReturnValue('MacIntel');
+    const items: ContextMenuEntry[] = [
+      ...makeItems(),
+      { id: 'ungroup', label: 'Ungroup', shortcut: 'Ctrl+Shift+G', onClick: vi.fn() },
+      { id: 'remove', label: 'Remove', shortcut: 'Del', onClick: vi.fn() },
+    ];
+    render(<ContextMenu x={100} y={100} items={items} onClose={vi.fn()} />);
+
+    expect(screen.getByText('⌘C')).toBeInTheDocument();
+    expect(screen.getByText('⇧⌘G')).toBeInTheDocument();
+    expect(screen.getByText('⌫')).toBeInTheDocument();
+    expect(screen.queryByText(/Ctrl/)).toBeNull();
+    platform.mockRestore();
+  });
+
   it('calls onClick when item clicked', async () => {
     const user = userEvent.setup();
     const onClick = vi.fn();

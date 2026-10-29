@@ -93,7 +93,7 @@ function MenuItem({
         {checked != null ? (checked ? '\u2713' : '') : ''}
       </span>
       <span className={styles.dropdownLabel}>{label}</span>
-      {shortcut && <span className={styles.dropdownShortcut}>{shortcut}</span>}
+      {shortcut && <span className={styles.dropdownShortcut}>{formatShortcut(shortcut)}</span>}
     </button>
   );
 }
@@ -1551,16 +1551,18 @@ const JOINERS: Record<NonNullable<ShortcutEntry['join']>, string> = {
 
 function ShortcutRow({ entry }: { entry: ShortcutEntry }) {
   const joiner = JOINERS[entry.join ?? 'or'];
+  // Keys a Mac prints alike (Delete and Backspace are both ⌫) are shown once
+  const shown = [...new Set(entry.keys.map((keys) => formatShortcut(keys)))];
   return (
     <div className={styles.shortcutRow} data-testid="shortcut-row">
       <span className={styles.shortcutLabel} data-testid="shortcut-label">
         {entry.label}
       </span>
       <span className={styles.shortcutKeys} data-testid="shortcut-keys">
-        {entry.keys.map((keys, index) => (
+        {shown.map((keys, index) => (
           <span key={keys}>
             {index > 0 && <span className={styles.shortcutJoiner}>{joiner}</span>}
-            <kbd className={styles.shortcutKbd}>{formatShortcut(keys)}</kbd>
+            <kbd className={styles.shortcutKbd}>{keys}</kbd>
           </span>
         ))}
       </span>
