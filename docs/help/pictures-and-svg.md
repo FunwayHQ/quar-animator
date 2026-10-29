@@ -14,6 +14,9 @@ both.
 1. Choose **File › Import Image…**.
 2. Choose a PNG, JPEG, GIF or WebP file, up to 10 MB.
 
+An animated GIF comes in as a clip that plays on the timeline instead, up to
+100 MB: see [GIF clips](video-clips.md#gif).
+
 The picture comes in at its own size, in the middle of the page, where the
 rulers read 0, and selected. Its layer is named after the file. If you can't see
 it, press [[Mod+0]] to fit the artwork in the window.
@@ -25,7 +28,8 @@ If it lands on an artboard, the picture [goes into it](artboards.md#layers).
 - **Drop it:** drag a picture file from your computer onto the canvas. It comes
   in centered where you drop it, and goes into the
   [artboard](artboards.md#layers) you drop it on.
-  Drop several, and only the first picture comes in.
+  Drop several, and only the first picture comes in. (An animated GIF comes
+  in as a [clip](video-clips.md#import).)
 - **Paste it:** copy a picture, in your browser or in another app, then press
   [[Mod+V]] in the editor. It's placed in the middle of the view, and called
   Pasted Image.
