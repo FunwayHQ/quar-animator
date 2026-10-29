@@ -129,7 +129,9 @@ To change it, drag its ends or its middle. [[I]] puts its start at the
 playhead and [[Shift+I]] its end; so do **Set Work Area Start** and
 **Set Work Area End** on the ruler's right-click menu. **Work area**
 (or [[Alt+W]]) turns it off and on again, and
-**Clear Work Area** on the ruler's menu takes it away. While it's on, [[Home]] goes to its start.
+**Clear Work Area** on the ruler's menu takes it away. While it's on, [[Home]],
+**Go to start**, **Animation › Go to Start** and **Go To Start** on the
+ruler's menu go to its start.
 
 ## Animate with keyframes {#animate}
 

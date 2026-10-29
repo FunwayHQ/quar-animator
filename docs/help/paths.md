@@ -19,7 +19,8 @@ reshape any path point by point, and cut, join and combine them.
 4. Go on, a click or a drag for each point. A dashed line runs from the last
    point to the pointer, where the next part will go.
 5. Finish the path:
-   - To close it, click its first point. A closed path is filled.
+   - To close it, click its first point, once it has at least three. A
+     closed path is filled.
    - To leave it open, press [[Enter]]. An open path has only its stroke.
 
 The path is selected, and the editor is back on the Selection tool ([[V]]).
