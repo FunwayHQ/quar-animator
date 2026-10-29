@@ -380,6 +380,21 @@ describe('useProjectActions', () => {
       }
     });
 
+    it('saves the brush profiles made in the document with it', async () => {
+      const profiles = [
+        { id: 'uniform', name: 'Uniform', samples: [1, 1] },
+        { id: 'custom-1', name: 'Diamond', samples: [0, 1, 0] },
+      ];
+      Object.assign(mockEditorState, { projectId: 'existing-id', brushProfiles: profiles });
+      const { result } = renderProjectActions();
+      await act(async () => {
+        await result.current.saveProject();
+      });
+
+      const snapshot = mockSerialize.mock.calls[0]![2] as { brushProfiles: unknown };
+      expect(snapshot.brushProfiles).toEqual(profiles);
+    });
+
     it('marks project as not dirty after save', async () => {
       const { result } = renderProjectActions();
       mockEditorState.projectId = 'existing-id';

@@ -79,6 +79,7 @@ import {
 } from './reparent';
 import { flipInParentSpace, flipMatrix, flipPlacement, type FlipAxis } from './flip';
 import { symbolsUsedBy, type ClipboardPayload } from '../services/systemClipboard';
+import { withBuiltInProfiles } from '../services/brushProfiles';
 import { pastedArtboardTimelines, pastedTracks, type RootMove } from './clipboardAnimation';
 import {
   closedContour,
@@ -1389,14 +1390,8 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   setEraserMode: (mode: EraserMode) => set({ eraserMode: mode }),
 
   // Brush profiles
-  brushProfiles: [
-    { id: 'uniform', name: 'Uniform', samples: [1, 1] },
-    { id: 'taper-out', name: 'Taper Out', samples: [1, 1, 0.8, 0.5, 0.2, 0] },
-    { id: 'taper-in', name: 'Taper In', samples: [0, 0.2, 0.5, 0.8, 1, 1] },
-    { id: 'taper-both', name: 'Taper Both', samples: [0, 0.3, 0.8, 1, 1, 0.8, 0.3, 0] },
-    { id: 'bulge', name: 'Bulge', samples: [0.3, 0.7, 1, 1, 0.7, 0.3] },
-    { id: 'calligraphic', name: 'Calligraphic', samples: [0.2, 0.8, 1, 0.6, 0.3] },
-  ],
+  // The built-in ones, then the document's own (saved with it)
+  brushProfiles: withBuiltInProfiles([]),
   activeBrushProfileId: null,
   addBrushProfile: (profile: BrushProfile) =>
     set((state) => ({ brushProfiles: [...state.brushProfiles, profile] })),
@@ -1645,7 +1640,8 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     const id = `custom-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
     const profile: BrushProfile = { id, name, samples };
 
-    set((s) => ({ brushProfiles: [...s.brushProfiles, profile] }));
+    // The document's own: saved with it, so there's something to save
+    set((s) => ({ brushProfiles: [...s.brushProfiles, profile], isDirty: true }));
     return profile;
   },
 
@@ -4247,6 +4243,7 @@ function createHistoryActions(
         symbols: [],
         sounds: [],
         selectedSoundClipId: null,
+        brushProfiles: withBuiltInProfiles([]),
         guides: [],
         documentBackground: { ...DEFAULT_DOCUMENT_BACKGROUND },
         ikChains: [],

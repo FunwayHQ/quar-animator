@@ -1652,6 +1652,62 @@ describe('ProjectSerializer', () => {
   });
 
   // ============================================================================
+  // Brush profiles
+  // ============================================================================
+
+  describe('brush profiles', () => {
+    const builtIn = [
+      { id: 'uniform', name: 'Uniform', samples: [1, 1] },
+      { id: 'taper-out', name: 'Taper Out', samples: [1, 1, 0.8, 0.5, 0.2, 0] },
+    ];
+    const diamond = { id: 'custom-1', name: 'Diamond', samples: [0, 0.5, 1, 0.5, 0] };
+    const state = (brushProfiles?: typeof builtIn): EditorStateSnapshot => ({
+      timeline: createTimeline(),
+      timelineDuration: 300,
+      frameRate: 30,
+      autoKeyframe: false,
+      onionSkin: { ...DEFAULT_ONION_SKIN_SETTINGS },
+      ...(brushProfiles && { brushProfiles }),
+    });
+
+    it('keeps the profiles made in the document through a .quar file, not the built-in ones', () => {
+      const data = serializeProject('Strokes', new SceneGraph(), state([...builtIn, diamond]));
+      expect(data.brushProfiles).toEqual([diamond]);
+
+      let applied: Record<string, unknown> = {};
+      deserializeProjectFromBinary(projectDataToBinary(data), new SceneGraph(), (s) => {
+        applied = s;
+      });
+      const profiles = applied.brushProfiles as Array<{ id: string }>;
+      // Every built-in one, then the document's
+      expect(profiles.at(-1)).toEqual(diamond);
+      expect(profiles.map((p) => p.id)).toContain('taper-both');
+      expect(profiles.filter((p) => p.id === 'custom-1')).toHaveLength(1);
+    });
+
+    it('opens an older file with none with only the built-in ones', () => {
+      const data = JSON.parse(
+        JSON.stringify(serializeProject('Old', new SceneGraph(), state()))
+      ) as ProjectDataV2;
+      delete data.brushProfiles;
+
+      let applied: Record<string, unknown> = {};
+      deserializeProject(data, new SceneGraph(), (s) => {
+        applied = s;
+      });
+      const profiles = applied.brushProfiles as Array<{ id: string }>;
+      expect(profiles.map((p) => p.id)).toEqual([
+        'uniform',
+        'taper-out',
+        'taper-in',
+        'taper-both',
+        'bulge',
+        'calligraphic',
+      ]);
+    });
+  });
+
+  // ============================================================================
   // Slide transitions
   // ============================================================================
 

@@ -112,6 +112,7 @@ export function useProjectActions(options: UseProjectActionsOptions = {}): Proje
           )
         : state.symbols,
       sounds: state.sounds,
+      brushProfiles: state.brushProfiles,
       ...(editing && { pageScene: editing.page }),
     };
   }, [sceneGraph]);

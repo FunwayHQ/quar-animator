@@ -18,6 +18,7 @@ import type {
   SkinData,
   Color,
   Sound,
+  BrushProfile,
 } from '@quar/types';
 import type { OnionSkinSettings } from '@quar/core';
 import type { SceneGraph } from '@quar/core';
@@ -42,6 +43,7 @@ import {
 } from '@quar/core';
 import type { Guide, PageData } from '../stores/editorStore';
 import { readSoundClips, readSounds } from './soundData';
+import { customBrushProfiles, readBrushProfiles, withBuiltInProfiles } from './brushProfiles';
 
 // ============================================================================
 // Types
@@ -116,6 +118,8 @@ export interface ProjectDataV2 {
   symbols?: SymbolDefinition[];
   /** The sounds the pages' timelines play (each clip names one) */
   sounds?: Sound[];
+  /** The brush profiles made in the document (its brush strokes name them) */
+  brushProfiles?: BrushProfile[];
 }
 
 /** v3.0 binary format (same structure as v2.0, different version tag) */
@@ -146,6 +150,8 @@ export interface EditorStateSnapshot {
   activePageId?: string;
   symbols?: SymbolDefinition[];
   sounds?: Sound[];
+  /** Every brush profile, the built-in ones too (those aren't saved) */
+  brushProfiles?: BrushProfile[];
   /**
    * The active page's layers, when the scene graph doesn't hold them: while
    * a symbol is edited, it holds the symbol's
@@ -256,6 +262,7 @@ export function serializeProject(
     symbols: editorState.symbols ? structuredClone(editorState.symbols) : [],
     // Only the sounds some clip plays: one taken off the timeline goes with it
     sounds: soundsPlayedOn(pages, editorState.sounds ?? []),
+    brushProfiles: customBrushProfiles(editorState.brushProfiles ?? []),
   };
 }
 
@@ -582,6 +589,7 @@ export function deserializeProject(
     activePageId: activePage.id,
     symbols: v2.symbols ?? [],
     sounds: readSounds(v2.sounds),
+    brushProfiles: withBuiltInProfiles(readBrushProfiles(v2.brushProfiles)),
   };
 
   // Load the active page's scene graph, then restore the editor state —
