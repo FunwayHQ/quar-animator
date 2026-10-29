@@ -18,7 +18,7 @@ Then:
   front. A click on a layer in a group selects the whole group (see
   [Groups](#groups)). An artboard is selected by its label (see
   [Artboards](artboards.md#select)).
-- **Shift+click** another layer to add it to the selection, or to take it out
+- **[[Shift]]+click** another layer to add it to the selection, or to take it out
   again. [[Mod]]+click does the same.
 - **Drag across an empty part of the canvas** to draw a box: every layer the
   box touches is selected. Hold [[Shift]] as you drag to add them to what's
@@ -27,7 +27,7 @@ Then:
 - **Select nothing:** click an empty part of the canvas, or press [[Esc]].
 
 You can also select in the Layers panel: click a layer's row, [[Mod]]+click to
-add or remove one, and Shift+click to select every row from the last one you
+add or remove one, and [[Shift]]+click to select every row from the last one you
 clicked to this one.
 
 Hidden and locked layers can't be picked on the canvas, but you can still

@@ -45,7 +45,8 @@ Inter comes with the editor and needs nothing from anyone. The other fonts in
 the [font picker](text.md#fonts) come from Google Fonts, and none of them is asked for until you
 allow it. You can allow Google Fonts:
 
-- on the note that greets you on your first visit (**Enable Google Fonts**);
+- by ticking **Enable Google Fonts** on the note that greets you on your first
+  visit, before you click **Got it**;
 - when you first pick one of them: the editor asks, and **Allow Google Fonts**
   loads it, while **Cancel** keeps the font you had;
 - with **Help › Use Google Fonts**, ticked while they're allowed.

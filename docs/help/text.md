@@ -118,7 +118,9 @@ after all, turn Google Fonts on (below), save, and reload the page.
 To change your mind later, choose **Help › Use Google Fonts**: it's ticked while
 Google Fonts are allowed, and choosing it again turns them off. Turned off,
 nothing more loads from Google; fonts already loaded stay until you reload the
-page. Your choice is remembered in this browser.
+page. Your choice is remembered in this browser. What the editor sends to
+Google, and the other place you can allow it, are in
+[Fonts and Google](troubleshooting.md#google-fonts).
 
 ## Turn text into shapes {#convert}
 

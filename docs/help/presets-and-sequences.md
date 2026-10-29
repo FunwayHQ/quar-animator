@@ -102,7 +102,8 @@ selected, say. For **Own keyframes** it also says what it will add (see
 [below](#own-keyframes)).
 
 **Play from start**, the button at the right of the window's foot, plays the
-page from frame 0.
+timeline in view from frame 0: the page's, or an artboard's (see
+[Each artboard has its own timeline](artboards.md#timelines)).
 
 ### Change a step {#step-settings}
 

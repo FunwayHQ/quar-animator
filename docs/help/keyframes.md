@@ -40,8 +40,8 @@ The timeline is along the bottom of the editor.
    [Auto-keyframe](#auto-keyframe)).
 2. **Loop** ([[L]]): playing starts over when it reaches the end. It's on
    unless you turn it off.
-3. **Work area** ([[Alt+W]]): plays only part of the timeline (see
-   [The work area](#work-area)).
+3. **Work area** ([[Alt+W]] on Windows and Linux): plays only part of the
+   timeline (see [The work area](#work-area)).
 4. **Graph editor** ([[G]]): shows the keyframes as curves instead (see
    [Easing and the graph editor](easing.md)).
 5. **Animation Sequence** ([[Shift+A]]): opens the Animation Sequence window
@@ -123,8 +123,8 @@ watch one move over and over.
 To change it, drag its ends or its middle. [[I]] puts its start at the
 playhead and [[Shift+I]] its end; so do **Set Work Area Start** and
 **Set Work Area End** on the ruler's right-click menu. **Work area**
-([[Alt+W]]) turns it off and on again, and **Clear Work Area** on the ruler's
-menu takes it away. While it's on, [[Home]] goes to its start.
+(or [[Alt+W]], though not on a Mac) turns it off and on again, and
+**Clear Work Area** on the ruler's menu takes it away. While it's on, [[Home]] goes to its start.
 
 ## Animate with keyframes {#animate}
 

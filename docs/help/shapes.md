@@ -183,8 +183,8 @@ The color behind your artwork belongs to the document. To change it:
 
 It's saved with the project. The canvas shows it behind everything, the
 project's picture on the Projects page has it, and so do the pictures and
-videos you export, unless you choose a transparent background when you export
-(see [What's exported](exporting.md#scope)). An artboard has
+videos you make from the **Export** menu, unless you choose a transparent
+background when you export (see [What's exported](exporting.md#scope)). An artboard has
 [its own fill](artboards.md#select) on top of it.
 
 The background is dark (`#1A1A1A`) in a new project. It doesn't change with the

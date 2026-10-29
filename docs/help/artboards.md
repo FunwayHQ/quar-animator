@@ -79,11 +79,12 @@ Playing plays the timeline in view.
 
 The artboards at the top of a page also play one after another, as slides:
 
-- When the page has an artboard, a play button at the end of the toolbar
-  presents them full screen, in the order the Layers panel lists them (see
-  [Present](presenting.md#present)).
-- Video, GIF and PNG-sequence exports can play every artboard as a slide, each
-  for its own timeline (see [What's exported](exporting.md#scope)).
+- When the page has an artboard that isn't hidden, a play button at the end of
+  the toolbar presents them full screen, in the order the Layers panel lists
+  them (see [Present](presenting.md#present)).
+- With no artboard selected, video, GIF and PNG-sequence exports of a page
+  with two or more artboards play every one as a slide, each for its own
+  timeline (see [What's exported](exporting.md#scope)).
 
 The **Slide** section of an artboard's properties sets the transition that
 brings it on after the slide before it (see

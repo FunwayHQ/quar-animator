@@ -10,7 +10,7 @@ weights it works out bend a shape well; where they don't (a sleeve that
 tears at the elbow, a body that follows an arm), you paint them by hand.
 
 This chapter starts where [Bones and binding](rigging-bones.md#bind) leaves
-off, with a shape bound to bones. Page 2 of Tutorial 5 (Rigging) has a shape
+off, with a shape bound to bones. Page 2 of Tutorial 5 · Rigging has a shape
 to bind and paint.
 
 ## The weights binding gives you {#auto-weights}

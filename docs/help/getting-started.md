@@ -19,7 +19,8 @@ tablet you see a note asking for a larger screen instead.
 
 The first time you visit, two notes greet you: one says your work stays on
 your device, the other that Quar Animator is in beta. Read them, then click
-**Got it** on each.
+**Got it** on each. The first also has an **Enable Google Fonts** box,
+unticked to begin with (see [Fonts and Google](troubleshooting.md#google-fonts)).
 
 > [!NOTE]
 > The free editor keeps your projects in this browser, on this computer, and

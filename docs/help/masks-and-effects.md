@@ -15,7 +15,7 @@ like anything else.
    same group or artboard. It can be a rectangle, an ellipse, a polygon or
    star, a path, text or a [picture](pictures-and-svg.md).
 2. In the Layers panel, select the mask and the layers to mask: click one and
-   Shift+click the others, or [[Mod]]+click them.
+   [[Shift]]+click the others, or [[Mod]]+click them.
 3. Right-click one of them and choose **Create Clip Mask**, **Create Alpha
    Mask** or **Create Luminance Mask** (1).
 
@@ -47,7 +47,7 @@ you can slide artwork past a still window, as the tutorial does, or move the
 window over still artwork.
 
 > [!TIP]
-> Tutorial 6, Groups, symbols & masks, has a mask to try on its third page.
+> Tutorial 6 · Groups, symbols & masks has a mask to try on its third page.
 
 ## Combine shapes {#booleans}
 

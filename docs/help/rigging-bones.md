@@ -9,7 +9,7 @@ bind shapes and pictures to it, and turn the bones: the artwork bends with
 them, smoothly at the joints. Bones are helpers. You see them while you work,
 but they're never drawn in an export.
 
-Tutorial 5 (Rigging) on the Projects page has a page for each step of this
+Tutorial 5 · Rigging on the Projects page has a page for each step of this
 chapter, so you can try them as you read.
 
 ## Draw bones {#draw}

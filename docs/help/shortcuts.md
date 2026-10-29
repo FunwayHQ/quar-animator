@@ -48,7 +48,7 @@ stacking keys and [[Esc]] (see [Select layers](selecting-and-arranging.md#select
 | [[Esc]]                                                                   | any shape, a brush stroke                   | gives up on what you're drawing                       |
 | [[Shift]] (hold)                                                          | Pen                                         | keeps the line to steps of 45°                        |
 | [[Enter]]                                                                 | Pen                                         | finishes the path, open                               |
-| [[Backspace]]                                                             | Pen                                         | takes away the last point                             |
+| [[Backspace]] or [[Delete]]                                               | Pen                                         | takes away the last point                             |
 | [[Esc]]                                                                   | Pen                                         | gives up on the path                                  |
 | [[Alt]]+click a point                                                     | Pen                                         | turns it between a corner and a smooth point          |
 | [[Alt]] (hold), dragging out a point                                      | Pen                                         | breaks its handles apart: only the one you drag moves |
@@ -163,19 +163,19 @@ More in [Move around the canvas](selecting-and-arranging.md#view) and
 
 ## Timeline and playback {#timeline}
 
-| Keys                      | Does                                                  |
-| ------------------------- | ----------------------------------------------------- |
-| [[Space]]                 | play and pause (on the canvas: when you let go of it) |
-| [[Home]] / [[End]]        | go to the first / last frame                          |
-| [[,]] / [[.]]             | previous / next frame                                 |
-| [[Shift+,]] / [[Shift+.]] | 10 frames back / on                                   |
-| [[L]]                     | Loop Playback on or off                               |
-| [[K]]                     | Auto-Keyframe on or off                               |
-| [[G]]                     | switch between the dope sheet and the graph editor    |
-| [[I]] / [[Shift+I]]       | start / end the work area (the range that plays) here |
-| [[Alt+W]]                 | the work area on or off (Windows and Linux)           |
-| [[Shift+O]]               | Onion Skinning on or off                              |
-| [[Shift+A]]               | the Animation Sequence window                         |
+| Keys                      | Does                                                     |
+| ------------------------- | -------------------------------------------------------- |
+| [[Space]]                 | play and pause (on the canvas: when you let go of it)    |
+| [[Home]] / [[End]]        | go to the start / the end of the animation               |
+| [[,]] / [[.]]             | previous / next frame                                    |
+| [[Shift+,]] / [[Shift+.]] | 10 frames back / on                                      |
+| [[L]]                     | Loop Playback on or off                                  |
+| [[K]]                     | Auto-Keyframe on or off                                  |
+| [[G]]                     | switch the timeline's rows to the graph editor, and back |
+| [[I]] / [[Shift+I]]       | start / end the work area (the range that plays) here    |
+| [[Alt+W]]                 | the work area on or off (Windows and Linux)              |
+| [[Shift+O]]               | Onion Skinning on or off                                 |
+| [[Shift+A]]               | the Animation Sequence window                            |
 
 More in [Play your animation](keyframes.md#playing),
 [The work area](keyframes.md#work-area),
@@ -193,13 +193,13 @@ mutes it or turns it on again, and [[Enter]] opens its settings.
 
 ## Rigging {#rigging}
 
-| Keys                                                                      | With                                             | Does                                                 |
-| ------------------------------------------------------------------------- | ------------------------------------------------ | ---------------------------------------------------- |
-| <kbd class="keys"><kbd>[</kbd></kbd> <kbd class="keys"><kbd>]</kbd></kbd> | Weight Paint                                     | makes the brush smaller or bigger                    |
-| [[X]]                                                                     | Weight Paint                                     | switches between adding and taking away weight       |
-| <kbd class="keys"><kbd>[</kbd></kbd> <kbd class="keys"><kbd>]</kbd></kbd> | Point Magnet, while you record a Smart Bone pose | makes it smaller or bigger                           |
-| [[F]]                                                                     | Point Magnet                                     | changes how its pull fades: smooth, linear, constant |
-| [[Esc]]                                                                   | Point Magnet                                     | drops the moves you haven't kept                     |
+| Keys                                                                      | With                                               | Does                                                 |
+| ------------------------------------------------------------------------- | -------------------------------------------------- | ---------------------------------------------------- |
+| <kbd class="keys"><kbd>[</kbd></kbd> <kbd class="keys"><kbd>]</kbd></kbd> | Weight Paint                                       | makes the brush smaller or bigger                    |
+| [[X]]                                                                     | Weight Paint                                       | switches between adding and taking away weight       |
+| <kbd class="keys"><kbd>[</kbd></kbd> <kbd class="keys"><kbd>]</kbd></kbd> | Point Magnet, while you record a Smart Bone target | makes it smaller or bigger                           |
+| [[F]]                                                                     | Point Magnet                                       | changes how its push fades: smooth, linear, constant |
+| [[Esc]]                                                                   | Point Magnet                                       | clears the target you're recording, to start it over |
 
 More in [Paint weights](rigging-weights.md#weight-paint),
 [The Point Magnet](rigging-weights.md#point-magnet) and
@@ -209,7 +209,9 @@ More in [Paint weights](rigging-weights.md#weight-paint),
 
 In the Properties panel's number fields: [[Up]] and [[Down]] add or take away
 1 (with [[Shift]]: 10), and so does turning the mouse wheel over the field
-you're in. [[Right]] goes on from the whole number to the decimals. More in
+you're in. [[Right]] goes on from the whole number to the decimals. A slide
+transition's **Duration** steps by a tenth of a second instead (with
+[[Shift]]: a whole second). More in
 [Type exact values](selecting-and-arranging.md#fields).
 
 ## Presenting {#presenting}
