@@ -58,6 +58,7 @@ import {
 } from './sequenceActions';
 import { createSoundActions, type SoundActions } from './soundActions';
 import { createVideoActions, type VideoActions } from './videoActions';
+import { createVideoClipActions, type VideoClipActions } from './videoClipActions';
 import { keepVideoFiles } from '../services/videoFiles';
 import { createTransitionActions, type TransitionActions } from './transitionActions';
 import {
@@ -722,7 +723,7 @@ export const DEFAULT_STROKE: Stroke = {
 // ============================================================================
 
 export interface EditorStore
-  extends SequenceActions, SoundActions, VideoActions, TransitionActions {
+  extends SequenceActions, SoundActions, VideoActions, VideoClipActions, TransitionActions {
   // Project state
   projectId: string | null;
   projectName: string;
@@ -3432,6 +3433,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   ...createSequenceActions(set, get),
   ...createSoundActions(set, get),
   ...createVideoActions(set),
+  ...createVideoClipActions(set, get),
   ...createTransitionActions(set, get),
 }));
 

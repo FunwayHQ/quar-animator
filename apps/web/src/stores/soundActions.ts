@@ -14,6 +14,7 @@ import {
 } from '@quar/animation';
 import type { Sound, SoundClip } from '@quar/types';
 import type { EditorStore, SceneGraphLike } from './editorStore';
+import { followLinkedVideo } from './videoSounds';
 
 const SCRUB_STORAGE_KEY = 'quar-animator-scrub-sounds';
 
@@ -38,8 +39,9 @@ export interface SoundActions {
    */
   addSoundClip: (sceneGraph: SceneGraphLike, sound: Sound, frame: number) => string;
   /**
-   * Change a clip (move or trim it, set its volume, mute it). An undoable
-   * step, unless `undoable` is false: a drag records one as it begins.
+   * Change a clip (move or trim it, set its volume, mute it); a video's
+   * sound moved moves its video layer's clip too. An undoable step, unless
+   * `undoable` is false: a drag records one as it begins.
    */
   updateSoundClip: (
     sceneGraph: SceneGraphLike,
@@ -113,10 +115,13 @@ export function createSoundActions(
       return clip.id;
     },
     updateSoundClip: (sceneGraph, clipId, change, undoable = true) => {
-      const timeline = withSoundClip(get().timeline, clipId, change);
-      if (timeline === get().timeline) return;
+      const before = get().timeline;
+      const timeline = withSoundClip(before, clipId, change);
+      if (timeline === before) return;
       if (undoable) get().pushUndo(sceneGraph);
       set({ timeline, isDirty: true });
+      // A video's sound moved takes the video with it
+      followLinkedVideo(sceneGraph, before, timeline, clipId);
     },
     removeSoundClip: (sceneGraph, clipId) => {
       const timeline = withSoundClip(get().timeline, clipId, () => null);
