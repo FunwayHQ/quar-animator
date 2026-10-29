@@ -18,8 +18,8 @@ import { createPortal } from 'react-dom';
 import { Film, Repeat, Unlink } from 'lucide-react';
 import {
   clipMomentAt,
-  clipSeconds,
   clipSpeed,
+  heldVideoTime,
   MAX_CLIP_SPEED,
   MIN_CLIP_SPEED,
   movedVideoClip,
@@ -360,9 +360,8 @@ export const VideoClipBar = memo(function VideoClipBar({
   const speed = clipSpeed(clip);
   const fast = speed !== 1 ? speedLabel(speed) : '';
   const held = clip.holdLastFrame === true && end < duration;
-  const heldStill = held
-    ? stillAt(video, clipMomentAt(clip, Math.max(0, clipSeconds(clip) - 1e-6)))
-    : undefined;
+  const heldTime = held ? heldVideoTime(clip, frameRate) : null;
+  const heldStill = heldTime !== null ? stillAt(video, heldTime) : undefined;
   return (
     <>
       <div

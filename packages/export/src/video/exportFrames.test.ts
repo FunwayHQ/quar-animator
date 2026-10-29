@@ -297,8 +297,8 @@ describe('createExportVideoFrames', () => {
     const seen = await play(source, shots.length, [held, gone]);
     expect(seen.map(([frame]) => frame)).toEqual(range(0, 29).map((f) => Math.min(f, 14)));
     expect(seen.map(([, frame]) => frame)).toEqual(range(0, 29).map((f) => (f < 15 ? f : null)));
-    // Each layer's 15 frames, and the held one's last once more for the moment it holds
-    expect(mocks.drawn).toHaveLength(31);
+    // Each layer's 15 frames: the held one goes on showing its last, decoded once
+    expect(mocks.drawn).toHaveLength(30);
   });
 
   it('keeps a picture’s key while it shows the same frame, so it isn’t uploaded again', async () => {

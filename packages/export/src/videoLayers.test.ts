@@ -101,7 +101,8 @@ describe('which moment a video layer’s still shows', () => {
   });
 
   it('in a Lottie: its last, held, when the clip is over before the export starts', () => {
-    expect(at({ start: 0, duration: 1, holdLastFrame: true }, 45, 59)).toBeCloseTo(1, 3);
+    // The picture its last frame (29) shows
+    expect(at({ start: 0, duration: 1, holdLastFrame: true }, 45, 59)).toBeCloseTo(29 / 30, 9);
   });
 
   it('in a Lottie: none for a clip outside the export', () => {
@@ -338,7 +339,8 @@ describe('video layers in a PDF, as stills', () => {
     });
     const [[moments]] = videoStills.mock.calls as unknown as [[VideoMoment[]]];
     expect(moments.map((m) => m.nodeId)).toEqual(['held']);
-    expect(moments[0]?.seconds).toBeCloseTo(1, 3);
+    // The picture its last frame (29) shows
+    expect(moments[0]?.seconds).toBeCloseTo(29 / 30, 9);
     expect(await images(blob)).toBe(1);
   });
 });

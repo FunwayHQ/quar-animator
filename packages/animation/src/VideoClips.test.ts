@@ -4,6 +4,7 @@ import {
   clipMomentAt,
   clipSeconds,
   clipSpeed,
+  heldVideoTime,
   lastVideoFrame,
   linkedSoundClip,
   loopedUntil,
@@ -126,33 +127,58 @@ describe('speed, loops and held last frames', () => {
     expect(clipMomentAt(looped, 0.6)).toBe(1);
   });
 
-  it('show their last picture after they end when they hold it, nothing before them', () => {
+  it('go on showing the picture their last frame shows when they hold it, nothing before them', () => {
     const held = clip({ holdLastFrame: true });
     expect(videoTimeAt(held, 29, 30)).toBeNull();
-    expect(videoTimeAt(held, 150, 30)).toBeCloseTo(6, 3);
-    expect(videoTimeAt(held, 1000, 30)).toBeLessThan(6);
-    // A looped one holds where its last pass got to
-    const loopedHeld = clip({ loop: true, loopFor: 5, holdLastFrame: true });
-    expect(videoTimeAt(loopedHeld, 400, 30)).toBeCloseTo(3, 3);
+    // Its last frame, 149, shows 3 29⁄30 s into its part (from 2 s)
+    expect(videoTimeAt(held, 149, 30)).toBeCloseTo(6 - 1 / 30, 9);
+    expect(videoTimeAt(held, 150, 30)).toBe(videoTimeAt(held, 149, 30));
+    expect(videoTimeAt(held, 1000, 30)).toBe(videoTimeAt(held, 149, 30));
+    expect(heldVideoTime(held, 30)).toBe(videoTimeAt(held, 149, 30));
+    // Not held: nothing after it
+    expect(heldVideoTime(clip(), 30)).toBeNull();
     // An empty clip shows nothing, held or not
     expect(videoTimeAt(clip({ duration: 0, holdLastFrame: true }), 40, 30)).toBeNull();
   });
 
-  it('hold the picture their part ends on, not the one after it', () => {
+  it('hold the picture a looped clip cut mid-pass stopped on, not the video’s last', () => {
+    // 5 s from frame 30 of a 4 s part from 2 s: its last frame, 179, is 1 29⁄30 s into its second pass
+    const loopedHeld = clip({ loop: true, loopFor: 5, holdLastFrame: true });
+    expect(videoTimeAt(loopedHeld, 179, 30)).toBeCloseTo(3 - 1 / 30, 9);
+    expect(videoTimeAt(loopedHeld, 400, 30)).toBe(videoTimeAt(loopedHeld, 179, 30));
+    // Cut at any frame (its right end dragged there): the picture on the frame before it
+    for (const end of [37, 151, 152, 233]) {
+      const cut = trimmedVideoEnd(loopedHeld, end, 30, 6);
+      expect(videoTimeAt(cut, end + 50, 30)).toBe(videoTimeAt(cut, end - 1, 30));
+    }
+  });
+
+  it('hold their last frame’s picture, never the start of the next pass or past their part', () => {
     // The frame source nudges each moment on by 1e-5 s, so a frame boundary lands
-    // in the frame it begins: the held moment is further than that inside the last
+    // in the frame it begins: the held moment is further than that inside the part
     const NUDGE = 1e-5;
     for (const speed of [0.25, 1, 4]) {
-      const held = videoTimeAt(clip({ speed, holdLastFrame: true }), 2000, 30) ?? 0;
-      expect(held + NUDGE).toBeLessThan(6);
-      expect(held).toBeGreaterThan(6 - 1 / 30);
+      const held = clip({ speed, holdLastFrame: true });
+      const last = Math.ceil(videoClipEndFrame(held, 30)) - 1;
+      const shown = videoTimeAt(held, 2000, 30) ?? 0;
+      expect(shown).toBe(videoTimeAt(held, last, 30));
+      expect(shown + NUDGE).toBeLessThan(6);
       // Looped for a whole number of passes: the end of the last, not the start of the next
       const passes = (4 / speed) * 3;
       const looped = clip({ speed, loop: true, loopFor: passes, holdLastFrame: true });
-      const last = videoTimeAt(looped, 5000, 30) ?? 0;
-      expect(last + NUDGE).toBeLessThan(6);
-      expect(last).toBeGreaterThan(6 - 1 / 30);
+      const loopedShown = videoTimeAt(looped, 5000, 30) ?? 0;
+      expect(loopedShown + NUDGE).toBeLessThan(6);
+      expect(loopedShown).toBeGreaterThan(6 - (speed + 0.01) / 30);
     }
+  });
+
+  it('hold from their last frame on when an export samples between frames', () => {
+    const held = clip({ holdLastFrame: true });
+    // Frame 149.5 (a 60 fps export) is still the clip, but held: no going back a half frame at 150
+    expect(videoTimeAt(held, 149.5, 30)).toBe(videoTimeAt(held, 149, 30));
+    expect(videoTimeAt(held, 148.5, 30)).toBeCloseTo(2 + 118.5 / 30, 9);
+    // Not held, it plays to its end
+    expect(videoTimeAt(clip(), 149.5, 30)).toBeCloseTo(2 + 119.5 / 30, 9);
   });
 
   it('give their linked sound their speed and loop, not their hold', () => {

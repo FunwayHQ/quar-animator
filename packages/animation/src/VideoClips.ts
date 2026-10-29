@@ -81,27 +81,42 @@ export function lastVideoFrame(clips: Iterable<VideoClip>, frameRate: number): n
 }
 
 /**
- * Just short of a clip's end, in seconds of the video: its last picture is
- * the one showing there. More than the frame source nudges a moment on (so
- * a frame boundary lands in the frame it begins), far less than a frame.
+ * How far into a clip its last frame on its timeline is, in seconds (the
+ * last whole frame it plays on; a clip ending part way through a frame
+ * plays on that one).
  */
-const LAST_MOMENT = 1e-4;
+function lastFrameElapsed(clip: VideoClip, rate: number): number {
+  return Math.max(0, Math.ceil(clipSeconds(clip) * rate - 1e-6) - 1) / rate;
+}
+
+/**
+ * The moment of the video a clip that holds its last frame goes on showing
+ * after it ends: the one its last frame shows — where its part ends, or,
+ * looped and cut part way through a pass, where it stopped. Null for a clip
+ * that doesn't hold, or has nothing to show.
+ */
+export function heldVideoTime(clip: VideoClip, frameRate: number): number | null {
+  if (!clip.holdLastFrame || !(clipSeconds(clip) > 0)) return null;
+  return clipMomentAt(clip, lastFrameElapsed(clip, Math.max(1, frameRate)));
+}
 
 /**
  * The moment of the video, in seconds, a frame of its timeline shows. Frame
  * f begins at f / frameRate seconds, as it does for a sound clip; frames
  * needn't be whole (an export at another rate samples between them). Null
- * outside the clip, where the layer shows nothing — but after it, a clip
- * that holds its last frame shows that.
+ * outside the clip, where the layer shows nothing — but a clip that holds
+ * its last frame shows that frame's picture from it on (between it and the
+ * clip's end too, so an export sampling between frames never goes back).
  */
 export function videoTimeAt(clip: VideoClip, frame: number, frameRate: number): number | null {
   const rate = Math.max(1, frameRate);
   if (!(frame >= clip.start)) return null;
   const elapsed = (frame - clip.start) / rate;
-  const length = clipSeconds(clip);
-  if (elapsed < length) return clipMomentAt(clip, elapsed);
-  if (!clip.holdLastFrame || !(length > 0)) return null;
-  return clipMomentAt(clip, length - LAST_MOMENT / clipSpeed(clip));
+  if (clip.holdLastFrame) {
+    const last = lastFrameElapsed(clip, rate);
+    if (elapsed >= last) return heldVideoTime(clip, rate);
+  }
+  return elapsed < clipSeconds(clip) ? clipMomentAt(clip, elapsed) : null;
 }
 
 /**
