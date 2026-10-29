@@ -11,6 +11,7 @@ import type {
   PathNode,
   TextNode,
   ImageNode,
+  VideoNode,
   GroupNode,
   BoneNode,
   ArtboardNode,
@@ -59,6 +60,7 @@ import {
 } from '../path/pathUtils';
 import { trimPathToProgress } from '../path/pathReveal';
 import { isDocumentImage } from './imageSource';
+import type { VideoFrameProvider } from './videoFrames';
 import { clockwiseFrom, dashPolyline, pieceAlign } from '../path/dashes';
 import earcut from 'earcut';
 import {
@@ -546,6 +548,25 @@ interface StaticGeometry {
 const STATIC_SWEEP_EVERY = 120;
 const STATIC_UNUSED_AFTER = 240;
 
+/** A video layer's texture, and which of its pictures is in it. */
+interface VideoTexture {
+  texture: WebGLTexture;
+  /** The key of the picture uploaded (null: none yet, or its upload failed) */
+  key: string | number | null;
+  width: number;
+  height: number;
+  /** The frame it was last drawn in (textures not drawn for a while are freed) */
+  lastUsed: number;
+}
+
+/** The size of a picture WebGL uploads, in pixels. */
+function textureSourceSize(source: TexImageSource): { width: number; height: number } {
+  if ('displayWidth' in source) return { width: source.displayWidth, height: source.displayHeight };
+  if ('videoWidth' in source) return { width: source.videoWidth, height: source.videoHeight };
+  if ('naturalWidth' in source) return { width: source.naturalWidth, height: source.naturalHeight };
+  return { width: source.width, height: source.height };
+}
+
 /**
  * Index arrays as the GPU takes them, converted once per array: cached
  * geometry keeps its index array, so drawing it again needs no new copy.
@@ -646,6 +667,8 @@ function buildGeometryKey(node: Node): string {
         : '';
       return `I:${node.width}:${node.height}:${node.transform.anchor.x}:${node.transform.anchor.y}${voStr}`;
     }
+    case 'video':
+      return `V:${node.width}:${node.height}:${node.transform.anchor.x}:${node.transform.anchor.y}`;
     case 'bone':
       return `B:${node.length}:${node.boneStyle}`;
     case 'artboard':
@@ -731,6 +754,14 @@ export class ShapeRenderer {
   private failedImages = new Map<string, number>();
   /** Set by dispose(): images that finish loading afterwards make no textures. */
   private disposed = false;
+  /** The picture each video layer shows now (set by whoever decodes the videos) */
+  private videoFrames: VideoFrameProvider | null = null;
+  /**
+   * A texture per video layer, by node id: two layers of one video show
+   * different moments, and one texture between them would be uploaded twice
+   * a frame.
+   */
+  private videoTextures = new Map<string, VideoTexture>();
   private currentVPArray: Float32Array | null = null;
   private currentMorphOffsets: Map<string, Float32Array> | undefined = undefined;
 
@@ -1106,8 +1137,9 @@ export class ShapeRenderer {
       case 'path':
         box = getNodeLocalBounds(node);
         break;
-      case 'image': {
-        if (node.vertexOffsets) return undefined;
+      case 'image':
+      case 'video': {
+        if (node.type === 'image' && node.vertexOffsets) return undefined;
         const { x: ax, y: ay } = node.transform.anchor;
         box = [-node.width * ax, -node.height * ay, node.width * (1 - ax), node.height * (1 - ay)];
         break;
@@ -1124,7 +1156,7 @@ export class ShapeRenderer {
     }
     // A stroke reaches out to its width, a miter at a sharp corner further
     let stroke = 0;
-    for (const s of node.type === 'image' ? [] : node.strokes) {
+    for (const s of node.type === 'image' || node.type === 'video' ? [] : node.strokes) {
       if (s.visible) stroke = Math.max(stroke, s.width * 2);
     }
     const [bx0, by0, bx1, by1] = [
@@ -1308,6 +1340,9 @@ export class ShapeRenderer {
         break;
       case 'image':
         this.renderImage(node, worldTransform);
+        break;
+      case 'video':
+        this.renderVideo(node, worldTransform);
         break;
       case 'bone':
         this.renderBone(node, worldTransform);
@@ -1783,6 +1818,87 @@ export class ShapeRenderer {
     this.failedImages.clear();
     this.loadedImages.clear();
     this.alphaMasks.clear();
+    this.sweepVideoTextures(true);
+  }
+
+  // --------------------------------------------------------------------------
+  // Video Textures
+  // --------------------------------------------------------------------------
+
+  /** Where video layers' pictures come from (null: they draw nothing). */
+  setVideoFrames(provider: VideoFrameProvider | null): void {
+    this.videoFrames = provider;
+  }
+
+  /**
+   * The texture holding the picture a video layer shows now, uploaded only
+   * when the picture's key changes: into the texture it has when the size is
+   * the same, else made again. No mipmaps — they'd be made again for every
+   * frame shown; videos are drawn about their own size, linearly filtered.
+   * Null when it shows nothing, or its picture couldn't be uploaded (a frame
+   * closed meanwhile): it's tried again on the next frame.
+   */
+  private videoTexture(node: VideoNode): WebGLTexture | null {
+    const frame = this.videoFrames?.(node) ?? null;
+    if (!frame) return null;
+    let entry = this.videoTextures.get(node.id);
+    if (entry?.key === frame.key) {
+      entry.lastUsed = this.frame;
+      return entry.texture;
+    }
+    const { width, height } = textureSourceSize(frame.source);
+    if (!(width > 0 && height > 0)) return null;
+
+    const gl = this.renderer.context;
+    if (!entry) {
+      const texture = gl.createTexture();
+      if (!texture) return null;
+      gl.bindTexture(gl.TEXTURE_2D, texture);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      entry = { texture, key: null, width: 0, height: 0, lastUsed: this.frame };
+      this.videoTextures.set(node.id, entry);
+    } else {
+      gl.bindTexture(gl.TEXTURE_2D, entry.texture);
+    }
+    entry.lastUsed = this.frame;
+    try {
+      if (entry.width === width && entry.height === height) {
+        gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, gl.RGBA, gl.UNSIGNED_BYTE, frame.source);
+      } else {
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, frame.source);
+        entry.width = width;
+        entry.height = height;
+      }
+      entry.key = frame.key;
+    } catch {
+      // What's in the texture now is unknown: uploaded whole next time
+      entry.key = null;
+      entry.width = 0;
+      entry.height = 0;
+    } finally {
+      gl.bindTexture(gl.TEXTURE_2D, null);
+    }
+    return entry.key === null ? null : entry.texture;
+  }
+
+  /** Free a video layer's texture (the layer is gone). */
+  disposeVideoTexture(nodeId: string): void {
+    const entry = this.videoTextures.get(nodeId);
+    if (!entry) return;
+    this.renderer.context.deleteTexture(entry.texture);
+    this.videoTextures.delete(nodeId);
+  }
+
+  /** Free the textures of video layers not drawn for a while (hidden, outside their clips), or all. */
+  private sweepVideoTextures(all = false): void {
+    for (const [nodeId, entry] of this.videoTextures) {
+      if (all || this.frame - entry.lastUsed >= STATIC_UNUSED_AFTER) {
+        this.disposeVideoTexture(nodeId);
+      }
+    }
   }
 
   // --------------------------------------------------------------------------
@@ -1900,7 +2016,10 @@ export class ShapeRenderer {
     // Checked here; the effect passes below call back into it
     const program = this.program;
     this.frame++;
-    if (this.frame % STATIC_SWEEP_EVERY === 0) this.sweepStaticGeometry();
+    if (this.frame % STATIC_SWEEP_EVERY === 0) {
+      this.sweepStaticGeometry();
+      this.sweepVideoTextures();
+    }
 
     const gl = this.renderer.context;
 
@@ -2241,6 +2360,9 @@ export class ShapeRenderer {
       case 'image':
         this.renderImage(node, worldMatrix);
         break;
+      case 'video':
+        this.renderVideo(node, worldMatrix);
+        break;
       case 'bone':
         this.renderBone(node, worldMatrix);
         break;
@@ -2320,6 +2442,9 @@ export class ShapeRenderer {
         break;
       case 'image':
         this.renderImage(node, worldTransform);
+        break;
+      case 'video':
+        this.renderVideo(node, worldTransform);
         break;
       case 'bone':
         this.renderBone(node, worldTransform);
@@ -2593,10 +2718,36 @@ export class ShapeRenderer {
    * Render an image node as a textured quad
    */
   renderImage(node: ImageNode, worldMatrix: Matrix3): void {
-    if (!this.textureProgram || !this.textureVAO || !this.textureVertexBuffer) return;
+    if (!this.textureProgram) return;
 
     const texture = this.getTexture(node.src);
     if (!texture) return; // Still loading
+
+    // Cache the image's mesh (what binding weights and getTessellatedVertices return)
+    this.ensureBindPoseImageGeometry(node);
+    this.drawPicture(node, texture, worldMatrix);
+  }
+
+  /**
+   * Render a video layer: the picture it shows now, drawn as a picture is
+   * (adjustments, corners, opacity, masks; effects and blend modes round it
+   * as round any layer). Nothing while it shows none — outside its clip, or
+   * before a frame is decoded — nor in onion-skin ghosts, whose frames its
+   * picture isn't of.
+   */
+  renderVideo(node: VideoNode, worldMatrix: Matrix3): void {
+    if (!this.textureProgram || this.drawingGhost) return;
+    const texture = this.videoTexture(node);
+    if (texture) this.drawPicture(node, texture, worldMatrix);
+  }
+
+  /** A picture's (or a video's) quad with its texture, adjustments, opacity and corners. */
+  private drawPicture(
+    node: ImageNode | VideoNode,
+    texture: WebGLTexture,
+    worldMatrix: Matrix3
+  ): void {
+    if (!this.textureProgram || !this.textureVAO || !this.textureVertexBuffer) return;
 
     const gl = this.renderer.context;
 
@@ -2627,7 +2778,7 @@ export class ShapeRenderer {
     const y1 = y0 + node.height;
 
     // Apply vertex offsets for free-form distortion [BL, BR, TL, TR]
-    const vo = node.vertexOffsets;
+    const vo = node.type === 'image' ? node.vertexOffsets : undefined;
     const blX = x0 + (vo?.[0]?.x ?? 0),
       blY = y0 + (vo?.[0]?.y ?? 0);
     const brX = x1 + (vo?.[1]?.x ?? 0),
@@ -2636,9 +2787,6 @@ export class ShapeRenderer {
       tlY = y1 + (vo?.[2]?.y ?? 0);
     const trX = x1 + (vo?.[3]?.x ?? 0),
       trY = y1 + (vo?.[3]?.y ?? 0);
-
-    // Cache the image's mesh (what binding weights and getTessellatedVertices return)
-    this.ensureBindPoseImageGeometry(node);
 
     // UV: Y inverted because texImage2D loads top-to-bottom but world is Y-up
     const quadData = new Float32Array([
@@ -4556,6 +4704,7 @@ export class ShapeRenderer {
       case 'bone':
         this.renderBoneWithOverride(node, worldMatrix, colorOverride);
         break;
+      // A video draws no ghost: its picture is of now, not of the ghost's frame
     }
 
     this.renderer.bindVAO(null);
@@ -5142,6 +5291,8 @@ export class ShapeRenderer {
     this.failedImages.clear();
     this.loadedImages.clear();
     this.alphaMasks.clear();
+    this.sweepVideoTextures(true);
+    this.videoFrames = null;
 
     // Weight visualization resources
     if (this.weightVertexBuffer) {

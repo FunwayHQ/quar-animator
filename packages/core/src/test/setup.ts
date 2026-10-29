@@ -132,6 +132,7 @@ export function createMockWebGL2Context(): WebGL2RenderingContext {
     bindTexture: vi.fn(),
     activeTexture: vi.fn(),
     texImage2D: vi.fn(),
+    texSubImage2D: vi.fn(),
     texParameteri: vi.fn(),
     deleteTexture: vi.fn(),
 
