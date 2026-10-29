@@ -14,6 +14,7 @@ import {
   exportWebm,
 } from '@quar/export';
 import { downloadBlob } from '../../services/exportService';
+import { loadVideoStills } from '../../services/videoStills';
 import { SceneGraphProvider, useSceneGraph } from '../../contexts/SceneGraphContext';
 
 // Mock the editor store
@@ -844,6 +845,20 @@ describe('ExportDialog', () => {
     await waitFor(() =>
       expect(downloadBlob).toHaveBeenCalledWith(expect.any(Blob), 'frame_59.pdf')
     );
+  });
+
+  it('has a PDF’s video layers shown as stills of the videos’ files', async () => {
+    render(
+      <>
+        <VideoSeeder />
+        <ExportDialogHost />
+      </>
+    );
+    act(() => showExportDialog('pdf'));
+    fireEvent.click(screen.getByTestId('export-dialog-export'));
+    await waitFor(() => expect(exportPdf).toHaveBeenCalledOnce());
+    const [, options] = vi.mocked(exportPdf).mock.calls[0]!;
+    expect(options?.videoStills).toBe(loadVideoStills);
   });
 
   it('rejects an SVG frame outside the timeline', async () => {

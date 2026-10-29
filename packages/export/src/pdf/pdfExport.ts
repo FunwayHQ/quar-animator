@@ -4,6 +4,7 @@
  * frame — an artboard (a slide) or all the artwork — posed as exports pose
  * it and painted as the canvas paints it (see pdfScene). A page is its
  * part's own size: a unit of the document is a CSS pixel, ¾ of a point.
+ * A video layer is a picture of its still at the page's frame.
  */
 
 import { mat3, type SceneGraph } from '@quar/core';
@@ -11,6 +12,7 @@ import type { Color, Rect, SymbolDefinition, Timeline } from '@quar/types';
 import type { ExportProgress } from '../index';
 import type { FrameRig } from '../frameRenderer';
 import { poseFrame } from '../posedFrame';
+import { drawVideoStills, videoMomentsAtFrame, type VideoStillLoader } from '../videoStills';
 import { PdfContent, rgb } from './pdfContent';
 import type { TextOutlines } from './pdfGeometry';
 import { decodeDocumentImage } from './pdfImages';
@@ -45,6 +47,8 @@ export interface PdfExportOptions {
   rasterizer?: ((scene: SceneGraph, symbols?: SymbolDefinition[]) => PdfRasterizer) | null;
   /** Pixels a unit those layers are drawn at */
   rasterScale?: number;
+  /** Has video layers' stills (each page's at its frame); without, they're left out */
+  videoStills?: VideoStillLoader;
 }
 
 /** The PDF of these pages, in order; null when cancelled. */
@@ -69,6 +73,19 @@ export async function exportPdf(
 
     const { x, y, width, height } = page.viewport;
     const posed = poseFrame(page.sceneGraph, page.timeline, page.rig, page.frame);
+    if (options.videoStills) {
+      // PDF plays no video: each video layer is a picture of the moment it's at
+      const shown = page.rootIds
+        ? page.rootIds.flatMap((id) => page.sceneGraph.getNode(id) ?? [])
+        : page.sceneGraph.getRootNodes();
+      const moments = videoMomentsAtFrame(
+        shown,
+        (id) => page.sceneGraph.getNode(id),
+        page.frame,
+        page.timeline.frameRate
+      );
+      if (moments.length > 0) drawVideoStills(posed, await options.videoStills(moments));
+    }
     const roots = page.rootIds
       ? page.rootIds.flatMap((id) => posed.getNode(id) ?? [])
       : posed.getRootNodes();

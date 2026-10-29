@@ -549,7 +549,8 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
         if (pages.length === 0) throw new Error('There’s nothing on the page to export.');
         const blob = await exportPdf(
           pages,
-          { title: useEditorStore.getState().projectName },
+          // Video layers are stills of the frame each page shows
+          { title: useEditorStore.getState().projectName, videoStills: loadVideoStills },
           (progress) => setState((s) => ({ ...s, progress })),
           () => cancelledRef.current
         );

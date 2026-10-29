@@ -5,7 +5,7 @@
  * and an artboard too.
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { SceneGraph, exportNodesToSvg } from '@quar/core';
 import { createTimeline } from '@quar/animation';
 import type { GroupNode, Node, VideoClip, VideoNode } from '@quar/types';
@@ -14,7 +14,12 @@ import {
   analyzeLottieExport,
   lottieVideoMoments,
 } from './lottie/lottieExporter';
-import { countVideoLayers, drawVideoStills, videoMomentsAtFrame } from './videoStills';
+import {
+  countVideoLayers,
+  drawVideoStills,
+  videoMomentsAtFrame,
+  type VideoMoment,
+} from './videoStills';
 import { exportPdf } from './pdf/pdfExport';
 import { exportSvgFrame } from './svgFrame';
 import { readPdf } from './__fixtures__/pdfReader';
@@ -265,6 +270,76 @@ describe('video layers in an SVG of a frame, as stills', () => {
       viewport: { x: -400, y: -300, width: 800, height: 600 },
     });
     expect(svg).toMatch(/<image [^>]*transform="translate\(100,0\)/);
+  });
+});
+
+describe('video layers in a PDF, as stills', () => {
+  const pixels = () =>
+    Promise.resolve({
+      kind: 'pixels' as const,
+      width: 2,
+      height: 1,
+      data: new Uint8ClampedArray([255, 0, 0, 255, 0, 0, 255, 255]),
+    });
+  /** Has a still for every moment asked, named for its layer */
+  const loader = () =>
+    vi.fn((moments: VideoMoment[]) =>
+      Promise.resolve(
+        new Map(moments.map((m) => [m.nodeId, `data:image/jpeg;base64,${m.nodeId}`] as const))
+      )
+    );
+  const page = (sg: SceneGraph, frame: number, rootIds?: string[]) => ({
+    sceneGraph: sg,
+    timeline: createTimeline({ duration: 60, frameRate: 30 }),
+    viewport: { x: -200, y: -200, width: 400, height: 400 },
+    frame,
+    rootIds,
+  });
+  const images = async (blob: Blob | null) =>
+    [...(await readPdf(blob!)).objects.values()].filter((object) =>
+      /\/Subtype \/Image/.test(object.body)
+    ).length;
+
+  it('paints each as the picture of its still at the page’s frame', async () => {
+    const sg = new SceneGraph();
+    sg.addNode(video('v', { start: 10, offset: 1 }));
+    const videoStills = loader();
+    const decodeImage = vi.fn(pixels);
+    const blob = await exportPdf([page(sg, 25)], { rasterizer: null, decodeImage, videoStills });
+    expect(videoStills).toHaveBeenCalledWith([{ nodeId: 'v', videoId: 'file-v', seconds: 1.5 }]);
+    expect(decodeImage).toHaveBeenCalledWith('data:image/jpeg;base64,v');
+    expect(await images(blob)).toBe(1);
+    expect(sg.getNode('v')?.type).toBe('video');
+  });
+
+  it('asks each slide’s page for its own layers at its own frame', async () => {
+    const sg = scene();
+    const videoStills = loader();
+    await exportPdf([page(sg, 30, ['board']), page(sg, 0, ['grouped'])], {
+      rasterizer: null,
+      decodeImage: pixels,
+      videoStills,
+    });
+    expect(videoStills.mock.calls.map(([moments]) => moments)).toEqual([
+      [{ nodeId: 'on-board', videoId: 'file-on-board', seconds: 1 }],
+      [{ nodeId: 'in-group', videoId: 'file-in-group', seconds: 0 }],
+    ]);
+  });
+
+  it('shows a held last picture after its clip, nothing after one that isn’t held', async () => {
+    const sg = new SceneGraph();
+    sg.addNode(video('held', { duration: 1, holdLastFrame: true }));
+    sg.addNode(video('gone', { duration: 1 }));
+    const videoStills = loader();
+    const blob = await exportPdf([page(sg, 59)], {
+      rasterizer: null,
+      decodeImage: pixels,
+      videoStills,
+    });
+    const [[moments]] = videoStills.mock.calls as unknown as [[VideoMoment[]]];
+    expect(moments.map((m) => m.nodeId)).toEqual(['held']);
+    expect(moments[0]?.seconds).toBeCloseTo(1, 3);
+    expect(await images(blob)).toBe(1);
   });
 });
 
