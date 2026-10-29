@@ -1,0 +1,58 @@
+diff --git a/dist/modules/src/media-sink.js b/dist/modules/src/media-sink.js
+index 2501bfeed99de5f5df04d1e6a62aa42fdb28b718..abfd6f194ab9b26e23aead70126b8c5a1f2d53ee 100644
+--- a/dist/modules/src/media-sink.js
++++ b/dist/modules/src/media-sink.js
+@@ -1354,20 +1354,9 @@ const colorAlphaMergerWorkerCode = () => {
+         else {
+             // For Y-plane-first formats (I*** and NV12), the leading width*height samples are the Y plane
+             const yPlane = cpuAlphaBuffer.subarray(0, width * height * bytesPerSample);
+-            if (alpha.colorSpace.fullRange === false) {
+-                // Some decoders hand us limited-range alpha, so stretch it back out to full range
+-                const bitDepth = format.includes('P12') ? 12 : format.includes('P10') ? 10 : 8;
+-                const low = 16 << (bitDepth - 8);
+-                const high = 235 << (bitDepth - 8);
+-                const max = (1 << bitDepth) - 1;
+-                const samples = bytesPerSample === 2
+-                    ? new Uint16Array(yPlane.buffer, 0, width * height)
+-                    : yPlane;
+-                for (let i = 0; i < samples.length; i++) {
+-                    const value = Math.round((samples[i] - low) * max / (high - low));
+-                    samples[i] = Math.min(Math.max(value, 0), max);
+-                }
+-            }
++            // The alpha is taken as it's stored, whatever range its stream's header
++            // says: libvpx marks it limited, yet ffmpeg and the browsers' own players
++            // read it as it is (stretched, 128 read as 130 and 0–16 as 0)
+             return yPlane;
+         }
+     };
+diff --git a/src/media-sink.ts b/src/media-sink.ts
+index 45e4dd88efaf845a8052c29869a73d3e8cb05414..266a3acb985e44d611e9d159932cec45326ea199 100644
+--- a/src/media-sink.ts
++++ b/src/media-sink.ts
+@@ -1702,22 +1702,9 @@ const colorAlphaMergerWorkerCode = () => {
+ 			// For Y-plane-first formats (I*** and NV12), the leading width*height samples are the Y plane
+ 			const yPlane = cpuAlphaBuffer.subarray(0, width * height * bytesPerSample);
+ 
+-			if (alpha.colorSpace.fullRange === false) {
+-				// Some decoders hand us limited-range alpha, so stretch it back out to full range
+-				const bitDepth = format!.includes('P12') ? 12 : format!.includes('P10') ? 10 : 8;
+-				const low = 16 << (bitDepth - 8);
+-				const high = 235 << (bitDepth - 8);
+-				const max = (1 << bitDepth) - 1;
+-				const samples = bytesPerSample === 2
+-					? new Uint16Array(yPlane.buffer, 0, width * height)
+-					: yPlane;
+-
+-				for (let i = 0; i < samples.length; i++) {
+-					const value = Math.round((samples[i]! - low) * max / (high - low));
+-					samples[i] = Math.min(Math.max(value, 0), max);
+-				}
+-			}
+-
++			// The alpha is taken as it's stored, whatever range its stream's header
++			// says: libvpx marks it limited, yet ffmpeg and the browsers' own players
++			// read it as it is (stretched, 128 read as 130 and 0–16 as 0)
+ 			return yPlane;
+ 		}
+ 	};

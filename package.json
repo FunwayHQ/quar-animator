@@ -55,5 +55,10 @@
   "engines": {
     "node": ">=18.0.0",
     "pnpm": ">=9.0.0"
+  },
+  "pnpm": {
+    "patchedDependencies": {
+      "mediabunny@1.61.4": "patches/mediabunny@1.61.4.patch"
+    }
   }
 }

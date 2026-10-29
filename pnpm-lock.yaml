@@ -4,6 +4,11 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+patchedDependencies:
+  mediabunny@1.61.4:
+    hash: hug42wai4ojv3j3m4zgfcdwnha
+    path: patches/mediabunny@1.61.4.patch
+
 importers:
 
   .:
@@ -229,7 +234,7 @@ importers:
         version: 3.10.1
       mediabunny:
         specifier: ^1.61.4
-        version: 1.61.4
+        version: 1.61.4(patch_hash=hug42wai4ojv3j3m4zgfcdwnha)
     devDependencies:
       tsup:
         specifier: ^8.0.1
@@ -11698,7 +11703,7 @@ snapshots:
 
   media-typer@0.3.0: {}
 
-  mediabunny@1.61.4:
+  mediabunny@1.61.4(patch_hash=hug42wai4ojv3j3m4zgfcdwnha):
     dependencies:
       '@types/dom-mediacapture-transform': 0.1.12
       '@types/dom-webcodecs': 0.1.13
