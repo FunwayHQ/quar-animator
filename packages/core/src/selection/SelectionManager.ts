@@ -3,7 +3,7 @@
  * Calculates bounding boxes for selected nodes
  */
 
-import type { Node, Rect, SymbolDefinition, SymbolInstanceNode } from '@quar/types';
+import type { Matrix3, Node, Rect, SymbolDefinition, SymbolInstanceNode } from '@quar/types';
 import type { SceneGraph } from '../SceneGraph';
 import type { SelectionBounds } from './types';
 import { rect, mat3 } from '../math';
@@ -155,10 +155,30 @@ export class SelectionManager {
   // --------------------------------------------------------------------------
 
   /**
-   * Collect bounds for a node. For groups, recurse into descendants.
-   * Uses world-transform-based AABB for all leaf nodes.
+   * The bounds of what a group draws in its own space: its layers placed by
+   * the transforms below it, before its own position, turn and scale (and
+   * its parents'). Null when it draws nothing or is scaled to nothing.
    */
-  private collectNodeBounds(node: Node, sceneGraph: SceneGraph, out: Rect[]): void {
+  getGroupContentBounds(group: Node, sceneGraph: SceneGraph): Rect | null {
+    if (group.type !== 'group') return null;
+    const toGroup = mat3.invert(sceneGraph.getWorldTransform(group.id));
+    if (!toGroup) return null;
+    const rects: Rect[] = [];
+    this.collectNodeBounds(group, sceneGraph, rects, toGroup);
+    return rects.length > 0 ? this.unionBounds(rects) : null;
+  }
+
+  /**
+   * Collect bounds for a node. For groups, recurse into descendants.
+   * Uses world-transform-based AABB for all leaf nodes; a group's layers can
+   * be measured in another `space` instead (a matrix from world space to it).
+   */
+  private collectNodeBounds(
+    node: Node,
+    sceneGraph: SceneGraph,
+    out: Rect[],
+    space?: Matrix3
+  ): void {
     if (node.type === 'artboard') {
       // Artboard uses its own dimensions, not descendant bounds
       if (node.parent) {
@@ -188,13 +208,18 @@ export class SelectionManager {
         if (!desc.visible) continue;
         // An instance has no layers of its own: what it draws comes from its symbol
         if (desc.type === 'symbol-instance') {
-          this.collectSymbolInstanceBounds(desc, sceneGraph, out);
+          this.collectSymbolInstanceBounds(desc, sceneGraph, out, space);
           continue;
         }
         const worldTransform = sceneGraph.getWorldTransform(desc.id);
         const localBounds = getNodeLocalBounds(desc);
         if (localBounds) {
-          out.push(transformBoundsToWorld(localBounds, worldTransform));
+          out.push(
+            transformBoundsToWorld(
+              localBounds,
+              space ? mat3.multiply(space, worldTransform) : worldTransform
+            )
+          );
         }
       }
     } else if (node.parent) {
@@ -220,7 +245,8 @@ export class SelectionManager {
   private collectSymbolInstanceBounds(
     inst: SymbolInstanceNode,
     sceneGraph: SceneGraph,
-    out: Rect[]
+    out: Rect[],
+    space?: Matrix3
   ): void {
     const def = this.symbolDefinitions.find((d) => d.id === inst.symbolId);
     if (!def || def.sceneGraphJSON.nodes.length === 0) return;
@@ -233,7 +259,9 @@ export class SelectionManager {
       const worldMatrix = inst.parent
         ? sceneGraph.getWorldTransform(inst.id)
         : mat3.compose(inst.transform.position, inst.transform.rotation, inst.transform.scale);
-      out.push(transformBoundsToWorld(symBounds, worldMatrix));
+      out.push(
+        transformBoundsToWorld(symBounds, space ? mat3.multiply(space, worldMatrix) : worldMatrix)
+      );
     }
   }
 

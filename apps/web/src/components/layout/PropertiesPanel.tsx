@@ -187,15 +187,16 @@ function getNodeSize(
       return { width: node.width, height: node.height };
     }
     case 'group': {
+      // What it draws in its own space, times its own scale: a shape's size
+      // whatever its turn. (Its layers' world bounds hold its scale already,
+      // and multiplied by it again showed a scaled group too big.)
       if (!sceneGraph) return { width: 0, height: 0 };
-      const childIds = new Set(sceneGraph.getDescendants(node.id).map((n: Node) => n.id));
-      const bounds = groupBoundsManager.getSelectionBounds(childIds, sceneGraph);
-      if (bounds) {
-        const gsx = node.transform.scale?.x ?? 1;
-        const gsy = node.transform.scale?.y ?? 1;
-        return { width: bounds.rect.width * gsx, height: bounds.rect.height * gsy };
-      }
-      return { width: 0, height: 0 };
+      groupBoundsManager.setSymbolDefinitions(symbols ?? useEditorStore.getState().symbols);
+      const content = groupBoundsManager.getGroupContentBounds(node, sceneGraph);
+      if (!content) return { width: 0, height: 0 };
+      const gsx = Math.abs(node.transform.scale?.x ?? 1);
+      const gsy = Math.abs(node.transform.scale?.y ?? 1);
+      return { width: content.width * gsx, height: content.height * gsy };
     }
     case 'symbol-instance': {
       // Symbol instances have no scene graph children — compute from definition
@@ -801,15 +802,16 @@ export function PropertiesPanel() {
           }
         }
       } else if (nodeToUpdate.type === 'group') {
-        // Groups scale via transform.scale relative to base bounds
-        const currentSize = getNodeSize(nodeToUpdate, sceneGraph, symbols);
+        // The scale that brings what it draws, in its own space, to W × H
+        // (keeping a flip)
+        groupBoundsManager.setSymbolDefinitions(symbols);
+        const content = groupBoundsManager.getGroupContentBounds(nodeToUpdate, sceneGraph);
         const curSx = nodeToUpdate.transform.scale?.x ?? 1;
         const curSy = nodeToUpdate.transform.scale?.y ?? 1;
-        // Compute base (unscaled) size
-        const baseW = curSx !== 0 ? currentSize.width / curSx : 1;
-        const baseH = curSy !== 0 ? currentSize.height / curSy : 1;
-        const scaleX = baseW > 0 ? w / baseW : curSx;
-        const scaleY = baseH > 0 ? h / baseH : curSy;
+        const scaleX =
+          content && content.width > 0 ? (curSx < 0 ? -1 : 1) * (w / content.width) : curSx;
+        const scaleY =
+          content && content.height > 0 ? (curSy < 0 ? -1 : 1) * (h / content.height) : curSy;
         sceneGraph.updateNode(selectedId, {
           transform: {
             ...nodeToUpdate.transform,

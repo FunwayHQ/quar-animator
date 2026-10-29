@@ -721,5 +721,21 @@ describe('SelectionManager', () => {
       const bounds = manager.getSelectionBounds(new Set(['inst']), sceneGraph);
       expect(bounds?.rect).toEqual({ x: 30, y: -10, width: 40, height: 20 });
     });
+
+    it('measures what a group draws in its own space, whatever its scale and turn', () => {
+      const group = sceneGraph.getNode('group')!;
+      sceneGraph.updateNode('group', {
+        transform: { ...group.transform, rotation: 30, scale: { x: 2, y: -3 } },
+      });
+      sceneGraph.addNode(createTestRectangle('shape', 0, 0, 10, 10), 'group');
+      sceneGraph.addNode(createTestInstance('inst', 200, 0), 'group');
+
+      // The shape spans x −5–5, the instance 180–220, as they're placed in it
+      const bounds = manager.getGroupContentBounds(sceneGraph.getNode('group')!, sceneGraph);
+      expect(bounds?.x).toBeCloseTo(-5);
+      expect(bounds?.y).toBeCloseTo(-10);
+      expect(bounds?.width).toBeCloseTo(225);
+      expect(bounds?.height).toBeCloseTo(20);
+    });
   });
 });

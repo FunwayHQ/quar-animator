@@ -537,6 +537,51 @@ describe('PropertiesPanel', () => {
       expect(updatedNode.height).toBe(75);
     });
 
+    it("shows a scaled group's size once scaled, and resizes it to exactly what's typed", () => {
+      const sg = renderWithSceneGraph();
+      const shape = (id: string, x: number, width: number, height: number): RectangleNode => ({
+        ...createTestRect(id, id),
+        transform: { ...createDefaultTransform(), position: { x, y: 0 } },
+        width,
+        height,
+        strokes: [],
+      });
+      act(() => {
+        sg.addNode({
+          id: 'g',
+          name: 'Group',
+          type: 'group',
+          parent: null,
+          children: [],
+          transform: { ...createDefaultTransform(), scale: { x: 2, y: 2 } },
+          visible: true,
+          locked: false,
+          opacity: 1,
+          blendMode: 'normal',
+        });
+        // x −50–50 and 130–170 in the group: 220 × 80 before its scale
+        sg.addNode(shape('a', 0, 100, 60), 'g');
+        sg.addNode(shape('b', 150, 40, 80), 'g');
+        useEditorStore.setState({ aspectRatioLocked: false, snapToGrid: false });
+        useEditorStore.getState().setSelection(['g']);
+      });
+
+      const widthInput = document.getElementById('prop-size-w') as HTMLInputElement;
+      const heightInput = document.getElementById('prop-size-h') as HTMLInputElement;
+      expect(widthInput.value).toBe('440.0');
+      expect(heightInput.value).toBe('160.0');
+
+      act(() => {
+        fireEvent.change(widthInput, { target: { value: '330' } });
+      });
+      act(() => {
+        fireEvent.change(heightInput, { target: { value: '40' } });
+      });
+      expect(sg.getNode('g')!.transform.scale).toEqual({ x: 1.5, y: 0.5 });
+      expect(widthInput.value).toBe('330.0');
+      expect(heightInput.value).toBe('40.0');
+    });
+
     it('should update ellipse radiusX when W input is changed', () => {
       const sg = renderWithSceneGraph();
 
