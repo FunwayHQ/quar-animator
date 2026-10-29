@@ -331,22 +331,24 @@ export function Timeline({ playback }: TimelineProps = {}) {
   const commitFpsDraft = useCallback(() => {
     const parsed = Number.parseInt(fpsDraft, 10);
     if (Number.isFinite(parsed) && parsed >= 1) {
-      setFrameRate(parsed);
+      // An undo step (when it changes the rate)
+      setFrameRate(parsed, sceneGraph);
       // Shown clamped (1–120) if it was out of range
       setFpsDraft(String(Math.max(1, Math.min(120, parsed))));
     } else {
       setFpsDraft(String(frameRate));
     }
-  }, [fpsDraft, frameRate, setFrameRate]);
+  }, [fpsDraft, frameRate, setFrameRate, sceneGraph]);
 
   const commitDurationDraft = useCallback(() => {
     const parsedDuration = Number.parseInt(durationDraft, 10);
     if (Number.isFinite(parsedDuration) && parsedDuration >= 1) {
-      setTimelineDuration(parsedDuration);
+      // An undo step (when it changes the length)
+      setTimelineDuration(parsedDuration, sceneGraph);
     } else {
       setDurationDraft(String(duration));
     }
-  }, [durationDraft, duration, setTimelineDuration]);
+  }, [durationDraft, duration, setTimelineDuration, sceneGraph]);
 
   const durationControl = (
     <label className={styles.durationControl}>

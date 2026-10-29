@@ -200,6 +200,8 @@ interface HistorySnapshot {
 interface StepSettings {
   documentBackground?: Color;
   globalWind?: WindSettings;
+  /** Every page's timeline runs at it (see atFrameRate) */
+  frameRate?: number;
 }
 
 /** These settings as they are now. */
@@ -411,20 +413,28 @@ function pageScoped<T>(
 /** Store fields to restore from a popped history snapshot (F026). */
 function restoredFieldsFrom(
   snapshot: HistorySnapshot,
-  current: HistoryCapturable & { timelineScope: string | null },
+  current: HistoryCapturable &
+    Pick<
+      EditorStore,
+      'timelineScope' | 'frameRate' | 'timelineDuration' | 'workAreaStart' | 'workAreaEnd'
+    >,
   currentScene: { nodes: Node[] }
 ) {
-  const timeline = structuredClone(snapshot.timeline);
+  // The frame rate is the document's, not the page's: it stays as it is,
+  // unless the step changed it (its settings, restoredSettings)
+  const timeline = { ...structuredClone(snapshot.timeline), frameRate: current.frameRate };
   const pageLayerIds = new Set([
     ...currentScene.nodes.map((node) => node.id),
     ...snapshot.sceneData.nodes.map((node) => node.id),
   ]);
+  // The timeline in view stays so; its length as it was then, and the work area inside it
+  const timelineDuration = scopeDuration(timeline, current.timelineScope);
   return {
     selectedNodeIds: new Set(snapshot.selectedNodeIds),
     timeline,
-    // The timeline in view stays so; its length as it was then
-    timelineDuration: scopeDuration(timeline, current.timelineScope),
-    frameRate: timeline.frameRate,
+    timelineDuration,
+    ...workAreaFor(timelineDuration, current),
+    frameRate: current.frameRate,
     animationSequence: structuredClone(snapshot.animationSequence ?? createAnimationSequence()),
     ikChains: pageScoped(
       snapshot.ikChains,
@@ -450,6 +460,23 @@ function restoredFieldsFrom(
       (controller) => controller.groups.flatMap((group) => group.boneIds),
       pageLayerIds
     ),
+  };
+}
+
+/**
+ * Everything a popped step puts back: the page as its snapshot has it, and
+ * the document-wide settings the step changed (a frame rate on every page).
+ */
+function restoredState(snapshot: HistorySnapshot, now: HistorySnapshot, state: EditorStore) {
+  const fields = restoredFieldsFrom(snapshot, state, now.sceneData);
+  const settings = restoredSettings(snapshot, now, state);
+  const { frameRate } = settings;
+  return {
+    ...fields,
+    ...settings,
+    ...(frameRate !== undefined
+      ? atFrameRate(frameRate, { timeline: fields.timeline, pages: state.pages })
+      : {}),
   };
 }
 
@@ -617,6 +644,21 @@ function workAreaFor(
   if (start >= duration) start = Math.max(0, duration - 2);
   if (start >= end) start = Math.max(0, end - 1);
   return { workAreaStart: start, workAreaEnd: end };
+}
+
+/** The whole document runs at one frame rate: the timeline in view and every page's take it. */
+function atFrameRate(
+  rate: number,
+  state: Pick<EditorStore, 'timeline' | 'pages'>
+): Pick<EditorStore, 'frameRate' | 'timeline' | 'pages'> {
+  return {
+    frameRate: rate,
+    timeline: { ...state.timeline, frameRate: rate },
+    pages: state.pages.map((page) => ({
+      ...page,
+      timeline: { ...page.timeline, frameRate: rate },
+    })),
+  };
 }
 
 /**
@@ -957,8 +999,10 @@ export interface EditorStore extends SequenceActions, SoundActions, TransitionAc
   setCurrentFrame: (frame: number) => void;
   setIsPlaying: (playing: boolean) => void;
   setIsLooping: (looping: boolean) => void;
-  setTimelineDuration: (duration: number) => void;
-  setFrameRate: (rate: number) => void;
+  /** With the scene graph, a change of length is an undo step (the Frames field) */
+  setTimelineDuration: (duration: number, sceneGraph?: SceneGraphLike) => void;
+  /** With the scene graph, a change of rate is an undo step (the FPS field) */
+  setFrameRate: (rate: number, sceneGraph?: SceneGraphLike) => void;
   setTimelineExpanded: (expanded: boolean) => void;
   toggleTimelineExpanded: () => void;
 
@@ -2902,10 +2946,11 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     })),
   setIsPlaying: (playing: boolean) => set({ isPlaying: playing }),
   setIsLooping: (looping: boolean) => set({ isLooping: looping }),
-  setTimelineDuration: (duration: number) => {
+  setTimelineDuration: (duration, sceneGraph) => {
     const d = Number.isFinite(duration)
       ? Math.max(1, Math.min(Number.MAX_SAFE_INTEGER, Math.round(duration)))
       : 1;
+    if (sceneGraph && d !== get().timelineDuration) get().pushUndo(sceneGraph);
     set((state) => {
       if (d === state.timelineDuration) return {};
       return {
@@ -2917,20 +2962,13 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       };
     });
   },
-  setFrameRate: (rate: number) => {
+  setFrameRate: (rate, sceneGraph) => {
     const r = Number.isFinite(rate) ? Math.max(1, Math.min(120, Math.round(rate))) : 30;
+    // A document-wide setting: its undo step notes it (a page's history mustn't undo it)
+    if (sceneGraph && r !== get().frameRate) pushSettingUndo(get, sceneGraph, 'frameRate');
     set((state) => {
       if (r === state.frameRate && r === state.timeline.frameRate) return {};
-      // The whole document runs at one rate: every page's timeline takes it
-      return {
-        frameRate: r,
-        timeline: { ...state.timeline, frameRate: r },
-        pages: state.pages.map((page) => ({
-          ...page,
-          timeline: { ...page.timeline, frameRate: r },
-        })),
-        isDirty: true,
-      };
+      return { ...atFrameRate(r, state), isDirty: true };
     });
   },
   setTimelineExpanded: (expanded: boolean) => set({ timelineExpanded: expanded }),
@@ -4128,8 +4166,7 @@ function createHistoryActions(
         canRedo: true,
         enteredGroupId: null,
         isDirty: true,
-        ...restoredFieldsFrom(snapshot, state, now.sceneData),
-        ...restoredSettings(snapshot, now, state),
+        ...restoredState(snapshot, now, state),
       });
     },
 
@@ -4162,8 +4199,7 @@ function createHistoryActions(
         canRedo: newRedoStack.length > 0,
         enteredGroupId: null,
         isDirty: true,
-        ...restoredFieldsFrom(snapshot, state, now.sceneData),
-        ...restoredSettings(snapshot, now, state),
+        ...restoredState(snapshot, now, state),
       });
     },
 

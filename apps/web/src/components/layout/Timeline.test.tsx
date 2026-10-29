@@ -130,6 +130,94 @@ describe('Timeline', () => {
     expect(useEditorStore.getState().frameRate).toBe(120);
   });
 
+  describe('Frames and FPS as undo steps', () => {
+    function renderWithGraph() {
+      let graph: SceneGraph | undefined;
+      function CaptureGraph() {
+        graph = useSceneGraph();
+        return null;
+      }
+      useEditorStore.setState({
+        timeline: createTimeline({ duration: 300, frameRate: 30 }),
+        timelineScope: null,
+        undoStack: [],
+        redoStack: [],
+        canUndo: false,
+        canRedo: false,
+      });
+      render(
+        <SceneGraphProvider>
+          <CaptureGraph />
+          <Timeline />
+        </SceneGraphProvider>
+      );
+      return graph!;
+    }
+    const commit = (input: HTMLElement, value: string) => {
+      fireEvent.change(input, { target: { value } });
+      fireEvent.keyDown(input, { key: 'Enter' });
+      fireEvent.blur(input);
+    };
+
+    it('undoes and redoes a change of length, the work area with it', () => {
+      const graph = renderWithGraph();
+      const frames = screen.getByTestId('timeline-duration-input');
+      commit(frames, '600');
+      expect(useEditorStore.getState().timelineDuration).toBe(600);
+      expect(useEditorStore.getState().undoStack).toHaveLength(1);
+
+      act(() => useEditorStore.getState().undo(graph));
+      expect(useEditorStore.getState().timelineDuration).toBe(300);
+      expect(useEditorStore.getState().timeline.duration).toBe(300);
+      expect(useEditorStore.getState().workAreaEnd).toBe(299);
+      expect(frames).toHaveValue(300);
+
+      act(() => useEditorStore.getState().redo(graph));
+      expect(useEditorStore.getState().timelineDuration).toBe(600);
+      expect(frames).toHaveValue(600);
+    });
+
+    it('undoes and redoes a change of frame rate, on every page', () => {
+      const graph = renderWithGraph();
+      const otherPage = { ...useEditorStore.getState().pages[0]!, id: 'page-2', name: 'Page 2' };
+      act(() => useEditorStore.setState((s) => ({ pages: [...s.pages, otherPage] })));
+      const fps = screen.getByTestId('timeline-fps-input');
+      commit(fps, '24');
+      expect(useEditorStore.getState().undoStack).toHaveLength(1);
+
+      act(() => useEditorStore.getState().undo(graph));
+      const undone = useEditorStore.getState();
+      expect(undone.frameRate).toBe(30);
+      expect(undone.timeline.frameRate).toBe(30);
+      expect(undone.pages.every((page) => page.timeline.frameRate === 30)).toBe(true);
+      expect(fps).toHaveValue(30);
+
+      act(() => useEditorStore.getState().redo(graph));
+      expect(useEditorStore.getState().frameRate).toBe(24);
+      expect(useEditorStore.getState().pages.every((p) => p.timeline.frameRate === 24)).toBe(true);
+    });
+
+    it('leaves the frame rate alone when undoing an edit made after it', () => {
+      const graph = renderWithGraph();
+      commit(screen.getByTestId('timeline-fps-input'), '24');
+      commit(screen.getByTestId('timeline-duration-input'), '200');
+      expect(useEditorStore.getState().undoStack).toHaveLength(2);
+
+      act(() => useEditorStore.getState().undo(graph));
+      expect(useEditorStore.getState().timelineDuration).toBe(300);
+      expect(useEditorStore.getState().frameRate).toBe(24);
+      act(() => useEditorStore.getState().undo(graph));
+      expect(useEditorStore.getState().frameRate).toBe(30);
+    });
+
+    it('makes no step of a value left as it was', () => {
+      renderWithGraph();
+      commit(screen.getByTestId('timeline-duration-input'), '300');
+      commit(screen.getByTestId('timeline-fps-input'), '30');
+      expect(useEditorStore.getState().undoStack).toHaveLength(0);
+    });
+  });
+
   it('zooms the ruler and tracks together', () => {
     renderTimeline();
 
