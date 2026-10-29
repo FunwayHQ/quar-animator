@@ -122,8 +122,6 @@ export function Timeline({ playback }: TimelineProps = {}) {
   const setFrameRate = useEditorStore((s) => s.setFrameRate);
   const toggleTimelineExpanded = useEditorStore((s) => s.toggleTimelineExpanded);
   const toggleAutoKeyframe = useEditorStore((s) => s.toggleAutoKeyframe);
-  const selectKeyframe = useEditorStore((s) => s.selectKeyframe);
-  const addKeyframeToSelection = useEditorStore((s) => s.addKeyframeToSelection);
   const clearKeyframeSelection = useEditorStore((s) => s.clearKeyframeSelection);
   const removeSelectedKeyframes = useEditorStore((s) => s.removeSelectedKeyframes);
   const deleteLayerAnimation = useEditorStore((s) => s.deleteLayerAnimation);
@@ -545,6 +543,44 @@ export function Timeline({ playback }: TimelineProps = {}) {
     return result;
   }, [nodes, timeline]);
 
+  // A layer has one row, so its keyframes on one frame — of several
+  // properties — are one diamond, clicked and dragged as one; its tooltip
+  // names them, and the graph editor shows each property apart. Keyframes
+  // an Animation Sequence step owns are diamonds of their own
+  const nodeDiamonds = useMemo(() => {
+    type RowDiamond = {
+      /** Its keyframes, the first one's naming it */
+      ids: string[];
+      time: number;
+      properties: string[];
+      nodeId: string;
+      /** The Animation Sequence steps owning them (none: the layer's own) */
+      stepIds: string[];
+    };
+    const result = new Map<string, RowDiamond[]>();
+    for (const [nodeId, kfs] of nodeKeyframes) {
+      const byFrame = new Map<string, RowDiamond>();
+      for (const kf of kfs) {
+        const key = `${kf.stepId !== undefined ? 'step' : 'own'}@${kf.time}`;
+        let diamond = byFrame.get(key);
+        if (!diamond) {
+          diamond = { ids: [], time: kf.time, properties: [], nodeId, stepIds: [] };
+          byFrame.set(key, diamond);
+        }
+        diamond.ids.push(kf.id);
+        diamond.properties.push(kf.property);
+        if (kf.stepId !== undefined) diamond.stepIds.push(kf.stepId);
+      }
+      // Sequence diamonds first: the layer's own on the same frame lie over them
+      const diamonds = [...byFrame.values()];
+      result.set(nodeId, [
+        ...diamonds.filter((diamond) => diamond.stepIds.length > 0),
+        ...diamonds.filter((diamond) => diamond.stepIds.length === 0),
+      ]);
+    }
+    return result;
+  }, [nodeKeyframes]);
+
   // Frame ranges where each node animates — drawn as a line through the
   // keyframes that make up one animation
   const nodeSpans = useMemo(() => {
@@ -717,29 +753,37 @@ export function Timeline({ playback }: TimelineProps = {}) {
 
   // ------- Keyframe click handlers -------
 
+  // A diamond stands for all its layer's keyframes on its frame (nodeDiamonds):
+  // a click selects them all, Shift adds them
+  const selectDiamond = useCallback(
+    (kfIds: string[], add: boolean) => {
+      const selected = useEditorStore.getState().selectedKeyframeIds;
+      setSelectedKeyframeIds(add ? [...new Set([...selected, ...kfIds])] : kfIds);
+    },
+    [setSelectedKeyframeIds]
+  );
+
   const handleKeyframeClick = useCallback(
-    (e: React.MouseEvent, kfId: string) => {
+    (e: React.MouseEvent, kfIds: string[]) => {
       e.stopPropagation();
       // The click that ends a drag: every dragged keyframe stays selected
       if (keyframeDraggedRef.current) {
         keyframeDraggedRef.current = false;
         return;
       }
-      if (e.shiftKey) {
-        addKeyframeToSelection(kfId);
-      } else {
-        selectKeyframe(kfId);
-      }
+      selectDiamond(kfIds, e.shiftKey);
     },
-    [selectKeyframe, addKeyframeToSelection]
+    [selectDiamond]
   );
 
   const handleKeyframeContextMenu = useCallback(
-    (e: React.MouseEvent, kfId: string, nodeId: string, property: string) => {
+    (e: React.MouseEvent, kfIds: string[], nodeId: string, property: string) => {
       e.preventDefault();
       e.stopPropagation();
-      if (!selectedKeyframeIds.has(kfId)) {
-        selectKeyframe(kfId);
+      const kfId = kfIds[0];
+      if (kfId === undefined) return;
+      if (!kfIds.every((id) => selectedKeyframeIds.has(id))) {
+        selectDiamond(kfIds, false);
       }
       // Calculate frame from position
       const tracks = tracksRef.current;
@@ -749,13 +793,13 @@ export function Timeline({ playback }: TimelineProps = {}) {
       const frame = Math.max(0, Math.min(duration - 1, Math.round((x / rect.width) * duration)));
       setContextMenu({ x: e.clientX, y: e.clientY, frame, keyframeId: kfId, nodeId, property });
     },
-    [duration, selectedKeyframeIds, selectKeyframe]
+    [duration, selectedKeyframeIds, selectDiamond]
   );
 
   // ------- Keyframe drag-to-move -------
 
   const handleKeyframePointerDown = useCallback(
-    (e: React.PointerEvent, kfId: string) => {
+    (e: React.PointerEvent, kfIds: string[]) => {
       keyframeDraggedRef.current = false;
       if (e.button !== 0) return;
       const tracks = tracksRef.current;
@@ -765,17 +809,13 @@ export function Timeline({ playback }: TimelineProps = {}) {
       dragRef.current = { startX: e.clientX, startFrame, trackWidth: rect.width };
       // The whole drag is one undo step
       undoGroupUntilRelease();
-      // Ensure this keyframe is selected
-      if (!selectedKeyframeIds.has(kfId)) {
-        if (e.shiftKey) {
-          addKeyframeToSelection(kfId);
-        } else {
-          selectKeyframe(kfId);
-        }
+      // Ensure the diamond's keyframes are selected: they all move
+      if (!kfIds.every((id) => selectedKeyframeIds.has(id))) {
+        selectDiamond(kfIds, e.shiftKey);
       }
       (e.target as HTMLElement).setPointerCapture(e.pointerId);
     },
-    [duration, selectedKeyframeIds, selectKeyframe, addKeyframeToSelection]
+    [duration, selectedKeyframeIds, selectDiamond]
   );
 
   const handleKeyframePointerMove = useCallback(
@@ -1748,7 +1788,7 @@ export function Timeline({ playback }: TimelineProps = {}) {
                 data-testid="timeline-tracks"
               >
                 {nodes.map((node) => {
-                  const kfs = nodeKeyframes.get(node.id);
+                  const diamonds = nodeDiamonds.get(node.id);
                   return (
                     <div
                       key={node.id}
@@ -1768,47 +1808,61 @@ export function Timeline({ playback }: TimelineProps = {}) {
                           aria-hidden="true"
                         />
                       ))}
-                      {kfs &&
-                        kfs.map((kf) =>
-                          kf.stepId !== undefined ? (
-                            // Owned by an Animation Sequence step: not editable here —
-                            // clicking opens the step in the sequence window
+                      {diamonds?.map((diamond) => {
+                        const id = diamond.ids[0] ?? '';
+                        const properties = diamond.properties.join(', ');
+                        const [stepId] = diamond.stepIds;
+                        if (stepId !== undefined) {
+                          // Owned by Animation Sequence steps: not editable here —
+                          // clicking opens the (first) step in the sequence window
+                          const numbers = [...new Set(diamond.stepIds)].map(
+                            (step) => stepNumbers.get(step) ?? '?'
+                          );
+                          const steps = numbers.map((n) => `#${n}`).join(', ');
+                          return (
                             <button
                               type="button"
-                              key={kf.id}
+                              key={id}
                               className={`${styles.keyframe} ${styles.managedKeyframe}`}
-                              style={{ left: `${(kf.time / duration) * 100}%` }}
+                              style={{ left: `${(diamond.time / duration) * 100}%` }}
                               onClick={(e) => {
                                 e.stopPropagation();
-                                if (kf.stepId !== undefined) revealSequenceStep(kf.stepId);
+                                revealSequenceStep(stepId);
                               }}
                               onContextMenu={(e) => {
                                 e.preventDefault();
                                 e.stopPropagation();
-                                if (kf.stepId !== undefined) revealSequenceStep(kf.stepId);
+                                revealSequenceStep(stepId);
                               }}
-                              data-testid={`keyframe-${kf.id}`}
-                              title={`${kf.property} @ frame ${kf.time} — Animation Sequence step #${stepNumbers.get(kf.stepId) ?? '?'} (click to edit)`}
-                              aria-label={`Sequence keyframe of step ${stepNumbers.get(kf.stepId) ?? '?'}, ${kf.property} at frame ${kf.time}`}
+                              data-testid={`keyframe-${id}`}
+                              title={`${properties} @ frame ${diamond.time} — Animation Sequence step ${steps} (click to edit)`}
+                              aria-label={`Sequence keyframe of step ${numbers.join(', ')}, ${properties} at frame ${diamond.time}`}
                             />
-                          ) : (
-                            /* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- keyframe diamonds, keyboard handled at track level */
-                            <div
-                              key={kf.id}
-                              className={`${styles.keyframe} ${selectedKeyframeIds.has(kf.id) ? styles.selected : ''}`}
-                              style={{ left: `${(kf.time / duration) * 100}%` }}
-                              onClick={(e) => handleKeyframeClick(e, kf.id)}
-                              onContextMenu={(e) =>
-                                handleKeyframeContextMenu(e, kf.id, kf.nodeId, kf.property)
-                              }
-                              onPointerDown={(e) => handleKeyframePointerDown(e, kf.id)}
-                              onPointerMove={handleKeyframePointerMove}
-                              onPointerUp={handleKeyframePointerUp}
-                              data-testid={`keyframe-${kf.id}`}
-                              title={`${kf.property} @ frame ${kf.time}`}
-                            />
-                          )
-                        )}
+                          );
+                        }
+                        return (
+                          /* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- keyframe diamonds, keyboard handled at track level */
+                          <div
+                            key={id}
+                            className={`${styles.keyframe} ${diamond.ids.some((kfId) => selectedKeyframeIds.has(kfId)) ? styles.selected : ''}`}
+                            style={{ left: `${(diamond.time / duration) * 100}%` }}
+                            onClick={(e) => handleKeyframeClick(e, diamond.ids)}
+                            onContextMenu={(e) =>
+                              handleKeyframeContextMenu(
+                                e,
+                                diamond.ids,
+                                diamond.nodeId,
+                                diamond.properties[0] ?? ''
+                              )
+                            }
+                            onPointerDown={(e) => handleKeyframePointerDown(e, diamond.ids)}
+                            onPointerMove={handleKeyframePointerMove}
+                            onPointerUp={handleKeyframePointerUp}
+                            data-testid={`keyframe-${id}`}
+                            title={`${properties} @ frame ${diamond.time}`}
+                          />
+                        );
+                      })}
                     </div>
                   );
                 })}

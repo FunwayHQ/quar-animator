@@ -684,6 +684,105 @@ describe('Timeline', () => {
     });
   });
 
+  describe('keyframes of several properties on one frame', () => {
+    /** A ball keyed on opacity at 10 and 20, and on rotation at 10 */
+    function renderStackedKeyframes() {
+      let graph: SceneGraph | undefined;
+      function CaptureGraph() {
+        graph = useSceneGraph();
+        return null;
+      }
+      const opacity = createTrack<number>('ball', 'opacity');
+      const rotation = createTrack<number>('ball', 'transform.rotation');
+      const fade = [addKeyframe(opacity, 10, 0), addKeyframe(opacity, 20, 1)];
+      const turn = addKeyframe(rotation, 10, 45);
+      useEditorStore.setState({
+        timeline: createTimeline({ tracks: [opacity, rotation] }),
+        timelineViewMode: 'dopeSheet',
+        selectedKeyframeIds: new Set<string>(),
+        undoStack: [],
+        redoStack: [],
+        canUndo: false,
+        canRedo: false,
+      });
+      render(
+        <SceneGraphProvider>
+          <CaptureGraph />
+          <Timeline />
+        </SceneGraphProvider>
+      );
+      act(() => {
+        graph!.addNode({ id: 'ball', name: 'Ball', children: [] } as unknown as Node);
+      });
+      // One pixel per frame
+      Object.defineProperty(screen.getByTestId('timeline-tracks'), 'getBoundingClientRect', {
+        configurable: true,
+        value: () => ({ left: 0, top: 0, width: 300, height: 26 }) as DOMRect,
+      });
+      const row = screen.getByTestId('timeline-track-ball');
+      const diamonds = [...row.querySelectorAll<HTMLElement>('[class*="keyframe"]')].filter(
+        (element) => !element.dataset.testid?.startsWith('keyframe-span')
+      );
+      for (const diamond of diamonds) {
+        Object.defineProperty(diamond, 'setPointerCapture', { value: vi.fn() });
+      }
+      return { fade, turn, diamonds, graph: graph! };
+    }
+
+    const timesOf = (property: string) =>
+      useEditorStore
+        .getState()
+        .timeline.tracks.find((track) => track.property === property)
+        ?.keyframes.map((kf) => kf.time);
+
+    it('draws one diamond for a frame, naming every property keyed on it', () => {
+      const { diamonds } = renderStackedKeyframes();
+      expect(diamonds).toHaveLength(2);
+      expect(diamonds[0]).toHaveAttribute('title', 'opacity, transform.rotation @ frame 10');
+      expect(diamonds[1]).toHaveAttribute('title', 'opacity @ frame 20');
+    });
+
+    it('selects every keyframe on the frame with a click, and adds them with Shift', () => {
+      const { fade, turn, diamonds } = renderStackedKeyframes();
+      fireEvent.click(diamonds[0]!);
+      expect(useEditorStore.getState().selectedKeyframeIds).toEqual(
+        new Set([fade[0]!.id, turn.id])
+      );
+      expect(diamonds[0]!.className).toMatch(/selected/);
+
+      fireEvent.click(diamonds[1]!, { shiftKey: true });
+      expect(useEditorStore.getState().selectedKeyframeIds).toEqual(
+        new Set([fade[0]!.id, turn.id, fade[1]!.id])
+      );
+      // A click without Shift: that frame's alone
+      fireEvent.click(diamonds[1]!);
+      expect(useEditorStore.getState().selectedKeyframeIds).toEqual(new Set([fade[1]!.id]));
+    });
+
+    it('drags every property keyed on the frame together, as one undo step', () => {
+      const { diamonds, graph } = renderStackedKeyframes();
+      const first = diamonds[0]!;
+      fireEvent.pointerDown(first, { button: 0, clientX: 10, pointerId: 1 });
+      fireEvent.pointerMove(first, { clientX: 15, pointerId: 1 });
+      fireEvent.pointerUp(first, { clientX: 15, pointerId: 1 });
+      fireEvent.click(first, { clientX: 15 });
+
+      expect(timesOf('opacity')).toEqual([15, 20]);
+      expect(timesOf('transform.rotation')).toEqual([15]);
+      expect(useEditorStore.getState().undoStack).toHaveLength(1);
+      act(() => useEditorStore.getState().undo(graph));
+      expect(timesOf('transform.rotation')).toEqual([10]);
+    });
+
+    it('deletes them all from the menu of their diamond', () => {
+      const { diamonds } = renderStackedKeyframes();
+      fireEvent.contextMenu(diamonds[0]!, { clientX: 10 });
+      fireEvent.click(screen.getByRole('menuitem', { name: /Delete Keyframes/ }));
+      expect(timesOf('opacity')).toEqual([20]);
+      expect(timesOf('transform.rotation') ?? []).toEqual([]);
+    });
+  });
+
   it('toggles the Animation Sequence window from the toolbar', () => {
     useEditorStore.setState({ sequenceWindowOpen: false });
     renderTimeline();
