@@ -80,7 +80,7 @@ are at rest.
 
 The Point Magnet is the brush Smart Bones use. It isn't in the toolbar: it
 comes on by itself while you record a Smart Bone target, and goes when you
-stop (see the next chapter). "Smart Bone Recording" shows at the bottom left
+stop (see [Reshape with Smart Bones](rigging-ik-physics.md#smart-bones)). "Smart Bone Recording" shows at the bottom left
 of the canvas, and a red dashed circle is the brush.
 
 - Drag over bound shapes to push their points the way you drag. Points near

@@ -61,7 +61,7 @@ A bone's own settings are under **Transform**:
 - **Color**: the bone's color on the canvas.
 
 **Smart Bones**, **Vitruvian Bones** and **Dynamic Chain** are covered in
-the chapter on IK, physics and Smart Bones.
+[IK, physics and Smart Bones](rigging-ik-physics.md).
 
 ### Animate a pose {#animate}
 
