@@ -1,4 +1,4 @@
-import { app, BrowserWindow, shell } from 'electron';
+import { app, BrowserWindow, dialog, shell } from 'electron';
 import path from 'node:path';
 
 function createWindow(): void {
@@ -19,6 +19,20 @@ function createWindow(): void {
       void shell.openExternal(url);
     }
     return { action: 'deny' };
+  });
+
+  // The editor holds the window while there are unsaved changes (beforeunload);
+  // a browser asks then, and Electron leaves the asking to the app
+  window.webContents.on('will-prevent-unload', (event) => {
+    const choice = dialog.showMessageBoxSync(window, {
+      type: 'question',
+      buttons: ['Leave', 'Stay'],
+      defaultId: 1,
+      cancelId: 1,
+      message: 'Leave without saving?',
+      detail: 'Your unsaved changes will be lost.',
+    });
+    if (choice === 0) event.preventDefault();
   });
 
   if (app.isPackaged) {

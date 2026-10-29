@@ -25,6 +25,7 @@ import { useEditorStore } from '../stores/editorStore';
 import { okToDiscard } from '../services/unsavedChanges';
 import { useSceneGraph } from '../contexts/SceneGraphContext';
 import { useDirtyTracking } from '../hooks/useDirtyTracking';
+import { useLeaveWarning } from '../hooks/useLeaveWarning';
 import { useDocumentFonts } from '../hooks/useDocumentFonts';
 import styles from './Editor.module.css';
 
@@ -44,6 +45,8 @@ function EditorInner() {
   useViewShortcuts();
   // Unsaved changes: any scene edit, but not an export posing frames
   useDirtyTracking(sceneGraph);
+  // Closing or reloading the tab asks while there are unsaved changes
+  useLeaveWarning();
   useDocumentFonts(sceneGraph);
 
   const [searchParams] = useSearchParams();
