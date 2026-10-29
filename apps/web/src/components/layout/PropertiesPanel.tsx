@@ -44,6 +44,7 @@ import { isPosingScene } from '../../stores/scenePosing';
 import { useUndoable, useUndoableEdits } from '../../hooks/useUndoableEdits';
 import { ScrubLabel } from '../common/ScrubLabel';
 import { SlideSection } from './SlideSection';
+import { VideoSection } from './VideoSection';
 import { ToolSettingsSection } from './ToolSettingsSection';
 import { setBoneLength } from '../../stores/boneLength';
 import { AnimationPresetsPanel } from '../common/AnimationPresetsPanel';
@@ -182,10 +183,9 @@ function getNodeSize(
       const tsy = textNode.transform.scale?.y ?? 1;
       return { width: textBounds.width * tsx, height: textBounds.height * tsy };
     }
-    case 'image': {
-      const imgNode = node;
-      return { width: imgNode.width, height: imgNode.height };
-    }
+    case 'image':
+    case 'video':
+      return { width: node.width, height: node.height };
     case 'artboard': {
       return { width: node.width, height: node.height };
     }
@@ -349,6 +349,7 @@ function isSizeEditable(node: Node): boolean {
     node.type === 'polygon' ||
     node.type === 'path' ||
     node.type === 'image' ||
+    node.type === 'video' ||
     node.type === 'group' ||
     node.type === 'artboard' ||
     node.type === 'text'
@@ -411,6 +412,7 @@ function getSizePropertyPaths(node: Node): { w: string; h: string } {
   switch (node.type) {
     case 'rectangle':
     case 'image':
+    case 'video':
     case 'artboard':
       return { w: 'width', h: 'height' };
     case 'ellipse':
@@ -429,7 +431,7 @@ function getCornerRadius(node: Node): [number, number, number, number] | number 
   if (node.type === 'rectangle') {
     return node.cornerRadius;
   }
-  if (node.type === 'image') {
+  if (node.type === 'image' || node.type === 'video') {
     return node.cornerRadius ?? [0, 0, 0, 0];
   }
   if (node.type === 'polygon') {
@@ -439,7 +441,12 @@ function getCornerRadius(node: Node): [number, number, number, number] | number 
 }
 
 function hasCornerRadius(node: Node): boolean {
-  return node.type === 'rectangle' || node.type === 'image' || node.type === 'polygon';
+  return (
+    node.type === 'rectangle' ||
+    node.type === 'image' ||
+    node.type === 'video' ||
+    node.type === 'polygon'
+  );
 }
 
 /** Get fills array from any shape node */
@@ -745,6 +752,7 @@ export function PropertiesPanel() {
       if (
         nodeToUpdate.type === 'rectangle' ||
         nodeToUpdate.type === 'image' ||
+        nodeToUpdate.type === 'video' ||
         nodeToUpdate.type === 'artboard'
       ) {
         sceneGraph.updateNode(selectedId, { width: w, height: h });
@@ -1301,9 +1309,8 @@ export function PropertiesPanel() {
     (key: keyof ImageAdjustmentsType, value: number) => {
       if (!selectedId) return;
       const currentNode = sceneGraph.getNode(selectedId);
-      if (!currentNode || currentNode.type !== 'image') return;
-      const imgNode = currentNode;
-      const adjustments = { ...(imgNode.adjustments ?? DEFAULT_ADJUSTMENTS), [key]: value };
+      if (!currentNode || (currentNode.type !== 'image' && currentNode.type !== 'video')) return;
+      const adjustments = { ...(currentNode.adjustments ?? DEFAULT_ADJUSTMENTS), [key]: value };
       sceneGraph.updateNode(selectedId, { adjustments } as Partial<Node>);
       if (shouldKeyframe(autoKeyframe, selectedId, `adjustments.${String(key)}`)) {
         addKeyframeAtFrame(selectedId, `adjustments.${String(key)}`, liveFrame(), value);
@@ -1316,10 +1323,9 @@ export function PropertiesPanel() {
     (key: keyof ImageAdjustmentsType) => {
       if (!selectedId) return;
       const currentNode = sceneGraph.getNode(selectedId);
-      if (!currentNode || currentNode.type !== 'image') return;
-      const imgNode = currentNode;
+      if (!currentNode || (currentNode.type !== 'image' && currentNode.type !== 'video')) return;
       const adjustments = {
-        ...(imgNode.adjustments ?? DEFAULT_ADJUSTMENTS),
+        ...(currentNode.adjustments ?? DEFAULT_ADJUSTMENTS),
         [key]: DEFAULT_ADJUSTMENTS[key],
       };
       sceneGraph.updateNode(selectedId, { adjustments } as Partial<Node>);
@@ -1330,7 +1336,7 @@ export function PropertiesPanel() {
   const handleAdjustmentResetAll = useCallback(() => {
     if (!selectedId) return;
     const currentNode = sceneGraph.getNode(selectedId);
-    if (!currentNode || currentNode.type !== 'image') return;
+    if (!currentNode || (currentNode.type !== 'image' && currentNode.type !== 'video')) return;
     sceneGraph.updateNode(selectedId, { adjustments: { ...DEFAULT_ADJUSTMENTS } } as Partial<Node>);
   }, [selectedId, sceneGraph]);
 
@@ -1368,7 +1374,7 @@ export function PropertiesPanel() {
         }
         sceneGraph.updateNode(selectedId, { cornerRadius: newRadius });
         keyCorners(selectedId);
-      } else if (currentNode.type === 'image') {
+      } else if (currentNode.type === 'image' || currentNode.type === 'video') {
         const img = currentNode;
         const newRadius = [...(img.cornerRadius ?? [0, 0, 0, 0])] as [
           number,
@@ -1847,7 +1853,7 @@ export function PropertiesPanel() {
                 const cr = getCornerRadius(node);
                 if (cr === null) return null;
 
-                if (node.type === 'rectangle' || node.type === 'image') {
+                if (node.type === 'rectangle' || node.type === 'image' || node.type === 'video') {
                   const corners = cr as [number, number, number, number];
                   const uniformValue = Math.round(corners[0]);
                   return (
@@ -3366,6 +3372,9 @@ export function PropertiesPanel() {
             );
           })()}
 
+        {/* What a video layer shows, and when */}
+        {node.type === 'video' && selectedNodeIds.size === 1 && <VideoSection node={node} />}
+
         {/* An artboard at the top of the page is a slide: how it comes on after the one before */}
         {node.type === 'artboard' && node.parent === null && selectedNodeIds.size === 1 && (
           <SlideSection artboard={node} sceneGraph={sceneGraph} />
@@ -3749,8 +3758,8 @@ export function PropertiesPanel() {
           </div>
         </div>
 
-        {/* Image Adjustments — shown only for image nodes */}
-        {node.type === 'image' && (
+        {/* Image Adjustments — shown for pictures and videos */}
+        {(node.type === 'image' || node.type === 'video') && (
           <div className={styles.section} data-testid="image-adjustments-section">
             <ImageAdjustments
               adjustments={node.adjustments ?? DEFAULT_ADJUSTMENTS}

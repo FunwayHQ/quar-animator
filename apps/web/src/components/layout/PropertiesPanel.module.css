@@ -1081,3 +1081,116 @@
     animation: none !important;
   }
 }
+
+/* ============================================================================
+   Video section: what a video layer shows, and when
+   ============================================================================ */
+
+/* A still of the video, framed as film is: sprocket holes above and below */
+.videoStill {
+  position: relative;
+  padding: 9px 6px;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-tertiary);
+}
+
+.videoStill::before,
+.videoStill::after {
+  content: '';
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  height: 3px;
+  border-radius: 1px;
+  background: repeating-linear-gradient(
+    90deg,
+    var(--color-border-strong) 0 5px,
+    transparent 5px 10px
+  );
+  pointer-events: none;
+}
+
+.videoStill::before {
+  top: 3px;
+}
+
+.videoStill::after {
+  bottom: 3px;
+}
+
+.videoStill img {
+  display: block;
+  width: 100%;
+  max-height: 140px;
+  aspect-ratio: var(--still-aspect, 16 / 9);
+  object-fit: contain;
+  border-radius: 2px;
+}
+
+/* A video that may be transparent shows what's behind it as a checkerboard */
+.videoStillAlpha img {
+  background-image:
+    linear-gradient(45deg, var(--color-border-strong) 25%, transparent 25%),
+    linear-gradient(-45deg, var(--color-border-strong) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, var(--color-border-strong) 75%),
+    linear-gradient(-45deg, transparent 75%, var(--color-border-strong) 75%);
+  background-size: 8px 8px;
+  background-position:
+    0 0,
+    0 4px,
+    4px -4px,
+    -4px 0;
+}
+
+.videoFacts {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+}
+
+.videoFact {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-md);
+  min-width: 0;
+}
+
+.videoFact dt {
+  flex-shrink: 0;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-tertiary);
+}
+
+.videoFact dd {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-xs);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The file's name reads as a name, not a number */
+.videoFact dd.videoFileName {
+  font-family: var(--font-family-ui);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-primary);
+}
+
+/* The clip, on its timeline, set apart from the file */
+.videoFactClip {
+  margin-top: 2px;
+  padding-top: 8px;
+  border-top: 1px solid var(--color-border-subtle);
+}
+
+.videoFactUnit {
+  color: var(--color-text-tertiary);
+}
