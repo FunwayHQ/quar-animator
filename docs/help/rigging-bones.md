@@ -102,10 +102,12 @@ near it.
   shape or picture is selected.
 - A bound layer has a **Rigging** section in the Properties panel: how many
   bones it's **Bound** to, a **Bone** list, and the **Weight Paint** and
-  **Unbind** buttons. The next chapter is about weights.
+  **Unbind** buttons. The next chapter,
+  [Weights and bending](rigging-weights.md), is about them.
 
 If a part of the shape follows the wrong bone, you can change how strongly
-each bone pulls with the Weight Paint tool.
+each bone pulls with the Weight Paint tool: see
+[Paint weights](rigging-weights.md#weight-paint).
 
 ### Unbind {#unbind}
 
