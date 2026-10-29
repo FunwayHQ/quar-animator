@@ -30,6 +30,7 @@ import { openHelp } from '../help/helpPanel';
 import styles from './MenuBar.module.css';
 import { useToolsBelowMenus } from './useToolsBelowMenus';
 import { useProjectShortcuts } from '../../hooks/useProjectShortcuts';
+import { okToDiscard } from '../../services/unsavedChanges';
 import { QuarLogo } from '../common/QuarLogo';
 
 // ============================================================================
@@ -178,7 +179,6 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
   const [openMenu, setOpenMenu] = useState<MenuId>(null);
   const [showProjectList, setShowProjectList] = useState(false);
   const [showSaveAsPrompt, setShowSaveAsPrompt] = useState(false);
-  const [showNewConfirm, setShowNewConfirm] = useState(false);
   const [showShortcutsDialog, setShowShortcutsDialog] = useState(false);
   const [showAboutDialog, setShowAboutDialog] = useState(false);
   const [saveAsName, setSaveAsName] = useState('');
@@ -404,22 +404,13 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
   const closeMenu = useCallback(() => setOpenMenu(null), []);
 
   // --- File menu actions ---
-  const handleNew = useCallback(() => {
+  const handleNew = useCallback(async () => {
     closeMenu();
     if (!projectActions) return;
     // New Project clears the scene, timeline and undo history — confirm first if
     // there are unsaved changes (F013).
-    if (isDirty) {
-      setShowNewConfirm(true);
-    } else {
-      projectActions.newProject();
-    }
-  }, [projectActions, closeMenu, isDirty]);
-
-  const handleNewConfirm = useCallback(() => {
-    setShowNewConfirm(false);
-    projectActions?.newProject();
-  }, [projectActions]);
+    if (await okToDiscard('Creating a new project')) projectActions.newProject();
+  }, [projectActions, closeMenu]);
 
   const handleOpen = useCallback(async () => {
     closeMenu();
@@ -488,10 +479,11 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
     projectActions.downloadProject();
   }, [projectActions, closeMenu]);
 
-  const handleImport = useCallback(() => {
+  const handleImport = useCallback(async () => {
     closeMenu();
     if (!projectActions) return;
-    void projectActions.importProject();
+    // An imported project takes the editor's place
+    if (await okToDiscard('Importing a project')) await projectActions.importProject();
   }, [projectActions, closeMenu]);
 
   const handleImportSvg = useCallback(() => {
@@ -515,7 +507,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
   // The file keys do what the File menu does: the same questions and dialogs
   const fileShortcuts = useMemo(
     () => ({
-      onNew: handleNew,
+      onNew: () => void handleNew(),
       onOpen: () => void handleOpen(),
       onSave: handleSave,
       onSaveAs: handleSaveAs,
@@ -529,7 +521,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
   const handleOpenProject = useCallback(
     async (id: string) => {
       setShowProjectList(false);
-      if (!projectActions) return;
+      if (!projectActions || !(await okToDiscard('Opening another project'))) return;
       await projectActions.openProject(id);
     },
     [projectActions]
@@ -580,7 +572,11 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
               {menuButton('file', 'File', 'menu-file')}
               {openMenu === 'file' && (
                 <div className={styles.dropdown} role="menu" data-testid="file-menu-dropdown">
-                  <MenuItem label="New Project" shortcut="Ctrl+N" onClick={handleNew} />
+                  <MenuItem
+                    label="New Project"
+                    shortcut="Ctrl+N"
+                    onClick={() => void handleNew()}
+                  />
                   <MenuItem
                     label="Open Project..."
                     shortcut="Ctrl+O"
@@ -591,7 +587,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                   <MenuItem label="Save As..." shortcut="Ctrl+Shift+S" onClick={handleSaveAs} />
                   <Separator />
                   <MenuItem label="Download as .quar" onClick={handleDownload} />
-                  <MenuItem label="Import .quar..." onClick={handleImport} />
+                  <MenuItem label="Import .quar..." onClick={() => void handleImport()} />
                   <MenuItem label="Import SVG..." shortcut="Ctrl+I" onClick={handleImportSvg} />
                   <MenuItem label="Import Image..." onClick={handleImportImage} />
                   <MenuItem label="Import Sound..." onClick={handleImportSound} />
@@ -1459,38 +1455,6 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                 disabled={!saveAsName.trim()}
               >
                 Save
-              </button>
-            </div>
-          </div>
-        </>
-      )}
-
-      {showNewConfirm && (
-        <>
-          {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions */}
-          <div className={styles.saveAsOverlay} onClick={() => setShowNewConfirm(false)} />
-          <div
-            className={styles.saveAsDialog}
-            role="dialog"
-            aria-label="Discard unsaved changes"
-            data-testid="new-confirm-dialog"
-          >
-            <h3 className={styles.saveAsTitle}>Discard unsaved changes?</h3>
-            <p>Creating a new project will discard your unsaved changes.</p>
-            <div className={styles.saveAsActions}>
-              <button
-                className={styles.saveAsCancel}
-                onClick={() => setShowNewConfirm(false)}
-                data-testid="new-confirm-cancel"
-              >
-                Cancel
-              </button>
-              <button
-                className={styles.saveAsConfirm}
-                onClick={handleNewConfirm}
-                data-testid="new-confirm-discard"
-              >
-                Discard
               </button>
             </div>
           </div>

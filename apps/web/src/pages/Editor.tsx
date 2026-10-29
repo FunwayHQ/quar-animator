@@ -22,6 +22,7 @@ import { useFlipShortcuts } from '../hooks/useFlipShortcuts';
 import { useSystemClipboard } from '../hooks/useSystemClipboard';
 import { useViewShortcuts } from '../hooks/useViewShortcuts';
 import { useEditorStore } from '../stores/editorStore';
+import { okToDiscard } from '../services/unsavedChanges';
 import { useSceneGraph } from '../contexts/SceneGraphContext';
 import { useDirtyTracking } from '../hooks/useDirtyTracking';
 import { useDocumentFonts } from '../hooks/useDocumentFonts';
@@ -50,6 +51,13 @@ function EditorInner() {
 
   const projectActions = useProjectActions({ loadProjectId: projectId });
 
+  // A .quar dropped on the canvas takes the editor's place
+  const openDroppedProject = async (file: File) => {
+    if (await okToDiscard('Opening the dropped project')) {
+      await projectActions.importProjectFile(file);
+    }
+  };
+
   const sequenceWindowOpen = useEditorStore((state) => state.sequenceWindowOpen);
 
   return (
@@ -64,7 +72,7 @@ function EditorInner() {
           </div>
           <div className={styles.canvasArea}>
             <ErrorBoundary>
-              <Canvas onProjectFileDrop={(file) => projectActions.importProjectFile(file)} />
+              <Canvas onProjectFileDrop={openDroppedProject} />
             </ErrorBoundary>
           </div>
           <div className={styles.rightPanel}>

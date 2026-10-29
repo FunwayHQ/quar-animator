@@ -3,13 +3,14 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render as baseRender, screen, fireEvent, act, within } from '../../test/utils';
+import { render as baseRender, screen, fireEvent, act, within, waitFor } from '../../test/utils';
 import { useEditorStore, DEFAULT_FILL, DEFAULT_STROKE } from '../../stores/editorStore';
 import { createTimeline } from '@quar/animation';
 import { DEFAULT_ONION_SKIN_SETTINGS } from '@quar/core';
 import { SceneGraphProvider, useSceneGraph } from '../../contexts/SceneGraphContext';
 import { MenuBar } from './MenuBar';
 import { ExportDialogHost } from '../common/ExportDialog';
+import { PromptDialogHost } from '../common/PromptDialog';
 import { setUiTheme } from '../../hooks/useUiTheme';
 import type { ProjectActions } from '../../hooks/useProjectActions';
 import { Profiler } from 'react';
@@ -43,7 +44,13 @@ vi.mock('../common/Toast', async (importOriginal) => {
 });
 
 function render(ui: ReactElement) {
-  return baseRender(<SceneGraphProvider>{ui}</SceneGraphProvider>);
+  // The host shows the questions the menu asks (unsaved changes)
+  return baseRender(
+    <SceneGraphProvider>
+      {ui}
+      <PromptDialogHost />
+    </SceneGraphProvider>
+  );
 }
 
 function createMockProjectActions(): ProjectActions {
@@ -230,15 +237,15 @@ describe('MenuBar', () => {
     expect(screen.getByText('Import .quar...')).toBeInTheDocument();
   });
 
-  it('calls newProject when New Project clicked', () => {
+  it('calls newProject when New Project clicked', async () => {
     const actions = createMockProjectActions();
     render(<MenuBar projectActions={actions} />);
     fireEvent.click(screen.getByTestId('menu-file'));
     fireEvent.click(screen.getByText('New Project'));
-    expect(actions.newProject).toHaveBeenCalledOnce();
+    await waitFor(() => expect(actions.newProject).toHaveBeenCalledOnce());
   });
 
-  it('confirms before New Project when there are unsaved changes (F013)', () => {
+  it('confirms before New Project when there are unsaved changes (F013)', async () => {
     const actions = createMockProjectActions();
     useEditorStore.setState({ isDirty: true });
     render(<MenuBar projectActions={actions} />);
@@ -246,12 +253,64 @@ describe('MenuBar', () => {
     fireEvent.click(screen.getByText('New Project'));
 
     // Not created yet — a confirm dialog is shown instead.
+    expect(
+      await screen.findByText('Creating a new project will discard your unsaved changes.')
+    ).toBeInTheDocument();
     expect(actions.newProject).not.toHaveBeenCalled();
-    expect(screen.getByTestId('new-confirm-dialog')).toBeInTheDocument();
 
     // Discard confirms the destructive action.
-    fireEvent.click(screen.getByTestId('new-confirm-discard'));
-    expect(actions.newProject).toHaveBeenCalledOnce();
+    fireEvent.click(screen.getByTestId('prompt-dialog-confirm'));
+    await waitFor(() => expect(actions.newProject).toHaveBeenCalledOnce());
+  });
+
+  describe('unsaved changes', () => {
+    beforeEach(() => {
+      useEditorStore.setState({ isDirty: true });
+    });
+
+    it('asks before opening another project, and keeps this one on Cancel', async () => {
+      const actions = createMockProjectActions();
+      vi.mocked(actions.listProjects).mockResolvedValue([
+        { id: 'p2', name: 'Other', updatedAt: '2026-10-29T00:00:00.000Z' },
+      ]);
+      render(<MenuBar projectActions={actions} />);
+      fireEvent.click(screen.getByTestId('menu-file'));
+      fireEvent.click(screen.getByText('Open Project...'));
+      fireEvent.click(await screen.findByTestId('project-item-p2'));
+
+      expect(
+        await screen.findByText('Opening another project will discard your unsaved changes.')
+      ).toBeInTheDocument();
+      fireEvent.click(screen.getByTestId('prompt-dialog-cancel'));
+      await waitFor(() => expect(screen.queryByTestId('prompt-dialog')).toBeNull());
+      expect(actions.openProject).not.toHaveBeenCalled();
+    });
+
+    it('opens the other project on Discard', async () => {
+      const actions = createMockProjectActions();
+      vi.mocked(actions.listProjects).mockResolvedValue([
+        { id: 'p2', name: 'Other', updatedAt: '2026-10-29T00:00:00.000Z' },
+      ]);
+      render(<MenuBar projectActions={actions} />);
+      fireEvent.click(screen.getByTestId('menu-file'));
+      fireEvent.click(screen.getByText('Open Project...'));
+      fireEvent.click(await screen.findByTestId('project-item-p2'));
+      fireEvent.click(await screen.findByTestId('prompt-dialog-confirm'));
+      await waitFor(() => expect(actions.openProject).toHaveBeenCalledWith('p2'));
+    });
+
+    it('asks before importing a project', async () => {
+      const actions = createMockProjectActions();
+      render(<MenuBar projectActions={actions} />);
+      fireEvent.click(screen.getByTestId('menu-file'));
+      fireEvent.click(screen.getByText('Import .quar...'));
+      expect(
+        await screen.findByText('Importing a project will discard your unsaved changes.')
+      ).toBeInTheDocument();
+      expect(actions.importProject).not.toHaveBeenCalled();
+      fireEvent.click(screen.getByTestId('prompt-dialog-confirm'));
+      await waitFor(() => expect(actions.importProject).toHaveBeenCalledOnce());
+    });
   });
 
   describe('the file keys', () => {
@@ -260,14 +319,13 @@ describe('MenuBar', () => {
         fireEvent.keyDown(window, { key, ctrlKey: true, shiftKey });
       });
 
-    it('Ctrl+N asks before discarding unsaved changes, as the menu does', () => {
+    it('Ctrl+N asks before discarding unsaved changes, as the menu does', async () => {
       const actions = createMockProjectActions();
       useEditorStore.setState({ isDirty: true });
       render(<MenuBar projectActions={actions} />);
       press('n');
-      expect(actions.newProject).not.toHaveBeenCalled();
-      fireEvent.click(screen.getByTestId('new-confirm-discard'));
-      expect(actions.newProject).toHaveBeenCalledOnce();
+      fireEvent.click(await screen.findByTestId('prompt-dialog-confirm'));
+      await waitFor(() => expect(actions.newProject).toHaveBeenCalledOnce());
     });
 
     it('Ctrl+O opens the project list', async () => {
@@ -310,12 +368,12 @@ describe('MenuBar', () => {
     expect(actions.downloadProject).toHaveBeenCalledOnce();
   });
 
-  it('calls importProject when Import clicked', () => {
+  it('calls importProject when Import clicked', async () => {
     const actions = createMockProjectActions();
     render(<MenuBar projectActions={actions} />);
     fireEvent.click(screen.getByTestId('menu-file'));
     fireEvent.click(screen.getByText('Import .quar...'));
-    expect(actions.importProject).toHaveBeenCalledOnce();
+    await waitFor(() => expect(actions.importProject).toHaveBeenCalledOnce());
   });
 
   it('imports sounds from File > Import Sound', () => {
