@@ -397,6 +397,8 @@ describe('the sound lane', () => {
     renderTimeline();
     const id = placed(0);
     fireEvent.doubleClick(screen.getByTestId(`sound-clip-${id}`));
+    // Its volume in focus, as before it had a speed
+    expect(screen.getByTestId('sound-clip-volume')).toHaveFocus();
     const steps = store().undoStack.length;
     fireEvent.click(screen.getByTestId('sound-clip-speed-2'));
     expect(clips()[0]?.speed).toBe(2);

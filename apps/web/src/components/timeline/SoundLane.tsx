@@ -757,7 +757,7 @@ function SoundClipSettings({ clip, sound, frameRate, x, y, onClose }: SoundClipS
         : y - rect.height;
     card.style.left = `${Math.max(8, Math.min(x, window.innerWidth - rect.width - 8))}px`;
     card.style.top = `${Math.max(8, top)}px`;
-    card.querySelector<HTMLInputElement>('input')?.focus();
+    card.querySelector<HTMLInputElement>('[data-testid="sound-clip-volume"]')?.focus();
   }, [x, y]);
 
   useEffect(() => {
