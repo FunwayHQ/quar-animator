@@ -25,6 +25,9 @@ const mp4 = fixture('clip-h264-aac.mp4');
 const webm = fixture('clip-vp9-opus.webm');
 
 /** A Blob's bytes, read as the browser reads a dropped file */
+/** Whether two files' bytes are the same (at once: toEqual compares a byte at a time) */
+const sameBytes = (a: Uint8Array, b: Uint8Array) => Buffer.from(a).equals(Buffer.from(b));
+
 const bytesOf = (blob: Blob) =>
   new Promise<Uint8Array>((done, fail) => {
     const reader = new FileReader();
@@ -160,8 +163,8 @@ describe('videos in a project file', () => {
     const decoded = decodeQuarBinary(binary);
     const buffers = decoded.buffers.filter((buffer) => buffer.mimeType.startsWith('video/'));
     expect(buffers.map((buffer) => buffer.mimeType)).toEqual(['video/mp4', 'video/webm']);
-    expect(buffers[0]!.data).toEqual(mp4);
-    expect(buffers[1]!.data).toEqual(webm);
+    expect(sameBytes(buffers[0]!.data, mp4)).toBe(true);
+    expect(sameBytes(buffers[1]!.data, webm)).toBe(true);
     const entries = decoded.json.videos as Array<{ file: string }>;
     expect(entries.map((entry) => decoded.buffers[Number(entry.file.slice(7))]!.mimeType)).toEqual([
       'video/mp4',
@@ -177,8 +180,8 @@ describe('videos in a project file', () => {
     expect(applied.videos).toEqual([video('clip'), video('loop', 'video/webm')]);
     const clip = applied.videoFiles?.get('clip');
     expect(clip?.type).toBe('video/mp4');
-    expect(await bytesOf(clip!)).toEqual(mp4);
-    expect(await bytesOf(applied.videoFiles!.get('loop')!)).toEqual(webm);
+    expect(sameBytes(await bytesOf(clip!), mp4)).toBe(true);
+    expect(sameBytes(await bytesOf(applied.videoFiles!.get('loop')!), webm)).toBe(true);
     expect(sceneGraph.getNode('a')).toMatchObject({ type: 'video', videoId: 'clip' });
   });
 
@@ -227,7 +230,7 @@ describe('videos in a project file', () => {
     downloadProjectFile('Clips', data, (id) => files.get(id));
 
     const applied = open(await readProjectFile(new File([downloaded!], 'Clips.quar')));
-    expect(await bytesOf(applied.videoFiles!.get('clip')!)).toEqual(mp4);
+    expect(sameBytes(await bytesOf(applied.videoFiles!.get('clip')!), mp4)).toBe(true);
   });
 
   it('leaves out videos a damaged file got wrong, and opens the layers of missing ones', () => {
