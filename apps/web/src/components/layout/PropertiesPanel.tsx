@@ -34,7 +34,9 @@ import {
   Download,
   MoveHorizontal,
   MoveVertical,
+  Pencil,
   Square,
+  Unlink,
 } from 'lucide-react';
 import { useSceneGraph } from '../../contexts/SceneGraphContext';
 import { useEditorStore, DEFAULT_FILL, DEFAULT_STROKE } from '../../stores/editorStore';
@@ -1638,9 +1640,9 @@ export function PropertiesPanel() {
                     {symDef ? symDef.name : 'Unknown Symbol'}
                   </span>
                 </div>
-                <div className={styles.row} style={{ gap: '4px' }}>
+                <div className={styles.booleanOpsRow}>
                   <button
-                    className={styles.booleanButton}
+                    className={styles.booleanOpButton}
                     onClick={() => {
                       if (symDef) {
                         useEditorStore.getState().enterSymbolEdit(symInst.symbolId, sceneGraph);
@@ -1649,17 +1651,19 @@ export function PropertiesPanel() {
                     title="Edit Symbol"
                     data-testid="edit-symbol-button"
                   >
-                    Edit Symbol
+                    <Pencil size={14} />
+                    <span>Edit Symbol</span>
                   </button>
                   <button
-                    className={styles.booleanButton}
+                    className={styles.booleanOpButton}
                     onClick={() => {
                       useEditorStore.getState().detachInstance(sceneGraph);
                     }}
                     title="Detach Instance"
                     data-testid="detach-instance-button"
                   >
-                    Detach
+                    <Unlink size={14} />
+                    <span>Detach</span>
                   </button>
                   {/* No Reset (overrides) yet: nothing can make an instance differ from its symbol */}
                 </div>

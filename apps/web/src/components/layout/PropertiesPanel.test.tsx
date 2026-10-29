@@ -2238,4 +2238,33 @@ describe('PropertiesPanel', () => {
       expect(screen.queryByTestId('vertex-handle-out-x')).toBeNull();
     });
   });
+
+  describe('symbol instance', () => {
+    it('styles Edit Symbol and Detach as the panel’s other buttons', () => {
+      const sg = renderWithSceneGraph();
+      act(() => {
+        useEditorStore.setState({
+          symbols: [
+            {
+              id: 'badge',
+              name: 'Badge',
+              sceneGraphJSON: { nodes: [createTestRect('r', 'Rect')], rootNodeIds: ['r'] },
+            },
+          ],
+        });
+        sg.addNode({
+          ...createTestRect('inst', 'Badge'),
+          type: 'symbol-instance',
+          symbolId: 'badge',
+          overrides: [],
+        } as unknown as Node);
+        useEditorStore.getState().setSelection(['inst']);
+      });
+
+      for (const id of ['edit-symbol-button', 'detach-instance-button']) {
+        expect(screen.getByTestId(id).className).toContain('booleanOpButton');
+      }
+      act(() => useEditorStore.setState({ symbols: [] }));
+    });
+  });
 });
