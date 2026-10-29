@@ -59,21 +59,34 @@ function penPage(ids: TutorialNodes): TutorialPage {
     '1 · Pen',
     'Draw with the pen',
     'Press P for the Pen tool. Click to place a corner point, or click and drag to pull out a curve (Alt breaks the handles, Shift keeps to 45°). Click the first point again to close the shape, or press Enter to finish an open line. Backspace removes the last point; Escape throws the path away. With a path selected, the Pen adds and removes points on it, and carries on from an open end.\n\n' +
-      'Try tracing the outline on the right: two points, both dragged. Then give your shape a fill in Properties.'
+      'Try tracing the drop on the right: click its tip, drag down at its right side and up at its left, then click the tip to close the shape and give it a fill in Properties.'
   );
   return {
     name: '1 · Pen',
     nodes: [
       ...nodes,
       caption(ids, board.id, 'Trace this', 60, 175),
-      path(ids, board.id, 'Outline to trace', 130, 40, leafPoints(220, 80), {
+      path(ids, board.id, 'Outline to trace', 130, 40, dropPoints(), {
         stroke: LIGHT,
         strokeWidth: 2,
       }),
       caption(ids, board.id, 'Finished', 250, 175),
-      path(ids, board.id, 'Leaf', 300, 40, leafPoints(220, 80), { fill: TEAL }),
+      path(ids, board.id, 'Drop', 300, 40, dropPoints(), { fill: TEAL }),
     ],
   };
+}
+
+/**
+ * A drop as the Pen draws it: a clicked tip (a corner) and two dragged sides,
+ * their handles mirrored as a drag makes them. Three points, since a click
+ * on the first point closes a path only once it has three.
+ */
+function dropPoints() {
+  return [
+    [0, 100],
+    [70, -30, [0, 70], [0, -70]],
+    [-70, -30, [0, -70], [0, 70]],
+  ] as Array<[number, number, [number, number]?, [number, number]?]>;
 }
 
 function pointsPage(ids: TutorialNodes): TutorialPage {
@@ -562,12 +575,13 @@ function build(
 export const MORE_TUTORIALS: Tutorial[] = [
   {
     // 2: the Pen and Direct Selection's new keys, Edit > Path
+    // 3: a three-point drop to trace, which a click on its tip closes
     ...build('tutorial-paths-and-shapes', 'Tutorial 3 · Paths & shapes', 't3', (ids) => [
       penPage(ids),
       pointsPage(ids),
       combinePage(ids),
     ]),
-    version: 2,
+    version: 3,
   },
   {
     // 2: Figma-style text editing keys, Google Fonts asked for on first pick

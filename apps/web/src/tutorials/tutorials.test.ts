@@ -167,6 +167,35 @@ describe('what the lessons say', () => {
     expect(page.sceneGraph.nodes.some((n) => n.type === 'ik-target')).toBe(false);
   });
 
+  it('Pen: the drop to trace is drawn as the page says, and closes with a click on its tip', () => {
+    const page = pageOf('tutorial-paths-and-shapes', '1 · Pen');
+    expect(lessonOf(page)).toContain(
+      'click its tip, drag down at its right side and up at its left, then click the tip to close the shape'
+    );
+    const outline = page.sceneGraph.nodes.find((n) => n.name === 'Outline to trace');
+    expect(outline?.type).toBe('path');
+    const [tip, right, left, ...more] = outline?.type === 'path' ? outline.points : [];
+    // A click on the first point closes a path only once it has three points
+    expect(more).toHaveLength(0);
+    expect(outline?.type === 'path' && outline.closed).toBe(true);
+    // The tip is clicked: a corner with no handles
+    expect(tip).toMatchObject({ type: 'corner', handleIn: null, handleOut: null });
+    // The sides are dragged (down on the right, up on the left): mirrored handles
+    for (const [side, down] of [
+      [right, true],
+      [left, false],
+    ] as const) {
+      expect(side!.handleOut!.y < 0).toBe(down);
+      expect(side!.handleIn!.x + side!.handleOut!.x).toBe(0);
+      expect(side!.handleIn!.y + side!.handleOut!.y).toBe(0);
+    }
+    // The finished one is the same drop
+    const finished = page.sceneGraph.nodes.find((n) => n.name === 'Drop');
+    expect(finished?.type === 'path' && finished.points).toEqual(
+      outline?.type === 'path' && outline.points
+    );
+  });
+
   it('graph editor: every curve of the rocket has handles to drag', () => {
     const page = pageOf('tutorial-timing', '2 · Graph editor');
     expect(lessonOf(page)).toContain('A selected keyframe shows its handles: drag them');
