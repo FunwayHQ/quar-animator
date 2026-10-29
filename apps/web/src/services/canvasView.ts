@@ -1,12 +1,13 @@
 /**
  * Where the canvas is looking, for what's put "in the middle of the canvas"
- * from outside it (a symbol placed from the Symbols panel). The canvas says
- * while it's there.
+ * from outside it (a symbol placed from the Symbols panel, a video fitted
+ * to the view). The canvas says while it's there.
  */
 
-import type { Vector2 } from '@quar/types';
+import type { Rect, Vector2 } from '@quar/types';
 
 let viewCenter: (() => Vector2) | null = null;
+let viewBounds: (() => Rect | null) | null = null;
 
 /** The canvas tells how to find the world point at its middle (null once it's gone). */
 export function setCanvasViewCenter(center: (() => Vector2) | null): void {
@@ -16,4 +17,14 @@ export function setCanvasViewCenter(center: (() => Vector2) | null): void {
 /** The world point in the middle of the canvas view; null with no canvas. */
 export function canvasViewCenter(): Vector2 | null {
   return viewCenter ? viewCenter() : null;
+}
+
+/** The canvas tells how to find the part of the world it shows (null once it's gone). */
+export function setCanvasViewBounds(bounds: (() => Rect | null) | null): void {
+  viewBounds = bounds;
+}
+
+/** The part of the world the canvas shows; null with no canvas. */
+export function canvasViewBounds(): Rect | null {
+  return viewBounds?.() ?? null;
 }

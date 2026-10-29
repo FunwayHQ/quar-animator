@@ -29,7 +29,7 @@ import {
 import type { DynamicChainState } from '@quar/types';
 import type { PointMagnetTool, WeightPaintTool } from '@quar/core';
 import { intoArtboardBeneath } from '../../services/intoArtboard';
-import { setCanvasViewCenter } from '../../services/canvasView';
+import { setCanvasViewBounds, setCanvasViewCenter } from '../../services/canvasView';
 import { isSoundFile } from '../../services/soundFiles';
 import { importSoundFiles } from '../../services/soundImport';
 import { useCanvasTools } from '../../hooks/useCanvasTools';
@@ -1354,10 +1354,14 @@ export function Canvas({
   }, []);
 
   // What's put in the middle of the canvas from elsewhere (a symbol from the
-  // Symbols panel) goes where this canvas is looking
+  // Symbols panel, a video fitted to the view) goes where this canvas is looking
   useEffect(() => {
     setCanvasViewCenter(getCanvasCenter);
-    return () => setCanvasViewCenter(null);
+    setCanvasViewBounds(() => cameraRef.current?.getVisibleBounds() ?? null);
+    return () => {
+      setCanvasViewCenter(null);
+      setCanvasViewBounds(null);
+    };
   }, [getCanvasCenter]);
 
   const importSvgString = useCallback(
