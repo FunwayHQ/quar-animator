@@ -3,10 +3,11 @@
  * When a video layer plays on its timeline and which moment of its video
  * each frame shows (the canvas, the presentation player and exports alike,
  * counting frames as sound clips do, so a video and its sound stay
- * together) — at its speed, looped, holding its last frame — moving a clip
- * a frame at a time, and keeping its linked sound clip where the video's
- * clip is. The timing of a clip's length and moments (clipSeconds,
- * clipMomentAt) is a sound clip's too.
+ * together) — at its speed, looped, holding its last frame — moving and
+ * trimming a clip a frame at a time, setting its speed, loop and hold, and
+ * keeping its linked sound clip where the video's clip is. The timing of a
+ * clip's length and moments (clipSeconds, clipMomentAt), and trimming it
+ * and setting its speed and loop, are a sound clip's too.
  */
 
 import type { SoundClip, VideoClip } from '@quar/types';
@@ -89,6 +90,104 @@ export function videoPosterTime(clip: VideoClip): number {
 export function movedVideoClip(clip: VideoClip, frame: number): VideoClip {
   const start = Math.max(0, Math.round(frame));
   return start === clip.start ? clip : { ...clip, start };
+}
+
+/** Small enough a slip in the sums not to round a frame away. */
+const SLIP = 1e-6;
+
+/** A looped clip's length as it was made, in seconds (none: one pass). */
+function loopLength(clip: Pick<ClipTiming, 'loop' | 'loopFor'>): number | undefined {
+  const { loopFor } = clip;
+  return clip.loop && loopFor !== undefined && Number.isFinite(loopFor) && loopFor > 0
+    ? loopFor
+    : undefined;
+}
+
+/**
+ * The clip's beginning trimmed to `frame`: the video before it skipped, or
+ * (moved earlier) more of it played — at its speed, a frame of the timeline
+ * being `speed` frames' worth of the video — back to the file's start (and
+ * the timeline's first frame), and never past the end of its first pass, or
+ * its own, less a frame. Its end stays where it is: a looped clip's length
+ * changes with its pass.
+ */
+export function trimmedVideoStart<C extends ClipTiming>(
+  clip: C,
+  frame: number,
+  frameRate: number
+): C {
+  const rate = Math.max(1, frameRate);
+  const speed = clipSpeed(clip);
+  const earliest = Math.max(0, Math.ceil(clip.start - (clip.offset * rate) / speed - SLIP));
+  const passEnd = clip.start + (Math.max(0, clip.duration) / speed) * rate;
+  const end = clip.start + clipSeconds(clip) * rate;
+  const latest = Math.floor(Math.min(passEnd, end) + SLIP) - 1;
+  if (latest < earliest) return clip;
+  const start = Math.min(latest, Math.max(earliest, Math.round(frame)));
+  if (start === clip.start) return clip;
+  const moved = (start - clip.start) / rate;
+  const trimmed: C = {
+    ...clip,
+    start,
+    offset: Math.max(0, clip.offset + moved * speed),
+    duration: clip.duration - moved * speed,
+  };
+  const loopFor = loopLength(clip);
+  if (loopFor !== undefined) trimmed.loopFor = loopFor - moved;
+  return trimmed;
+}
+
+/**
+ * The clip's end trimmed to `frame` (at least a frame after its start): an
+ * unlooped clip plays more or less of the video at its speed, not past the
+ * end of the file (`videoDuration` seconds); a looped one lasts that long,
+ * as far past the video's end as it's made to, its pass as it was.
+ */
+export function trimmedVideoEnd<C extends ClipTiming>(
+  clip: C,
+  frame: number,
+  frameRate: number,
+  videoDuration: number
+): C {
+  const rate = Math.max(1, frameRate);
+  const length = Math.max(1, Math.round(frame) - clip.start) / rate;
+  if (clip.loop) return length === clip.loopFor ? clip : { ...clip, loopFor: length };
+  const longest = Math.max(0, videoDuration - clip.offset);
+  const duration = Math.min(longest, length * clipSpeed(clip));
+  return duration === clip.duration ? clip : { ...clip, duration };
+}
+
+/**
+ * The clip played at `speed` (kept to 0.25×–4×; a wrong one changes
+ * nothing) from where it starts: it ends sooner or later, but a looped one
+ * lasts as long as it was made to.
+ */
+export function withClipSpeed<C extends ClipTiming>(clip: C, speed: number): C {
+  if (!Number.isFinite(speed) || speed <= 0) return clip;
+  const next = Math.min(MAX_CLIP_SPEED, Math.max(MIN_CLIP_SPEED, speed));
+  if (clip.speed === (next === 1 ? undefined : next)) return clip;
+  const changed: C = { ...clip, speed: next };
+  // 1× is playing as recorded: no speed of its own
+  if (next === 1) delete changed.speed;
+  return changed;
+}
+
+/** The clip looping (for a pass until it's lengthened), or not (its looped length gone with it). */
+export function withLoop<C extends ClipTiming>(clip: C, on: boolean): C {
+  if (on) return clip.loop ? clip : { ...clip, loop: true };
+  if (clip.loop === undefined && clip.loopFor === undefined) return clip;
+  const changed: C = { ...clip };
+  delete changed.loop;
+  delete changed.loopFor;
+  return changed;
+}
+
+/** The clip holding its last frame after it ends, or not. */
+export function withHold(clip: VideoClip, on: boolean): VideoClip {
+  if (on ? clip.holdLastFrame === true : clip.holdLastFrame === undefined) return clip;
+  if (on) return { ...clip, holdLastFrame: true };
+  const { holdLastFrame: _hold, ...changed } = clip;
+  return changed;
 }
 
 /** The timing a linked sound takes from its video's clip (holding a last frame isn't a sound's). */

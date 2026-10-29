@@ -6,9 +6,14 @@ import {
   clipSpeed,
   linkedSoundClip,
   movedVideoClip,
+  trimmedVideoEnd,
+  trimmedVideoStart,
   videoClipEndFrame,
   videoPosterTime,
   videoTimeAt,
+  withClipSpeed,
+  withHold,
+  withLoop,
 } from './VideoClips';
 import { soundsPlayed } from './SoundClips';
 
@@ -136,5 +141,159 @@ describe('speed, loops and held last frames', () => {
     expect(back).not.toHaveProperty('speed');
     expect(back).not.toHaveProperty('loop');
     expect(back).not.toHaveProperty('loopFor');
+  });
+});
+
+describe('trimming a clip', () => {
+  it('trims its start, the video before it skipped, its end where it was', () => {
+    const trimmed = trimmedVideoStart(clip(), 60, 30);
+    expect(trimmed).toEqual({ start: 60, offset: 3, duration: 3 });
+    expect(videoClipEndFrame(trimmed, 30)).toBeCloseTo(150);
+    // The same clip when it stays put
+    const same = clip();
+    expect(trimmedVideoStart(same, 30.2, 30)).toBe(same);
+  });
+
+  it('trims its start at its speed: a frame is more of the video when it’s faster', () => {
+    // 2×: 60 frames long (30 to 90); 15 frames on is 1 s of the video
+    const fast = trimmedVideoStart(clip({ speed: 2 }), 45, 30);
+    expect(fast).toEqual({ start: 45, offset: 3, duration: 3, speed: 2 });
+    expect(videoClipEndFrame(fast, 30)).toBeCloseTo(90);
+    // 0.25×: 480 frames long; 30 frames on is a quarter of a second
+    const slow = trimmedVideoStart(clip({ speed: 0.25 }), 60, 30);
+    expect(slow).toMatchObject({ start: 60, offset: 2.25, duration: 3.75 });
+    expect(videoClipEndFrame(slow, 30)).toBeCloseTo(510);
+    // 4×: 30 frames long; 3 frames on is 0.4 s
+    const quick = trimmedVideoStart(clip({ speed: 4 }), 33, 30);
+    expect(quick.offset).toBeCloseTo(2.4);
+    expect(quick.duration).toBeCloseTo(3.6);
+  });
+
+  it('brings trimmed video back, as far as the file’s start and the first frame', () => {
+    // 2 s trimmed off at 0.5× is 120 frames: from frame 150 back to 30
+    const slow = clip({ start: 150, speed: 0.5 });
+    expect(trimmedVideoStart(slow, 0, 30)).toMatchObject({ start: 30, offset: 0, duration: 6 });
+    // At 2× they’d be 30 frames before frame 30: as far as frame 0
+    expect(trimmedVideoStart(clip({ speed: 2 }), -100, 30)).toMatchObject({
+      start: 0,
+      offset: 0,
+      duration: 6,
+    });
+  });
+
+  it('leaves at least a frame when its start is trimmed past its end', () => {
+    // 1.01 s ends at frame 60.3: frame 59 is its last
+    const short = trimmedVideoStart(clip({ duration: 1.01 }), 500, 30);
+    expect(short.start).toBe(59);
+    expect(short.duration).toBeCloseTo(1.01 - 29 / 30);
+    expect(videoClipEndFrame(short, 30)).toBeCloseTo(60.3);
+    // 1 s at 4× is 7.5 frames: from 30 to 37.5, frame 36 its last
+    const quick = trimmedVideoStart(clip({ duration: 1, speed: 4 }), 100, 30);
+    expect(quick.start).toBe(36);
+    expect(quick.duration).toBeCloseTo(0.2);
+    expect(videoClipEndFrame(quick, 30)).toBeCloseTo(37.5);
+  });
+
+  it('trims a looped clip’s first pass, its end staying where it is', () => {
+    const looped = clip({ loop: true, loopFor: 10 });
+    const trimmed = trimmedVideoStart(looped, 60, 30);
+    expect(trimmed).toMatchObject({ start: 60, offset: 3, duration: 3, loop: true, loopFor: 9 });
+    expect(videoClipEndFrame(trimmed, 30)).toBeCloseTo(330);
+    // No further than a frame short of the first pass’s end (frame 150)
+    const most = trimmedVideoStart(looped, 400, 30);
+    expect(most.start).toBe(149);
+    expect(most.duration).toBeCloseTo(1 / 30);
+    expect(videoClipEndFrame(most, 30)).toBeCloseTo(330);
+    // Looped but not lengthened: one pass, ending where it did
+    const once = trimmedVideoStart(clip({ loop: true }), 60, 30);
+    expect(once).not.toHaveProperty('loopFor');
+    expect(videoClipEndFrame(once, 30)).toBeCloseTo(150);
+    // Looped shorter than a pass: no further than its end
+    expect(trimmedVideoStart(clip({ loop: true, loopFor: 1 }), 400, 30).start).toBe(59);
+  });
+
+  it('keeps holding its last frame as it’s trimmed', () => {
+    expect(trimmedVideoStart(clip({ holdLastFrame: true }), 60, 30).holdLastFrame).toBe(true);
+    expect(trimmedVideoEnd(clip({ holdLastFrame: true }), 90, 30, 10).holdLastFrame).toBe(true);
+  });
+
+  it('trims its end to a frame, at least a frame long, not past the video’s end', () => {
+    expect(trimmedVideoEnd(clip(), 90, 30, 10)).toEqual({ start: 30, offset: 2, duration: 2 });
+    expect(trimmedVideoEnd(clip(), 90.4, 30, 10).duration).toBe(2);
+    expect(trimmedVideoEnd(clip(), 10, 30, 10).duration).toBeCloseTo(1 / 30);
+    // A 10 s video played from 2 s in: 8 s of it left
+    expect(trimmedVideoEnd(clip(), 900, 30, 10).duration).toBe(8);
+    const same = clip();
+    expect(trimmedVideoEnd(same, 150, 30, 10)).toBe(same);
+  });
+
+  it('trims its end at its speed', () => {
+    // 2×: 30 frames are 2 s of the video; the 8 s left last 120 frames
+    expect(trimmedVideoEnd(clip({ speed: 2 }), 60, 30, 10).duration).toBe(2);
+    const longest = trimmedVideoEnd(clip({ speed: 2 }), 900, 30, 10);
+    expect(longest.duration).toBe(8);
+    expect(videoClipEndFrame(longest, 30)).toBe(150);
+    // 0.25×: a frame is 1/120 s of the video
+    expect(trimmedVideoEnd(clip({ speed: 0.25 }), 60, 30, 10).duration).toBe(0.25);
+    expect(trimmedVideoEnd(clip({ speed: 0.25 }), 0, 30, 10).duration).toBeCloseTo(1 / 120);
+    // 4×: the 8 s left last 2 s, ending on frame 90
+    expect(videoClipEndFrame(trimmedVideoEnd(clip({ speed: 4 }), 900, 30, 10), 30)).toBe(90);
+  });
+
+  it('lengthens a looped clip past the video’s end, its pass as it was', () => {
+    const looped = trimmedVideoEnd(clip({ loop: true }), 600, 30, 10);
+    expect(looped).toEqual({ start: 30, offset: 2, duration: 4, loop: true, loopFor: 19 });
+    expect(videoClipEndFrame(looped, 30)).toBe(600);
+    // As short as a frame, at any speed
+    expect(trimmedVideoEnd(clip({ loop: true, speed: 2 }), 10, 30, 10).loopFor).toBeCloseTo(1 / 30);
+    // A whole frame
+    expect(trimmedVideoEnd(clip({ loop: true }), 100.6, 30, 10).loopFor).toBeCloseTo(71 / 30);
+  });
+});
+
+describe('a clip’s speed, loop and hold set', () => {
+  it('plays at a speed from where it starts, ending sooner or later', () => {
+    const fast = withClipSpeed(clip(), 2);
+    expect(fast).toEqual({ start: 30, offset: 2, duration: 4, speed: 2 });
+    expect(videoClipEndFrame(fast, 30)).toBe(90);
+    expect(videoClipEndFrame(withClipSpeed(clip(), 0.5), 30)).toBe(270);
+    // Back to 1×: no speed of its own
+    expect(withClipSpeed(fast, 1)).toEqual(clip());
+  });
+
+  it('keeps its speed within 0.25× to 4×, and ignores a wrong one', () => {
+    expect(withClipSpeed(clip(), 10).speed).toBe(4);
+    expect(withClipSpeed(clip(), 0.1).speed).toBe(0.25);
+    const same = clip({ speed: 2 });
+    expect(withClipSpeed(same, 2)).toBe(same);
+    expect(withClipSpeed(same, Number.NaN)).toBe(same);
+    expect(withClipSpeed(same, 0)).toBe(same);
+    expect(withClipSpeed(same, -1)).toBe(same);
+  });
+
+  it('keeps a looped clip as long as it was made at another speed', () => {
+    const looped = withClipSpeed(clip({ loop: true, loopFor: 10 }), 2);
+    expect(looped.loopFor).toBe(10);
+    expect(videoClipEndFrame(looped, 30)).toBe(330);
+  });
+
+  it('loops for a pass until it’s lengthened, and stops looping', () => {
+    const looped = withLoop(clip(), true);
+    expect(looped).toEqual({ ...clip(), loop: true });
+    expect(videoClipEndFrame(looped, 30)).toBe(150);
+    expect(withLoop(looped, true)).toBe(looped);
+    // Its length goes with its looping
+    expect(withLoop(clip({ loop: true, loopFor: 10 }), false)).toEqual(clip());
+    const plain = clip();
+    expect(withLoop(plain, false)).toBe(plain);
+  });
+
+  it('holds its last frame, or doesn’t', () => {
+    const held = withHold(clip(), true);
+    expect(held).toEqual({ ...clip(), holdLastFrame: true });
+    expect(withHold(held, true)).toBe(held);
+    expect(withHold(held, false)).toEqual(clip());
+    const plain = clip();
+    expect(withHold(plain, false)).toBe(plain);
   });
 });
