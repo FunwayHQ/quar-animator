@@ -4504,7 +4504,8 @@ function createPageActions(
         clipboardExtras: null,
         currentFrame: 0,
         isPlaying: false,
-        isDirty: true,
+        // Opening another page changes nothing in the project: unsaved
+        // changes stay unsaved, and none are made (a save keeps it open)
       });
     },
 

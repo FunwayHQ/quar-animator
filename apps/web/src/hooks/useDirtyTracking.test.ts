@@ -52,6 +52,30 @@ describe('useDirtyTracking', () => {
     expect(useEditorStore.getState().isDirty).toBe(true);
   });
 
+  it('leaves it clean when another page is opened, until an edit there', () => {
+    const sg = new SceneGraph();
+    useEditorStore.getState().resetProject();
+    sg.addNode(createGroupNode('on-page-1', 'Group'));
+    const firstPage = useEditorStore.getState().activePageId;
+    useEditorStore.getState().addPage(sg);
+    sg.addNode(createGroupNode('on-page-2', 'Group'));
+    const secondPage = useEditorStore.getState().activePageId;
+    renderHook(() => useDirtyTracking(sg));
+    useEditorStore.setState({ isDirty: false });
+
+    useEditorStore.getState().switchPage(firstPage, sg);
+    expect(sg.getNode('on-page-1')).toBeDefined();
+    expect(useEditorStore.getState().isDirty).toBe(false);
+    useEditorStore.getState().switchPage(secondPage, sg);
+    expect(useEditorStore.getState().isDirty).toBe(false);
+
+    sg.updateNode('on-page-2', { opacity: 0.5 });
+    expect(useEditorStore.getState().isDirty).toBe(true);
+    // Unsaved changes stay unsaved on another page
+    useEditorStore.getState().switchPage(firstPage, sg);
+    expect(useEditorStore.getState().isDirty).toBe(true);
+  });
+
   it('stops listening when unmounted', () => {
     const sg = new SceneGraph();
     const { unmount } = renderHook(() => useDirtyTracking(sg));
