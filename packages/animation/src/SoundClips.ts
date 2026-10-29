@@ -128,7 +128,11 @@ function playLevels(clip: SoundClip, skipped: number, duration: number): SoundLe
 
 /** How loud a play is (0–1, before its volume) `seconds` of the sound into it. */
 export function playLevel(play: SoundPlay, seconds: number): number {
-  const levels = play.levels;
+  return levelAmong(play.levels, seconds);
+}
+
+/** The loudness at `seconds` along levels (straight between them; 1 with none). */
+function levelAmong(levels: readonly SoundLevel[] | undefined, seconds: number): number {
   if (!levels || levels.length === 0) return 1;
   const first = levels[0]!;
   if (seconds <= first.time) return first.level;
@@ -179,6 +183,35 @@ export function schedulePlayGain(
 /** Plays shorter than this (seconds) are slips in the sums, not sound. */
 const SLIVER = 1e-9;
 
+/** Seconds a looped clip dips to silence where it starts over, so the join doesn't click. */
+const JOIN_FADE = 0.005;
+
+/**
+ * A pass's levels with a moment's dip where it meets the pass before it
+ * (`fromJoin`) or the one after (`toJoin`): a loop seldom starts over on a
+ * whole wave, and a cut there clicks.
+ */
+function withJoins(
+  levels: SoundLevel[] | undefined,
+  duration: number,
+  fromJoin: boolean,
+  toJoin: boolean
+): SoundLevel[] | undefined {
+  if (!fromJoin && !toJoin) return levels;
+  const ramp = Math.min(JOIN_FADE, duration / 2);
+  const times = new Set([0, duration, ...(levels ?? []).map((point) => point.time)]);
+  if (fromJoin) times.add(ramp);
+  if (toJoin) times.add(duration - ramp);
+  return [...times]
+    .sort((a, b) => a - b)
+    .map((time) => {
+      let level = levelAmong(levels, time);
+      if (fromJoin && time < ramp) level *= time / ramp;
+      if (toJoin && time > duration - ramp) level *= (duration - time) / ramp;
+      return { time, level };
+    });
+}
+
 /**
  * What of each clip plays when frames `startFrame` to `endFrame` of a
  * timeline play (frame f shows from f / frameRate seconds, for a frame), at
@@ -214,7 +247,13 @@ export function soundsPlayed(
       const playFrom = Math.max(start, passBegins);
       const playTo = Math.min(end, passBegins + pass);
       if (!(playTo - playFrom > SLIVER)) continue;
-      const levels = playLevels(clip, playFrom - begins, playTo - playFrom);
+      const levels = withJoins(
+        playLevels(clip, playFrom - begins, playTo - playFrom),
+        playTo - playFrom,
+        k > 0 && playFrom - passBegins < SLIVER,
+        passBegins + pass < begins + clipSeconds(clip) - SLIVER &&
+          passBegins + pass - playTo < SLIVER
+      );
       plays.push({
         clipId: clip.id,
         soundId: clip.soundId,

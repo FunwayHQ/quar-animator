@@ -120,6 +120,33 @@ describe('clips at a speed and looped', () => {
     expect(soundsPlayed([clip('b', 0, 2, { loop: true })], 30, 0, 299)).toHaveLength(1);
   });
 
+  it('dip to silence for a moment where a loop starts over, so the join doesn’t click', () => {
+    const looped = clip('a', 0, 2, { offset: 1, loop: true, loopFor: 5 });
+    const [first, middle, last] = soundsPlayed([looped], 30, 0, 299);
+    // The clip's own start and end aren't joins: they play at full level
+    expect(playLevel(first!, 0)).toBe(1);
+    expect(playLevel(last!, 0.9999)).toBeCloseTo(1, 3);
+    // Each join is a 5 ms dip, out of one pass and into the next
+    expect(playLevel(first!, 2)).toBe(0);
+    expect(playLevel(first!, 1.9975)).toBeCloseTo(0.5);
+    expect(playLevel(first!, 1.99)).toBe(1);
+    expect(playLevel(middle!, 0)).toBe(0);
+    expect(playLevel(middle!, 0.0025)).toBeCloseTo(0.5);
+    expect(playLevel(middle!, 1)).toBe(1);
+    expect(playLevel(last!, 0)).toBe(0);
+    // A clip that doesn't loop has no joins
+    expect(soundsPlayed([clip('b', 0, 2)], 30, 0, 299)[0]?.levels).toBeUndefined();
+  });
+
+  it('dip at a join that falls inside its fades, the fades kept', () => {
+    const looped = clip('a', 0, 2, { loop: true, loopFor: 4, fadeIn: 1, fadeOut: 1 });
+    const [first, second] = soundsPlayed([looped], 30, 0, 299);
+    expect(playLevel(first!, 0.5)).toBeCloseTo(0.5);
+    expect(playLevel(first!, 2)).toBe(0);
+    expect(playLevel(second!, 0)).toBe(0);
+    expect(playLevel(second!, 1.5)).toBeCloseTo(0.5);
+  });
+
   it('play a looped clip from the middle of a pass, and only the passes in the range', () => {
     const looped = clip('a', 0, 2, { offset: 1, loop: true, loopFor: 5 });
     // From 1.5 s (frame 45) to 4.5 s (frame 134)
@@ -157,18 +184,25 @@ describe('clips at a speed and looped', () => {
   it('fade over the clip’s whole length on the timeline: in on its first pass, out on its last', () => {
     const looped = clip('a', 0, 2, { loop: true, loopFor: 5, fadeIn: 1, fadeOut: 1.5 });
     const [first, second, third] = soundsPlayed([looped], 30, 0, 299);
-    expect(first!.levels).toEqual([
-      { time: 0, level: 0 },
-      { time: 1, level: 1 },
-      { time: 2, level: 1 },
+    const shown = (play: typeof first) =>
+      play!.levels?.map(({ time, level }) => [+time.toFixed(4), +level.toFixed(4)]);
+    // Each pass also dips for 5 ms where it meets the next (withJoins)
+    expect(shown(first)).toEqual([
+      [0, 0],
+      [1, 1],
+      [1.995, 1],
+      [2, 0],
     ]);
-    expect(second!.levels?.map(({ time, level }) => [time, +level.toFixed(4)])).toEqual([
-      [0, 1],
+    expect(shown(second)).toEqual([
+      [0, 0],
+      [0.005, 1],
       [1.5, 1],
-      [2, 0.6667],
+      [1.995, 0.67],
+      [2, 0],
     ]);
-    expect(third!.levels?.map(({ time, level }) => [time, +level.toFixed(4)])).toEqual([
-      [0, 0.6667],
+    expect(shown(third)).toEqual([
+      [0, 0],
+      [0.005, 0.6633],
       [1, 0],
     ]);
   });
