@@ -80,11 +80,12 @@ describe('videoFrameAt', () => {
     expect(videoFrameAt('nowhere', 0)).toBeNull();
   });
 
-  it('decodes a video from its file, one source for all it asks of it', () => {
+  it('decodes a video from its file, one source for all one layer asks of it', async () => {
     const file = new Blob(['v1'], { type: 'video/mp4' });
     setVideoFile('v1', file);
     useEditorStore.getState().addVideo(video('v1'));
     videoFrameAt('v1', 0.5);
+    await tick();
     videoFrameAt('v1', 0.6, true);
     expect(sources).toHaveLength(1);
     expect(sources[0]?.file).toBe(file);
@@ -105,15 +106,21 @@ describe('videoFrameAt', () => {
     expect(still?.key).toBe('v1:still2');
   });
 
-  it('shows the exact frame once it’s decoded, its key changing with the picture', () => {
+  it('shows the exact frame once it’s decoded, its key changing with the picture', async () => {
     setVideoFile('v1', new Blob(['v1']));
     useEditorStore.getState().addVideo(video('v1'));
     videoFrameAt('v1', 0.5);
     const canvas = { id: 'canvas' };
     sources[0]!.pick = { frame: { canvas, key: 7, timestamp: 0.5 }, distance: 0 };
-    expect(videoFrameAt('v1', 0.5)).toEqual({ source: canvas, key: 'v1:7' });
+    await tick();
+    expect(videoFrameAt('v1', 0.5)).toEqual({
+      source: canvas,
+      key: expect.stringMatching(/^v1:r\d+:7$/),
+    });
     sources[0]!.pick = { frame: { canvas, key: 8, timestamp: 0.533 }, distance: 0 };
-    expect(videoFrameAt('v1', 0.53)?.key).toBe('v1:8');
+    await tick();
+    expect(videoFrameAt('v1', 0.53)?.key).toMatch(/^v1:r\d+:8$/);
+    expect(sources).toHaveLength(1);
   });
 
   it('shows a decoded frame near the moment rather than a still further off', async () => {
@@ -124,7 +131,7 @@ describe('videoFrameAt', () => {
     const canvas = { id: 'canvas' };
     // A frame behind while playing: nearer than the still at 0.5
     sources[0]!.pick = { frame: { canvas, key: 3, timestamp: 0.567 }, distance: 0.0001 };
-    expect(videoFrameAt('v1', 0.6, true)?.key).toBe('v1:3');
+    expect(videoFrameAt('v1', 0.6, true)?.key).toMatch(/^v1:r\d+:3$/);
     // Seconds away (the playhead jumped): the still at 0.5 is nearer
     sources[0]!.pick = { frame: { canvas, key: 3, timestamp: 1.5 }, distance: 0.9 };
     expect(videoFrameAt('v1', 0.6)?.key).toBe('v1:still2');
@@ -144,6 +151,72 @@ describe('videoFrameAt', () => {
     setVideoFile('v1', new Blob(['new']));
     videoFrameAt('v1', 0);
     expect(sources.map((s) => s.disposed)).toEqual([true, false]);
+  });
+
+  it('gives a layer showing another moment of the video a reader of its own, kept frame after frame', async () => {
+    setVideoFile('v1', new Blob(['v1']));
+    // One layer plays the video while another (on another timeline) shows its first picture
+    for (let frame = 0; frame < 3; frame++) {
+      videoFrameAt('v1', 2 + frame / 30, true);
+      videoFrameAt('v1', 0);
+      await tick();
+    }
+    expect(sources).toHaveLength(2);
+    expect(sources[0]?.asked.map(([, playing]) => playing)).toEqual([true, true, true]);
+    expect(sources[1]?.asked).toEqual([
+      [0, false],
+      [0, false],
+      [0, false],
+    ]);
+  });
+
+  it('keys each reader’s pictures apart', async () => {
+    setVideoFile('v1', new Blob(['v1']));
+    videoFrameAt('v1', 2, true);
+    videoFrameAt('v1', 0);
+    const canvas = { id: 'canvas' };
+    sources[0]!.pick = { frame: { canvas, key: 1, timestamp: 2 }, distance: 0 };
+    sources[1]!.pick = { frame: { canvas, key: 1, timestamp: 0 }, distance: 0 };
+    await tick();
+    const playing = videoFrameAt('v1', 2, true)?.key;
+    const first = videoFrameAt('v1', 0)?.key;
+    expect(playing).not.toBe(first);
+  });
+
+  it('seeks one layer’s reader when its playhead jumps, rather than opening another', async () => {
+    setVideoFile('v1', new Blob(['v1']));
+    videoFrameAt('v1', 0);
+    await tick();
+    videoFrameAt('v1', 1.5);
+    await tick();
+    videoFrameAt('v1', 0.2);
+    expect(sources).toHaveLength(1);
+    expect(sources[0]?.asked.map(([seconds]) => seconds)).toEqual([0, 1.5, 0.2]);
+  });
+
+  it('opens three readers of a video at most', () => {
+    setVideoFile('v1', new Blob(['v1']));
+    for (const seconds of [0, 1, 2, 3, 4]) videoFrameAt('v1', seconds);
+    expect(sources).toHaveLength(3);
+  });
+
+  it('lets a reader no layer has asked of for a while go', async () => {
+    vi.useFakeTimers();
+    try {
+      setVideoFile('v1', new Blob(['v1']));
+      videoFrameAt('v1', 2, true);
+      videoFrameAt('v1', 0);
+      await vi.advanceTimersByTimeAsync(100);
+      expect(sources).toHaveLength(2);
+      // The second layer is gone: only the first asks now
+      for (let i = 0; i < 40; i++) {
+        videoFrameAt('v1', 2 + i / 30, true);
+        await vi.advanceTimersByTimeAsync(100);
+      }
+      expect(sources.map((s) => s.disposed)).toEqual([false, true]);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('lets a video’s decoding go when the document lets its file go', () => {
