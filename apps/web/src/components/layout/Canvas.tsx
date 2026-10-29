@@ -59,6 +59,7 @@ import { GuideOverlay } from '../canvas/GuideOverlay';
 import { SmartGuidesOverlay } from '../canvas/SmartGuidesOverlay';
 import { WeightPaintOverlay } from '../canvas/WeightPaintOverlay';
 import { PointMagnetOverlay } from '../canvas/PointMagnetOverlay';
+import { EraserCursorOverlay } from '../canvas/EraserCursorOverlay';
 import { CanvasUnavailable, type CanvasProblem } from '../canvas/CanvasUnavailable';
 import { ContextMenu } from '../common/ContextMenu';
 import type { ContextMenuEntry } from '../common/ContextMenu';
@@ -2694,6 +2695,9 @@ export function Canvas({
           canvasWidth={viewportSize.width}
           canvasHeight={viewportSize.height}
         />
+      )}
+      {activeTool === 'eraser' && (
+        <EraserCursorOverlay canvasWidth={viewportSize.width} canvasHeight={viewportSize.height} />
       )}
       {activeTool === 'point-magnet' && cameraRef.current && (
         <PointMagnetOverlay

@@ -590,6 +590,58 @@ describe('useCanvasTools', () => {
     });
   });
 
+  describe('brush and eraser settings', () => {
+    const optionsOf = (result: { current: ReturnType<typeof useCanvasTools> }, tool: string) =>
+      (
+        result.current.toolManagerRef.current!.getTool(tool as never) as unknown as {
+          getOptions(): Record<string, unknown>;
+        }
+      ).getOptions();
+
+    beforeEach(() => {
+      useEditorStore.setState({
+        brushSize: 5,
+        brushSmoothing: 50,
+        eraserSize: 10,
+        eraserMode: 'stroke',
+      });
+    });
+
+    it('draws with the Brush size and smoothing set in the panel', () => {
+      useEditorStore.setState({ brushSize: 24 });
+      const { result } = renderHook(() => useCanvasTools({ camera, sceneGraph }));
+      expect(optionsOf(result, 'brush')).toMatchObject({ size: 24, smoothing: 50 });
+
+      act(() => {
+        useEditorStore.getState().setBrushSize(40);
+        useEditorStore.getState().setBrushSmoothing(85);
+      });
+      expect(optionsOf(result, 'brush')).toMatchObject({ size: 40, smoothing: 85 });
+    });
+
+    it('erases with the Eraser size and mode set in the panel', () => {
+      const { result } = renderHook(() => useCanvasTools({ camera, sceneGraph }));
+
+      act(() => {
+        useEditorStore.getState().setEraserSize(30);
+        useEditorStore.getState().setEraserMode('point');
+      });
+      expect(optionsOf(result, 'eraser')).toMatchObject({ size: 30, mode: 'point' });
+    });
+
+    it('shows in the panel the size [ and ] give the Eraser', () => {
+      const { result } = renderHook(() => useCanvasTools({ camera, sceneGraph }));
+      act(() => useEditorStore.getState().setActiveTool('eraser'));
+
+      act(() => result.current.handleKeyDown(createMockKeyboardEvent(']')));
+      expect(useEditorStore.getState().eraserSize).toBe(15);
+      act(() => result.current.handleKeyDown(createMockKeyboardEvent('[')));
+      act(() => result.current.handleKeyDown(createMockKeyboardEvent('[')));
+      expect(useEditorStore.getState().eraserSize).toBe(5);
+      expect(optionsOf(result, 'eraser')).toMatchObject({ size: 5 });
+    });
+  });
+
   describe('a Smart Bone recording', () => {
     it('finishes, keeping its work, when another tool is picked', async () => {
       const { createBoneNode } = await import('@quar/rigging');

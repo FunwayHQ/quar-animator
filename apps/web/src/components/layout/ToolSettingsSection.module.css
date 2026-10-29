@@ -1,0 +1,102 @@
+/* ============================================================================
+   Brush and Eraser settings (Properties panel). The rows use the panel's own
+   classes; these are what's theirs alone.
+   ============================================================================ */
+
+/* A test stroke on a strip of paper: the brush's size and smoothing at a glance */
+.preview {
+  position: relative;
+  height: 40px;
+  overflow: hidden;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  background:
+    linear-gradient(180deg, var(--color-surface-sheen), transparent 60%), var(--color-bg-tertiary);
+  box-shadow: var(--shadow-inset);
+}
+
+.previewSvg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.previewStroke {
+  fill: none;
+  stroke: var(--color-accent-primary);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: stroke-width var(--duration-fast) var(--easing-default);
+}
+
+/* The two modes share the row */
+.modes {
+  width: 100%;
+}
+
+.mode {
+  flex: 1;
+  gap: 5px;
+  width: auto;
+  padding: 0 var(--space-sm);
+  font-family: inherit;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  white-space: nowrap;
+}
+
+/* Words, not icons: the one not chosen still reads as a choice, not as disabled */
+.mode[aria-pressed='false'] {
+  color: var(--color-text-secondary);
+}
+
+.mode[aria-pressed='false']:hover {
+  color: var(--color-text-primary);
+}
+
+/* The chosen one stays marked under the pointer */
+.mode[aria-pressed='true'],
+.mode[aria-pressed='true']:hover {
+  color: var(--color-accent-primary);
+  background: color-mix(in srgb, var(--color-accent-primary) 15%, transparent);
+}
+
+.mode:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 1px var(--color-accent-primary);
+}
+
+/* A label with the keys that change its value at the end of the line */
+.labelRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.keys {
+  display: inline-flex;
+  gap: 2px;
+}
+
+.key {
+  display: inline-grid;
+  place-items: center;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  border: 1px solid var(--color-border-default);
+  border-bottom-width: 2px;
+  border-radius: var(--radius-xs);
+  background: var(--color-bg-elevated);
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-2xs);
+  line-height: 1;
+  color: var(--color-text-tertiary);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .previewStroke {
+    transition: none;
+  }
+}

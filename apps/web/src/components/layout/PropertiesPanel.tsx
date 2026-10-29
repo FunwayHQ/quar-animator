@@ -42,6 +42,7 @@ import { isPosingScene } from '../../stores/scenePosing';
 import { useUndoable, useUndoableEdits } from '../../hooks/useUndoableEdits';
 import { ScrubLabel } from '../common/ScrubLabel';
 import { SlideSection } from './SlideSection';
+import { ToolSettingsSection } from './ToolSettingsSection';
 import { setBoneLength } from '../../stores/boneLength';
 import { AnimationPresetsPanel } from '../common/AnimationPresetsPanel';
 import { KeyframeIndicator } from '../common/KeyframeIndicator';
@@ -1492,6 +1493,7 @@ export function PropertiesPanel() {
           <h3 className={styles.title}>Properties</h3>
         </div>
         <div className={styles.content}>
+          <ToolSettingsSection />
           {booleanOpsSection}
           {!multiShapeSelected && (
             <>
@@ -1599,6 +1601,7 @@ export function PropertiesPanel() {
         <span className={styles.nodeTypeLabel}>{nodeTypeLabel}</span>
       </div>
       <div className={styles.content}>
+        <ToolSettingsSection />
         <AnimationPresetsPanel nodeIds={[...selectedNodeIds]} />
         {/* Symbol Instance Section */}
         {node.type === 'symbol-instance' &&

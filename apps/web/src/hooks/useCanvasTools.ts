@@ -13,6 +13,8 @@ import {
   SelectionTool,
   WeightPaintTool,
   PointMagnetTool,
+  BrushTool,
+  EraserTool,
   getAllPoints,
   pathShapeOf,
   type SmartGuide,
@@ -168,6 +170,24 @@ function reportWeightPaintSettings(tool: WeightPaintTool): void {
     state.setWeightPaintBrushStrength(tool.getBrushStrength());
   }
   if (tool.getPaintMode() !== state.weightPaintMode) state.setWeightPaintMode(tool.getPaintMode());
+}
+
+/** The panel's Brush size and smoothing, and Eraser size and mode, on their tools. */
+function applyBrushAndEraserSettings(manager: ToolManager): void {
+  const state = useEditorStore.getState();
+  const brush = manager.getTool<BrushTool>('brush');
+  brush?.setSize(state.brushSize);
+  brush?.setSmoothing(state.brushSmoothing);
+  const eraser = manager.getTool<EraserTool>('eraser');
+  eraser?.setSize(state.eraserSize);
+  eraser?.setMode(state.eraserMode);
+}
+
+/** The Eraser's size, as its keys ([ ]) left it, shown in the panel. */
+function reportEraserSettings(tool: EraserTool): void {
+  const state = useEditorStore.getState();
+  const { size } = tool.getOptions();
+  if (size !== state.eraserSize) state.setEraserSize(size);
 }
 
 export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsReturn {
@@ -524,6 +544,7 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
 
     // Set the active tool from EditorStore (ToolManager defaults to 'selection')
     manager.setActiveTool(activeToolRef.current);
+    applyBrushAndEraserSettings(manager);
 
     toolManagerRef.current = manager;
     setCursor(manager.getCursor());
@@ -821,14 +842,32 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
     []
   );
 
+  // The Brush and Eraser follow the panel: their size, smoothing and mode
+  useEffect(
+    () =>
+      useEditorStore.subscribe((state, prev) => {
+        if (
+          state.brushSize === prev.brushSize &&
+          state.brushSmoothing === prev.brushSmoothing &&
+          state.eraserSize === prev.eraserSize &&
+          state.eraserMode === prev.eraserMode
+        ) {
+          return;
+        }
+        if (toolManagerRef.current) applyBrushAndEraserSettings(toolManagerRef.current);
+      }),
+    []
+  );
+
   // The canvas's key events, or keys pressed elsewhere meant for it (useEditShortcuts)
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent | KeyboardEvent) => {
       if (!toolManagerRef.current) return;
       toolManagerRef.current.handleKeyDown('nativeEvent' in event ? event.nativeEvent : event);
-      // Brush keys ([ ] X) change the tool's brush: show it in the panel
+      // Brush keys ([ ] X) change the tool's brush, [ ] the Eraser's size: show it in the panel
       const tool = toolManagerRef.current.getActiveTool();
       if (tool?.type === 'weight-paint') reportWeightPaintSettings(tool as WeightPaintTool);
+      if (tool?.type === 'eraser') reportEraserSettings(tool as EraserTool);
       // Sync tool overlay state after key events
       syncPenToolState();
       syncDirectSelectionState();
