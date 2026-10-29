@@ -5,7 +5,7 @@
  */
 
 import type { EasingFunction, Node } from '@quar/types';
-import { applyAnimationPreset } from '@quar/animation';
+import { applyAnimationPreset, createCubicBezier } from '@quar/animation';
 import type { AnimationPresetId } from '@quar/animation';
 import {
   CORAL,
@@ -486,7 +486,7 @@ function graphPage(ids: TutorialNodes): TutorialPage {
     ids,
     '2 · Graph editor',
     'Shape the curves',
-    'Press G to swap the dope sheet for the graph editor, where each animated property is a curve. Drag keyframes to change their time and value, and drag the handles to reshape the curve between them.\n\n' +
+    'Press G to swap the dope sheet for the graph editor, where each animated property is a curve. Drag keyframes to change their time and value. A selected keyframe shows its handles: drag them to reshape the curve on either side.\n\n' +
       'Scroll to zoom in time, Ctrl+scroll to zoom the values, double-click to fit the view, and Alt+drag to pan. Select the rocket and press G to see its curves.'
   );
   const rocket = path(
@@ -503,16 +503,18 @@ function graphPage(ids: TutorialNodes): TutorialPage {
     { fill: CORAL }
   );
   const timeline = emptyTimeline();
+  // Only easings a cubic bezier draws show handles in the graph editor: the
+  // in-out moves are custom curves drawn like Ease In/Out Cubic and Quad
   key(timeline, rocket.id, 'transform.position.y', [
     [0, -120, 'easeInCubic'],
     [70, 140, 'easeOutBack'],
-    [110, 140, 'easeInOutCubic'],
+    [110, 140, createCubicBezier(0.65, 0, 0.35, 1)],
     [149, -120],
   ]);
   key(timeline, rocket.id, 'transform.rotation', [
-    [0, 0, 'easeInOutQuad'],
-    [70, -12, 'easeInOutQuad'],
-    [110, 12, 'easeInOutQuad'],
+    [0, 0, createCubicBezier(0.45, 0, 0.55, 1)],
+    [70, -12, createCubicBezier(0.45, 0, 0.55, 1)],
+    [110, 12, createCubicBezier(0.45, 0, 0.55, 1)],
     [149, 0],
   ]);
   return { name: '2 · Graph editor', nodes: [...nodes, rocket], timeline };
@@ -600,9 +602,13 @@ export const MORE_TUTORIALS: Tutorial[] = [
       );
     },
   },
-  build('tutorial-timing', 'Tutorial 7 · Timing', 't7', (ids) => [
-    easingPage(ids),
-    graphPage(ids),
-    onionPage(ids),
-  ]),
+  {
+    // 2: the rocket's every keyframe shows handles in the graph editor
+    ...build('tutorial-timing', 'Tutorial 7 · Timing', 't7', (ids) => [
+      easingPage(ids),
+      graphPage(ids),
+      onionPage(ids),
+    ]),
+    version: 2,
+  },
 ];

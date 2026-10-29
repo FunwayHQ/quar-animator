@@ -13,6 +13,7 @@ import {
 } from '@quar/core';
 import { deserializeProject, validateProjectData } from '../services/projectSerializer';
 import type { ProjectData, ProjectDataV2 } from '../services/projectSerializer';
+import { isEasingEditable } from '@quar/animation';
 import { TUTORIALS } from './tutorials';
 import { PAGE_HEIGHT, PAGE_WIDTH } from './tutorialBuilder';
 
@@ -164,6 +165,22 @@ describe('what the lessons say', () => {
       ).toBe(true);
     }
     expect(page.sceneGraph.nodes.some((n) => n.type === 'ik-target')).toBe(false);
+  });
+
+  it('graph editor: every curve of the rocket has handles to drag', () => {
+    const page = pageOf('tutorial-timing', '2 · Graph editor');
+    expect(lessonOf(page)).toContain('A selected keyframe shows its handles: drag them');
+    const rocket = page.sceneGraph.nodes.find((n) => n.name === 'Rocket')!;
+    const tracks = page.timeline.tracks.filter((track) => track.nodeId === rocket.id);
+    expect(tracks.length).toBeGreaterThan(0);
+    for (const track of tracks) {
+      // A keyframe's easing shapes the curve after it: all but the last have one
+      for (const keyframe of track.keyframes.slice(0, -1)) {
+        expect(isEasingEditable(keyframe.easing), `${track.property} @ ${keyframe.time}`).toBe(
+          true
+        );
+      }
+    }
   });
 });
 
