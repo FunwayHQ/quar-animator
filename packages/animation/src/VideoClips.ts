@@ -58,8 +58,12 @@ export function videoClipEndFrame(clip: VideoClip, frameRate: number): number {
   return clip.start + clipSeconds(clip) * Math.max(1, frameRate);
 }
 
-/** Just short of a clip's end: its last picture is the one showing there. */
-const LAST_MOMENT = 1e-6;
+/**
+ * Just short of a clip's end, in seconds of the video: its last picture is
+ * the one showing there. More than the frame source nudges a moment on (so
+ * a frame boundary lands in the frame it begins), far less than a frame.
+ */
+const LAST_MOMENT = 1e-4;
 
 /**
  * The moment of the video, in seconds, a frame of its timeline shows. Frame
@@ -75,7 +79,7 @@ export function videoTimeAt(clip: VideoClip, frame: number, frameRate: number): 
   const length = clipSeconds(clip);
   if (elapsed < length) return clipMomentAt(clip, elapsed);
   if (!clip.holdLastFrame || !(length > 0)) return null;
-  return clipMomentAt(clip, length - LAST_MOMENT);
+  return clipMomentAt(clip, length - LAST_MOMENT / clipSpeed(clip));
 }
 
 /**

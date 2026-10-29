@@ -119,13 +119,30 @@ describe('speed, loops and held last frames', () => {
   it('show their last picture after they end when they hold it, nothing before them', () => {
     const held = clip({ holdLastFrame: true });
     expect(videoTimeAt(held, 29, 30)).toBeNull();
-    expect(videoTimeAt(held, 150, 30)).toBeCloseTo(6, 5);
+    expect(videoTimeAt(held, 150, 30)).toBeCloseTo(6, 3);
     expect(videoTimeAt(held, 1000, 30)).toBeLessThan(6);
     // A looped one holds where its last pass got to
     const loopedHeld = clip({ loop: true, loopFor: 5, holdLastFrame: true });
-    expect(videoTimeAt(loopedHeld, 400, 30)).toBeCloseTo(3, 5);
+    expect(videoTimeAt(loopedHeld, 400, 30)).toBeCloseTo(3, 3);
     // An empty clip shows nothing, held or not
     expect(videoTimeAt(clip({ duration: 0, holdLastFrame: true }), 40, 30)).toBeNull();
+  });
+
+  it('hold the picture their part ends on, not the one after it', () => {
+    // The frame source nudges each moment on by 1e-5 s, so a frame boundary lands
+    // in the frame it begins: the held moment is further than that inside the last
+    const NUDGE = 1e-5;
+    for (const speed of [0.25, 1, 4]) {
+      const held = videoTimeAt(clip({ speed, holdLastFrame: true }), 2000, 30) ?? 0;
+      expect(held + NUDGE).toBeLessThan(6);
+      expect(held).toBeGreaterThan(6 - 1 / 30);
+      // Looped for a whole number of passes: the end of the last, not the start of the next
+      const passes = (4 / speed) * 3;
+      const looped = clip({ speed, loop: true, loopFor: passes, holdLastFrame: true });
+      const last = videoTimeAt(looped, 5000, 30) ?? 0;
+      expect(last + NUDGE).toBeLessThan(6);
+      expect(last).toBeGreaterThan(6 - 1 / 30);
+    }
   });
 
   it('give their linked sound their speed and loop, not their hold', () => {
