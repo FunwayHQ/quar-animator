@@ -149,6 +149,12 @@ export {
   type VideoFormat,
 } from './videoExporter';
 
+// ============================================================================
+// Video Files (imported: probed, their strips and sounds, their frames decoded)
+// ============================================================================
+
+export { probeVideo, type VideoInfo, type VideoProbe, type VideoProblem } from './video/probe';
+
 export {
   decodeSound,
   mixSoundtrack,
