@@ -1,13 +1,14 @@
 /**
  * useDocumentFonts Hook
- * Loads the Google fonts the open document's text uses, when it opens,
- * whenever text arrives in it, and as soon as Google Fonts are turned on.
+ * Loads the fonts the open document's text uses (Inter's weights, Google
+ * fonts), when it opens, whenever text arrives in it, and as soon as Google
+ * Fonts are turned on.
  */
 
 import { useEffect } from 'react';
 import type { SceneGraph } from '@quar/core';
 import { useEditorStore } from '../stores/editorStore';
-import { googleFontsUsed, loadDocumentFonts } from '../services/documentFonts';
+import { documentFontsUsed, loadDocumentFonts } from '../services/documentFonts';
 import { onGoogleFontsConsentChange } from '../components/common/ConsentBanner';
 
 export function useDocumentFonts(sceneGraph: SceneGraph): void {
@@ -19,7 +20,7 @@ export function useDocumentFonts(sceneGraph: SceneGraph): void {
       queued = true;
       queueMicrotask(() => {
         queued = false;
-        const uses = googleFontsUsed(sceneGraph.getNodes(), useEditorStore.getState().symbols);
+        const uses = documentFontsUsed(sceneGraph.getNodes(), useEditorStore.getState().symbols);
         loadDocumentFonts(uses).catch((error: unknown) => {
           console.warn('[Fonts] Could not load the document’s fonts:', error);
         });

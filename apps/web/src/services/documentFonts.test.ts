@@ -7,6 +7,7 @@ import type { Node, SymbolDefinition } from '@quar/types';
 import { getFontManager, GOOGLE_FONTS_CATALOG } from '@quar/core';
 import {
   documentFontFamilies,
+  documentFontsUsed,
   fontFamiliesUsed,
   fontsToLoad,
   googleFontsUsed,
@@ -40,6 +41,23 @@ describe('googleFontsUsed', () => {
       { family: 'Outfit', weight: 800 },
       { family: 'Outfit', weight: 400 },
       { family: 'DM Sans', weight: 500 },
+    ]);
+  });
+});
+
+describe('documentFontsUsed', () => {
+  it("lists Inter's weights the text is set in, then the catalog's fonts", () => {
+    const nodes: Node[] = [
+      textIn('a', 'Outfit', 800),
+      textIn('b', 'Inter', 800),
+      textIn('c', 'Inter', 650),
+      textIn('d', 'My Own Font'),
+    ];
+
+    expect(documentFontsUsed(nodes)).toEqual([
+      { family: 'Inter', weight: 800 },
+      { family: 'Inter', weight: 600 },
+      { family: 'Outfit', weight: 800 },
     ]);
   });
 });
@@ -152,6 +170,46 @@ describe('loadDocumentFonts', () => {
     expect(fontsToLoad(uses, true)).toEqual([{ family: 'Outfit', weight: 800 }]);
     // Not allowed: nothing to wait for (and nobody asked)
     expect(fontsToLoad(uses, false)).toEqual([]);
+    vi.restoreAllMocks();
+  });
+
+  it("loads Inter's weights from the app without asking, Google Fonts declined or not", async () => {
+    const fm = getFontManager();
+    const load = vi.spyOn(fm, 'loadFontFromUrl').mockResolvedValue({} as never);
+    vi.spyOn(fm, 'hasFontWeight').mockReturnValue(false);
+    const decline = vi.fn().mockResolvedValue(false);
+
+    const loaded = await loadDocumentFonts(
+      [
+        { family: 'Inter', weight: 800 },
+        { family: 'Outfit', weight: 400 },
+      ],
+      decline
+    );
+
+    expect(load).toHaveBeenCalledWith(
+      expect.stringMatching(/inter-800\.woff$/),
+      'Inter',
+      'bundled',
+      800
+    );
+    expect(loaded).toBe(1);
+    // Asked about Google's alone
+    expect(decline).toHaveBeenCalledTimes(1);
+    expect(fetchMock).not.toHaveBeenCalled();
+    vi.restoreAllMocks();
+  });
+
+  it("lists Inter's weights still to load though Google Fonts aren't allowed", () => {
+    const fm = getFontManager();
+    vi.spyOn(fm, 'hasFontWeight').mockReturnValue(false);
+    const uses = [
+      { family: 'Inter', weight: 800 },
+      { family: 'Outfit', weight: 400 },
+    ];
+
+    expect(fontsToLoad(uses, false)).toEqual([{ family: 'Inter', weight: 800 }]);
+    expect(fontsToLoad(uses, true)).toEqual(uses);
     vi.restoreAllMocks();
   });
 

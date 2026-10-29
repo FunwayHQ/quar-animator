@@ -96,6 +96,7 @@ import { EasingEditor } from '../common/EasingEditor';
 import { exportSelectionAsPng, exportSelectionAsSvg } from '../../services/exportService';
 import { videoFile } from '../../services/videoFiles';
 import { documentFontFamilies } from '../../services/documentFonts';
+import { isBundledFamily, loadBundledFont } from '../../services/bundledFonts';
 import styles from './PropertiesPanel.module.css';
 
 // ============================================================================
@@ -2505,6 +2506,12 @@ export function PropertiesPanel() {
                           value={textNode.fontFamily}
                           documentFamilies={() => documentFontFamilies(sceneGraph.getNodes())}
                           onChange={(family) => {
+                            // Inter's weight comes with the app: the text redraws once it's in
+                            if (isBundledFamily(family)) {
+                              loadBundledFont(textNode.fontWeight).catch(() => {
+                                toast.error(`Failed to load ${family}`);
+                              });
+                            }
                             // A Google font not loaded yet loads first
                             if (!fm.hasFont(family) && findGoogleFont(family)) {
                               // Asks to allow Google Fonts the first time
@@ -2591,8 +2598,14 @@ export function PropertiesPanel() {
                           onChange={(e) => {
                             const w = parseInt(e.target.value);
                             const family = textNode.fontFamily;
+                            // Inter's weights come with the app: the text redraws once it's in
+                            if (isBundledFamily(family)) {
+                              loadBundledFont(w).catch(() => {
+                                toast.error(`Failed to load ${family} weight ${w}`);
+                              });
+                            }
                             // Check if the weight is loaded; if not, try loading it
-                            if (!fm.hasFontWeight(family, w)) {
+                            else if (!fm.hasFontWeight(family, w)) {
                               // Asks to allow Google Fonts the first time
                               void ensureGoogleFontsConsent().then((allowed) => {
                                 if (!allowed) return;

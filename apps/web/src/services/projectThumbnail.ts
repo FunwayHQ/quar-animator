@@ -30,7 +30,7 @@ import { createTimeline, openingScope, videoPosterTime, videoTimeAt } from '@qua
 import { createFrameRenderer, stripStillAt, videoMoments } from '@quar/export';
 import { deserializeProject } from './projectSerializer';
 import type { EditorStateSnapshot, ProjectData } from './projectSerializer';
-import { loadBundledFonts } from './bundledFonts';
+import { bundledWeightsUsed, loadBundledFonts } from './bundledFonts';
 
 // ============================================================================
 // Types
@@ -221,11 +221,12 @@ export async function renderProjectThumbnail(
   data: string | ArrayBuffer
 ): Promise<ProjectThumbnail | null> {
   const project = parseQuarFile(data) as unknown as ProjectData;
-  // Text falls back to Inter, which may still be loading at startup
-  await loadBundledFonts().catch(() => undefined);
-
   const scene = pickThumbnailScene(project);
   if (!scene) return null;
+  // Text falls back to Inter, which may still be loading at startup; text
+  // set in it is in its own weights
+  const weights = bundledWeightsUsed(scene.sceneGraph.getNodes(), scene.symbols);
+  await loadBundledFonts([400, 700, ...weights]).catch(() => undefined);
 
   const { sceneGraph, region } = scene;
   const size = thumbnailPixelSize(region.bounds);

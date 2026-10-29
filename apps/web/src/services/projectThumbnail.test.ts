@@ -18,7 +18,10 @@ vi.mock('@quar/export', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@quar/export')>()),
   createFrameRenderer: mocks.createFrameRenderer,
 }));
-vi.mock('./bundledFonts', () => ({ loadBundledFonts: mocks.loadBundledFonts }));
+vi.mock('./bundledFonts', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./bundledFonts')>()),
+  loadBundledFonts: mocks.loadBundledFonts,
+}));
 
 import {
   findThumbnailRegion,
@@ -29,6 +32,7 @@ import {
   THUMBNAIL_MAX_HEIGHT,
 } from './projectThumbnail';
 import type { ProjectData } from './projectSerializer';
+import { textIn } from '../test/textNode';
 
 // ============================================================================
 // Fixtures
@@ -420,6 +424,19 @@ describe('renderProjectThumbnail', () => {
       const drawn = await drawnVideos([[{ ...video('lost'), videoId: 'gone' } as Node]]);
       expect(drawn.get('lost')).toBeNull();
     });
+  });
+
+  it('loads the weights of Inter its text is set in, beside regular and bold', async () => {
+    const data = JSON.stringify(
+      project(
+        [{ id: 'p1', nodes: [textIn('title', 'Inter', 800), textIn('note', 'Inter', 500)] }],
+        'p1'
+      )
+    );
+
+    await renderProjectThumbnail(data);
+
+    expect(mocks.loadBundledFonts).toHaveBeenCalledWith([400, 700, 800, 500]);
   });
 
   it('still renders when the bundled fonts fail to load', async () => {

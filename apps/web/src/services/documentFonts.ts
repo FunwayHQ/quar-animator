@@ -1,8 +1,9 @@
 /**
  * Document Fonts
- * Loads the Google fonts a document's text is set in when it opens or when
- * text arrives (a paste, a version loaded in place): otherwise that text shows
- * in the fallback font until each font is picked again.
+ * Loads the fonts a document's text is set in when it opens or when text
+ * arrives (a paste, a version loaded in place): Inter's weights from the
+ * app, Google fonts once they're allowed. Otherwise that text shows in the
+ * fallback font until each font is picked again.
  */
 
 import type { Node, SymbolDefinition } from '@quar/types';
@@ -11,6 +12,13 @@ import {
   ensureGoogleFontsConsent,
   hasGoogleFontsConsent,
 } from '../components/common/ConsentBanner';
+import {
+  BUNDLED_FAMILY,
+  bundledWeight,
+  bundledWeightsUsed,
+  isBundledFamily,
+  loadBundledFont,
+} from './bundledFonts';
 import { useEditorStore } from '../stores/editorStore';
 
 export interface FontUse {
@@ -32,6 +40,21 @@ export function googleFontsUsed(
   for (const node of nodes) visit(node);
   for (const symbol of symbols) symbol.sceneGraphJSON.nodes.forEach(visit);
   return [...uses.values()];
+}
+
+/**
+ * The fonts these nodes' text is set in (symbols' too) that are loaded
+ * rather than built in: Inter's weights, then the catalog's.
+ */
+export function documentFontsUsed(
+  nodes: Iterable<Node>,
+  symbols: readonly SymbolDefinition[] = []
+): FontUse[] {
+  const all = [...nodes];
+  return [
+    ...bundledWeightsUsed(all, symbols).map((weight) => ({ family: BUNDLED_FAMILY, weight })),
+    ...googleFontsUsed(all, symbols),
+  ];
 }
 
 /** Every font family these nodes' text is set in, each once, in the order first met. */
@@ -58,8 +81,9 @@ export function documentFontFamilies(pageNodes: Iterable<Node>): string[] {
   ]);
 }
 
-/** The weight the catalog has closest to the one asked for, as loadGoogleFont picks it. */
+/** The weight the font has closest to the one asked for, as it's loaded. */
 function catalogWeight(family: string, weight: number): number {
+  if (isBundledFamily(family)) return bundledWeight(weight);
   return nearestWeight(findGoogleFont(family)?.weights ?? [400], weight);
 }
 
@@ -72,19 +96,20 @@ function notLoaded(uses: readonly FontUse[]): FontUse[] {
 }
 
 /**
- * The fonts of `uses` not loaded yet that may be without asking (Google
- * Fonts allowed): what a presentation waits for. None when they aren't
+ * The fonts of `uses` not loaded yet that may be without asking: what a
+ * presentation waits for. Inter's always; Google's only when they're
  * allowed, since it never asks (the editor does, as the document opens).
  */
 export function fontsToLoad(
   uses: readonly FontUse[],
   allowed: boolean = hasGoogleFontsConsent()
 ): FontUse[] {
-  return allowed ? notLoaded(uses) : [];
+  return notLoaded(uses).filter(({ family }) => allowed || isBundledFamily(family));
 }
 
-/** Loads one of the catalog's fonts (or joins its load under way). */
+/** Loads one of Inter's weights or the catalog's fonts (or joins its load under way). */
 export function loadFont({ family, weight }: FontUse): Promise<unknown> {
+  if (isBundledFamily(family)) return loadBundledFont(weight);
   return getFontManager().loadGoogleFont(family, weight);
 }
 
@@ -93,8 +118,9 @@ export function loadFont({ family, weight }: FontUse): Promise<unknown> {
 let declined = false;
 
 /**
- * Load the fonts not loaded yet, first asking to use Google Fonts if they
- * haven't been allowed. Resolves to how many were loaded.
+ * Load the fonts not loaded yet: Inter's weights at once, Google's after
+ * asking to use Google Fonts if they haven't been allowed. Resolves to how
+ * many were loaded.
  */
 export async function loadDocumentFonts(
   uses: readonly FontUse[],
@@ -102,16 +128,20 @@ export async function loadDocumentFonts(
 ): Promise<number> {
   const fm = getFontManager();
   const missing = notLoaded(uses);
+  const bundled = missing.filter(({ family }) => isBundledFamily(family));
+  const google = missing.filter(({ family }) => !isBundledFamily(family));
+  const shipped = await Promise.allSettled(bundled.map(({ weight }) => loadBundledFont(weight)));
+  const count = shipped.filter((result) => result.status === 'fulfilled').length;
   if (hasGoogleFontsConsent()) declined = false;
-  if (missing.length === 0 || declined) return 0;
+  if (google.length === 0 || declined) return count;
   if (!(await allow())) {
     declined = true;
-    return 0;
+    return count;
   }
   const loaded = await Promise.allSettled(
-    missing.map(({ family, weight }) => fm.loadGoogleFont(family, weight))
+    google.map(({ family, weight }) => fm.loadGoogleFont(family, weight))
   );
-  return loaded.filter((result) => result.status === 'fulfilled' && result.value).length;
+  return count + loaded.filter((result) => result.status === 'fulfilled' && result.value).length;
 }
 
 /** Forget a decline (tests). */

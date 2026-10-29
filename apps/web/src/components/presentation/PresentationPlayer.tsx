@@ -31,7 +31,12 @@ import { transitionDirection } from '@quar/animation';
 import type { SlideTransition } from '@quar/types';
 
 import { useSceneGraph } from '../../contexts/SceneGraphContext';
-import { fontsToLoad, googleFontsUsed, loadFont, type FontUse } from '../../services/documentFonts';
+import {
+  documentFontsUsed,
+  fontsToLoad,
+  loadFont,
+  type FontUse,
+} from '../../services/documentFonts';
 import { exportRig, getSlides, slideShow } from '../../services/exportScene';
 import { SoundPlayer } from '../../services/soundPlayer';
 import { createVideoFrames, type VideoFrames } from '../../services/videoFrames';
@@ -135,7 +140,7 @@ function useDeck(videos: Videos, drawing: VideoDrawing) {
       sounds: state.sounds,
       played: state.sounds.filter((sound) => played.has(sound.id)),
       clips,
-      fonts: fontsToLoad(googleFontsUsed(shown, state.symbols)),
+      fonts: fontsToLoad(documentFontsUsed(shown, state.symbols)),
       // The first picture each video layer shows, decoded before the first slide starts
       videos: firstPictures(scene, slides, timeline.frameRate),
     };
