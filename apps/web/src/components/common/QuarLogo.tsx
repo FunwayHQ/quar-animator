@@ -13,6 +13,8 @@ interface QuarLogoProps {
 }
 
 const LETTERS = '#9a4fd8';
+/** The corner marks are half see-through, so the letters lead. */
+const FRAME_OPACITY = 0.5;
 
 /** Each bar: its centre, size and turn (degrees, counter-clockwise). */
 const BARS: ReadonlyArray<{
@@ -88,6 +90,7 @@ export function QuarLogo({ className }: QuarLogoProps) {
           fill="none"
           strokeWidth={18}
           strokeLinecap="square"
+          strokeOpacity={FRAME_OPACITY}
           style={{ stroke: 'var(--color-logo-frame, #eef0ff)' }}
         >
           {CORNERS.map((d) => (

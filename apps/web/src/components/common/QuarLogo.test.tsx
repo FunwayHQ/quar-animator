@@ -18,6 +18,12 @@ describe('QuarLogo', () => {
     expect(frame?.style.stroke).toBe('var(--color-logo-frame, #eef0ff)');
   });
 
+  it('draws the frame half see-through', () => {
+    render(<QuarLogo />);
+    const frame = screen.getByTestId('quar-logo').querySelector('path')?.parentElement;
+    expect(frame?.getAttribute('stroke-opacity')).toBe('0.5');
+  });
+
   it('gives each logo on a page a tile of its own', () => {
     render(
       <>
