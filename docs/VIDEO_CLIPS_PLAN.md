@@ -53,14 +53,18 @@ front), duration (s of the video played), speed, loop, holdLastFrame }`.
 
 ## Decoding and drawing
 
-- **Decoding:** WebCodecs `VideoDecoder`, frame-accurate. Demux MP4/MOV
-  with mp4box.js (BSD-3, fits the MIT repo); WebM with a small EBML reader
-  (SimpleBlock/BlockGroup, BlockAdditions for VP8/VP9 alpha). GIF with
-  `ImageDecoder` where present, else a small GIF decoder (gifuct-js, MIT).
-- **Alpha (WebM):** the alpha channel is a second VP8/VP9 stream in
-  BlockAdditions; decode it with a second `VideoDecoder` and combine the two
-  in the shader (alpha from its luma). Where the browser can't, import says
-  so (the decision above) rather than drawing it opaque without warning.
+- **Decoding:** mediabunny, already the export package's muxer, also reads:
+  `Input` over a `BlobSource` demuxes MP4, MOV and WebM; the tracks say
+  whether this browser can decode them (`canDecode()`); `CanvasSink` decodes
+  frames through WebCodecs to canvases, frame-accurately (`getCanvas(t)` to
+  seek, `canvases(t)` to play on, `canvasesAtTimestamps` for the strip);
+  `AudioBufferSink` decodes the sound. No mp4box.js or EBML reader needed.
+  GIF: `ImageDecoder` where present, else a small GIF decoder (gifuct-js,
+  MIT).
+- **Alpha (WebM):** `CanvasSink({ alpha: true })` reads VP8/VP9 alpha side
+  data into transparent canvases; `track.canBeTransparent()` sets the
+  video's `hasAlpha`. Where the browser can't, import says so (the decision
+  above) rather than drawing it opaque without warning.
 - **A frame source per video:** `frameAt(seconds)` → a GPU texture, with a
   small cache of decoded frames around the playhead, decode-ahead while
   playing, seek to the nearest keyframe and decode forward when scrubbing,
@@ -112,6 +116,60 @@ front), duration (s of the video played), speed, loop, holdLastFrame }`.
   the dialog warns.
 - **Presentation player:** plays video layers, its loader waits for their
   first frames.
+
+## Step 1 design (as built)
+
+The foundation (types, clip timing, the library, the renderer's interface)
+is in place; the rest of step 1 builds on these names.
+
+- **Types** (`@quar/types`): `VideoNode` (`type: 'video'`, `videoId`, size,
+  natural size, corner radius, adjustments, `clip: VideoClip`), `VideoClip`
+  (`start` frame, `offset` and `duration` in seconds; speed, loop and hold
+  come in step 2 as optional fields), `Video` (the library entry: name, MIME
+  type, byte length, size, duration, frame rate, `hasAlpha`, `strip`),
+  `VideoStrip` (stills `rate` a second, `height` px, data URIs),
+  `SoundClip.linkedTo` (the video layer whose sound it is).
+- **Timing** (`packages/animation/src/VideoClips.ts`): `videoTimeAt(clip,
+frame, fps)` (null outside the clip; frame f begins at f/fps seconds, as
+  for sounds), `videoClipEndFrame`, `videoPosterTime` (a layer outside the
+  timeline in view shows its clip's first frame), `movedVideoClip`,
+  `linkedSoundClip` (a linked sound put where its layer's clip is).
+- **Library and files:** the store's `videos` (`stores/videoActions.ts`,
+  `addVideo`; emptied by New Project) holds the JSON-able entries; the files
+  are Blobs in `services/videoFiles.ts` (`setVideoFile`, `videoFile`,
+  `keepVideoFiles`), so undo snapshots (which clone every node) and the
+  JSON never carry them. Video nodes hold no `src`.
+- **Saving:** a .quar keeps each video file as a buffer of the v3 container
+  (the JSON's `videos[i].file` names it); writing one is async (Blob →
+  bytes). The browser's storage keeps each file once, in an object store of
+  its own keyed by project and video, written when the project is first
+  saved with it; the project record holds only the JSON and small buffers,
+  so autosave never rewrites a video. Download, Save As, duplicate and
+  delete handle the files; an imported .quar's video buffers become Blobs.
+  (The cloud edition syncs the .quar with its files — its step 6.)
+- **Decoding:** a frame source per video (`services/videoFrames.ts`):
+  mediabunny `CanvasSink` (no bigger than the video, at most 1920 px on its
+  long side), a few decoded frames kept round the playhead, decoding ahead
+  while playing, seeking when scrubbing, the strip's nearest still shown
+  until the exact frame arrives, everything closed when the video goes.
+- **Drawing:** core `VideoFrameProvider` (`rendering/videoFrames.ts`): the
+  app tells the `ShapeRenderer` the picture each video layer shows now
+  (`{ source, key }`, null for nothing); the renderer draws it through the
+  picture path (adjustments, corners, masks, effects, blend modes) with a
+  texture per layer uploaded again when the key changes. The canvas redraws
+  every animation frame, so decoded frames show as they arrive.
+- **Import:** File › Import Video…, a video dropped on the canvas or the
+  timeline: at most 100 MB, probed first (a decodable video track, else a
+  message naming the problem), the strip made, the sound copied out of the
+  file without re-encoding into a sound of the library and a clip linked to
+  the layer, the layer fitted to the artboard in view, its clip from the
+  playhead; one undo step.
+- **Timeline:** the clip bar on the layer's own row (its strip, its name),
+  dragged to move it (its linked sound with it); diamonds stay on top.
+- **Edits:** undo, delete (asks whether to keep its sound), duplicate and
+  copy/paste in the window (the video with it; between windows the system
+  clipboard can't carry a video: it says so), moving into or out of an
+  artboard (its linked sound moves to that timeline), pages, symbols.
 
 ## Steps
 
