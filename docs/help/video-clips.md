@@ -248,10 +248,10 @@ Firefox can't show them correctly, so it doesn't import a transparent video:
 use another browser for it. A project that already holds one shows it wrongly
 in Firefox.
 
-Exports keep what's see-through: a [WebM](exporting.md#video) with
-**Transparent** ticked, a PNG sequence, a sprite sheet and a GIF (where each
-pixel either shows or doesn't). An MP4 has no transparency: the video is
-drawn over the background.
+Exports keep what's see-through: a sprite sheet, and a
+[WebM](exporting.md#video), a GIF or a PNG sequence with **Transparent**
+ticked (in a GIF, each pixel either shows or doesn't). An MP4 has no
+transparency: the video is drawn over the background.
 
 ## Export and present {#export}
 
@@ -272,8 +272,8 @@ it), it uses those instead. The file is still made, and the Export dialog
 stays open to say which video it was.
 
 When you [present](presenting.md#present) the artboards as slides, each
-slide's videos play in step with it. The player waits a moment for their
-first pictures before it starts.
+slide's videos play in step with it. The player waits up to 5 seconds for
+their first pictures before it starts.
 
 ## Saving {#saving}
 
