@@ -6,6 +6,7 @@ import { describe, it, expect } from 'vitest';
 import {
   parseQuarFile,
   writeQuarFile,
+  writeQuarBlob,
   migrateV1ToV2,
   migrateV2ToV3,
   migrateToLatest,
@@ -322,6 +323,77 @@ describe('quarMigration', () => {
       const binary = writeQuarFile(project);
       const parsed = parseQuarFile(binary);
       expect(parsed.name).toBe('Empty');
+    });
+  });
+
+  // ==========================================================================
+  // Files kept whole (a video's)
+  // ==========================================================================
+
+  describe('files kept whole', () => {
+    /** A Blob's bytes, read as the browser reads a dropped file */
+    const bytesOf = (blob: Blob) =>
+      new Promise<Uint8Array>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(new Uint8Array(reader.result as ArrayBuffer));
+        reader.onerror = () => reject(reader.error ?? new Error('unreadable'));
+        reader.readAsArrayBuffer(blob);
+      });
+    const videoBytes = new Uint8Array([0, 0, 0, 0x18, 0x66, 0x74, 0x79, 0x70, 0xff, 0x2b, 0x2f]);
+    const withVideo = () => ({
+      ...makeV2ProjectWithImage(),
+      videos: [
+        {
+          id: 'v1',
+          name: 'Clip',
+          mimeType: 'video/mp4',
+          file: new Blob([videoBytes], { type: 'video/mp4' }),
+        },
+      ],
+    });
+
+    it('writes a file as a buffer of its own, its bytes and type as they are, and reads it back', async () => {
+      const binary = (await bytesOf(writeQuarBlob(withVideo()))).buffer as ArrayBuffer;
+
+      // The picture's buffer, then the video's, which its entry names
+      const decoded = decodeQuarBinary(binary);
+      expect(decoded.buffers.map((buffer) => buffer.mimeType)).toEqual(['image/png', 'video/mp4']);
+      expect(decoded.buffers[1]!.data).toEqual(videoBytes);
+      expect((decoded.json.videos as any[])[0].file).toBe('buffer:1');
+
+      const parsed = parseQuarFile(binary);
+      const file = (parsed.videos as any[])[0].file as Blob;
+      expect(file).toBeInstanceOf(Blob);
+      expect(file.type).toBe('video/mp4');
+      expect(await bytesOf(file)).toEqual(videoBytes);
+      // Pictures come back as data URIs, as ever
+      const image = (parsed.pages as any[])[0].sceneGraph.nodes.find((n: any) => n.id === 'img1');
+      expect(image.src).toBe(TINY_PNG_DATA_URI);
+    });
+
+    it('writes what writeQuarFile writes for a project without files', async () => {
+      const project = makeV2ProjectWithImage();
+      expect(await bytesOf(writeQuarBlob(project))).toEqual(new Uint8Array(writeQuarFile(project)));
+    });
+
+    it('leaves files out of writeQuarFile, which keeps the rest', () => {
+      const binary = writeQuarFile(withVideo());
+      expect(decodeQuarBinary(binary).buffers.map((buffer) => buffer.mimeType)).toEqual([
+        'image/png',
+      ]);
+      expect((parseQuarFile(binary).videos as any[])[0]).toEqual({
+        id: 'v1',
+        name: 'Clip',
+        mimeType: 'video/mp4',
+      });
+    });
+
+    it('leaves a file reference naming no buffer as it is', () => {
+      const binary = encodeQuarBinary({
+        json: { ...makeV2Project(), version: '3.0', videos: [{ id: 'v1', file: 'buffer:7' }] },
+        buffers: [],
+      });
+      expect((parseQuarFile(binary).videos as any[])[0].file).toBe('buffer:7');
     });
   });
 });

@@ -9,8 +9,10 @@
 
 import {
   encodeQuarBinary,
+  encodeQuarBlob,
   decodeQuarBinary,
   extractImageBuffers,
+  extractImageAndFileBuffers,
   restoreImageBuffers,
   isQuarBinary,
 } from './quarFormat';
@@ -151,6 +153,9 @@ export function parseQuarFile(data: ArrayBuffer | string): Record<string, unknow
 /**
  * Writes a project as a .quar v3 binary file.
  * Extracts images from data URIs into binary buffers for efficient storage.
+ * Files kept whole (a `file` field's Blob: a video's) are left out, as their
+ * bytes can't be had at once: writeQuarBlob writes them, and the browser's
+ * storage keeps them apart from the project.
  *
  * @param project - Project data (any version — will be migrated to v3)
  * @returns Binary ArrayBuffer in .quar v3 format
@@ -166,4 +171,15 @@ export function writeQuarFile(project: Record<string, unknown>): ArrayBuffer {
     json: json as Record<string, unknown>,
     buffers,
   });
+}
+
+/**
+ * Writes a project as a .quar v3 file, as writeQuarFile does, with the files
+ * kept whole in it too: each `file` field's Blob (a video's) a buffer of its
+ * own, its bytes as they are. A Blob, put together from its parts, so those
+ * files are never read into memory to be written.
+ */
+export function writeQuarBlob(project: Record<string, unknown>): Blob {
+  const { json, buffers } = extractImageAndFileBuffers(migrateToLatest(project));
+  return encodeQuarBlob(json as Record<string, unknown>, buffers);
 }

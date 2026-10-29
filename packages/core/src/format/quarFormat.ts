@@ -15,6 +15,10 @@
  * │   MIME type (UTF-8)      │ variable
  * │   Buffer data (raw)      │ variable
  * └─────────────────────────┘
+ *
+ * The JSON names each buffer "buffer:N": a `src` field a picture's or a
+ * sound's (a data URI in memory), a `file` field a file kept whole (a
+ * video's: a Blob in memory, never read to be written).
  */
 
 // ============================================================================
@@ -37,6 +41,25 @@ export interface QuarBuffer {
 export interface QuarFile {
   json: Record<string, unknown>;
   buffers: QuarBuffer[];
+}
+
+/** A buffer whose bytes are a Blob's (a video's file): written as they are, never read */
+export interface QuarBlobBuffer {
+  data: Blob;
+  mimeType: string;
+}
+
+function isBlob(value: unknown): value is Blob {
+  return typeof Blob !== 'undefined' && value instanceof Blob;
+}
+
+/** Bytes as a part of a Blob, which can't hold a view of shared memory (that's copied) */
+function blobPart(bytes: Uint8Array): BlobPart {
+  return isUnshared(bytes) ? bytes : bytes.slice();
+}
+
+function isUnshared(bytes: Uint8Array): bytes is Uint8Array<ArrayBuffer> {
+  return bytes.buffer instanceof ArrayBuffer;
 }
 
 // ============================================================================
@@ -104,13 +127,38 @@ const DATA_URI_REGEX = /^data:((?:image|audio)\/[^;]+);base64,(.+)$/;
 /**
  * Deep-walks a JSON structure, extracts all `src` fields matching
  * `data:image/...;base64,...` and replaces them with `"buffer:N"` references.
- * Returns the modified JSON and the extracted binary buffers.
+ * Returns the modified JSON and the extracted binary buffers. A `file` field
+ * holding a Blob is left out: its bytes can't be had at once
+ * (extractImageAndFileBuffers keeps it).
  */
 export function extractImageBuffers(json: unknown): {
   json: unknown;
   buffers: QuarBuffer[];
 } {
-  const buffers: QuarBuffer[] = [];
+  const extracted = extractBuffers(json, false);
+  // Without files, every buffer holds its bytes
+  return {
+    json: extracted.json,
+    buffers: extracted.buffers.filter((buffer): buffer is QuarBuffer => !isBlob(buffer.data)),
+  };
+}
+
+/**
+ * As extractImageBuffers, and each `file` field holding a Blob (a video's
+ * file) becomes a `"buffer:N"` reference too, the Blob its buffer.
+ */
+export function extractImageAndFileBuffers(json: unknown): {
+  json: unknown;
+  buffers: Array<QuarBuffer | QuarBlobBuffer>;
+} {
+  return extractBuffers(json, true);
+}
+
+function extractBuffers(
+  json: unknown,
+  keepFiles: boolean
+): { json: unknown; buffers: Array<QuarBuffer | QuarBlobBuffer> } {
+  const buffers: Array<QuarBuffer | QuarBlobBuffer> = [];
   const bufferMap = new Map<string, number>(); // data URI → buffer index (dedup)
 
   function walk(obj: unknown): unknown {
@@ -127,6 +175,13 @@ export function extractImageBuffers(json: unknown): {
       for (const [key, value] of Object.entries(obj as Record<string, unknown>)) {
         // Assigned, a file's "__proto__" would become the object's prototype
         if (key === '__proto__') continue;
+        if (key === 'file' && isBlob(value)) {
+          if (keepFiles) {
+            result[key] = `buffer:${buffers.length}`;
+            buffers.push({ data: value, mimeType: value.type });
+          }
+          continue;
+        }
         if (key === 'src' && typeof value === 'string') {
           const match = DATA_URI_REGEX.exec(value);
           if (match) {
@@ -162,7 +217,8 @@ export function extractImageBuffers(json: unknown): {
 
 /**
  * Reverse of extractImageBuffers. Finds `"buffer:N"` references in `src` fields
- * and restores them to data URIs using the provided buffers.
+ * and restores them to data URIs using the provided buffers; those in `file`
+ * fields become Blobs of their buffers' bytes and type.
  */
 export function restoreImageBuffers(json: unknown, buffers: QuarBuffer[]): unknown {
   const BUFFER_REF_REGEX = /^buffer:(\d+)$/;
@@ -190,6 +246,14 @@ export function restoreImageBuffers(json: unknown, buffers: QuarBuffer[]): unkno
               result[key] = `data:${buf.mimeType};base64,${bytesToBase64(buf.data)}`;
               continue;
             }
+          }
+        }
+        if (key === 'file' && typeof value === 'string' && typeof Blob !== 'undefined') {
+          const match = BUFFER_REF_REGEX.exec(value);
+          const buf = match ? buffers[parseInt(match[1]!, 10)] : undefined;
+          if (buf) {
+            result[key] = new Blob([blobPart(buf.data)], { type: buf.mimeType });
+            continue;
           }
         }
         result[key] = walk(value);
@@ -258,6 +322,40 @@ export function encodeQuarBinary(file: QuarFile): ArrayBuffer {
   }
 
   return result;
+}
+
+/**
+ * Encodes a .quar v3.0 file as encodeQuarBinary does, as a Blob made of its
+ * parts: the buffers held in Blobs (videos) go in as they are, never read
+ * into memory, and are read only as the file is (downloaded, uploaded).
+ */
+export function encodeQuarBlob(
+  json: Record<string, unknown>,
+  buffers: ReadonlyArray<QuarBuffer | QuarBlobBuffer>
+): Blob {
+  const jsonBytes = encodeUTF8(JSON.stringify(json));
+
+  const header = new DataView(new ArrayBuffer(HEADER_SIZE));
+  header.setUint32(0, QUAR_MAGIC, true);
+  header.setUint32(4, FORMAT_VERSION, true);
+  header.setUint32(8, 0, true); // flags (reserved)
+  header.setUint32(12, jsonBytes.length, true);
+  const count = new DataView(new ArrayBuffer(4));
+  count.setUint32(0, buffers.length, true);
+
+  const parts: BlobPart[] = [header.buffer, blobPart(jsonBytes), count.buffer];
+  for (const buf of buffers) {
+    const mimeBytes = encodeUTF8(buf.mimeType);
+    const lengths = new DataView(new ArrayBuffer(8));
+    lengths.setUint32(0, isBlob(buf.data) ? buf.data.size : buf.data.length, true);
+    lengths.setUint32(4, mimeBytes.length, true);
+    parts.push(
+      lengths.buffer,
+      blobPart(mimeBytes),
+      isBlob(buf.data) ? buf.data : blobPart(buf.data)
+    );
+  }
+  return new Blob(parts, { type: 'application/octet-stream' });
 }
 
 // ============================================================================
