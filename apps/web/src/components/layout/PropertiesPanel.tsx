@@ -622,6 +622,7 @@ export function PropertiesPanel() {
   const setWeightPaintMode = useEditorStore((state) => state.setWeightPaintMode);
   const dynamicChains = useEditorStore((state) => state.dynamicChains);
   const symbols = useEditorStore((state) => state.symbols);
+  const brushProfiles = useEditorStore((state) => state.brushProfiles);
 
   // Undo snapshot before scrub or input commit
   const handleScrubStart = useCallback(() => {
@@ -3327,7 +3328,7 @@ export function PropertiesPanel() {
                   }}
                   data-testid="brush-stroke-profile"
                 >
-                  {useEditorStore.getState().brushProfiles.map((p) => (
+                  {brushProfiles.map((p) => (
                     <option key={p.id} value={p.id}>
                       {p.name}
                     </option>

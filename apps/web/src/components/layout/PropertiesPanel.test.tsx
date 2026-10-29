@@ -251,6 +251,39 @@ describe('PropertiesPanel', () => {
     expect(screen.queryByText('Size')).toBeNull();
   });
 
+  it('lists a brush profile in a stroke’s Profile list as soon as it’s made', () => {
+    const sg = renderWithSceneGraph();
+    const spine = [
+      { position: { x: 0, y: 0 }, handleIn: null, handleOut: null, type: 'corner' as const },
+      { position: { x: 100, y: 0 }, handleIn: null, handleOut: null, type: 'corner' as const },
+    ];
+    act(() => {
+      sg.addNode({
+        ...createTestRect('stroke', 'Brush Stroke'),
+        type: 'path',
+        points: spine,
+        closed: true,
+        brushData: { spine, widths: [10, 10], profileId: null },
+      } as unknown as Node);
+      useEditorStore.getState().setSelection(['stroke']);
+    });
+    const profiles = () =>
+      [...(screen.getByTestId('brush-stroke-profile') as HTMLSelectElement).options].map(
+        (option) => option.textContent
+      );
+    expect(profiles()).not.toContain('Diamond Taper');
+
+    act(() =>
+      useEditorStore.getState().addBrushProfile({
+        id: 'diamond',
+        name: 'Diamond Taper',
+        samples: [0, 1, 0],
+      })
+    );
+    expect(profiles()).toContain('Diamond Taper');
+    act(() => useEditorStore.getState().removeBrushProfile('diamond'));
+  });
+
   it('adds presets as Animation Sequence steps while the sequence window is open', () => {
     const sg = renderWithSceneGraph();
     act(() => {
