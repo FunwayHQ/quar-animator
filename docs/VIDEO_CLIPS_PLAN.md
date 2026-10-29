@@ -2,7 +2,7 @@
 
 Import a video (or an animated GIF) and place it on the timeline as a clip, its
 sound track separated onto the Sound lane. Decided with the owner on
-2026-10-29; steps 1–5 are built (below).
+2026-10-29; steps 1–5 and 7 are built (below); step 6 is under way in the cloud repositories.
 
 ## Decisions
 
@@ -262,6 +262,21 @@ frame, fps)` (null outside the clip; frame f begins at f/fps seconds, as
   transparency (slow for very large ones); the Video section's title says
   "Video" for a GIF; saving a project with any video fails in WebKit
   private windows (its storage refuses the file).
+
+## Step 7 (as built)
+
+- A guide chapter, `docs/help/video-clips.md` (after Sound), with five
+  pictures; its shots import `docs/help/shots/media/` (a 4 s MP4 with sound
+  and a transparent GIF, made by `make-media.py`).
+- Updated chapters: shortcuts, exporting (a table of what each format does
+  with video), timeline (`keyframes.md`), troubleshooting (videos that
+  won't import, Safari private windows), sound (clip speed and loop, a
+  video's linked sound), pictures (GIFs as clips) and presenting.
+- Fixed from what the guide's writing found: the still-picture warning
+  names PNG Sequence and Sprite Sheet too; the transparency refusal
+  suggests Safari as well; Help › Keyboard Shortcuts has a Video clips
+  group. Left as it is: Delete on a clicked video clip bar does nothing
+  (on the Sound lane it removes the clip).
 
 ## Steps
 
