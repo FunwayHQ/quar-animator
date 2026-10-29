@@ -11,6 +11,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   captureClip,
   drawMarkers,
+  numbersInEnglish,
   loadShotLists,
   parseArgs,
   selectShots,
@@ -221,5 +222,21 @@ describe('markers', () => {
     expect([three!.style.left, three!.style.top]).toEqual(['184px', '84px']);
     expect(four!.textContent).toBe('4');
     expect([four!.style.left, four!.style.top]).toEqual(['102px', '319px']);
+  });
+});
+
+describe('number fields', () => {
+  afterEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  it('show their value as the editor holds it, not in the computer’s format', () => {
+    document.body.innerHTML =
+      '<input id="x1" type="number" value="0.42" /><input id="name" type="text" value="Ball" />';
+    expect(numbersInEnglish()).toBe(1);
+    const x1 = document.getElementById('x1') as HTMLInputElement;
+    expect(x1.type).toBe('text');
+    expect(x1.value).toBe('0.42');
+    expect((document.getElementById('name') as HTMLInputElement).value).toBe('Ball');
   });
 });

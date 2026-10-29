@@ -25,6 +25,7 @@ import {
   DEFAULTS,
   captureClip,
   drawMarkers,
+  numbersInEnglish,
   loadShotLists,
   parseArgs,
   selectShots,
@@ -222,6 +223,8 @@ async function takeShot(browser, shot, baseUrl) {
 
     if (!shot.keepPointer) await page.mouse.move(viewport.width - 2, viewport.height - 2);
     await page.waitForTimeout(shot.settle ?? DEFAULTS.settle);
+    // 0.42, not this computer's 0,42
+    await page.evaluate(numbersInEnglish);
     if (shot.markers?.length) {
       const missing = await page.evaluate(drawMarkers, shot.markers);
       if (missing.length) throw new Error(`markers point at nothing: ${missing.join(', ')}`);

@@ -278,6 +278,22 @@ export function captureClip(boxes, padding, viewport) {
 }
 
 /**
+ * Show number fields as text, just before a picture is taken (runs in the
+ * browser): Chrome writes a number field's value in the computer's own
+ * format, 0,42 on a Mac set to many languages, and on a Mac nothing passed to
+ * the browser changes that. As text, a field shows its value as the editor
+ * holds it, 0.42. The app styles number fields only to hide their spinners,
+ * which text fields don't have, so they look the same.
+ *
+ * @returns {number} how many fields were changed
+ */
+export function numbersInEnglish() {
+  const fields = document.querySelectorAll('input[type="number"]');
+  for (const field of fields) field.setAttribute('type', 'text');
+  return fields.length;
+}
+
+/**
  * Draw numbered markers over the page (runs in the browser, so it uses only
  * what's passed in): a violet badge at each target, and an outline round it
  * when asked. The guide's text names what each number points at, so the

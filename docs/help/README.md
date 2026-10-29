@@ -80,6 +80,8 @@ By default it starts a dev server of its own for this checkout. Each shot
 runs in a fresh browser (its own storage, so the tutorials are seeded as on a
 first visit), 1280 × 800 at twice the size (DPR 2), dark unless it says
 otherwise. On a Mac it draws the canvas on the GPU; elsewhere in software.
+Number fields are shown as text when the picture is taken, so their numbers
+read 0.42 whatever the computer's language (Chrome would write 0,42 on many).
 
 A shot:
 
