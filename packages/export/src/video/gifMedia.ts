@@ -2,12 +2,13 @@
  * A GIF opened as a video is (media.ts): a track saying its size and
  * length, and sinks drawing the picture it shows at a moment into canvases
  * of a pool. The pictures are the browser's own where it decodes GIFs with
- * an ImageDecoder (a frame asked for by its index comes composited), else
- * composited here (gif.ts) — as they are where the ImageDecoder counts
- * the frames otherwise, or fails at one. The moments are the GIF's own,
- * read from its blocks, so every browser shows the same frame at a time.
- * The file's bytes are read once for all the sinks drawing it, and let go
- * when none does.
+ * an ImageDecoder (a frame asked for by its index comes composited) that
+ * shows a trial GIF as browsers show it — WebKit's makes what's transparent
+ * opaque black — else composited here (gif.ts), as they are where the
+ * ImageDecoder counts a GIF's frames otherwise, or fails at one. The
+ * moments are the GIF's own, read from its blocks, so every browser shows
+ * the same frame at a time. The file's bytes are read once for all the
+ * sinks drawing it, and let go when none does.
  */
 
 import type { WrappedCanvas } from 'mediabunny';
@@ -118,16 +119,78 @@ function composedPictures(file: Blob, info: GifInfo): GifPictures {
 }
 
 /**
- * The browser's own pictures, where it has an ImageDecoder for GIFs that
- * counts the frames as they're read here; null where it hasn't.
+ * A GIF of four pixels in a row, red, green, blue and white: red all along,
+ * cleared; green and a transparent pixel at the second and third, put back;
+ * blue at the first.
+ */
+const TRIAL_GIF = new Uint8Array([
+  71, 73, 70, 56, 57, 97, 4, 0, 1, 0, 129, 0, 0, 255, 0, 0, 0, 255, 0, 0, 0, 255, 255, 255, 255, 33,
+  249, 4, 8, 10, 0, 0, 0, 44, 0, 0, 0, 0, 4, 0, 1, 0, 0, 2, 3, 4, 8, 20, 0, 33, 249, 4, 13, 10, 0,
+  3, 0, 44, 1, 0, 0, 0, 2, 0, 1, 0, 0, 2, 2, 204, 10, 0, 33, 249, 4, 0, 10, 0, 0, 0, 44, 0, 0, 0, 0,
+  1, 0, 1, 0, 0, 2, 2, 84, 1, 0, 59,
+]);
+/** Its frames as browsers show them (null: transparent) */
+const TRIAL_PICTURES: Array<Array<readonly [number, number, number] | null>> = [
+  [
+    [255, 0, 0],
+    [255, 0, 0],
+    [255, 0, 0],
+    [255, 0, 0],
+  ],
+  [null, [0, 255, 0], null, null],
+  [[0, 0, 255], null, null, null],
+];
+
+/** Whether each ImageDecoder met shows the trial GIF as browsers do (tried once) */
+const trials = new WeakMap<object, Promise<boolean>>();
+
+/** Whether this browser's ImageDecoder decodes GIFs, composited, transparency kept. */
+function decoderShowsGifs(): Promise<boolean> {
+  if (typeof ImageDecoder === 'undefined') return Promise.resolve(false);
+  let trial = trials.get(ImageDecoder);
+  if (!trial) {
+    trial = (async () => {
+      if (!(await ImageDecoder.isTypeSupported(GIF_TYPE))) return false;
+      const decoder = new ImageDecoder({ data: TRIAL_GIF, type: GIF_TYPE });
+      try {
+        await decoder.tracks.ready;
+        const canvas = newCanvas(4, 1);
+        for (const [index, expected] of TRIAL_PICTURES.entries()) {
+          const { image } = await decoder.decode({ frameIndex: index });
+          try {
+            drawScaled(canvas, image);
+          } finally {
+            image.close();
+          }
+          const shown = contextOf(canvas).getImageData(0, 0, 4, 1).data;
+          const right = expected.every((colour, x) =>
+            colour === null
+              ? shown[x * 4 + 3] === 0
+              : shown[x * 4 + 3] === 255 && colour.every((value, c) => shown[x * 4 + c] === value)
+          );
+          if (!right) return false;
+        }
+        return true;
+      } finally {
+        decoder.close();
+      }
+    })().catch(() => false);
+    trials.set(ImageDecoder, trial);
+  }
+  return trial;
+}
+
+/**
+ * The browser's own pictures, where its ImageDecoder shows GIFs as they
+ * are and counts this one's frames as they're read here; null where not.
  */
 async function browserPictures(file: Blob, info: GifInfo): Promise<GifPictures | null> {
-  if (typeof ImageDecoder === 'undefined') return null;
+  if (!(await decoderShowsGifs())) return null;
   let decoder: ImageDecoder | null = null;
   try {
-    if (!(await ImageDecoder.isTypeSupported(GIF_TYPE))) return null;
     decoder = new ImageDecoder({ data: file.stream(), type: GIF_TYPE });
-    // The whole file read, its frames are counted
+    // Its tracks known and the whole file read, its frames are counted
+    await decoder.tracks.ready;
     await decoder.completed;
     if (decoder.tracks.selectedTrack?.frameCount !== info.frames.length) {
       decoder.close();

@@ -54,6 +54,15 @@ class FakeContext {
     return { width, height, data: new Uint8ClampedArray(width * height * 4) };
   }
 
+  getImageData(x: number, y: number, width: number, height: number) {
+    const data = new Uint8ClampedArray(width * height * 4);
+    for (let row = 0; row < height; row++) {
+      const from = ((y + row) * this.canvas.width + x) * 4;
+      data.set(this.canvas.pixels.subarray(from, from + width * 4), row * width * 4);
+    }
+    return { width, height, data };
+  }
+
   putImageData(image: { width: number; height: number; data: Uint8ClampedArray }): void {
     this.canvas.pixels.set(image.data.subarray(0, this.canvas.pixels.length));
     this.canvas.drawn.push('put');

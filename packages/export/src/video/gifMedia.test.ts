@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { canvasPixel, installFakeCanvases, type FakePicture } from '../__fixtures__/fakeCanvas';
 import { solid, writeTestGif } from '../__fixtures__/gifs';
+import { createGifCompositor, readGif } from './gif';
 import { openGifMedia } from './gifMedia';
 import { openVideoMedia } from './media';
 
@@ -37,39 +38,72 @@ function counterFrame(canvas: unknown, width = 64, height = 36): number {
 }
 
 /**
- * The browser's ImageDecoder stood in for: frame i decodes to a picture of
- * one colour, red i × 10 — so a canvas shows which one was drawn.
+ * The browser's ImageDecoder stood in for. A file (a stream) decodes frame
+ * i to a picture of one colour, red i × 10, so a canvas shows which one was
+ * drawn; bytes handed over at once (the trial GIF the decoder is tried on)
+ * decode to the pictures they are — or, as WebKit's do, with what's
+ * transparent made opaque black. Its tracks are known once they're ready,
+ * as Chrome's are.
  */
 class FakeImageDecoder {
   static supported = true;
   static frameCount: number | null = null;
   static failAt = -1;
+  static dropsTransparency = false;
   static made: FakeImageDecoder[] = [];
   static async isTypeSupported(type: string) {
     return FakeImageDecoder.supported && type === 'image/gif';
   }
 
   readonly completed = Promise.resolve();
-  readonly tracks: { selectedTrack: { frameCount: number } };
+  readonly tracks: { ready: Promise<void>; selectedTrack: { frameCount: number } | null };
   readonly decoded: number[] = [];
+  readonly trial: boolean;
   closed = false;
   framesClosed = 0;
 
   constructor(readonly init: { data: unknown; type: string }) {
     FakeImageDecoder.made.push(this);
-    this.tracks = { selectedTrack: { frameCount: FakeImageDecoder.frameCount ?? 10 } };
+    const { data } = init;
+    this.trial = data instanceof Uint8Array;
+    const count = this.trial
+      ? readGif(data as Uint8Array).frames.length
+      : (FakeImageDecoder.frameCount ?? 10);
+    const tracks: FakeImageDecoder['tracks'] = {
+      ready: new Promise((resolve) => setTimeout(resolve, 0)).then(() => {
+        tracks.selectedTrack = { frameCount: count };
+      }),
+      selectedTrack: null,
+    };
+    this.tracks = tracks;
   }
 
   async decode({ frameIndex }: { frameIndex: number }) {
     if (frameIndex === FakeImageDecoder.failAt) throw new Error('Decoding failed.');
     this.decoded.push(frameIndex);
+    const close = () => this.framesClosed++;
+    if (this.trial) {
+      const bytes = this.init.data as Uint8Array;
+      const gif = readGif(bytes);
+      const pixels = createGifCompositor(bytes, gif).pictureAt(frameIndex).slice();
+      if (FakeImageDecoder.dropsTransparency) {
+        for (let i = 3; i < pixels.length; i += 4) pixels[i] = 255;
+      }
+      const image: FakePicture & { close(): void } = {
+        width: gif.width,
+        height: gif.height,
+        pixels,
+        close,
+      };
+      return { image };
+    }
     const image: FakePicture & { close(): void } = {
       width: 64,
       height: 36,
       pixels: new Uint8ClampedArray(64 * 36 * 4).map((_, i) =>
         i % 4 === 0 ? frameIndex * 10 : i % 4 === 3 ? 255 : 0
       ),
-      close: () => this.framesClosed++,
+      close,
     };
     return { image };
   }
@@ -79,9 +113,13 @@ class FakeImageDecoder {
   }
 }
 
+/** A browser's ImageDecoder: a class of its own each time, so it's tried afresh. */
 function useImageDecoder() {
-  (globalThis as { ImageDecoder?: unknown }).ImageDecoder = FakeImageDecoder;
+  (globalThis as { ImageDecoder?: unknown }).ImageDecoder = class extends FakeImageDecoder {};
 }
+
+/** The decoders made for files (not the trial). */
+const fileDecoders = () => FakeImageDecoder.made.filter((decoder) => !decoder.trial);
 
 describe('openGifMedia', () => {
   let restoreCanvases = () => {};
@@ -91,6 +129,7 @@ describe('openGifMedia', () => {
     FakeImageDecoder.supported = true;
     FakeImageDecoder.frameCount = null;
     FakeImageDecoder.failAt = -1;
+    FakeImageDecoder.dropsTransparency = false;
     FakeImageDecoder.made = [];
   });
 
@@ -225,7 +264,7 @@ describe('openGifMedia', () => {
       const shown = await sink.getCanvas(0.36);
       expect(shown).toMatchObject({ timestamp: 0.35, duration: 0.05 });
       expect(canvasPixel(shown?.canvas, 0, 0)).toEqual([30, 0, 0, 255]);
-      const [decoder] = FakeImageDecoder.made;
+      const [decoder] = fileDecoders();
       expect(decoder?.init.type).toBe('image/gif');
       expect(decoder?.decoded).toEqual([3]);
       expect(decoder?.framesClosed).toBe(1);
@@ -239,7 +278,27 @@ describe('openGifMedia', () => {
       FakeImageDecoder.frameCount = 9;
       const sink = (await openGifMedia(fixture('gif-counter.gif'))).canvasSink({});
       expect(counterFrame((await sink.getCanvas(0.36))?.canvas)).toBe(3);
-      expect(FakeImageDecoder.made[0]?.closed).toBe(true);
+      expect(fileDecoders()[0]?.closed).toBe(true);
+    });
+
+    it('composites here where the browser’s decoder loses a GIF’s transparency (as WebKit’s does)', async () => {
+      useImageDecoder();
+      FakeImageDecoder.dropsTransparency = true;
+      const sink = (await openGifMedia(fixture('gif-counter.gif'))).canvasSink({});
+      expect(counterFrame((await sink.getCanvas(0.36))?.canvas)).toBe(3);
+      // Tried, found wanting, closed; no file given it
+      expect(FakeImageDecoder.made.map((decoder) => [decoder.trial, decoder.closed])).toEqual([
+        [true, true],
+      ]);
+    });
+
+    it('tries the browser’s decoder once', async () => {
+      useImageDecoder();
+      const file = fixture('gif-counter.gif');
+      await (await openGifMedia(file)).canvasSink({}).getCanvas(0);
+      await (await openGifMedia(file)).canvasSink({}).getCanvas(0.5);
+      expect(FakeImageDecoder.made.filter((decoder) => decoder.trial)).toHaveLength(1);
+      expect(fileDecoders()).toHaveLength(2);
     });
 
     it('composites here where the browser has no decoder for GIFs', async () => {
@@ -258,7 +317,7 @@ describe('openGifMedia', () => {
       expect(canvasPixel((await sink.getCanvas(0.1))?.canvas, 0, 0)).toEqual([10, 0, 0, 255]);
       expect(counterFrame((await sink.getCanvas(0.5))?.canvas)).toBe(5);
       expect(counterFrame((await sink.getCanvas(0.1))?.canvas)).toBe(1);
-      expect(FakeImageDecoder.made[0]?.closed).toBe(true);
+      expect(fileDecoders()[0]?.closed).toBe(true);
     });
   });
 });
