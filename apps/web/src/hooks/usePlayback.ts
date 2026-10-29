@@ -11,21 +11,27 @@ import {
   applyAnimatedValues,
   scopedTimeline,
   lastSoundFrame,
+  lastVideoFrame,
 } from '@quar/animation';
-import { inTimelineScope } from '@quar/core';
+import { inTimelineScope, type ScopeLookup } from '@quar/core';
+import type { VideoClip } from '@quar/types';
 import { evaluateIKChains } from '@quar/rigging';
 import { useEditorStore } from '../stores/editorStore';
 import { noteSequenceShown } from '../stores/sequenceActions';
 import { useSceneGraph } from '../contexts/SceneGraphContext';
-import { poseScene } from '../stores/scenePosing';
+import { isPosingScene, poseScene } from '../stores/scenePosing';
 
 /**
  * Where playing stops or loops: the last keyframe, or the last frame a sound
- * plays on if that's later, when they reach past frame 0; otherwise the end
- * of the timeline. Stepping and seeking aren't limited by it, so new
- * keyframes can be set after the last one.
+ * or a video (`lastVideo`, see videoEndInView) plays on if that's later,
+ * when they reach past frame 0; otherwise the end of the timeline. Stepping
+ * and seeking aren't limited by it, so new keyframes can be set after the
+ * last one.
  */
-export function getPlayEnd(timeline: ReturnType<typeof useEditorStore.getState>['timeline']) {
+export function getPlayEnd(
+  timeline: ReturnType<typeof useEditorStore.getState>['timeline'],
+  lastVideo = -1
+) {
   const lastKeyframe =
     timeline.tracks?.reduce(
       (lastFrame, track) =>
@@ -35,8 +41,33 @@ export function getPlayEnd(timeline: ReturnType<typeof useEditorStore.getState>[
         ) ?? lastFrame,
       -1
     ) ?? -1;
-  const last = Math.max(lastKeyframe, lastSoundFrame(timeline.sounds, timeline.frameRate));
+  const last = Math.max(
+    lastKeyframe,
+    lastSoundFrame(timeline.sounds, timeline.frameRate),
+    lastVideo
+  );
   return last >= 1 ? Math.ceil(last) : null;
+}
+
+/** The clips of the video layers playing on the timeline in view. */
+function videoClipsInView(sceneGraph: ScopeLookup, scope: string | null): VideoClip[] {
+  const inScope = inTimelineScope(sceneGraph, scope);
+  const clips: VideoClip[] = [];
+  for (const root of sceneGraph.getRootNodes()) {
+    for (const node of [root, ...sceneGraph.getDescendants(root.id)]) {
+      if (node.type === 'video' && inScope(node.id)) clips.push(node.clip);
+    }
+  }
+  return clips;
+}
+
+/** The last frame a video layer on the timeline in view plays on (-1 with none). */
+export function videoEndInView(
+  sceneGraph: ScopeLookup,
+  scope: string | null,
+  frameRate: number
+): number {
+  return lastVideoFrame(videoClipsInView(sceneGraph, scope), frameRate);
 }
 
 type EditorState = ReturnType<typeof useEditorStore.getState>;
@@ -57,7 +88,7 @@ export function getAnimationEnd(
     | 'workAreaStart'
     | 'workAreaEnd'
   >,
-  sceneGraph: Parameters<typeof inTimelineScope>[0]
+  sceneGraph: ScopeLookup
 ): number {
   const last = Math.max(0, state.timelineDuration - 1);
   const range = state.workAreaEnabled
@@ -65,7 +96,8 @@ export function getAnimationEnd(
     : { start: 0, end: last };
   const { timeline, timelineScope: scope } = state;
   const inView = scopedTimeline(timeline, scope, inTimelineScope(sceneGraph, scope));
-  return playbackEndFrame(range, getPlayEnd(inView));
+  const lastVideo = videoEndInView(sceneGraph, scope, timeline.frameRate);
+  return playbackEndFrame(range, getPlayEnd(inView, lastVideo));
 }
 
 /**
@@ -203,17 +235,27 @@ export function usePlayback() {
       },
       onPlaybackEnd: () => useEditorStore.getState().setIsPlaying(false),
     });
+    // Where playing ends: the timeline in view's keyframes and sounds, and its videos
+    const playEnd = (now: EditorState) =>
+      getPlayEnd(
+        scopedOf(now.timeline, now.timelineScope),
+        videoEndInView(sceneGraphRef.current, now.timelineScope, now.frameRate)
+      );
     // Initialize work area and play end from store
     ctrl.setWorkArea(state.workAreaEnabled, state.workAreaStart, state.workAreaEnd);
-    ctrl.setPlayEnd(getPlayEnd(scopedOf(state.timeline, state.timelineScope)));
+    ctrl.setPlayEnd(playEnd(state));
     controllerRef.current = ctrl;
 
     const unsub = useEditorStore.subscribe((curr, prev) => {
       if (curr.timelineDuration !== prev.timelineDuration) {
         ctrl.setDuration(Math.max(1, curr.timelineDuration));
       }
-      if (curr.timeline !== prev.timeline || curr.timelineScope !== prev.timelineScope) {
-        ctrl.setPlayEnd(getPlayEnd(scopedOf(curr.timeline, curr.timelineScope)));
+      if (
+        curr.timeline !== prev.timeline ||
+        curr.timelineScope !== prev.timelineScope ||
+        curr.frameRate !== prev.frameRate
+      ) {
+        ctrl.setPlayEnd(playEnd(curr));
       }
       if (curr.frameRate !== prev.frameRate) {
         ctrl.setFrameRate(curr.frameRate);
@@ -260,8 +302,23 @@ export function usePlayback() {
       }
     });
 
+    // A video's clip is on its layer: moved, trimmed, looped or sped up, or the
+    // layer added, removed or moved into another timeline, playing ends elsewhere
+    const sg = sceneGraphRef.current;
+    const replayEnd = () => ctrl.setPlayEnd(playEnd(useEditorStore.getState()));
+    const stops = [
+      sg.on('nodeChanged', (event) => {
+        if (applyingRef.current || isPosingScene()) return;
+        if (sg.getNode(event.nodeId ?? '')?.type === 'video') replayEnd();
+      }),
+      ...(['nodeAdded', 'nodeRemoved', 'nodeMoved', 'graphReplaced'] as const).map((type) =>
+        sg.on(type, replayEnd)
+      ),
+    ];
+
     return () => {
       unsub();
+      stops.forEach((stop) => stop());
       ctrl.dispose();
       controllerRef.current = null;
     };

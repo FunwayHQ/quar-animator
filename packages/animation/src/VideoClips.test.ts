@@ -4,6 +4,7 @@ import {
   clipMomentAt,
   clipSeconds,
   clipSpeed,
+  lastVideoFrame,
   linkedSoundClip,
   movedVideoClip,
   trimmedVideoEnd,
@@ -312,5 +313,19 @@ describe('a clip’s speed, loop and hold set', () => {
     expect(withHold(held, false)).toEqual(clip());
     const plain = clip();
     expect(withHold(plain, false)).toBe(plain);
+  });
+});
+
+describe('the last frame videos play on', () => {
+  it('is the latest clip’s last, at its speed and loop, held frames not counted', () => {
+    expect(lastVideoFrame([], 30)).toBe(-1);
+    // 30 + 4 s × 30 = 150: frames 30 to 149
+    expect(lastVideoFrame([clip()], 30)).toBe(149);
+    expect(lastVideoFrame([clip(), clip({ start: 0, speed: 0.5 })], 30)).toBe(239);
+    expect(lastVideoFrame([clip({ loop: true, loopFor: 10 })], 30)).toBe(329);
+    expect(lastVideoFrame([clip({ holdLastFrame: true })], 30)).toBe(149);
+    // A part that isn't whole frames plays on into the frame it ends in
+    expect(lastVideoFrame([clip({ duration: 1.01 })], 30)).toBe(60);
+    expect(lastVideoFrame([clip({ duration: 0 })], 30)).toBe(-1);
   });
 });

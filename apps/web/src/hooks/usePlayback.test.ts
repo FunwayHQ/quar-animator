@@ -11,6 +11,7 @@ import { SceneGraphProvider, useSceneGraph } from '../contexts/SceneGraphContext
 import type { Node } from '@quar/types';
 import { SceneGraph } from '@quar/core';
 import { PlaybackController, addKeyframe, createTimeline, getOrCreateTrack } from '@quar/animation';
+import { videoLayer } from '../test/videoLayer';
 
 // Mock PlaybackController to avoid rAF issues in tests
 vi.mock('@quar/animation', async () => {
@@ -172,6 +173,25 @@ describe('usePlayback', () => {
     expect(useEditorStore.getState().isPlaying).toBe(true);
     act(() => result.current.togglePlay());
     expect(useEditorStore.getState().isPlaying).toBe(false);
+  });
+
+  it('plays on to the end of a video layer’s clip, following the clip as it changes', () => {
+    const { result } = renderHook(() => usePlaybackWithSceneGraph(), { wrapper });
+    const ctrl = vi.mocked(PlaybackController).mock.results.at(-1)?.value as {
+      playEnd: number | null;
+    };
+    expect(ctrl.playEnd).toBeNull();
+    const { sceneGraph } = result.current;
+    // 4 s from frame 30: frames 30 to 149
+    act(() => sceneGraph.addNode(videoLayer('v', 'clip')));
+    expect(ctrl.playEnd).toBe(149);
+    // At half speed it lasts 8 s
+    act(() =>
+      sceneGraph.updateNode('v', { clip: { start: 30, offset: 0, duration: 4, speed: 0.5 } })
+    );
+    expect(ctrl.playEnd).toBe(269);
+    act(() => sceneGraph.removeNode('v'));
+    expect(ctrl.playEnd).toBeNull();
   });
 
   it('starts playback when isPlaying is set from elsewhere (Animation > Play)', () => {
@@ -530,6 +550,26 @@ describe('getAnimationEnd: where End and Animation › Go to End go', () => {
     }
     expect(endOf([12, 45])).toBe(45);
     expect(endOf([])).toBe(299);
+  });
+
+  it('is the end of a video layer’s clip when that’s later', () => {
+    const withVideo = new SceneGraph();
+    withVideo.addNode(videoLayer('v', 'clip'));
+    const end = (frames: number[]) =>
+      getAnimationEnd(
+        {
+          ...useEditorStore.getState(),
+          timeline: timelineWithKeyframes(frames),
+          timelineScope: null,
+          timelineDuration: 300,
+          workAreaEnabled: false,
+          workAreaStart: 0,
+          workAreaEnd: 299,
+        },
+        withVideo
+      );
+    expect(end([])).toBe(149);
+    expect(end([12, 200])).toBe(200);
   });
 });
 

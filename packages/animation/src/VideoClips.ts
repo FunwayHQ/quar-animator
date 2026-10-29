@@ -61,6 +61,19 @@ export function videoClipEndFrame(clip: VideoClip, frameRate: number): number {
 }
 
 /**
+ * The last frame any of the clips plays on (-1 with none): playing runs on
+ * to it, as it does to the last sound. A held last frame isn't playing.
+ */
+export function lastVideoFrame(clips: Iterable<VideoClip>, frameRate: number): number {
+  let last = -1;
+  for (const clip of clips) {
+    if (!(clipSeconds(clip) > 0)) continue;
+    last = Math.max(last, Math.ceil(videoClipEndFrame(clip, frameRate) - 1e-6) - 1);
+  }
+  return last;
+}
+
+/**
  * Just short of a clip's end, in seconds of the video: its last picture is
  * the one showing there. More than the frame source nudges a moment on (so
  * a frame boundary lands in the frame it begins), far less than a frame.
