@@ -16,7 +16,8 @@ Then:
 
 - **Click a layer** on the canvas to select it. A click picks the layer in
   front. A click on a layer in a group selects the whole group (see
-  [Groups](#groups)).
+  [Groups](#groups)). An artboard is selected by its label (see
+  [Artboards](artboards.md#select)).
 - **Shift+click** another layer to add it to the selection, or to take it out
   again. [[Mod]]+click does the same.
 - **Drag across an empty part of the canvas** to draw a box: every layer the
