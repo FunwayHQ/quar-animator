@@ -275,4 +275,34 @@ describe('useTimelineShortcuts', () => {
     pressKey('<', { shiftKey: true });
     expect(useEditorStore.getState().currentFrame).toBe(10);
   });
+
+  describe('Alt+W, the work area', () => {
+    const workArea = () => useEditorStore.getState().workAreaEnabled;
+
+    it('toggles it on Windows and Linux, where Alt+W types a w', () => {
+      useEditorStore.setState({ workAreaEnabled: false });
+      renderHook(() => useTimelineShortcuts(createCallbacks()));
+      pressKey('w', { altKey: true, code: 'KeyW' });
+      expect(workArea()).toBe(true);
+      pressKey('W', { altKey: true, shiftKey: true, code: 'KeyW' });
+      expect(workArea()).toBe(false);
+    });
+
+    it('toggles it on a Mac, where Option+W types a ∑', () => {
+      useEditorStore.setState({ workAreaEnabled: false });
+      renderHook(() => useTimelineShortcuts(createCallbacks()));
+      pressKey('∑', { altKey: true, code: 'KeyW' });
+      expect(workArea()).toBe(true);
+    });
+
+    it('goes by the letter where the layout puts W elsewhere (AZERTY)', () => {
+      useEditorStore.setState({ workAreaEnabled: false });
+      renderHook(() => useTimelineShortcuts(createCallbacks()));
+      // AZERTY's W is where QWERTY's Z is, and its Z where QWERTY's W is
+      pressKey('z', { altKey: true, code: 'KeyW' });
+      expect(workArea()).toBe(false);
+      pressKey('w', { altKey: true, code: 'KeyZ' });
+      expect(workArea()).toBe(true);
+    });
+  });
 });

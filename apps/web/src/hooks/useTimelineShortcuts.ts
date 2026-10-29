@@ -34,6 +34,16 @@ function isCanvas(target: EventTarget | null): boolean {
   return target instanceof HTMLCanvasElement;
 }
 
+/**
+ * Whether this is the W of Alt+W. On a Mac, Option+W types "∑", so where the
+ * key typed isn't a letter its place on the keyboard (code) stands in; where
+ * it is, the letter counts, so W works on layouts that put it elsewhere.
+ */
+function isAltW(event: KeyboardEvent): boolean {
+  const key = event.key.toLowerCase();
+  return /^[a-z]$/.test(key) ? key === 'w' : event.code === 'KeyW';
+}
+
 interface TimelineShortcutCallbacks {
   togglePlay: () => void;
   goToStart: () => void;
@@ -46,12 +56,7 @@ export function useTimelineShortcuts(callbacks: TimelineShortcutCallbacks) {
   const handleKeyDown = useCallback(
     (event: KeyboardEvent) => {
       // Alt+W: toggle work area (handle before the altKey guard)
-      if (
-        event.altKey &&
-        (event.key === 'w' || event.key === 'W') &&
-        !event.ctrlKey &&
-        !event.metaKey
-      ) {
+      if (event.altKey && isAltW(event) && !event.ctrlKey && !event.metaKey) {
         const target = event.target as HTMLElement | null;
         if (target && target.tagName) {
           const tagName = target.tagName.toLowerCase();
