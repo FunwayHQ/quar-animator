@@ -58,7 +58,7 @@ function penPage(ids: TutorialNodes): TutorialPage {
     ids,
     '1 · Pen',
     'Draw with the pen',
-    'Press P for the Pen tool. Click to place a corner point, or click and drag to pull out a curve (Alt breaks the handles, Shift keeps to 45°). Click the first point again to close the shape, or press Enter to finish an open line. Backspace removes the last point; Escape throws the path away. With a path selected, the Pen adds and removes points on it, and carries on from an open end.\n\n' +
+    'Press P for the Pen tool. Click to place a corner point, or click and drag to pull out a curve (Alt/Option breaks the handles, Shift keeps to 45°). Click the first point again to close the shape, or press Enter to finish an open line. Backspace removes the last point; Escape throws the path away. With a path selected, the Pen adds and removes points on it, and carries on from an open end.\n\n' +
       'Try tracing the drop on the right: click its tip, drag down at its right side and up at its left, then click the tip to close the shape and give it a fill in Properties.'
   );
   return {
@@ -94,8 +94,8 @@ function pointsPage(ids: TutorialNodes): TutorialPage {
     ids,
     '2 · Points',
     'Reshape point by point',
-    'Press A for Direct Selection and click a shape to see its points. Drag a point to move it; Shift+click, a marquee or Ctrl+A picks several. Drag a handle or a segment to bend the curve (Alt-drag: one handle alone). Alt+click switches corner and smooth; double-click a segment adds a point; Delete removes the picked ones.\n\n' +
-      'Shapes clicked with Direct Selection become paths, keeping their animation. Edit > Path reverses, simplifies, joins (Ctrl+J) and cuts paths. Try it on the star.'
+    'Press A for Direct Selection and click a shape to see its points. Drag a point to move it; Shift+click, a marquee or Ctrl/Cmd+A picks several. Drag a handle or a segment to bend the curve (Alt/Option+drag: one handle alone). Alt/Option+click switches corner and smooth; double-click a segment adds a point; Delete removes the picked ones.\n\n' +
+      'Shapes clicked with Direct Selection become paths, keeping their animation. Edit > Path reverses, simplifies, joins (Ctrl/Cmd+J) and cuts paths. Try it on the star.'
   );
   const wave = path(
     ids,
@@ -128,7 +128,7 @@ function combinePage(ids: TutorialNodes): TutorialPage {
     ids,
     '3 · Combine',
     'Combine shapes',
-    'Select two or more shapes and pick Union, Subtract, Intersect or Exclude: in Properties, or in the Edit menu (Ctrl+Shift+U, D, I or X). The result stays editable: the shapes live on inside the boolean group, and Flatten Boolean makes it a single path.\n\n' +
+    'Select two or more shapes and pick Union, Subtract, Intersect or Exclude: in Properties, or in the Edit menu (Ctrl/Cmd+Shift+U, D, I or X). The result stays editable: the shapes live on inside the boolean group, and Flatten Boolean makes it a single path.\n\n' +
       'Subtract cuts the shapes above out of the bottom one. Try it on the pair on the left; the ring is a subtraction already.\n\n' +
       'Edit > Outline Stroke turns a stroke into a filled shape.'
   );
@@ -251,7 +251,7 @@ function outlinesPage(ids: TutorialNodes): TutorialPage {
     ids,
     '3 · Outlines',
     'Turn text into shapes',
-    'Edit > Convert to Path (Ctrl+Shift+P) turns a text layer into a group with one path per letter. They are shapes from then on: reshape them with Direct Selection (A), color them one by one, or animate each letter on its own.\n\n' +
+    'Edit > Convert to Path (Ctrl/Cmd+Shift+P) turns a text layer into a group with one path per letter. They are shapes from then on: reshape them with Direct Selection (A), color them one by one, or animate each letter on its own.\n\n' +
       'Converted letters no longer follow edits to the text, so keep a copy if you might change it. Try it on the word on the right.'
   );
   return {
@@ -375,7 +375,7 @@ function groupsPage(ids: TutorialNodes): TutorialPage {
     ids,
     '1 · Groups',
     'Group things together',
-    'Select two or more layers (Shift+click on the canvas, Ctrl+click in Layers) and press Ctrl+G to group them; Ctrl+Shift+G ungroups. A group moves, scales and animates as one.\n\n' +
+    'Select two or more layers (Shift+click on the canvas, Ctrl/Cmd+click in Layers) and press Ctrl/Cmd+G to group them; Ctrl/Cmd+Shift+G ungroups. A group moves, scales and animates as one.\n\n' +
       'Double-click a group to work inside it, and press Escape to come back out. In Layers, drop a layer onto a group to put it inside. The flower on the right is a group that spins as one.'
   );
   const flower = group(ids, board.id, 'Flower');
@@ -409,7 +409,7 @@ function symbolsPage(ids: TutorialNodes, badge: ReturnType<typeof badgeSymbol>):
     ids,
     '2 · Symbols',
     'Reuse with symbols',
-    'Select some artwork and choose Edit > Create Symbol (Ctrl+Shift+K): it becomes an instance of a new symbol, listed under Symbols on the left. Click a symbol there to add another instance in the middle of the canvas.\n\n' +
+    'Select some artwork and choose Edit > Create Symbol (Ctrl/Cmd+Shift+K): it becomes an instance of a new symbol, listed under Symbols on the left. Click a symbol there to add another instance in the middle of the canvas.\n\n' +
       'Double-click a symbol in that list to edit it, and every instance changes with it. To make one instance independent, select it and click Detach in Properties. The three badges on the right are one symbol.'
   );
   return {
@@ -500,7 +500,7 @@ function graphPage(ids: TutorialNodes): TutorialPage {
     '2 · Graph editor',
     'Shape the curves',
     'Press G to swap the dope sheet for the graph editor, where each animated property is a curve. Drag keyframes to change their time and value. A selected keyframe shows its handles: drag them to reshape the curve on either side.\n\n' +
-      'Scroll to zoom in time, Ctrl+scroll to zoom the values, double-click to fit the view, and Alt+drag to pan. Select the rocket and press G to see its curves.'
+      'Scroll to zoom in time, Ctrl/Cmd+scroll to zoom the values, double-click to fit the view, and Alt/Option+drag to pan. Select the rocket and press G to see its curves.'
   );
   const rocket = path(
     ids,
@@ -576,22 +576,24 @@ export const MORE_TUTORIALS: Tutorial[] = [
   {
     // 2: the Pen and Direct Selection's new keys, Edit > Path
     // 3: a three-point drop to trace, which a click on its tip closes
+    // 4: Ctrl/Cmd and Alt/Option, as on both keyboards
     ...build('tutorial-paths-and-shapes', 'Tutorial 3 · Paths & shapes', 't3', (ids) => [
       penPage(ids),
       pointsPage(ids),
       combinePage(ids),
     ]),
-    version: 3,
+    version: 4,
   },
   {
     // 2: Figma-style text editing keys, Google Fonts asked for on first pick
     // 3: Font Size named as Properties names it
+    // 4: Ctrl/Cmd, as on both keyboards
     ...build('tutorial-text', 'Tutorial 4 · Text', 't4', (ids) => [
       textBoxesPage(ids),
       textStylePage(ids),
       outlinesPage(ids),
     ]),
-    version: 3,
+    version: 4,
   },
   {
     // 2: the IK page says what's keyed (the target's position) and that a chain overrides the wave
@@ -605,6 +607,8 @@ export const MORE_TUTORIALS: Tutorial[] = [
   {
     id: 'tutorial-groups-symbols-masks',
     name: 'Tutorial 6 · Groups, symbols & masks',
+    // 2: Ctrl/Cmd, as on both keyboards
+    version: 2,
     build: (createdAt) => {
       const ids = new TutorialNodes('t6');
       const badge = badgeSymbol('t6-badge');
@@ -619,11 +623,12 @@ export const MORE_TUTORIALS: Tutorial[] = [
   },
   {
     // 2: the rocket's every keyframe shows handles in the graph editor
+    // 3: Ctrl/Cmd and Alt/Option, as on both keyboards
     ...build('tutorial-timing', 'Tutorial 7 · Timing', 't7', (ids) => [
       easingPage(ids),
       graphPage(ids),
       onionPage(ids),
     ]),
-    version: 2,
+    version: 3,
   },
 ];

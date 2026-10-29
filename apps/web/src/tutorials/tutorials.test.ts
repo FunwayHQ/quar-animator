@@ -88,6 +88,22 @@ describe.each(built)('$tutorial.name', ({ tutorial, data }) => {
     }
   });
 
+  it('names Ctrl and Alt as both keyboards have them: Ctrl/Cmd and Alt/Option', () => {
+    // A text layer can't follow the platform, and Inter (Latin) has no ⌘ or ⌥
+    const count = (content: string, pattern: RegExp) => content.match(pattern)?.length ?? 0;
+    for (const page of data.pages) {
+      for (const node of page.sceneGraph.nodes) {
+        if (node.type !== 'text') continue;
+        const { content } = node;
+        expect(count(content, /\bCtrl\b/g), content).toBe(count(content, /\bCtrl\/Cmd\b/g));
+        expect(count(content, /\bCmd\b/g), content).toBe(count(content, /\bCtrl\/Cmd\b/g));
+        expect(count(content, /\bAlt\b/g), content).toBe(count(content, /\bAlt\/Option\b/g));
+        expect(count(content, /\bOption\b/g), content).toBe(count(content, /\bAlt\/Option\b/g));
+        expect(content).not.toMatch(/\b(Meta|Command|Control)\b/);
+      }
+    }
+  });
+
   it('gives every node an id of its own', () => {
     const ids = data.pages.flatMap((page) => page.sceneGraph.nodes.map((node) => node.id));
     expect(new Set(ids).size).toBe(ids.length);

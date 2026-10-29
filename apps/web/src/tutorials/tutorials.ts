@@ -93,7 +93,7 @@ function shapesPage(ids: TutorialNodes): TutorialPage {
     ids,
     '1 · Shapes',
     'Draw shapes',
-    'Pick a tool in the bar at the top, or press its key: V selects, R draws rectangles, O ellipses, P paths with the pen, T text and F artboards. Drag on the canvas to draw. Hold Shift for a square or circle, Alt to draw from the center.\n\n' +
+    'Pick a tool in the bar at the top, or press its key: V selects, R draws rectangles, O ellipses, P paths with the pen, T text and F artboards. Drag on the canvas to draw. Hold Shift for a square or circle, Alt/Option to draw from the center.\n\n' +
       'Select a shape to change it in Properties on the right: position, size, rotation, fill and stroke. Drag a label such as X or W to scrub its value.\n\n' +
       'With the Text tool, click to type a line that grows as you type, or drag a box for text that wraps inside it, like this one.'
   );
@@ -277,6 +277,8 @@ export const TUTORIALS: Tutorial[] = [
   {
     id: 'tutorial-draw-and-animate',
     name: 'Tutorial 1 · Draw & animate',
+    // 2: Alt/Option, as on both keyboards
+    version: 2,
     build: (createdAt) => {
       const ids = new TutorialNodes('t1');
       return tutorialProject(
