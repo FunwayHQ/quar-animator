@@ -1,4 +1,3 @@
-import { useCallback, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Toolbar } from '../components/layout/Toolbar';
 import { Canvas } from '../components/layout/Canvas';
@@ -18,7 +17,6 @@ import { usePlayback } from '../hooks/usePlayback';
 import { useSoundPlayback } from '../hooks/useSoundPlayback';
 import { useTimelineShortcuts } from '../hooks/useTimelineShortcuts';
 import { useProjectActions } from '../hooks/useProjectActions';
-import { useProjectShortcuts } from '../hooks/useProjectShortcuts';
 import { useUndoShortcuts } from '../hooks/useUndoShortcuts';
 import { useFlipShortcuts } from '../hooks/useFlipShortcuts';
 import { useSystemClipboard } from '../hooks/useSystemClipboard';
@@ -52,44 +50,6 @@ function EditorInner() {
 
   const projectActions = useProjectActions({ loadProjectId: projectId });
 
-  // Save As opens the prompt via MenuBar — trigger via shortcut needs name
-  const handleSaveAs = useCallback(() => {
-    const name = useEditorStore.getState().projectName;
-    const newName = window.prompt('Save project as:', name);
-    if (newName && newName.trim()) {
-      void projectActions.saveProjectAs(newName.trim());
-    }
-  }, [projectActions]);
-
-  const handleOpen = useCallback(async () => {
-    // Ctrl+O shortcut shows prompt-based open (MenuBar has the full dialog)
-    const projects = await projectActions.listProjects();
-    if (projects.length === 0) {
-      return;
-    }
-    // For keyboard shortcut, use a simple prompt
-    const names = projects.map((p, i) => `${i + 1}. ${p.name}`).join('\n');
-    const choice = window.prompt(`Open project:\n${names}\n\nEnter number:`);
-    if (choice) {
-      const idx = parseInt(choice, 10) - 1;
-      if (idx >= 0 && idx < projects.length) {
-        await projectActions.openProject(projects[idx]!.id);
-      }
-    }
-  }, [projectActions]);
-
-  const shortcutCallbacks = useMemo(
-    () => ({
-      onSave: () => projectActions.saveProject(),
-      onSaveAs: handleSaveAs,
-      onNew: () => projectActions.newProject(),
-      onOpen: handleOpen,
-      onImportSvg: () => projectActions.importSvg(),
-    }),
-    [projectActions, handleSaveAs, handleOpen]
-  );
-
-  useProjectShortcuts(shortcutCallbacks);
   const sequenceWindowOpen = useEditorStore((state) => state.sequenceWindowOpen);
 
   return (

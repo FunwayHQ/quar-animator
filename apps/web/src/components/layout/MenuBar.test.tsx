@@ -254,6 +254,46 @@ describe('MenuBar', () => {
     expect(actions.newProject).toHaveBeenCalledOnce();
   });
 
+  describe('the file keys', () => {
+    const press = (key: string, shiftKey = false) =>
+      act(() => {
+        fireEvent.keyDown(window, { key, ctrlKey: true, shiftKey });
+      });
+
+    it('Ctrl+N asks before discarding unsaved changes, as the menu does', () => {
+      const actions = createMockProjectActions();
+      useEditorStore.setState({ isDirty: true });
+      render(<MenuBar projectActions={actions} />);
+      press('n');
+      expect(actions.newProject).not.toHaveBeenCalled();
+      fireEvent.click(screen.getByTestId('new-confirm-discard'));
+      expect(actions.newProject).toHaveBeenCalledOnce();
+    });
+
+    it('Ctrl+O opens the project list', async () => {
+      const actions = createMockProjectActions();
+      render(<MenuBar projectActions={actions} />);
+      press('o');
+      expect(await screen.findByTestId('project-list-dialog')).toBeInTheDocument();
+      expect(actions.listProjects).toHaveBeenCalledOnce();
+    });
+
+    it('Ctrl+Shift+S opens Save As with the project name', () => {
+      const actions = createMockProjectActions();
+      useEditorStore.setState({ projectName: 'Sunset' });
+      render(<MenuBar projectActions={actions} />);
+      press('S', true);
+      expect(screen.getByTestId('save-as-input')).toHaveValue('Sunset');
+    });
+
+    it('Ctrl+S saves', () => {
+      const actions = createMockProjectActions();
+      render(<MenuBar projectActions={actions} />);
+      press('s');
+      expect(actions.saveProject).toHaveBeenCalledOnce();
+    });
+  });
+
   it('calls saveProject when Save clicked', () => {
     const actions = createMockProjectActions();
     render(<MenuBar projectActions={actions} />);

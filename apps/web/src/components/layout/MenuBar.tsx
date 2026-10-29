@@ -29,6 +29,7 @@ import { HelpHost } from '../help/HelpWindow';
 import { openHelp } from '../help/helpPanel';
 import styles from './MenuBar.module.css';
 import { useToolsBelowMenus } from './useToolsBelowMenus';
+import { useProjectShortcuts } from '../../hooks/useProjectShortcuts';
 import { QuarLogo } from '../common/QuarLogo';
 
 // ============================================================================
@@ -510,6 +511,19 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
     if (!projectActions) return;
     projectActions.importSound();
   }, [projectActions, closeMenu]);
+
+  // The file keys do what the File menu does: the same questions and dialogs
+  const fileShortcuts = useMemo(
+    () => ({
+      onNew: handleNew,
+      onOpen: () => void handleOpen(),
+      onSave: handleSave,
+      onSaveAs: handleSaveAs,
+      onImportSvg: handleImportSvg,
+    }),
+    [handleNew, handleOpen, handleSave, handleSaveAs, handleImportSvg]
+  );
+  useProjectShortcuts(fileShortcuts);
 
   // --- Project list dialog actions ---
   const handleOpenProject = useCallback(
