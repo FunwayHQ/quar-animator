@@ -248,6 +248,28 @@ describe('createVideoFrameSource', () => {
     expect(mocks.seeks).toEqual([]);
   });
 
+  it('lets the run go once it has stood still a while, its decoded frames with it', async () => {
+    let now = 1000;
+    const clock = vi.spyOn(Date, 'now').mockImplementation(() => now);
+    try {
+      const source = open();
+      source.frameAt(0, true);
+      await settle();
+      // Paused on that frame: shown again and again, the run kept for a step on
+      now += 500;
+      expect(source.frameAt(0)?.distance).toBe(0);
+      await settle();
+      expect(mocks.stopped).toBe(0);
+      now += 2500;
+      source.frameAt(0);
+      await settle();
+      expect(mocks.stopped).toBe(1);
+      expect(source.frameAt(0)?.distance).toBe(0);
+    } finally {
+      clock.mockRestore();
+    }
+  });
+
   it('decodes only the latest of the moments asked for while it was busy', async () => {
     const source = open();
     await settle();

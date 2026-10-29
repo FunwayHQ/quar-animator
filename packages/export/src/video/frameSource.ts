@@ -55,6 +55,8 @@ const KEEP = 6;
 const PLAYING_RUN_ON = 2;
 /** Stopped, the playhead stepped on this far is decoded on to; further, it seeks */
 const STEPPING_RUN_ON = 0.5;
+/** A run not decoded on for this long is let go (it holds decoded frames), in ms */
+const RUN_IDLE = 2000;
 /** Moments are nudged on by this much: a frame boundary in floating point lands in the frame it begins */
 const NUDGE = 1e-5;
 
@@ -92,7 +94,12 @@ export function createVideoFrameSource(
   /** A frame decoded for a moment it doesn't strictly span (an odd last frame): that moment's */
   let answered: { at: number; frame: DecodedFrame } | null = null;
   /** Decoding on through the video, and the timestamp of the last frame it gave */
-  let run: { frames: AsyncGenerator<WrappedCanvas, void, unknown>; at: number } | null = null;
+  let run: {
+    frames: AsyncGenerator<WrappedCanvas, void, unknown>;
+    at: number;
+    /** When it last gave a frame, in ms */
+    used: number;
+  } | null = null;
   let busy = false;
 
   const ready = (async () => {
@@ -170,13 +177,14 @@ export function createVideoFrameSource(
       return null;
     }
     current.at = next.value.timestamp;
+    current.used = Date.now();
     return keepFrame(next.value);
   }
 
   async function startRun(at: number): Promise<void> {
     if (!sink) return;
     await stopRun();
-    run = { frames: sink.canvases(at), at: -Infinity };
+    run = { frames: sink.canvases(at), at: -Infinity, used: Date.now() };
     const frame = await runOn();
     if (frame) answered = { at, frame };
   }
@@ -238,6 +246,8 @@ export function createVideoFrameSource(
       const exact = decodedAt(at);
       if (!exact) wanted = { seconds, playing };
       if (!exact || playing) void pump();
+      // Stopped a while: the run (and the frames it decoded ahead) goes, the pictures kept stay
+      else if (run && !busy && Date.now() - run.used > RUN_IDLE) void stopRun();
       if (exact) return { frame: exact, distance: 0 };
       const near = nearest(at);
       return near ? { frame: near, distance: distanceTo(near, at) } : null;
