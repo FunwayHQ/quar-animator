@@ -9,7 +9,7 @@ import { useEditorStore, DEFAULT_FILL, DEFAULT_STROKE } from '../stores/editorSt
 import { Camera, SceneGraph } from '@quar/core';
 import { createKeyframe, createTimeline, createTrack } from '@quar/animation';
 import { toast } from '../components/common/Toast';
-import { videoLayer } from '../test/videoLayerFixture';
+import { videoLayer } from '../test/videoLayer';
 import type React from 'react';
 
 // ============================================================================
@@ -462,14 +462,14 @@ describe('useCanvasTools', () => {
         timeline: createTimeline(),
         selectedNodeIds: new Set(['video']),
       });
-      sceneGraph.addNode(videoLayer('video', { width: 100, height: 100 }));
+      sceneGraph.addNode(videoLayer('video', 'film', {}, { width: 100, height: 100 }));
       const { result } = renderHook(() => useCanvasTools({ camera, sceneGraph }));
 
-      // Drag the (50, 50) corner of its -50..50 box out by 50
+      // Drag the (100, 100) corner of its 0..100 box out by 50
       const at = (x: number, y: number) => [camera.worldToScreen({ x, y }), { x, y }] as const;
-      act(() => result.current.handlePointerDown(...at(50, 50), createMockPointerEvent()));
-      act(() => result.current.handlePointerMove(...at(100, 100), createMockPointerEvent()));
-      act(() => result.current.handlePointerUp(...at(100, 100), createMockPointerEvent()));
+      act(() => result.current.handlePointerDown(...at(100, 100), createMockPointerEvent()));
+      act(() => result.current.handlePointerMove(...at(150, 150), createMockPointerEvent()));
+      act(() => result.current.handlePointerUp(...at(150, 150), createMockPointerEvent()));
 
       const { timeline } = useEditorStore.getState();
       const keyed = (property: string) =>

@@ -8,10 +8,10 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { render, screen, act, fireEvent, within } from '../../test/utils';
 import { SceneGraphProvider, useSceneGraph } from '../../contexts/SceneGraphContext';
 import type { SceneGraph } from '@quar/core';
-import type { Video, VideoNode } from '@quar/types';
+import type { VideoClip, VideoNode } from '@quar/types';
 import { PropertiesPanel } from './PropertiesPanel';
 import { useEditorStore } from '../../stores/editorStore';
-import { videoLayer } from '../../test/videoLayerFixture';
+import { testVideo, videoLayer } from '../../test/videoLayer';
 
 function SceneGraphCapture({ onCapture }: { onCapture: (sg: SceneGraph) => void }) {
   const sg = useSceneGraph();
@@ -30,24 +30,19 @@ function renderWithSceneGraph(): SceneGraph {
   return sg!;
 }
 
-const VIDEO: Video = {
-  id: 'file-v',
+const VIDEO = testVideo('file-v', {
   name: 'Beach at dusk.mp4',
-  mimeType: 'video/mp4',
-  byteLength: 38_380,
   width: 1280,
   height: 720,
   duration: 75.25,
-  frameRate: 30,
-  hasAlpha: false,
   strip: { rate: 4, height: 90, frames: ['data:image/webp;base64,AAAA'] },
-};
+});
 
-/** A video layer on the canvas, selected. */
-function selectVideo(patch: Partial<VideoNode> = {}): SceneGraph {
+/** A layer showing VIDEO (320 × 180) on the canvas, selected. */
+function selectVideo(clip: Partial<VideoClip> = {}): SceneGraph {
   const sg = renderWithSceneGraph();
   act(() => {
-    sg.addNode(videoLayer('v', patch));
+    sg.addNode(videoLayer('v', VIDEO.id, clip));
     useEditorStore.getState().setSelection(['v']);
   });
   return sg;
@@ -70,14 +65,14 @@ describe('PropertiesPanel - video layer', () => {
 
   it('sizes it by its width and height, as a picture', () => {
     const sg = selectVideo();
-    expect(screen.getByDisplayValue('160.0')).toBeInTheDocument();
-    expect(screen.getByDisplayValue('90.0')).toBeInTheDocument();
+    expect(document.getElementById('prop-size-w')).toHaveValue('320.0');
+    expect(document.getElementById('prop-size-h')).toHaveValue('180.0');
 
     act(() => {
-      fireEvent.change(document.getElementById('prop-size-w')!, { target: { value: '320' } });
+      fireEvent.change(document.getElementById('prop-size-w')!, { target: { value: '640' } });
     });
     const video = sg.getNode('v') as VideoNode;
-    expect(video.width).toBe(320);
+    expect(video.width).toBe(640);
     expect(video.transform.scale).toEqual({ x: 1, y: 1 });
   });
 
@@ -124,7 +119,7 @@ describe('PropertiesPanel - video layer', () => {
     });
 
     it('shows where its clip starts and how long it plays, at the document’s frame rate', () => {
-      selectVideo({ clip: { start: 12, offset: 2, duration: 4 } });
+      selectVideo({ start: 12, offset: 2, duration: 4 });
       const section = within(screen.getByTestId('video-section'));
       expect(section.getByTestId('video-clip-start')).toHaveTextContent('Frame 12');
       expect(section.getByTestId('video-clip-length')).toHaveTextContent('0:04.0');
@@ -143,14 +138,14 @@ describe('PropertiesPanel - video layer', () => {
       const section = within(screen.getByTestId('video-section'));
       expect(section.getByTestId('video-missing')).toBeInTheDocument();
       // The clip is still the layer's own
-      expect(section.getByTestId('video-clip-start')).toHaveTextContent('Frame 0');
+      expect(section.getByTestId('video-clip-start')).toHaveTextContent('Frame 30');
     });
 
     it('isn’t shown for a picture', () => {
       const sg = renderWithSceneGraph();
       act(() => {
         sg.addNode({
-          ...videoLayer('img'),
+          ...videoLayer('img', VIDEO.id),
           type: 'image',
           src: 'data:image/png;base64,test',
         } as unknown as VideoNode);
