@@ -471,6 +471,23 @@ function liveFrame(): number {
   return useEditorStore.getState().currentFrame;
 }
 
+/**
+ * After an edit of a path's points: when its Shape is keyed, key the whole
+ * Shape at the playhead (a Shape keyframe there takes the new outline), as
+ * dragging the points with Direct Selection does. Else the next frame shown
+ * put the points back where the Shape's keyframes have them. True if it keyed.
+ */
+function keyShapeIfKeyed(sceneGraph: SceneGraph, nodeId: string): boolean {
+  const { timeline, addKeyframeAtFrame } = useEditorStore.getState();
+  const node = sceneGraph.getNode(nodeId);
+  const keyed = timeline.tracks.some(
+    (t) => t.nodeId === nodeId && t.property === 'points' && t.keyframes.length > 0
+  );
+  if (!keyed || node?.type !== 'path') return false;
+  addKeyframeAtFrame(nodeId, 'points', liveFrame(), pathShapeOf(node));
+  return true;
+}
+
 /** With nothing selected: the document's own settings, its background. */
 function DocumentProperties() {
   const sceneGraph = useSceneGraph();
@@ -2874,9 +2891,11 @@ export function PropertiesPanel() {
                   points: split.points,
                   subpaths: split.subpaths,
                 });
+                // A keyed Shape takes the edit (the point itself only if it's keyed)
+                const shapeKeyed = keyShapeIfKeyed(sceneGraph, sp.nodeId);
                 if (
                   shouldKeyframe(
-                    autoKeyframe,
+                    autoKeyframe && !shapeKeyed,
                     sp.nodeId,
                     vertexPropPath(n, sp.pointIndex, `position.${axis}`)
                   )
@@ -2911,9 +2930,10 @@ export function PropertiesPanel() {
                   points: split.points,
                   subpaths: split.subpaths,
                 });
+                const shapeKeyed = keyShapeIfKeyed(sceneGraph, sp.nodeId);
                 if (
                   shouldKeyframe(
-                    autoKeyframe,
+                    autoKeyframe && !shapeKeyed,
                     sp.nodeId,
                     vertexPropPath(n, sp.pointIndex, 'cornerRadius')
                   )
@@ -2932,14 +2952,18 @@ export function PropertiesPanel() {
             const types = new Set(dsPoints.map((sp) => allPts[sp.pointIndex]?.type));
             const sharedType = types.size === 1 ? [...types][0] : undefined;
 
-            /** Key a point's handles (when auto-keyframing), after they changed. */
+            /**
+             * Key a point's handles after they changed: the whole Shape when
+             * it's keyed, else the handles (when auto-keyframing or keyed).
+             */
             const keyHandles = (n: PathNode, index: number, point: PathPoint) => {
+              const shapeKeyed = keyShapeIfKeyed(sceneGraph, n.id);
               for (const handle of ['handleIn', 'handleOut'] as const) {
                 const value = point[handle];
                 if (!value) continue;
                 for (const axis of ['x', 'y'] as const) {
                   const property = vertexPropPath(n, index, `${handle}.${axis}`);
-                  if (shouldKeyframe(autoKeyframe, n.id, property)) {
+                  if (shouldKeyframe(autoKeyframe && !shapeKeyed, n.id, property)) {
                     addKeyframeAtFrame(n.id, property, liveFrame(), value[axis]);
                   }
                 }
