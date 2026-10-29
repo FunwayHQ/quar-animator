@@ -13,7 +13,7 @@ like anything else.
 
 1. Put the shape that will be the mask on top of the layers it masks, in the
    same group or artboard. It can be a rectangle, an ellipse, a polygon or
-   star, a path, text or a picture.
+   star, a path, text or a [picture](pictures-and-svg.md).
 2. In the Layers panel, select the mask and the layers to mask: click one and
    Shift+click the others, or [[Mod]]+click them.
 3. Right-click one of them and choose **Create Clip Mask**, **Create Alpha
@@ -112,8 +112,9 @@ soft it is) and **Spread** (how much bigger than the layer it is). A blur has
 a **Radius**. Type the values, or drag the names left and right.
 
 A layer can have several effects. The eye (2) hides one for a while; the ×
-(3) removes it. With **Auto-Keyframe** on, changing an effect's values adds
-keyframes, so a shadow can grow or a blur can clear over time.
+(3) removes it. With [**Auto-Keyframe**](keyframes.md#auto-keyframe) on,
+changing an effect's values adds keyframes, so a shadow can grow or a blur can
+clear over time.
 
 > [!NOTE]
 > Effects and blend modes are drawn for shapes, text, pictures, boolean groups

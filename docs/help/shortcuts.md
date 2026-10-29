@@ -22,22 +22,22 @@ stacking keys and [[Esc]] (see [Select layers](selecting-and-arranging.md#select
 
 ## Tools {#tools}
 
-| Key   | Tool             |
-| ----- | ---------------- |
-| [[V]] | Selection        |
-| [[A]] | Direct Selection |
-| [[H]] | Hand             |
-| [[R]] | Rectangle        |
-| [[O]] | Ellipse          |
-| [[U]] | Polygon          |
-| [[S]] | Star             |
-| [[P]] | Pen              |
-| [[B]] | Brush            |
-| [[E]] | Eraser           |
-| [[T]] | Text             |
-| [[F]] | Artboard         |
-| [[J]] | Bone             |
-| [[W]] | Weight Paint     |
+| Key   | Tool                                            |
+| ----- | ----------------------------------------------- |
+| [[V]] | [Selection](selecting-and-arranging.md#select)  |
+| [[A]] | [Direct Selection](paths.md#direct-selection)   |
+| [[H]] | [Hand](selecting-and-arranging.md#view)         |
+| [[R]] | [Rectangle](shapes.md#tools)                    |
+| [[O]] | [Ellipse](shapes.md#tools)                      |
+| [[U]] | [Polygon](shapes.md#tools)                      |
+| [[S]] | [Star](shapes.md#tools)                         |
+| [[P]] | [Pen](paths.md#pen)                             |
+| [[B]] | [Brush](brush-and-eraser.md#brush)              |
+| [[E]] | [Eraser](brush-and-eraser.md#eraser)            |
+| [[T]] | [Text](text.md#add)                             |
+| [[F]] | [Artboard](artboards.md#draw)                   |
+| [[J]] | [Bone](rigging-bones.md#draw)                   |
+| [[W]] | [Weight Paint](rigging-weights.md#weight-paint) |
 
 ## While you draw {#drawing}
 
@@ -55,6 +55,10 @@ stacking keys and [[Esc]] (see [Select layers](selecting-and-arranging.md#select
 | <kbd class="keys"><kbd>[</kbd></kbd> <kbd class="keys"><kbd>]</kbd></kbd> | Eraser                                      | makes the eraser smaller or bigger                    |
 | [[Esc]]                                                                   | Bone                                        | ends the chain of bones and goes back to Selection    |
 
+More in [Draw a shape](shapes.md#draw), [Draw with the Pen](paths.md#pen),
+[Rub out with the Eraser](brush-and-eraser.md#eraser) and
+[Draw bones](rigging-bones.md#draw).
+
 ## Files {#file}
 
 | Keys            | Does                     |
@@ -64,6 +68,9 @@ stacking keys and [[Esc]] (see [Select layers](selecting-and-arranging.md#select
 | [[Mod+O]]       | **File › Open Project…** |
 | [[Mod+N]]       | **File › New Project**   |
 | [[Mod+I]]       | **File › Import SVG…**   |
+
+More in [Save your work](getting-started.md#saving) and
+[Import SVG](pictures-and-svg.md#svg).
 
 ## Edit {#edit}
 
@@ -79,6 +86,10 @@ stacking keys and [[Esc]] (see [Select layers](selecting-and-arranging.md#select
 | [[Mod+Shift+K]]                 | **Edit › Create Symbol**                                     |
 | [[Esc]], while editing a symbol | back to the page                                             |
 
+More in [Undo and redo](getting-started.md#undo),
+[Copy, paste and duplicate](selecting-and-arranging.md#clipboard) and
+[Symbols](symbols.md).
+
 ## Arrange {#arrange}
 
 | Keys                                                                                                                                     | Does                                                            |
@@ -93,6 +104,8 @@ stacking keys and [[Esc]] (see [Select layers](selecting-and-arranging.md#select
 | [[Shift+V]]                                                                                                                              | Flip Vertical                                                   |
 | [[Up]] [[Down]] [[Left]] [[Right]]                                                                                                       | nudge by 1 (with [[Shift]]: 10; with Snap to Grid: a grid step) |
 
+More in [Select and arrange](selecting-and-arranging.md).
+
 ## Shapes and paths {#paths}
 
 | Keys            | Does                                            |
@@ -105,10 +118,14 @@ stacking keys and [[Esc]] (see [Select layers](selecting-and-arranging.md#select
 | [[Mod+Shift+P]] | Convert to Path                                 |
 | [[Mod+Shift+O]] | Outline Stroke                                  |
 
+More in [Path commands](paths.md#path-commands),
+[Convert shapes, strokes and text](paths.md#convert) and
+[Combine shapes](paths.md#boolean).
+
 With the Selection tool, double-click a path to edit its points (it switches
 to Direct Selection), or double-click text to edit it.
 
-**Editing points with Direct Selection:**
+**Editing points with [Direct Selection](paths.md#direct-selection):**
 
 | Keys                               | Does                                            |
 | ---------------------------------- | ----------------------------------------------- |
@@ -120,7 +137,7 @@ to Direct Selection), or double-click text to edit it.
 | [[Alt]]+drag a handle              | moves that handle alone                         |
 | [[Esc]]                            | selects no points; again, back to Selection     |
 
-**Editing text:**
+**[Editing text](text.md#edit):**
 
 | Keys                     | Does                 |
 | ------------------------ | -------------------- |
@@ -141,6 +158,9 @@ to Direct Selection), or double-click text to edit it.
 | [[Shift+G]]            | Show Guides                   |
 | [[Delete]], on a guide | removes the guide you clicked |
 
+More in [Move around the canvas](selecting-and-arranging.md#view) and
+[Line things up](selecting-and-arranging.md#align).
+
 ## Timeline and playback {#timeline}
 
 | Keys                      | Does                                                  |
@@ -157,13 +177,19 @@ to Direct Selection), or double-click text to edit it.
 | [[Shift+O]]               | Onion Skinning on or off                              |
 | [[Shift+A]]               | the Animation Sequence window                         |
 
-In the **graph editor**, after you click in it: [[Delete]] deletes the selected
-keyframes, [[Left]] and [[Right]] move them a frame (with [[Shift]]: 10),
-[[Up]] and [[Down]] change their value by 1 (with [[Shift]]: 10).
+More in [Play your animation](keyframes.md#playing),
+[The work area](keyframes.md#work-area),
+[Onion skin](keyframes.md#onion-skin) and
+[The Animation Sequence window](presets-and-sequences.md#sequence).
 
-On the **sound lane**, with a clip selected: [[Delete]] removes it, [[Left]]
-and [[Right]] move it a frame (with [[Shift]]: 10), [[M]] mutes it or turns it
-on again, and [[Enter]] opens its settings.
+In the [**graph editor**](easing.md#graph-keyframes), after you click in it:
+[[Delete]] deletes the selected keyframes, [[Left]] and [[Right]] move them a
+frame (with [[Shift]]: 10), [[Up]] and [[Down]] change their value by 1 (with
+[[Shift]]: 10).
+
+On the [**sound lane**](sound.md#move), with a clip selected: [[Delete]]
+removes it, [[Left]] and [[Right]] move it a frame (with [[Shift]]: 10), [[M]]
+mutes it or turns it on again, and [[Enter]] opens its settings.
 
 ## Rigging {#rigging}
 
@@ -175,11 +201,16 @@ on again, and [[Enter]] opens its settings.
 | [[F]]                                                                     | Point Magnet                                     | changes how its pull fades: smooth, linear, constant |
 | [[Esc]]                                                                   | Point Magnet                                     | drops the moves you haven't kept                     |
 
+More in [Paint weights](rigging-weights.md#weight-paint),
+[The Point Magnet](rigging-weights.md#point-magnet) and
+[Reshape with Smart Bones](rigging-ik-physics.md#smart-bones).
+
 ## Number fields {#fields}
 
 In the Properties panel's number fields: [[Up]] and [[Down]] add or take away
 1 (with [[Shift]]: 10), and so does turning the mouse wheel over the field
-you're in. [[Right]] goes on from the whole number to the decimals.
+you're in. [[Right]] goes on from the whole number to the decimals. More in
+[Type exact values](selecting-and-arranging.md#fields).
 
 ## Presenting {#presenting}
 
@@ -192,9 +223,13 @@ While the artboards play full screen:
 | [[Home]] / [[End]]       | the first / last slide                               |
 | [[Esc]]                  | stop presenting                                      |
 
+More in [Present](presenting.md#present).
+
 ## Help {#help}
 
 | Keys    | Does                                                                                               |
 | ------- | -------------------------------------------------------------------------------------------------- |
 | [[F1]]  | opens this guide, at the page about what has the focus or what you're pointing at, if there is one |
 | [[Esc]] | closes the guide                                                                                   |
+
+More in [Get help](getting-started.md#help).

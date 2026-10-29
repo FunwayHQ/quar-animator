@@ -29,8 +29,9 @@ chapter, so you can try them as you read.
   shoulder, say.
 - **Start another skeleton:** press [[Esc]] to end the chain, press [[J]]
   again and drag somewhere away from the other bones.
-- **Rename a bone:** double-click its name in the Layers panel, type the new
-  one and press [[Enter]]. Names like Upper arm and Hand make a rig easier to
+- **Rename a bone:** double-click its name in the
+  [Layers panel](selecting-and-arranging.md#layers), type the new one and
+  press [[Enter]]. Names like Upper arm and Hand make a rig easier to
   work with.
 
 A very short drag (a few pixels on screen) makes no bone.
@@ -49,7 +50,8 @@ To move a whole skeleton, drag its first bone.
 A bone's **Rotation**, in the Properties panel, is measured from its parent
 bone: a child bone at 0° carries straight on from its parent, and turning the
 parent doesn't change it. The first bone of a chain has no parent bone, so its
-angle is measured from the horizontal (or from the group or artboard it's in).
+angle is measured from the horizontal (or from the group or
+[artboard](artboards.md) it's in).
 
 ![A bone's settings in the Properties panel: Transform with Length, Style and Color, the Smart Bones, Vitruvian Bones and Dynamic Chain sections, and Rotation](img/rigging-bones-properties.png "A bone's settings in the Properties panel.")
 
@@ -66,7 +68,8 @@ A bone's own settings are under **Transform**:
 ### Animate a pose {#animate}
 
 Bones take keyframes like any other layer: their **Rotation** and **Length**
-have keyframe diamonds. Press [[K]] to turn on auto-keyframe, move the
+have keyframe diamonds. Press [[K]] to turn on
+[auto-keyframe](keyframes.md#auto-keyframe), move the
 playhead to a frame, and turn the bones: each turn adds a rotation keyframe
 there. The first page of Tutorial 5 plays an arm animated this way.
 
@@ -76,7 +79,8 @@ A shape bound to bones bends as they turn.
 
 1. Draw the bones over the artwork, posed as the artwork is drawn. That pose
    is the one the artwork rests in.
-2. Select the shape or picture (or several).
+2. Select the shape or picture (or several: see
+   [Select layers](selecting-and-arranging.md#select)).
 3. Choose **Rigging › Bind Selection to Bones**, or right-click it and choose
    **Bind to Bones**.
 
@@ -94,8 +98,8 @@ corners: the editor fills it with small triangles, and each follows the bones
 near it.
 
 - Rectangles, ellipses, polygons and stars, paths and pictures can be bound.
-  Text can't: turn it into paths first with **Convert to Path**
-  ([[Mod+Shift+P]]).
+  Text can't: turn it into paths first with
+  [**Convert to Path**](paths.md#convert) ([[Mod+Shift+P]]).
 - To bind the shapes and pictures in a group, right-click the group and
   choose **Bind to Bones**.
 - **Bind Selection to Bones** is greyed out until the page has a bone and a

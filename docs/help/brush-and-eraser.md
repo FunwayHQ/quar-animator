@@ -106,5 +106,5 @@ out a trail 20 pixels wide.
 
 > [!CAUTION]
 > A shape the Eraser cuts is a new layer in the old one's place: its animation
-> and effects don't come with it, and a brush stroke loses its **Width** and
+> and [effects](masks-and-effects.md#effects) don't come with it, and a brush stroke loses its **Width** and
 > **Profile**. Rub out before you animate, or undo the erasing.

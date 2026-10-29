@@ -50,7 +50,7 @@ press [[Esc]].
 The line under **Size** says what the export is of:
 
 - **An artboard.** Select one artboard, and only it and its contents are
-  exported, playing the artboard's own timeline. On a page with a single
+  exported, playing the artboard's [own timeline](artboards.md#timelines). On a page with a single
   artboard, that one is exported even with nothing selected. To export the
   whole page instead, select everything first ([[Mod+A]]).
 - **Every artboard, one after another.** With no artboard selected, on a page
@@ -72,7 +72,8 @@ artboards are left out.
 
 Formats without transparency, and those with **Transparent** off, show the
 document's background color behind the artwork. To change it, select
-nothing and set **Background** under **Document** in the Properties panel.
+nothing and set **Background** under **Document** in the Properties panel
+(see [The background](shapes.md#background)).
 
 ## GIF {#gif}
 
@@ -81,7 +82,8 @@ GIFs play everywhere and loop forever.
 - **Background**: tick **Transparent** for a GIF with nothing behind the
   artwork.
 - **Frame rate**: frames a second, up to 50, the most a GIF can play. The
-  project's own rate is marked "(project)".
+  project's own rate (its [**FPS**](keyframes.md#frames-and-fps)) is marked
+  "(project)".
 - **Speed**: from 0.25× (slower) to 4× (faster). The line under it says how
   many frames the GIF has and how long it plays.
 - **Compression**: from 0% to 100%. At 0% the GIF has 256 colors and stores
@@ -101,8 +103,9 @@ Videos for sharing, for video editors and for the web.
 - **WebM** uses VP9 (or VP8, where VP9 isn't available). Tick **Transparent**
   to keep the parts with nothing drawn see-through: Chrome, Edge and Firefox
   show a transparent WebM.
-- **Sound**: when the timeline has sound clips, this box (**With its 2 sound
-  clips**, say) puts them in the video, as they play in the editor. A slides
+- **Sound**: when the timeline has [sound clips](sound.md), this box (**With
+  its 2 sound clips**, say) puts them in the video, as they play in the
+  editor. A slides
   export plays each slide's sounds with it. Clear it for a silent video.
 - **Frame rate** and **Speed** work as for a GIF, with rates up to 60 frames
   a second (and the project's own).
@@ -147,8 +150,9 @@ sharp at any size. The file is `animation.json`.
 The dialog counts the layers Lottie gets, and warns about what it can't take:
 
 - layers of a kind it doesn't take, which are left out;
-- effects (shadows and blurs), which are left out;
-- blend modes, which export as normal;
+- [effects](masks-and-effects.md#effects) (shadows and blurs), which are left
+  out;
+- [blend modes](masks-and-effects.md#blend), which export as normal;
 - pictures bound to bones, which don't bend. Shapes bound to bones bend as
   they do in the editor.
 
@@ -181,8 +185,9 @@ Vector pages, each at its timeline's last frame, as the canvas draws it.
 A one-page PDF is named after its frame: `frame_149.pdf` for a timeline of
 150 frames.
 
-Layers with a blur or a drop shadow, and pictures bent by bones or adjusted,
-go in as pictures, not vectors.
+Layers with a [blur or a drop shadow](masks-and-effects.md#effects), and
+pictures bent by bones or [adjusted](pictures-and-svg.md#adjust), go in as
+pictures, not vectors.
 
 ## Export selected layers {#export-selection}
 

@@ -83,11 +83,13 @@ before it discards them.
    and Help. The tools are in the middle: Selection,
    Direct Selection, Hand, the shapes, Pen, Brush, Eraser, Text, Artboard and
    Bone. Point at a tool to see its name and its one-key shortcut. When the
-   page has an artboard, a play button after the tools presents the artboards
-   full screen. The project's name is on the right.
+   page has an artboard, a play button after the tools
+   [presents the artboards](presenting.md#present) full screen. The project's
+   name is on the right.
 2. **Page tabs.** A project has one page or more: see [Pages](#pages).
 3. **Layers.** Everything on the page, the topmost first. Click a layer to
-   select it. The symbols you make are listed below.
+   select it (see [The Layers panel](selecting-and-arranging.md#layers)). The
+   symbols you make are listed below.
 4. **The canvas**, where you draw and arrange. Scroll to zoom in and out
    around the pointer, and hold [[Space]] and drag to move around.
    [[Mod+0]] fits the artwork in the window, [[Mod+1]] shows it at 100%. The
@@ -97,10 +99,12 @@ before it discards them.
    selected, it shows the document's background color.
 6. **The timeline.** It plays the animation and holds its keyframes, a row for
    each layer, with the sound lane below them. Press [[Space]] to play and to
-   pause. Drag its top edge to make it taller or shorter.
+   pause. Drag its top edge to make it taller or shorter. See
+   [The timeline](keyframes.md#timeline).
 
 > [!TIP]
-> **Help › Keyboard Shortcuts** lists the main shortcuts. Tools have one-key
+> **Help › Keyboard Shortcuts** lists the main shortcuts, and
+> [Keyboard shortcuts](shortcuts.md) all of them. Tools have one-key
 > shortcuts that work as long as you're not typing in a field.
 
 ## Pages {#pages}
@@ -163,6 +167,8 @@ computer. So:
 - Clearing this site's data in your browser (its cookies and site data)
   deletes them.
 
+If a save fails, see [When saving fails](troubleshooting.md#saving).
+
 ## Keep a backup {#backups}
 
 A backup is a `.quar` file on your computer, with the whole project in it:
@@ -214,7 +220,7 @@ Your choice is remembered in this browser, and this guide follows it.
 
 The color behind the artwork belongs to the document, not to the appearance:
 to change it, select nothing and set **Background** under **Document** in the
-Properties panel.
+Properties panel (see [The background](shapes.md#background)).
 
 ## Get help {#help}
 

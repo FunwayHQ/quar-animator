@@ -33,8 +33,8 @@ The sound is kept in the project, so it goes with the project into
 
 > [!NOTE]
 > A sound goes on the timeline in view: the page's, or an artboard's (see
-> [Each artboard's timeline](keyframes.md#artboards)). Each timeline has
-> sounds of its own.
+> [Each artboard has its own timeline](artboards.md#timelines)). Each
+> timeline has sounds of its own.
 
 ## The Sound lane {#lane}
 
@@ -93,7 +93,8 @@ Press [[Space]] to play. The sounds play in step with the frames.
 
 Playing goes on until the last sound ends, even when that's after the last
 keyframe. With a work area, only the sounds in it play (see
-[The work area](keyframes.md#work-area)).
+[The work area](keyframes.md#work-area)). When you present the artboards as
+slides, each plays its own sounds (see [Present](presenting.md#present)).
 
 ### Hear it as you scrub {#scrub}
 
@@ -106,8 +107,8 @@ turn it back on. The editor remembers your choice in this browser.
 
 ## Sound in videos {#export}
 
-MP4 and WebM exports have a **Sound** option, there when the timeline has
-sound clips: **With its sound clip** (or **With its 2 sound clips**, and so
-on). It's ticked unless you untick it. The clips play in the video as they
+[MP4 and WebM exports](exporting.md#video) have a **Sound** option, there
+when the timeline has sound clips: **With its sound clip** (or **With its 2
+sound clips**, and so on). It's ticked unless you untick it. The clips play in the video as they
 do in the editor, with their volume and fades; muted clips stay silent. GIFs
 and the other exports have no sound.

@@ -62,9 +62,10 @@ in a group stay in their group when you move them.
 ## Each artboard has its own timeline {#timelines}
 
 The animation of the layers in an artboard belongs to that artboard: its own
-keyframes, its own length (the **Frames** field) and its own sounds. Layers
-outside every artboard share the page's timeline. The frame rate (**FPS**) is
-the same for the whole project.
+keyframes, its own length (the **Frames** field) and its own
+[sounds](sound.md). Layers outside every artboard share the page's timeline.
+The frame rate (**FPS**) is the same for the whole project. (More in
+[Each artboard's timeline](keyframes.md#artboards).)
 
 The timeline shows one of them at a time. Selecting a layer brings up its
 artboard's timeline, and the picker at the top of the timeline's layer list (1)
@@ -79,9 +80,11 @@ Playing plays the timeline in view.
 The artboards at the top of a page also play one after another, as slides:
 
 - When the page has an artboard, a play button at the end of the toolbar
-  presents them full screen, in the order the Layers panel lists them.
+  presents them full screen, in the order the Layers panel lists them (see
+  [Present](presenting.md#present)).
 - Video, GIF and PNG-sequence exports can play every artboard as a slide, each
-  for its own timeline.
+  for its own timeline (see [What's exported](exporting.md#scope)).
 
 The **Slide** section of an artboard's properties sets the transition that
-brings it on after the slide before it.
+brings it on after the slide before it (see
+[Transitions](presenting.md#transitions)).

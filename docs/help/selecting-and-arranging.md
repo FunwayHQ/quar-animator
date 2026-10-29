@@ -33,6 +33,10 @@ clicked to this one.
 Hidden and locked layers can't be picked on the canvas, but you can still
 select them in the Layers panel (see [The Layers panel](#layers)).
 
+Double-click a path with the Selection tool to reshape its points (see
+[Paths and the Pen](paths.md#direct-selection)), or text to edit its words
+(see [Edit text](text.md#edit)).
+
 > [!NOTE]
 > [[Mod+A]], [[Delete]], [[Mod+D]], the arrow keys and the stacking keys go to
 > the canvas: they work after you've clicked on the canvas, not after you've
@@ -87,8 +91,10 @@ To change a value:
 The lock between W and H (2) is **Lock aspect ratio**: while it's closed,
 changing the width changes the height in proportion, and the other way round.
 
-The diamond beside each name adds a keyframe: that's for animating, and the
-animation chapters explain it.
+The diamond beside each name adds a keyframe: that's for animating (see
+[The diamonds in Properties](keyframes.md#diamonds)). With
+[Auto-keyframe](keyframes.md#auto-keyframe) on, moving, resizing and turning a
+layer set keyframes too.
 
 ## Line things up {#align}
 
@@ -173,8 +179,8 @@ show them again.
 - **Hide or show** a layer: point at its row and click the eye (1). A hidden
   layer isn't drawn on the canvas.
 - **Lock or unlock** it: click the lock (2). A locked layer stays put: it
-  can't be selected, moved or erased on the canvas, and clicks go through it to
-  what's behind.
+  can't be selected, moved or [erased](brush-and-eraser.md#eraser) on the
+  canvas, and clicks go through it to what's behind.
 - **Rename** it: double-click its row, type the name and press [[Enter]].
   [[Esc]] keeps the old name.
 - **Reorder:** drag a row up or down and let go between two rows.

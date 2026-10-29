@@ -18,12 +18,13 @@ The picture comes in at its own size, in the middle of the page, where the
 rulers read 0, and selected. Its layer is named after the file. If you can't see
 it, press [[Mod+0]] to fit the artwork in the window.
 
-If it lands on an artboard, the picture goes into it.
+If it lands on an artboard, the picture [goes into it](artboards.md#layers).
 
 ### Drop or paste a picture {#drop}
 
 - **Drop it:** drag a picture file from your computer onto the canvas. It comes
-  in centered where you drop it, and goes into the artboard you drop it on.
+  in centered where you drop it, and goes into the
+  [artboard](artboards.md#layers) you drop it on.
   Drop several, and only the first picture comes in.
 - **Paste it:** copy a picture, in your browser or in another app, then press
   [[Mod+V]] in the editor. It's placed in the middle of the view, and called
@@ -59,6 +60,9 @@ A picture has no fill or stroke. Instead, the Properties panel has its
 The adjustments change how the picture is drawn, not the picture itself: reset
 them and it's as it was.
 
+A picture also has the **Effects** (shadows and blur) and the **Blend Mode**
+any layer has: see [Masks, blending and effects](masks-and-effects.md#blend).
+
 ### Pull a picture's corners {#corners}
 
 With Direct Selection ([[A]]), click a picture: its four corners appear as
@@ -68,6 +72,9 @@ points. Drag one to pull the picture out of shape, to set it on a slant, say.
 
 As with paths, this doesn't work on a picture that's inside an artboard (see
 [Paths and the Pen](paths.md#direct-selection)).
+
+To bend a picture along its length, as an arm bends at the elbow, bind it to
+bones: see [Bind shapes and pictures](rigging-bones.md#bind).
 
 ### Replace a picture {#replace}
 

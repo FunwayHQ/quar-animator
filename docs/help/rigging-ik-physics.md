@@ -23,7 +23,8 @@ follows.
 2. Choose **Rigging › Create IK Chain**, or right-click the bone and choose
    **Create IK Chain**.
 3. A target appears at the bone's tip, selected: a layer called IK Target
-   (Hand). Drag it, and the bones of the chain turn to reach it.
+   (Hand), listed in the [Layers panel](selecting-and-arranging.md#layers)
+   like any other. Drag it, and the bones of the chain turn to reach it.
 
 ![An arm of three bones reaching up to the round IK target at the tip of its hand](img/rigging-ik-physics-ik.png 'Dragging the target poses the whole arm.')
 
@@ -43,7 +44,7 @@ follows.
 
 Animate the target, and the chain follows it:
 
-1. Press [[K]] to turn on auto-keyframe.
+1. Press [[K]] to turn on [auto-keyframe](keyframes.md#auto-keyframe).
 2. Move the playhead to a frame, and drag the target. Its position gets a
    keyframe there.
 3. Do the same at the other frames of the move, then press [[Space]] to play.

@@ -124,7 +124,8 @@ again to go inside: its paths' points can be picked. With no points picked,
 > Direct Selection doesn't pick the points of a shape that's inside an
 > artboard: clicking one there selects the artboard. To reshape it, drag its
 > layer out of the artboard in the Layers panel, reshape it, then drag the layer
-> back onto the artboard. It keeps its place on the canvas both ways.
+> back onto the artboard. It keeps its place on the canvas both ways (see
+> [Put layers in an artboard](artboards.md#layers)).
 
 ## The Vertex section {#vertex}
 
@@ -142,7 +143,10 @@ With points picked, the Properties panel shows a **Vertex** section:
 - **R** rounds the picked points' corners. It's there when every picked point
   is a corner.
 
-The diamonds beside **X**, **Y** and **R** are for animating the point.
+The diamonds beside **X**, **Y** and **R** are for animating the point (see
+[The diamonds in Properties](keyframes.md#diamonds)). To morph the whole
+outline from one shape into another, key the path's **Shape** row under
+**Transform** instead: see [Shape tweening](shape-tweening.md#morph).
 
 ## Path commands {#path-commands}
 
@@ -154,7 +158,8 @@ menu too.
 
 - **Reverse Path** turns the path round: its last point becomes its first. It
   matters where the direction does: an animation that draws the path's stroke
-  on starts from the other end.
+  on, such as the [**Draw On** preset](presets-and-sequences.md#presets),
+  starts from the other end.
 - **Simplify Path** takes away points the path doesn't need, keeping its shape.
 - **Close Path** joins the path's ends with a segment, and fills it if it had
   no fill. **Open Path**, in its place for a closed path, takes that segment
@@ -179,7 +184,8 @@ Under **Convert** in the **Edit** menu:
 - **Convert to Path** ([[Mod+Shift+P]]) turns the selected rectangles,
   ellipses, polygons and stars into paths, so you can reshape them point by
   point. Each stays the same layer, with its name and its animation. Text
-  becomes a group with one path for each letter.
+  becomes a group with one path for each letter (see
+  [Turn text into shapes](text.md#convert)).
 - **Outline Stroke** ([[Mod+Shift+O]]) turns the shape's stroke into a filled
   shape of its own, just above it, and takes the stroke off the shape. Then you
   can reshape the outline, or fill it with a gradient, as you would any shape.
@@ -199,7 +205,8 @@ path's fills decides what's filled:
 Rectangles, ellipses, polygons and paths can be combined into new shapes.
 
 1. Select two shapes or more (hold [[Shift]] and click them, or drag a box
-   around them with the Selection tool).
+   around them with the Selection tool: see
+   [Select layers](selecting-and-arranging.md#select)).
 2. Choose how to combine them, in the **Edit** menu under **Boolean**, in the
    right-click menu, or with the buttons under **Boolean Operations** in the
    Properties panel:
@@ -211,8 +218,8 @@ Rectangles, ellipses, polygons and paths can be combined into new shapes.
 
 ![A circle cut out of a rectangle, and the Boolean Subtract group holding them in the Layers panel](img/paths-boolean.png 'A circle subtracted from a rectangle. The shapes are still there, inside the group.')
 
-The result is a group, named after what it does (1), with the shapes inside
-it. It takes the lowest shape's fill and stroke, and you can change them as
+The result is a [group](selecting-and-arranging.md#groups), named after what
+it does (1), with the shapes inside it. It takes the lowest shape's fill and stroke, and you can change them as
 you would a shape's. The shapes inside stay as they are: move or reshape one
 and the result follows.
 

@@ -50,7 +50,8 @@ The timeline is along the bottom of the editor.
    (see [Onion skin](#onion-skin)).
 
 A button is lit while what it turns on is on. Point at a button to see its
-name and shortcut.
+name and shortcut; all the timeline's keys are in
+[Keyboard shortcuts](shortcuts.md#timeline).
 
 ### Make room for it {#resize}
 
@@ -92,7 +93,7 @@ menu, take you to the last frame of the timeline.
 Keyframes keep their frame numbers when you change the frame rate, so a
 higher **FPS** plays the same animation faster and a lower one plays it more
 slowly. That's how you change the speed of the whole animation. (GIF, MP4 and
-WebM exports also have a **Speed** setting of their own.)
+WebM exports also have a [**Speed**](exporting.md#gif) setting of their own.)
 
 ## The playhead and the ruler {#ruler}
 
@@ -200,7 +201,7 @@ choose **Select Keyframes**.
 
 Keyframes made by an Animation Sequence step are hollow diamonds. They belong
 to the step: clicking one opens it in the Animation Sequence window (see
-[Presets and Animation Sequence](presets-and-sequences.md)).
+[How steps become keyframes](presets-and-sequences.md#keyframes)).
 
 ### Copy keyframes to another frame or layer {#copy-paste}
 
@@ -253,8 +254,9 @@ right-click on the **Onion skin** button. Click the button for its settings:
 ## Each artboard's timeline {#artboards}
 
 Every artboard on a page has a timeline of its own, and the layers outside
-artboards share the page's timeline. That way each artboard can be a scene or
-a slide with its own timing.
+artboards share the page's timeline (see
+[Artboards](artboards.md#timelines)). That way each artboard can be a scene
+or a [slide](presenting.md) with its own timing.
 
 - Select a layer and the timeline shows the timeline it's on: its artboard's,
   or the page's.

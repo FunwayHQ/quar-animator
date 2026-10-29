@@ -118,7 +118,7 @@ The keys work while the graph has the focus: click in it first.
 
 Keyframes made by an Animation Sequence step are hollow dots. Clicking one
 opens its step in the Animation Sequence window, where you change it (see
-[Presets and Animation Sequence](presets-and-sequences.md)).
+[How steps become keyframes](presets-and-sequences.md#keyframes)).
 
 ### Bend a curve with its handles {#handles}
 

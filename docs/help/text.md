@@ -25,7 +25,7 @@ turn it into shapes.
 
 New text is set in Inter, 24 pixels, regular weight, aligned left, and filled
 cornflower blue. Text you leave empty is removed when you finish. Text you put
-on an artboard goes into it.
+on an artboard [goes into it](artboards.md#layers).
 
 ## Edit text {#edit}
 
@@ -68,10 +68,11 @@ The text's color is its **Fill**, under **Appearance**, as for any shape (see
 a stroke, hidden to begin with: click the stroke's eye to outline the letters.
 
 The diamonds beside **Font Size**, **Line Height** and **Letter Spacing** are
-for animating them. And text has entrances of its own among the animation
-presets, under **Animation** at the top of the Properties panel: **Typewriter**
-shows it a letter at a time, **By Word** a word at a time, **By Line** a line at
-a time.
+for animating them (see [The diamonds in Properties](keyframes.md#diamonds)).
+And text has entrances of its own among the
+[animation presets](presets-and-sequences.md#presets), under **Animation** at
+the top of the Properties panel: **Typewriter** shows it a letter at a time,
+**By Word** a word at a time, **By Line** a line at a time.
 
 ## Choose a font {#fonts}
 

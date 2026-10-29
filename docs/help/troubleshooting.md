@@ -29,8 +29,9 @@ your browser's data, and now and then for work you care about.
 If "Failed to save project" (or "Auto-save failed") appears at the bottom
 right, the project in the editor hasn't been saved. A common reason is that
 the browser's storage for the site is full: browsers give each site a share of
-the disk, and pictures and sounds make projects big (a picture can be up to 10
-MB, a sound up to 50 MB).
+the disk, and pictures and sounds make projects big (a
+[picture](pictures-and-svg.md#import-picture) can be up to 10 MB, a
+[sound](sound.md#add) up to 50 MB).
 
 1. Don't close the tab: your work is still in the editor.
 2. Choose **File › Download as .quar** to keep it as a file.
@@ -41,7 +42,7 @@ MB, a sound up to 50 MB).
 ## Fonts and Google {#google-fonts}
 
 Inter comes with the editor and needs nothing from anyone. The other fonts in
-the font picker come from Google Fonts, and none of them is asked for until you
+the [font picker](text.md#fonts) come from Google Fonts, and none of them is asked for until you
 allow it. You can allow Google Fonts:
 
 - on the note that greets you on your first visit (**Enable Google Fonts**);
@@ -113,10 +114,11 @@ Exports aren't affected: they draw every frame in full, however long it takes.
 
 ## An export fails {#exports}
 
-When an export can't be made, the Export dialog says why. The usual reasons:
+When an export can't be made, the Export dialog says why (see
+[Exporting](exporting.md)). The usual reasons:
 
-- **Video:** MP4 and WebM are made by the browser's own video encoder, and not
-  every browser or computer has one for each. If MP4 doesn't work, try WebM, or
+- **Video:** [MP4 and WebM](exporting.md#video) are made by the browser's own
+  video encoder, and not every browser or computer has one for each. If MP4 doesn't work, try WebM, or
   the other way round, or another browser; GIF and PNG sequences don't need
   one.
 - **MP4 size:** an MP4's width and height must both be even numbers.

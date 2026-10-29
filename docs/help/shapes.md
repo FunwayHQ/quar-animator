@@ -26,7 +26,8 @@ The four shape tools are in the toolbar at the top of the editor.
 1. Press the tool's key, or click it in the toolbar.
 2. Drag on the canvas, from one corner of the shape to the opposite one.
 3. Let go. The shape is drawn and selected, and the editor is back on the
-   Selection tool ([[V]]), ready to move it.
+   Selection tool ([[V]]), ready to move it (see
+   [Move, resize and rotate](selecting-and-arranging.md#transform)).
 
 While you drag, you can hold:
 
@@ -42,7 +43,7 @@ inside the box you drag, as big as the box's shorter side allows. With [[Alt]], 
 center and drag outwards: how far you drag is the distance from its center to
 its corners.
 
-A shape you draw on an artboard goes into that artboard.
+A shape you draw on an artboard [goes into that artboard](artboards.md#layers).
 
 Every new shape is filled cornflower blue (`#6495ED`) and outlined with a stroke
 2 pixels wide. The stroke is black, or near white, whichever stands out against
@@ -75,10 +76,11 @@ with one value.
 > [!TIP]
 > To change a number, type it and press [[Enter]], press [[Up]] or [[Down]] in
 > the field (with [[Shift]], by 10), or drag the field's short label (**CR**,
-> **N**, **IR**) left or right.
+> **N**, **IR**) left or right. More in
+> [Type exact values](selecting-and-arranging.md#fields).
 
 The diamond beside a setting's name is for animating it: it puts a keyframe at
-the current frame.
+the current frame (see [The diamonds in Properties](keyframes.md#diamonds)).
 
 ## Fill and stroke {#fill-and-stroke}
 
@@ -88,7 +90,7 @@ paints the inside of the shape; the stroke is its outline.
 ![The Appearance section of a selected rectangle, its parts numbered](img/shapes-appearance.png 'Fill, stroke and opacity in the Properties panel.')
 
 1. **The fill.** From left to right: the eye shows or hides it, the diamond
-   animates its color, the swatch opens the color picker (see
+   [animates its color](keyframes.md#diamonds), the swatch opens the color picker (see
    [Pick a color](#color-picker)), then its color as a hex code you can type
    over, and its opacity. Point at the row to see the **×** that removes it.
 2. **Solid**, **Linear**, **Radial** and **Conic**: one color, or a gradient
@@ -102,7 +104,7 @@ paints the inside of the shape; the stroke is its outline.
    **Add Stroke** adds another stroke.
 6. **Opacity**: how see-through the whole shape is, fill and stroke together.
 
-If you select several shapes, a change to a fill or a stroke is made to all of
+If you [select several shapes](selecting-and-arranging.md#select), a change to a fill or a stroke is made to all of
 them.
 
 ## Pick a color {#color-picker}
@@ -181,8 +183,9 @@ The color behind your artwork belongs to the document. To change it:
 
 It's saved with the project. The canvas shows it behind everything, the
 project's picture on the Projects page has it, and so do the pictures and
-videos you export, unless you choose a transparent background when you export.
-An artboard has its own fill on top of it.
+videos you export, unless you choose a transparent background when you export
+(see [What's exported](exporting.md#scope)). An artboard has
+[its own fill](artboards.md#select) on top of it.
 
 The background is dark (`#1A1A1A`) in a new project. It doesn't change with the
 editor's light or dark appearance.

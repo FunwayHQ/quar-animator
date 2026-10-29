@@ -70,8 +70,8 @@ its points. Its weights carry over: each part of the changed shape takes the
 weights of the parts of the old shape nearest it, so it goes on bending as
 before. You don't need to bind it again.
 
-To work on a bound path's points, select the path and press [[A]] for Direct
-Selection. Its points are shown where the bones have bent it, not where they
+To work on a bound path's points, select the path and press [[A]] for
+[Direct Selection](paths.md#direct-selection). Its points are shown where the bones have bent it, not where they
 are at rest.
 
 ![A bent path with its points shown on the bend, where the bones have moved them](img/rigging-weights-points.png 'A bound path in Direct Selection: its points follow the bend.')

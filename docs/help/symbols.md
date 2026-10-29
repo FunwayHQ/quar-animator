@@ -60,7 +60,7 @@ Each instance has a place of its own on the page. You can:
 - move it, resize it with its handles, rotate it and flip it;
 - change its **Opacity** and **Blend Mode**, and give it effects such as a
   drop shadow;
-- animate all of these, as you would any layer.
+- [animate](keyframes.md#animate) all of these, as you would any layer.
 
 What's in it — its shapes, colors and layers — comes from the symbol, the
 same in every instance. The **Size** fields don't take typing for an instance:

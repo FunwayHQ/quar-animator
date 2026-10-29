@@ -10,10 +10,12 @@ frames or more, change the outline between them, and the editor works out
 every frame in between. This chapter shows you how, and how the morph copes
 with added points, holes and converted shapes.
 
-Shape tweens are for paths: what you draw with the Pen or the Brush, and
-shapes you've made into paths. A rectangle, an ellipse, a polygon or a star
-animates its size, corner radius and the like instead (see
-[Keyframes and the timeline](keyframes.md)), until you convert it.
+Shape tweens are for paths: what you draw with the [Pen](paths.md#pen) or the
+[Brush](brush-and-eraser.md#brush), and shapes you've
+[made into paths](paths.md#convert). A rectangle, an ellipse, a polygon or a
+star animates its size, [corner radius and the like](shapes.md#shape-settings)
+instead (see [Keyframes and the timeline](keyframes.md)), until you convert
+it.
 
 ## Morph a path {#morph}
 
@@ -25,8 +27,9 @@ animates its size, corner radius and the like instead (see
    row shows how many points the path has.
 4. Go to a later frame: press [[Shift+.]], or click the ruler.
 5. Press [[A]] for Direct Selection and drag the path's points and handles
-   into the new outline. As soon as you change it, the outline is keyed at
-   this frame too.
+   into the new outline (see
+   [Reshape a path with Direct Selection](paths.md#direct-selection)). As soon
+   as you change it, the outline is keyed at this frame too.
 6. Press [[Space]] to watch it morph.
 
 ![A star path with its points shown by Direct Selection, one point dragged up at frame 20; the Shape row in Properties and the keyframes on the timeline numbered](img/shape-tweening-edit.png 'Editing a point at frame 20 keys the Shape there. The numbers match the list below.')
@@ -41,7 +44,7 @@ timeline as for any other keyframes (see
 [Easing and the graph editor](easing.md)).
 
 > [!TIP]
-> Turn on onion skin ([[Shift+O]]) to see the outlines of the frames around
+> Turn on [onion skin](keyframes.md#onion-skin) ([[Shift+O]]) to see the outlines of the frames around
 > the playhead while you shape the in-betweens.
 
 ![Onion skin showing a star's top point swinging to the right over the frames around the playhead](img/shape-tweening-morph.png 'The morph, frame by frame, with onion skin on: the frames before in red, after in teal.')
@@ -60,9 +63,11 @@ that keyframe takes the new outline.
 > move to another frame. Drag the point on the canvas instead.
 
 Changing the number of points works too. When you add a point to the path or
-delete one, it's added to or taken from every Shape keyframe, so the
-keyframes keep matching and the morph keeps its shape. **Edit › Open Path**
-and **Edit › Close Path** open or close the path in every Shape keyframe.
+delete one (with the [Pen](paths.md#pen-points) or Direct Selection), it's
+added to or taken from every Shape keyframe, so the keyframes keep matching
+and the morph keeps its shape. **Edit › Open Path** and **Edit › Close Path**
+(see [Path commands](paths.md#path-commands)) open or close the path in every
+Shape keyframe.
 
 > [!NOTE]
 > **Edit › Simplify Path** leaves a path alone while its points are animated:
@@ -81,8 +86,8 @@ in the same places. The editor matches them up as it morphs:
 
 ### Holes {#holes}
 
-A path can have holes: the middle of a letter O made into a path, for
-instance. A Shape keyframe holds the holes along with the outline, and they
+A path can have holes: the middle of a letter O
+[made into a path](text.md#convert), for instance. A Shape keyframe holds the holes along with the outline, and they
 morph with it. A hole that only one of the two keyframes has grows from its
 middle, or shrinks away to it, over the tween.
 
@@ -92,7 +97,8 @@ A rectangle, an ellipse, a polygon or a star can be converted to a path with
 its animation:
 
 1. Select the animated shape.
-2. Choose **Edit › Convert to Path** ([[Mod+Shift+P]]).
+2. Choose **Edit › Convert to Path** ([[Mod+Shift+P]]; see
+   [Convert shapes, strokes and text](paths.md#convert)).
 
 The shape becomes a path in the same place, with the same name and the rest
 of its animation. Its size keyframes — width and height, radius, corner

@@ -30,8 +30,10 @@ The effects come in four groups:
 
 - **Entrance:** Fade, Rise, Drop, Slide, Spin, Pop and Zoom In bring a layer
   into view. A path also has **Draw On**, which draws its stroke from start
-  to finish, and a text has **Typewriter**, **By Word** and **By Line**,
-  which reveal it a letter, a word or a line at a time.
+  to finish (**Reverse Path** turns it round: see
+  [Path commands](paths.md#path-commands)), and a [text](text.md#settings)
+  has **Typewriter**, **By Word** and **By Line**, which reveal it a letter, a
+  word or a line at a time.
 - **Emphasis:** Pulse, Bounce, Shake, Wobble, Heartbeat, Flash and Rubber
   Band draw attention to a layer that's already there.
 - **Loop:** Float, Sway, Breathing and Orbit make one cycle of a movement
