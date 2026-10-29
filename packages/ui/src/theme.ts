@@ -88,6 +88,10 @@ export const colors = {
     soundFill: 'rgba(45, 212, 191, 0.13)',
     soundFillSelected: 'rgba(45, 212, 191, 0.24)',
     soundWave: 'rgba(94, 234, 212, 0.62)',
+    video: '#fb923c',
+    videoFill: 'rgba(251, 146, 60, 0.15)',
+    videoFillSelected: 'rgba(251, 146, 60, 0.28)',
+    videoPerforation: 'rgba(9, 9, 11, 0.62)',
   },
 
   // Keyframe indicators in the properties panel
@@ -166,6 +170,10 @@ export const lightColors: ColorTokens = {
     soundFill: 'rgba(13, 148, 136, 0.11)',
     soundFillSelected: 'rgba(13, 148, 136, 0.22)',
     soundWave: 'rgba(15, 118, 110, 0.55)',
+    video: '#c2410c',
+    videoFill: 'rgba(234, 88, 12, 0.11)',
+    videoFillSelected: 'rgba(234, 88, 12, 0.22)',
+    videoPerforation: 'rgba(255, 255, 255, 0.78)',
   },
   keyframe: {
     active: '#b45309',
@@ -366,6 +374,10 @@ function colorVariables(c: ColorTokens): string {
   --color-timeline-sound-fill: ${c.timeline.soundFill};
   --color-timeline-sound-fill-selected: ${c.timeline.soundFillSelected};
   --color-timeline-sound-wave: ${c.timeline.soundWave};
+  --color-timeline-video: ${c.timeline.video};
+  --color-timeline-video-fill: ${c.timeline.videoFill};
+  --color-timeline-video-fill-selected: ${c.timeline.videoFillSelected};
+  --color-timeline-video-perforation: ${c.timeline.videoPerforation};
 
   /* Colors - Keyframe indicators */
   --color-keyframe-active: ${c.keyframe.active};`;
