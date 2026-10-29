@@ -2,8 +2,8 @@
  * Tests for project thumbnails: what region they show and how they're drawn
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { Node } from '@quar/types';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import type { Node, VideoClip } from '@quar/types';
 import { SceneGraph, createDefaultTransform, createGroupNode } from '@quar/core';
 
 const mocks = vi.hoisted(() => ({
@@ -14,7 +14,10 @@ const mocks = vi.hoisted(() => ({
   loadBundledFonts: vi.fn(),
 }));
 
-vi.mock('@quar/export', () => ({ createFrameRenderer: mocks.createFrameRenderer }));
+vi.mock('@quar/export', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@quar/export')>()),
+  createFrameRenderer: mocks.createFrameRenderer,
+}));
 vi.mock('./bundledFonts', () => ({ loadBundledFonts: mocks.loadBundledFonts }));
 
 import {
@@ -85,6 +88,40 @@ function graph(...nodes: Array<[Node, string?]>): SceneGraph {
   for (const [node, parent] of nodes) sg.addNode(node, parent);
   return sg;
 }
+
+function video(id: string, clip: Partial<VideoClip> = {}, x = 0, y = 0) {
+  return {
+    ...base(id, x, y),
+    type: 'video',
+    videoId: 'v1',
+    width: 160,
+    height: 90,
+    naturalWidth: 1280,
+    naturalHeight: 720,
+    cornerRadius: [0, 0, 0, 0],
+    clip: { start: 0, offset: 0, duration: 4, ...clip },
+  } as unknown as Node;
+}
+
+/** The library entry of the video: a strip of eight stills, four a second. */
+const library = [
+  {
+    id: 'v1',
+    name: 'Clip',
+    mimeType: 'video/mp4',
+    byteLength: 1000,
+    width: 1280,
+    height: 720,
+    duration: 2,
+    frameRate: 30,
+    hasAlpha: false,
+    strip: {
+      rate: 4,
+      height: 90,
+      frames: [0, 1, 2, 3, 4, 5, 6, 7].map((i) => `data:image/webp;base64,s${i}`),
+    },
+  },
+];
 
 function project(
   pages: Array<{ id: string; nodes: Node[] }>,
@@ -318,6 +355,71 @@ describe('renderProjectThumbnail', () => {
 
     await expect(renderProjectThumbnail(data)).rejects.toThrow('Could not encode');
     expect(mocks.dispose).toHaveBeenCalledOnce();
+  });
+
+  describe('with video layers', () => {
+    /** Pictures load at once (jsdom loads none) */
+    class LoadingImage {
+      onload: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      private loaded = '';
+      get src() {
+        return this.loaded;
+      }
+      set src(value: string) {
+        this.loaded = value;
+        setTimeout(() => (value.includes('broken') ? this.onerror?.() : this.onload?.()), 0);
+      }
+    }
+    beforeEach(() => vi.stubGlobal('Image', LoadingImage));
+    afterEach(() => vi.unstubAllGlobals());
+
+    /** The picture each video layer is drawn with in the thumbnail, by layer id. */
+    async function drawnVideos(nodes: Array<[Node, string?]>) {
+      const sg = graph(
+        ...nodes.map(([node, parent]) => [structuredClone(node), parent] as [Node, string?])
+      );
+      const data = JSON.stringify({
+        ...project([], 'p1', { videos: library as never }),
+        pages: [{ id: 'p1', name: 'p1', sceneGraph: sg.toJSON(), timeline: undefined }],
+      });
+      await renderProjectThumbnail(data);
+      const [ctx] = mocks.renderFrameAsBlob.mock.calls[0]!;
+      const drawn = new Map<string, string | null>();
+      for (const [node] of nodes) {
+        if (node.type !== 'video') continue;
+        const picture = ctx.videoFrames?.(node, 0);
+        drawn.set(node.id, picture ? (picture.source as unknown as LoadingImage).src : null);
+      }
+      return drawn;
+    }
+
+    it('draws each as its strip’s still at the frame the project opens on', async () => {
+      const drawn = await drawnVideos([
+        [video('playing', { offset: 1 })],
+        [video('later', { start: 30 })],
+      ]);
+      expect(drawn).toEqual(
+        new Map([
+          ['playing', 'data:image/webp;base64,s4'],
+          // Its clip hasn't started at the first frame
+          ['later', null],
+        ])
+      );
+    });
+
+    it('draws one on a timeline not in view at its clip’s first picture, as the canvas does', async () => {
+      const drawn = await drawnVideos([
+        [artboard('board', 0, 0, 400, 300)],
+        [video('on-board', { start: 30, offset: 0.5 }), 'board'],
+      ]);
+      expect(drawn.get('on-board')).toBe('data:image/webp;base64,s2');
+    });
+
+    it('draws nothing for a video it can’t find a still of', async () => {
+      const drawn = await drawnVideos([[{ ...video('lost'), videoId: 'gone' } as Node]]);
+      expect(drawn.get('lost')).toBeNull();
+    });
   });
 
   it('still renders when the bundled fonts fail to load', async () => {

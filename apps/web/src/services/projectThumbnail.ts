@@ -1,10 +1,21 @@
 /**
  * Project Thumbnails for Quar Animator
  * Renders a small picture of a saved project for the Projects page: its first
- * artboard, or when it has none, the area its artwork covers.
+ * artboard, or when it has none, the area its artwork covers. A video layer
+ * is drawn as its strip's still nearest the moment it shows (nothing is
+ * decoded on the Projects page).
  */
 
-import type { Color, Rect, SymbolDefinition, IKChain, SmartBoneAction } from '@quar/types';
+import type {
+  Color,
+  Rect,
+  SymbolDefinition,
+  IKChain,
+  Node,
+  SmartBoneAction,
+  Timeline,
+  Video,
+} from '@quar/types';
 import {
   DEFAULT_DOCUMENT_BACKGROUND,
   SceneGraph,
@@ -12,10 +23,11 @@ import {
   getArtworkBounds,
   padRect,
   parseQuarFile,
+  timelineScopeOf,
   widenToAspect,
 } from '@quar/core';
-import { createTimeline } from '@quar/animation';
-import { createFrameRenderer } from '@quar/export';
+import { createTimeline, openingScope, videoPosterTime, videoTimeAt } from '@quar/animation';
+import { createFrameRenderer, stripStillAt, videoMoments } from '@quar/export';
 import { deserializeProject } from './projectSerializer';
 import type { EditorStateSnapshot, ProjectData } from './projectSerializer';
 import { loadBundledFonts } from './bundledFonts';
@@ -105,6 +117,10 @@ export function thumbnailPixelSize(bounds: Rect): { width: number; height: numbe
 export interface ThumbnailScene {
   sceneGraph: SceneGraph;
   region: ThumbnailRegion;
+  /** The page's timeline (which one it opens on says what its video layers show) */
+  timeline: Timeline;
+  /** The video library, for the video layers' strips */
+  videos: Video[];
   symbols: SymbolDefinition[];
   ikChains: IKChain[];
   smartBoneActions: SmartBoneAction[];
@@ -136,6 +152,8 @@ export function pickThumbnailScene(project: ProjectData): ThumbnailScene | null 
       return {
         sceneGraph,
         region,
+        timeline: page.timeline ?? createTimeline(),
+        videos: state.videos ?? [],
         symbols,
         ikChains: state.ikChains ?? [],
         smartBoneActions: state.smartBoneActions ?? [],
@@ -150,6 +168,48 @@ export function pickThumbnailScene(project: ProjectData): ThumbnailScene | null 
 // ============================================================================
 // Rendering
 // ============================================================================
+
+/** A still, loaded as a picture; null when it won't load. */
+function loadStill(src: string): Promise<HTMLImageElement | null> {
+  return new Promise((resolve) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => resolve(null);
+    image.src = src;
+  });
+}
+
+/**
+ * The picture each video layer drawn is shown with: its strip's still
+ * nearest the moment the canvas shows of it as the project opens — of the
+ * timeline it opens on, the first frame's (nothing outside its clip); of
+ * another, its clip's first. By layer id.
+ */
+async function videoStillPictures(
+  scene: ThumbnailScene,
+  roots: Node[]
+): Promise<Map<string, HTMLImageElement>> {
+  const { sceneGraph, timeline } = scene;
+  const scope = openingScope(sceneGraph, timeline);
+  const moments = videoMoments(
+    roots,
+    (id) => sceneGraph.getNode(id),
+    (node) =>
+      timelineScopeOf(sceneGraph, node.id) === scope
+        ? videoTimeAt(node.clip, 0, scene.frameRate)
+        : videoPosterTime(node.clip)
+  );
+  const pictures = new Map<string, HTMLImageElement>();
+  await Promise.all(
+    moments.map(async ({ nodeId, videoId, seconds }) => {
+      const strip = scene.videos.find((video) => video.id === videoId)?.strip;
+      const src = stripStillAt(strip, seconds);
+      const picture = src ? await loadStill(src) : null;
+      if (picture) pictures.set(nodeId, picture);
+    })
+  );
+  return pictures;
+}
 
 /**
  * Render a stored project (binary or legacy JSON) as a PNG thumbnail. The
@@ -175,6 +235,7 @@ export async function renderProjectThumbnail(
       ? region.rootIds.flatMap((id) => sceneGraph.getNode(id) ?? [])
       : sceneGraph.getRootNodes();
     await renderer.preloadTextures(roots, sceneGraph, scene.symbols);
+    const stills = await videoStillPictures(scene, roots);
     const png = await renderer.renderFrameAsBlob(
       {
         sceneGraph,
@@ -188,6 +249,10 @@ export async function renderProjectThumbnail(
         exportRootIds: region.rootIds,
         viewportBounds: region.bounds,
         symbols: scene.symbols,
+        videoFrames: (node) => {
+          const still = stills.get(node.id);
+          return still ? { source: still, key: still.src } : null;
+        },
       },
       0
     );
