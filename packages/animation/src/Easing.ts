@@ -475,3 +475,36 @@ export function easingToBezierPoints(
   }
   return null;
 }
+
+/**
+ * The named easings a cubic bezier draws exactly, by its control points
+ * [x1, y1, x2, y2]. With x1 = 1/3 and x2 = 2/3 the bezier's x runs evenly
+ * with its parameter, so its y is a cubic polynomial of x, and these curves
+ * are such polynomials: Quad's t² (or its mirror), Cubic's t³, Back's
+ * c3·t³ − c1·t² (overshoot and all), and Linear's t, its handles a third of
+ * the way along. The others — In Out (two curves joined), Quart, Quint,
+ * Expo, Circ, Elastic, Bounce — no single cubic bezier draws.
+ */
+const NAMED_BEZIERS: Partial<Record<EasingType, [number, number, number, number]>> = {
+  linear: [1 / 3, 1 / 3, 2 / 3, 2 / 3],
+  easeInQuad: [1 / 3, 0, 2 / 3, 1 / 3],
+  easeOutQuad: [1 / 3, 2 / 3, 2 / 3, 1],
+  easeInCubic: [1 / 3, 0, 2 / 3, 0],
+  easeOutCubic: [1 / 3, 1, 2 / 3, 1],
+  easeInBack: [1 / 3, 0, 2 / 3, -c1 / 3],
+  easeOutBack: [1 / 3, 1 + c1 / 3, 2 / 3, 1],
+};
+
+/**
+ * The cubic bezier that draws this easing, as control points [x1, y1, x2,
+ * y2]: a custom curve's own, or a named curve's (NAMED_BEZIERS), so its
+ * handles can be shown and dragged, and the custom curve a drag makes
+ * starts as the named one. Null for the easings no cubic bezier draws.
+ */
+export function easingAsBezier(easing: EasingFunction): [number, number, number, number] | null {
+  if (typeof easing === 'string') {
+    const points = NAMED_BEZIERS[easing];
+    return points ? [...points] : null;
+  }
+  return easing.type === 'cubicBezier' ? easing.points : null;
+}

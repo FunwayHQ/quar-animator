@@ -57,10 +57,16 @@ describe('isEasingEditable', () => {
     expect(isEasingEditable(createCubicBezier(0.4, 0, 0.2, 1))).toBe(true);
   });
 
-  it('returns false for named preset easings', () => {
+  it('returns true for named easings a cubic bezier draws', () => {
+    expect(isEasingEditable('easeInQuad')).toBe(true);
+    expect(isEasingEditable('easeOutCubic')).toBe(true);
+    expect(isEasingEditable('easeInBack')).toBe(true);
+  });
+
+  it('returns false for named easings no cubic bezier draws', () => {
     expect(isEasingEditable('easeInBounce')).toBe(false);
     expect(isEasingEditable('easeOutElastic')).toBe(false);
-    expect(isEasingEditable('easeInQuad')).toBe(false);
+    expect(isEasingEditable('easeInOutQuad')).toBe(false);
   });
 });
 
@@ -133,13 +139,22 @@ describe('easingToTangents', () => {
     expect(easingToTangents('easeInBounce', 0, 0, 30, 100)).toBeNull();
   });
 
-  it('returns tangents for linear easing', () => {
+  it('returns tangents a third of the way along for linear easing, long enough to see', () => {
     const result = easingToTangents('linear', 0, 0, 30, 100);
     expect(result).not.toBeNull();
-    // linear: [0,0,1,1] → tangentOut = (0,0), tangentIn = (0,0)
-    expect(result!.tangentOut.x).toBeCloseTo(0);
-    expect(result!.tangentOut.y).toBeCloseTo(0);
-    expect(result!.tangentIn.x).toBeCloseTo(0);
+    // linear: [1/3, 1/3, 2/3, 2/3] → along the line, a third of the span each
+    expect(result!.tangentOut.x).toBeCloseTo(10);
+    expect(result!.tangentOut.y).toBeCloseTo(100 / 3);
+    expect(result!.tangentIn.x).toBeCloseTo(-10);
+    expect(result!.tangentIn.y).toBeCloseTo(-100 / 3);
+  });
+
+  it('returns the tangents of a named curve a cubic bezier draws', () => {
+    // Ease Out Cubic: [1/3, 1, 2/3, 1]
+    const result = easingToTangents('easeOutCubic', 0, 0, 30, 100);
+    expect(result!.tangentOut.x).toBeCloseTo(10);
+    expect(result!.tangentOut.y).toBeCloseTo(100);
+    expect(result!.tangentIn.x).toBeCloseTo(-10);
     expect(result!.tangentIn.y).toBeCloseTo(0);
   });
 

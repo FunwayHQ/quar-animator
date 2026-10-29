@@ -90,6 +90,44 @@ describe('GraphEditorKeyframes', () => {
     expect(container.querySelectorAll('circle[class*="keyframeDot"]')).toHaveLength(2);
   });
 
+  it('shows the handles of Linear and the menu easings a cubic bezier draws, off the dot', () => {
+    for (const easing of ['linear', 'easeInCubic', 'easeOutBack']) {
+      const { container, unmount } = render(
+        <GraphEditorKeyframes
+          tracks={[{ track: makeTrack(easing), globalIndex: 0 }]}
+          transform={transform}
+          selectedKeyframeIds={new Set(['kf-2'])}
+          onKeyframeMouseDown={vi.fn()}
+          onTangentMouseDown={vi.fn()}
+        />
+      );
+      const handle = container.querySelector('circle[class*="tangentHandle"]');
+      const dot = container.querySelectorAll('circle[class*="keyframeDot"]')[1];
+      expect(handle, easing).not.toBeNull();
+      // A third of the way back in time: 10 frames of 10 px make 33 px
+      expect(Number(dot!.getAttribute('cx')) - Number(handle!.getAttribute('cx'))).toBeCloseTo(
+        100 / 3
+      );
+      unmount();
+    }
+  });
+
+  it('shows no handles for the menu easings no cubic bezier draws', () => {
+    for (const easing of ['easeInOutCubic', 'easeOutElastic']) {
+      const { container, unmount } = render(
+        <GraphEditorKeyframes
+          tracks={[{ track: makeTrack(easing), globalIndex: 0 }]}
+          transform={transform}
+          selectedKeyframeIds={new Set(['kf-2'])}
+          onKeyframeMouseDown={vi.fn()}
+          onTangentMouseDown={vi.fn()}
+        />
+      );
+      expect(container.querySelectorAll('circle[class*="tangentHandle"]'), easing).toHaveLength(0);
+      unmount();
+    }
+  });
+
   it('draws sequence keyframes hollow, without tangents, and reveals their step on press', () => {
     const track = makeTrack();
     track.keyframes[1].sequenceStepId = 'step-7';

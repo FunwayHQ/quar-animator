@@ -3,11 +3,12 @@
  *
  * Tangent handles are a visual editing layer on top of the easing system.
  * The easing field on Keyframe remains the source of truth for interpolation.
- * Only cubic-bezier and linear easings support tangent handle editing.
+ * Only easings a cubic bezier draws (custom curves, Linear and the named
+ * curves in easingAsBezier) support tangent handle editing.
  */
 
 import type { EasingFunction, Keyframe, PropertyTrack, TangentMode, Vector2 } from '@quar/types';
-import { easingToBezierPoints, applyEasing, createCubicBezier } from './Easing';
+import { easingAsBezier, applyEasing, createCubicBezier } from './Easing';
 
 // ============================================================================
 // Types
@@ -61,15 +62,13 @@ export function getTrackColor(index: number): string {
 // ============================================================================
 
 /**
- * Returns true if the easing can be edited via tangent handles
- * (cubic bezier or linear). Preset easings like bounce/elastic/spring
- * are displayed as sampled polylines but not editable via handles.
+ * Returns true if the easing can be edited via tangent handles: a cubic
+ * bezier draws it (a custom curve, Linear, or a named curve such as Ease In
+ * Cubic — see easingAsBezier). Easings like bounce/elastic are displayed as
+ * sampled polylines but not editable via handles.
  */
 export function isEasingEditable(easing: EasingFunction): boolean {
-  if (typeof easing === 'string') {
-    return easing === 'linear';
-  }
-  return easing.type === 'cubicBezier';
+  return easingAsBezier(easing) !== null;
 }
 
 // ============================================================================
@@ -110,7 +109,9 @@ export function screenToGraph(
 
 /**
  * Convert an easing function to visual tangent handles in absolute frame/value space.
- * Returns null for non-editable easings.
+ * Returns null for non-editable easings. A named curve's handles are its
+ * bezier's (easingAsBezier), so dragging one makes a custom curve that
+ * starts as the named one.
  *
  * The bezier control points [x1,y1,x2,y2] are in normalized [0,1] space.
  * We scale them to the actual time/value span between keyframes.
@@ -125,7 +126,7 @@ export function easingToTangents(
   nextTime: number,
   nextValue: number
 ): TangentPair | null {
-  const points = easingToBezierPoints(easing);
+  const points = easingAsBezier(easing);
   if (!points) return null;
 
   const [x1, y1, x2, y2] = points;

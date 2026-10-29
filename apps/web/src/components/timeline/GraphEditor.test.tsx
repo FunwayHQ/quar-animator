@@ -284,6 +284,40 @@ describe('GraphEditor', () => {
     });
   });
 
+  describe('the handles of a menu easing', () => {
+    it('make it a custom curve that starts as the named one, so nothing jumps', () => {
+      const tl = setupTimelineWithKeyframes();
+      const kf = tl.tracks[0]!.keyframes[1]!;
+      // Ease Out Cubic into frame 30: cubic-bezier(1/3, 1, 2/3, 1)
+      kf.easing = 'easeOutCubic';
+      useEditorStore.setState({ timeline: tl, selectedKeyframeIds: new Set([kf.id]) });
+      const view = renderGraphEditor();
+      const area = screen.getByTestId('graph-editor-area');
+
+      // Its incoming handle, first: where the curve's second control point is
+      const transform = useEditorStore.getState().graphViewTransform;
+      const handle = view.container.querySelector('circle[class*="tangentHandle"]')!;
+      const expected = graphToScreen(20, 200, transform);
+      expect(Number(handle.getAttribute('cx'))).toBeCloseTo(expected.x);
+      expect(Number(handle.getAttribute('cy'))).toBeCloseTo(expected.y);
+
+      // Dragged 3 frames back in time
+      const to = graphToScreen(17, 200, transform);
+      fireEvent.mouseDown(handle, { button: 0, clientX: expected.x, clientY: expected.y });
+      fireEvent.mouseMove(area, { clientX: to.x, clientY: to.y });
+      fireEvent.mouseUp(area);
+
+      const easing = useEditorStore.getState().timeline.tracks[0]!.keyframes[1]!.easing;
+      expect(easing).toMatchObject({ type: 'cubicBezier' });
+      const [x1, y1, x2, y2] = (easing as { points: number[] }).points;
+      // The other handle stays the named curve's; this one moved back in time
+      expect(x1).toBeCloseTo(1 / 3);
+      expect(y1).toBeCloseTo(1);
+      expect(x2).toBeCloseTo(2 / 3 - 3 / 30);
+      expect(y2).toBeCloseTo(1);
+    });
+  });
+
   describe('colors', () => {
     /** The same color as jsdom writes it into an inline style. */
     function rgb(hex: string) {

@@ -10,6 +10,7 @@ import {
   createCubicBezier,
   easingToSvgPath,
   easingToBezierPoints,
+  easingAsBezier,
   getEasingDisplayName,
   EASING_CATEGORIES,
   EASE,
@@ -477,6 +478,67 @@ describe('easingToBezierPoints', () => {
   it('should return custom points for createCubicBezier', () => {
     const easing = createCubicBezier(0.1, 0.2, 0.8, 0.9);
     expect(easingToBezierPoints(easing)).toEqual([0.1, 0.2, 0.8, 0.9]);
+  });
+});
+
+// ============================================================================
+// easingAsBezier
+// ============================================================================
+
+describe('easingAsBezier', () => {
+  /** How far the bezier at these points strays from the easing, over the whole move */
+  function strayFrom(easing: EasingType, points: [number, number, number, number]) {
+    const bezier = createCubicBezier(...points);
+    let most = 0;
+    for (let i = 0; i <= 200; i++) {
+      const t = i / 200;
+      most = Math.max(most, Math.abs(applyEasing(t, bezier) - applyEasing(t, easing)));
+    }
+    return most;
+  }
+
+  it('gives the control points of each named curve a cubic bezier draws exactly', () => {
+    const drawn: EasingType[] = [
+      'linear',
+      'easeInQuad',
+      'easeOutQuad',
+      'easeInCubic',
+      'easeOutCubic',
+      'easeInBack',
+      'easeOutBack',
+    ];
+    for (const easing of drawn) {
+      const points = easingAsBezier(easing);
+      expect(points, easing).not.toBeNull();
+      expect(strayFrom(easing, points!), easing).toBeLessThan(1e-5);
+    }
+  });
+
+  it('puts Linear’s handles a third of the way along, where they can be seen', () => {
+    const [x1, y1, x2, y2] = easingAsBezier('linear')!;
+    expect([x1, y1, x2, y2].map((v) => Number(v.toFixed(4)))).toEqual([
+      0.3333, 0.3333, 0.6667, 0.6667,
+    ]);
+  });
+
+  it('gives none for curves no cubic bezier draws', () => {
+    const notDrawn: EasingType[] = [
+      'easeInOutQuad',
+      'easeInOutCubic',
+      'easeInQuart',
+      'easeOutQuint',
+      'easeInExpo',
+      'easeOutCirc',
+      'easeInOutBack',
+      'easeOutElastic',
+      'easeInBounce',
+    ];
+    for (const easing of notDrawn) expect(easingAsBezier(easing), easing).toBeNull();
+  });
+
+  it('gives a custom curve its own points', () => {
+    expect(easingAsBezier(createCubicBezier(0.1, 0.2, 0.8, 0.9))).toEqual([0.1, 0.2, 0.8, 0.9]);
+    expect(easingAsBezier(EASE)).toEqual([0.25, 0.1, 0.25, 1]);
   });
 });
 
