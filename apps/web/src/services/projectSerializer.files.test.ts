@@ -101,10 +101,22 @@ describe('project file import/export', () => {
     });
   });
 
-  it('rejects dropped project files larger than 50MB', async () => {
-    const file = { size: 50 * 1024 * 1024 + 1 } as File;
+  it('opens project files over 50 MB, as a backup with big sounds is', async () => {
+    const file = new File([writeQuarFile(project)], 'backup.quar', {
+      type: 'application/octet-stream',
+    });
+    // As big as a project with a few 50 MB sounds
+    Object.defineProperty(file, 'size', { value: 300 * 1024 * 1024 });
 
-    await expect(readProjectFile(file)).rejects.toThrow('Maximum size is 50MB');
+    await expect(readProjectFile(file)).resolves.toMatchObject({ name: 'File Test' });
+  });
+
+  it('rejects project files over 512 MB, saying how big they may be', async () => {
+    const file = { size: 512 * 1024 * 1024 + 1 } as File;
+
+    await expect(readProjectFile(file)).rejects.toThrow(
+      'This file is 513 MB: Quar Animator opens .quar files of up to 512 MB.'
+    );
   });
 
   it('settles and removes the picker when file selection is cancelled', async () => {

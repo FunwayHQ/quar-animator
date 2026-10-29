@@ -632,12 +632,25 @@ export class ProjectFileCancelledError extends Error {
   }
 }
 
-const MAX_PROJECT_FILE_SIZE = 50 * 1024 * 1024;
+const MB = 1024 * 1024;
+/**
+ * The biggest .quar file that opens. A project keeps each sound (up to 50 MB)
+ * and picture (up to 10 MB) in it, so a backup can be far bigger than any
+ * one of them. The file is read whole into memory, and its pictures and
+ * sounds become data URIs about a third bigger again, so opening one this
+ * size takes well over a gigabyte for a moment: as much as a browser tab
+ * comfortably has.
+ */
+const MAX_PROJECT_FILE_SIZE = 512 * MB;
 
 /** Read and validate a project file without opening a file picker. */
 export function readProjectFile(file: File): Promise<ProjectData> {
   if (file.size > MAX_PROJECT_FILE_SIZE) {
-    return Promise.reject(new Error('File too large. Maximum size is 50MB.'));
+    return Promise.reject(
+      new Error(
+        `This file is ${Math.ceil(file.size / MB)} MB: Quar Animator opens .quar files of up to ${MAX_PROJECT_FILE_SIZE / MB} MB.`
+      )
+    );
   }
 
   return new Promise<ProjectData>((resolve, reject) => {
