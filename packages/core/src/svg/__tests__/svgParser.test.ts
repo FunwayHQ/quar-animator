@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseSvg } from '../svgParser';
+import { parseSvg, type SvgGroup } from '../svgParser';
 import { convertSvgToNodes } from '../svgConverter';
 import type { PathNode } from '@quar/types';
 
@@ -325,6 +325,31 @@ describe('parseSvg', () => {
     </svg>`;
     const result = parseSvg(svg);
     expect(result.elements).toHaveLength(1);
+  });
+
+  it('skips visibility:hidden elements, as attribute or style, as it skips display:none', () => {
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg">
+      <rect id="shown" width="100" height="100" />
+      <rect width="50" height="50" visibility="hidden" />
+      <circle r="5" style="visibility: hidden" />
+      <path d="M0 0 L10 10" visibility="collapse" />
+    </svg>`;
+    const result = parseSvg(svg);
+    expect(result.elements.map((el) => el.id)).toEqual(['shown']);
+  });
+
+  it('keeps what a hidden group shows again, and leaves out one that shows nothing', () => {
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg">
+      <g id="partly" visibility="hidden">
+        <rect width="10" height="10" />
+        <rect id="again" width="20" height="20" visibility="visible" />
+      </g>
+      <g id="wholly" style="visibility:hidden"><rect width="10" height="10" /></g>
+    </svg>`;
+    const result = parseSvg(svg);
+    expect(result.elements.map((el) => el.id)).toEqual(['partly']);
+    const group = result.elements[0] as SvgGroup;
+    expect(group.children.map((el) => el.id)).toEqual(['again']);
   });
 
   it('resolves stroke properties', () => {

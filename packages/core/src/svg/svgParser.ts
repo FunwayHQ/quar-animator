@@ -421,6 +421,11 @@ function parseSimpleStyle(style: string): Record<string, string> {
 // Element Walking
 // ============================================================================
 
+/** visibility:hidden (or collapse, the same for SVG): not drawn, though its children may be. */
+function isHidden(style: ResolvedStyle): boolean {
+  return style.visibility === 'hidden' || style.visibility === 'collapse';
+}
+
 function walkChildren(
   parent: Element,
   defs: SvgDefs,
@@ -448,8 +453,10 @@ function walkChildren(
 
     const style = resolveStyle(child, parentStyle);
 
-    // Skip hidden elements
+    // Skip hidden elements: display:none hides all inside; visibility:hidden
+    // only what doesn't make itself visible again, so a group's still walked
     if (style.display === 'none') continue;
+    if (tag !== 'g' && isHidden(style)) continue;
 
     const base: SvgElementBase = {
       tag,
@@ -551,6 +558,8 @@ function parseElement(
 
     case 'g': {
       const children = walkChildren(el, defs, style);
+      // A hidden group with nothing inside shown draws nothing
+      if (isHidden(style) && children.length === 0) return null;
       return {
         ...base,
         tag: 'g',
