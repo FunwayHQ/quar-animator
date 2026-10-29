@@ -19,6 +19,7 @@ import { scopeDuration, scopeSounds, scopedTimeline } from '@quar/animation';
 import { useSceneGraph } from '../../contexts/SceneGraphContext';
 import { useEditorStore } from '../../stores/editorStore';
 import {
+  countVideoLayers,
   exportLottieBlob,
   analyzeLottieExport,
   gifCompressionSettings,
@@ -241,6 +242,13 @@ function SoundField({
   );
 }
 
+/** The formats that show a video layer as a still picture of it (they play no video). */
+const STILL_VIDEO_TABS: Partial<Record<ExportTab, string>> = {
+  lottie: 'Lottie',
+  svg: 'SVG',
+  pdf: 'PDF',
+};
+
 /** The formats that play the page's artboards as slides, one after another. */
 const SLIDE_TABS: ExportTab[] = ['mp4', 'webm', 'gif', 'png-sequence'];
 
@@ -411,6 +419,20 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
     state.height,
     sceneScope
   );
+
+  // The video layers a format without video shows as stills: the artboard's,
+  // the slides' (a PDF of them), or the page's
+  const stillVideoFormat = STILL_VIDEO_TABS[state.tab];
+  const stillVideoCount = stillVideoFormat
+    ? countVideoLayers(
+        selectedArtboard
+          ? [selectedArtboard.node]
+          : slidesPdf
+            ? slides.map((slide) => slide.node)
+            : sceneGraph.getRootNodes(),
+        (id) => sceneGraph.getNode(id)
+      )
+    : 0;
 
   // Lottie analysis
   const lottieAnalysis =
@@ -1069,6 +1091,19 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
                   max={Math.max(0, timelineDuration - 1)}
                   data-testid="export-end-frame"
                 />
+              </div>
+            )}
+
+            {stillVideoCount > 0 && (
+              <div className={styles.warning} role="note" data-testid="export-video-stills">
+                <AlertTriangle size={14} className={styles.warningIcon} />
+                <span className={styles.warningText}>
+                  {stillVideoCount === 1
+                    ? '1 video layer will show as a still picture'
+                    : `${stillVideoCount} video layers will show as still pictures`}
+                  : {stillVideoFormat} doesn’t play video. MP4, WebM and GIF play{' '}
+                  {stillVideoCount === 1 ? 'it' : 'them'}.
+                </span>
               </div>
             )}
 

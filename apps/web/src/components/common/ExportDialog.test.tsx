@@ -847,6 +847,33 @@ describe('ExportDialog', () => {
     );
   });
 
+  it('warns that a video shows as a still in Lottie, SVG and PDF, and not in the formats that play it', () => {
+    render(
+      <>
+        <VideoSeeder />
+        <ExportDialogHost />
+      </>
+    );
+    act(() => showExportDialog('lottie'));
+    expect(screen.getByTestId('export-video-stills')).toHaveTextContent(
+      '1 video layer will show as a still picture: Lottie doesn’t play video. MP4, WebM and GIF play it.'
+    );
+    fireEvent.click(screen.getByTestId('export-tab-svg'));
+    expect(screen.getByTestId('export-video-stills')).toHaveTextContent('SVG doesn’t play video');
+    fireEvent.click(screen.getByTestId('export-tab-pdf'));
+    expect(screen.getByTestId('export-video-stills')).toHaveTextContent('PDF doesn’t play video');
+    for (const tab of ['mp4', 'webm', 'gif', 'png-sequence']) {
+      fireEvent.click(screen.getByTestId(`export-tab-${tab}`));
+      expect(screen.queryByTestId('export-video-stills')).not.toBeInTheDocument();
+    }
+  });
+
+  it('gives no video warning with no video layers', () => {
+    render(<ExportDialogHost />);
+    act(() => showExportDialog('pdf'));
+    expect(screen.queryByTestId('export-video-stills')).not.toBeInTheDocument();
+  });
+
   it('has a PDF’s video layers shown as stills of the videos’ files', async () => {
     render(
       <>
