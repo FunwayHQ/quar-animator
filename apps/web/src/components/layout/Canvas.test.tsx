@@ -1,6 +1,6 @@
 import type { ComponentProps } from 'react';
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '../../test/utils';
+import { act, render, screen, fireEvent } from '../../test/utils';
 import { SceneGraphProvider, useSceneGraph } from '../../contexts/SceneGraphContext';
 import { useEditorStore } from '../../stores/editorStore';
 import { toast } from '../common/Toast';
@@ -217,5 +217,82 @@ describe('Canvas', () => {
     fireEvent.drop(dropZone, { dataTransfer: { files: [voice, music], types: ['Files'] } });
 
     expect(importSoundFiles).toHaveBeenCalledWith(expect.anything(), [voice, music]);
+  });
+
+  describe('editing keys', () => {
+    /** A rectangle on the page, selected. */
+    function selectedRectangle(sceneGraph: SceneGraph) {
+      sceneGraph.addNode({
+        id: 'rect',
+        name: 'Rectangle',
+        type: 'rectangle',
+        parent: null,
+        children: [],
+        transform: {
+          position: { x: 0, y: 0 },
+          rotation: 0,
+          scale: { x: 1, y: 1 },
+          anchor: { x: 0.5, y: 0.5 },
+          skew: { x: 0, y: 0 },
+        },
+        visible: true,
+        locked: false,
+        opacity: 1,
+        blendMode: 'normal',
+        width: 100,
+        height: 100,
+        cornerRadius: [0, 0, 0, 0],
+        fills: [],
+        strokes: [],
+      });
+      // Picked, and shown so (the tools read the selection the canvas shows)
+      act(() => {
+        useEditorStore.setState({ activeTool: 'selection', selectedNodeIds: new Set(['rect']) });
+      });
+    }
+
+    /** A layer row in another panel, focused, as after a click on it. */
+    function focusElsewhere() {
+      const row = document.createElement('div');
+      row.tabIndex = 0;
+      document.body.append(row);
+      row.focus();
+      return row;
+    }
+
+    it('work with focus elsewhere, as after a click in the Layers panel', () => {
+      const sceneGraph = renderCanvasWithScene();
+      selectedRectangle(sceneGraph);
+      const row = focusElsewhere();
+
+      fireEvent.keyDown(row, { key: 'ArrowRight', shiftKey: true });
+      fireEvent.keyUp(row, { key: 'ArrowRight' });
+      expect(sceneGraph.getNode('rect')!.transform.position.x).toBe(10);
+
+      fireEvent.keyDown(row, { key: 'd', ctrlKey: true });
+      expect(sceneGraph.getRootNodes()).toHaveLength(2);
+
+      fireEvent.keyDown(row, { key: 'a', ctrlKey: true });
+      expect(useEditorStore.getState().selectedNodeIds.size).toBe(2);
+      fireEvent.keyDown(row, { key: 'Delete' });
+      expect(sceneGraph.getRootNodes()).toHaveLength(0);
+      row.remove();
+    });
+
+    it('act once when the canvas has the focus', () => {
+      const sceneGraph = renderCanvasWithScene();
+      selectedRectangle(sceneGraph);
+      const canvas = document.querySelector('canvas')!;
+      canvas.focus();
+
+      fireEvent.keyDown(canvas, { key: 'd', ctrlKey: true });
+      fireEvent.keyDown(canvas, { key: 'ArrowRight' });
+      fireEvent.keyUp(canvas, { key: 'ArrowRight' });
+
+      const roots = sceneGraph.getRootNodes();
+      expect(roots).toHaveLength(2);
+      // Only the copy is selected after duplicating: nudged one unit, once
+      expect(roots[1]!.transform.position.x - roots[0]!.transform.position.x).toBe(21);
+    });
   });
 });

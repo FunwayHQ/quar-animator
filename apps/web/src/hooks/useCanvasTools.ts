@@ -65,10 +65,10 @@ export interface UseCanvasToolsReturn {
   handlePointerMove: (screenPos: Vector2, worldPos: Vector2, event: React.PointerEvent) => void;
   /** Handle pointer up event on canvas */
   handlePointerUp: (screenPos: Vector2, worldPos: Vector2, event: React.PointerEvent) => void;
-  /** Handle key down event on canvas */
-  handleKeyDown: (event: React.KeyboardEvent) => void;
-  /** Handle key up event on canvas */
-  handleKeyUp: (event: React.KeyboardEvent) => void;
+  /** Handle key down event on canvas (or a key pressed elsewhere meant for it) */
+  handleKeyDown: (event: React.KeyboardEvent | KeyboardEvent) => void;
+  /** Handle key up event on canvas (or a key let go elsewhere meant for it) */
+  handleKeyUp: (event: React.KeyboardEvent | KeyboardEvent) => void;
   /** Current preview node from active tool (null when not dragging) */
   previewNode: Node | null;
   /** Current cursor for active tool */
@@ -821,10 +821,11 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
     []
   );
 
+  // The canvas's key events, or keys pressed elsewhere meant for it (useEditShortcuts)
   const handleKeyDown = useCallback(
-    (event: React.KeyboardEvent) => {
+    (event: React.KeyboardEvent | KeyboardEvent) => {
       if (!toolManagerRef.current) return;
-      toolManagerRef.current.handleKeyDown(event.nativeEvent);
+      toolManagerRef.current.handleKeyDown('nativeEvent' in event ? event.nativeEvent : event);
       // Brush keys ([ ] X) change the tool's brush: show it in the panel
       const tool = toolManagerRef.current.getActiveTool();
       if (tool?.type === 'weight-paint') reportWeightPaintSettings(tool as WeightPaintTool);
@@ -836,9 +837,9 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
   );
 
   const handleKeyUp = useCallback(
-    (event: React.KeyboardEvent) => {
+    (event: React.KeyboardEvent | KeyboardEvent) => {
       if (!toolManagerRef.current) return;
-      toolManagerRef.current.handleKeyUp(event.nativeEvent);
+      toolManagerRef.current.handleKeyUp('nativeEvent' in event ? event.nativeEvent : event);
       // Sync PenTool state after key events
       syncPenToolState();
     },

@@ -1254,7 +1254,16 @@ export function Timeline({ playback }: TimelineProps = {}) {
   // ============================================================
 
   return (
-    <div className={styles.timeline} ref={timelineRef} style={{ height: timelineHeight }}>
+    // Delete and the arrows here are for its keyframes and sound clips, not
+    // the layers (useEditShortcuts). A click anywhere in it, a keyframe's
+    // say, gives it the focus, so they stay here
+    <div
+      className={styles.timeline}
+      ref={timelineRef}
+      style={{ height: timelineHeight }}
+      tabIndex={-1}
+      data-own-edit-keys
+    >
       {/* Resize handle on the top border: drag, arrow keys, or double-click to reset.
           A focusable separator is the ARIA window-splitter pattern, which jsx-a11y
           doesn't recognize as interactive. */}

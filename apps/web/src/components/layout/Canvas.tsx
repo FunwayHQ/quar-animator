@@ -33,6 +33,7 @@ import { isSoundFile } from '../../services/soundFiles';
 import { importSoundFiles } from '../../services/soundImport';
 import { useCanvasTools } from '../../hooks/useCanvasTools';
 import { useToolShortcuts } from '../../hooks/useToolShortcuts';
+import { useEditShortcuts } from '../../hooks/useEditShortcuts';
 import { useEditorStore } from '../../stores/editorStore';
 import { useSceneGraph } from '../../contexts/SceneGraphContext';
 import { SelectionOverlay } from '../canvas/SelectionOverlay';
@@ -1581,8 +1582,10 @@ export function Canvas({
   // Keyboard Handlers
   // --------------------------------------------------------------------------
 
+  // Keys pressed on the canvas, and its editing keys pressed elsewhere
+  // (useEditShortcuts), which do the same here
   const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
+    (e: React.KeyboardEvent | KeyboardEvent) => {
       const camera = cameraRef.current;
       const canvas = canvasRef.current;
       if (!camera || !canvas) return;
@@ -1733,7 +1736,7 @@ export function Canvas({
   );
 
   const handleKeyUp = useCallback(
-    (e: React.KeyboardEvent) => {
+    (e: React.KeyboardEvent | KeyboardEvent) => {
       if (e.code === 'Space') {
         isSpaceHeldRef.current = false;
         const canvas = canvasRef.current;
@@ -1748,6 +1751,10 @@ export function Canvas({
     },
     [toolKeyUp, toolCursor]
   );
+
+  // Delete, nudge, duplicate, select all, order and the brush keys work with
+  // the focus anywhere (after a click in the Layers panel, say), not only here
+  useEditShortcuts({ canvasRef, onKeyDown: handleKeyDown, onKeyUp: handleKeyUp });
 
   // --------------------------------------------------------------------------
   // Context Menu

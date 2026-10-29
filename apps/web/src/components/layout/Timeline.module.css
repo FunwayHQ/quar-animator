@@ -10,6 +10,11 @@
   position: relative;
 }
 
+/* Focused by a click in it (so it keeps Delete and the arrows), never by Tab */
+.timeline:focus-visible {
+  outline: none;
+}
+
 /* Top highlight line */
 .timeline::before {
   content: '';
