@@ -32,7 +32,7 @@ export interface LayerBuildContext {
   /** Side of the square canvas given to precompositions (centered on their origin). */
   precompSize: number;
   assets: LottieAsset[];
-  /** Image src → asset id, so repeated images are embedded once. */
+  /** Image src and size → asset id, so repeated images are embedded once at each size shown. */
   imageAssets: Map<string, string>;
   /** Video layers' stills, by layer id (one without shows nothing) */
   videoStills?: VideoStills;
@@ -123,10 +123,12 @@ function imageLayer(
   frame: Frame,
   ctx: LayerBuildContext
 ): LottieLayer {
-  let assetId = ctx.imageAssets.get(node.src);
+  // Lottie draws an image layer at its asset's size: a picture shown at another size is another asset
+  const key = `${node.width}x${node.height} ${node.src}`;
+  let assetId = ctx.imageAssets.get(key);
   if (!assetId) {
     assetId = `image_${ctx.imageAssets.size}`;
-    ctx.imageAssets.set(node.src, assetId);
+    ctx.imageAssets.set(key, assetId);
     ctx.assets.push({ id: assetId, w: node.width, h: node.height, u: '', p: node.src, e: 1 });
   }
 

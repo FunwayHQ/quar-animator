@@ -75,6 +75,20 @@ describe('images → Lottie', () => {
     expect(animation.layers.map((layer) => layer.refId)).toEqual(['image_0', 'image_0']);
   });
 
+  it('gives a picture shown at another size an asset of that size', () => {
+    const animation = exportToLottieJson(
+      [image('i1'), image('i2', { width: 160, height: 80 }), image('i3')],
+      timeline,
+      options
+    );
+    // Lottie draws an image layer at its asset's size
+    expect(animation.assets.map((asset) => [asset.id, asset.w, asset.h, asset.p])).toEqual([
+      ['image_0', 80, 40, PNG],
+      ['image_1', 160, 80, PNG],
+    ]);
+    expect(animation.layers.map((layer) => layer.refId)).toEqual(['image_0', 'image_1', 'image_0']);
+  });
+
   it('clips rounded corners with a layer mask', () => {
     const [layer] = exportToLottieJson(
       [image('i1', { cornerRadius: [8, 8, 8, 8] })],
