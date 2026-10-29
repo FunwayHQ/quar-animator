@@ -394,11 +394,12 @@ export class EffectRenderer {
     );
     gl.uniform1f(shadow.uniforms.u_opacity ?? null, effect.opacity);
 
-    // Shadow offset in UV space (Y is inverted: positive offsetY = down in screen = negative in UV)
+    // Shadow offset in UV space. Its Y counts up, as every Y in the editor does
+    // (a positive one moves the shadow up), and so does UV's (y from the bottom)
     gl.uniform2f(
       shadow.uniforms.u_offset ?? null,
       effect.offsetX / region.w,
-      -effect.offsetY / region.h
+      effect.offsetY / region.h
     );
 
     gl.enable(gl.BLEND);

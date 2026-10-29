@@ -410,7 +410,7 @@ export class PdfSceneDrawer {
   /**
    * Each drop shadow as the canvas draws it: the layer's alpha blurred
    * (σ = blur / 3), in the shadow's color and opacity, moved by its offset
-   * on the page (a positive Y falls below).
+   * on the page (Y counts up, as in the editor: a negative Y falls below).
    */
   private async drawShadows(
     node: Node,
@@ -434,7 +434,7 @@ export class PdfSceneDrawer {
         mask[i] = Math.round(Math.max(0, Math.min(1, alpha[i]! * strength)) * 255);
       }
       const image = await this.writer.tinted(width, height, mask, shadow.color);
-      const moved = { ...rect, x: rect.x + shadow.offsetX, y: rect.y - shadow.offsetY };
+      const moved = { ...rect, x: rect.x + shadow.offsetX, y: rect.y + shadow.offsetY };
       this.placePicture(state.out, image, moved, this.writer.resources.alpha(1, 1));
     }
   }

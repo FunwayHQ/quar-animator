@@ -418,7 +418,7 @@ describe('effects', () => {
     data: new Uint8ClampedArray(width * height * 4).fill(255),
   });
 
-  it('draws a drop shadow from the layer’s silhouette under it, moved by its offset (down for a positive Y)', async () => {
+  it('draws a drop shadow from the layer’s silhouette under it, moved by its offset (up for a positive Y)', async () => {
     const render = vi.fn((_id: string, rect: { width: number; height: number }, scale: number) =>
       Promise.resolve(raster(Math.round(rect.width * scale), Math.round(rect.height * scale)))
     );
@@ -439,7 +439,7 @@ describe('effects', () => {
     });
     expect(render).toHaveBeenCalledWith('box', { x: -10, y: -10, width: 20, height: 20 }, 2, false);
     // The shadow, then the layer itself, still vector
-    expect(page).toMatch(/20 0 0 20 -6 -16 cm\n\/X\d+ Do[\s\S]*1 0 0 rg/);
+    expect(page).toMatch(/20 0 0 20 -6 -4 cm\n\/X\d+ Do[\s\S]*1 0 0 rg/);
     expect(bodies).toMatch(/\/ColorSpace \/DeviceRGB \/Interpolate true \/SMask \d+ 0 R/);
   });
 

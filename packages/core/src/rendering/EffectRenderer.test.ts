@@ -350,7 +350,8 @@ describe('EffectRenderer', () => {
 
     expect(gl.drawArrays).toHaveBeenCalledTimes(3);
     expect(gl.uniform4f).toHaveBeenCalledWith(null, 0, 0, 0, 1);
-    expect(gl.uniform2f).toHaveBeenLastCalledWith(null, 0.02, -0.03);
+    // Y counts up, as in the rest of the editor (and up in the framebuffer)
+    expect(gl.uniform2f).toHaveBeenLastCalledWith(null, 0.02, 0.03);
     expect(gl.viewport).toHaveBeenLastCalledWith(30, 40, 100, 100);
     expect(renderer.bindVAO).toHaveBeenLastCalledWith(null);
     (effectRenderer as any).fbManager.release(source);
