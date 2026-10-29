@@ -72,9 +72,9 @@ artboard, their easing too. Changing one is a step you can undo.
 1. Click the Play button (3), **Present**, at the end of the tools in the
    menu bar. It's there while the page has an artboard that isn't hidden
    (and not while you're [editing a symbol](symbols.md#edit)).
-2. The slides fill the screen, the first one first. Each plays its timeline
-   and its [sounds](sound.md) once from the start, then holds on its last
-   frame.
+2. The slides fill the screen, the first one first. Each plays its timeline,
+   its [sounds](sound.md) and its [videos](video-clips.md) once from the
+   start, then holds on its last frame.
 3. Press [[Down]] to go on to the next slide, with its transition.
 4. Press [[Esc]] to stop presenting and go back to editing.
 
@@ -104,11 +104,13 @@ A presentation clicker that sends Page Down and Page Up works too.
 ### Getting the slides ready {#loading}
 
 Before the first slide plays, the player loads what the slides need: their
-pictures, the sounds they play and the fonts of their text
+pictures, the first picture of each of their videos, the sounds they play
+and the fonts of their text
 ([Google Fonts](text.md#google-fonts) only if you've let the editor use them). If that takes more than a moment, a
 loading screen shows the first slide's name, how many slides there are, and
-how far it has got with the **Slides**, and with the **Sounds** and **Fonts**
-when they have any. [[Esc]] leaves from there too.
+how far it has got with the **Slides**, and with the **Videos**, **Sounds**
+and **Fonts** when they have any. It waits at most 5 seconds for the videos.
+[[Esc]] leaves from there too.
 
 ## Slides in exports {#exports}
 
