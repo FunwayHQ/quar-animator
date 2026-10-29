@@ -1,20 +1,37 @@
 /**
  * Video clip store actions: a video layer's clip changed — moved along its
  * timeline, trimmed, sped up or slowed down, looped, holding its last
- * frame — its linked sound kept where it is, the layer's timeline long
- * enough to play it to its end; and that sound unlinked to be a sound of
- * its own. Each an undoable step.
+ * frame, stopped at a frame — its linked sound kept where it is, the
+ * layer's timeline long enough to play it to its end; and that sound
+ * unlinked to be a sound of its own. Each an undoable step.
  */
 
 import {
   movedVideoClip,
   scopeDuration,
+  stoppedVideoClip,
   videoClipEndFrame,
+  withHold,
+  withLoop,
   withScopeDuration,
 } from '@quar/animation';
-import type { VideoClip } from '@quar/types';
+import { GIF_TYPE } from '@quar/export';
+import type { Video, VideoClip } from '@quar/types';
 import type { EditorStore, SceneGraphLike } from './editorStore';
 import { layerScope, unlinkedSoundClip, withLinkedSoundAt } from './videoSounds';
+
+/**
+ * The clip looping, or not. A GIF that stops stays on its last frame, as a
+ * browser leaves one, so turning its loop off holds it (Hold can go off).
+ */
+export function withClipLoop(
+  clip: VideoClip,
+  on: boolean,
+  video: Pick<Video, 'mimeType'> | undefined
+): VideoClip {
+  const changed = withLoop(clip, on);
+  return !on && video?.mimeType === GIF_TYPE ? withHold(changed, true) : changed;
+}
 
 export interface VideoClipActions {
   /**
@@ -50,6 +67,12 @@ export interface VideoClipActions {
    * end (never shortened). Part of the change before it: no undo step.
    */
   fitTimelineToVideoClip: (sceneGraph: SceneGraphLike, nodeId: string) => void;
+  /**
+   * End a video layer's clip on `frame` (the playhead's), holding the
+   * picture showing there — part way through a looped one's pass too.
+   * Nothing where its clip doesn't play then. Undoable.
+   */
+  stopVideoClip: (sceneGraph: SceneGraphLike, nodeId: string, frame: number) => void;
   /** Make a video's sound clip a sound of its own: it no longer moves with the video. Undoable. */
   unlinkSoundClip: (sceneGraph: SceneGraphLike, clipId: string) => void;
 }
@@ -89,6 +112,10 @@ export function createVideoClipActions(
         set({ timeline: withScopeDuration(state.timeline, scope, needed), isDirty: true });
       }
     },
+    stopVideoClip: (sceneGraph, nodeId, frame) =>
+      get().updateVideoClip(sceneGraph, nodeId, (clip) =>
+        stoppedVideoClip(clip, frame, get().frameRate)
+      ),
     unlinkSoundClip: (sceneGraph, clipId) =>
       get().updateSoundClip(sceneGraph, clipId, unlinkedSoundClip),
   };

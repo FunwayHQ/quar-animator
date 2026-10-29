@@ -15,8 +15,10 @@ import {
   withHold,
   withLoop,
 } from '@quar/animation';
+import { heldVideoTime, videoTimeAt } from '@quar/animation';
 import type { VideoNode } from '@quar/types';
 import { useEditorStore } from './editorStore';
+import { withClipLoop } from './videoClipActions';
 import { artboard, linkedSound, testVideo, videoLayer } from '../test/videoLayer';
 
 const store = () => useEditorStore.getState();
@@ -215,6 +217,87 @@ describe('changing a video clip', () => {
     // Moving doesn’t lengthen the timeline: a drag does as it ends
     expect(store().timelineDuration).toBe(300);
     expect(sound()?.start).toBe(250);
+  });
+});
+
+describe('a GIF’s loop', () => {
+  const gif = testVideo('wave', { mimeType: 'image/gif', duration: 1 });
+
+  it('turned off holds its last frame, as a browser leaves a stopped GIF', () => {
+    const looped = { start: 0, offset: 0, duration: 1, loop: true, loopFor: 5 };
+    expect(withClipLoop(looped, false, gif)).toEqual({
+      start: 0,
+      offset: 0,
+      duration: 1,
+      holdLastFrame: true,
+    });
+    // On again: it loops, still held when it ends
+    expect(withClipLoop({ start: 0, offset: 0, duration: 1 }, true, gif)).toMatchObject({
+      loop: true,
+    });
+  });
+
+  it('turned off on a video only stops it looping', () => {
+    const looped = { start: 0, offset: 0, duration: 4, loop: true, loopFor: 9 };
+    expect(withClipLoop(looped, false, testVideo('beach'))).toEqual({
+      start: 0,
+      offset: 0,
+      duration: 4,
+    });
+  });
+});
+
+describe('stopping a video clip at a frame', () => {
+  beforeEach(() => store().resetProject());
+
+  it('ends a looped clip on that frame, holding the picture showing there, in one step', () => {
+    const sg = new SceneGraph();
+    // A 1 s GIF from frame 30, looping for 8 s
+    sg.addNode(videoLayer('g', 'wave', { duration: 1, loop: true, loopFor: 8 }));
+    useEditorStore.setState({
+      videos: [testVideo('wave', { mimeType: 'image/gif', duration: 1 })],
+    });
+    const showing = videoTimeAt(layer(sg, 'g').clip, 107, 30);
+    store().stopVideoClip(sg, 'g', 107);
+    const clip = layer(sg, 'g').clip;
+    // Frames 30 to 107: 78 frames, part way through its third pass
+    expect(clip).toEqual({
+      start: 30,
+      offset: 0,
+      duration: 1,
+      loop: true,
+      loopFor: 78 / 30,
+      holdLastFrame: true,
+    });
+    expect(videoTimeAt(clip, 107, 30)).toBe(showing);
+    expect(heldVideoTime(clip, 30)).toBe(showing);
+    expect(videoTimeAt(clip, 250, 30)).toBe(showing);
+    expect(store().undoStack).toHaveLength(1);
+    store().undo(sg);
+    expect(layer(sg, 'g').clip).toEqual({
+      start: 30,
+      offset: 0,
+      duration: 1,
+      loop: true,
+      loopFor: 8,
+    });
+  });
+
+  it('ends a video’s clip there too, its sound with it', () => {
+    const sg = scene();
+    store().stopVideoClip(sg, 'v', 89);
+    // 4 s from frame 30, stopped after frame 89: 2 s of it
+    expect(layer(sg).clip).toEqual({ start: 30, offset: 0, duration: 2, holdLastFrame: true });
+    expect(scopeSounds(store().timeline, null)[0]).toMatchObject({ duration: 2 });
+    expect(scopeSounds(store().timeline, null)[0]).not.toHaveProperty('holdLastFrame');
+  });
+
+  it('does nothing at a frame outside the clip', () => {
+    const sg = scene();
+    store().stopVideoClip(sg, 'v', 29);
+    store().stopVideoClip(sg, 'v', 150);
+    expect(layer(sg).clip).toEqual({ start: 30, offset: 0, duration: 4 });
+    expect(store().undoStack).toHaveLength(0);
   });
 });
 

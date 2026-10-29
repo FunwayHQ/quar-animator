@@ -8,14 +8,14 @@
  * pass starts over, a clip holding its last frame shows it held to the end
  * of the timeline, and one that isn't at 1× its speed. Double-clicked (or
  * Enter, or its row's menu), its settings card sets its speed, loop and
- * hold, and unlinks its sound. It follows the clip through the scene graph
+ * hold, stops it at the playhead, and unlinks its sound. It follows the clip through the scene graph
  * on its own, so the timeline's rows aren't rebuilt for it, nor redrawn as
  * the animation plays.
  */
 
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Film, Repeat, Unlink } from 'lucide-react';
+import { CircleStop, Film, Repeat, Unlink } from 'lucide-react';
 import {
   clipMomentAt,
   clipSpeed,
@@ -26,14 +26,15 @@ import {
   trimmedVideoEnd,
   trimmedVideoStart,
   videoClipEndFrame,
+  videoClipPlaysOn,
   withClipSpeed,
   withHold,
-  withLoop,
 } from '@quar/animation';
 import type { Video, VideoClip } from '@quar/types';
 import { useSceneGraph } from '../../contexts/SceneGraphContext';
 import { useEditorStore } from '../../stores/editorStore';
 import { isPosingScene } from '../../stores/scenePosing';
+import { withClipLoop } from '../../stores/videoClipActions';
 import { findLinkedSound } from '../../stores/videoSounds';
 import styles from './VideoClipBar.module.css';
 
@@ -501,6 +502,7 @@ function VideoClipSettings({
 }: VideoClipSettingsProps) {
   const sceneGraph = useSceneGraph();
   const linkedClipId = useEditorStore((s) => findLinkedSound(s.timeline, nodeId)?.clip.id);
+  const playhead = useEditorStore((s) => s.currentFrame);
   const cardRef = useRef<HTMLDivElement>(null);
   // A slide of the speed is one undo step
   const slidingRef = useRef(false);
@@ -533,6 +535,7 @@ function VideoClipSettings({
 
   const speed = clipSpeed(clip);
   const lastFrame = Math.max(clip.start, Math.ceil(videoClipEndFrame(clip, frameRate)) - 1);
+  const stoppable = videoClipPlaysOn(clip, playhead, frameRate);
 
   // Its events go no further than it: in React they'd reach the timeline row it's drawn from
   const stop = (event: React.SyntheticEvent) => event.stopPropagation();
@@ -619,7 +622,7 @@ function VideoClipSettings({
               checked={clip.loop === true}
               onChange={(event) => {
                 const on = event.target.checked;
-                update((c) => withLoop(c, on));
+                update((c) => withClipLoop(c, on, video));
               }}
               data-testid="video-clip-loop"
             />
@@ -645,6 +648,24 @@ function VideoClipSettings({
               <small>Keep showing it after the clip ends</small>
             </span>
           </label>
+        </div>
+
+        <div className={styles.settingsActions}>
+          <span className={styles.settingsNote} data-testid="video-clip-stop-note">
+            {stoppable
+              ? `Ends it on frame ${playhead}, holding the picture there`
+              : 'Put the playhead on the clip to stop it there'}
+          </span>
+          <button
+            type="button"
+            className={styles.stopButton}
+            disabled={!stoppable}
+            onClick={() => useEditorStore.getState().stopVideoClip(sceneGraph, nodeId, playhead)}
+            data-testid="video-clip-stop"
+          >
+            <CircleStop aria-hidden="true" />
+            Stop Here
+          </button>
         </div>
 
         {linkedClipId !== undefined && (

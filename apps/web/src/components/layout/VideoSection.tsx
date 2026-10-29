@@ -19,11 +19,11 @@ import {
   videoClipEndFrame,
   withClipSpeed,
   withHold,
-  withLoop,
 } from '@quar/animation';
 import type { VideoClip, VideoNode } from '@quar/types';
 import type { SceneGraphLike } from '../../stores/editorStore';
 import { useEditorStore } from '../../stores/editorStore';
+import { withClipLoop } from '../../stores/videoClipActions';
 import styles from './PropertiesPanel.module.css';
 
 /** Seconds as a length: m:ss.s, and h:mm:ss.s from an hour. */
@@ -172,7 +172,7 @@ export function VideoSection({
                 checked={clip.loop === true}
                 onChange={(e) => {
                   const on = e.target.checked;
-                  change((c) => withLoop(c, on));
+                  change((c) => withClipLoop(c, on, video));
                 }}
                 data-testid="video-section-loop"
               />

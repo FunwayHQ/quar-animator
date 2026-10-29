@@ -5,7 +5,12 @@ import { isPosingScene } from '../../stores/scenePosing';
 import { getAnimationEnd, getAnimationStart } from '../../hooks/usePlayback';
 import { undoGroupUntilRelease } from '../../stores/undoGroups';
 import { KEYS, formatShortcut } from '../common/shortcuts';
-import { formatTimecode, getAnimationSpans, getTracksByNode } from '@quar/animation';
+import {
+  formatTimecode,
+  getAnimationSpans,
+  getTracksByNode,
+  videoClipPlaysOn,
+} from '@quar/animation';
 import type { AnimationSpan } from '@quar/animation';
 import { getRulerScale } from './timelineRuler';
 import type { Node, EasingFunction } from '@quar/types';
@@ -1138,10 +1143,10 @@ export function Timeline({ playback }: TimelineProps = {}) {
     }
 
     // Timeline ruler context menu (a video layer's lane: its clip's settings first)
-    const videoId =
-      contextMenu.layerNodeId && sceneGraph.getNode(contextMenu.layerNodeId)?.type === 'video'
-        ? contextMenu.layerNodeId
-        : null;
+    const videoNode = contextMenu.layerNodeId ? sceneGraph.getNode(contextMenu.layerNodeId) : null;
+    const videoId = videoNode?.type === 'video' ? videoNode.id : null;
+    // Where the playhead is as the menu opens (the timeline isn't drawn again for each frame)
+    const { currentFrame: playhead, frameRate: rate } = useEditorStore.getState();
     const items: ContextMenuEntry[] = [
       ...(videoId
         ? [
@@ -1150,6 +1155,15 @@ export function Timeline({ playback }: TimelineProps = {}) {
               label: 'Clip Settings...',
               shortcut: 'Enter',
               onClick: () => openVideoClipSettings(videoId, contextMenu.x, contextMenu.y),
+            },
+            {
+              id: 'video-clip-stop',
+              label: 'Stop Clip at Playhead',
+              // Only where the clip plays: its picture there is held
+              disabled: !(
+                videoNode?.type === 'video' && videoClipPlaysOn(videoNode.clip, playhead, rate)
+              ),
+              onClick: () => useEditorStore.getState().stopVideoClip(sceneGraph, videoId, playhead),
             },
             { type: 'separator' as const },
           ]

@@ -223,6 +223,23 @@ describe('PropertiesPanel - video layer', () => {
       expect(clip()).not.toHaveProperty('loop');
     });
 
+    it('holds a GIF’s last frame when its loop is turned off', () => {
+      useEditorStore.setState({
+        videos: [{ ...VIDEO, name: 'Wave.gif', mimeType: 'image/gif', duration: 1 }],
+      });
+      const sg = selectVideo({ start: 12, offset: 0, duration: 1, loop: true, loopFor: 6 });
+      act(() => {
+        fireEvent.click(screen.getByTestId('video-section-loop'));
+      });
+      expect((sg.getNode('v') as VideoNode).clip).toEqual({
+        start: 12,
+        offset: 0,
+        duration: 1,
+        holdLastFrame: true,
+      });
+      expect(screen.getByTestId('video-section-hold')).toBeChecked();
+    });
+
     it('says how long a looped clip plays and how often it starts over', () => {
       selectVideo({ start: 12, offset: 2, duration: 4, loop: true, loopFor: 10 });
       const length = screen.getByTestId('video-clip-length');

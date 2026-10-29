@@ -365,6 +365,64 @@ describe('editing a video clip on its bar', () => {
     expect(clip()).not.toHaveProperty('holdLastFrame');
   });
 
+  it('holds a GIF’s last frame when its loop is turned off, Hold still able to go off', () => {
+    renderWithVideo({ clip: { loop: true, loopFor: 6 } });
+    act(() =>
+      useEditorStore.setState({
+        videos: [testVideo('beach', { name: 'Wave.gif', mimeType: 'image/gif', duration: 4 })],
+      })
+    );
+    fireEvent.doubleClick(bar());
+    fireEvent.click(screen.getByTestId('video-clip-loop'));
+    expect(clip()).toEqual({ start: 30, offset: 0, duration: 4, holdLastFrame: true });
+    expect(store().undoStack).toHaveLength(1);
+    fireEvent.click(screen.getByTestId('video-clip-hold'));
+    expect(clip()).not.toHaveProperty('holdLastFrame');
+  });
+
+  it('stops where the playhead is from its settings, holding the frame there, in one step', () => {
+    renderWithVideo({ clip: { loop: true, loopFor: 8 } });
+    act(() => store().setCurrentFrame(20));
+    fireEvent.doubleClick(bar());
+    // The playhead before the clip: nothing to stop
+    expect(screen.getByTestId('video-clip-stop')).toBeDisabled();
+    act(() => store().setCurrentFrame(197));
+    expect(screen.getByTestId('video-clip-stop')).toBeEnabled();
+    fireEvent.click(screen.getByTestId('video-clip-stop'));
+    // Frames 30 to 197, part way through its second pass, held after
+    expect(clip()).toMatchObject({ loop: true, loopFor: 168 / 30, holdLastFrame: true });
+    expect(screen.getByTestId('video-clip-hold-v').style.left).toBe(`${(198 / 300) * 100}%`);
+    expect(store().undoStack).toHaveLength(1);
+    act(() => store().undo(sceneGraph!));
+    expect(clip()).toMatchObject({ loopFor: 8 });
+    expect(clip()).not.toHaveProperty('holdLastFrame');
+  });
+
+  it('stops where the playhead is from its row’s menu, which can’t outside it', () => {
+    renderWithVideo({ clip: { loop: true, loopFor: 8 } });
+    rowsOfWidth();
+    act(() => store().setCurrentFrame(10));
+    fireEvent.contextMenu(bar(), { clientX: 40, clientY: 10 });
+    expect(screen.getByText('Stop Clip at Playhead').closest('[role="menuitem"]')).toHaveAttribute(
+      'aria-disabled',
+      'true'
+    );
+    fireEvent.keyDown(document, { key: 'Escape' });
+    act(() => store().setCurrentFrame(100));
+    fireEvent.contextMenu(bar(), { clientX: 40, clientY: 10 });
+    fireEvent.click(screen.getByText('Stop Clip at Playhead'));
+    expect(clip()).toMatchObject({ loopFor: 71 / 30, holdLastFrame: true });
+  });
+
+  it('cuts a looped clip at any frame its right end is dragged to, not where a pass ends', () => {
+    renderWithVideo({ clip: { loop: true, loopFor: 8 } });
+    rowsOfWidth();
+    // From its end at frame 270 to frame 187: 157 frames, part way through its second pass
+    drag(edge('end'), 270, 230, 187);
+    expect(clip()).toMatchObject({ loop: true, loopFor: 157 / 30 });
+    expect(bar().style.width).toBe(`${(157 / 300) * 100}%`);
+  });
+
   it('unlinks its sound from its settings, when it has one', () => {
     renderWithVideo({ sound: true });
     fireEvent.doubleClick(bar());

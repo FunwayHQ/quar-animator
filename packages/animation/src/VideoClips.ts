@@ -241,6 +241,24 @@ export function withHold(clip: VideoClip, on: boolean): VideoClip {
   return changed;
 }
 
+/** Whether a clip plays on a (whole) frame of its timeline: from its start, before its end. */
+export function videoClipPlaysOn(clip: VideoClip, frame: number, frameRate: number): boolean {
+  return frame >= clip.start && videoClipEndFrame(clip, frameRate) - frame > SLIP;
+}
+
+/**
+ * The clip ending on `frame` of its timeline (its last frame then) and
+ * holding the picture showing there: stopped where it is, looped or not.
+ * Unchanged where it doesn't play on that frame.
+ */
+export function stoppedVideoClip(clip: VideoClip, frame: number, frameRate: number): VideoClip {
+  const at = Math.floor(frame);
+  if (!videoClipPlaysOn(clip, at, frameRate)) return clip;
+  // Never longer than it plays now
+  const stopped = trimmedVideoEnd(clip, at + 1, frameRate, clip.offset + clip.duration);
+  return withHold(stopped, true);
+}
+
 /** The timing a linked sound takes from its video's clip (holding a last frame isn't a sound's). */
 const LINKED_TIMING = ['start', 'offset', 'duration', 'speed', 'loop', 'loopFor'] as const;
 

@@ -526,3 +526,16 @@
   outline: 1px solid var(--color-accent-primary);
   outline-offset: 1px;
 }
+
+/* Stop Here: an action of the card's, as Unlink Sound is; there's nothing to stop off the clip */
+.stopButton {
+  composes: unlinkButton;
+}
+
+.stopButton:disabled {
+  border-color: var(--color-border-subtle);
+  background: transparent;
+  color: var(--color-text-tertiary);
+  cursor: default;
+  opacity: 0.55;
+}
