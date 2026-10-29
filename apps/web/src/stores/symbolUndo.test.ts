@@ -102,3 +102,40 @@ describe('Delete Symbol and undo', () => {
     expect(store().symbols).toHaveLength(0);
   });
 });
+
+describe('Create Symbol and undo', () => {
+  let sg: SceneGraph;
+
+  beforeEach(() => {
+    store().resetProject();
+    store().clearHistory();
+    sg = new SceneGraph();
+  });
+
+  it('takes the new symbol out of the library, and redo puts it back', () => {
+    const { symbolId, instanceId } = symbolOf(sg, 'r1', 0);
+    const definition = structuredClone(store().symbols[0]);
+
+    store().undo(sg);
+    expect(store().symbols).toEqual([]);
+    expect(instances(sg)).toEqual([]);
+    expect(sg.getNode('r1')?.type).toBe('rectangle');
+
+    store().redo(sg);
+    expect(store().symbols).toEqual([definition]);
+    expect(store().symbols[0]?.id).toBe(symbolId);
+    expect(instances(sg)).toEqual([instanceId]);
+
+    // The step redo put back takes it out again
+    store().undo(sg);
+    expect(store().symbols).toEqual([]);
+  });
+
+  it('takes out only the symbol the step made', () => {
+    const first = symbolOf(sg, 'r1', 0).symbolId;
+    symbolOf(sg, 'r2', 50);
+
+    store().undo(sg);
+    expect(store().symbols.map((symbol) => symbol.id)).toEqual([first]);
+  });
+});

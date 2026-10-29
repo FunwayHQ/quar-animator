@@ -182,7 +182,8 @@ interface HistorySnapshot {
   vitruvianControllers: VitruvianController[];
   /**
    * Symbols the step this snapshot undoes (or redoes) added to the library —
-   * a paste from another project — taken out on undo, put back on redo.
+   * Create Symbol's, a paste's from another project — taken out on undo, put
+   * back on redo.
    * (The library isn't in snapshots: symbol editing keeps its own history.)
    */
   symbolsAdded?: SymbolDefinition[];
@@ -4728,6 +4729,12 @@ function createSymbolActions(
       sceneGraph.addNode(instanceNode, instanceParent ?? undefined);
       if (instanceIndex !== undefined)
         sceneGraph.moveNode(instanceId, instanceParent, instanceIndex);
+
+      // Undo takes the new symbol out of the library as well (snapshots don't hold it)
+      const step = get().undoStack[get().undoStack.length - 1];
+      if (step) {
+        step.symbolsAdded = [...(step.symbolsAdded ?? []), structuredClone(definition)];
+      }
 
       set({
         symbols: [...state.symbols, definition],
