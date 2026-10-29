@@ -6,6 +6,7 @@
 import { useEffect, useRef, useCallback } from 'react';
 import {
   PlaybackController,
+  playbackEndFrame,
   evaluateTimelineAtFrame,
   applyAnimatedValues,
   scopedTimeline,
@@ -39,6 +40,33 @@ export function getPlayEnd(timeline: ReturnType<typeof useEditorStore.getState>[
 }
 
 type EditorState = ReturnType<typeof useEditorStore.getState>;
+
+/**
+ * The frame End goes to, the end of the animation, as the playback
+ * controller's goToEnd() works it out (playbackEndFrame): the last keyframe
+ * or sound of the timeline in view, kept inside the work area while it's
+ * on. For the menus, which have no controller of their own.
+ */
+export function getAnimationEnd(
+  state: Pick<
+    EditorState,
+    | 'timeline'
+    | 'timelineScope'
+    | 'timelineDuration'
+    | 'workAreaEnabled'
+    | 'workAreaStart'
+    | 'workAreaEnd'
+  >,
+  sceneGraph: Parameters<typeof inTimelineScope>[0]
+): number {
+  const last = Math.max(0, state.timelineDuration - 1);
+  const range = state.workAreaEnabled
+    ? { start: state.workAreaStart, end: Math.min(state.workAreaEnd, last) }
+    : { start: 0, end: last };
+  const { timeline, timelineScope: scope } = state;
+  const inView = scopedTimeline(timeline, scope, inTimelineScope(sceneGraph, scope));
+  return playbackEndFrame(range, getPlayEnd(inView));
+}
 
 /** Apply animated values to ALL scene graph nodes (including children in groups). */
 function applyFrame(

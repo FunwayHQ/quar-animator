@@ -31,6 +31,7 @@ import { openHelp } from '../help/helpPanel';
 import styles from './MenuBar.module.css';
 import { useToolsBelowMenus } from './useToolsBelowMenus';
 import { useProjectShortcuts } from '../../hooks/useProjectShortcuts';
+import { getAnimationEnd } from '../../hooks/usePlayback';
 import { okToDiscard } from '../../services/unsavedChanges';
 import { QuarLogo } from '../common/QuarLogo';
 
@@ -1090,7 +1091,9 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                     shortcut="End"
                     onClick={() => {
                       closeMenu();
-                      setCurrentFrameAction(useEditorStore.getState().timelineDuration - 1);
+                      // Where End goes: the end of the animation, not of the timeline
+                      setIsPlayingAction(false);
+                      setCurrentFrameAction(getAnimationEnd(useEditorStore.getState(), sceneGraph));
                     }}
                   />
                   <Separator />

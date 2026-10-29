@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect, vi } from 'vitest';
-import { PlaybackController } from './PlaybackController';
+import { PlaybackController, playbackEndFrame } from './PlaybackController';
 import type { PlaybackOptions } from './PlaybackController';
 
 // ============================================================================
@@ -542,6 +542,16 @@ describe('play end', () => {
     timer.tick(0);
     timer.tick(500);
     expect(controller.currentFrame).toBe(12);
+  });
+});
+
+describe('playbackEndFrame', () => {
+  it('is the end of the range, or the play end when that is inside it', () => {
+    expect(playbackEndFrame({ start: 0, end: 299 }, null)).toBe(299);
+    expect(playbackEndFrame({ start: 0, end: 299 }, 45)).toBe(45);
+    expect(playbackEndFrame({ start: 0, end: 30 }, 45)).toBe(30);
+    // A play end before the range doesn't count
+    expect(playbackEndFrame({ start: 100, end: 200 }, 45)).toBe(200);
   });
 });
 

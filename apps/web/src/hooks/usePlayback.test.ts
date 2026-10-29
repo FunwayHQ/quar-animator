@@ -5,10 +5,11 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import type { ReactNode } from 'react';
-import { usePlayback } from './usePlayback';
+import { getAnimationEnd, usePlayback } from './usePlayback';
 import { useEditorStore, DEFAULT_FILL, DEFAULT_STROKE } from '../stores/editorStore';
 import { SceneGraphProvider, useSceneGraph } from '../contexts/SceneGraphContext';
 import type { Node } from '@quar/types';
+import { SceneGraph } from '@quar/core';
 import { PlaybackController, addKeyframe, createTimeline, getOrCreateTrack } from '@quar/animation';
 
 // Mock PlaybackController to avoid rAF issues in tests
@@ -474,5 +475,60 @@ describe('usePlayback', () => {
     });
 
     expect(result.current.sceneGraph.getNode(nodeId)?.opacity).toBe(0);
+  });
+});
+
+describe('getAnimationEnd: where End and Animation › Go to End go', () => {
+  const sceneGraph = new SceneGraph();
+  const endOf = (frames: number[], workArea?: [number, number]) =>
+    getAnimationEnd(
+      {
+        ...useEditorStore.getState(),
+        timeline: timelineWithKeyframes(frames),
+        timelineScope: null,
+        timelineDuration: 300,
+        workAreaEnabled: workArea !== undefined,
+        workAreaStart: workArea?.[0] ?? 0,
+        workAreaEnd: workArea?.[1] ?? 299,
+      },
+      sceneGraph
+    );
+
+  /** Where the playback controller's goToEnd() goes for the same timeline */
+  async function controllerEnd(frames: number[], workArea?: [number, number]) {
+    const actual = await vi.importActual<typeof import('@quar/animation')>('@quar/animation');
+    const ctrl = new actual.PlaybackController({
+      duration: 300,
+      frameRate: 30,
+      looping: false,
+      requestFrame: () => 0,
+      cancelFrame: () => {},
+    });
+    if (workArea) ctrl.setWorkArea(true, workArea[0], workArea[1]);
+    const last = Math.max(-1, ...frames);
+    ctrl.setPlayEnd(last >= 1 ? last : null);
+    ctrl.goToEnd();
+    return ctrl.currentFrame;
+  }
+
+  it('is the last keyframe, inside the work area while it is on, as for the controller', async () => {
+    const cases: Array<[number[], [number, number]?]> = [
+      [[]],
+      [[0]],
+      [[12, 45]],
+      [
+        [12, 90],
+        [10, 50],
+      ],
+      [
+        [12, 90],
+        [100, 200],
+      ],
+    ];
+    for (const [frames, workArea] of cases) {
+      expect(endOf(frames, workArea)).toBe(await controllerEnd(frames, workArea));
+    }
+    expect(endOf([12, 45])).toBe(45);
+    expect(endOf([])).toBe(299);
   });
 });

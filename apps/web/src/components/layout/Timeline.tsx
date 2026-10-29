@@ -2,6 +2,7 @@ import { useRef, useCallback, useState, useEffect, useMemo, useLayoutEffect } fr
 import { useSceneGraph } from '../../contexts/SceneGraphContext';
 import { useEditorStore } from '../../stores/editorStore';
 import { isPosingScene } from '../../stores/scenePosing';
+import { getAnimationEnd } from '../../hooks/usePlayback';
 import { undoGroupUntilRelease } from '../../stores/undoGroups';
 import { formatTimecode, getAnimationSpans, getTracksByNode } from '@quar/animation';
 import type { AnimationSpan } from '@quar/animation';
@@ -709,15 +710,16 @@ export function Timeline({ playback }: TimelineProps = {}) {
     }
   }, [playback, setCurrentFrame, setIsPlaying]);
 
+  // The end of the animation (as End): where playing stops
   const goToEnd = useCallback(() => {
     if (playback) {
       playback.pause();
       playback.goToEnd();
     } else {
-      setCurrentFrame(duration - 1);
       setIsPlaying(false);
+      setCurrentFrame(getAnimationEnd(useEditorStore.getState(), sceneGraph));
     }
-  }, [playback, duration, setCurrentFrame, setIsPlaying]);
+  }, [playback, sceneGraph, setCurrentFrame, setIsPlaying]);
 
   const stepFrame = useCallback(
     (delta: number) => {
@@ -1159,9 +1161,16 @@ export function Timeline({ playback }: TimelineProps = {}) {
         id: 'go-to-end',
         label: 'Go To End',
         shortcut: 'End',
+        // What End and the Go to end button do: the end of the animation
+        onClick: goToEnd,
+      },
+      {
+        id: 'go-to-last-frame',
+        label: 'Go To Last Frame',
+        // The timeline's own last frame, past the animation's end (to key after it)
         onClick: () => {
-          setCurrentFrame(duration - 1);
           setIsPlaying(false);
+          setCurrentFrame(duration - 1);
         },
       },
     ];
@@ -1234,6 +1243,7 @@ export function Timeline({ playback }: TimelineProps = {}) {
     setWorkAreaStart,
     setWorkAreaEnd,
     clearWorkArea,
+    goToEnd,
   ]);
 
   // ============================================================

@@ -473,6 +473,26 @@ describe('MenuBar', () => {
       expect(useEditorStore.getState().currentFrame).toBe(299);
     });
 
+    it('goes to the end of the animation with Go to End, where End goes', () => {
+      const timeline = createTimeline({ duration: 300, frameRate: 30 });
+      timeline.tracks.push({
+        id: 'track-1',
+        nodeId: 'loose-layer',
+        property: 'opacity',
+        keyframes: [
+          { id: 'kf-1', time: 0, value: 0, easing: 'linear' },
+          { id: 'kf-2', time: 60, value: 1, easing: 'linear' },
+        ],
+      });
+      render(<MenuBar />);
+      act(() => useEditorStore.setState({ timeline, timelineScope: null, isPlaying: true }));
+
+      fireEvent.click(screen.getByTestId('menu-animation'));
+      fireEvent.click(screen.getByText('Go to End'));
+      expect(useEditorStore.getState().currentFrame).toBe(60);
+      expect(useEditorStore.getState().isPlaying).toBe(false);
+    });
+
     it('Bind Selection to Bones needs bones in the scene', () => {
       let sceneGraph: SceneGraph | null = null;
       function Grab() {

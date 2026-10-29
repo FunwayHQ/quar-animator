@@ -1053,12 +1053,36 @@ describe('Timeline', () => {
   });
 
   it('navigates to end when go to end is clicked', async () => {
+    useEditorStore.setState({ timeline: createTimeline({ duration: 300, frameRate: 30 }) });
     const user = userEvent.setup();
     renderTimeline();
 
     const goToEndButton = screen.getByTitle('Go to end (End)');
     await user.click(goToEndButton);
 
+    expect(useEditorStore.getState().currentFrame).toBe(299);
+  });
+
+  it('goes to the end of the animation with the ruler’s Go To End, and to the timeline’s with Go To Last Frame', () => {
+    const track = createTrack<number>('ball', 'opacity');
+    addKeyframe(track, 0, 0);
+    addKeyframe(track, 60, 1);
+    useEditorStore.setState({ timeline: createTimeline({ tracks: [track] }), timelineScope: null });
+    renderTimeline();
+    const ruler = screen.getByTestId('timeline-ruler');
+    Object.defineProperty(ruler, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => ({ left: 0, top: 0, width: 300, height: 20 }) as DOMRect,
+    });
+
+    fireEvent.contextMenu(ruler, { clientX: 10 });
+    const end = screen.getByRole('menuitem', { name: /^Go To End/ });
+    expect(end).toHaveTextContent('End');
+    fireEvent.click(end);
+    expect(useEditorStore.getState().currentFrame).toBe(60);
+
+    fireEvent.contextMenu(ruler, { clientX: 10 });
+    fireEvent.click(screen.getByRole('menuitem', { name: /Go To Last Frame/ }));
     expect(useEditorStore.getState().currentFrame).toBe(299);
   });
 

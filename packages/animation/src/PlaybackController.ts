@@ -12,6 +12,20 @@ export interface PlaybackOptions {
   cancelFrame?: (id: number) => void;
 }
 
+/**
+ * Where playing stops or loops, and where goToEnd() goes — End, "the end
+ * of the animation": the play end (the last keyframe or sound) when it's
+ * inside the playing range, else the range's end (the work area's while
+ * it's on, else the timeline's last frame).
+ */
+export function playbackEndFrame(
+  range: { start: number; end: number },
+  playEnd: number | null
+): number {
+  if (playEnd === null || playEnd < range.start) return range.end;
+  return Math.min(range.end, playEnd);
+}
+
 export class PlaybackController {
   private _currentFrame: number = 0;
   private _duration: number;
@@ -91,9 +105,10 @@ export class PlaybackController {
    * the whole range, so frames past the last keyframe can be keyed.
    */
   private get _playbackEnd(): number {
-    const end = this._effectiveEnd;
-    if (this._playEnd === null || this._playEnd < this._effectiveStart) return end;
-    return Math.min(end, this._playEnd);
+    return playbackEndFrame(
+      { start: this._effectiveStart, end: this._effectiveEnd },
+      this._playEnd
+    );
   }
 
   /** Stop/loop playback at this frame (e.g. the last keyframe); null plays to the end. */
