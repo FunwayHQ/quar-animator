@@ -11,6 +11,7 @@ import { getRulerScale } from './timelineRuler';
 import type { Node, EasingFunction } from '@quar/types';
 import { ContextMenu } from '../common/ContextMenu';
 import { SoundLaneLabel, SoundLaneTrack, useSoundDrop } from '../timeline/SoundLane';
+import { VideoClipBar } from '../timeline/VideoClipBar';
 import type { ContextMenuEntry } from '../common/ContextMenu';
 import { OnionSkinPanel } from '../common/OnionSkinPanel';
 import { EasingEditor } from '../common/EasingEditor';
@@ -1814,6 +1815,10 @@ export function Timeline({ playback }: TimelineProps = {}) {
                       onContextMenu={(e) => handleTimelineContextMenu(e, node.id)}
                       data-testid={`timeline-track-${node.id}`}
                     >
+                      {/* A video's clip, under its keyframes */}
+                      {node.type === 'video' && (
+                        <VideoClipBar nodeId={node.id} duration={duration} />
+                      )}
                       {nodeSpans.get(node.id)?.map((span) => (
                         <div
                           key={`${span.start}-${span.end}`}

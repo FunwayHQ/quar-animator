@@ -70,6 +70,11 @@
   --color-timeline-sound-fill: rgba(45, 212, 191, 0.13);
   --color-timeline-sound-fill-selected: rgba(45, 212, 191, 0.24);
   --color-timeline-sound-wave: rgba(94, 234, 212, 0.62);
+  /* Video clips: warm film orange, apart from the keyframes and the sounds */
+  --color-timeline-video: #fb923c;
+  --color-timeline-video-fill: rgba(251, 146, 60, 0.15);
+  --color-timeline-video-fill-selected: rgba(251, 146, 60, 0.28);
+  --color-timeline-video-perforation: rgba(9, 9, 11, 0.62);
 
   /* Colors - Keyframe indicators */
   --color-keyframe-active: #f5a623;
@@ -197,6 +202,10 @@
   --color-timeline-sound-fill: rgba(13, 148, 136, 0.11);
   --color-timeline-sound-fill-selected: rgba(13, 148, 136, 0.22);
   --color-timeline-sound-wave: rgba(15, 118, 110, 0.55);
+  --color-timeline-video: #c2410c;
+  --color-timeline-video-fill: rgba(234, 88, 12, 0.11);
+  --color-timeline-video-fill-selected: rgba(234, 88, 12, 0.22);
+  --color-timeline-video-perforation: rgba(255, 255, 255, 0.78);
   --color-keyframe-active: #b45309;
 
   --shadow-sm: 0 1px 2px rgba(24, 24, 27, 0.08);
