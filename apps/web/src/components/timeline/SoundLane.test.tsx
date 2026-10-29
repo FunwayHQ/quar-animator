@@ -6,12 +6,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, createEvent, fireEvent, waitFor } from '@testing-library/react';
 import { render, screen } from '../../test/utils';
-import { scopeSounds } from '@quar/animation';
+import { createTimeline, scopeSounds } from '@quar/animation';
 import type { SceneGraph } from '@quar/core';
-import type { Sound } from '@quar/types';
+import type { Sound, VideoNode } from '@quar/types';
 import { Timeline } from '../layout/Timeline';
 import { SceneGraphProvider, useSceneGraph } from '../../contexts/SceneGraphContext';
 import { useEditorStore } from '../../stores/editorStore';
+import { linkedSound, videoLayer } from '../../test/videoLayer';
 
 const mocks = vi.hoisted(() => ({
   importSoundFiles: vi.fn(async () => {}),
@@ -316,5 +317,50 @@ describe('the sound lane', () => {
     expect(screen.queryByTestId(`sound-clip-${onPage}`)).not.toBeInTheDocument();
     const onSlide = placed(10);
     expect(screen.getByTestId(`sound-clip-${onSlide}`)).toBeInTheDocument();
+  });
+
+  it('moves a video’s sound with its video, untrimmed, until it’s unlinked', () => {
+    renderTimeline();
+    const layer = videoLayer('v', 'beach');
+    act(() => {
+      sceneGraph!.addNode(layer);
+      useEditorStore.setState({
+        sounds: [voice],
+        timeline: createTimeline({
+          duration: 300,
+          frameRate: 30,
+          sounds: [linkedSound('s', layer, 'voice')],
+        }),
+      });
+    });
+    laneOfWidth();
+    const clip = screen.getByTestId('sound-clip-s');
+    expect(clip).toHaveAccessibleName('Sound Voice, frames 30 to 149, the sound of a video');
+    expect(screen.getByTestId('sound-clip-linked-s')).toBeInTheDocument();
+    // Trimmed with its video, not here
+    expect(clip.querySelector('[data-edge="start"], [data-edge="end"]')).toBeNull();
+
+    const steps = store().undoStack.length;
+    fireEvent.pointerDown(clip, { button: 0, clientX: 40, pointerId: 1 });
+    fireEvent.pointerMove(clip, { clientX: 70, pointerId: 1 });
+    fireEvent.pointerUp(clip, { pointerId: 1 });
+    expect(clips()[0]?.start).toBe(60);
+    expect((sceneGraph!.getNode('v') as VideoNode).clip.start).toBe(60);
+    expect(store().undoStack.length).toBe(steps + 1);
+
+    fireEvent.contextMenu(clip, { clientX: 20, clientY: 20 });
+    fireEvent.click(screen.getByText('Unlink from Video'));
+    expect(clips()[0]).not.toHaveProperty('linkedTo');
+    expect(screen.queryByTestId('sound-clip-linked-s')).not.toBeInTheDocument();
+    expect(clip.querySelectorAll('[data-edge="start"], [data-edge="end"]')).toHaveLength(2);
+    // On its own now
+    fireEvent.keyDown(clip, { key: 'ArrowRight' });
+    expect(clips()[0]?.start).toBe(61);
+    expect((sceneGraph!.getNode('v') as VideoNode).clip.start).toBe(60);
+    act(() => {
+      store().undo(sceneGraph!);
+      store().undo(sceneGraph!);
+    });
+    expect(clips()[0]?.linkedTo).toBe('v');
   });
 });

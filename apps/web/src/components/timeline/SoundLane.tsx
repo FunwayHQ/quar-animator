@@ -3,13 +3,14 @@
  * The timeline's row of sound clips, kept in view below the layers: each
  * clip a bar with its waveform, dragged to move it, its ends dragged to
  * trim it, its top corners dragged to fade it in and out, its volume, fades
- * and mute in a small settings card. Sound files dropped on the timeline
- * land where they're dropped.
+ * and mute in a small settings card. A video's sound moves with its video
+ * (and isn't trimmed on its own) until it's unlinked. Sound files dropped
+ * on the timeline land where they're dropped.
  */
 
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { HeadphoneOff, Headphones, Music, Plus, Trash2, VolumeX } from 'lucide-react';
+import { HeadphoneOff, Headphones, Link2, Music, Plus, Trash2, VolumeX } from 'lucide-react';
 import {
   clipEndFrame,
   clipFades,
@@ -308,6 +309,15 @@ export function SoundLaneTrack({
         shortcut: 'M',
         onClick: () => change(clip.id, (c) => ({ ...c, muted: !c.muted })),
       },
+      ...(clip.linkedTo !== undefined
+        ? [
+            {
+              id: 'unlink',
+              label: 'Unlink from Video',
+              onClick: () => store().unlinkSoundClip(sceneGraph, clip.id),
+            },
+          ]
+        : []),
       { type: 'separator' },
       {
         id: 'delete',
@@ -462,11 +472,14 @@ const SoundClipBar = memo(function SoundClipBar({
   }, [audio, offset, length, gain, fadeInSet, fadeOutSet, columns]);
   const end = clipEndFrame(clip, frameRate);
   const name = sound?.name ?? 'Missing sound';
+  // A video's sound: moved with its video, trimmed with it (not here) until unlinked
+  const linked = clip.linkedTo !== undefined;
   const lastFrame = Math.max(clip.start, Math.ceil(end) - 1);
   const { fadeIn, fadeOut } = clipFades(clip);
   const inAt = clip.duration > 0 ? (fadeIn / clip.duration) * 100 : 0;
   const outAt = clip.duration > 0 ? 100 - (fadeOut / clip.duration) * 100 : 100;
   const described = [
+    linked ? 'the sound of a video' : '',
     clip.muted ? 'muted' : '',
     clip.gain !== 1 ? `volume ${Math.round(clip.gain * 100)}%` : '',
     fadeIn > 0 ? `fades in over ${seconds(fadeIn)}` : '',
@@ -492,7 +505,11 @@ const SoundClipBar = memo(function SoundClipBar({
       onContextMenu={onContextMenu}
       aria-label={[`Sound ${name}, frames ${clip.start} to ${lastFrame}`, ...described].join(', ')}
       aria-pressed={selected}
-      title={`${name}: frames ${clip.start}–${lastFrame} (${seconds(clip.duration)}). Drag to move, its ends to trim, its top corners to fade; double-click for volume and fades.`}
+      title={
+        linked
+          ? `${name}: frames ${clip.start}–${lastFrame} (${seconds(clip.duration)}), the sound of a video. Drag to move it with its video, its top corners to fade; double-click for volume and fades; unlink it (right-click) to trim it on its own.`
+          : `${name}: frames ${clip.start}–${lastFrame} (${seconds(clip.duration)}). Drag to move, its ends to trim, its top corners to fade; double-click for volume and fades.`
+      }
       data-testid={`sound-clip-${clip.id}`}
     >
       {wave && (
@@ -506,6 +523,13 @@ const SoundClipBar = memo(function SoundClipBar({
         </svg>
       )}
       <span className={styles.clipName}>
+        {linked && (
+          <Link2
+            className={styles.linkedIcon}
+            aria-hidden="true"
+            data-testid={`sound-clip-linked-${clip.id}`}
+          />
+        )}
         {clip.muted && <VolumeX className={styles.mutedIcon} aria-hidden="true" />}
         {name}
       </span>
@@ -531,8 +555,12 @@ const SoundClipBar = memo(function SoundClipBar({
           )}
         </svg>
       )}
-      <span className={styles.edgeStart} data-edge="start" aria-hidden="true" />
-      <span className={styles.edgeEnd} data-edge="end" aria-hidden="true" />
+      {!linked && (
+        <>
+          <span className={styles.edgeStart} data-edge="start" aria-hidden="true" />
+          <span className={styles.edgeEnd} data-edge="end" aria-hidden="true" />
+        </>
+      )}
       {/* Grabbed to fade: where each fade ends, in the top corners when there's none */}
       <span
         className={`${styles.fadeHandle} ${fadeIn > 0 ? styles.fadeSet : ''}`}

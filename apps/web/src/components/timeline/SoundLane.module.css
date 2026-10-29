@@ -190,6 +190,14 @@
   flex-shrink: 0;
 }
 
+/* A video's sound: linked to it, in the videos' colour */
+.linkedIcon {
+  width: 10px;
+  height: 10px;
+  flex-shrink: 0;
+  color: var(--color-timeline-video);
+}
+
 /* Grab an end to trim the clip */
 .edgeStart,
 .edgeEnd {
