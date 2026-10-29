@@ -57,7 +57,8 @@ The line under **Size** says what the export is of:
   with two or more, MP4, WebM, GIF and PNG Sequence play them as slides: each
   over its own timeline, in the Layers panel's order (the topmost first),
   with the transitions between them. The line says how many slides there are
-  and how long they play. A PDF has a page for each.
+  and how long they play. A PDF has a page for each. See
+  [Slides and presenting](presenting.md).
 - **The whole page.** Otherwise, everything on the page, framed to fit all of
   its animation, wherever things move to (Lottie aside: see
   [Lottie JSON](#lottie)).
