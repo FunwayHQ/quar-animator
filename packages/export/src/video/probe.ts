@@ -172,11 +172,11 @@ function drawsRgbaFramesAsTheyAre(): boolean {
       codedHeight: 1,
       timestamp: 0,
     });
-    const canvas =
+    // Each kind of canvas's own 2D context (a union of canvases has no one getContext)
+    const context =
       typeof OffscreenCanvas !== 'undefined'
-        ? new OffscreenCanvas(1, 1)
-        : Object.assign(document.createElement('canvas'), { width: 1, height: 1 });
-    const context = canvas.getContext('2d');
+        ? new OffscreenCanvas(1, 1).getContext('2d')
+        : Object.assign(document.createElement('canvas'), { width: 1, height: 1 }).getContext('2d');
     if (!context) return false;
     context.drawImage(frame, 0, 0);
     const [red = 0, , , alpha = 0] = context.getImageData(0, 0, 1, 1).data;
