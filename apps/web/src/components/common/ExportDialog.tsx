@@ -33,6 +33,7 @@ import {
 import type { ExportProgress, FrameRenderContext, Shot } from '@quar/export';
 import { downloadBlob } from '../../services/exportService';
 import { decodedSound } from '../../services/soundFiles';
+import { videoFile } from '../../services/videoFiles';
 import { loadVideoStills } from '../../services/videoStills';
 import {
   defaultExportSize,
@@ -468,6 +469,8 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
           : {}),
     };
     const frameRenderRoots = selectedArtboard ? [selectedArtboard.node] : sceneGraph.getRootNodes();
+    // Video layers show their exact frames, decoded from the document's files
+    const videoSources = { videos: useEditorStore.getState().videos, videoFile };
     // Each artboard over its own timeline, fitted into the export's size
     const slideFrames = slidesExport
       ? slideShow(slides, frameRenderContext, state.width, state.height)
@@ -627,6 +630,7 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
             backgroundColor: documentBackground,
             compression: state.gifCompression,
             slides: slideFrames,
+            ...videoSources,
           },
           (progress) => setState((s) => ({ ...s, progress })),
           () => cancelledRef.current
@@ -649,6 +653,7 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
             speed: state.mp4Speed,
             backgroundColor: documentBackground,
             slides: slideFrames,
+            ...videoSources,
             ...(withSound && {
               sounds: useEditorStore.getState().sounds,
               decodeSound: decodedSound,
@@ -676,6 +681,7 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
             transparent: state.webmTransparent,
             backgroundColor: documentBackground,
             slides: slideFrames,
+            ...videoSources,
             ...(withSound && {
               sounds: useEditorStore.getState().sounds,
               decodeSound: decodedSound,
@@ -690,8 +696,13 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
         }
       } else if (state.tab === 'png-sequence') {
         // PNG Sequence requires dynamic import of frameRenderer (WebGL)
-        const { createFrameRenderer, createShotRenderer, getFrameCount, generateFrameFilenames } =
-          await import('@quar/export');
+        const {
+          createExportVideoFrames,
+          createFrameRenderer,
+          createShotRenderer,
+          getFrameCount,
+          generateFrameFilenames,
+        } = await import('@quar/export');
         const JSZip = (await import('jszip')).default;
 
         // Every frame of the range — or of each slide's timeline, one after
@@ -708,11 +719,18 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
           : generateFrameFilenames(state.pngPattern, state.startFrame, state.endFrame, 'png');
         const zip = new JSZip();
 
+        // Each frame's video pictures, decoded before it's drawn
+        const videoFrames = createExportVideoFrames(
+          shots,
+          { width: state.width, height: state.height, multiplier: state.pngMultiplier },
+          videoSources
+        );
         const renderer = createFrameRenderer({
           width: state.width,
           height: state.height,
           multiplier: state.pngMultiplier,
           backgroundColor: state.pngTransparent ? null : documentBackground,
+          videoFrames: videoFrames.provider,
         });
         const draw = createShotRenderer(renderer, {
           background: state.pngTransparent ? null : documentBackground,
@@ -734,6 +752,8 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
             };
             setState((s) => ({ ...s, progress }));
 
+            await videoFrames.prepare(i);
+            if (cancelledRef.current) break;
             const blob = await draw.renderAsBlob(shot);
             if (blob) {
               zip.file(filenames[i]!, blob);
@@ -757,10 +777,12 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
             close();
           }
         } finally {
+          videoFrames.dispose();
           renderer.dispose();
         }
       } else if (state.tab === 'sprite-sheet') {
         const {
+          createExportVideoFrames,
           createFrameRenderer,
           getFrameCount,
           packGrid,
@@ -799,10 +821,20 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
         const atlasCtx = atlasCanvas.getContext('2d');
         if (!atlasCtx) throw new Error('Failed to get 2D context for sprite sheet atlas');
 
+        // Each frame's video pictures, decoded before it's drawn
+        const videoFrames = createExportVideoFrames(
+          Array.from({ length: frameCount }, (_, i) => ({
+            ctx: frameRenderContext,
+            frame: state.startFrame + i,
+          })),
+          { width: state.width, height: state.height, multiplier: 1 },
+          videoSources
+        );
         const renderer = createFrameRenderer({
           width: state.width,
           height: state.height,
           multiplier: 1,
+          videoFrames: videoFrames.provider,
         });
 
         try {
@@ -826,6 +858,8 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
               },
             }));
 
+            await videoFrames.prepare(i);
+            if (cancelledRef.current) break;
             const frameCanvas = renderer.renderFrame(frameRenderContext, frame);
             atlasCtx.drawImage(frameCanvas, rect.x, rect.y);
 
@@ -874,6 +908,7 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
             close();
           }
         } finally {
+          videoFrames.dispose();
           renderer.dispose();
         }
       }

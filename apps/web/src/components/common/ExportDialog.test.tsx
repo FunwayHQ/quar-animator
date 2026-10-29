@@ -53,6 +53,14 @@ const frameRenderer = vi.hoisted(() => ({
   dispose: vi.fn(),
 }));
 
+// The video pictures decoded for each frame, stood in for: what's prepared, in order
+const videoFrames = vi.hoisted(() => ({
+  made: [] as Array<{ shots: unknown[]; size: unknown; sources: unknown }>,
+  log: [] as string[],
+  provider: () => null,
+  disposed: 0,
+}));
+
 // Mock export functions (the scene's extent is the real thing: it decides the framing)
 vi.mock('@quar/export', async () => {
   const actual = await vi.importActual<typeof import('@quar/export')>('@quar/export');
@@ -64,7 +72,26 @@ vi.mock('@quar/export', async () => {
     // The slides' plan as it is: their frames and the transitions between them
     sampleSlides: actual.sampleSlides,
     createShotRenderer: actual.createShotRenderer,
+    packGrid: actual.packGrid,
+    packMaxRects: actual.packMaxRects,
+    nextPowerOfTwo: actual.nextPowerOfTwo,
+    assertAllFramesPacked: actual.assertAllFramesPacked,
+    generateSpriteSheetMetadata: actual.generateSpriteSheetMetadata,
     createFrameRenderer: vi.fn(() => frameRenderer),
+    createExportVideoFrames: (shots: unknown[], size: unknown, sources: unknown) => {
+      videoFrames.made.push({ shots, size, sources });
+      return {
+        provider: videoFrames.provider,
+        problems: [],
+        prepare: async (index: number) => {
+          await Promise.resolve();
+          videoFrames.log.push(`prepare ${index}`);
+        },
+        dispose: () => {
+          videoFrames.disposed++;
+        },
+      };
+    },
     exportLottieBlob: vi.fn().mockReturnValue(new Blob(['{}'], { type: 'application/json' })),
     exportGif: vi.fn().mockResolvedValue(new Blob(['gif'], { type: 'image/gif' })),
     exportMp4: vi.fn().mockResolvedValue(new Blob(['mp4'], { type: 'video/mp4' })),
@@ -726,6 +753,84 @@ describe('ExportDialog', () => {
       fireEvent.click(screen.getByTestId('export-dialog-export'));
       await waitFor(() => expect(exportWebm).toHaveBeenCalledOnce());
       expect(vi.mocked(exportWebm).mock.calls[0]![1]).not.toHaveProperty('sounds');
+    });
+  });
+
+  describe('video layers', () => {
+    const clip = { id: 'clip', name: 'Clip', strip: { rate: 4, height: 90, frames: [] } };
+    const store = mockStore as unknown as { videos?: unknown[] };
+    let canvases: Array<{ mockRestore: () => void }> = [];
+    beforeEach(() => {
+      store.videos = [clip];
+      videoFrames.made = [];
+      videoFrames.log = [];
+      videoFrames.disposed = 0;
+      frameRenderer.renderFrame.mockImplementation(() => {
+        videoFrames.log.push('render');
+        return document.createElement('canvas');
+      });
+      // Canvases that draw and give PNGs (jsdom's do neither)
+      canvases = [
+        vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({
+          drawImage: () => {},
+        } as never),
+        vi
+          .spyOn(HTMLCanvasElement.prototype, 'toBlob')
+          .mockImplementation((done) => done(new Blob(['png'], { type: 'image/png' }))),
+      ];
+    });
+    afterEach(() => {
+      delete store.videos;
+      frameRenderer.renderFrame.mockImplementation(() => document.createElement('canvas'));
+      for (const spy of canvases) spy.mockRestore();
+    });
+
+    it('are drawn from the document’s video files in GIF, MP4 and WebM', async () => {
+      render(<ExportDialogHost />);
+      for (const [tab, exporter] of [
+        ['gif', exportGif],
+        ['mp4', exportMp4],
+        ['webm', exportWebm],
+      ] as const) {
+        act(() => showExportDialog(tab));
+        fireEvent.click(screen.getByTestId('export-dialog-export'));
+        await waitFor(() => expect(exporter).toHaveBeenCalledOnce());
+        expect(vi.mocked(exporter).mock.calls[0]![1]).toMatchObject({
+          videos: [clip],
+          videoFile: expect.any(Function),
+        });
+        await waitFor(() => expect(screen.queryByTestId('export-dialog')).toBeNull());
+      }
+    });
+
+    it('show each frame’s pictures in a PNG sequence, decoded before it’s drawn', async () => {
+      render(<ExportDialogHost />);
+      act(() => showExportDialog('png-sequence'));
+      fireEvent.change(screen.getByTestId('export-end-frame'), { target: { value: '1' } });
+      fireEvent.click(screen.getByTestId('export-dialog-export'));
+      await waitFor(() => expect(downloadBlob).toHaveBeenCalled());
+
+      expect(videoFrames.log).toEqual(['prepare 0', 'render', 'prepare 1', 'render']);
+      expect(videoFrames.made[0]).toMatchObject({
+        size: { multiplier: 1 },
+        sources: { videos: [clip], videoFile: expect.any(Function) },
+      });
+      expect(videoFrames.made[0]!.shots).toHaveLength(2);
+      expect(videoFrames.disposed).toBe(1);
+    });
+
+    it('show each frame’s pictures in a sprite sheet, decoded before it’s drawn', async () => {
+      render(<ExportDialogHost />);
+      act(() => showExportDialog('sprite-sheet'));
+      fireEvent.change(screen.getByTestId('export-end-frame'), { target: { value: '1' } });
+      fireEvent.click(screen.getByTestId('export-dialog-export'));
+      await waitFor(() => expect(videoFrames.disposed).toBe(1));
+
+      expect(videoFrames.log).toEqual(['prepare 0', 'render', 'prepare 1', 'render']);
+      expect(videoFrames.made[0]!.shots).toEqual([
+        expect.objectContaining({ frame: 0 }),
+        expect.objectContaining({ frame: 1 }),
+      ]);
     });
   });
 
