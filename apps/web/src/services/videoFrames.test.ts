@@ -13,6 +13,8 @@ interface FakeSource {
 }
 
 const sources = vi.hoisted(() => [] as FakeSource[]);
+/** Whether the sources made now fail to open */
+const opening = vi.hoisted(() => ({ fails: false }));
 
 vi.mock('@quar/export', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@quar/export')>();
@@ -22,7 +24,7 @@ vi.mock('@quar/export', async (importOriginal) => {
       const source: FakeSource = { file, pick: null, asked: [], disposed: false };
       sources.push(source);
       return {
-        ready: Promise.resolve(),
+        ready: opening.fails ? Promise.reject(new Error('not a video')) : Promise.resolve(),
         frameAt: (seconds: number, playing = false) => {
           source.asked.push([seconds, playing]);
           return source.pick;
@@ -35,7 +37,7 @@ vi.mock('@quar/export', async (importOriginal) => {
   };
 });
 
-import { releaseVideoFrames, videoFrameAt } from './videoFrames';
+import { createVideoFrames, releaseVideoFrames, videoFrameAt } from './videoFrames';
 
 /** Pictures load at once here (jsdom loads none): the stills are ready a tick after they're asked for. */
 class LoadingImage {
@@ -239,5 +241,89 @@ describe('videoFrameAt', () => {
     // Its stills are let go too: asked again, they load again
     expect(videoFrameAt('v1', 0.5)).toBeNull();
     expect(sources).toHaveLength(2);
+  });
+});
+
+describe('createVideoFrames', () => {
+  beforeEach(() => {
+    vi.stubGlobal('Image', LoadingImage);
+    useEditorStore.getState().resetProject();
+    sources.length = 0;
+    opening.fails = false;
+  });
+
+  afterEach(() => {
+    releaseVideoFrames('v1');
+    vi.unstubAllGlobals();
+  });
+
+  it('reads with readers of its own, so the canvas’s aren’t sought to its moments', async () => {
+    setVideoFile('v1', new Blob(['v1']));
+    const own = createVideoFrames();
+    for (let frame = 0; frame < 3; frame++) {
+      videoFrameAt('v1', 0);
+      await tick();
+      own.frameAt('v1', 2 + frame / 30, true);
+      await tick();
+    }
+    expect(sources).toHaveLength(2);
+    expect(sources[0]?.asked.map(([seconds]) => seconds)).toEqual([0, 0, 0]);
+    expect(sources[1]?.asked.map(([, playing]) => playing)).toEqual([true, true, true]);
+    own.dispose();
+    expect(sources.map((source) => source.disposed)).toEqual([false, true]);
+  });
+
+  it('says whether a picture is the moment’s own yet', async () => {
+    setVideoFile('v1', new Blob(['v1']));
+    useEditorStore.getState().addVideo(video('v1'));
+    const own = createVideoFrames();
+    own.pick('v1', 0.5);
+    await tick();
+    expect(own.pick('v1', 0.5)).toMatchObject({ exact: false, image: { key: 'v1:still2' } });
+    const canvas = { id: 'canvas' };
+    sources[0]!.pick = { frame: { canvas, key: 4, timestamp: 0.5 }, distance: 0 };
+    expect(own.pick('v1', 0.5)).toMatchObject({ exact: true, image: { source: canvas } });
+    own.dispose();
+  });
+
+  it('decodes a moment ahead of its showing, saying when it’s in', async () => {
+    vi.useFakeTimers();
+    try {
+      setVideoFile('v1', new Blob(['v1']));
+      const own = createVideoFrames();
+      const decoded = vi.fn();
+      void own.decode('v1', 1.5, 2000).then(decoded);
+      await vi.advanceTimersByTimeAsync(100);
+      expect(decoded).not.toHaveBeenCalled();
+      expect(sources[0]?.asked[0]).toEqual([1.5, false]);
+      sources[0]!.pick = { frame: { canvas: {}, key: 1, timestamp: 1.5 }, distance: 0 };
+      await vi.advanceTimersByTimeAsync(100);
+      expect(decoded).toHaveBeenCalledWith(true);
+      // Shown later, the decoded picture is there at once
+      expect(own.pick('v1', 1.5).exact).toBe(true);
+      own.dispose();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('gives up on a moment that isn’t in by the time allowed, or can’t be decoded at all', async () => {
+    vi.useFakeTimers();
+    try {
+      setVideoFile('v1', new Blob(['v1']));
+      const own = createVideoFrames();
+      const late = own.decode('v1', 1, 500);
+      await vi.advanceTimersByTimeAsync(600);
+      await expect(late).resolves.toBe(false);
+      own.dispose();
+
+      opening.fails = true;
+      const broken = createVideoFrames();
+      await expect(broken.decode('v1', 0, 5000)).resolves.toBe(false);
+      await expect(broken.decode('no-file', 0, 5000)).resolves.toBe(false);
+      broken.dispose();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
