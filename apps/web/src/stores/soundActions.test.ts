@@ -4,9 +4,19 @@
 
 import { beforeEach, describe, expect, it } from 'vitest';
 import { SceneGraph } from '@quar/core';
-import { movedClip, scopeSounds } from '@quar/animation';
-import type { Sound } from '@quar/types';
+import {
+  createTimeline,
+  loopedClip,
+  movedClip,
+  scopeDuration,
+  scopeSounds,
+  spedClip,
+  trimmedEnd,
+  trimmedStart,
+} from '@quar/animation';
+import type { Sound, VideoNode } from '@quar/types';
 import { useEditorStore } from './editorStore';
+import { artboard, linkedSound, testVideo, videoLayer } from '../test/videoLayer';
 
 const store = () => useEditorStore.getState();
 const voice: Sound = {
@@ -97,5 +107,120 @@ describe('sound clips', () => {
     store().resetProject();
     expect(store().sounds).toEqual([]);
     expect(store().selectedSoundClipId).toBeNull();
+  });
+});
+
+describe('a clip’s length on its timeline', () => {
+  beforeEach(() => store().resetProject());
+
+  it('lengthens the timeline to play a clip slowed down or looped to its end', () => {
+    const sg = new SceneGraph();
+    store().setTimelineDuration(60);
+    const id = store().addSoundClip(sg, voice, 0);
+    // Half as fast: 4 s, to frame 120
+    store().updateSoundClip(sg, id, (clip) => spedClip(clip, 0.5));
+    expect(store().timelineDuration).toBe(120);
+    // Not while it's dragged (the frame under the pointer would move): as the drag ends
+    store().updateSoundClip(
+      sg,
+      id,
+      (clip) => trimmedEnd(loopedClip(clip, true), 200, 30, 2),
+      true,
+      false
+    );
+    expect(store().timelineDuration).toBe(120);
+    store().fitTimelineToSoundClip(id);
+    expect(store().timelineDuration).toBe(200);
+    // Undone in the step that lengthened it
+    store().undo(sg);
+    expect(store().timelineDuration).toBe(120);
+  });
+
+  it('lengthens the timeline the clip is on, an artboard’s not in view', () => {
+    const timeline = createTimeline({
+      duration: 300,
+      frameRate: 30,
+      artboards: {
+        slide: {
+          duration: 60,
+          sounds: [{ id: 's', soundId: 'voice', start: 0, offset: 0, duration: 2, gain: 1 }],
+        },
+      },
+    });
+    useEditorStore.setState({ timeline, sounds: [voice] });
+    store().updateSoundClip(new SceneGraph(), 's', (clip) => spedClip(clip, 0.5));
+    expect(scopeDuration(store().timeline, 'slide')).toBe(120);
+    expect(store().timelineDuration).toBe(300);
+  });
+});
+
+describe('a video’s sound changed on the Sound lane', () => {
+  beforeEach(() => store().resetProject());
+
+  const layer = (sg: SceneGraph) => sg.getNode('v') as VideoNode;
+  function scene(clip = {}) {
+    const sg = new SceneGraph();
+    const video = videoLayer('v', 'beach', clip);
+    sg.addNode(video);
+    useEditorStore.setState({
+      videos: [testVideo('beach')],
+      sounds: [{ ...voice, id: 'track', duration: 4 }],
+      timeline: createTimeline({ duration: 300, frameRate: 30, sounds: [linkedSound('s', video)] }),
+    });
+    return sg;
+  }
+
+  it('trims its video the same way, in the same step', () => {
+    const sg = scene({ speed: 2 });
+    store().updateSoundClip(sg, 's', (clip) => trimmedStart(clip, 45, 30));
+    expect(layer(sg).clip).toEqual({ start: 45, offset: 1, duration: 3, speed: 2 });
+    store().updateSoundClip(sg, 's', (clip) => trimmedEnd(clip, 75, 30, 4));
+    expect(layer(sg).clip).toEqual({ start: 45, offset: 1, duration: 2, speed: 2 });
+    store().undo(sg);
+    expect(layer(sg).clip).toEqual({ start: 45, offset: 1, duration: 3, speed: 2 });
+    store().undo(sg);
+    expect(layer(sg).clip).toEqual({ start: 30, offset: 0, duration: 4, speed: 2 });
+    expect(scopeSounds(store().timeline, null)[0]).toMatchObject({ start: 30, duration: 4 });
+  });
+
+  it('sets its video’s speed and loop with its own, its hold left as it is', () => {
+    const sg = scene({ holdLastFrame: true });
+    store().updateSoundClip(sg, 's', (clip) => spedClip(clip, 0.5));
+    expect(layer(sg).clip).toEqual({
+      start: 30,
+      offset: 0,
+      duration: 4,
+      speed: 0.5,
+      holdLastFrame: true,
+    });
+    store().updateSoundClip(sg, 's', (clip) => trimmedEnd(loopedClip(clip, true), 600, 30, 4));
+    expect(layer(sg).clip).toMatchObject({ loop: true, loopFor: 19, speed: 0.5 });
+    store().updateSoundClip(sg, 's', (clip) => spedClip(loopedClip(clip, false), 1));
+    expect(layer(sg).clip).toEqual({ start: 30, offset: 0, duration: 4, holdLastFrame: true });
+  });
+
+  it('leaves the video alone for its own volume, fades and mute, or once unlinked', () => {
+    const sg = scene();
+    store().updateSoundClip(sg, 's', (clip) => ({ ...clip, gain: 0.5, fadeIn: 1, muted: true }));
+    expect(layer(sg).clip).toEqual({ start: 30, offset: 0, duration: 4 });
+    store().unlinkSoundClip(sg, 's');
+    store().updateSoundClip(sg, 's', (clip) => spedClip(clip, 2));
+    expect(layer(sg).clip).toEqual({ start: 30, offset: 0, duration: 4 });
+  });
+
+  it('follows on an artboard’s timeline too', () => {
+    const sg = new SceneGraph();
+    sg.addNode(artboard('slide'));
+    const video = videoLayer('v', 'beach');
+    sg.addNode(video, 'slide');
+    useEditorStore.setState({
+      timeline: createTimeline({
+        duration: 300,
+        frameRate: 30,
+        artboards: { slide: { duration: 200, sounds: [linkedSound('s', video)] } },
+      }),
+    });
+    store().updateSoundClip(sg, 's', (clip) => trimmedStart(clip, 60, 30));
+    expect(layer(sg).clip).toEqual({ start: 60, offset: 1, duration: 3 });
   });
 });

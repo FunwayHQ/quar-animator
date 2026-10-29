@@ -1,18 +1,12 @@
 /**
  * Video layers' sounds. The sound clip linked to a video layer stays where
  * the layer's clip is and on the timeline the layer plays on: as the clip is
- * moved (or its sound is, on the Sound lane), as the layer goes into or out
- * of an artboard, and when the layer is deleted (its sound kept, unlinked,
- * or deleted with it).
+ * moved, trimmed, sped up or looped (or its sound is, on the Sound lane), as
+ * the layer goes into or out of an artboard, and when the layer is deleted
+ * (its sound kept, unlinked, or deleted with it).
  */
 
-import {
-  linkedSoundClip,
-  movedVideoClip,
-  scopeSounds,
-  withScopeSounds,
-  withSoundClip,
-} from '@quar/animation';
+import { linkedSoundClip, scopeSounds, withScopeSounds, withSoundClip } from '@quar/animation';
 import type { TimelineScope } from '@quar/animation';
 import type { Node, SoundClip, Timeline, VideoClip, VideoNode } from '@quar/types';
 
@@ -100,9 +94,28 @@ export function withLinkedSoundsFollowing(
   return result;
 }
 
+/** The timing a video's clip takes from its linked sound (the inverse of linkedSoundClip). */
+const LINKED_TIMING = ['start', 'offset', 'duration', 'speed', 'loop', 'loopFor'] as const;
+
 /**
- * A linked sound clip moved on the Sound lane (`before` → `after`) takes its
- * video layer's clip with it: the layer's clip starts where the sound now does.
+ * A video layer's clip put where its linked sound is: the same start, the
+ * same part of the file, at the same speed, looped alike (holding its last
+ * frame stays its own). Unchanged when it's there already.
+ */
+export function clipOfLinkedSound(clip: VideoClip, sound: SoundClip): VideoClip {
+  if (LINKED_TIMING.every((key) => clip[key] === sound[key])) return clip;
+  const linked: VideoClip = { ...clip };
+  for (const key of LINKED_TIMING) {
+    if (sound[key] === undefined) delete linked[key];
+    else Object.assign(linked, { [key]: sound[key] });
+  }
+  return linked;
+}
+
+/**
+ * A linked sound clip changed on the Sound lane (`before` → `after`) takes
+ * its video layer's clip with it: moved, trimmed, sped up or slowed down,
+ * looped, the layer's clip is where the sound now is.
  */
 export function followLinkedVideo(
   sceneGraph: Pick<LayerLookup, 'getNode'> & {
@@ -121,10 +134,10 @@ export function followLinkedVideo(
   };
   const was = find(before);
   const now = find(after);
-  if (!was || !now?.linkedTo || now.start === was.start) return;
+  if (!was || !now?.linkedTo || LINKED_TIMING.every((key) => now[key] === was[key])) return;
   const layer = sceneGraph.getNode(now.linkedTo);
   if (layer?.type !== 'video') return;
-  const clip = movedVideoClip(layer.clip, now.start);
+  const clip = clipOfLinkedSound(layer.clip, now);
   if (clip !== layer.clip) sceneGraph.updateNode(layer.id, { clip });
 }
 
