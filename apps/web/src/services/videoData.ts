@@ -74,10 +74,14 @@ export function readVideoClip(clip: unknown): VideoClip {
     Record<keyof VideoClip, unknown>
   >;
   return {
-    ...parts,
     start: isNumber(parts.start) ? Math.max(0, Math.round(parts.start)) : 0,
     offset: isNumber(parts.offset) ? Math.max(0, parts.offset) : 0,
     duration: isNumber(parts.duration) ? Math.max(0, parts.duration) : 0,
+    // Its speed, loop and hold, where a file has them right
+    ...(isPositive(parts.speed) ? { speed: parts.speed } : {}),
+    ...(parts.loop === true ? { loop: true } : {}),
+    ...(isPositive(parts.loopFor) ? { loopFor: parts.loopFor } : {}),
+    ...(parts.holdLastFrame === true ? { holdLastFrame: true } : {}),
   };
 }
 
