@@ -220,6 +220,19 @@ describe('the sound lane', () => {
     window.removeEventListener('keydown', outside);
   });
 
+  it('keeps Delete for the clip, not the timeline’s selected keyframes', () => {
+    renderTimeline();
+    const id = placed(30);
+    act(() => {
+      store().addKeyframeAtFrame('some-layer', 'opacity', 10, 1);
+      const [keyframe] = store().timeline.tracks[0]?.keyframes ?? [];
+      if (keyframe) store().selectKeyframe(keyframe.id);
+    });
+    fireEvent.keyDown(screen.getByTestId(`sound-clip-${id}`), { key: 'Delete' });
+    expect(clips()).toEqual([]);
+    expect(store().timeline.tracks[0]?.keyframes).toHaveLength(1);
+  });
+
   it('sets a clip’s volume and mute in its settings', () => {
     renderTimeline();
     const id = placed(0);

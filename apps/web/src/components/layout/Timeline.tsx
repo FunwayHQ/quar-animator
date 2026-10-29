@@ -796,6 +796,48 @@ export function Timeline({ playback }: TimelineProps = {}) {
     dragRef.current = null;
   }, []);
 
+  // ------- Keyframe keys -------
+
+  // The keys the keyframes' menus show — Ctrl/Cmd+C, Ctrl/Cmd+V (at the
+  // playhead) and Delete — while the timeline has the focus (a click in it
+  // gives it that): for its keyframes, not the layers. Keys typed into its
+  // fields, pressed in its menus and windows (portals, outside it) or on a
+  // sound clip (which keeps its own) stay there; with no keyframe selected,
+  // Ctrl/Cmd+C copies the layers as anywhere else
+  const handleKeyframeKeys = useCallback(
+    (e: React.KeyboardEvent<HTMLDivElement>) => {
+      const target = e.target;
+      if (!(target instanceof HTMLElement) || !e.currentTarget.contains(target)) return;
+      if (target.closest('input, textarea, select, [contenteditable="true"]')) return;
+      if (e.altKey || e.shiftKey) return;
+      const state = useEditorStore.getState();
+      if (state.timelineViewMode !== 'dopeSheet') return;
+      const withMod = e.ctrlKey || e.metaKey;
+      const key = e.key.toLowerCase();
+      const anySelected = state.selectedKeyframeIds.size > 0;
+
+      if (!withMod && (key === 'delete' || key === 'backspace') && anySelected) {
+        removeSelectedKeyframes(keyframeMap, sceneGraph);
+      } else if (withMod && key === 'c' && anySelected) {
+        copySelectedKeyframes(keyframeMap);
+      } else if (withMod && key === 'v' && state.keyframeClipboard) {
+        // Onto the selected layer, as the menus' Paste; else back onto the copied keyframes' own
+        const copiedFrom = state.keyframeClipboard.entries[0]?.nodeId;
+        const targetId =
+          [...state.selectedNodeIds][0] ??
+          (copiedFrom && sceneGraph.getNode(copiedFrom) ? copiedFrom : undefined);
+        if (!targetId) return;
+        pasteKeyframes(targetId, state.currentFrame, sceneGraph);
+      } else {
+        return;
+      }
+      // Not also the browser's copy or paste, nor the layers' keys
+      e.preventDefault();
+      e.stopPropagation();
+    },
+    [keyframeMap, sceneGraph, removeSelectedKeyframes, copySelectedKeyframes, pasteKeyframes]
+  );
+
   // ------- Track click (deselect keyframes) -------
 
   const handleTrackClick = useCallback(() => {
@@ -1253,13 +1295,16 @@ export function Timeline({ playback }: TimelineProps = {}) {
   return (
     // Delete and the arrows here are for its keyframes and sound clips, not
     // the layers (useEditShortcuts). A click anywhere in it, a keyframe's
-    // say, gives it the focus, so they stay here
+    // say, gives it the focus, so they stay here, and so do Ctrl/Cmd+C and V
+    // for the keyframes (handleKeyframeKeys)
+    // eslint-disable-next-line jsx-a11y/no-static-element-interactions -- the keys of the focusable panel; its controls are buttons of their own
     <div
       className={styles.timeline}
       ref={timelineRef}
       style={{ height: timelineHeight }}
       tabIndex={-1}
       data-own-edit-keys
+      onKeyDown={handleKeyframeKeys}
     >
       {/* Resize handle on the top border: drag, arrow keys, or double-click to reset.
           A focusable separator is the ARIA window-splitter pattern, which jsx-a11y

@@ -570,6 +570,120 @@ describe('Timeline', () => {
     });
   });
 
+  describe('keyframe keys, while the timeline has the focus', () => {
+    /** A ball with opacity keyframes at 10 and 20, the first selected; the timeline focused */
+    function renderFocusedTimeline() {
+      let graph: SceneGraph | undefined;
+      function CaptureGraph() {
+        graph = useSceneGraph();
+        return null;
+      }
+      const track = createTrack<number>('ball', 'opacity');
+      const keyframes = [addKeyframe(track, 10, 0), addKeyframe(track, 20, 1)];
+      useEditorStore.setState({
+        timeline: createTimeline({ tracks: [track] }),
+        timelineViewMode: 'dopeSheet',
+        selectedKeyframeIds: new Set([keyframes[0]!.id]),
+        selectedNodeIds: new Set(['ball']),
+        keyframeClipboard: null,
+        clipboard: null,
+        undoStack: [],
+        redoStack: [],
+        canUndo: false,
+        canRedo: false,
+      });
+      render(
+        <SceneGraphProvider>
+          <CaptureGraph />
+          <Timeline />
+        </SceneGraphProvider>
+      );
+      act(() => {
+        graph!.addNode({ id: 'ball', name: 'Ball', children: [] } as unknown as Node);
+      });
+      const timeline = screen
+        .getByTestId('timeline-tracks')
+        .closest<HTMLElement>('[data-own-edit-keys]')!;
+      act(() => timeline.focus());
+      return { ids: keyframes.map((kf) => kf.id), graph: graph!, timeline };
+    }
+
+    const keyframesNow = () =>
+      useEditorStore
+        .getState()
+        .timeline.tracks.flatMap((track) => track.keyframes.map((kf) => [kf.time, kf.value]));
+
+    it('deletes the selected keyframes with Delete or Backspace, each an undo step', () => {
+      const { ids, graph, timeline } = renderFocusedTimeline();
+      expect(document.activeElement).toBe(timeline);
+
+      expect(fireEvent.keyDown(timeline, { key: 'Delete' })).toBe(false);
+      expect(keyframesNow()).toEqual([[20, 1]]);
+      act(() => useEditorStore.setState({ selectedKeyframeIds: new Set([ids[1]!]) }));
+      fireEvent.keyDown(timeline, { key: 'Backspace' });
+      expect(keyframesNow()).toEqual([]);
+      expect(useEditorStore.getState().undoStack).toHaveLength(2);
+
+      act(() => useEditorStore.getState().undo(graph));
+      expect(keyframesNow()).toEqual([[20, 1]]);
+      act(() => useEditorStore.getState().undo(graph));
+      expect(keyframesNow()).toEqual([
+        [10, 0],
+        [20, 1],
+      ]);
+    });
+
+    it('copies the selected keyframes with Ctrl/Cmd+C and pastes them at the playhead with Ctrl/Cmd+V', () => {
+      const { graph, timeline } = renderFocusedTimeline();
+
+      // Taken here: not the browser's copy (which would copy the layers)
+      expect(fireEvent.keyDown(timeline, { key: 'c', ctrlKey: true })).toBe(false);
+      expect(useEditorStore.getState().keyframeClipboard?.entries).toHaveLength(1);
+      expect(useEditorStore.getState().clipboard).toBeNull();
+
+      act(() => useEditorStore.getState().setCurrentFrame(50));
+      expect(fireEvent.keyDown(timeline, { key: 'v', metaKey: true })).toBe(false);
+      expect(keyframesNow()).toEqual([
+        [10, 0],
+        [20, 1],
+        [50, 0],
+      ]);
+      // The pasted keyframe is selected, and the paste is one undo step
+      const pasted = useEditorStore.getState().timeline.tracks[0]!.keyframes[2]!;
+      expect(useEditorStore.getState().selectedKeyframeIds).toEqual(new Set([pasted.id]));
+      expect(useEditorStore.getState().undoStack).toHaveLength(1);
+      act(() => useEditorStore.getState().undo(graph));
+      expect(keyframesNow()).toHaveLength(2);
+    });
+
+    it('leaves the keys to the layers elsewhere, and to the fields in it', () => {
+      const { timeline } = renderFocusedTimeline();
+
+      // Pressed with the focus outside the timeline: not for its keyframes
+      act(() => timeline.blur());
+      fireEvent.keyDown(document.body, { key: 'c', ctrlKey: true });
+      fireEvent.keyDown(document.body, { key: 'Delete' });
+      expect(useEditorStore.getState().keyframeClipboard).toBeNull();
+      expect(keyframesNow()).toHaveLength(2);
+
+      // Typed into its Frames field
+      const frames = screen.getByTestId('timeline-duration-input');
+      act(() => frames.focus());
+      expect(fireEvent.keyDown(frames, { key: 'Backspace' })).toBe(true);
+      fireEvent.keyDown(frames, { key: 'c', ctrlKey: true });
+      expect(keyframesNow()).toHaveLength(2);
+      expect(useEditorStore.getState().keyframeClipboard).toBeNull();
+    });
+
+    it('copies the layers as before when no keyframe is selected', () => {
+      const { timeline } = renderFocusedTimeline();
+      act(() => useEditorStore.setState({ selectedKeyframeIds: new Set<string>() }));
+      // Left to the browser's copy event (useSystemClipboard)
+      expect(fireEvent.keyDown(timeline, { key: 'c', ctrlKey: true })).toBe(true);
+      expect(useEditorStore.getState().keyframeClipboard).toBeNull();
+    });
+  });
+
   it('toggles the Animation Sequence window from the toolbar', () => {
     useEditorStore.setState({ sequenceWindowOpen: false });
     renderTimeline();
