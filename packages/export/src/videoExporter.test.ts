@@ -29,6 +29,31 @@ const mocks = vi.hoisted(() => ({
 
 const createFrameRendererMock = vi.hoisted(() => vi.fn());
 
+/** The video pictures decoded for each frame, stood in for: what's prepared, in order */
+const videoFrames = vi.hoisted(() => ({
+  made: [] as Array<{ shots: unknown[]; size: unknown; sources: unknown }>,
+  log: [] as string[],
+  provider: () => null,
+  disposed: 0,
+}));
+
+vi.mock('./video/exportFrames', () => ({
+  createExportVideoFrames: (shots: unknown[], size: unknown, sources: unknown) => {
+    videoFrames.made.push({ shots, size, sources });
+    return {
+      provider: videoFrames.provider,
+      problems: [],
+      prepare: async (index: number) => {
+        await Promise.resolve();
+        videoFrames.log.push(`prepare ${index}`);
+      },
+      dispose: () => {
+        videoFrames.disposed++;
+      },
+    };
+  },
+}));
+
 vi.mock('./soundtrack', async (importOriginal) => {
   // What plays when, as it is: only the mixing is stood in for
   const actual = await importOriginal<typeof import('./soundtrack')>();
@@ -133,6 +158,65 @@ describe('exportMp4', () => {
     mocks.source = null;
     mocks.audio = null;
     mocks.audioTracks = [];
+    videoFrames.made = [];
+    videoFrames.log = [];
+    videoFrames.disposed = 0;
+  });
+
+  it('decodes the video layers’ pictures for each frame before drawing it, then lets them go', async () => {
+    mocks.canEncodeVideo.mockResolvedValue(true);
+    mocks.renderer.renderFrame.mockImplementation((_: unknown, frame: number) => {
+      videoFrames.log.push(`render ${frame}`);
+      return { frame } as unknown as HTMLCanvasElement;
+    });
+    const videoFile = () => new Blob(['video']);
+    const videos = [{ id: 'clip' }] as never;
+    await exportMp4(
+      { sceneGraph: { getRootNodes: () => [] } as never, timeline: { tracks: [] } as never },
+      { width: 64, height: 48, frameRate: 24, startFrame: 0, endFrame: 2, videos, videoFile }
+    );
+
+    expect(videoFrames.log).toEqual([
+      'prepare 0',
+      'render 0',
+      'prepare 1',
+      'render 1',
+      'prepare 2',
+      'render 2',
+    ]);
+    expect(videoFrames.made).toHaveLength(1);
+    expect(videoFrames.made[0]).toMatchObject({
+      size: { width: 64, height: 48 },
+      sources: { videos, videoFile },
+    });
+    expect(videoFrames.made[0]!.shots).toHaveLength(3);
+    expect(createFrameRendererMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({ videoFrames: videoFrames.provider })
+    );
+    expect(videoFrames.disposed).toBe(1);
+  });
+
+  it('stops decoding when it’s cancelled', async () => {
+    mocks.canEncodeVideo.mockResolvedValue(true);
+    // Preloaded, the first frame, then cancelled
+    const isCancelled = vi
+      .fn()
+      .mockReturnValueOnce(false)
+      .mockReturnValueOnce(false)
+      .mockReturnValue(true);
+    const result = await exportMp4(
+      { sceneGraph: { getRootNodes: () => [] } as never, timeline: { tracks: [] } as never },
+      { width: 64, height: 48, frameRate: 24, startFrame: 0, endFrame: 9 },
+      undefined,
+      isCancelled
+    );
+
+    expect(result).toBeNull();
+    expect(videoFrames.log.filter((step) => step.startsWith('prepare'))).toEqual([
+      'prepare 0',
+      'prepare 1',
+    ]);
+    expect(videoFrames.disposed).toBe(1);
   });
 
   it('renders the selected range, muxes H.264 MP4, and reports progress', async () => {

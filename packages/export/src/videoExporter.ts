@@ -18,12 +18,16 @@ import {
 import { createShotRenderer } from './slideTransition';
 import { hasTransitions } from './exportUtils';
 import type { SoundDecoder, SoundtrackPart } from './soundtrack';
+import { createExportVideoFrames, type VideoExportSources } from './video/exportFrames';
 import type { ExportProgress } from './index';
 
 export type VideoFormat = 'mp4' | 'webm';
 
-/** `fps` (default: the timeline's) and `speed` set the video's frame rate and pace. */
-export interface VideoExportOptions extends PlaybackTiming {
+/**
+ * `fps` (default: the timeline's) and `speed` set the video's frame rate and
+ * pace; video layers show their exact frames, decoded from `videoFile`.
+ */
+export interface VideoExportOptions extends PlaybackTiming, VideoExportSources {
   width: number;
   height: number;
   /** What shows where nothing is drawn: the document background. */
@@ -118,7 +122,14 @@ export async function exportVideo(
   const backgroundColor: Color | null = transparent
     ? null
     : { ...(options.backgroundColor ?? DEFAULT_DOCUMENT_BACKGROUND), a: 1 };
-  const renderer = createFrameRenderer({ width, height, backgroundColor });
+  // Each frame's video pictures, decoded before it's drawn
+  const videoFrames = createExportVideoFrames(shots, { width, height }, options);
+  const renderer = createFrameRenderer({
+    width,
+    height,
+    backgroundColor,
+    videoFrames: videoFrames.provider,
+  });
   let output: InstanceType<typeof Output> | null = null;
   let source: InstanceType<typeof CanvasSource> | null = null;
   let finalized = false;
@@ -159,6 +170,7 @@ export async function exportVideo(
       background: backgroundColor,
       fixed: hasTransitions(shots),
     });
+    await videoFrames.prepare(0);
     const canvas = draw.render(shots[0]!);
     const target = new BufferTarget();
     output = new Output({
@@ -182,6 +194,7 @@ export async function exportVideo(
     }
 
     for (let i = 0; i < frameCount; i++) {
+      if (i > 0) await videoFrames.prepare(i);
       if (isCancelled()) {
         source.close();
         await output.cancel();
@@ -220,6 +233,7 @@ export async function exportVideo(
     }
     throw error;
   } finally {
+    videoFrames.dispose();
     source?.close();
     renderer.dispose();
   }
