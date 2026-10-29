@@ -567,6 +567,7 @@ const MASK_SOURCE_TYPES = new Set<Node['type']>([
   'path',
   'text',
   'image',
+  'video',
 ]);
 
 /**

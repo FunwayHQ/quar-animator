@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { SceneGraph } from '@quar/core';
 import type { Node } from '@quar/types';
 import { bindLayersToBones, bindableLayers, skinBinding } from './bindToBones';
+import { videoLayer } from '../../test/videoLayerFixture';
 
 const transform = () => ({
   position: { x: 0, y: 0 },
@@ -79,6 +80,16 @@ describe('bindLayersToBones', () => {
     bindLayersToBones(graph, ['b1', 'missing'], () => null, bind);
     expect(bind).not.toHaveBeenCalled();
     expect(bindableLayers(graph, graph.getNode('nested')!)).toEqual([]);
+  });
+
+  it('binds no video layer, alone or in a group: videos don’t bend', () => {
+    const graph = scene();
+    graph.addNode(videoLayer('video'));
+    graph.addNode(videoLayer('grouped'), 'group');
+    const bind = vi.fn();
+    bindLayersToBones(graph, ['video', 'group'], () => null, bind);
+    expect(bind.mock.calls.map((call) => call[1])).toEqual(['inner']);
+    expect(bindableLayers(graph, graph.getNode('video')!)).toEqual([]);
   });
 });
 
