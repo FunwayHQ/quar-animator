@@ -196,6 +196,13 @@ describe('what the lessons say', () => {
     );
   });
 
+  it('Text: names the fields of Properties as Properties labels them', () => {
+    const lesson = lessonOf(pageOf('tutorial-text', '2 · Style & reveal'));
+    expect(lesson).toContain(
+      'Font, Font Size, Weight, Align, Line Height and Letter Spacing in Properties'
+    );
+  });
+
   it('graph editor: every curve of the rocket has handles to drag', () => {
     const page = pageOf('tutorial-timing', '2 · Graph editor');
     expect(lessonOf(page)).toContain('A selected keyframe shows its handles: drag them');

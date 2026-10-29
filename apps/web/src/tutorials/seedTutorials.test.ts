@@ -103,7 +103,10 @@ describe('seedTutorials', () => {
       await seedTutorials();
 
       expect(await nameOf()).toBe('Tutorial 4 · Text');
-      expect(JSON.parse((await getSetting(SEEDED_TUTORIALS_KEY))!)[textId]).toBe(2);
+      // Recorded as given at the version it's at now
+      expect(JSON.parse((await getSetting(SEEDED_TUTORIALS_KEY))!)[textId]).toBe(
+        TUTORIALS.find((t) => t.id === textId)!.version
+      );
     });
 
     it('leaves a copy the user edited, and one they deleted', async () => {

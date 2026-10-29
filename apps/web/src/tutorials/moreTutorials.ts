@@ -199,7 +199,7 @@ function textStylePage(ids: TutorialNodes): TutorialPage {
     ids,
     '2 · Style & reveal',
     'Style it, then reveal it',
-    'Select text to change its Font, Size, Weight, Align, Line Height and Letter Spacing in Properties. Inter comes with the app; the other fonts in the list come from Google Fonts, and the first time you pick one the app asks before loading it.\n\n' +
+    'Select text to change its Font, Font Size, Weight, Align, Line Height and Letter Spacing in Properties. Inter comes with the app; the other fonts in the list come from Google Fonts, and the first time you pick one the app asks before loading it.\n\n' +
       'Under Animation in Properties, text has three entrances of its own: Typewriter, By Word and By Line. Each example on the right uses one. Press Space to play them.'
   );
   const typed = text(ids, board.id, 'Typewriter: letter by letter.', 60, 160, 320, 30, {
@@ -585,12 +585,13 @@ export const MORE_TUTORIALS: Tutorial[] = [
   },
   {
     // 2: Figma-style text editing keys, Google Fonts asked for on first pick
+    // 3: Font Size named as Properties names it
     ...build('tutorial-text', 'Tutorial 4 · Text', 't4', (ids) => [
       textBoxesPage(ids),
       textStylePage(ids),
       outlinesPage(ids),
     ]),
-    version: 2,
+    version: 3,
   },
   {
     // 2: the IK page says what's keyed (the target's position) and that a chain overrides the wave
