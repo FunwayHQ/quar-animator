@@ -1913,223 +1913,191 @@ export class ShapeRenderer {
     this.maskSourceNodeIds.clear();
     this.setMaskState(null, 0);
 
-    // Traverse and render visible shapes
-    sceneGraph.traverseVisible(
-      (node) => {
-        // Skip node being edited (e.g. text node with active overlay)
-        if (skipNodeId && node.id === skipNodeId) return;
+    // The shape programs, as an effect pass leaves them changed: set again
+    // for what it draws and for what's drawn after it
+    const setShapePrograms = () => {
+      this.renderer.useProgram(program);
+      this.renderer.bindVAO(this.vao);
+      gl.uniformMatrix3fv(program.uniforms.u_viewProjection ?? null, false, vpArray);
+      if (this.gradientProgram) {
+        this.renderer.useProgram(this.gradientProgram);
+        gl.uniformMatrix3fv(this.gradientProgram.uniforms.u_viewProjection ?? null, false, vpArray);
+        this.renderer.useProgram(program);
+      }
+      this.currentVPArray = vpArray;
+    };
 
-        if (node.type === 'group' && node.maskMode && node.maskNodeId && !node.booleanOp) {
-          this.beginSceneMask(node, sceneGraph);
-          return;
-        }
+    const enterNode = (node: Node): boolean | void => {
+      // Skip node being edited (e.g. text node with active overlay)
+      if (skipNodeId && node.id === skipNodeId) return;
 
-        // The mask source defines coverage but is not itself part of the output.
-        if (this.maskSourceNodeIds.has(node.id)) return false;
+      // A group's effects and blend mode apply to it as a whole, as a symbol
+      // instance's do: its layers (masked, if it masks) are drawn together
+      // off screen first. Groups without any are drawn straight through.
+      if (
+        node.type === 'group' &&
+        !node.booleanOp &&
+        !this.maskSourceNodeIds.has(node.id) &&
+        this.effectRenderer.needsMultiPass(node.effects, node.blendMode)
+      ) {
+        const group = node;
+        this.effectRenderer.renderNodeWithEffects(
+          group.effects,
+          group.blendMode,
+          () => {
+            setShapePrograms();
+            if (group.maskMode && group.maskNodeId) this.beginSceneMask(group, sceneGraph);
+            sceneGraph.traverseVisible(enterNode, exitNode, group.children);
+            this.popMask(group.id);
+          },
+          canvasWidth,
+          canvasHeight,
+          effectScale
+        );
+        setShapePrograms();
+        return false; // its layers were drawn in the pass
+      }
 
-        // Skip IK target and vitruvian nodes (no geometry to render)
-        if (node.type === 'ik-target' || node.type === 'vitruvian') return;
+      if (node.type === 'group' && node.maskMode && node.maskNodeId && !node.booleanOp) {
+        this.beginSceneMask(node, sceneGraph);
+        return;
+      }
 
-        const worldTransform = sceneGraph.getWorldTransform(node.id);
-        this.currentEffectiveOpacity = sceneGraph.getEffectiveOpacity(node.id);
+      // The mask source defines coverage but is not itself part of the output.
+      if (this.maskSourceNodeIds.has(node.id)) return false;
 
-        // Symbol instance: resolve and render master's children
-        if (node.type === 'symbol-instance') {
-          const inst = node;
-          if (!this.symbolDefinitions.has(inst.symbolId)) return false; // skip if definition missing
+      // Skip IK target and vitruvian nodes (no geometry to render)
+      if (node.type === 'ik-target' || node.type === 'vitruvian') return;
 
-          const renderSymbolChildren = () => this.renderSymbolContent(inst, worldTransform);
+      const worldTransform = sceneGraph.getWorldTransform(node.id);
+      this.currentEffectiveOpacity = sceneGraph.getEffectiveOpacity(node.id);
 
-          if (this.effectRenderer.needsMultiPass(node.effects, node.blendMode)) {
-            this.effectRenderer.renderNodeWithEffects(
-              node.effects,
-              node.blendMode,
-              () => {
-                this.renderer.useProgram(program);
-                this.renderer.bindVAO(this.vao);
-                gl.uniformMatrix3fv(program.uniforms.u_viewProjection ?? null, false, vpArray);
-                if (this.gradientProgram) {
-                  this.renderer.useProgram(this.gradientProgram);
-                  gl.uniformMatrix3fv(
-                    this.gradientProgram.uniforms.u_viewProjection ?? null,
-                    false,
-                    vpArray
-                  );
-                  this.renderer.useProgram(program);
-                }
-                this.currentVPArray = vpArray;
-                renderSymbolChildren();
-              },
-              canvasWidth,
-              canvasHeight,
-              effectScale
-            );
-            this.renderer.useProgram(program);
-            this.renderer.bindVAO(this.vao);
-            gl.uniformMatrix3fv(program.uniforms.u_viewProjection ?? null, false, vpArray);
-            if (this.gradientProgram) {
-              this.renderer.useProgram(this.gradientProgram);
-              gl.uniformMatrix3fv(
-                this.gradientProgram.uniforms.u_viewProjection ?? null,
-                false,
-                vpArray
-              );
-              this.renderer.useProgram(program);
-            }
-            this.currentVPArray = vpArray;
-          } else {
-            renderSymbolChildren();
-          }
-          return false; // skip empty children array
-        }
+      // Symbol instance: resolve and render master's children
+      if (node.type === 'symbol-instance') {
+        const inst = node;
+        if (!this.symbolDefinitions.has(inst.symbolId)) return false; // skip if definition missing
 
-        // Artboard: render background and set up scissor clipping
-        if (node.type === 'artboard') {
-          this.renderArtboardBackground(node, worldTransform);
-          if (node.clipContent) {
-            // Compute screen-space scissor rect from artboard bounds
-            const hw = node.width / 2;
-            const hh = node.height / 2;
-            // Artboard corners in local space (anchor 0.5,0.5)
-            const corners = [
-              mat3.transformPoint(worldTransform, { x: -hw, y: -hh }),
-              mat3.transformPoint(worldTransform, { x: hw, y: -hh }),
-              mat3.transformPoint(worldTransform, { x: hw, y: hh }),
-              mat3.transformPoint(worldTransform, { x: -hw, y: hh }),
-            ];
-            // Transform world coords through VP to NDC
-            const screenCorners = corners.map((c) => {
-              const ndc = mat3.transformPoint(viewProjectionMatrix, c);
-              // NDC to screen pixels
-              return {
-                x: (ndc.x * 0.5 + 0.5) * canvasWidth,
-                y: (ndc.y * 0.5 + 0.5) * canvasHeight, // GL scissor Y is bottom-up (matches NDC)
-              };
-            });
-            const minX = Math.min(...screenCorners.map((c) => c.x));
-            const minY = Math.min(...screenCorners.map((c) => c.y));
-            const maxX = Math.max(...screenCorners.map((c) => c.x));
-            const maxY = Math.max(...screenCorners.map((c) => c.y));
-            pushScissor(
-              Math.floor(minX),
-              Math.floor(minY),
-              Math.ceil(maxX - minX),
-              Math.ceil(maxY - minY)
-            );
-          }
-          return; // continue into children
-        }
+        const renderSymbolChildren = () => this.renderSymbolContent(inst, worldTransform);
 
-        // Boolean group: render computed result, skip children
-        if (node.type === 'group' && node.booleanOp) {
-          const groupNode = node;
-          const renderBoolGroup = () => {
-            this.renderBooleanGroup(groupNode, worldTransform, sceneGraph);
-          };
-
-          if (this.effectRenderer.needsMultiPass(node.effects, node.blendMode)) {
-            this.effectRenderer.renderNodeWithEffects(
-              node.effects,
-              node.blendMode,
-              () => {
-                this.renderer.useProgram(program);
-                this.renderer.bindVAO(this.vao);
-                gl.uniformMatrix3fv(program.uniforms.u_viewProjection ?? null, false, vpArray);
-                if (this.gradientProgram) {
-                  this.renderer.useProgram(this.gradientProgram);
-                  gl.uniformMatrix3fv(
-                    this.gradientProgram.uniforms.u_viewProjection ?? null,
-                    false,
-                    vpArray
-                  );
-                  this.renderer.useProgram(program);
-                }
-                this.currentVPArray = vpArray;
-                renderBoolGroup();
-              },
-              canvasWidth,
-              canvasHeight,
-              effectScale
-            );
-            this.renderer.useProgram(program);
-            this.renderer.bindVAO(this.vao);
-            gl.uniformMatrix3fv(program.uniforms.u_viewProjection ?? null, false, vpArray);
-            if (this.gradientProgram) {
-              this.renderer.useProgram(this.gradientProgram);
-              gl.uniformMatrix3fv(
-                this.gradientProgram.uniforms.u_viewProjection ?? null,
-                false,
-                vpArray
-              );
-              this.renderer.useProgram(program);
-            }
-            this.currentVPArray = vpArray;
-          } else {
-            renderBoolGroup();
-          }
-          return false; // skip children — they are rendered as part of the boolean result
-        }
-
-        const renderShape = () => this.renderNodeGeometry(node, worldTransform, sceneGraph);
-
-        // Check if node needs multi-pass rendering (effects or blend mode)
         if (this.effectRenderer.needsMultiPass(node.effects, node.blendMode)) {
           this.effectRenderer.renderNodeWithEffects(
             node.effects,
             node.blendMode,
             () => {
-              // Re-setup shader state since effect renderer may have changed it
-              this.renderer.useProgram(program);
-              this.renderer.bindVAO(this.vao);
-              gl.uniformMatrix3fv(program.uniforms.u_viewProjection ?? null, false, vpArray);
-              if (this.gradientProgram) {
-                this.renderer.useProgram(this.gradientProgram);
-                gl.uniformMatrix3fv(
-                  this.gradientProgram.uniforms.u_viewProjection ?? null,
-                  false,
-                  vpArray
-                );
-                this.renderer.useProgram(program);
-              }
-              this.currentVPArray = vpArray;
-              renderShape();
+              setShapePrograms();
+              renderSymbolChildren();
             },
             canvasWidth,
             canvasHeight,
-            effectScale,
-            this.effectBounds(node, worldTransform, viewProjectionMatrix, canvasWidth, canvasHeight)
+            effectScale
           );
-          // Restore shader state for next node
-          this.renderer.useProgram(program);
-          this.renderer.bindVAO(this.vao);
-          gl.uniformMatrix3fv(program.uniforms.u_viewProjection ?? null, false, vpArray);
-          if (this.gradientProgram) {
-            this.renderer.useProgram(this.gradientProgram);
-            gl.uniformMatrix3fv(
-              this.gradientProgram.uniforms.u_viewProjection ?? null,
-              false,
-              vpArray
-            );
-            this.renderer.useProgram(program);
-          }
-          this.currentVPArray = vpArray;
+          setShapePrograms();
         } else {
-          // Fast path: no effects, normal blend mode — render directly
-          renderShape();
+          renderSymbolChildren();
         }
-        return; // explicit void return (callback returns boolean | void)
-      },
-      (node) => {
-        // onExitNode: pop scissor when leaving a clipping artboard
-        if (node.type === 'artboard' && node.clipContent) {
-          popScissor();
+        return false; // skip empty children array
+      }
+
+      // Artboard: render background and set up scissor clipping
+      if (node.type === 'artboard') {
+        this.renderArtboardBackground(node, worldTransform);
+        if (node.clipContent) {
+          // Compute screen-space scissor rect from artboard bounds
+          const hw = node.width / 2;
+          const hh = node.height / 2;
+          // Artboard corners in local space (anchor 0.5,0.5)
+          const corners = [
+            mat3.transformPoint(worldTransform, { x: -hw, y: -hh }),
+            mat3.transformPoint(worldTransform, { x: hw, y: -hh }),
+            mat3.transformPoint(worldTransform, { x: hw, y: hh }),
+            mat3.transformPoint(worldTransform, { x: -hw, y: hh }),
+          ];
+          // Transform world coords through VP to NDC
+          const screenCorners = corners.map((c) => {
+            const ndc = mat3.transformPoint(viewProjectionMatrix, c);
+            // NDC to screen pixels
+            return {
+              x: (ndc.x * 0.5 + 0.5) * canvasWidth,
+              y: (ndc.y * 0.5 + 0.5) * canvasHeight, // GL scissor Y is bottom-up (matches NDC)
+            };
+          });
+          const minX = Math.min(...screenCorners.map((c) => c.x));
+          const minY = Math.min(...screenCorners.map((c) => c.y));
+          const maxX = Math.max(...screenCorners.map((c) => c.x));
+          const maxY = Math.max(...screenCorners.map((c) => c.y));
+          pushScissor(
+            Math.floor(minX),
+            Math.floor(minY),
+            Math.ceil(maxX - minX),
+            Math.ceil(maxY - minY)
+          );
         }
-        if (node.type === 'group' && node.maskMode && node.maskNodeId) {
-          this.popMask(node.id);
+        return; // continue into children
+      }
+
+      // Boolean group: render computed result, skip children
+      if (node.type === 'group' && node.booleanOp) {
+        const groupNode = node;
+        const renderBoolGroup = () => {
+          this.renderBooleanGroup(groupNode, worldTransform, sceneGraph);
+        };
+
+        if (this.effectRenderer.needsMultiPass(node.effects, node.blendMode)) {
+          this.effectRenderer.renderNodeWithEffects(
+            node.effects,
+            node.blendMode,
+            () => {
+              setShapePrograms();
+              renderBoolGroup();
+            },
+            canvasWidth,
+            canvasHeight,
+            effectScale
+          );
+          setShapePrograms();
+        } else {
+          renderBoolGroup();
         }
-      },
-      exportNodeIds
-    );
+        return false; // skip children — they are rendered as part of the boolean result
+      }
+
+      const renderShape = () => this.renderNodeGeometry(node, worldTransform, sceneGraph);
+
+      // Check if node needs multi-pass rendering (effects or blend mode)
+      if (this.effectRenderer.needsMultiPass(node.effects, node.blendMode)) {
+        this.effectRenderer.renderNodeWithEffects(
+          node.effects,
+          node.blendMode,
+          () => {
+            // Re-setup shader state since effect renderer may have changed it
+            setShapePrograms();
+            renderShape();
+          },
+          canvasWidth,
+          canvasHeight,
+          effectScale,
+          this.effectBounds(node, worldTransform, viewProjectionMatrix, canvasWidth, canvasHeight)
+        );
+        // Restore shader state for next node
+        setShapePrograms();
+      } else {
+        // Fast path: no effects, normal blend mode — render directly
+        renderShape();
+      }
+      return; // explicit void return (callback returns boolean | void)
+    };
+    const exitNode = (node: Node): void => {
+      // onExitNode: pop scissor when leaving a clipping artboard
+      if (node.type === 'artboard' && node.clipContent) {
+        popScissor();
+      }
+      if (node.type === 'group' && node.maskMode && node.maskNodeId) {
+        this.popMask(node.id);
+      }
+    };
+
+    // Traverse and render visible shapes
+    sceneGraph.traverseVisible(enterNode, exitNode, exportNodeIds);
 
     while (this.maskStack.length > 0) {
       this.popMask(this.maskStack[this.maskStack.length - 1]!.groupId);

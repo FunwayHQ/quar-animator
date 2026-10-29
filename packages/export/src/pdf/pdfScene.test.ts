@@ -395,6 +395,20 @@ describe('structure', () => {
     const { page } = await draw([instance], { symbols: [symbol] });
     expect(block(page, '1 0 0 rg')).toContain('1 0 0 1 32 10 cm');
   });
+
+  it('blends a group as a whole, its layers painted together in an isolated group', async () => {
+    const { page, streams, bodies } = await draw([
+      group('g', [], { blendMode: 'difference' }),
+      [rect('a', 0, 0, 10, 10), 'g'],
+      [rect('b', 5, 5, 10, 10, { fills: [solid(BLUE)] }), 'g'],
+    ]);
+    expect(bodies).toContain('/BM /Difference');
+    expect(page).toMatch(/\/G\d+ gs \/X\d+ Do/);
+    // Both painted in the group's form, not on the page
+    expect(page).not.toContain('1 0 0 rg');
+    expect(streams).toContain('1 0 0 rg');
+    expect(streams).toContain('0 0 1 rg');
+  });
 });
 
 describe('effects', () => {
@@ -467,6 +481,19 @@ describe('effects', () => {
     });
     // 200 pixels across 40 units of the page
     expect(render).toHaveBeenCalledWith('photo', expect.anything(), 5, true);
+  });
+
+  it('draws a blurred group as the renderer draws it, its layers and all, in its place', async () => {
+    const render = vi.fn(() => Promise.resolve(raster(4, 4)));
+    const blur = { id: 'b', type: 'layer-blur' as const, visible: true, radius: 20 };
+    const { page } = await draw(
+      [group('g', [], { effects: [blur] }), [rect('a', 0, 0, 10, 10), 'g']],
+      { rasterizer: () => ({ render }) }
+    );
+    expect(render).toHaveBeenCalledWith('g', expect.anything(), expect.any(Number), true);
+    expect(render).toHaveBeenCalledTimes(1);
+    expect(page).toContain('Do');
+    expect(page).not.toContain('1 0 0 rg');
   });
 
   it('draws layers with effects plainly without a renderer', async () => {

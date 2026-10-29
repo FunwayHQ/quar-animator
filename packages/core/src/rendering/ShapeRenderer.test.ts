@@ -4,6 +4,7 @@
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { ShapeRenderer } from './ShapeRenderer';
+import type { EffectRenderer } from './EffectRenderer';
 import { boundOutline } from './shapeOutline';
 import { WebGLRenderer } from './WebGLRenderer';
 import { SceneGraph, createDefaultTransform, createGroupNode } from '../SceneGraph';
@@ -15,6 +16,8 @@ import type {
   PolygonNode,
   PathNode,
   SymbolInstanceNode,
+  GroupNode,
+  Effect,
   Fill,
   Stroke,
 } from '@quar/types';
@@ -430,6 +433,104 @@ describe('ShapeRenderer', () => {
         sceneGraph.addNode(createInstance('inst', 'loop', 0));
 
         expect(placedRectangles()).toEqual([['loop-rect', 0]]);
+      });
+    });
+
+    describe('group effects', () => {
+      const blur: Effect = { id: 'blur', type: 'layer-blur', visible: true, radius: 20 };
+
+      /** Each effect pass's effects and blend mode, and the rectangles drawn, each with the pass it's in. */
+      function drawn() {
+        const effects = (shapeRenderer as unknown as { effectRenderer: EffectRenderer })
+          .effectRenderer;
+        const passes: [Effect[] | undefined, string][] = [];
+        let open: number[] = [];
+        vi.spyOn(effects, 'renderNodeWithEffects').mockImplementation((list, blendMode, draw) => {
+          passes.push([list, blendMode]);
+          open = [...open, passes.length];
+          draw();
+          open = open.slice(0, -1);
+        });
+        const rectangles: [string, number | null][] = [];
+        vi.spyOn(shapeRenderer, 'renderRectangle').mockImplementation((node) => {
+          rectangles.push([node.id, open[open.length - 1] ?? null]);
+        });
+        shapeRenderer.render(sceneGraph, mat3.identity());
+        return { passes, rectangles };
+      }
+
+      function addGroup(patch: Partial<GroupNode>) {
+        sceneGraph.addNode({ ...createGroupNode('flower', 'Flower'), ...patch });
+        sceneGraph.addNode(createRectangleNode('petal', 20, 20), 'flower');
+        sceneGraph.addNode(createRectangleNode('stem', 4, 40), 'flower');
+      }
+
+      it('draws a group’s layers together in one pass of its effects', () => {
+        addGroup({ effects: [blur] });
+        sceneGraph.addNode(createRectangleNode('ground', 100, 10));
+
+        const { passes, rectangles } = drawn();
+
+        expect(passes).toEqual([[[blur], 'normal']]);
+        expect(rectangles).toEqual([
+          ['petal', 1],
+          ['stem', 1],
+          ['ground', null],
+        ]);
+      });
+
+      it('blends a group as a whole', () => {
+        addGroup({ blendMode: 'difference' });
+
+        const { passes, rectangles } = drawn();
+
+        expect(passes).toEqual([[undefined, 'difference']]);
+        expect(rectangles).toEqual([
+          ['petal', 1],
+          ['stem', 1],
+        ]);
+      });
+
+      it('draws a group with no effects or blend mode straight through', () => {
+        addGroup({ effects: [{ ...blur, visible: false }] });
+
+        const { passes, rectangles } = drawn();
+
+        expect(passes).toEqual([]);
+        expect(rectangles).toEqual([
+          ['petal', null],
+          ['stem', null],
+        ]);
+      });
+
+      it('masks inside the pass, the mask layer drawing coverage only', () => {
+        addGroup({ effects: [blur], maskMode: 'alpha', maskNodeId: 'stem' });
+
+        const { passes, rectangles } = drawn();
+
+        expect(passes).toHaveLength(1);
+        // The mask layer first, into its coverage, then what it masks
+        expect(rectangles).toEqual([
+          ['stem', 1],
+          ['petal', 1],
+        ]);
+        expect((shapeRenderer as unknown as { maskStack: unknown[] }).maskStack).toEqual([]);
+      });
+
+      it('gives a layer in the group a pass of its own inside the group’s', () => {
+        addGroup({ effects: [blur] });
+        sceneGraph.updateNode('petal', { blendMode: 'multiply' });
+
+        const { passes, rectangles } = drawn();
+
+        expect(passes).toEqual([
+          [[blur], 'normal'],
+          [undefined, 'multiply'],
+        ]);
+        expect(rectangles).toEqual([
+          ['petal', 2],
+          ['stem', 1],
+        ]);
       });
     });
   });

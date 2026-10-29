@@ -262,18 +262,21 @@ export class PdfSceneDrawer {
         if (node.booleanOp) {
           return this.withEffects(node, own, (s) => this.drawBooleanGroup(node, s));
         }
+        // Its effects and blend mode apply to the group as a whole, as on the canvas
         const mask = this.maskSource(node, (id) => this.scene.getNode(id));
-        if (mask && node.maskMode) {
-          return this.drawMasked(
-            node.maskMode,
-            mask,
-            this.scene.getWorldTransform(mask.id),
-            (s) => this.drawSceneNode(mask, s),
-            (s) => this.drawSceneChildren(node, s, mask.id),
-            own
-          );
-        }
-        return this.drawSceneChildren(node, own);
+        const maskMode = node.maskMode;
+        return this.withEffects(node, own, (s) =>
+          mask && maskMode
+            ? this.drawMasked(
+                maskMode,
+                mask,
+                this.scene.getWorldTransform(mask.id),
+                (m) => this.drawSceneNode(mask, m),
+                (c) => this.drawSceneChildren(node, c, mask.id),
+                s
+              )
+            : this.drawSceneChildren(node, s)
+        );
       }
       case 'symbol-instance':
         return this.withEffects(node, own, (s) => this.drawSymbol(node, world, s, new Set()));
