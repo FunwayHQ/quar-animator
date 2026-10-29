@@ -1094,19 +1094,6 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
               </div>
             )}
 
-            {stillVideoCount > 0 && (
-              <div className={styles.warning} role="note" data-testid="export-video-stills">
-                <AlertTriangle size={14} className={styles.warningIcon} />
-                <span className={styles.warningText}>
-                  {stillVideoCount === 1
-                    ? '1 video layer will show as a still picture'
-                    : `${stillVideoCount} video layers will show as still pictures`}
-                  : {stillVideoFormat} doesn’t play video. MP4, WebM and GIF play{' '}
-                  {stillVideoCount === 1 ? 'it' : 'them'}.
-                </span>
-              </div>
-            )}
-
             {/* Tab-specific settings */}
             {state.tab === 'png-sequence' && (
               <>
@@ -1390,6 +1377,20 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
                   </div>
                 )}
               </>
+            )}
+
+            {/* After the format's own settings and notes */}
+            {stillVideoCount > 0 && (
+              <div className={styles.warning} role="note" data-testid="export-video-stills">
+                <AlertTriangle size={14} className={styles.warningIcon} />
+                <span className={styles.warningText}>
+                  {stillVideoCount === 1
+                    ? '1 video layer will show as a still picture'
+                    : `${stillVideoCount} video layers will show as still pictures`}
+                  : {stillVideoFormat} doesn’t play video. MP4, WebM and GIF play{' '}
+                  {stillVideoCount === 1 ? 'it' : 'them'}.
+                </span>
+              </div>
             )}
           </div>
         )}
