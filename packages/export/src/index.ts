@@ -154,6 +154,15 @@ export {
 // ============================================================================
 
 export { probeVideo, type VideoInfo, type VideoProbe, type VideoProblem } from './video/probe';
+export {
+  makeVideoStrip,
+  stillIndexAt,
+  stripRate,
+  stripTimes,
+  STRIP_HEIGHT,
+  STRIP_RATE,
+  STRIP_STILLS,
+} from './video/strip';
 
 export {
   decodeSound,
