@@ -1463,14 +1463,22 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
         )}
 
         {state.error && !state.exporting && (
-          <div className={styles.warning} role="alert" data-testid="export-error">
+          <div
+            className={`${styles.warning} ${styles.dialogNotice}`}
+            role="alert"
+            data-testid="export-error"
+          >
             <AlertTriangle size={14} className={styles.warningIcon} />
             <span className={styles.warningText}>{state.error}</span>
           </div>
         )}
 
         {state.videoProblems.length > 0 && !state.exporting && (
-          <div className={styles.warning} role="status" data-testid="export-video-problems">
+          <div
+            className={`${styles.warning} ${styles.dialogNotice}`}
+            role="status"
+            data-testid="export-video-problems"
+          >
             <AlertTriangle size={14} className={styles.warningIcon} />
             <span className={styles.warningText}>{describeVideoProblems(state.videoProblems)}</span>
           </div>

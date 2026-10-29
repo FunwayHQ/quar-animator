@@ -227,6 +227,11 @@
   margin-top: 12px;
 }
 
+/* A notice after the body (an export's error or outcome), inside the dialog's margins */
+.dialogNotice {
+  margin: 0 16px 14px;
+}
+
 .warningIcon {
   color: #eab308;
   flex-shrink: 0;
