@@ -192,9 +192,11 @@ export {
   decodeSound,
   mixSoundtrack,
   slideSoundtrackParts,
+  soundAtSpeed,
   soundBytes,
   soundtrackPlays,
   SOUNDTRACK_RATE,
+  type SoundDecoder,
   type SoundtrackPart,
 } from './soundtrack';
 

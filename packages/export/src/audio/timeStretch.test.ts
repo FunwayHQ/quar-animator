@@ -27,6 +27,17 @@ function pitch(samples: Float32Array, from = 0, to = samples.length): number {
   return crossings / ((last - first) / RATE);
 }
 
+/** Whether two sets of channels hold the same samples (quicker than comparing them deeply). */
+function sameSamples(a: readonly Float32Array[], b: readonly Float32Array[]): boolean {
+  return (
+    a.length === b.length &&
+    a.every((samples, c) => {
+      const other = b[c]!;
+      return samples.length === other.length && samples.every((value, i) => value === other[i]);
+    })
+  );
+}
+
 /** The largest step from one sample to the next. */
 function largestStep(samples: Float32Array, from = 1, to = samples.length): number {
   let largest = 0;
@@ -125,7 +136,7 @@ describe('stretch', () => {
     expect(progress.length).toBeGreaterThan(2);
     expect(progress).toEqual([...progress].sort((a, b) => a - b));
     expect(progress.at(-1)).toBeLessThanOrEqual(1);
-    expect(step.value).toEqual(stretch(channels, RATE, 0.5));
+    expect(sameSamples(step.value, stretch(channels, RATE, 0.5))).toBe(true);
   });
 
   it('stretches in steps a moment at a time, pausing between them', async () => {
@@ -137,7 +148,7 @@ describe('stretch', () => {
         pauses++;
       },
     });
-    expect(out).toEqual(stretch(channels, RATE, 0.5));
+    expect(sameSamples(out, stretch(channels, RATE, 0.5))).toBe(true);
     expect(pauses).toBeGreaterThan(1);
   });
 

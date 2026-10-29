@@ -5,9 +5,11 @@ import {
   decodeSound,
   mixSoundtrack,
   slideSoundtrackParts,
+  soundAtSpeed,
   soundBytes,
   soundtrackPlays,
 } from './soundtrack';
+import { stretch } from './audio/timeStretch';
 
 /** What the mix asked the audio context to play */
 interface Played {
@@ -76,6 +78,54 @@ class FakeOfflineContext {
   }
 }
 
+/** An audio buffer, as Web Audio makes one: its channels' samples. */
+class FakeAudioBuffer {
+  readonly numberOfChannels: number;
+  readonly length: number;
+  readonly sampleRate: number;
+  readonly channels: Float32Array[];
+  constructor(options: { numberOfChannels: number; length: number; sampleRate: number }) {
+    this.numberOfChannels = options.numberOfChannels;
+    this.length = options.length;
+    this.sampleRate = options.sampleRate;
+    this.channels = Array.from(
+      { length: options.numberOfChannels },
+      () => new Float32Array(options.length)
+    );
+  }
+  get duration() {
+    return this.length / this.sampleRate;
+  }
+  getChannelData(channel: number) {
+    return this.channels[channel]!;
+  }
+}
+
+/** Whether two sets of channels hold the same samples (quicker than comparing them deeply). */
+function sameSamples(a: readonly Float32Array[], b: readonly Float32Array[]): boolean {
+  return (
+    a.length === b.length &&
+    a.every((samples, c) => {
+      const other = b[c]!;
+      return samples.length === other.length && samples.every((value, i) => value === other[i]);
+    })
+  );
+}
+
+/** A buffer of a tone in each channel. */
+function toneBuffer(seconds: number, channels = 2) {
+  const buffer = new FakeAudioBuffer({
+    numberOfChannels: channels,
+    length: Math.round(seconds * 48000),
+    sampleRate: 48000,
+  });
+  buffer.channels.forEach((samples, c) => {
+    for (let i = 0; i < samples.length; i++)
+      samples[i] = Math.sin((2 * Math.PI * (330 + c * 110) * i) / 48000);
+  });
+  return buffer;
+}
+
 const sound = (id: string): Sound => ({
   id,
   name: id,
@@ -95,8 +145,25 @@ const clip = (id: string, soundId: string, start: number, more: Partial<SoundCli
 beforeEach(() => {
   FakeOfflineContext.made = [];
   vi.stubGlobal('OfflineAudioContext', FakeOfflineContext);
+  vi.stubGlobal('AudioBuffer', FakeAudioBuffer);
 });
 afterEach(() => vi.unstubAllGlobals());
+
+describe('soundAtSpeed', () => {
+  it('is the sound itself at 1×', async () => {
+    const audio = toneBuffer(0.2);
+    expect(await soundAtSpeed(audio as unknown as AudioBuffer, 1)).toBe(audio);
+  });
+
+  it('is the sound stretched at another speed, each channel alike, at its rate', async () => {
+    const audio = toneBuffer(0.5);
+    const fast = (await soundAtSpeed(audio as unknown as AudioBuffer, 2, {
+      pause: async () => {},
+    })) as unknown as FakeAudioBuffer;
+    expect([fast.numberOfChannels, fast.length, fast.sampleRate]).toEqual([2, 12000, 48000]);
+    expect(sameSamples(fast.channels, stretch(audio.channels, 48000, 2))).toBe(true);
+  });
+});
 
 describe('soundBytes', () => {
   it('reads a data URI’s bytes', () => {
@@ -241,6 +308,67 @@ describe('mixSoundtrack', () => {
       { from: 'one' },
       { from: 'one' },
     ]);
+  });
+
+  it('mixes a clip at a speed of its own from the sound’s rendition at it', async () => {
+    const decode = vi.fn(
+      async (s: Sound, speed = 1) => ({ from: s.id, speed }) as unknown as AudioBuffer
+    );
+    const plays = soundtrackPlays(
+      [
+        {
+          clips: [
+            clip('a', 'one', 0),
+            clip('b', 'one', 30, { offset: 1, speed: 2 }),
+            clip('c', 'one', 60, { speed: 2, loop: true, loopFor: 1.5 }),
+          ],
+          at: 0,
+          startFrame: 0,
+          endFrame: 149,
+        },
+      ],
+      30
+    );
+    await mixSoundtrack(plays, [sound('one')], 5, decode);
+    // The sound itself and its rendition at 2×, each made once
+    expect(decode.mock.calls.map(([s, speed]) => [s.id, speed])).toEqual([
+      ['one', 1],
+      ['one', 2],
+    ]);
+    expect(FakeOfflineContext.made.at(-1)!.played.map((p) => [p.buffer, p.rate, p.start])).toEqual([
+      [{ from: 'one', speed: 1 }, 1, [0, 0, 2]],
+      // 2 s of the sound from 1 s in, twice as fast: 1 s of the rendition from 0.5 s in
+      [{ from: 'one', speed: 2 }, 1, [1, 0.5, 1]],
+      // Looped: a pass of 1 s, then half of one
+      [{ from: 'one', speed: 2 }, 1, [2, 0, 1]],
+      [{ from: 'one', speed: 2 }, 1, [3, 0, 0.5]],
+    ]);
+  });
+
+  it('makes the renditions itself without a decoder: the sound stretched, keeping its pitch', async () => {
+    const audio = toneBuffer(1);
+    const decoding = vi.spyOn(FakeOfflineContext.prototype, 'decodeAudioData');
+    decoding.mockResolvedValue(audio as never);
+    const plays = soundtrackPlays(
+      [
+        {
+          clips: [clip('a', 'one', 0, { speed: 0.5 }), clip('b', 'one', 0)],
+          at: 0,
+          startFrame: 0,
+          endFrame: 299,
+        },
+      ],
+      30
+    );
+    await mixSoundtrack(plays, [sound('one')], 4);
+    // Decoded once for both
+    expect(decoding).toHaveBeenCalledOnce();
+    const [slow, plain] = FakeOfflineContext.made.at(-1)!.played;
+    expect(plain!.buffer).toBe(audio);
+    const rendition = slow!.buffer as FakeAudioBuffer;
+    expect(rendition.length).toBe(96000);
+    expect(sameSamples(rendition.channels, stretch(audio.channels, 48000, 0.5))).toBe(true);
+    decoding.mockRestore();
   });
 
   it('is silent when nothing plays, or its sound is missing', async () => {

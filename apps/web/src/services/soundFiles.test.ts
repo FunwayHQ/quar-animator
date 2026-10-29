@@ -2,7 +2,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Sound } from '@quar/types';
 
 const decodeSound = vi.hoisted(() => vi.fn());
-vi.mock('@quar/export', () => ({ decodeSound }));
+const soundAtSpeed = vi.hoisted(() => vi.fn());
+vi.mock('@quar/export', () => ({ decodeSound, soundAtSpeed }));
 
 import {
   MAX_SOUND_BYTES,
@@ -24,7 +25,10 @@ function audio(duration: number, ...channels: number[][]): AudioBuffer {
   } as unknown as AudioBuffer;
 }
 
-beforeEach(() => decodeSound.mockClear());
+beforeEach(() => {
+  decodeSound.mockClear();
+  soundAtSpeed.mockReset();
+});
 
 describe('soundType', () => {
   it('takes the system’s type, else the name’s', () => {
@@ -97,6 +101,48 @@ describe('decodedSound', () => {
     keepDecodedSounds([]);
     await decodedSound(sound('one'));
     expect(decodeSound).toHaveBeenCalledTimes(3);
+  });
+});
+
+describe('a sound at a clip’s speed', () => {
+  const sound = (id: string): Sound => ({
+    id,
+    name: id,
+    src: `data:audio/wav;base64,${id}`,
+    duration: 1,
+  });
+
+  it('is its rendition at that speed, made once from its audio decoded once; at 1× the audio', async () => {
+    const decoded = audio(1, [0]);
+    decodeSound.mockResolvedValue(decoded);
+    soundAtSpeed.mockImplementation(async (from: AudioBuffer, speed: number) => ({ from, speed }));
+    const voice = sound('voice-at-speeds');
+    expect(await decodedSound(voice, 1)).toBe(decoded);
+    expect(await decodedSound(voice, 2)).toEqual({ from: decoded, speed: 2 });
+    await decodedSound(voice, 2);
+    await decodedSound(voice, 0.5);
+    expect(soundAtSpeed.mock.calls.map(([from, speed]) => [from, speed])).toEqual([
+      [decoded, 2],
+      [decoded, 0.5],
+    ]);
+    expect(decodeSound).toHaveBeenCalledOnce();
+  });
+
+  it('is made again after a failure, and let go of with its sound', async () => {
+    decodeSound.mockResolvedValue(audio(1, [0]));
+    soundAtSpeed.mockRejectedValueOnce(new Error('busy')).mockResolvedValue({ stretched: true });
+    const drums = sound('drums-at-speeds');
+    await expect(decodedSound(drums, 2)).rejects.toThrow('busy');
+    await decodedSound(drums, 2);
+    await decodedSound(drums, 2);
+    expect(soundAtSpeed).toHaveBeenCalledTimes(2);
+
+    keepDecodedSounds([drums]);
+    await decodedSound(drums, 2);
+    expect(soundAtSpeed).toHaveBeenCalledTimes(2);
+    keepDecodedSounds([]);
+    await decodedSound(drums, 2);
+    expect(soundAtSpeed).toHaveBeenCalledTimes(3);
   });
 });
 

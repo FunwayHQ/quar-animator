@@ -1,10 +1,11 @@
 /**
  * Sound files: read into the document's library as data, decoded once
- * each (and let go when the library no longer has them) for playback,
- * waveforms and video exports alike.
+ * each — and made once at each speed a clip plays one at, keeping its
+ * pitch — (and let go when the library no longer has them) for playback,
+ * waveforms and video exports alike, so they all sound the same.
  */
 
-import { decodeSound } from '@quar/export';
+import { decodeSound, soundAtSpeed } from '@quar/export';
 import type { Sound } from '@quar/types';
 
 /** The largest sound file read: the project keeps the whole file. */
@@ -49,6 +50,8 @@ function readAsDataUri(blob: Blob): Promise<string> {
 }
 
 const decoded = new Map<string, Promise<AudioBuffer>>();
+/** Each sound's renditions, by the speed they play at */
+const renditions = new Map<string, Map<number, Promise<AudioBuffer>>>();
 
 /**
  * A sound file read into a sound for the library: its data, and its length
@@ -87,8 +90,13 @@ export async function soundFromDecoded(
   return keptDecoded(name, await readAsDataUri(file), audio);
 }
 
-/** A sound's audio, decoded once. */
-export function decodedSound(sound: Sound): Promise<AudioBuffer> {
+/**
+ * A sound's audio, decoded once — or at a clip's speed (other than 1), its
+ * rendition at that speed, keeping its pitch: made once, a slice of time at
+ * a time so the editor stays responsive meanwhile.
+ */
+export function decodedSound(sound: Sound, speed = 1): Promise<AudioBuffer> {
+  if (speed !== 1) return rendition(sound, speed);
   let audio = decoded.get(sound.id);
   if (!audio) {
     audio = decodeSound(sound.src);
@@ -99,10 +107,28 @@ export function decodedSound(sound: Sound): Promise<AudioBuffer> {
   return audio;
 }
 
-/** Lets go of the decoded audio of sounds the library no longer has. */
+function rendition(sound: Sound, speed: number): Promise<AudioBuffer> {
+  let made = renditions.get(sound.id);
+  if (!made) {
+    made = new Map();
+    renditions.set(sound.id, made);
+  }
+  let audio = made.get(speed);
+  if (!audio) {
+    const kept = made;
+    audio = decodedSound(sound).then((original) => soundAtSpeed(original, speed));
+    kept.set(speed, audio);
+    // Made again next time it's wanted
+    audio.catch(() => kept.delete(speed));
+  }
+  return audio;
+}
+
+/** Lets go of the decoded audio (and renditions) of sounds the library no longer has. */
 export function keepDecodedSounds(sounds: readonly Sound[]): void {
   const kept = new Set(sounds.map((sound) => sound.id));
   for (const id of decoded.keys()) if (!kept.has(id)) decoded.delete(id);
+  for (const id of renditions.keys()) if (!kept.has(id)) renditions.delete(id);
 }
 
 /** How many peaks a second a waveform is drawn from. */

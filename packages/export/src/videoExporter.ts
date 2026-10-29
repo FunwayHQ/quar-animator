@@ -17,7 +17,7 @@ import {
 } from './soundtrack';
 import { createShotRenderer } from './slideTransition';
 import { hasTransitions } from './exportUtils';
-import type { SoundtrackPart } from './soundtrack';
+import type { SoundDecoder, SoundtrackPart } from './soundtrack';
 import type { ExportProgress } from './index';
 
 export type VideoFormat = 'mp4' | 'webm';
@@ -37,8 +37,11 @@ export interface VideoExportOptions extends PlaybackTiming {
   slides?: FrameSlide[];
   /** The document's sounds: the video has the sound of the clips it plays (none without) */
   sounds?: readonly Sound[];
-  /** Decodes a sound (the editor has them decoded); they're decoded here otherwise */
-  decodeSound?: (sound: Sound) => Promise<AudioBuffer>;
+  /**
+   * Decodes a sound, or gives its rendition at a clip's speed (the editor
+   * has them made); they're decoded and made here otherwise
+   */
+  decodeSound?: SoundDecoder;
 }
 
 export type Mp4ExportOptions = Omit<VideoExportOptions, 'transparent'>;

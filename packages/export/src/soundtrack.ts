@@ -3,12 +3,14 @@
  * The sound of a video export: the clips on the timeline it plays (or on
  * each slide's, as each slide plays, once the transition into it is over),
  * mixed into one stereo track timed to the video, as the editor plays
- * them — fades too.
+ * them — fades, loops and clips at a speed of their own (from the sound's
+ * rendition at that speed, keeping its pitch) too.
  */
 
 import { schedulePlayGain, soundsPlayed } from '@quar/animation';
 import type { SoundPlay } from '@quar/animation';
 import type { Sound, SoundClip } from '@quar/types';
+import { stretchInSteps, type StretchInStepsOptions } from './audio/timeStretch';
 import type { ExportSlide, Shot } from './exportUtils';
 
 /** The soundtrack's sample rate (sounds are resampled to it as they're decoded). */
@@ -26,6 +28,49 @@ export function soundBytes(src: string): Uint8Array<ArrayBuffer> {
 export async function decodeSound(src: string, context?: BaseAudioContext): Promise<AudioBuffer> {
   const decoder = context ?? new OfflineAudioContext(1, 1, SOUNDTRACK_RATE);
   return decoder.decodeAudioData(soundBytes(src).buffer);
+}
+
+/**
+ * A sound's audio at `speed` (1 when absent), keeping its pitch: at 1× the
+ * sound decoded, otherwise its rendition at that speed (see soundAtSpeed).
+ */
+export type SoundDecoder = (sound: Sound, speed?: number) => Promise<AudioBuffer>;
+
+/**
+ * A sound's rendition at a clip's speed: its audio time-stretched keeping
+ * its pitch (a slice of time at a time, so the page stays responsive), a
+ * buffer as long as the sound takes at that speed. At 1× the audio itself.
+ */
+export async function soundAtSpeed(
+  audio: AudioBuffer,
+  speed: number,
+  options?: StretchInStepsOptions
+): Promise<AudioBuffer> {
+  if (speed === 1) return audio;
+  const channels = Array.from({ length: audio.numberOfChannels }, (_, channel) =>
+    audio.getChannelData(channel)
+  );
+  const stretched = await stretchInSteps(channels, audio.sampleRate, speed, options);
+  const rendition = new AudioBuffer({
+    numberOfChannels: Math.max(1, stretched.length),
+    length: Math.max(1, stretched[0]?.length ?? 0),
+    sampleRate: audio.sampleRate,
+  });
+  stretched.forEach((samples, channel) => rendition.getChannelData(channel).set(samples));
+  return rendition;
+}
+
+/** Sounds decoded (each once) and their renditions made, for one mix. */
+function decodingOnce(): SoundDecoder {
+  const decoded = new Map<string, Promise<AudioBuffer>>();
+  return (sound, speed = 1) => {
+    let audio = decoded.get(sound.id);
+    if (!audio) {
+      audio = decodeSound(sound.src);
+      decoded.set(sound.id, audio);
+    }
+    return audio.then((buffer) => soundAtSpeed(buffer, speed));
+  };
 }
 
 /** A stretch of the video: frames `startFrame`–`endFrame` of a timeline with these clips, from `at` seconds in. */
@@ -74,15 +119,22 @@ export function soundtrackPlays(
   );
 }
 
+/** Which of a sound's audio a play plays: the sound itself, or its rendition at a speed. */
+function renditionKey(play: SoundPlay): string {
+  return `${play.soundId}@${play.speed ?? 1}`;
+}
+
 /**
  * The plays mixed into a stereo track `duration` seconds long, or null when
  * nothing plays (a clip whose sound isn't in the library plays nothing).
+ * `decode` gives each sound's audio, or its rendition at a clip's speed;
+ * by default they're decoded and made here.
  */
 export async function mixSoundtrack(
   plays: readonly SoundPlay[],
   sounds: readonly Sound[],
   duration: number,
-  decode: (sound: Sound) => Promise<AudioBuffer> = (sound) => decodeSound(sound.src)
+  decode: SoundDecoder = decodingOnce()
 ): Promise<AudioBuffer | null> {
   const library = new Map(sounds.map((sound) => [sound.id, sound]));
   const heard = plays.filter((play) => library.has(play.soundId));
@@ -91,9 +143,10 @@ export async function mixSoundtrack(
   const decoded = new Map<string, AudioBuffer>();
   for (const play of heard) {
     const sound = library.get(play.soundId);
-    if (!sound || decoded.has(sound.id)) continue;
+    const key = renditionKey(play);
+    if (!sound || decoded.has(key)) continue;
     try {
-      decoded.set(sound.id, await decode(sound));
+      decoded.set(key, await decode(sound, play.speed ?? 1));
     } catch {
       throw new Error(`The sound “${sound.name}” can’t be read, so the video can’t have it.`);
     }
@@ -105,7 +158,7 @@ export async function mixSoundtrack(
     SOUNDTRACK_RATE
   );
   for (const play of heard) {
-    const buffer = decoded.get(play.soundId);
+    const buffer = decoded.get(renditionKey(play));
     if (!buffer) continue;
     const source = context.createBufferSource();
     source.buffer = buffer;
