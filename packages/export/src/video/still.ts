@@ -7,8 +7,7 @@
  */
 
 import type { VideoStrip } from '@quar/types';
-import type { InputVideoTrack } from 'mediabunny';
-import { openMedia, videoTrackOf } from './media';
+import { openVideoMedia, type VideoTrackInfo } from './media';
 import { stillIndexAt } from './strip';
 
 export type StillCanvas = HTMLCanvasElement | OffscreenCanvas;
@@ -47,10 +46,10 @@ async function decodeEach(
   options: VideoStillOptions,
   take: (still: StillCanvas | null, index: number) => Promise<void> | void
 ): Promise<void> {
-  const { mb, input } = await openMedia(file);
+  const media = await openVideoMedia(file);
   try {
-    const track = await videoTrackOf(input);
-    const sink = new mb.CanvasSink(track, await sinkOptions(track, options));
+    const { track } = media;
+    const sink = media.canvasSink(await sinkOptions(track, options));
     const first = await track.getFirstTimestamp();
     const end = await track.computeDuration();
     for (const [index, seconds] of moments.entries()) {
@@ -60,12 +59,12 @@ async function decodeEach(
       await take(decoded?.canvas ?? null, index);
     }
   } finally {
-    input.dispose();
+    media.dispose();
   }
 }
 
 /** The stills' size (the video's own, no bigger than asked) and transparency. */
-async function sinkOptions(track: InputVideoTrack, options: VideoStillOptions) {
+async function sinkOptions(track: VideoTrackInfo, options: VideoStillOptions) {
   const width = await track.getDisplayWidth();
   const height = await track.getDisplayHeight();
   const scale = Math.min(1, (options.maxSize ?? MAX_SIZE) / Math.max(width, height, 1));

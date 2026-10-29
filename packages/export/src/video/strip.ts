@@ -6,7 +6,7 @@
  */
 
 import type { VideoStrip } from '@quar/types';
-import { openMedia, videoTrackOf } from './media';
+import { openVideoMedia } from './media';
 
 /** Stills a second, at most */
 export const STRIP_RATE = 4;
@@ -76,14 +76,14 @@ export async function makeVideoStrip(
 ): Promise<VideoStrip> {
   const rate = stripRate(video.duration);
   const height = Math.max(1, Math.round(Math.min(STRIP_HEIGHT, video.height)));
-  const { mb, input } = await openMedia(file);
+  const media = await openVideoMedia(file);
   try {
-    const track = await videoTrackOf(input);
+    const { track } = media;
     // Nothing shows before its first frame: the first still is that frame
     const first = await track.getFirstTimestamp();
     const times = stripTimes(video.duration, rate).map((time) => Math.max(first, time));
     // One canvas, used again for each still: each is encoded before the next is drawn
-    const sink = new mb.CanvasSink(track, { height, alpha: video.hasAlpha, poolSize: 1 });
+    const sink = media.canvasSink({ height, alpha: video.hasAlpha, poolSize: 1 });
     const frames: Array<string | null> = [];
     for await (const still of sink.canvasesAtTimestamps(times)) {
       frames.push(still ? await stillDataUri(still.canvas, video.hasAlpha) : null);
@@ -99,6 +99,6 @@ export async function makeVideoStrip(
       frames: frames.map((frame) => (previous = frame ?? previous)),
     };
   } finally {
-    input.dispose();
+    media.dispose();
   }
 }

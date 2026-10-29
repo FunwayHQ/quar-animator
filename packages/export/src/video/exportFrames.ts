@@ -23,10 +23,10 @@ import { timelineScopeOf } from '@quar/core';
 import type { SceneGraph, VideoFrameImage, VideoFrameProvider } from '@quar/core';
 import { videoPosterTime, videoTimeAt } from '@quar/animation';
 import type { Node, PropertyTrack, Timeline, Video, VideoNode } from '@quar/types';
-import type { CanvasSink, Input, InputVideoTrack, WrappedCanvas } from 'mediabunny';
+import type { WrappedCanvas } from 'mediabunny';
 import type { Shot } from '../exportUtils';
 import type { FrameRenderContext } from '../frameRenderer';
-import { openMedia, videoTrackOf, type Mediabunny } from './media';
+import { openVideoMedia, type FrameSink, type VideoMedia } from './media';
 import { stillIndexAt } from './strip';
 
 /** Where an export's video layers get their pictures. */
@@ -98,8 +98,7 @@ interface Plan {
 
 /** A video opened to decode. */
 interface OpenVideo {
-  mb: Mediabunny;
-  track: InputVideoTrack;
+  media: VideoMedia;
   width: number;
   height: number;
   alpha: boolean;
@@ -112,7 +111,7 @@ interface OpenVideo {
 interface Reader {
   plan: Plan;
   serial: number;
-  sink: CanvasSink | null;
+  sink: FrameSink | null;
   /** The pass through its moments, and the last of them it gave */
   run: AsyncGenerator<WrappedCanvas | null, void, unknown> | null;
   pulled: number;
@@ -159,7 +158,7 @@ export function createExportVideoFrames(
   /** What each layer shows now, by node id */
   const current = new Map<string, VideoFrameImage>();
   const opened = new Map<string, Promise<OpenVideo | null>>();
-  const inputs: Input[] = [];
+  const inputs: VideoMedia[] = [];
   /** Videos given up on, and the problems said */
   const failed = new Set<string>();
   const problems: string[] = [];
@@ -191,16 +190,15 @@ export function createExportVideoFrames(
           giveUp(videoId, 'Its file is missing.');
           return null;
         }
-        const { mb, input } = await openMedia(file);
+        const media = await openVideoMedia(file);
         if (disposed) {
-          input.dispose();
+          media.dispose();
           return null;
         }
-        inputs.push(input);
-        const track = await videoTrackOf(input);
+        inputs.push(media);
+        const { track } = media;
         return {
-          mb,
-          track,
+          media,
           width: await track.getDisplayWidth(),
           height: await track.getDisplayHeight(),
           alpha: await track.canBeTransparent(),
@@ -250,7 +248,7 @@ export function createExportVideoFrames(
     const video = await open(plan.node.videoId);
     if (!video || disposed || failed.has(plan.node.videoId)) return null;
     try {
-      reader.sink ??= new video.mb.CanvasSink(video.track, {
+      reader.sink ??= video.media.canvasSink({
         ...decodeSize(plan, video),
         alpha: video.alpha,
         poolSize: POOL,

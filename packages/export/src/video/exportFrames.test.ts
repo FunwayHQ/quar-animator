@@ -549,7 +549,8 @@ describe('createExportVideoFrames', () => {
     mocks.onOpen = () => source.dispose();
     await source.prepare(0);
     await vi.waitFor(() => expect(mocks.inputs).toBe(1));
-    expect(mocks.disposed).toBe(1);
+    // Once its track is read
+    await vi.waitFor(() => expect(mocks.disposed).toBe(1));
     expect(mocks.drawn).toEqual([]);
   });
 

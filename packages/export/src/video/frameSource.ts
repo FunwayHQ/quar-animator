@@ -7,8 +7,8 @@
  * A handful of pictures are kept, in canvases of a pool drawn over in turn.
  */
 
-import type { CanvasSink, Input, WrappedCanvas } from 'mediabunny';
-import { openMedia, videoTrackOf } from './media';
+import type { WrappedCanvas } from 'mediabunny';
+import { openVideoMedia, type FrameSink, type VideoMedia } from './media';
 
 /** A decoded picture of the video. */
 export interface DecodedFrame {
@@ -78,8 +78,8 @@ export function createVideoFrameSource(
   const keep = Math.max(3, Math.round(options.keep ?? KEEP));
   let disposed = false;
   let failed = false;
-  let input: Input | null = null;
-  let sink: CanvasSink | null = null;
+  let media: VideoMedia | null = null;
+  let sink: FrameSink | null = null;
   // Where the video's pictures are, in its own time
   let first = 0;
   let end = Infinity;
@@ -103,13 +103,13 @@ export function createVideoFrameSource(
   let busy = false;
 
   const ready = (async () => {
-    const opened = await openMedia(file);
-    input = opened.input;
+    const opened = await openVideoMedia(file);
+    media = opened;
     if (disposed) {
-      input.dispose();
+      opened.dispose();
       return;
     }
-    const track = await videoTrackOf(input);
+    const { track } = opened;
     const width = await track.getDisplayWidth();
     const height = await track.getDisplayHeight();
     const scale = Math.min(1, (options.maxSize ?? MAX_SIZE) / Math.max(width, height, 1));
@@ -121,7 +121,7 @@ export function createVideoFrameSource(
           : { height: Math.round(height * scale) };
     first = await track.getFirstTimestamp();
     end = await track.computeDuration();
-    sink = new opened.mb.CanvasSink(track, {
+    sink = opened.canvasSink({
       ...size,
       alpha: await track.canBeTransparent(),
       poolSize: keep,
@@ -258,7 +258,7 @@ export function createVideoFrameSource(
       wanted = null;
       void stopRun();
       frames.length = 0;
-      input?.dispose();
+      media?.dispose();
     },
   };
 }
