@@ -294,6 +294,21 @@ export function numbersInEnglish() {
 }
 
 /**
+ * Make the page see a Windows computer (an init script, run in the browser
+ * before the editor's own): the menus and the guide print shortcuts as the
+ * computer's keyboard has them, ⌘ and Cmd on a Mac, and the pictures are
+ * taken on one. Seen as Windows, every picture shows Ctrl and Alt, as the
+ * guide's text does where it can't follow the reader's computer.
+ */
+export function keysAsOnWindows() {
+  Object.defineProperty(navigator, 'platform', { get: () => 'Win32', configurable: true });
+  Object.defineProperty(navigator, 'userAgentData', {
+    get: () => ({ platform: 'Windows', mobile: false, brands: [] }),
+    configurable: true,
+  });
+}
+
+/**
  * Draw numbered markers over the page (runs in the browser, so it uses only
  * what's passed in): a violet badge at each target, and an outline round it
  * when asked. The guide's text names what each number points at, so the

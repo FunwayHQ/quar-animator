@@ -11,6 +11,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   captureClip,
   drawMarkers,
+  keysAsOnWindows,
   numbersInEnglish,
   loadShotLists,
   parseArgs,
@@ -18,6 +19,7 @@ import {
   validateShots,
 } from '../../scripts/help/shot-kit.mjs';
 import { WEB_ROOT } from '../../scripts/help/paths.mjs';
+import { formatShortcut, isMacPlatform } from '../components/common/shortcuts';
 
 const shot = (name: string, extra: Record<string, unknown> = {}) => ({
   name,
@@ -238,5 +240,30 @@ describe('number fields', () => {
     expect(x1.type).toBe('text');
     expect(x1.value).toBe('0.42');
     expect((document.getElementById('name') as HTMLInputElement).value).toBe('Ball');
+  });
+});
+
+describe('shortcuts in the pictures', () => {
+  it('are shown as on Windows, though the pictures are taken on a Mac', () => {
+    const platform = Object.getOwnPropertyDescriptor(navigator, 'platform');
+    const agentData = Object.getOwnPropertyDescriptor(navigator, 'userAgentData');
+    Object.defineProperty(navigator, 'platform', { get: () => 'MacIntel', configurable: true });
+    Object.defineProperty(navigator, 'userAgentData', {
+      get: () => ({ platform: 'macOS' }),
+      configurable: true,
+    });
+    expect(formatShortcut('Ctrl+Shift+Z')).toBe('⇧⌘Z');
+
+    keysAsOnWindows();
+    expect(isMacPlatform()).toBe(false);
+    expect(formatShortcut('Ctrl+Shift+Z')).toBe('Ctrl+Shift+Z');
+
+    for (const [name, descriptor] of [
+      ['platform', platform],
+      ['userAgentData', agentData],
+    ] as const) {
+      if (descriptor) Object.defineProperty(navigator, name, descriptor);
+      else delete (navigator as unknown as Record<string, unknown>)[name];
+    }
   });
 });

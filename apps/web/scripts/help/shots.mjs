@@ -25,6 +25,7 @@ import {
   DEFAULTS,
   captureClip,
   drawMarkers,
+  keysAsOnWindows,
   numbersInEnglish,
   loadShotLists,
   parseArgs,
@@ -206,6 +207,7 @@ async function takeShot(browser, shot, baseUrl) {
         document.head.appendChild(style);
       });
     });
+    await context.addInitScript(keysAsOnWindows);
     const page = await context.newPage();
     // Dates on the page (a project's "last saved") stay the same from one take to the next
     if (shot.date) await page.clock.setFixedTime(new Date(shot.date));
