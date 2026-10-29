@@ -115,7 +115,9 @@ function SliderRow({
         step={step}
         value={value}
         onChange={(e) => onChange(parseFloat(e.target.value))}
-        style={{ flex: 1, height: 14, cursor: 'pointer' }}
+        // May narrow below a range input's own width, so the number field
+        // beside it stays inside the panel
+        style={{ flex: 1, minWidth: 0, height: 14, cursor: 'pointer' }}
         data-testid={`${testId}-slider`}
       />
       <div className={styles.driverInputGroup} style={{ width: 52, flex: 'none' }}>

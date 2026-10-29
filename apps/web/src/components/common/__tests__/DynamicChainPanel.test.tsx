@@ -117,6 +117,30 @@ describe('DynamicChainPanel', () => {
     );
   });
 
+  it('lets its sliders narrow, so the number fields fit the panel', () => {
+    mockState.dynamicChains = [
+      {
+        id: 'dc-1',
+        name: 'Chain',
+        rootBoneId: 'bone-1',
+        boneIds: ['bone-1'],
+        enabled: true,
+        stiffness: 0.5,
+        damping: 0.3,
+        gravity: 100,
+        gravityAngle: -90,
+        windInfluence: 1,
+        elasticity: 0.5,
+        collisionRadius: 0,
+      },
+    ];
+    render(<DynamicChainPanel boneId="bone-1" />);
+    // A range input is as wide as its own default unless it may shrink
+    const sliders = screen.getAllByRole('slider');
+    expect(sliders).toHaveLength(6);
+    for (const slider of sliders) expect(parseFloat(slider.style.minWidth)).toBe(0);
+  });
+
   it('updates gravity via number input', () => {
     mockState.dynamicChains = [
       {

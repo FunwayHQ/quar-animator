@@ -40,6 +40,14 @@ describe('WindPanel', () => {
     expect(screen.getByText('Global Wind')).toBeTruthy();
   });
 
+  it('lets its sliders narrow, so the number fields fit the panel', () => {
+    render(<WindPanel />);
+    // A range input is as wide as its own default unless it may shrink
+    const sliders = screen.getAllByRole('slider');
+    expect(sliders).toHaveLength(4);
+    for (const slider of sliders) expect(parseFloat(slider.style.minWidth)).toBe(0);
+  });
+
   it('toggles wind enabled', () => {
     render(<WindPanel />);
     const checkbox = screen.getByLabelText('Enable wind');
