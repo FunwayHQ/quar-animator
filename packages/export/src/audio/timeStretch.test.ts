@@ -139,6 +139,14 @@ describe('stretch', () => {
     expect(sameSamples(step.value, stretch(channels, RATE, 0.5))).toBe(true);
   });
 
+  it('gets a long sound ready in steps too, before laying its first frame', () => {
+    // 10 s of stereo: mixed down and looked at roughly a slice at a time
+    const steps = stretching([sine(440, 10), sine(660, 10)], RATE, 4);
+    let before = 0;
+    for (let step = steps.next(); !step.done && step.value === 0; step = steps.next()) before++;
+    expect(before).toBeGreaterThanOrEqual(4);
+  });
+
   it('stretches in steps a moment at a time, pausing between them', async () => {
     let pauses = 0;
     const channels = [sine(440, 4)];

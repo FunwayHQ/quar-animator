@@ -21,31 +21,38 @@ export const STRETCH_SEARCH_SECONDS = 0.015;
 const SEARCH_RATES = [4000, 16000];
 /** How many frames are laid between the steps a stretch is made in. */
 const FRAMES_PER_STEP = 32;
+/** How many samples are mixed down or averaged between those steps. */
+const SAMPLES_PER_STEP = 1 << 17;
 
 /** How many samples `length` samples take at `speed`. */
 export function stretchedLength(length: number, speed: number): number {
   return Math.max(0, Math.round(length / speed));
 }
 
-/** The channels mixed down (the frames are chosen on all of them at once). */
-function mixed(channels: readonly Float32Array[], length: number): Float32Array {
-  const mix = new Float32Array(length);
-  for (const channel of channels) {
-    for (let i = 0; i < length; i++) mix[i]! += channel[i]!;
+/** The channels mixed down into `mix` (the frames are chosen on all of them at once), in steps. */
+function* mixing(channels: readonly Float32Array[], mix: Float32Array): Generator<number> {
+  for (let from = 0; from < mix.length; from += SAMPLES_PER_STEP) {
+    const to = Math.min(mix.length, from + SAMPLES_PER_STEP);
+    for (const channel of channels) {
+      for (let i = from; i < to; i++) mix[i]! += channel[i]!;
+    }
+    yield 0;
   }
-  return mix;
 }
 
-/** The sound averaged over every `step` samples: what the search looks at first. */
-function decimated(samples: Float32Array, step: number): Float32Array {
-  const out = new Float32Array(Math.ceil(samples.length / step));
-  for (let i = 0; i < out.length; i++) {
-    let sum = 0;
-    const end = Math.min(samples.length, (i + 1) * step);
-    for (let k = i * step; k < end; k++) sum += samples[k]!;
-    out[i] = sum / step;
+/** `samples` averaged over every `step` of them into `out`: what the search looks at first. In steps. */
+function* averaging(samples: Float32Array, step: number, out: Float32Array): Generator<number> {
+  const each = Math.max(1, Math.floor(SAMPLES_PER_STEP / step));
+  for (let from = 0; from < out.length; from += each) {
+    const to = Math.min(out.length, from + each);
+    for (let i = from; i < to; i++) {
+      let sum = 0;
+      const end = Math.min(samples.length, (i + 1) * step);
+      for (let k = i * step; k < end; k++) sum += samples[k]!;
+      out[i] = sum / step;
+    }
+    yield 0;
   }
-  return out;
 }
 
 /**
@@ -105,15 +112,21 @@ export function* stretching(
   const window = new Float32Array(frame);
   for (let i = 0; i < frame; i++) window[i] = 0.5 - 0.5 * Math.cos((Math.PI * i) / half);
 
-  const mix = mixed(channels, length);
+  const mix = new Float32Array(length);
+  yield* mixing(channels, mix);
   // Each look: how many samples one of its samples stands for, and the sound so
   const scales = [...new Set([...SEARCH_RATES.map((rate) => Math.floor(sampleRate / rate)), 1])]
     .filter((every) => every >= 1)
     .sort((a, b) => b - a);
-  const looks = scales.map((every) => ({
-    every,
-    samples: every > 1 ? decimated(mix, every) : mix,
-  }));
+  const looks: Array<{ every: number; samples: Float32Array }> = [];
+  for (const every of scales) {
+    let samples = mix;
+    if (every > 1) {
+      samples = new Float32Array(Math.ceil(length / every));
+      yield* averaging(mix, every, samples);
+    }
+    looks.push({ every, samples });
+  }
   const out = channels.map(() => new Float32Array(outLength + frame));
   const frames = Math.ceil(outLength / half);
   // Frames are whole frames of the sound: the last ones taken from its end (a slowed end drawn out, not faded)
