@@ -2,7 +2,7 @@
 
 Import a video (or an animated GIF) and place it on the timeline as a clip, its
 sound track separated onto the Sound lane. Decided with the owner on
-2026-10-29; steps 1–4 are built (below).
+2026-10-29; steps 1–5 are built (below).
 
 ## Decisions
 
@@ -224,6 +224,44 @@ frame, fps)` (null outside the clip; frame f begins at f/fps seconds, as
   open saying so. The Properties PNG and the Lottie/SVG/PDF stills only
   `console.warn` theirs.
 - **Properties:** the Video section's "Alpha · Transparent" line.
+
+## Step 5 (as built)
+
+- **Decoder:** our own (`packages/export/src/video/gif.ts`, no library).
+  Reading a GIF walks its blocks: each frame's place, delay (10 ms or less
+  plays as 100 ms), disposal, transparent colour, palette and data, and the
+  loop count; pixels are decoded (LZW, interlace) only when a frame is
+  drawn. The compositor draws each frame over the one before (disposal 2
+  clears, 3 puts back), holding one picture and restore points (16 MB at
+  most) to seek from. It matches PIL and the browsers' ImageDecoder pixel
+  for pixel.
+- **ImageDecoder** (`gifMedia.ts`), by frame index, only where it passes a
+  4-pixel trial (transparency, disposal) and counts the file's frames the
+  same; otherwise, and from any frame it fails on, the compositor. WebKit
+  fails the trial (its transparent pixels come out black). Timing always
+  comes from the GIF's own delays.
+- **One branch:** `openVideoMedia` (`media.ts`) gives a GIF a track and
+  sinks shaped like mediabunny's, so the strip, the canvas frame source,
+  the presenter's readers, export frames and stills read it as a video.
+  `probeVideo` knows a GIF by its first bytes (its rate is frames ÷ length,
+  its transparency exact, no sound, `loopCount`); one of a single frame is
+  `still-picture`.
+- **Import:** File › Import Video… takes `.gif`; a GIF dropped on the
+  canvas or chosen in Import Image… is a clip when animated, a picture
+  when still. The clip plays as the file says: forever (or unknown) loops
+  to the timeline's end; no count plays once and holds; n repeats plays
+  n+1 passes and holds — never past the timeline's end unless one pass
+  needs it.
+- **Stopping:** Loop off on a GIF turns Hold on (`withClipLoop`); Stop Here
+  in the settings card, or Stop Clip at Playhead in the row's menu, ends any
+  clip on the playhead's frame and holds what shows there
+  (`stoppedVideoClip`), one undo step, its linked sound following. Hold
+  shows the picture the clip's last frame shows (`heldVideoTime`), so a
+  looped clip cut part way through a pass freezes where it stopped.
+- **Open:** a big GIF's import composites every frame to learn its
+  transparency (slow for very large ones); the Video section's title says
+  "Video" for a GIF; saving a project with any video fails in WebKit
+  private windows (its storage refuses the file).
 
 ## Steps
 
