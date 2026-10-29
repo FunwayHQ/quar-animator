@@ -538,6 +538,71 @@ describe('MenuBar', () => {
       fireEvent.click(screen.getByTestId('menu-rigging'));
       expect(bindItem()).not.toBeDisabled();
     });
+
+    it('Bind Selection to Bones takes a group of shapes, as the canvas menu does', () => {
+      let sceneGraph: SceneGraph | null = null;
+      function Grab() {
+        sceneGraph = useSceneGraph();
+        return null;
+      }
+      render(
+        <>
+          <Grab />
+          <MenuBar />
+        </>
+      );
+      const layer = (id: string, type: string, parent: string | null) =>
+        ({
+          id,
+          name: id,
+          type,
+          parent,
+          children: [],
+          transform: createDefaultTransform(),
+          visible: true,
+          locked: false,
+          opacity: 1,
+          blendMode: 'normal',
+          width: 100,
+          height: 50,
+          cornerRadius: [0, 0, 0, 0],
+          fills: [],
+          strokes: [],
+        }) as unknown as Node;
+      act(() => {
+        sceneGraph?.addNode(createBoneNode('bone-1', 'Bone', { x: 0, y: 0 }, 50));
+        sceneGraph?.addNode(layer('body', 'group', null));
+        sceneGraph?.addNode(layer('torso', 'rectangle', 'body'), 'body');
+        sceneGraph?.addNode(layer('empty', 'group', null));
+      });
+      const bindItem = () => screen.getByText('Bind Selection to Bones').closest('button');
+      const openRigging = (ids: string[]) => {
+        act(() => useEditorStore.setState({ selectedNodeIds: new Set(ids) }));
+        fireEvent.click(screen.getByTestId('menu-rigging'));
+      };
+
+      openRigging(['body']);
+      expect(bindItem()).not.toBeDisabled();
+      const bind = vi.fn();
+      window.addEventListener('menubar:bind-to-bones', bind);
+      fireEvent.click(bindItem()!);
+      window.removeEventListener('menubar:bind-to-bones', bind);
+      expect(bind).toHaveBeenCalledOnce();
+
+      // Once its shapes are bound, the group unbinds from the menu too
+      const unbindItem = () => screen.getByText('Unbind Mesh').closest('button');
+      openRigging(['body']);
+      expect(unbindItem()).toBeDisabled();
+      fireEvent.click(screen.getByTestId('menu-rigging'));
+      act(() => sceneGraph?.updateNode('torso', { skinData: {} } as Partial<Node>));
+      openRigging(['body']);
+      expect(unbindItem()).not.toBeDisabled();
+      fireEvent.click(screen.getByTestId('menu-rigging'));
+
+      // A group with nothing to bind in it has nothing to bind
+      openRigging(['empty']);
+      expect(bindItem()).toBeDisabled();
+    });
   });
 
   it('has correct structure with header and nav', () => {

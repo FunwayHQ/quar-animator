@@ -13,6 +13,7 @@ import {
 } from '../../stores/editorStore';
 import { useSceneGraph } from '../../contexts/SceneGraphContext';
 import { flipSelected } from '../canvas/flipSelected';
+import { bindableLayers } from '../canvas/bindToBones';
 import { hasGoogleFontsConsent, setGoogleFontsConsent } from '../common/ConsentBanner';
 import { copyLayers, pasteLayers } from '../../hooks/useSystemClipboard';
 import type { SceneGraph } from '@quar/core';
@@ -307,6 +308,10 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
   // (the scene graph is one object for the whole session, so useMemo([sceneGraph])
   // would never see bones added)
   let hasBoneNodes = false;
+  // What Bind to Bones binds, as the canvas's context menu has it: shapes,
+  // pictures and groups holding them; and whether any of those is bound now
+  let hasBindableSelected = false;
+  let hasSkinnedSelected = false;
   if (openMenu === 'rigging') {
     sceneGraph.traverse((node: { type: string }) => {
       if (node.type === 'bone') {
@@ -315,15 +320,14 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
       }
       return true;
     });
-  }
-
-  const hasShapeSelected = useMemo(() => {
-    return Array.from(selectedNodeIds).some((id) => {
-      const n = sceneGraph.getNode(id);
-      if (!n) return false;
-      return ['rectangle', 'ellipse', 'polygon', 'path', 'image'].includes(n.type);
+    const graph = sceneGraph as unknown as SceneGraph;
+    const layers = Array.from(selectedNodeIds).flatMap((id) => {
+      const node = graph.getNode(id);
+      return node ? bindableLayers(graph, node) : [];
     });
-  }, [selectedNodeIds, sceneGraph]);
+    hasBindableSelected = layers.length > 0;
+    hasSkinnedSelected = layers.some((layer) => !!(layer as { skinData?: unknown }).skinData);
+  }
 
   const hasBoneSelected = useMemo(() => {
     return Array.from(selectedNodeIds).some((id) => {
@@ -336,14 +340,6 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
     return Array.from(selectedNodeIds).some((id) => {
       const n = sceneGraph.getNode(id);
       return n && (n.type === 'bone' || n.type === 'ik-target');
-    });
-  }, [selectedNodeIds, sceneGraph]);
-
-  const hasSkinnedSelected = useMemo(() => {
-    return Array.from(selectedNodeIds).some((id) => {
-      const n = sceneGraph.getNode(id);
-      if (!n) return false;
-      return !!(n as { skinData?: unknown }).skinData;
     });
   }, [selectedNodeIds, sceneGraph]);
 
@@ -1150,7 +1146,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                   <Separator />
                   <MenuItem
                     label="Bind Selection to Bones"
-                    disabled={!hasShapeSelected || !hasBoneNodes}
+                    disabled={!hasBindableSelected || !hasBoneNodes}
                     onClick={() => {
                       closeMenu();
                       window.dispatchEvent(new CustomEvent('menubar:bind-to-bones'));
