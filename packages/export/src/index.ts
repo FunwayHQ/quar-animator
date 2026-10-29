@@ -177,6 +177,15 @@ export {
   type VideoFrameSource,
   type VideoFrameSourceOptions,
 } from './video/frameSource';
+export {
+  decodeVideoStill,
+  stillDataUri,
+  stripStillAt,
+  videoStillsAt,
+  type StillCanvas,
+  type VideoStillOptions,
+  type VideoStillSource,
+} from './video/still';
 
 export {
   stretch,
