@@ -68,10 +68,10 @@ export interface VideoPlacing {
 }
 
 /**
- * A GIF's clip as its file plays it: once, holding its last frame, as a
- * browser leaves one that's stopped (no count); a pass and its repeats; or
- * over and over — never past `until` (the timeline's end) unless a pass
- * needs it.
+ * A GIF's clip as its file plays it: once (no count), or a pass and its
+ * repeats, then holding its last frame, as a browser leaves one that's
+ * stopped; or over and over — never past `until` (the timeline's end)
+ * unless a pass needs it.
  */
 function gifClip(
   clip: VideoClip,
@@ -83,7 +83,7 @@ function gifClip(
   const filling = loopedUntil(clip, until, frameRate);
   if (!loopCount) return filling;
   const passes = (loopCount + 1) * clipSeconds(clip);
-  return { ...filling, loopFor: Math.min(passes, filling.loopFor ?? passes) };
+  return withHold({ ...filling, loopFor: Math.min(passes, filling.loopFor ?? passes) }, true);
 }
 
 /**

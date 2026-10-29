@@ -202,7 +202,7 @@ describe('placeVideoLayer', () => {
       });
     });
 
-    it('plays as many times as the file says: a pass and its repeats', () => {
+    it('plays as many times as the file says, a pass and its repeats, then holds its last frame', () => {
       const sg = new SceneGraph();
       const id = placeVideoLayer(sg, gif(), null, 60, { loopCount: 2 });
       expect((sg.getNode(id) as VideoNode).clip).toEqual({
@@ -211,6 +211,7 @@ describe('placeVideoLayer', () => {
         duration: 1,
         loop: true,
         loopFor: 3,
+        holdLastFrame: true,
       });
     });
 
