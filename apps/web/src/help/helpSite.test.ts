@@ -464,3 +464,14 @@ describe('the dev server', () => {
     expect(resolveHelpRequest('/help/%2e%2e/%2e%2e/etc/passwd', out)).toEqual({ missing: true });
   });
 });
+
+describe('the pages’ pictures', () => {
+  it('are shown at the size their tag gives, half their pixels', async () => {
+    const { THEME_DIR } = await import('../../scripts/help/paths.mjs');
+    const css = fs.readFileSync(path.join(THEME_DIR, 'help.css'), 'utf8');
+    const rule = /\.text figure img \{([^}]*)\}/.exec(css)?.[1] ?? '';
+    expect(rule).toContain('max-width: 100%');
+    // A width in the style sheet would undo the tag's
+    expect(rule).not.toMatch(/(^|[^-])width:/);
+  });
+});

@@ -858,10 +858,11 @@ pre code {
   margin: 26px 0 30px;
 }
 
-/* A whole window fills the column; a detail keeps its own size */
+/* Shown at the size its tag gives (half its pixels: pictures are taken at
+   twice the size), no wider than the column: a whole window fills the column,
+   a detail keeps its size. No width here, or it would undo the tag's. */
 .text figure img {
   display: block;
-  width: auto;
   max-width: 100%;
   height: auto;
   border: 1px solid var(--rule-strong);
