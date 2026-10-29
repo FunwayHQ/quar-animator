@@ -54,6 +54,9 @@ Point at a clip to see its frames and length.
 - **Trim it:** drag its left or right end. Trimming the left end starts the
   clip later in the sound; trimming the right end stops it sooner. Drag an
   end back out to hear more of the sound again, up to the whole of it.
+- **Play it over again:** turn on **Loop** in its [settings](#settings),
+  then drag its right end past the sound's end. A mark on the clip shows
+  where it starts over.
 
 Click a clip to select it. Then:
 
@@ -63,22 +66,29 @@ Click a clip to select it. Then:
 - [[Delete]] or [[Backspace]] takes it off the timeline.
 
 Right-click a clip for **Sound Settings…**, **Mute** (or **Unmute**) and
-**Delete**. **Edit › Undo** takes back changes to clips.
+**Delete**, and, on a video's sound, **Unlink from Video**. **Edit › Undo**
+takes back changes to clips.
 
 ## Volume, fades and mute {#settings}
 
 Double-click a clip to open its settings.
 
-![The settings of a sound clip: its frames, Volume, Fade in, Fade out, Mute and Remove](img/sound-settings.png "A clip's settings.")
+![The settings of a sound clip: its frames, Speed, Volume, Fade in, Fade out, Mute, Loop and Remove](img/sound-settings.png "A clip's settings.")
 
 - The top line says which frames the clip plays on, and which part of the
-  sound it plays.
+  sound it plays (and, when it's so, that it loops or plays at another
+  speed).
+- **Speed:** click **0.5×**, **1×** or **2×**, or type a speed from 0.25 to
+  4 and press [[Enter]]. A faster clip is shorter on the timeline, a slower
+  one longer, and the sound keeps its pitch.
 - **Volume:** from 0% to 200%. 100% is the sound as it is.
 - **Fade in** and **Fade out:** how many seconds the sound takes to grow
   from silence at the start, and to die away at the end. Type a number and
   press [[Enter]].
 - **Mute:** silence the clip without taking it away. A muted clip is dimmed,
   with a speaker crossed out before its name.
+- **Loop:** the sound starts over at its end. Drag the clip's right end out
+  to play it for longer.
 - **Remove:** take the clip off the timeline.
 
 Press [[Esc]] or click outside the settings to close them.
@@ -86,6 +96,16 @@ Press [[Esc]] or click outside the settings to close them.
 You can also fade a clip on the lane itself: drag its top-left corner to
 the right to fade it in, and its top-right corner to the left to fade it
 out. The fade is drawn on the clip, and the waveform follows it.
+
+## A video's sound {#video-sound}
+
+When you [import a video](video-clips.md#import) with sound, its sound goes
+on the Sound lane as a clip with a link sign before its name. It's linked to
+the video: moving, trimming, looping or changing the speed of either one
+does the same to the other. Its volume, fades and mute are its own.
+
+To change it on its own, right-click it and choose **Unlink from Video**.
+See [Its sound](video-clips.md#sound).
 
 ## Hear your sounds {#playing}
 
