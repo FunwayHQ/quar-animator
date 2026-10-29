@@ -47,6 +47,7 @@ import { DeformedBoundsCache, selectedDeformedBounds } from '../canvas/deformedB
 import { TextEditOverlay } from '../canvas/TextEditOverlay';
 import { BoneOverlay } from '../canvas/BoneOverlay';
 import { GhostSceneCache, poseSceneAtFrame } from '../canvas/onionSkinScenes';
+import { createCanvasVideoFrames } from '../canvas/canvasVideoFrames';
 import { poseScene } from '../../stores/scenePosing';
 import { fitViewToArtwork } from '../canvas/fitView';
 import { deleteKeyTarget } from '../canvas/deleteKeyTarget';
@@ -334,14 +335,15 @@ export function Canvas({
     const incrementVersion = () => setSceneGraphVersion((v) => v + 1);
 
     // Evict the removed node's cached geometry (all node types) and free its
-    // texture if it was an image, so the renderer's per-node caches don't grow
-    // unbounded as nodes are deleted.
+    // texture if it was an image or a video, so the renderer's per-node caches
+    // don't grow unbounded as nodes are deleted.
     const handleNodeRemoved = (event: SceneGraphEvent) => {
       incrementVersion();
       const renderer = shapeRendererRef.current;
       if (!renderer) return;
       if (event.nodeId) renderer.invalidateCache(event.nodeId);
       const removed = event.node;
+      if (removed?.type === 'video') renderer.disposeVideoTexture(removed.id);
       if (removed?.type === 'image') {
         // The node is already out of the graph here (removeNode emits after
         // deleting), so only free the shared GPU texture when no OTHER image node
@@ -675,8 +677,18 @@ export function Canvas({
       // The selection's bounds as bones bend it, kept while nothing changes
       const deformedBoundsCache = new DeformedBoundsCache();
 
+      // Video layers show the picture of their clip at the playhead (or their first)
+      const videoFrames = createCanvasVideoFrames(
+        () => sceneGraphRef.current,
+        () => {
+          const { timelineScope, currentFrame, frameRate, isPlaying } = useEditorStore.getState();
+          return { scope: timelineScope, frame: currentFrame, frameRate, playing: isPlaying };
+        }
+      );
+
       // Initialize shape renderer (let: rebuilt on WebGL context restore)
       let shapeRenderer = new ShapeRenderer(renderer);
+      shapeRenderer.setVideoFrames(videoFrames);
       shapeRendererRef.current = shapeRenderer;
 
       // Initialize onion skin renderer (let: rebuilt on WebGL context restore)
@@ -991,6 +1003,7 @@ export function Canvas({
           gridRef.current = grid;
           gridBackground = null;
           shapeRenderer = new ShapeRenderer(renderer);
+          shapeRenderer.setVideoFrames(videoFrames);
           shapeRendererRef.current = shapeRenderer;
           onionSkinRenderer = new OnionSkinRenderer(shapeRenderer);
           onionSkinRendererRef.current = onionSkinRenderer;
