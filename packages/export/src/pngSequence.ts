@@ -14,13 +14,15 @@ import {
 } from './frameRenderer';
 import { sampleSlides, type Shot } from './exportUtils';
 import { createShotRenderer } from './slideTransition';
+import { createExportVideoFrames, type VideoExportSources } from './video/exportFrames';
 import type { ExportProgress } from './index';
 
 // ============================================================================
 // Types
 // ============================================================================
 
-export interface PngSequenceOptions {
+/** Video layers show their exact frames, decoded from `videoFile`. */
+export interface PngSequenceOptions extends VideoExportSources {
   startFrame: number;
   endFrame: number;
   width: number;
@@ -81,7 +83,15 @@ export async function exportPngSequence(
   const JSZip = (await import('jszip')).default;
   const zip = new JSZip();
 
-  const renderer = createFrameRenderer({ width, height, multiplier, backgroundColor });
+  // Each frame's video pictures, decoded before it's drawn
+  const videoFrames = createExportVideoFrames(shots, { width, height, multiplier }, options);
+  const renderer = createFrameRenderer({
+    width,
+    height,
+    multiplier,
+    backgroundColor,
+    videoFrames: videoFrames.provider,
+  });
   const draw = createShotRenderer(renderer, { background: backgroundColor });
 
   try {
@@ -101,6 +111,7 @@ export async function exportPngSequence(
       });
 
       // Render frame
+      await videoFrames.prepare(i);
       const blob = await draw.renderAsBlob(shot);
       if (blob) {
         zip.file(filenames[i]!, blob);
@@ -121,6 +132,7 @@ export async function exportPngSequence(
     const zipBlob = await zip.generateAsync({ type: 'blob' });
     return zipBlob;
   } finally {
+    videoFrames.dispose();
     renderer.dispose();
   }
 }

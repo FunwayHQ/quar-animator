@@ -12,6 +12,33 @@ const mockFrameRenderer = vi.hoisted(() => ({
   dispose: vi.fn(),
 }));
 
+/** The video pictures decoded for each frame, stood in for: what's prepared, in order */
+const videoFrames = vi.hoisted(() => ({
+  made: [] as Array<{ shots: unknown[]; size: unknown; sources: unknown }>,
+  log: [] as string[],
+  provider: () => null,
+  disposed: 0,
+}));
+
+vi.mock('./video/exportFrames', () => ({
+  createExportVideoFrames: (shots: unknown[], size: unknown, sources: unknown) => {
+    videoFrames.made.push({ shots, size, sources });
+    videoFrames.log = [];
+    videoFrames.disposed = 0;
+    return {
+      provider: videoFrames.provider,
+      problems: [],
+      prepare: async (index: number) => {
+        await Promise.resolve();
+        videoFrames.log.push(`prepare ${index}`);
+      },
+      dispose: () => {
+        videoFrames.disposed++;
+      },
+    };
+  },
+}));
+
 vi.mock('./frameRenderer', async (importOriginal) => {
   // The shot plan as it is: only the renderer is stood in for
   const actual = await importOriginal<typeof import('./frameRenderer')>();
@@ -316,6 +343,48 @@ describe('exportSpriteSheet', () => {
     } finally {
       vi.restoreAllMocks();
     }
+  });
+
+  it('decodes the video layers’ pictures for each frame before drawing it, then lets them go', async () => {
+    mockFrameRenderer.renderFrame.mockImplementation(((_: unknown, frame: number) => {
+      videoFrames.log.push(`render ${frame}`);
+      return { width: 20, height: 10 };
+    }) as never);
+    const videoFile = () => new Blob(['video']);
+    const context = { sceneGraph: { getRootNodes: () => [] } } as unknown as FrameRenderContext;
+    const atlas = {
+      width: 0,
+      height: 0,
+      getContext: () => ({ drawImage: () => {} }),
+      toBlob: (callback: (blob: Blob) => void) => callback(new Blob(['png'])),
+    };
+    const originalCreateElement = document.createElement.bind(document);
+    vi.spyOn(document, 'createElement').mockImplementation((tag, options) =>
+      tag === 'canvas'
+        ? (atlas as unknown as HTMLCanvasElement)
+        : originalCreateElement(tag, options)
+    );
+    try {
+      await exportSpriteSheet(context, {
+        startFrame: 4,
+        endFrame: 5,
+        frameWidth: 10,
+        frameHeight: 5,
+        layout: 'grid',
+        multiplier: 2,
+        videoFile,
+      });
+    } finally {
+      vi.restoreAllMocks();
+      mockFrameRenderer.renderFrame.mockImplementation(() => ({ width: 20, height: 10 }));
+    }
+
+    expect(videoFrames.log).toEqual(['prepare 0', 'render 4', 'prepare 1', 'render 5']);
+    expect(videoFrames.made.at(-1)).toMatchObject({
+      size: { width: 10, height: 5, multiplier: 2 },
+      sources: { videoFile },
+    });
+    expect(videoFrames.disposed).toBe(1);
   });
 
   it('fails when packed frames exceed the atlas instead of returning a partial sheet', async () => {

@@ -17,6 +17,7 @@ import {
   type PackResult,
 } from './binPacking';
 import { generateSpriteSheetMetadata } from './spriteSheetMetadata';
+import { createExportVideoFrames, type VideoExportSources } from './video/exportFrames';
 import type { ExportProgress } from './index';
 
 // Re-export for convenience
@@ -26,7 +27,8 @@ export { generateSpriteSheetMetadata } from './spriteSheetMetadata';
 // Types
 // ============================================================================
 
-export interface SpriteSheetOptions {
+/** Video layers show their exact frames, decoded from `videoFile`. */
+export interface SpriteSheetOptions extends VideoExportSources {
   startFrame: number;
   endFrame: number;
   frameWidth: number;
@@ -103,12 +105,18 @@ export async function exportSpriteSheet(
     atlasCtx.fillRect(0, 0, atlasW, atlasH);
   }
 
-  // Render individual frames
+  // Render individual frames, each with its video pictures decoded first
+  const videoFrames = createExportVideoFrames(
+    Array.from({ length: frameCount }, (_, i) => ({ ctx, frame: startFrame + i })),
+    { width: frameWidth, height: frameHeight, multiplier },
+    options
+  );
   const frameRenderer = createFrameRenderer({
     width: frameWidth,
     height: frameHeight,
     multiplier,
     backgroundColor,
+    videoFrames: videoFrames.provider,
   });
 
   // Pre-load image textures so they render correctly in the fresh WebGL context
@@ -127,6 +135,7 @@ export async function exportSpriteSheet(
         percentage: Math.round(((i + 1) / frameCount) * 90), // Reserve 10% for finalizing
       });
 
+      await videoFrames.prepare(i);
       const frameCanvas = frameRenderer.renderFrame(ctx, frame);
 
       // Blit frame to atlas
@@ -187,6 +196,7 @@ export async function exportSpriteSheet(
       metadata: JSON.stringify(metadata, null, 2),
     };
   } finally {
+    videoFrames.dispose();
     frameRenderer.dispose();
   }
 }

@@ -17,6 +17,33 @@ const mocks = vi.hoisted(() => ({
   ),
 }));
 
+/** The video pictures decoded for each frame, stood in for: what's prepared, in order */
+const videoFrames = vi.hoisted(() => ({
+  made: [] as Array<{ shots: unknown[]; size: unknown; sources: unknown }>,
+  log: [] as string[],
+  provider: () => null,
+  disposed: 0,
+}));
+
+vi.mock('./video/exportFrames', () => ({
+  createExportVideoFrames: (shots: unknown[], size: unknown, sources: unknown) => {
+    videoFrames.made.push({ shots, size, sources });
+    videoFrames.log = [];
+    videoFrames.disposed = 0;
+    return {
+      provider: videoFrames.provider,
+      problems: [],
+      prepare: async (index: number) => {
+        await Promise.resolve();
+        videoFrames.log.push(`prepare ${index}`);
+      },
+      dispose: () => {
+        videoFrames.disposed++;
+      },
+    };
+  },
+}));
+
 vi.mock('./frameRenderer', async (importOriginal) => {
   // The shot plan as it is: only the renderer is stood in for
   const actual = await importOriginal<typeof import('./frameRenderer')>();
@@ -89,6 +116,7 @@ describe('exportPngSequence', () => {
       height: 360,
       multiplier: 2,
       backgroundColor: { r: 12, g: 34, b: 56, a: 1 },
+      videoFrames: videoFrames.provider,
     });
     expect(renderer.preloadTextures).toHaveBeenCalledWith(
       [{ id: 'root' }],
@@ -108,6 +136,29 @@ describe('exportPngSequence', () => {
       { phase: 'finalizing', current: 2, total: 2, percentage: 100 },
     ]);
     expect(renderer.dispose).toHaveBeenCalledOnce();
+  });
+
+  it('decodes the video layers’ pictures for each frame before drawing it, then lets them go', async () => {
+    renderer.renderFrame.mockImplementation((_: unknown, frame: number) => {
+      videoFrames.log.push(`render ${frame}`);
+      return { width: 10, height: 10, toBlob: (done: (blob: Blob) => void) => done(png('png')) };
+    });
+    const videoFile = () => new Blob(['video']);
+    await exportPngSequence(context, {
+      startFrame: 2,
+      endFrame: 3,
+      width: 64,
+      height: 36,
+      multiplier: 2,
+      videoFile,
+    });
+
+    expect(videoFrames.log).toEqual(['prepare 0', 'render 2', 'prepare 1', 'render 3']);
+    expect(videoFrames.made.at(-1)).toMatchObject({
+      size: { width: 64, height: 36, multiplier: 2 },
+      sources: { videoFile },
+    });
+    expect(videoFrames.disposed).toBe(1);
   });
 
   it('numbers every frame of the slides, one after another', async () => {
