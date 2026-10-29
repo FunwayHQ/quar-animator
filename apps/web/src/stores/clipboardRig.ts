@@ -18,12 +18,14 @@ import type {
   SkinData,
   SmartBoneAction,
   Sound,
+  SoundClip,
   Timeline,
   Transform,
   VitruvianController,
 } from '@quar/types';
 import { applyPlacement, mapPlacement, placementOf, reparentMatrix } from './reparent';
 import { captureArtboardTimelines, captureTracks } from './clipboardAnimation';
+import { captureVideoSounds } from './videoClipboard';
 
 export interface ClipboardExtras {
   /**
@@ -42,6 +44,11 @@ export interface ClipboardExtras {
   frameRate?: number;
   /** Each copied artboard's own timeline (its length, its sound clips), by its id. */
   artboardTimelines?: Record<string, ArtboardTimeline>;
+  /**
+   * The sound clips linked to the copied video layers (those on a copied
+   * artboard's timeline come with it instead).
+   */
+  videoSounds?: SoundClip[];
   /** The sounds those clips play. */
   sounds?: Sound[];
 }
@@ -81,7 +88,7 @@ export function captureClipboardExtras(
     tracks: rigging.timeline ? captureTracks(rigging.timeline, copied) : [],
     frameRate: rigging.frameRate,
     ...(rigging.timeline
-      ? captureArtboardTimelines(rigging.timeline, copied, rigging.sounds ?? [])
+      ? capturedTimelines(rigging.timeline, clones, copied, rigging.sounds)
       : {}),
     ikChains: structuredClone(
       rigging.ikChains.filter(
@@ -99,6 +106,23 @@ export function captureClipboardExtras(
     smartBoneActions: structuredClone(
       rigging.smartBoneActions.filter((action) => copied.has(action.driver.boneId))
     ),
+  };
+}
+
+/** The copied artboards' timelines and the copied videos' sounds, with the sounds they play. */
+function capturedTimelines(
+  timeline: Timeline,
+  clones: Node[],
+  copied: Set<string>,
+  library: readonly Sound[] = []
+): Pick<ClipboardExtras, 'artboardTimelines' | 'videoSounds' | 'sounds'> {
+  const { artboardTimelines, sounds } = captureArtboardTimelines(timeline, copied, library);
+  const videos = captureVideoSounds(timeline, clones, copied, library);
+  const known = new Set(sounds.map((sound) => sound.id));
+  return {
+    artboardTimelines,
+    videoSounds: videos.videoSounds,
+    sounds: [...sounds, ...videos.sounds.filter((sound) => !known.has(sound.id))],
   };
 }
 

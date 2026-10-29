@@ -63,6 +63,13 @@ import { createVideoClipActions, type VideoClipActions } from './videoClipAction
 import { keepVideoFiles } from '../services/videoFiles';
 import { deleteVideoSoundsToo } from '../services/videoSoundQuestion';
 import { soundsLinkedToRemoved, withLinkedSoundsResolved } from './videoSounds';
+import {
+  pastedVideoSounds,
+  retimeVideoClips,
+  videoClipsEnd,
+  videosLeftOut,
+  withPlacedSounds,
+} from './videoClipboard';
 import { createTransitionActions, type TransitionActions } from './transitionActions';
 import {
   captureClipboardExtras,
@@ -2334,6 +2341,10 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   pasteClipboard: (sceneGraph: SceneGraphLike) => {
     const { clipboard, clipboardExtras } = get();
     if (!clipboard || clipboard.length === 0) return;
+    // Video layers whose video isn't here (or inside a symbol) are left out
+    const videosOut = videosLeftOut(clipboard, get().videos, get().editingSymbolId !== null);
+    if (videosOut.reason) toast.info(videosOut.reason);
+    if (clipboard.every((node) => videosOut.ids.has(node.id))) return;
     get().pushUndo(sceneGraph);
 
     // Build old-id → cloned-node map for the entire clipboard
@@ -2354,7 +2365,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     const rig = clipboardExtras
       ? pastedRigging(clipboardExtras, oldToNewId, nextId)
       : { ikChains: [], dynamicChains: [], smartBoneActions: [], chainIdForTarget: new Map() };
-    const skipped = new Set<string>();
+    const skipped = new Set<string>(videosOut.ids);
     for (const [oldId, clone] of oldIdToClone) {
       if (clone.type === 'ik-target' && !rig.chainIdForTarget.has(oldId)) skipped.add(oldId);
     }
@@ -2448,14 +2459,10 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       newIds,
       frameScale,
       (soundId) => playable.has(soundId),
-      nextId
+      nextId,
+      videosOut.ids
     );
-    const played = new Set(
-      Object.values(artboardTimelines)
-        .flatMap((entry) => entry.sounds ?? [])
-        .map((c) => c.soundId)
-    );
-    const soundsAdded = brought.filter((sound) => played.has(sound.id));
+    retimeVideoClips(newNodes, frameScale);
 
     // Add nodes in parent-first order (roots first, then children)
     const byId = new Map(newNodes.map((node) => [node.id, node]));
@@ -2472,6 +2479,22 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     for (const node of newNodes) {
       if (pastedRoots.has(node.id)) addRecursive(node);
     }
+
+    // The pasted videos' sounds, linked to them, on the timelines they landed on
+    const videoSounds = pastedVideoSounds(
+      clipboardExtras?.videoSounds,
+      newIds,
+      sceneGraph,
+      (soundId) => playable.has(soundId),
+      nextId
+    );
+    const played = new Set(
+      [
+        ...Object.values(artboardTimelines).flatMap((entry) => entry.sounds ?? []),
+        ...videoSounds.map((placed) => placed.clip),
+      ].map((c) => c.soundId)
+    );
+    const soundsAdded = brought.filter((sound) => played.has(sound.id));
 
     const timeline = get().timeline;
     set({
@@ -2493,9 +2516,14 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       ...(soundsAdded.length > 0 ? { sounds: [...library, ...soundsAdded] } : {}),
       isDirty: true,
     });
+    if (videoSounds.length > 0) set({ timeline: withPlacedSounds(get().timeline, videoSounds) });
     // A longer animation than this timeline holds: the timeline grows to fit it
     const lastFrame = Math.max(0, ...tracks.flatMap((t) => t.keyframes.map((k) => k.time)));
     if (lastFrame >= get().timelineDuration) get().setTimelineDuration(lastFrame + 1);
+    // And to play the videos pasted on it to their ends
+    const { timelineScope, frameRate } = get();
+    const videosEnd = videoClipsEnd(sceneGraph, pastedIds, timelineScope, frameRate);
+    if (videosEnd > get().timelineDuration) get().setTimelineDuration(videosEnd);
   },
   clipboardPayload: () => {
     const { clipboard, clipboardExtras, symbols } = get();

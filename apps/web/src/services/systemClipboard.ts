@@ -4,7 +4,9 @@
  * or another browser. Browsers only share plain formats, so they go as JSON
  * text (and the same JSON in an HTML attribute, for apps that prefer HTML),
  * with everything they need to stand alone: their rigging and the symbols
- * they use. Images travel inside them, as data URIs.
+ * they use. Images travel inside them, as data URIs; a video layer's file
+ * doesn't (it can be far too big): it pastes where the document has its
+ * video already.
  */
 
 import { readSlideTransition } from '@quar/animation';
@@ -88,7 +90,8 @@ export function decodeClipboard(
     typeof node.type === 'string' &&
     isRecord(node.transform) &&
     Array.isArray(node.children) &&
-    (node.type !== 'image' || (typeof node.src === 'string' && IMAGE_SOURCE.test(node.src)));
+    (node.type !== 'image' || (typeof node.src === 'string' && IMAGE_SOURCE.test(node.src))) &&
+    (node.type !== 'video' || looksLikeVideo(node));
   if (!nodes.every(looksLikeNode)) return null;
 
   const symbols = Array.isArray(data.symbols)
@@ -127,8 +130,25 @@ function readExtras(extras: Record<string, unknown>): ClipboardExtras {
   return {
     ...(extras as unknown as ClipboardExtras),
     artboardTimelines: timelines,
+    videoSounds: readSoundClips(extras.videoSounds),
     sounds: readSounds(extras.sounds),
   };
+}
+
+const isTime = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isFinite(value) && value >= 0;
+
+/** A video layer names its video and has a clip to play it in. */
+function looksLikeVideo(node: Record<string, unknown>): boolean {
+  const clip = node.clip;
+  return (
+    typeof node.videoId === 'string' &&
+    isRecord(clip) &&
+    isTime(clip.start) &&
+    isTime(clip.offset) &&
+    isTime(clip.duration) &&
+    clip.duration > 0
+  );
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

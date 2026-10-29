@@ -49,16 +49,18 @@ export function captureArtboardTimelines(
 
 /**
  * The copied artboards' timelines for the pasted artboards: their lengths
- * and clips timed for this project's frame rate, each clip with a new id,
- * and the transitions into their slides.
- * Clips whose sound isn't to be had (`playable`) are left out.
+ * and clips timed for this project's frame rate, each clip with a new id
+ * (a video's sound linked to the pasted video), and the transitions into
+ * their slides. Clips whose sound isn't to be had (`playable`), and the
+ * sounds of video layers the paste left out (`leftOut`), are left out.
  */
 export function pastedArtboardTimelines(
   timelines: Record<string, ArtboardTimeline> | undefined,
   newIds: Map<string, string>,
   frameScale: number,
   playable: (soundId: string) => boolean,
-  newId: (prefix: string) => string
+  newId: (prefix: string) => string,
+  leftOut: ReadonlySet<string> = new Set()
 ): Record<string, ArtboardTimeline> {
   const scale = Number.isFinite(frameScale) && frameScale > 0 ? frameScale : 1;
   const pasted: Record<string, ArtboardTimeline> = {};
@@ -67,7 +69,17 @@ export function pastedArtboardTimelines(
     if (!id) continue;
     const sounds = (entry.sounds ?? [])
       .filter((clip) => playable(clip.soundId))
-      .map((clip) => ({ ...clip, id: newId('sound'), start: Math.round(clip.start * scale) }));
+      .filter((clip) => clip.linkedTo === undefined || !leftOut.has(clip.linkedTo))
+      .map(({ linkedTo, ...clip }) => {
+        // Linked to the pasted video; a sound of its own when that wasn't copied
+        const video = linkedTo !== undefined ? newIds.get(linkedTo) : undefined;
+        return {
+          ...clip,
+          id: newId('sound'),
+          start: Math.round(clip.start * scale),
+          ...(video ? { linkedTo: video } : {}),
+        };
+      });
     pasted[id] = {
       duration: Math.max(1, Math.round(entry.duration * scale)),
       ...(sounds.length > 0 ? { sounds } : {}),
