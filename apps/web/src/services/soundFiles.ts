@@ -68,9 +68,23 @@ export async function readSoundFile(file: File): Promise<Sound> {
   } catch {
     throw new Error(`“${file.name}” can’t be played: this browser can’t read its format.`);
   }
+  return keptDecoded(file.name.replace(/\.[^.]+$/, '') || 'Sound', src, audio);
+}
+
+/** A new sound of the library, its decoded audio kept. */
+function keptDecoded(name: string, src: string, audio: AudioBuffer): Sound {
   const id = `sound_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
   decoded.set(id, Promise.resolve(audio));
-  return { id, name: file.name.replace(/\.[^.]+$/, '') || 'Sound', src, duration: audio.duration };
+  return { id, name, src, duration: audio.duration };
+}
+
+/** A sound for the library from a file decoded already (a video's sound, taken out of it). */
+export async function soundFromDecoded(
+  name: string,
+  file: Blob,
+  audio: AudioBuffer
+): Promise<Sound> {
+  return keptDecoded(name, await readAsDataUri(file), audio);
 }
 
 /** A sound's audio, decoded once. */

@@ -9,6 +9,7 @@ import {
   decodedSound,
   keepDecodedSounds,
   readSoundFile,
+  soundFromDecoded,
   soundPeaks,
   soundType,
   waveformPath,
@@ -60,6 +61,21 @@ describe('readSoundFile', () => {
     await expect(readSoundFile(new File(['x'], 'odd.flac'))).rejects.toThrow(
       'this browser can’t read its format'
     );
+  });
+});
+
+describe('soundFromDecoded', () => {
+  it('makes a sound of a file decoded already, kept decoded', async () => {
+    const decoded = audio(2, [0]);
+    const sound = await soundFromDecoded(
+      'Beach',
+      new Blob(['m4a'], { type: 'audio/mp4' }),
+      decoded
+    );
+    expect(sound).toMatchObject({ name: 'Beach', duration: 2 });
+    expect(sound.src).toBe(`data:audio/mp4;base64,${btoa('m4a')}`);
+    expect(await decodedSound(sound)).toBe(decoded);
+    expect(decodeSound).not.toHaveBeenCalled();
   });
 });
 
