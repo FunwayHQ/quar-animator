@@ -197,6 +197,10 @@ On the [**sound lane**](sound.md#move), with a clip selected: [[Delete]]
 removes it, [[Left]] and [[Right]] move it a frame (with [[Shift]]: 10), [[M]]
 mutes it or turns it on again, and [[Enter]] opens its settings.
 
+On a [**video clip**](video-clips.md#clip-bar), after you click it: [[Left]]
+and [[Right]] move it a frame (with [[Shift]]: 10), and [[Enter]] opens its
+settings. [[Esc]] closes them.
+
 ## Rigging {#rigging}
 
 | Keys                                                                      | With                                               | Does                                                 |
@@ -217,8 +221,9 @@ In the Properties panel's number fields: [[Up]] and [[Down]] add or take away
 1 (with [[Shift]]: 10), and so does turning the mouse wheel over the field
 you're in. [[Right]] goes on from the whole number to the decimals. A slide
 transition's **Duration** steps by a tenth of a second instead (with
-[[Shift]]: a whole second). More in
-[Type exact values](selecting-and-arranging.md#fields).
+[[Shift]]: a whole second), and a video's **Speed** by 0.05 (with [[Shift]]:
+0.25). More in [Type exact values](selecting-and-arranging.md#fields) and
+[The Video section](video-clips.md#properties).
 
 ## Presenting {#presenting}
 
