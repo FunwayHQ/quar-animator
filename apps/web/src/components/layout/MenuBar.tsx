@@ -1379,7 +1379,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                       setGoogleFontsConsent(on);
                       toast.info(
                         on
-                          ? 'Google Fonts are on: fonts other than Inter load from Google when you pick them.'
+                          ? 'Google Fonts are on: this project’s fonts load from Google now, and others when you pick them.'
                           : 'Google Fonts are off: nothing more loads from Google. Fonts already loaded stay until you reload.'
                       );
                     }}

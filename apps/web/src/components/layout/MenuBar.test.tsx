@@ -710,8 +710,13 @@ describe('MenuBar', () => {
     fireEvent.click(screen.getByTestId('menu-help'));
     const off = screen.getByRole('menuitemcheckbox', { name: /Use Google Fonts/ });
     expect(off).toHaveAttribute('aria-checked', 'false');
+    restoreMocks.info.mockReset();
     fireEvent.click(off);
     expect(localStorage.getItem('quar-google-fonts-consent')).toBe('true');
+    // The open project's fonts load at once, not only those picked later
+    expect(restoreMocks.info).toHaveBeenCalledWith(
+      'Google Fonts are on: this project’s fonts load from Google now, and others when you pick them.'
+    );
   });
 
   it('Help opens the privacy policy and the terms in new tabs', () => {
