@@ -535,6 +535,29 @@ describe('generateStrokeOutlineVertices', () => {
     expect(Math.abs(result[1] as number)).toBeCloseTo(5);
   });
 
+  it('mitres a corner whose point is there several times, as it does a single one', () => {
+    // A square, then the same square with its corners each twice and three times
+    // (a corner rounded with a radius of 0: an arc of no length)
+    const corners = [0, 0, 100, 0, 100, 100, 0, 100];
+    const square = generateStrokeOutlineVertices(new Float32Array(corners), 4, 10, true);
+    const repeated: number[] = [];
+    for (let i = 0; i < 4; i++) {
+      const point = corners.slice(i * 2, i * 2 + 2);
+      repeated.push(...point, ...point, ...(i % 2 === 0 ? point : []));
+    }
+    const doubled = generateStrokeOutlineVertices(new Float32Array(repeated), 10, 10, true);
+    /** The outline's points, each once, in order. */
+    const distinct = (outline: Float32Array) => {
+      const points: string[] = [];
+      for (let k = 0; k < outline.length; k += 2) {
+        const point = `${(outline[k] as number).toFixed(3)},${(outline[k + 1] as number).toFixed(3)}`;
+        if (points[points.length - 1] !== point) points.push(point);
+      }
+      return points;
+    };
+    expect(distinct(doubled)).toEqual(distinct(square));
+  });
+
   it('returns empty array for fewer than 2 vertices', () => {
     const vertices = new Float32Array([10, 20]);
     const result = generateStrokeOutlineVertices(vertices, 1, 4, false);

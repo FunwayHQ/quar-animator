@@ -977,12 +977,36 @@ export function generateStrokeOutlineVertices(
   let lastPerpX = 0;
   let lastPerpY = 1; // Default perpendicular direction
 
+  /**
+   * The nearest vertex before (step −1) or after (+1) vertex i that isn't on
+   * the same spot, or −1 at an open path's end. Points on one spot (a
+   * segment of no length, as a corner rounded with a radius of 0 has) then
+   * join the edges either side of them as the one corner they are, mitred,
+   * where they made a bevel and folded the inner side of the stroke.
+   */
+  const neighbour = (i: number, step: 1 | -1): number => {
+    const x = vertices[i * 2] as number;
+    const y = vertices[i * 2 + 1] as number;
+    let j = i;
+    for (let n = 1; n < numVertices; n++) {
+      j += step;
+      if (j < 0 || j >= numVertices) {
+        if (!closed) return -1;
+        j = (j + numVertices) % numVertices;
+      }
+      const dx = (vertices[j * 2] as number) - x;
+      const dy = (vertices[j * 2 + 1] as number) - y;
+      if (Math.sqrt(dx * dx + dy * dy) >= GEOMETRY_EPSILON) return j;
+    }
+    return -1;
+  };
+
   for (let i = 0; i < numVertices; i++) {
     const cx = vertices[i * 2] as number;
     const cy = vertices[i * 2 + 1] as number;
 
-    const prevIdx = i > 0 ? i - 1 : closed ? numVertices - 1 : -1;
-    const nextIdx = i < numVertices - 1 ? i + 1 : closed ? 0 : -1;
+    const prevIdx = neighbour(i, -1);
+    const nextIdx = neighbour(i, 1);
 
     let perpX: number;
     let perpY: number;
