@@ -5,6 +5,7 @@ import { InputAudioTrack, InputVideoTrack } from 'mediabunny';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { probeVideo } from './probe';
+import { extractVideoSound } from './sound';
 
 /** The small videos the app's tests use (apps/web/src/test/fixtures/video, its README says what each is). */
 function fixture(name: string): Blob {
@@ -96,6 +97,19 @@ describe('probeVideo', () => {
       ok: false,
       problem: 'not-a-video',
       reason: 'It isn’t a video this editor can read (MP4, MOV or WebM).',
+    });
+  });
+
+  it('turns away a file with sound but no pictures', async () => {
+    decodes(true);
+    // The fixture's sound alone, as a sound file would be
+    const sound = await extractVideoSound(fixture('clip-h264-aac.mp4'), {
+      decode: async () => ({ duration: 2 }) as AudioBuffer,
+    });
+    expect(await probeVideo(sound!.file)).toEqual({
+      ok: false,
+      problem: 'no-video-track',
+      reason: 'It has sound but no pictures.',
     });
   });
 });

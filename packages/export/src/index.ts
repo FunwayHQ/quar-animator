@@ -163,6 +163,13 @@ export {
   STRIP_RATE,
   STRIP_STILLS,
 } from './video/strip';
+export {
+  encodeWav,
+  extractVideoSound,
+  soundContainerFor,
+  type VideoSoundFile,
+  type VideoSoundOptions,
+} from './video/sound';
 
 export {
   decodeSound,
