@@ -15,3 +15,4 @@ export * from './bendMesh';
 export * from './bindVertices';
 export * from './shapeOutline';
 export * from './imageSource';
+export * from './videoFrames';

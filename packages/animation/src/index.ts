@@ -6,6 +6,7 @@
 export * from './Timeline';
 export * from './TimelineScope';
 export * from './SoundClips';
+export * from './VideoClips';
 export * from './SlideTransitions';
 export * from './AnimationPresets';
 export * from './AnimationSequence';

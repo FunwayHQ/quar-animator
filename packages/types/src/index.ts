@@ -187,6 +187,7 @@ export type NodeType =
   | 'path'
   | 'text'
   | 'image'
+  | 'video'
   | 'bone'
   | 'ik-target'
   | 'vitruvian'
@@ -362,6 +363,39 @@ export interface ImageNode extends BaseNode {
   vertexOffsets?: [Vector2, Vector2, Vector2, Vector2];
 }
 
+/**
+ * A video on the canvas: placed, masked, adjusted and keyframed like a
+ * picture, while its clip says when it plays. Its file is in the document's
+ * video library (`videoId`); outside its clip the layer shows nothing.
+ */
+export interface VideoNode extends BaseNode {
+  type: 'video';
+  /** The video in the library it shows */
+  videoId: string;
+  width: number;
+  height: number;
+  /** The video's own size, in pixels */
+  naturalWidth: number;
+  naturalHeight: number;
+  cornerRadius: [number, number, number, number]; // [TL, TR, BR, BL]
+  adjustments?: ImageAdjustments;
+  clip: VideoClip;
+}
+
+/**
+ * When a video layer plays, on the timeline its layer is in (the page's or
+ * an artboard's): from frame `start`, the part of the video from `offset`
+ * for `duration` seconds.
+ */
+export interface VideoClip {
+  /** The frame it starts on */
+  start: number;
+  /** Where in the video it starts, in seconds (what's trimmed off its beginning) */
+  offset: number;
+  /** How much of the video it plays from there, in seconds */
+  duration: number;
+}
+
 export type BoneStyle = 'stick' | 'octahedral';
 
 export interface BoneNode extends BaseNode {
@@ -485,6 +519,7 @@ export type Node =
   | PathNode
   | TextNode
   | ImageNode
+  | VideoNode
   | BoneNode
   | IKTargetNode
   | VitruvianNode
@@ -767,6 +802,49 @@ export interface SoundClip {
   fadeIn?: number;
   /** Seconds it takes to fall to silence at its end (none when absent) */
   fadeOut?: number;
+  /**
+   * The video layer whose sound it is: moved and trimmed with the layer's
+   * clip until it's unlinked (none: a sound of its own)
+   */
+  linkedTo?: string;
+}
+
+/**
+ * A video in the document's library, shown by the video layers that use it
+ * on any page. Its file isn't in the JSON: in memory it's a Blob (the app's
+ * video file registry), in a .quar a buffer, in the browser's storage a
+ * record of its own.
+ */
+export interface Video {
+  id: string;
+  name: string;
+  /** The file's type: video/mp4, video/quicktime, video/webm */
+  mimeType: string;
+  /** The file's size, in bytes */
+  byteLength: number;
+  /** Its picture's size, in pixels, as shown (rotation applied) */
+  width: number;
+  height: number;
+  /** Its length, in seconds */
+  duration: number;
+  /** Its frames a second (on average) */
+  frameRate: number;
+  /** Whether its pictures may be transparent (WebM with alpha) */
+  hasAlpha: boolean;
+  /** Small stills taken through it, for the timeline and renders that can't decode it */
+  strip: VideoStrip;
+}
+
+/**
+ * Stills of a video at a steady rate: `frames[i]` is the picture at
+ * `i / rate` seconds, `height` pixels high (WebP or JPEG data URIs; PNG
+ * where the video has alpha).
+ */
+export interface VideoStrip {
+  /** Stills a second */
+  rate: number;
+  height: number;
+  frames: string[];
 }
 
 // ============================================================================

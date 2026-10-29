@@ -57,6 +57,8 @@ import {
   type SequenceActions,
 } from './sequenceActions';
 import { createSoundActions, type SoundActions } from './soundActions';
+import { createVideoActions, type VideoActions } from './videoActions';
+import { keepVideoFiles } from '../services/videoFiles';
 import { createTransitionActions, type TransitionActions } from './transitionActions';
 import {
   captureClipboardExtras,
@@ -719,7 +721,8 @@ export const DEFAULT_STROKE: Stroke = {
 // Store Interface
 // ============================================================================
 
-export interface EditorStore extends SequenceActions, SoundActions, TransitionActions {
+export interface EditorStore
+  extends SequenceActions, SoundActions, VideoActions, TransitionActions {
   // Project state
   projectId: string | null;
   projectName: string;
@@ -3428,6 +3431,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   // Animation Sequence (PowerPoint-style numbered steps)
   ...createSequenceActions(set, get),
   ...createSoundActions(set, get),
+  ...createVideoActions(set),
   ...createTransitionActions(set, get),
 }));
 
@@ -4229,6 +4233,8 @@ function createHistoryActions(
       // singleton, so New Project must clear every project-scoped field or the
       // previous project's pages/symbols/timeline/rigging leak into the new one.
       closeUndoGroup();
+      // The last project's video files go with its library
+      keepVideoFiles(new Set());
       const defaultPage = createDefaultPage();
       set({
         projectId: null,
@@ -4253,6 +4259,7 @@ function createHistoryActions(
         editingSymbolPrevState: null,
         symbols: [],
         sounds: [],
+        videos: [],
         selectedSoundClipId: null,
         brushProfiles: withBuiltInProfiles([]),
         guides: [],
