@@ -268,6 +268,32 @@ describe('videos in a project file', () => {
     });
   });
 
+  it("keeps a video's sound linked to its layer", () => {
+    const linked = {
+      id: 'sound-clip',
+      soundId: 'voice',
+      start: 12,
+      offset: 0.5,
+      duration: 1.5,
+      gain: 1,
+      linkedTo: 'a',
+    };
+    const data = serializeProject(
+      'Clips',
+      scene(videoNode('a', 'clip')),
+      editorState([video('clip')], {
+        timeline: createTimeline({
+          sounds: [linked, { ...linked, id: 'odd', linkedTo: 7 } as never],
+        }),
+      })
+    );
+    const applied = open(JSON.parse(JSON.stringify(data)) as ProjectData);
+    expect(applied.timeline?.sounds).toEqual([
+      linked,
+      { ...linked, id: 'odd', linkedTo: undefined },
+    ]);
+  });
+
   it('opens an older file, with no videos, as it did', () => {
     const data = JSON.parse(
       JSON.stringify(serializeProject('Old', new SceneGraph(), editorState([])))

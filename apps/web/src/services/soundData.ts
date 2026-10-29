@@ -25,6 +25,8 @@ export function readSoundClips(clips: unknown): SoundClip[] {
         ...(clip.muted === true ? { muted: true } : {}),
         ...(isNumber(clip.fadeIn) && clip.fadeIn > 0 ? { fadeIn: clip.fadeIn } : {}),
         ...(isNumber(clip.fadeOut) && clip.fadeOut > 0 ? { fadeOut: clip.fadeOut } : {}),
+        // The video layer whose sound it is
+        ...(typeof clip.linkedTo === 'string' ? { linkedTo: clip.linkedTo } : {}),
       },
     ];
   });
