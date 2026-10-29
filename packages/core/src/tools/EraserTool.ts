@@ -528,16 +528,19 @@ export class EraserTool extends BaseTool {
   }
 
   // --------------------------------------------------------------------------
-  // Point Erase Logic (unchanged)
+  // Point Erase Logic
   // --------------------------------------------------------------------------
 
   /**
-   * Point eraser mode: delete individual points from path nodes.
-   * Uses world transforms for correct point positioning.
+   * Point eraser mode: delete individual points from path nodes (their main
+   * contour), opening a closed one. Uses world transforms for correct point
+   * positioning. The app is told which points went, as Direct Selection's
+   * Delete tells it, so their keyframes go and the others' follow their points.
    */
   private erasePoints(worldPos: Vector2, radius: number): void {
     const pathsToUpdate: Map<string, PathNode> = new Map();
     const pathsToRemove: string[] = [];
+    const pointsDeleted = new Map<string, { before: PathNode; indices: number[] }>();
 
     // traverseVisible skips hidden nodes (and their subtrees); the locked guard
     // mirrors stroke-mode erasing so point mode also leaves locked/hidden paths
@@ -570,6 +573,11 @@ export class EraserTool extends BaseTool {
             points: newPoints,
             closed: pathNode.closed && pointsToKeep.length === pathNode.points.length,
           });
+          const kept = new Set(pointsToKeep);
+          pointsDeleted.set(pathNode.id, {
+            before: structuredClone(pathNode),
+            indices: pathNode.points.map((_point, i) => i).filter((i) => !kept.has(i)),
+          });
         }
       }
     });
@@ -587,6 +595,13 @@ export class EraserTool extends BaseTool {
         points: updatedNode.points,
         closed: updatedNode.closed,
       });
+      const deleted = pointsDeleted.get(nodeId);
+      if (deleted) {
+        this.context.onPathPointsChange?.(nodeId, deleted.before, {
+          kind: 'delete',
+          indices: deleted.indices,
+        });
+      }
     }
 
     // Clear selection if any erased nodes were affected

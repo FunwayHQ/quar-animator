@@ -510,6 +510,70 @@ describe('useCanvasTools', () => {
       expect(tracksOf(copy!.id)).toEqual(['transform.position.x']);
       useEditorStore.setState({ activeTool: 'selection', timeline: createTimeline() });
     });
+
+    it('deleting points: their keyframes go, and the others stay on their points', () => {
+      const corner = (x: number) => ({
+        position: { x, y: 0 },
+        handleIn: null,
+        handleOut: null,
+        type: 'corner' as const,
+      });
+      sceneGraph.addNode({
+        id: 'line',
+        name: 'Line',
+        type: 'path',
+        parent: null,
+        children: [],
+        transform: {
+          position: { x: 0, y: 0 },
+          rotation: 0,
+          scale: { x: 1, y: 1 },
+          anchor: { x: 0, y: 0 },
+          skew: { x: 0, y: 0 },
+        },
+        visible: true,
+        locked: false,
+        opacity: 1,
+        blendMode: 'normal',
+        points: [corner(0), corner(100), corner(200)],
+        closed: false,
+        fills: [],
+        strokes: [],
+      });
+      useEditorStore.setState({
+        activeTool: 'eraser',
+        eraserMode: 'point',
+        eraserSize: 10,
+        timeline: {
+          ...createTimeline(),
+          tracks: [
+            createTrack('line', 'points.1.position', [createKeyframe(0, { x: 100, y: 0 })]),
+            createTrack('line', 'points.2.position', [createKeyframe(0, { x: 200, y: 40 })]),
+          ],
+        },
+      });
+      const { result } = renderHook(() => useCanvasTools({ camera, sceneGraph }));
+
+      // A click on the middle point
+      const at = [camera.worldToScreen({ x: 100, y: 0 }), { x: 100, y: 0 }] as const;
+      act(() => result.current.handlePointerDown(...at, createMockPointerEvent()));
+      act(() => result.current.handlePointerUp(...at, createMockPointerEvent()));
+
+      const line = sceneGraph.getNode('line') as { points: Array<{ position: { x: number } }> };
+      expect(line.points.map((p) => p.position.x)).toEqual([0, 200]);
+      // The last point's keyframe is now the second point's
+      expect(
+        useEditorStore
+          .getState()
+          .timeline.tracks.filter((track) => track.nodeId === 'line')
+          .map((track) => track.property)
+      ).toEqual(['points.1.position']);
+      useEditorStore.setState({
+        activeTool: 'selection',
+        eraserMode: 'stroke',
+        timeline: createTimeline(),
+      });
+    });
   });
 
   describe('weight paint', () => {

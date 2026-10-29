@@ -1074,6 +1074,32 @@ describe('EraserTool', () => {
       expect(updatedPath.closed).toBe(false);
     });
 
+    it('says which points went, so their keyframes go with them and the rest follow', () => {
+      const onPathPointsChange = vi.fn();
+      context.onPathPointsChange = onPathPointsChange;
+      const path = createTestPath(0, 0, [
+        { x: 0, y: 0 },
+        { x: 50, y: 0 },
+        { x: 100, y: 0 },
+        { x: 150, y: 0 },
+      ]);
+      context.sceneGraph.addNode(path);
+
+      tool.onPointerDown(createMockPointerEvent({ worldPosition: { x: 50, y: 0 }, button: 0 }));
+      tool.onPointerMove(createMockPointerEvent({ worldPosition: { x: 100, y: 0 } }));
+      tool.onPointerUp(createMockPointerEvent({ worldPosition: { x: 100, y: 0 }, button: 0 }));
+
+      // One drag, a call for each point it took: each as the path was just before
+      expect(onPathPointsChange).toHaveBeenCalledTimes(2);
+      const [firstId, firstBefore, firstChange] = onPathPointsChange.mock.calls[0]!;
+      expect(firstId).toBe(path.id);
+      expect((firstBefore as PathNode).points).toHaveLength(4);
+      expect(firstChange).toEqual({ kind: 'delete', indices: [1] });
+      const [, secondBefore, secondChange] = onPathPointsChange.mock.calls[1]!;
+      expect((secondBefore as PathNode).points.map((p) => p.position.x)).toEqual([0, 100, 150]);
+      expect(secondChange).toEqual({ kind: 'delete', indices: [1] });
+    });
+
     it('should not affect rectangles in point mode', () => {
       const rect = createTestRectangle(50, 50, 40, 40);
       context.sceneGraph.addNode(rect);
