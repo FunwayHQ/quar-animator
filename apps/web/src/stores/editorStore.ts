@@ -1537,8 +1537,23 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     // Compute end effector tip in world space for target placement
     const endBoneWT = sceneGraph.getWorldTransform(endEffectorBoneId);
     const boneLen = endBone.length;
-    const tipX = endBoneWT.a * boneLen + endBoneWT.tx;
-    const tipY = endBoneWT.b * boneLen + endBoneWT.ty;
+    const tip = {
+      x: endBoneWT.a * boneLen + endBoneWT.tx,
+      y: endBoneWT.b * boneLen + endBoneWT.ty,
+    };
+
+    // The target goes where the skeleton is — the artboard or group holding
+    // the bones the chain hangs from — at the tip on screen, so it's keyed on
+    // that artboard's timeline
+    let targetParent = chain[0]!.parent;
+    while (targetParent && sceneGraph.getNode(targetParent)?.type === 'bone') {
+      targetParent = sceneGraph.getNode(targetParent)?.parent ?? null;
+    }
+    const fromParent = targetParent
+      ? mat3.invert(sceneGraph.getWorldTransform(targetParent))
+      : null;
+    if (!fromParent) targetParent = null;
+    const { x: tipX, y: tipY } = fromParent ? mat3.transformPoint(fromParent, tip) : tip;
 
     const chainId = `ik_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     const targetId = `ikt_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
@@ -1548,7 +1563,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       id: targetId,
       name: `IK Target (${endBone.name})`,
       type: 'ik-target',
-      parent: null,
+      parent: targetParent,
       children: [],
       transform: {
         position: { x: tipX, y: tipY },
@@ -1565,7 +1580,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       targetType: 'effector',
     };
 
-    sceneGraph.addNode(targetNode as any);
+    sceneGraph.addNode(targetNode as any, targetParent ?? undefined);
 
     const newChain: IKChain = {
       id: chainId,
