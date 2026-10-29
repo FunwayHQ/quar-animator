@@ -110,6 +110,15 @@ export function getNodeLocalBounds(node: Node): Rect | null {
         height: imgNode.height,
       };
     }
+    case 'video': {
+      const anchor = node.transform.anchor;
+      return {
+        x: -node.width * anchor.x,
+        y: -node.height * anchor.y,
+        width: node.width,
+        height: node.height,
+      };
+    }
     case 'bone': {
       // Bone anchor is (0,0), extends along +X for length
       const halfH = Math.max(node.length * 0.15, 4);

@@ -15,7 +15,7 @@ import type {
   EllipseNode,
   PolygonNode,
 } from '@quar/types';
-import { createMockToolContext, createMockPointerEvent } from '../test/setup';
+import { createMockToolContext, createMockPointerEvent, createTestVideoNode } from '../test/setup';
 import { createDefaultTransform } from '../SceneGraph';
 
 // Helper to create a test path node
@@ -1816,6 +1816,17 @@ describe('DirectSelectionTool', () => {
       const selected = tool.getSelectedPoints();
       expect(selected.length).toBe(1);
       expect(selected[0].pointIndex).toBe(1); // BR = index 1
+    });
+
+    it('offers no corners to pull on a video layer: videos aren’t distorted', () => {
+      context.sceneGraph.addNode(createTestVideoNode('video', 0, 0, 100, 100));
+
+      tool.onPointerDown(createMockPointerEvent({ worldPosition: { x: -50, y: -50 }, button: 0 }));
+      tool.onPointerMove(createMockPointerEvent({ worldPosition: { x: -40, y: -40 } }));
+      tool.onPointerUp(createMockPointerEvent({ worldPosition: { x: -40, y: -40 } }));
+
+      expect(tool.getSelectedPoints()).toEqual([]);
+      expect(context.sceneGraph.getNode('video')).not.toHaveProperty('vertexOffsets');
     });
 
     it('should drag an image vertex and update vertexOffsets', () => {

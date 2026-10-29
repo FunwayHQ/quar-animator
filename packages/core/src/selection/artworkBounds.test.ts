@@ -6,6 +6,7 @@ import { describe, it, expect } from 'vitest';
 import type { Node } from '@quar/types';
 import { SceneGraph, createDefaultTransform, createGroupNode } from '../SceneGraph';
 import { getArtworkBounds, padRect, widenToAspect } from './artworkBounds';
+import { createTestVideoNode } from '../test/setup';
 
 function rect(id: string, x: number, y: number, w: number, h: number, stroke = 0): Node {
   return {
@@ -73,6 +74,27 @@ describe('getArtworkBounds', () => {
     const sg = new SceneGraph();
     sg.addNode(rect('a', 0, 0, 100, 100, 12));
     expect(getArtworkBounds(sg)?.strokePadding).toBe(6);
+  });
+
+  it('takes in video layers, as pictures, and the symbols they’re in', () => {
+    const sg = new SceneGraph();
+    sg.addNode(createTestVideoNode('video', 0, 0, 160, 90));
+    const inSymbol = createTestVideoNode('in-symbol', 0, 0, 40, 20);
+    const symbols = [
+      {
+        id: 'clip',
+        name: 'Clip',
+        sceneGraphJSON: { nodes: [inSymbol], rootNodeIds: [inSymbol.id] },
+      },
+    ];
+    sg.addNode({
+      ...rect('instance', 500, 0, 1, 1),
+      type: 'symbol-instance',
+      symbolId: 'clip',
+      overrides: [],
+    } as unknown as Node);
+
+    expect(getArtworkBounds(sg, symbols)?.rect).toEqual({ x: -80, y: -45, width: 600, height: 90 });
   });
 
   it('is null for a scene that draws nothing', () => {

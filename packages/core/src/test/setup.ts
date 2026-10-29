@@ -1,7 +1,7 @@
 import { vi } from 'vitest';
-import { SceneGraph } from '../SceneGraph';
+import { SceneGraph, createDefaultTransform } from '../SceneGraph';
 import { Camera } from '../Camera';
-import type { Fill, Stroke } from '@quar/types';
+import type { Fill, Stroke, VideoNode } from '@quar/types';
 import type { ToolContext } from '../tools/BaseTool';
 
 /**
@@ -241,6 +241,40 @@ export const mockDefaultStroke: Stroke = {
   visible: true,
   align: 'center',
 };
+
+/**
+ * A video layer for tests: `width` × `height` centred on (x, y), showing a
+ * 1280 × 720 video, its clip the video's first four seconds from frame 0.
+ */
+export function createTestVideoNode(
+  id: string,
+  x = 0,
+  y = 0,
+  width = 160,
+  height = 90,
+  patch: Partial<VideoNode> = {}
+): VideoNode {
+  return {
+    id,
+    name: `Video ${id}`,
+    type: 'video',
+    parent: null,
+    children: [],
+    transform: { ...createDefaultTransform(), position: { x, y } },
+    visible: true,
+    locked: false,
+    opacity: 1,
+    blendMode: 'normal',
+    videoId: `file-${id}`,
+    width,
+    height,
+    naturalWidth: 1280,
+    naturalHeight: 720,
+    cornerRadius: [0, 0, 0, 0],
+    clip: { start: 0, offset: 0, duration: 4 },
+    ...patch,
+  };
+}
 
 /**
  * Create a mock tool context for tool testing

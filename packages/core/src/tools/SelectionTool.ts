@@ -870,7 +870,8 @@ export class SelectionTool extends BaseTool {
         localBounds = getTextLocalBounds(node);
         break;
       }
-      case 'image': {
+      case 'image':
+      case 'video': {
         const anchor = transform.anchor;
         localBounds = {
           x: -node.width * anchor.x,
@@ -1190,6 +1191,7 @@ export class SelectionTool extends BaseTool {
         return { width: w * sx, height: h * sy };
       }
       case 'image':
+      case 'video':
         return {
           width: node.width,
           height: node.height,
@@ -1262,7 +1264,7 @@ export class SelectionTool extends BaseTool {
       } else if (node.type === 'text') {
         const box = getTextNodeBounds(node);
         state.textBox = { width: box.width, height: box.height };
-      } else if (node.type === 'image') {
+      } else if (node.type === 'image' || node.type === 'video') {
         state.width = node.width;
         state.height = node.height;
       } else if (node.type === 'group' || node.type === 'symbol-instance') {
@@ -1448,7 +1450,7 @@ export class SelectionTool extends BaseTool {
           },
         });
       } else if (
-        node.type === 'image' &&
+        (node.type === 'image' || node.type === 'video') &&
         initialState.width !== undefined &&
         initialState.height !== undefined
       ) {
