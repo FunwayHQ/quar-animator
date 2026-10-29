@@ -12,7 +12,7 @@ import { createPortal } from 'react-dom';
 import type { EasingFunction } from '@quar/types';
 import {
   easingToSvgPath,
-  easingToBezierPoints,
+  easingAsBezier,
   getEasingDisplayName,
   getEasingFunction,
   createCubicBezier,
@@ -59,16 +59,18 @@ export function EasingEditor({ easing, onChange, anchorX, anchorY, onClose }: Ea
 
   // Local editing state: either cubic bezier points or a named easing
   const [currentEasing, setCurrentEasing] = useState<EasingFunction>(easing);
-  const bezierPoints: [number, number, number, number] | null = easingToBezierPoints(currentEasing);
-  const isCubicBezier = bezierPoints !== null && typeof currentEasing !== 'string';
+  // A custom curve, or a named one a cubic bezier draws (Linear, Ease In
+  // Cubic…): its points and handles are the curve's own, and editing them
+  // starts from it. The others have none to show
+  const isCubicBezier = easingAsBezier(currentEasing) !== null;
 
   // P1 and P2 for the cubic bezier (local state)
   const [p1, setP1] = useState<[number, number]>(() => {
-    const pts = easingToBezierPoints(easing);
+    const pts = easingAsBezier(easing);
     return pts ? [pts[0], pts[1]] : [0.25, 0.1];
   });
   const [p2, setP2] = useState<[number, number]>(() => {
-    const pts = easingToBezierPoints(easing);
+    const pts = easingAsBezier(easing);
     return pts ? [pts[2], pts[3]] : [0.25, 1];
   });
 
@@ -82,7 +84,7 @@ export function EasingEditor({ easing, onChange, anchorX, anchorY, onClose }: Ea
 
   // Sync from currentEasing when changing presets
   const syncPointsFromEasing = useCallback((e: EasingFunction) => {
-    const pts = easingToBezierPoints(e);
+    const pts = easingAsBezier(e);
     if (pts) {
       setP1([pts[0], pts[1]]);
       setP2([pts[2], pts[3]]);
@@ -274,6 +276,9 @@ export function EasingEditor({ easing, onChange, anchorX, anchorY, onClose }: Ea
       .join(' ');
   }, [currentEasing, isCubicBezier, p1, p2]);
 
+  /** A control point's number in its field (none for a curve with no points) */
+  const shownPoint = (value: number) => (isCubicBezier ? Number(value.toFixed(2)) : '');
+
   // Handle positions in SVG coords
   const p1Svg = { x: PAD + p1[0] * CURVE_SIZE, y: PAD + (1 - p1[1]) * CURVE_SIZE };
   const p2Svg = { x: PAD + p2[0] * CURVE_SIZE, y: PAD + (1 - p2[1]) * CURVE_SIZE };
@@ -397,14 +402,15 @@ export function EasingEditor({ easing, onChange, anchorX, anchorY, onClose }: Ea
           <div ref={previewRef} className={styles.previewDot} style={{ left: '0%' }} />
         </div>
 
-        {/* Numeric Inputs (only meaningful for cubic bezier, but always show) */}
+        {/* Numeric Inputs: the curve's control points, empty for a curve with none */}
         <div className={styles.inputsRow}>
           <div className={styles.inputCol}>
             <span className={styles.inputLabel}>X1</span>
             <input
               type="number"
               className={styles.inputField}
-              value={Number(p1[0].toFixed(2))}
+              value={shownPoint(p1[0])}
+              disabled={!isCubicBezier}
               step={0.01}
               min={0}
               max={1}
@@ -417,7 +423,8 @@ export function EasingEditor({ easing, onChange, anchorX, anchorY, onClose }: Ea
             <input
               type="number"
               className={styles.inputField}
-              value={Number(p1[1].toFixed(2))}
+              value={shownPoint(p1[1])}
+              disabled={!isCubicBezier}
               step={0.01}
               onChange={(e) => handleNumericChange('y1', e.target.value)}
               data-testid="easing-input-y1"
@@ -428,7 +435,8 @@ export function EasingEditor({ easing, onChange, anchorX, anchorY, onClose }: Ea
             <input
               type="number"
               className={styles.inputField}
-              value={Number(p2[0].toFixed(2))}
+              value={shownPoint(p2[0])}
+              disabled={!isCubicBezier}
               step={0.01}
               min={0}
               max={1}
@@ -441,13 +449,20 @@ export function EasingEditor({ easing, onChange, anchorX, anchorY, onClose }: Ea
             <input
               type="number"
               className={styles.inputField}
-              value={Number(p2[1].toFixed(2))}
+              value={shownPoint(p2[1])}
+              disabled={!isCubicBezier}
               step={0.01}
               onChange={(e) => handleNumericChange('y2', e.target.value)}
               data-testid="easing-input-y2"
             />
           </div>
         </div>
+        {!isCubicBezier && (
+          <p className={styles.inputsNote} data-testid="easing-no-points">
+            {getEasingDisplayName(currentEasing)} isn’t one cubic bezier, so it has no points to
+            edit. Pick a curve with handles to start from.
+          </p>
+        )}
 
         {/* Preset Grid */}
         <div className={styles.presetArea} data-testid="easing-preset-area">

@@ -90,6 +90,53 @@ describe('EasingEditor', () => {
     expect(parseFloat(y1.value)).toBeCloseTo(0.1, 1);
   });
 
+  it("shows a named curve's own control points, and its handles", () => {
+    render(<EasingEditor {...defaultProps} easing="easeOutCubic" />);
+    const values = ['x1', 'y1', 'x2', 'y2'].map((field) =>
+      Number((screen.getByTestId(`easing-input-${field}`) as HTMLInputElement).value)
+    );
+    // Ease Out Cubic is cubic-bezier(1/3, 1, 2/3, 1)
+    expect(values).toEqual([0.33, 1, 0.67, 1]);
+    expect(screen.getByTestId('easing-handle-p1')).toBeInTheDocument();
+    expect(screen.queryByTestId('easing-no-points')).not.toBeInTheDocument();
+  });
+
+  it('shows Linear as its points along the line', () => {
+    render(<EasingEditor {...defaultProps} easing="linear" />);
+    const values = ['x1', 'y1', 'x2', 'y2'].map((field) =>
+      Number((screen.getByTestId(`easing-input-${field}`) as HTMLInputElement).value)
+    );
+    expect(values).toEqual([0.33, 0.33, 0.67, 0.67]);
+  });
+
+  it('leaves the fields empty and disabled, saying why, for a curve no bezier draws', () => {
+    render(<EasingEditor {...defaultProps} easing="easeOutBounce" />);
+    for (const field of ['x1', 'y1', 'x2', 'y2']) {
+      const input = screen.getByTestId(`easing-input-${field}`) as HTMLInputElement;
+      expect(input.value).toBe('');
+      expect(input).toBeDisabled();
+    }
+    expect(screen.getByTestId('easing-no-points')).toHaveTextContent(/Ease Out Bounce/);
+
+    // Picking a curve that has points fills them in
+    fireEvent.click(screen.getByTestId('easing-preset-in-cubic'));
+    const x2 = screen.getByTestId('easing-input-x2') as HTMLInputElement;
+    expect(x2).not.toBeDisabled();
+    expect(Number(x2.value)).toBe(0.67);
+    expect(screen.queryByTestId('easing-no-points')).not.toBeInTheDocument();
+  });
+
+  it("starts a typed curve from the named one's points", () => {
+    render(<EasingEditor {...defaultProps} easing="easeInCubic" />);
+    fireEvent.change(screen.getByTestId('easing-input-y2'), { target: { value: '0.5' } });
+    const lastCall = defaultProps.onChange.mock.calls[defaultProps.onChange.mock.calls.length - 1]!;
+    const [x1, y1, x2, y2] = (lastCall[0] as { points: number[] }).points;
+    expect(x1).toBeCloseTo(1 / 3);
+    expect(y1).toBeCloseTo(0);
+    expect(x2).toBeCloseTo(2 / 3);
+    expect(y2).toBe(0.5);
+  });
+
   it('renders the preset area with categories', () => {
     render(<EasingEditor {...defaultProps} />);
     expect(screen.getByTestId('easing-preset-area')).toBeInTheDocument();
