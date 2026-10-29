@@ -287,6 +287,7 @@ uniform float u_exposure;   // -1 to 1
 uniform float u_temperature; // -1 to 1
 uniform vec2 u_rectSize;       // (width, height) for SDF masking
 uniform vec4 u_cornerRadius;   // (TL, TR, BR, BL)
+uniform int u_premultiplied;   // 1: the texture's colours are premultiplied by its alpha (a video's)
 ${MASK_FRAGMENT_FUNCTIONS}
 
 out vec4 outColor;
@@ -319,7 +320,9 @@ vec3 adjustHue(vec3 color, float hueShift) {
 void main() {
   vec4 texColor = texture(u_texture, v_texCoord);
 
-  vec3 c = texColor.rgb;
+  // Premultiplied, a picture's see-through edges filter without dark fringes;
+  // its colour is had back before it's adjusted
+  vec3 c = u_premultiplied == 1 && texColor.a > 0.0 ? texColor.rgb / texColor.a : texColor.rgb;
 
   // Exposure
   c *= pow(2.0, u_exposure);
@@ -1414,6 +1417,7 @@ export class ShapeRenderer {
         'u_temperature',
         'u_rectSize',
         'u_cornerRadius',
+        'u_premultiplied',
         ...MASK_UNIFORM_NAMES,
       ]
     );
@@ -1871,6 +1875,9 @@ export class ShapeRenderer {
     }
     entry.lastUsed = this.frame;
     try {
+      // Premultiplied, as a canvas holds it: see-through edges filter without dark
+      // fringes (the picture shader takes the colour back)
+      gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
       if (entry.width === width && entry.height === height) {
         gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, gl.RGBA, gl.UNSIGNED_BYTE, frame.source);
       } else {
@@ -1885,6 +1892,8 @@ export class ShapeRenderer {
       entry.width = 0;
       entry.height = 0;
     } finally {
+      // Pictures are uploaded straight
+      gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
       gl.bindTexture(gl.TEXTURE_2D, null);
     }
     return entry.key === null ? null : entry.texture;
@@ -2826,6 +2835,12 @@ export class ShapeRenderer {
 
     // No tint for normal rendering
     gl.uniform4fv(this.textureProgram.uniforms.u_tintColor ?? null, new Float32Array([0, 0, 0, 0]));
+
+    // A video's pictures are uploaded premultiplied (see videoTexture)
+    gl.uniform1i(
+      this.textureProgram.uniforms.u_premultiplied ?? null,
+      node.type === 'video' ? 1 : 0
+    );
 
     // Image adjustments
     const adj = node.adjustments;
@@ -4431,6 +4446,7 @@ export class ShapeRenderer {
 
     gl.uniform1f(this.textureProgram.uniforms.u_opacity ?? null, this.currentEffectiveOpacity);
     gl.uniform4fv(this.textureProgram.uniforms.u_tintColor ?? null, new Float32Array([0, 0, 0, 0]));
+    gl.uniform1i(this.textureProgram.uniforms.u_premultiplied ?? null, 0);
 
     // Image adjustments
     const adj = node.adjustments;
@@ -5130,6 +5146,7 @@ export class ShapeRenderer {
       this.textureProgram.uniforms.u_tintColor ?? null,
       new Float32Array([colorOverride.tint[0], colorOverride.tint[1], colorOverride.tint[2], 0.5])
     );
+    gl.uniform1i(this.textureProgram.uniforms.u_premultiplied ?? null, 0);
 
     // No adjustments for ghost
     gl.uniform1f(this.textureProgram.uniforms.u_brightness ?? null, 0);

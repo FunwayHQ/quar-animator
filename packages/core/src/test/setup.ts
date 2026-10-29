@@ -126,6 +126,7 @@ export function createMockWebGL2Context(): WebGL2RenderingContext {
     FRAMEBUFFER: 36160,
     COLOR_ATTACHMENT0: 36064,
     FRAMEBUFFER_COMPLETE: 36053,
+    UNPACK_PREMULTIPLY_ALPHA_WEBGL: 37441,
 
     // Texture operations (unique handle per createTexture call)
     createTexture: vi.fn(() => ({ __isTexture: true, id: ++textureId }) as unknown as WebGLTexture),
@@ -133,6 +134,7 @@ export function createMockWebGL2Context(): WebGL2RenderingContext {
     activeTexture: vi.fn(),
     texImage2D: vi.fn(),
     texSubImage2D: vi.fn(),
+    pixelStorei: vi.fn(),
     texParameteri: vi.fn(),
     deleteTexture: vi.fn(),
 

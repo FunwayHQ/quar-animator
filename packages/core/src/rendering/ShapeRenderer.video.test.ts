@@ -333,6 +333,94 @@ describe('ShapeRenderer - video layers', () => {
     expect(quadsDrawn()).toBe(1);
   });
 
+  describe('transparency', () => {
+    /** The uniform locations are their names, so which is set to what can be told */
+    const withNamedUniforms = () => {
+      const mocks = createMockRenderer();
+      (mocks.gl.getUniformLocation as Mock).mockImplementation(
+        (_program: WebGLProgram, name: string) => ({ name })
+      );
+      gl = mocks.gl;
+      shapeRenderer = new ShapeRenderer(mocks.renderer);
+      shapeRenderer.setVideoFrames(provider);
+      vi.clearAllMocks();
+    };
+    const premultipliedSet = () =>
+      (gl.uniform1i as Mock).mock.calls
+        .filter(([location]) => (location as { name?: string })?.name === 'u_premultiplied')
+        .map(([, value]) => value as number);
+
+    it('uploads a video’s picture premultiplied (filtered without fringes), then unpacks straight again', () => {
+      sceneGraph.addNode(createVideoNode('v'));
+      frames.set('v', { source: picture(), key: 'f0' });
+      render();
+      frames.set('v', { source: picture(), key: 'f1' });
+      render();
+      const unpack = (gl.pixelStorei as Mock).mock;
+      const premultiplied = unpack.calls.flatMap(([name, value], i) =>
+        name === gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL
+          ? [{ value, order: unpack.invocationCallOrder[i]! }]
+          : []
+      );
+      const uploads = [
+        ...(gl.texImage2D as Mock).mock.invocationCallOrder,
+        ...(gl.texSubImage2D as Mock).mock.invocationCallOrder,
+      ];
+      expect(uploads).toHaveLength(2);
+      for (const upload of uploads) {
+        const before = premultiplied.filter(({ order }) => order < upload).at(-1);
+        const after = premultiplied.find(({ order }) => order > upload);
+        expect(before?.value).toBe(true);
+        expect(after?.value).toBe(false);
+      }
+    });
+
+    it('unpacks straight again when a picture can’t be uploaded', () => {
+      sceneGraph.addNode(createVideoNode('v'));
+      frames.set('v', { source: picture(), key: 'f0' });
+      (gl.texImage2D as Mock).mockImplementationOnce(() => {
+        throw new DOMException('The frame was closed', 'InvalidStateError');
+      });
+      render();
+      expect((gl.pixelStorei as Mock).mock.calls.at(-1)).toEqual([
+        gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL,
+        false,
+      ]);
+    });
+
+    it('tells the picture shader a video’s colours are premultiplied, and a picture’s aren’t', () => {
+      withNamedUniforms();
+      const src = 'data:image/png;base64,AAAA';
+      vi.spyOn(shapeRenderer, 'getTexture').mockImplementation((asked) =>
+        asked === src ? ({ __isTexture: true } as unknown as WebGLTexture) : null
+      );
+      sceneGraph.addNode(createVideoNode('v'));
+      sceneGraph.addNode({
+        ...createVideoNode('picture'),
+        type: 'image',
+        src,
+      } as unknown as Node);
+      frames.set('v', { source: picture(), key: 1 });
+      render();
+      expect(quadsDrawn()).toBe(2);
+      expect(premultipliedSet()).toEqual([1, 0]);
+    });
+
+    it('has the picture shader take a premultiplied colour back before adjusting it', () => {
+      const mocks = createMockRenderer();
+      new ShapeRenderer(mocks.renderer);
+      const fragment = (mocks.gl.shaderSource as Mock).mock.calls
+        .map(([, source]) => String(source))
+        .find((source) => source.includes('uniform vec4 u_cornerRadius;'));
+      expect(fragment).toContain('uniform int u_premultiplied;');
+      expect(fragment).toMatch(/texColor\.rgb\s*\/\s*texColor\.a/);
+      expect(mocks.gl.getUniformLocation).toHaveBeenCalledWith(
+        expect.anything(),
+        'u_premultiplied'
+      );
+    });
+  });
+
   it('draws the videos in a symbol an instance draws', () => {
     const video = createVideoNode('in-symbol');
     shapeRenderer.setSymbolDefinitions(
