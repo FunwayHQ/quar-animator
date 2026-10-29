@@ -1,4 +1,3 @@
-import { useSearchParams } from 'react-router-dom';
 import { Toolbar } from '../components/layout/Toolbar';
 import { Canvas } from '../components/layout/Canvas';
 import { PropertiesPanel } from '../components/layout/PropertiesPanel';
@@ -14,6 +13,7 @@ import { AnimationSequenceWindow } from '../components/common/AnimationSequenceW
 import { SceneGraphProvider } from '../contexts/SceneGraphContext';
 import { useTimelineScope } from '../hooks/useTimelineScope';
 import { usePlayback } from '../hooks/usePlayback';
+import { useProjectInAddress } from '../hooks/useProjectInAddress';
 import { useSoundPlayback } from '../hooks/useSoundPlayback';
 import { useTimelineShortcuts } from '../hooks/useTimelineShortcuts';
 import { useProjectActions } from '../hooks/useProjectActions';
@@ -49,8 +49,8 @@ function EditorInner() {
   useLeaveWarning();
   useDocumentFonts(sceneGraph);
 
-  const [searchParams] = useSearchParams();
-  const projectId = searchParams.get('project');
+  // The project the address names, and the address following the one open
+  const projectId = useProjectInAddress();
 
   const projectActions = useProjectActions({ loadProjectId: projectId });
 
