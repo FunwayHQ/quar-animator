@@ -558,6 +558,49 @@ describe('ExportDialog', () => {
     expect(screen.getByTestId('export-start-frame')).toBeInTheDocument();
   });
 
+  it('frames a Lottie of the whole page to fit all its artwork, at that size', async () => {
+    baseRender(
+      <SceneGraphProvider>
+        <SlidesSeeder />
+        <ExportDialogHost />
+      </SceneGraphProvider>
+    );
+    act(() => showExportDialog('lottie'));
+    expect(screen.getByTestId('export-scene-scope')).toHaveTextContent(
+      'framed to fit its whole animation'
+    );
+    // Both slides, from Intro's left (-320) to Outro's right (1640)
+    expect(screen.getByTestId('export-width')).toHaveValue(1960);
+    expect(screen.getByTestId('export-height')).toHaveValue(360);
+    // A slides format starts at the first slide's size, and back again
+    fireEvent.click(screen.getByTestId('export-tab-mp4'));
+    expect(screen.getByTestId('export-width')).toHaveValue(640);
+    fireEvent.click(screen.getByTestId('export-tab-lottie'));
+    expect(screen.getByTestId('export-width')).toHaveValue(1960);
+
+    fireEvent.click(screen.getByTestId('export-dialog-export'));
+    await waitFor(() => expect(exportLottieBlob).toHaveBeenCalledOnce());
+    const [nodes, , options] = vi.mocked(exportLottieBlob).mock.calls[0]!;
+    expect(nodes.map((node) => [node.id, node.transform.position])).toEqual([
+      ['outro', { x: 1320, y: 180 }],
+      ['intro', { x: 320, y: 180 }],
+    ]);
+    expect(options).toMatchObject({ width: 1960, height: 360 });
+  });
+
+  it('keeps a size typed for one format when another is chosen', () => {
+    baseRender(
+      <SceneGraphProvider>
+        <SlidesSeeder />
+        <ExportDialogHost />
+      </SceneGraphProvider>
+    );
+    act(() => showExportDialog('lottie'));
+    fireEvent.change(screen.getByTestId('export-width'), { target: { value: '500' } });
+    fireEvent.click(screen.getByTestId('export-tab-gif'));
+    expect(screen.getByTestId('export-width')).toHaveValue(500);
+  });
+
   it('passes the chosen MP4 frame rate and speed to the exporter', async () => {
     render(<ExportDialogHost />);
     act(() => showExportDialog('mp4'));

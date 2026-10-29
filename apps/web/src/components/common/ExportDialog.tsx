@@ -278,10 +278,14 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
           exportRig(useEditorStore.getState(), timeline.frameRate)
         )
   );
-  // The first slide's size, when there are slides
-  const defaultSize = defaultExportSize(
-    selectedArtboard?.bounds ?? (slides.length > 1 ? slides[0]!.bounds : sceneScope)
-  );
+  // The first slide's size, when there are slides — but a Lottie of the
+  // whole page is framed to fit all the artwork, so it starts at that size
+  const defaultSizeFor = (tab: ExportTab) =>
+    defaultExportSize(
+      selectedArtboard?.bounds ??
+        (slides.length > 1 && tab !== 'lottie' ? slides[0]!.bounds : sceneScope)
+    );
+  const defaultSize = defaultSizeFor(initialTab);
 
   const [exiting, setExiting] = useState(false);
   const [state, setState] = useState<ExportDialogState>(() => ({
@@ -386,12 +390,22 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
     setState((s) => ({ ...s, [key]: value, error: null }));
   };
 
+  // A size left as it started follows the format to its own default
+  const selectTab = (tab: ExportTab) => {
+    setState((s) => {
+      const before = defaultSizeFor(s.tab);
+      const untouched = s.width === before.width && s.height === before.height;
+      return { ...s, tab, error: null, ...(untouched ? defaultSizeFor(tab) : {}) };
+    });
+  };
+
   const lottieExportScene = getLottieExportScene(
     sceneGraph,
     timeline,
     selectedArtboard,
     state.width,
-    state.height
+    state.height,
+    sceneScope
   );
 
   // Lottie analysis
@@ -878,7 +892,7 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
             <button
               key={t.id}
               className={`${styles.tab} ${state.tab === t.id ? styles.active : ''}`}
-              onClick={() => update('tab', t.id)}
+              onClick={() => selectTab(t.id)}
               disabled={state.exporting}
               data-testid={`export-tab-${t.id}`}
             >

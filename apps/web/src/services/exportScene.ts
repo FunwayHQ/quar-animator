@@ -12,6 +12,7 @@ import type {
   DynamicChain,
   IKChain,
   Node,
+  Rect,
   RectangleNode,
   SmartBoneAction,
   SymbolDefinition,
@@ -172,41 +173,39 @@ export function getSceneExportScope(
  * What a Lottie export of an artboard is made from: its children moved and
  * scaled into the output's frame (Lottie's origin is its top-left), its
  * fill as a full-frame background, and their tracks re-expressed to match.
- * The whole page as it is without an artboard.
+ * Without an artboard, the page's layers, framed alike to fit `pageBounds`
+ * (the animated artwork's, getSceneExportScope) as the other whole-page
+ * exports frame it: widened to the output's shape, so nothing is stretched.
+ * The page as it is without either (nothing on it).
  */
 export function getLottieExportScene(
   sceneGraph: SceneGraph,
   timeline: Timeline,
   artboardScope: ReturnType<typeof getArtboardScope>,
   outputWidth: number,
-  outputHeight: number
+  outputHeight: number,
+  pageBounds?: Rect | null
 ): { nodes: Node[]; timeline: Timeline } {
-  if (!artboardScope) return { nodes: sceneGraph.getRootNodes(), timeline };
+  if (!artboardScope) {
+    if (!pageBounds) return { nodes: sceneGraph.getRootNodes(), timeline };
+    const region = widenToAspect(pageBounds, outputWidth / outputHeight);
+    const scale = outputWidth / region.width;
+    if (!Number.isFinite(scale) || scale <= 0)
+      return { nodes: sceneGraph.getRootNodes(), timeline };
+    const roots = sceneGraph.getRootNodes().map((node) => node.id);
+    const placed = placeInFrame(sceneGraph, timeline.tracks, roots, region, { x: scale, y: scale });
+    return { nodes: placed.nodes, timeline: { ...timeline, tracks: placed.tracks } };
+  }
 
-  const scaleX = outputWidth / artboardScope.bounds.width;
-  const scaleY = outputHeight / artboardScope.bounds.height;
-  const rootIds = new Set(artboardScope.node.children);
-  const nodes: Node[] = artboardScope.node.children.flatMap((id) => {
-    const node = sceneGraph.getNode(id);
-    if (!node) return [];
-
-    return [
-      {
-        ...node,
-        transform: {
-          ...node.transform,
-          position: {
-            x: (node.transform.position.x + artboardScope.bounds.width / 2) * scaleX,
-            y: (node.transform.position.y + artboardScope.bounds.height / 2) * scaleY,
-          },
-          scale: {
-            x: node.transform.scale.x * scaleX,
-            y: node.transform.scale.y * scaleY,
-          },
-        },
-      },
-    ];
-  });
+  const { bounds } = artboardScope;
+  const placed = placeInFrame(
+    sceneGraph,
+    timeline.tracks,
+    artboardScope.node.children,
+    { x: -bounds.width / 2, y: -bounds.height / 2 },
+    { x: outputWidth / bounds.width, y: outputHeight / bounds.height }
+  );
+  const nodes = placed.nodes;
 
   // The artboard's own fill, as a full-frame background under its children
   const artboard = artboardScope.node;
@@ -238,21 +237,61 @@ export function getLottieExportScene(
     nodes.unshift(background);
   }
 
-  const tracks = timeline.tracks.map((track) => {
-    if (track.nodeId === artboard.id && track.property.startsWith('fills.')) {
-      return { ...track, nodeId: backgroundId };
-    }
-    if (!rootIds.has(track.nodeId)) return track;
+  const tracks = placed.tracks.map((track) =>
+    track.nodeId === artboard.id && track.property.startsWith('fills.')
+      ? { ...track, nodeId: backgroundId }
+      : track
+  );
+
+  return { nodes, timeline: { ...timeline, tracks } };
+}
+
+/**
+ * Layers moved and scaled into a Lottie frame, their tracks re-expressed to
+ * match: along X (and Y) from `origin` on, `scale` times over.
+ */
+function placeInFrame(
+  sceneGraph: SceneGraph,
+  tracks: Timeline['tracks'],
+  ids: string[],
+  origin: { x: number; y: number },
+  scale: { x: number; y: number }
+): { nodes: Node[]; tracks: Timeline['tracks'] } {
+  const nodes: Node[] = ids.flatMap((id) => {
+    const node = sceneGraph.getNode(id);
+    if (!node) return [];
+
+    return [
+      {
+        ...node,
+        transform: {
+          ...node.transform,
+          position: {
+            x: (node.transform.position.x - origin.x) * scale.x,
+            y: (node.transform.position.y - origin.y) * scale.y,
+          },
+          scale: {
+            x: node.transform.scale.x * scale.x,
+            y: node.transform.scale.y * scale.y,
+          },
+        },
+      },
+    ];
+  });
+
+  const placed = new Set(ids);
+  const mapped = tracks.map((track) => {
+    if (!placed.has(track.nodeId)) return track;
 
     const coordinate =
       track.property === 'transform.position.x'
-        ? (value: number) => (value + artboardScope.bounds.width / 2) * scaleX
+        ? (value: number) => (value - origin.x) * scale.x
         : track.property === 'transform.position.y'
-          ? (value: number) => (value + artboardScope.bounds.height / 2) * scaleY
+          ? (value: number) => (value - origin.y) * scale.y
           : track.property === 'transform.scale.x'
-            ? (value: number) => value * scaleX
+            ? (value: number) => value * scale.x
             : track.property === 'transform.scale.y'
-              ? (value: number) => value * scaleY
+              ? (value: number) => value * scale.y
               : null;
 
     if (!coordinate) return track;
@@ -265,5 +304,5 @@ export function getLottieExportScene(
     };
   });
 
-  return { nodes, timeline: { ...timeline, tracks } };
+  return { nodes, tracks: mapped };
 }
