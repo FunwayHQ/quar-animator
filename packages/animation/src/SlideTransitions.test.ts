@@ -4,16 +4,19 @@ import type { SlideTransitionType } from '@quar/types';
 import { createTimeline } from './Timeline';
 import { scopeTransition, withScopeTransition } from './TimelineScope';
 import {
+  DEFAULT_TRANSITION_EASING,
   DEFAULT_TRANSITION_SECONDS,
   MAX_TRANSITION_SECONDS,
   SLIDE_TRANSITION_TYPES,
   readSlideTransition,
   slideTransition,
+  transitionEasing,
   transitionFrameCount,
   transitionMoves,
   transitionProgress,
   transitionSeconds,
   withSlidesTransition,
+  withTransitionEasing,
 } from './SlideTransitions';
 
 describe('the transition into a slide', () => {
@@ -75,6 +78,18 @@ describe('making a transition', () => {
       direction: 'left',
       duration: 2,
     });
+  });
+
+  it('eases in and out unless eased another way, the default kept as no easing', () => {
+    const push = slideTransition('push');
+    expect(transitionEasing(push)).toBe(DEFAULT_TRANSITION_EASING);
+    const bouncing = withTransitionEasing(push, 'easeOutBounce');
+    expect(bouncing).toEqual({ ...push, easing: 'easeOutBounce' });
+    expect(transitionEasing(bouncing)).toBe('easeOutBounce');
+    // Back to the default: the same transition as a new one
+    expect(withTransitionEasing(bouncing, DEFAULT_TRANSITION_EASING)).toEqual(push);
+    // A copy: what was passed in is unchanged
+    expect(push).not.toHaveProperty('easing');
   });
 
   it('lasts between a tenth of a second and ten, to the hundredth', () => {

@@ -132,6 +132,39 @@ describe('the Slide section', () => {
     expect(transitionOf('outro')?.duration).toBe(10);
   });
 
+  it('sets how the transition eases, undoably, and Apply to all carries it', () => {
+    select('middle');
+    expect(screen.queryByTestId('slide-transition-easing')).toBeNull();
+    fireEvent.change(screen.getByTestId('slide-transition'), { target: { value: 'push' } });
+    const easing = () => screen.getByTestId('slide-transition-easing') as HTMLSelectElement;
+    // Eased in and out until told otherwise
+    expect(easing().value).toBe('easeInOutCubic');
+    expect(screen.getByRole('option', { name: 'Ease Out Bounce' })).toBeTruthy();
+
+    fireEvent.change(easing(), { target: { value: 'easeOutBounce' } });
+    expect(transitionOf('middle')).toEqual({
+      type: 'push',
+      direction: 'left',
+      duration: 0.5,
+      easing: 'easeOutBounce',
+    });
+    // Another kind keeps it
+    fireEvent.change(screen.getByTestId('slide-transition'), { target: { value: 'fade' } });
+    expect(transitionOf('middle')?.easing).toBe('easeOutBounce');
+    act(() => store().undo(sg));
+    act(() => store().undo(sg));
+    expect(transitionOf('middle')).toEqual({ type: 'push', direction: 'left', duration: 0.5 });
+
+    fireEvent.change(easing(), { target: { value: 'linear' } });
+    fireEvent.click(screen.getByTestId('slide-transition-apply-all'));
+    for (const id of ['intro', 'middle', 'outro']) {
+      expect(transitionOf(id)?.easing).toBe('linear');
+    }
+    // Back to in and out: no easing of its own, as a new transition has
+    fireEvent.change(easing(), { target: { value: 'easeInOutCubic' } });
+    expect(transitionOf('middle')).toEqual({ type: 'push', direction: 'left', duration: 0.5 });
+  });
+
   it('applies one slide’s transition to all slides, once', () => {
     select('outro');
     fireEvent.change(screen.getByTestId('slide-transition'), {

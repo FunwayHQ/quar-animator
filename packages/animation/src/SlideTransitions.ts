@@ -51,6 +51,23 @@ export function transitionDirection(transition: SlideTransition): SlideTransitio
   return transition.direction ?? 'left';
 }
 
+/** How a transition's progress eases: its own easing, or in and out. */
+export function transitionEasing(transition: SlideTransition): EasingType {
+  return transition.easing ?? DEFAULT_TRANSITION_EASING;
+}
+
+/**
+ * The transition eased another way. Eased in and out, it has no easing of
+ * its own, as a new one hasn't, so the two count as the same transition.
+ */
+export function withTransitionEasing(
+  transition: SlideTransition,
+  easing: EasingType
+): SlideTransition {
+  const { easing: _was, ...rest } = transition;
+  return easing === DEFAULT_TRANSITION_EASING ? rest : { ...rest, easing };
+}
+
 /** A length in seconds a transition can have: within its bounds, to a hundredth. */
 export function transitionSeconds(seconds: number): number {
   if (!Number.isFinite(seconds)) return DEFAULT_TRANSITION_SECONDS;
@@ -130,5 +147,5 @@ export function transitionFrameCount(
  */
 export function transitionProgress(transition: SlideTransition, raw: number): number {
   const t = Math.min(1, Math.max(0, Number.isFinite(raw) ? raw : 0));
-  return applyEasing(t, transition.easing ?? DEFAULT_TRANSITION_EASING);
+  return applyEasing(t, transitionEasing(transition));
 }

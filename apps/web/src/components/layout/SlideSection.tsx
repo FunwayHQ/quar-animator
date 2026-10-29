@@ -3,27 +3,32 @@
  * a page: how its slide comes on after the one before when the page's
  * artboards play as slides (the presentation player, slides exports). The
  * transition (or none), the way it moves where it moves, how long it takes,
- * and a button putting it on every slide. A small preview plays it, one
- * slide number giving way to the next. The first slide opens the show, so
- * nothing plays into it: its controls are shown, disabled.
+ * how it eases, and a button putting it on every slide. A small preview
+ * plays it, one slide number giving way to the next. The first slide opens
+ * the show, so nothing plays into it: its controls are shown, disabled.
  */
 
 import { useEffect, useState, type CSSProperties, type KeyboardEvent } from 'react';
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, CopyCheck } from 'lucide-react';
 import {
   DEFAULT_TRANSITION_SECONDS,
+  EASING_CATEGORIES,
   SLIDE_TRANSITION_DIRECTIONS,
   SLIDE_TRANSITION_TYPES,
+  getEasingDisplayName,
   scopeTransition,
   slideTransition,
   transitionDirection,
+  transitionEasing,
   transitionMoves,
   transitionSeconds,
+  withTransitionEasing,
 } from '@quar/animation';
 import { artboardsInOrder } from '@quar/core';
 import type { SceneGraph } from '@quar/core';
 import type {
   ArtboardNode,
+  EasingType,
   SlideTransition,
   SlideTransitionDirection,
   SlideTransitionType,
@@ -48,6 +53,15 @@ const DIRECTIONS: Record<
   up: { label: 'Up', title: 'Moves up: in from below', Icon: ArrowUp, dx: 0, dy: -1 },
   down: { label: 'Down', title: 'Moves down: in from above', Icon: ArrowDown, dx: 0, dy: 1 },
 };
+
+/**
+ * The easings a transition can have, in the Easing Editor's families: the
+ * named ones (a transition's easing is a name, not a curve), Linear first.
+ */
+const EASING_FAMILIES = EASING_CATEGORIES.flatMap(({ name, items }) => {
+  const easings = items.flatMap(({ value }) => (typeof value === 'string' ? [value] : []));
+  return easings.length > 1 ? [{ name, easings }] : [];
+});
 
 /** Seconds as the field shows them: 0.5, 1.25, 2. */
 const shownSeconds = (seconds: number) => String(Math.round(seconds * 100) / 100);
@@ -162,6 +176,37 @@ export function SlideSection({
                 disabled={first}
                 onChange={(duration) => set({ ...transition, duration })}
               />
+            </div>
+          </div>
+        )}
+
+        {transition && (
+          <div className={styles.propertyRow}>
+            <label className={styles.propertyLabel} htmlFor="slide-transition-easing">
+              Easing
+            </label>
+            <div className={styles.propertyInputs}>
+              <select
+                id="slide-transition-easing"
+                className={styles.select}
+                value={transitionEasing(transition)}
+                disabled={first}
+                onChange={(e) =>
+                  set(withTransitionEasing(transition, e.target.value as EasingType))
+                }
+                data-testid="slide-transition-easing"
+              >
+                <option value="linear">{getEasingDisplayName('linear')}</option>
+                {EASING_FAMILIES.map(({ name, easings }) => (
+                  <optgroup key={name} label={name}>
+                    {easings.map((easing) => (
+                      <option key={easing} value={easing}>
+                        {getEasingDisplayName(easing)}
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
             </div>
           </div>
         )}
