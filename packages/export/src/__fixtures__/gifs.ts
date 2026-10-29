@@ -31,6 +31,8 @@ export interface TestGif {
   height: number;
   palette?: readonly Rgb[];
   frames: readonly TestGifFrame[];
+  /** How many times it repeats after its first pass, 0 forever (the default); null: no count, it plays once */
+  loopCount?: number | null;
 }
 
 /** A palette's size as a GIF stores it: a power of two, 2 at least. */
@@ -93,8 +95,13 @@ export function writeTestGif(gif: TestGif): Uint8Array {
   const globalBits = gif.palette ? tableBits(gif.palette.length) : 0;
   out.push(gif.palette ? 0x80 | (globalBits - 1) : 0, 0, 0);
   if (gif.palette) writePalette(out, gif.palette, globalBits);
-  // Played over and over
-  out.push(0x21, 0xff, 11, ...[...'NETSCAPE2.0'].map((c) => c.charCodeAt(0)), 3, 1, 0, 0, 0);
+  // Played over and over, or as many times as it says
+  const loops = gif.loopCount === undefined ? 0 : gif.loopCount;
+  if (loops !== null) {
+    out.push(0x21, 0xff, 11, ...[...'NETSCAPE2.0'].map((c) => c.charCodeAt(0)), 3, 1);
+    u16(loops);
+    out.push(0);
+  }
 
   for (const frame of gif.frames) {
     const transparent = frame.transparentIndex ?? -1;

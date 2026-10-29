@@ -77,6 +77,22 @@ describe('readGif', () => {
     expect(gif.duration).toBe(1);
   });
 
+  it('reads how many times it says it plays: over and over, a number of repeats, or once', () => {
+    expect(readGif(fixture('gif-counter.gif')).loopCount).toBe(0);
+    const gif = (loopCount?: number | null) =>
+      writeTestGif({
+        width: 2,
+        height: 1,
+        palette: PALETTE,
+        frames: [0, 1].map((colour) => ({ width: 2, height: 1, pixels: [colour, colour] })),
+        loopCount,
+      });
+    expect(readGif(gif(3)).loopCount).toBe(3);
+    expect(readGif(gif(65535)).loopCount).toBe(65535);
+    // No count: it plays once
+    expect(readGif(gif(null)).loopCount).toBeNull();
+  });
+
   it('plays a delay of 10 ms or less as 100 ms, as browsers do', () => {
     const gif = readGif(
       writeTestGif({

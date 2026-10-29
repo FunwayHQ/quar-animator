@@ -214,6 +214,7 @@ describe('probeVideo with a GIF', () => {
         videoCodec: 'GIF',
         audioCodec: null,
         canDecodeAudio: false,
+        loopCount: 0,
       },
     });
   });

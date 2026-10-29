@@ -48,7 +48,15 @@ export interface GifInfo {
   height: number;
   frames: GifFrame[];
   duration: number;
+  /**
+   * How many times it repeats after its first pass, as it says (its
+   * NETSCAPE2.0 block): 0 over and over; null without a count, when it plays once
+   */
+  loopCount: number | null;
 }
+
+/** The application blocks that say how many times a GIF plays */
+const LOOP_BLOCKS = new Set(['NETSCAPE2.0', 'ANIMEXTS1.0']);
 
 /** The shortest delay played as it says, in hundredths of a second; shorter ones play as `SLOW_DELAY` */
 const FASTEST_DELAY = 2;
@@ -119,6 +127,7 @@ export function readGif(bytes: Uint8Array): GifInfo {
   let control = { disposal: 0, delay: 0, transparentIndex: -1 };
   /** Hundredths of a second so far */
   let elapsed = 0;
+  let loopCount: number | null = null;
   while (p < bytes.length) {
     const block = bytes[p]!;
     if (block === 0x3b) break;
@@ -132,6 +141,11 @@ export function readGif(bytes: Uint8Array): GifInfo {
           delay: u16(p + 4),
           transparentIndex: packed & 1 ? bytes[p + 6]! : -1,
         };
+      } else if (label === 0xff && bytes[p + 2] === 11 && p + 18 < bytes.length) {
+        const name = String.fromCharCode(...bytes.subarray(p + 3, p + 14));
+        if (LOOP_BLOCKS.has(name) && bytes[p + 14]! >= 3 && bytes[p + 15] === 1) {
+          loopCount = u16(p + 16);
+        }
       }
       const end = skipSubBlocks(bytes, p + 2);
       if (end < 0) break;
@@ -186,7 +200,7 @@ export function readGif(bytes: Uint8Array): GifInfo {
   if (frames.length === 0 || !(width > 0 && height > 0)) {
     throw new Error('The GIF has no pictures in it.');
   }
-  return { width, height, frames, duration: elapsed / 100 };
+  return { width, height, frames, duration: elapsed / 100, loopCount };
 }
 
 /** The frame shown at a moment of a GIF, in seconds: -1 before its first. */

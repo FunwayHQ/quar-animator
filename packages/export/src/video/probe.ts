@@ -31,6 +31,11 @@ export interface VideoInfo {
   audioCodec: string | null;
   /** Whether this browser decodes its sound (false without sound) */
   canDecodeAudio: boolean;
+  /**
+   * A GIF's: how many times it repeats after its first pass, as it says (0
+   * over and over; null without a count, when it plays once). Videos have none.
+   */
+  loopCount?: number | null;
 }
 
 /** Why a file can't be a video layer (a GIF of one frame is a still picture). */
@@ -116,6 +121,7 @@ async function probeGif(file: Blob): Promise<VideoProbe> {
       videoCodec: 'GIF',
       audioCodec: null,
       canDecodeAudio: false,
+      loopCount: gif.loopCount,
     },
   };
 }

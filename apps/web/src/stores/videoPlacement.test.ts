@@ -185,6 +185,44 @@ describe('placeVideoLayer', () => {
       expect(store().timelineDuration).toBe(410);
     });
 
+    it('loops to fill, too, when the file says it plays over and over', () => {
+      const sg = new SceneGraph();
+      const id = placeVideoLayer(sg, gif(), null, 60, { loopCount: 0 });
+      expect((sg.getNode(id) as VideoNode).clip).toMatchObject({ loop: true, loopFor: 8 });
+    });
+
+    it('plays once and holds its last frame when the file has no loop count', () => {
+      const sg = new SceneGraph();
+      const id = placeVideoLayer(sg, gif(), null, 60, { loopCount: null });
+      expect((sg.getNode(id) as VideoNode).clip).toEqual({
+        start: 60,
+        offset: 0,
+        duration: 1,
+        holdLastFrame: true,
+      });
+    });
+
+    it('plays as many times as the file says: a pass and its repeats', () => {
+      const sg = new SceneGraph();
+      const id = placeVideoLayer(sg, gif(), null, 60, { loopCount: 2 });
+      expect((sg.getNode(id) as VideoNode).clip).toEqual({
+        start: 60,
+        offset: 0,
+        duration: 1,
+        loop: true,
+        loopFor: 3,
+      });
+    });
+
+    it('repeats no further than the timeline’s end, a pass at least', () => {
+      const sg = new SceneGraph();
+      // 1 s × 101 from frame 60: the 8 s left
+      const many = placeVideoLayer(sg, gif(), null, 60, { loopCount: 100 });
+      expect((sg.getNode(many) as VideoNode).clip.loopFor).toBe(8);
+      const late = placeVideoLayer(sg, gif({ duration: 2 }), null, 290, { loopCount: 3 });
+      expect((sg.getNode(late) as VideoNode).clip.loopFor).toBe(2);
+    });
+
     it('fills the timeline of the artboard it goes into, at that one’s length', () => {
       const sg = new SceneGraph();
       artboard(sg, 'board', 0, 0, 400, 400);

@@ -155,7 +155,7 @@ async function importVideoFile(
     const store = useEditorStore.getState();
     store.addVideo(video);
     const before = store.timelineDuration;
-    placeVideoLayer(sceneGraph, video, sound, frame);
+    placeVideoLayer(sceneGraph, video, sound, frame, { loopCount: info.loopCount });
 
     // Where it can be seen
     const shown = useEditorStore.getState();

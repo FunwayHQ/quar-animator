@@ -348,6 +348,27 @@ describe('importVideoFiles', () => {
     expect(toast.info).not.toHaveBeenCalled();
   });
 
+  it('plays a GIF as many times as its file says, holding its last frame where it plays once', async () => {
+    const gifInfo = {
+      ...info,
+      format: 'GIF',
+      mimeType: 'image/gif',
+      duration: 1,
+      audioCodec: null,
+      canDecodeAudio: false,
+    };
+    const sg = new SceneGraph();
+    mocks.probeVideo.mockResolvedValueOnce({ ok: true, info: { ...gifInfo, loopCount: 2 } });
+    mocks.probeVideo.mockResolvedValueOnce({ ok: true, info: { ...gifInfo, loopCount: null } });
+    await importVideoFiles(sg, [
+      new File(['GIF89a'], 'thrice.gif', { type: 'image/gif' }),
+      new File(['GIF89a'], 'once.gif', { type: 'image/gif' }),
+    ]);
+    const clips = Object.fromEntries(videoNodes(sg).map((node) => [node.name, node.clip]));
+    expect(clips.thrice).toMatchObject({ duration: 1, loop: true, loopFor: 3 });
+    expect(clips.once).toEqual({ start: 0, offset: 0, duration: 1, holdLastFrame: true });
+  });
+
   it('turns away a GIF of one frame, pointing to where pictures come in', async () => {
     mocks.probeVideo.mockResolvedValue({
       ok: false,
