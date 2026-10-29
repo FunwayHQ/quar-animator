@@ -43,6 +43,9 @@ export function clipSeconds(
   return loopFor !== undefined && Number.isFinite(loopFor) && loopFor > 0 ? loopFor : pass;
 }
 
+/** Far less than a frame (or a hold's last moment), more than a slip in floating point, in seconds */
+const LOOP_SLIP = 1e-9;
+
 /**
  * The moment of a clip's file, in seconds, `elapsed` seconds of its
  * timeline after it starts: at its speed, starting over at the end of its
@@ -51,7 +54,11 @@ export function clipSeconds(
 export function clipMomentAt(clip: ClipTiming, elapsed: number): number {
   const duration = Math.max(0, clip.duration);
   let played = Math.max(0, elapsed) * clipSpeed(clip);
-  if (clip.loop && duration > 0) played %= duration;
+  if (clip.loop && duration > 0) {
+    played %= duration;
+    // A whole number of passes, short by a slip in the sums: the next one starting
+    if (duration - played < LOOP_SLIP) played = 0;
+  }
   return clip.offset + Math.min(played, duration);
 }
 

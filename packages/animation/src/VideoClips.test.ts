@@ -117,6 +117,14 @@ describe('speed, loops and held last frames', () => {
     expect(clipMomentAt(clip({ loop: true, loopFor: 10, speed: 2 }), 2.5)).toBeCloseTo(3);
   });
 
+  it('start their part over on the frame each pass ends, whatever the sums slip', () => {
+    // 0.4 s a pass at 2×: frame 23 is 1.2 s of the part in, three whole passes
+    const looped = clip({ start: 5, offset: 1, duration: 0.4, speed: 2, loop: true, loopFor: 2 });
+    expect(videoTimeAt(looped, 23, 30)).toBe(1);
+    expect(videoTimeAt(looped, 11, 30)).toBe(1);
+    expect(clipMomentAt(looped, 0.6)).toBe(1);
+  });
+
   it('show their last picture after they end when they hold it, nothing before them', () => {
     const held = clip({ holdLastFrame: true });
     expect(videoTimeAt(held, 29, 30)).toBeNull();
