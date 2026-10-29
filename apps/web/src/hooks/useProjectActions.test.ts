@@ -92,6 +92,17 @@ vi.mock('@quar/core', () => ({
   createGroupNode: (id: string, name: string) => ({ id, name, type: 'group', children: [] }),
 }));
 
+// Which GIFs are animated (the ones not called still…), and the clips they become
+const mockImportVideoFiles = vi.fn().mockResolvedValue(undefined);
+vi.mock('../services/videoImport', () => ({
+  isGifFile: (file: File) => file.type === 'image/gif',
+  sortGifFiles: async (files: File[]) => ({
+    animated: files.filter((file) => !file.name.startsWith('still')),
+    still: files.filter((file) => file.name.startsWith('still')),
+  }),
+  importVideoFiles: (...args: unknown[]) => mockImportVideoFiles(...args),
+}));
+
 // Mock the artboard drop-in
 const mockIntoArtboard = vi.fn();
 vi.mock('../services/intoArtboard', () => ({
@@ -659,6 +670,46 @@ describe('useProjectActions', () => {
       const groupId = (mockSceneGraph.addNode.mock.calls[0]?.[0] as { id: string }).id;
       expect(mockIntoArtboard).toHaveBeenCalledWith(mockSceneGraph, groupId);
       expect(mockSceneGraph.moveNode).toHaveBeenCalledWith('a', groupId);
+    });
+  });
+
+  describe('importImage', () => {
+    /** Runs File › Import Image… with `file` chosen in the file dialog. */
+    function importChosen(file: File) {
+      const createElement = document.createElement.bind(document);
+      let input: HTMLInputElement | undefined;
+      const spy = vi.spyOn(document, 'createElement').mockImplementation((tag: string) => {
+        const element = createElement(tag);
+        if (tag === 'input') {
+          input = element as HTMLInputElement;
+          input.click = () => {};
+        }
+        return element;
+      });
+      const { result } = renderProjectActions();
+      act(() => result.current.importImage());
+      spy.mockRestore();
+      Object.defineProperty(input, 'files', { value: [file] });
+      input?.onchange?.(new Event('change'));
+    }
+
+    it('brings an animated GIF in as a clip, as Import Video does', async () => {
+      mockImportVideoFiles.mockClear();
+      const wave = new File(['GIF89a'], 'wave.gif', { type: 'image/gif' });
+      importChosen(wave);
+      await vi.waitFor(() =>
+        expect(mockImportVideoFiles).toHaveBeenCalledWith(mockSceneGraph, [wave])
+      );
+    });
+
+    it('keeps a still GIF a picture', async () => {
+      mockImportVideoFiles.mockClear();
+      const read = vi.spyOn(FileReader.prototype, 'readAsDataURL');
+      const logo = new File(['GIF89a'], 'still logo.gif', { type: 'image/gif' });
+      importChosen(logo);
+      await vi.waitFor(() => expect(read).toHaveBeenCalledWith(logo));
+      expect(mockImportVideoFiles).not.toHaveBeenCalled();
+      read.mockRestore();
     });
   });
 

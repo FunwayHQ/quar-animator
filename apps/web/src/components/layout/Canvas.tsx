@@ -32,7 +32,7 @@ import { intoArtboardBeneath } from '../../services/intoArtboard';
 import { setCanvasViewBounds, setCanvasViewCenter } from '../../services/canvasView';
 import { isSoundFile } from '../../services/soundFiles';
 import { importSoundFiles } from '../../services/soundImport';
-import { importVideoFiles, isVideoFile } from '../../services/videoImport';
+import { importVideoFiles, isGifFile, isVideoFile, sortGifFiles } from '../../services/videoImport';
 import { useCanvasTools } from '../../hooks/useCanvasTools';
 import { useToolShortcuts } from '../../hooks/useToolShortcuts';
 import { useEditShortcuts } from '../../hooks/useEditShortcuts';
@@ -2461,16 +2461,19 @@ export function Canvas({
       if (soundFiles.length > 0 && sceneForSounds) {
         void importSoundFiles(sceneForSounds, soundFiles);
       }
-      // Videos fitted to the artboard in view, their clips from the playhead
-      const videoFiles = files.filter(isVideoFile);
+      // Videos fitted to the artboard in view, their clips from the playhead (GIFs below)
+      const videoFiles = files.filter((file) => isVideoFile(file) && !isGifFile(file));
       if (videoFiles.length > 0 && sceneForSounds) {
         void importVideoFiles(sceneForSounds, videoFiles);
       }
+      const gifFiles = files.filter(isGifFile);
 
       const isSvgFile = (file: File) =>
         file.type === 'image/svg+xml' || file.name.toLowerCase().endsWith('.svg');
-      const imageFile = files.find((file) => file.type.startsWith('image/') || isSvgFile(file));
-      if (!imageFile) {
+      const imageFile = files.find(
+        (file) => !isGifFile(file) && (file.type.startsWith('image/') || isSvgFile(file))
+      );
+      if (!imageFile && gifFiles.length === 0) {
         if (soundFiles.length === 0 && videoFiles.length === 0) {
           toast.info('Drop an image, SVG, video, sound, or .quar project file onto the canvas');
         }
@@ -2480,12 +2483,6 @@ export function Canvas({
       const camera = cameraRef.current;
       const sg = sceneGraphRef.current;
       if (!camera || !sg) return;
-
-      const MAX_SIZE = 10 * 1024 * 1024;
-      if (imageFile.size > MAX_SIZE) {
-        toast.error('Image too large (max 10MB)');
-        return;
-      }
 
       // Get world position at drop location
       const canvas = canvasRef.current;
@@ -2497,14 +2494,20 @@ export function Canvas({
       };
       const worldPos = camera.screenToWorld(screenPos);
 
-      const isSvg = isSvgFile(imageFile);
+      const placePicture = (pictureFile: File) => {
+        const MAX_SIZE = 10 * 1024 * 1024;
+        if (pictureFile.size > MAX_SIZE) {
+          toast.error('Image too large (max 10MB)');
+          return;
+        }
 
-      if (isSvg) {
-        // SVG → import as vector paths
-        const reader = new FileReader();
-        reader.onload = () => importSvgAt(reader.result as string, sg, worldPos);
-        reader.readAsText(imageFile);
-      } else {
+        if (isSvgFile(pictureFile)) {
+          // SVG → import as vector paths
+          const reader = new FileReader();
+          reader.onload = () => importSvgAt(reader.result as string, sg, worldPos);
+          reader.readAsText(pictureFile);
+          return;
+        }
         // Raster image (PNG, JPG, etc.) → import as ImageNode
         const reader = new FileReader();
         reader.onload = () => {
@@ -2514,7 +2517,7 @@ export function Canvas({
             const nodeId = `node_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
             const imageNode = {
               id: nodeId,
-              name: imageFile.name.replace(/\.[^.]+$/, ''),
+              name: pictureFile.name.replace(/\.[^.]+$/, ''),
               type: 'image' as const,
               parent: null,
               children: [],
@@ -2544,7 +2547,17 @@ export function Canvas({
           };
           img.src = dataUri;
         };
-        reader.readAsDataURL(imageFile);
+        reader.readAsDataURL(pictureFile);
+      };
+
+      if (imageFile) placePicture(imageFile);
+      // An animated GIF is a clip, as a video is; a still one a picture (where no other was dropped)
+      if (gifFiles.length > 0) {
+        void sortGifFiles(gifFiles).then(({ animated, still }) => {
+          if (animated.length > 0) void importVideoFiles(sg, animated);
+          const picture = still[0];
+          if (!imageFile && picture) placePicture(picture);
+        });
       }
     },
     [onProjectFileDrop, sceneGraphRef]

@@ -3,12 +3,20 @@
  * on the canvas or the timeline: each checked (its size, its format, that
  * this browser decodes it), its frame strip made and its sound copied out,
  * then its layer placed — fitted to the artboard in view, its clip from the
- * playhead, its sound linked on the same timeline — as one undo step.
+ * playhead, its sound linked on the same timeline — as one undo step. An
+ * animated GIF comes in as a video without sound, its clip looping to the
+ * timeline's end.
  */
 
 import type { SceneGraph } from '@quar/core';
 // The decoder behind these (mediabunny) loads with the first video read
-import { extractVideoSound, makeVideoStrip, probeVideo } from '@quar/export';
+import {
+  GIF_TYPE,
+  extractVideoSound,
+  isAnimatedGif,
+  makeVideoStrip,
+  probeVideo,
+} from '@quar/export';
 import type { VideoProblem } from '@quar/export';
 import type { Sound, Video } from '@quar/types';
 
@@ -27,13 +35,35 @@ const TYPES_BY_EXTENSION: Record<string, string> = {
   m4v: 'video/mp4',
   mov: 'video/quicktime',
   webm: 'video/webm',
+  gif: GIF_TYPE,
 };
 
-/** Whether a file is a video: its type says so, or (untyped) its name does. */
+/** Whether a file is a video (or a GIF): its type says so, or (untyped) its name does. */
 export function isVideoFile(file: File): boolean {
-  if (file.type) return file.type.startsWith('video/');
+  if (file.type) return file.type.startsWith('video/') || file.type === GIF_TYPE;
   const extension = /\.([a-z0-9]+)$/i.exec(file.name)?.[1]?.toLowerCase();
   return extension !== undefined && extension in TYPES_BY_EXTENSION;
+}
+
+/** Whether a file is a GIF: its type says so, or (untyped) its name does. */
+export function isGifFile(file: File): boolean {
+  if (file.type) return file.type === GIF_TYPE;
+  return /\.gif$/i.test(file.name);
+}
+
+/**
+ * The GIFs among files sorted: the animated ones come in as clips (as
+ * videos do), the still ones as pictures.
+ */
+export async function sortGifFiles(
+  files: readonly File[]
+): Promise<{ animated: File[]; still: File[] }> {
+  const gifs = files.filter(isGifFile);
+  const animated = await Promise.all(gifs.map((file) => isAnimatedGif(file)));
+  return {
+    animated: gifs.filter((_, i) => animated[i]),
+    still: gifs.filter((_, i) => !animated[i]),
+  };
 }
 
 /** What the file picker offers. */
@@ -94,15 +124,18 @@ async function importVideoFile(
     const strip = await makeVideoStrip(file, info, (done) =>
       progress.update(`Importing ${label}: frames ${Math.round(done * 100)}%`)
     );
-    progress.update(`Importing ${label}: its sound…`);
     const name = file.name.replace(/\.[^.]+$/, '') || 'Video';
     let sound: Sound | null = null;
     let soundUnplayable = false;
-    try {
-      const extracted = await extractVideoSound(file);
-      if (extracted) sound = await soundFromDecoded(name, extracted.file, extracted.audio);
-    } catch {
-      soundUnplayable = true;
+    // A video without sound (a GIF) has none to take out
+    if (info.audioCodec !== null) {
+      progress.update(`Importing ${label}: its sound…`);
+      try {
+        const extracted = await extractVideoSound(file);
+        if (extracted) sound = await soundFromDecoded(name, extracted.file, extracted.audio);
+      } catch {
+        soundUnplayable = true;
+      }
     }
 
     const video: Video = {

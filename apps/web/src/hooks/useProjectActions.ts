@@ -7,6 +7,7 @@ import { useCallback, useEffect, useRef } from 'react';
 import { useSceneGraph } from '../contexts/SceneGraphContext';
 import { intoArtboardBeneath } from '../services/intoArtboard';
 import { chooseSoundFiles, importSoundFiles } from '../services/soundImport';
+import { importVideoFiles, isGifFile, sortGifFiles } from '../services/videoImport';
 import { useEditorStore } from '../stores/editorStore';
 import { toast } from '../components/common/Toast';
 import {
@@ -384,58 +385,70 @@ export function useProjectActions(options: UseProjectActionsOptions = {}): Proje
       const file = input.files?.[0];
       if (!file) return;
 
-      // Validate file size (max 10MB)
-      const MAX_SIZE = 10 * 1024 * 1024;
-      if (file.size > MAX_SIZE) {
-        toast.error('Image too large (max 10MB)');
+      const placePicture = () => {
+        // Validate file size (max 10MB)
+        const MAX_SIZE = 10 * 1024 * 1024;
+        if (file.size > MAX_SIZE) {
+          toast.error('Image too large (max 10MB)');
+          return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = () => {
+          const dataUri = reader.result as string;
+
+          // Load image to get natural dimensions
+          const img = new Image();
+          img.onload = () => {
+            const nodeId = `node_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+            const imageNode = {
+              id: nodeId,
+              name: file.name.replace(/\.[^.]+$/, ''),
+              type: 'image' as const,
+              parent: null,
+              children: [],
+              transform: {
+                position: { x: 0, y: 0 },
+                rotation: 0,
+                scale: { x: 1, y: 1 },
+                anchor: { x: 0.5, y: 0.5 },
+                skew: { x: 0, y: 0 },
+              },
+              visible: true,
+              locked: false,
+              opacity: 1,
+              blendMode: 'normal' as const,
+              src: dataUri,
+              width: img.naturalWidth,
+              height: img.naturalHeight,
+              naturalWidth: img.naturalWidth,
+              naturalHeight: img.naturalHeight,
+              cornerRadius: [0, 0, 0, 0] as [number, number, number, number],
+            };
+
+            useEditorStore.getState().pushUndo(sceneGraph);
+            sceneGraph.addNode(imageNode);
+            intoArtboardBeneath(sceneGraph, nodeId);
+            useEditorStore.setState({ selectedNodeIds: new Set([nodeId]) });
+            toast.success(`Imported image "${file.name}"`);
+          };
+          img.onerror = () => {
+            toast.error('Failed to load image');
+          };
+          img.src = dataUri;
+        };
+        reader.readAsDataURL(file);
+      };
+
+      // An animated GIF is a clip, as a video is; a still one a picture
+      if (isGifFile(file)) {
+        void sortGifFiles([file]).then(({ animated }) => {
+          if (animated.length > 0) void importVideoFiles(sceneGraph, animated);
+          else placePicture();
+        });
         return;
       }
-
-      const reader = new FileReader();
-      reader.onload = () => {
-        const dataUri = reader.result as string;
-
-        // Load image to get natural dimensions
-        const img = new Image();
-        img.onload = () => {
-          const nodeId = `node_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
-          const imageNode = {
-            id: nodeId,
-            name: file.name.replace(/\.[^.]+$/, ''),
-            type: 'image' as const,
-            parent: null,
-            children: [],
-            transform: {
-              position: { x: 0, y: 0 },
-              rotation: 0,
-              scale: { x: 1, y: 1 },
-              anchor: { x: 0.5, y: 0.5 },
-              skew: { x: 0, y: 0 },
-            },
-            visible: true,
-            locked: false,
-            opacity: 1,
-            blendMode: 'normal' as const,
-            src: dataUri,
-            width: img.naturalWidth,
-            height: img.naturalHeight,
-            naturalWidth: img.naturalWidth,
-            naturalHeight: img.naturalHeight,
-            cornerRadius: [0, 0, 0, 0] as [number, number, number, number],
-          };
-
-          useEditorStore.getState().pushUndo(sceneGraph);
-          sceneGraph.addNode(imageNode);
-          intoArtboardBeneath(sceneGraph, nodeId);
-          useEditorStore.setState({ selectedNodeIds: new Set([nodeId]) });
-          toast.success(`Imported image "${file.name}"`);
-        };
-        img.onerror = () => {
-          toast.error('Failed to load image');
-        };
-        img.src = dataUri;
-      };
-      reader.readAsDataURL(file);
+      placePicture();
     };
     input.click();
   }, [sceneGraph]);

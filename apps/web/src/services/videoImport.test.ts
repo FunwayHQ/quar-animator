@@ -1,3 +1,6 @@
+import { File as NodeFile } from 'node:buffer';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { SceneGraph } from '@quar/core';
 import { scopeSounds } from '@quar/animation';
@@ -18,7 +21,14 @@ vi.mock('@quar/export', async (importOriginal) => ({
   ...mocks,
 }));
 
-import { MAX_VIDEO_BYTES, importVideoFiles, isVideoFile } from './videoImport';
+import {
+  MAX_VIDEO_BYTES,
+  VIDEO_FILE_TYPES,
+  importVideoFiles,
+  isGifFile,
+  isVideoFile,
+  sortGifFiles,
+} from './videoImport';
 
 const store = () => useEditorStore.getState();
 
@@ -51,6 +61,38 @@ describe('isVideoFile', () => {
     expect(isVideoFile(new File([], 'voice.webm', { type: 'audio/webm' }))).toBe(false);
     expect(isVideoFile(new File([], 'song.mp3'))).toBe(false);
     expect(isVideoFile(new File([], 'cat.png', { type: 'image/png' }))).toBe(false);
+  });
+
+  it('takes GIFs, by their type or their name', () => {
+    expect(isVideoFile(new File([], 'wave.gif', { type: 'image/gif' }))).toBe(true);
+    expect(isVideoFile(new File([], 'Wave.GIF'))).toBe(true);
+    expect(VIDEO_FILE_TYPES.split(',')).toEqual(expect.arrayContaining(['image/gif', '.gif']));
+  });
+});
+
+describe('GIF files', () => {
+  // Node's own files: jsdom's can't be read as bytes
+  const gif = (name: string, as: string, type = 'image/gif') =>
+    new NodeFile([readFileSync(resolve(__dirname, '../test/fixtures/video', name))], as, {
+      type,
+    }) as unknown as File;
+
+  it('are known by their type or their name', () => {
+    expect(isGifFile(new File([], 'wave.gif', { type: 'image/gif' }))).toBe(true);
+    expect(isGifFile(new File([], 'WAVE.GIF'))).toBe(true);
+    expect(isGifFile(new File([], 'wave.gif', { type: 'image/png' }))).toBe(false);
+    expect(isGifFile(new File([], 'clip.mp4', { type: 'video/mp4' }))).toBe(false);
+  });
+
+  it('sort into the animated ones (clips) and the still ones (pictures)', async () => {
+    const wave = gif('gif-counter.gif', 'wave.gif');
+    const logo = gif('gif-still.gif', 'logo.gif');
+    const spark = gif('gif-transparent.gif', 'spark.gif', '');
+    const photo = new NodeFile(['png'], 'photo.png', { type: 'image/png' }) as unknown as File;
+    expect(await sortGifFiles([wave, photo, logo, spark])).toEqual({
+      animated: [wave, spark],
+      still: [logo],
+    });
   });
 });
 
@@ -260,6 +302,50 @@ describe('importVideoFiles', () => {
     expect(toast.error).toHaveBeenCalledWith(
       '“voice.mp4” can’t be imported. It has sound but no pictures. File › Import Sound takes its sound.'
     );
+  });
+
+  it('brings in an animated GIF as a clip that loops to fill the timeline, without sound', async () => {
+    mocks.probeVideo.mockResolvedValue({
+      ok: true,
+      info: {
+        ...info,
+        format: 'GIF',
+        mimeType: 'image/gif',
+        width: 480,
+        height: 270,
+        duration: 3,
+        frameRate: 15,
+        videoCodec: 'GIF',
+        audioCodec: null,
+        canDecodeAudio: false,
+      },
+    });
+    const sg = new SceneGraph();
+    useEditorStore.setState({ currentFrame: 30 });
+    const file = new File(['GIF89a'], 'Wave.gif', { type: 'image/gif' });
+    await importVideoFiles(sg, [file]);
+
+    const [video] = store().videos;
+    expect(video).toMatchObject({
+      name: 'Wave',
+      mimeType: 'image/gif',
+      duration: 3,
+      frameRate: 15,
+    });
+    expect(videoFile(video!.id)).toBe(file);
+    expect(videoNodes(sg)[0]?.clip).toEqual({
+      start: 30,
+      offset: 0,
+      duration: 3,
+      loop: true,
+      loopFor: 9,
+    });
+    // Nothing to take its sound from
+    expect(mocks.extractVideoSound).not.toHaveBeenCalled();
+    expect(progress.update).not.toHaveBeenCalledWith('Importing “Wave.gif”: its sound…');
+    expect(store().sounds).toEqual([]);
+    expect(toast.success).toHaveBeenCalledWith('Added “Wave” (3 s)');
+    expect(toast.info).not.toHaveBeenCalled();
   });
 
   it('turns away a GIF of one frame, pointing to where pictures come in', async () => {

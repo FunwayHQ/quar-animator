@@ -16,9 +16,17 @@ const smartGuides = vi.hoisted(() => ({ renders: 0 }));
 const importSoundFiles = vi.hoisted(() => vi.fn(async () => {}));
 vi.mock('../../services/soundImport', () => ({ importSoundFiles }));
 const importVideoFiles = vi.hoisted(() => vi.fn(async () => {}));
+// Which GIFs are animated: the ones not called still…
+const sortGifFiles = vi.hoisted(() =>
+  vi.fn(async (files: File[]) => ({
+    animated: files.filter((file) => !file.name.startsWith('still')),
+    still: files.filter((file) => file.name.startsWith('still')),
+  }))
+);
 vi.mock('../../services/videoImport', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../services/videoImport')>()),
   importVideoFiles,
+  sortGifFiles,
 }));
 
 vi.mock('../canvas/SmartGuidesOverlay', async (importOriginal) => {
@@ -295,6 +303,28 @@ describe('Canvas', () => {
 
     expect(importVideoFiles).toHaveBeenCalledWith(sceneGraph, [clip, phone]);
     expect(importSoundFiles).toHaveBeenCalledWith(expect.anything(), [voice]);
+  });
+
+  it('puts dropped animated GIFs on the canvas as clips, apart from the videos', async () => {
+    importVideoFiles.mockClear();
+    const sceneGraph = renderCanvasWithScene();
+    const dropZone = screen.getByTestId('canvas-drop-zone');
+    const clip = new File(['mp4'], 'clip.mp4', { type: 'video/mp4' });
+    const wave = new File(['GIF89a'], 'wave.gif', { type: 'image/gif' });
+    const spark = new File(['GIF89a'], 'spark.GIF', { type: '' });
+    const logo = new File(['GIF89a'], 'still logo.gif', { type: 'image/gif' });
+
+    fireEvent.drop(dropZone, {
+      dataTransfer: { files: [clip, wave, logo, spark], types: ['Files'] },
+    });
+
+    expect(importVideoFiles).toHaveBeenCalledWith(sceneGraph, [clip]);
+    expect(sortGifFiles).toHaveBeenCalledWith([wave, logo, spark]);
+    // Sorted (a few promises on; not a frame, which would draw the canvas)
+    for (let i = 0; i < 5; i++) await Promise.resolve();
+    expect(importVideoFiles).toHaveBeenCalledWith(sceneGraph, [wave, spark]);
+    // The still one is a picture, not a clip
+    expect(importVideoFiles).toHaveBeenCalledTimes(2);
   });
 
   describe('editing keys', () => {
