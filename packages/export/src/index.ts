@@ -179,6 +179,16 @@ export {
 } from './video/frameSource';
 
 export {
+  stretch,
+  stretchedLength,
+  stretching,
+  stretchInSteps,
+  STRETCH_FRAME_SECONDS,
+  STRETCH_SEARCH_SECONDS,
+  type StretchInStepsOptions,
+} from './audio/timeStretch';
+
+export {
   decodeSound,
   mixSoundtrack,
   slideSoundtrackParts,
