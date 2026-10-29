@@ -48,7 +48,6 @@ The brush's settings are in the **Rigging** section while you paint:
 4. **Paint**: **Add** puts more of the bone's weight on, **Subtract** takes it
    off. [[X]] switches between them.
 
-The keys work while the canvas has the focus: once you've painted on it.
 The line at the bottom left of the canvas says which bone you're painting
 and whether you're adding or subtracting.
 

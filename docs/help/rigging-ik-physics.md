@@ -24,7 +24,9 @@ follows.
    **Create IK Chain**.
 3. A target appears at the bone's tip, selected: a layer called IK Target
    (Hand), listed in the [Layers panel](selecting-and-arranging.md#layers)
-   like any other. Drag it, and the bones of the chain turn to reach it.
+   like any other, in the artboard or group that holds the skeleton (so its
+   keyframes go on that artboard's timeline). Drag it, and the bones of the
+   chain turn to reach it.
 
 ![An arm of three bones reaching up to the round IK target at the tip of its hand](img/rigging-ik-physics-ik.png 'Dragging the target poses the whole arm.')
 

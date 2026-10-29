@@ -83,8 +83,5 @@ Right-click the symbol in the Symbols panel:
   ordinary layers again (a group of them, when the symbol had several),
   looking just as it did.
 
-> [!CAUTION]
-> Undo doesn't bring back a deleted symbol. If you might want it again,
-> download a backup first (see [Keep a backup](getting-started.md#backups)).
-> Its former instances stay on the page, so you can also make a new symbol from
-> one of them.
+**Edit › Undo** ([[Mod+Z]]) brings a deleted symbol back, with its
+instances.

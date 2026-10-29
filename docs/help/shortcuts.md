@@ -11,10 +11,10 @@ shows the main ones in a window.
 
 ![The Keyboard Shortcuts window, listing tools, view, edit, arrange and animation shortcuts](img/shortcuts-dialog.png 'Help › Keyboard Shortcuts. It scrolls to show the rest.')
 
-Most shortcuts work wherever you are in the editor, but not while you're
-typing in a field: there, keys type. A few go to the canvas and work once
-you've clicked on it: [[Mod+A]], [[Delete]], [[Mod+D]], the arrow keys, the
-stacking keys and [[Esc]] (see [Select layers](selecting-and-arranging.md#select)).
+Shortcuts work wherever you are in the editor, but not while you're typing in
+a field: there, keys type. After a click on the timeline, [[Delete]] and the
+arrow keys are the timeline's. [[Esc]], to select nothing or give up on what
+you're drawing, goes to the canvas: it works once you've clicked on it.
 
 > [!NOTE]
 > A browser may keep some keys for itself: Chrome, for one, opens a new

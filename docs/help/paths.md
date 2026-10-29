@@ -120,12 +120,9 @@ To reshape a path inside a group, click the group to select it, then click it
 again to go inside: its paths' points can be picked. With no points picked,
 [[Esc]] takes you back out.
 
-> [!NOTE]
-> Direct Selection doesn't pick the points of a shape that's inside an
-> artboard: clicking one there selects the artboard. To reshape it, drag its
-> layer out of the artboard in the Layers panel, reshape it, then drag the layer
-> back onto the artboard. It keeps its place on the canvas both ways (see
-> [Put layers in an artboard](artboards.md#layers)).
+Shapes on an [artboard](artboards.md) are reshaped the same way: click one and
+its points show. Clicking the artboard's empty part picks nothing; its name
+label selects the artboard.
 
 ## The Vertex section {#vertex}
 

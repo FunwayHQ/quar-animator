@@ -37,12 +37,6 @@ Double-click a path with the Selection tool to reshape its points (see
 [Paths and the Pen](paths.md#direct-selection)), or text to edit its words
 (see [Edit text](text.md#edit)).
 
-> [!NOTE]
-> [[Mod+A]], [[Delete]], [[Mod+D]], the arrow keys and the stacking keys go to
-> the canvas: they work after you've clicked on the canvas, not after you've
-> clicked a row in the Layers panel. From there, use the Edit menu or the
-> row's right-click menu instead.
-
 ## Move, resize and rotate {#transform}
 
 To move layers, drag them. Dragging a layer that isn't selected selects it
@@ -74,7 +68,8 @@ animation presets) holds the selected layer's **Position**, **Size** and
 ![The Transform section of the Properties panel: Position, Size, Corner Radius and Rotation, with the X label, the aspect lock and the grid button numbered](img/selecting-and-arranging-transform.png 'Drag a field’s letter to change it (1). The lock (2) keeps width and height in proportion; the grid button (3) turns snapping to the grid on and off.')
 
 - **Position** is where the layer is: for a shape, **X** and **Y** are its
-  top-left corner. Y counts upward, as the ruler along the left does: a bigger
+  top-left corner, and for a group or a symbol instance the top-left corner of
+  what it draws. Y counts upward, as the ruler along the left does: a bigger
   Y is higher on the canvas.
 - **Size** is its width (**W**) and height (**H**).
 - **Rotation** is in degrees. Positive values turn it anticlockwise.
@@ -124,7 +119,7 @@ section, makes moved layers snap to the canvas grid, every 20 units.
 
 ### Nudge with the arrow keys {#nudge}
 
-With layers selected and the canvas focused, the arrow keys move them by 1
+With layers selected, the arrow keys move them by 1
 unit, or by 10 with [[Shift]]. While **Snap to Grid** is on, they move a whole
 grid step.
 

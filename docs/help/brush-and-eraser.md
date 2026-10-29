@@ -99,12 +99,13 @@ fine details, out for broad strokes. To make it bigger or smaller, press
 Each press changes its size by 5, from 1 to 100. It starts at 10, which rubs
 out a trail 20 pixels wide.
 
-> [!NOTE]
-> The keys reach the Eraser once the canvas has the focus, as it does when you
-> click, draw or rub out on it. Chosen from the toolbar, the Eraser takes them
-> after its first stroke.
+A shape the Eraser cuts stays the same layer, with its name, its
+[effects](masks-and-effects.md#effects), its colors and its animation; a brush
+stroke keeps its **Width** and **Profile**. Cut in two, it becomes two layers
+side by side, the bigger part keeping the name and the other named after it
+(`Leaf 2`), both with the same animation.
 
-> [!CAUTION]
-> A shape the Eraser cuts is a new layer in the old one's place: its animation
-> and [effects](masks-and-effects.md#effects) don't come with it, and a brush stroke loses its **Width** and
-> **Profile**. Rub out before you animate, or undo the erasing.
+> [!NOTE]
+> Keyframes that shaped the old outline — its **Shape**, its points, a
+> rectangle's size or corner radius — go: the outline they describe isn't there
+> any more. Keyframes of its position, rotation, opacity and colors stay.

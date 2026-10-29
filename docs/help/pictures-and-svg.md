@@ -70,9 +70,6 @@ points. Drag one to pull the picture out of shape, to set it on a slant, say.
 
 ![A picture whose top right corner has been pulled up and out with Direct Selection](img/pictures-corners.png 'A picture with one corner pulled out (1).')
 
-As with paths, this doesn't work on a picture that's inside an artboard (see
-[Paths and the Pen](paths.md#direct-selection)).
-
 To bend a picture along its length, as an arm bends at the elbow, bind it to
 bones: see [Bind shapes and pictures](rigging-bones.md#bind).
 

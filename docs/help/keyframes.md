@@ -192,6 +192,9 @@ where there's no line, it holds still.
 - **Change the easing:** right-click a diamond and choose one (see
   [Easing and the graph editor](easing.md)).
 
+Each of these is one step for **Edit › Undo** ([[Mod+Z]]): a drag, however
+far, a deletion, a paste, a change of easing.
+
 Where a layer has several properties keyed on the same frame, their diamonds
 lie on top of each other and a click selects only the top one. To select all
 of a layer's keyframes, right-click its name at the left of the timeline and
@@ -246,10 +249,7 @@ right-click on the **Onion skin** button. Click the button for its settings:
 - **Show during playback:** keep the copies while the animation plays. They
   go while it plays unless this is ticked.
 
-> [!NOTE]
-> The copies are drawn behind everything on the canvas, so an artboard's
-> background color covers them: on an artboard with a background, you don't
-> see them.
+The copies show behind what's on the canvas, over an artboard's background.
 
 ## Each artboard's timeline {#artboards}
 

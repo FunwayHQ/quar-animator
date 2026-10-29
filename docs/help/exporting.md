@@ -60,8 +60,7 @@ The line under **Size** says what the export is of:
   and how long they play. A PDF has a page for each. See
   [Slides and presenting](presenting.md).
 - **The whole page.** Otherwise, everything on the page, framed to fit all of
-  its animation, wherever things move to (Lottie aside: see
-  [Lottie JSON](#lottie)).
+  its animation, wherever things move to.
 
 ![The MP4 tab of the Export dialog, its note saying three slides will play one after another](img/exporting-slides.png 'A page of three artboards, exported as slides.')
 
@@ -158,11 +157,9 @@ The dialog counts the layers Lottie gets, and warns about what it can't take:
 
 A Lottie file has no sound.
 
-> [!TIP]
-> For Lottie, export an artboard rather than the whole page: the artboard
-> fills the Lottie file's frame, at the **Size** you give it. The whole page
-> isn't framed to its artwork the way other formats frame it, so some of it
-> can fall outside.
+An artboard fills the Lottie file's frame, at the **Size** you give it; the
+whole page is framed to fit its animated artwork, its size starting at the
+artwork's own.
 
 ## SVG {#svg}
 

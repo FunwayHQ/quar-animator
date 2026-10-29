@@ -100,8 +100,7 @@ A layer can have several effects. The eye (2) hides one for a while; the ×
 changing an effect's values adds keyframes, so a shadow can grow or a blur can
 clear over time.
 
-> [!NOTE]
-> Effects and blend modes are drawn for shapes, text, pictures, boolean groups
-> and symbol instances. A plain group's own effects and blend mode don't
-> reach the layers in it: to give a group of layers one shadow, make them a
-> [symbol](symbols.md) and give the instance the shadow.
+A group's effects and blend mode act on the group as a whole: its layers are
+put together first, then shadowed, blurred or blended as one picture. To give
+several layers one shadow, group them ([[Mod+G]]) and give the group the
+shadow.
