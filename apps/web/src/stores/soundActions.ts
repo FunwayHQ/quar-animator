@@ -18,7 +18,7 @@ import {
 } from '@quar/animation';
 import type { Sound, SoundClip } from '@quar/types';
 import type { EditorStore, SceneGraphLike } from './editorStore';
-import { followLinkedVideo } from './videoSounds';
+import { clipOfLinkedSound, linkedVideoChange } from './videoSounds';
 
 const SCRUB_STORAGE_KEY = 'quar-animator-scrub-sounds';
 
@@ -134,9 +134,20 @@ export function createSoundActions(
       if (timeline === before) return;
       if (undoable) get().pushUndo(sceneGraph);
       set({ timeline, isDirty: true });
-      // A video's sound moved, trimmed or sped up takes the video with it
-      followLinkedVideo(sceneGraph, before, timeline, clipId);
-      if (fitTimeline) get().fitTimelineToSoundClip(clipId);
+      // A video's sound moved, trimmed, sped up or looped: its video the same way,
+      // in the same step (the sound kept where the video's clip is, its timeline fitted)
+      const video = linkedVideoChange(sceneGraph, before, timeline, clipId);
+      if (video) {
+        get().updateVideoClip(
+          sceneGraph,
+          video.nodeId,
+          (clip) => clipOfLinkedSound(clip, video.sound),
+          false,
+          fitTimeline
+        );
+      } else if (fitTimeline) {
+        get().fitTimelineToSoundClip(clipId);
+      }
     },
     fitTimelineToSoundClip: (clipId) => {
       const state = get();

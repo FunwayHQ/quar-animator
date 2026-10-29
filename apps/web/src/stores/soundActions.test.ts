@@ -6,13 +6,13 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { SceneGraph } from '@quar/core';
 import {
   createTimeline,
-  loopedClip,
   movedClip,
   scopeDuration,
   scopeSounds,
-  spedClip,
   trimmedEnd,
   trimmedStart,
+  withClipSpeed,
+  withLoop,
 } from '@quar/animation';
 import type { Sound, VideoNode } from '@quar/types';
 import { useEditorStore } from './editorStore';
@@ -118,13 +118,13 @@ describe('a clip’s length on its timeline', () => {
     store().setTimelineDuration(60);
     const id = store().addSoundClip(sg, voice, 0);
     // Half as fast: 4 s, to frame 120
-    store().updateSoundClip(sg, id, (clip) => spedClip(clip, 0.5));
+    store().updateSoundClip(sg, id, (clip) => withClipSpeed(clip, 0.5));
     expect(store().timelineDuration).toBe(120);
     // Not while it's dragged (the frame under the pointer would move): as the drag ends
     store().updateSoundClip(
       sg,
       id,
-      (clip) => trimmedEnd(loopedClip(clip, true), 200, 30, 2),
+      (clip) => trimmedEnd(withLoop(clip, true), 200, 30, 2),
       true,
       false
     );
@@ -148,7 +148,7 @@ describe('a clip’s length on its timeline', () => {
       },
     });
     useEditorStore.setState({ timeline, sounds: [voice] });
-    store().updateSoundClip(new SceneGraph(), 's', (clip) => spedClip(clip, 0.5));
+    store().updateSoundClip(new SceneGraph(), 's', (clip) => withClipSpeed(clip, 0.5));
     expect(scopeDuration(store().timeline, 'slide')).toBe(120);
     expect(store().timelineDuration).toBe(300);
   });
@@ -185,7 +185,7 @@ describe('a video’s sound changed on the Sound lane', () => {
 
   it('sets its video’s speed and loop with its own, its hold left as it is', () => {
     const sg = scene({ holdLastFrame: true });
-    store().updateSoundClip(sg, 's', (clip) => spedClip(clip, 0.5));
+    store().updateSoundClip(sg, 's', (clip) => withClipSpeed(clip, 0.5));
     expect(layer(sg).clip).toEqual({
       start: 30,
       offset: 0,
@@ -193,9 +193,11 @@ describe('a video’s sound changed on the Sound lane', () => {
       speed: 0.5,
       holdLastFrame: true,
     });
-    store().updateSoundClip(sg, 's', (clip) => trimmedEnd(loopedClip(clip, true), 600, 30, 4));
+    store().updateSoundClip(sg, 's', (clip) => trimmedEnd(withLoop(clip, true), 600, 30, 4));
     expect(layer(sg).clip).toMatchObject({ loop: true, loopFor: 19, speed: 0.5 });
-    store().updateSoundClip(sg, 's', (clip) => spedClip(loopedClip(clip, false), 1));
+    // The timeline the layer plays on lengthened to play them to their end
+    expect(store().timelineDuration).toBe(600);
+    store().updateSoundClip(sg, 's', (clip) => withClipSpeed(withLoop(clip, false), 1));
     expect(layer(sg).clip).toEqual({ start: 30, offset: 0, duration: 4, holdLastFrame: true });
   });
 
@@ -204,7 +206,7 @@ describe('a video’s sound changed on the Sound lane', () => {
     store().updateSoundClip(sg, 's', (clip) => ({ ...clip, gain: 0.5, fadeIn: 1, muted: true }));
     expect(layer(sg).clip).toEqual({ start: 30, offset: 0, duration: 4 });
     store().unlinkSoundClip(sg, 's');
-    store().updateSoundClip(sg, 's', (clip) => spedClip(clip, 2));
+    store().updateSoundClip(sg, 's', (clip) => withClipSpeed(clip, 2));
     expect(layer(sg).clip).toEqual({ start: 30, offset: 0, duration: 4 });
   });
 

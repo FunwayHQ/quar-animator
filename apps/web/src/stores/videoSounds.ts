@@ -113,18 +113,18 @@ export function clipOfLinkedSound(clip: VideoClip, sound: SoundClip): VideoClip 
 }
 
 /**
- * A linked sound clip changed on the Sound lane (`before` → `after`) takes
- * its video layer's clip with it: moved, trimmed, sped up or slowed down,
- * looped, the layer's clip is where the sound now is.
+ * The video layer a linked sound clip changed on the Sound lane (`before` →
+ * `after`) takes with it, and the sound as it now is: when it's been moved,
+ * trimmed, sped up or slowed down, or looped, the layer's clip goes where it
+ * now is. Null for a sound of its own, or one whose timing is as it was (its
+ * volume, fades and mute are its own).
  */
-export function followLinkedVideo(
-  sceneGraph: Pick<LayerLookup, 'getNode'> & {
-    updateNode(id: string, updates: Partial<Node>): void;
-  },
+export function linkedVideoChange(
+  sceneGraph: Pick<LayerLookup, 'getNode'>,
   before: Timeline,
   after: Timeline,
   clipId: string
-): void {
+): { nodeId: string; sound: SoundClip } | null {
   const find = (timeline: Timeline) => {
     for (const scope of scopesOf(timeline)) {
       const clip = scopeSounds(timeline, scope).find((candidate) => candidate.id === clipId);
@@ -134,11 +134,9 @@ export function followLinkedVideo(
   };
   const was = find(before);
   const now = find(after);
-  if (!was || !now?.linkedTo || LINKED_TIMING.every((key) => now[key] === was[key])) return;
+  if (!was || !now?.linkedTo || LINKED_TIMING.every((key) => now[key] === was[key])) return null;
   const layer = sceneGraph.getNode(now.linkedTo);
-  if (layer?.type !== 'video') return;
-  const clip = clipOfLinkedSound(layer.clip, now);
-  if (clip !== layer.clip) sceneGraph.updateNode(layer.id, { clip });
+  return layer?.type === 'video' ? { nodeId: layer.id, sound: now } : null;
 }
 
 /**

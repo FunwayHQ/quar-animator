@@ -30,13 +30,13 @@ import {
   clipSeconds,
   clipSpeed,
   fadedClip,
-  loopedClip,
   movedClip,
   scopeSounds,
   soundRows,
-  spedClip,
   trimmedEnd,
   trimmedStart,
+  withClipSpeed,
+  withLoop,
 } from '@quar/animation';
 import type { ClipShape } from '@quar/animation';
 import type { Sound, SoundClip } from '@quar/types';
@@ -816,7 +816,7 @@ function SoundClipSettings({ clip, sound, frameRate, x, y, onClose }: SoundClipS
                 type="button"
                 key={preset}
                 className={`${styles.speedPreset} ${speed === preset ? styles.speedPresetOn : ''}`}
-                onClick={() => update((c) => spedClip(c, preset))}
+                onClick={() => update((c) => withClipSpeed(c, preset))}
                 aria-pressed={speed === preset}
                 data-testid={`sound-clip-speed-${preset}`}
               >
@@ -824,7 +824,7 @@ function SoundClipSettings({ clip, sound, frameRate, x, y, onClose }: SoundClipS
               </button>
             ))}
           </div>
-          <SpeedField value={speed} onCommit={(value) => update((c) => spedClip(c, value))} />
+          <SpeedField value={speed} onCommit={(value) => update((c) => withClipSpeed(c, value))} />
         </div>
         <label className={styles.volumeRow}>
           <span>Volume</span>
@@ -880,7 +880,7 @@ function SoundClipSettings({ clip, sound, frameRate, x, y, onClose }: SoundClipS
               checked={clip.loop === true}
               onChange={(event) => {
                 const on = event.target.checked;
-                update((c) => loopedClip(c, on));
+                update((c) => withLoop(c, on));
               }}
               data-testid="sound-clip-loop"
             />
