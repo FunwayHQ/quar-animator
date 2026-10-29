@@ -262,6 +262,21 @@ describe('importVideoFiles', () => {
     );
   });
 
+  it('turns away a GIF of one frame, pointing to where pictures come in', async () => {
+    mocks.probeVideo.mockResolvedValue({
+      ok: false,
+      problem: 'still-picture',
+      reason: 'It’s a still picture, not an animated GIF.',
+    });
+    await importVideoFiles(new SceneGraph(), [
+      new File(['gif'], 'logo.gif', { type: 'image/gif' }),
+    ]);
+    expect(toast.error).toHaveBeenCalledWith(
+      '“logo.gif” can’t be imported. It’s a still picture, not an animated GIF. File › Import Image… takes it.'
+    );
+    expect(store().videos).toEqual([]);
+  });
+
   it('says so when its pictures can’t be decoded after all, and goes on with the rest', async () => {
     mocks.makeVideoStrip.mockRejectedValueOnce(
       new Error('No pictures could be decoded from the video.')

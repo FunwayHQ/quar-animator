@@ -72,6 +72,19 @@ export async function isGifFile(file: Blob): Promise<boolean> {
   return isGifData(new Uint8Array(await file.slice(0, 6).arrayBuffer()));
 }
 
+/**
+ * Whether a file is a GIF of more than one frame (its blocks read, no
+ * picture decoded): such a GIF is a clip; one of a single frame, a picture.
+ */
+export async function isAnimatedGif(file: Blob): Promise<boolean> {
+  if (!(await isGifFile(file))) return false;
+  try {
+    return readGif(new Uint8Array(await file.arrayBuffer())).frames.length > 1;
+  } catch {
+    return false;
+  }
+}
+
 /** The offset just past a run of sub-blocks starting at `at`; -1 where the file ends first. */
 function skipSubBlocks(bytes: Uint8Array, at: number): number {
   let p = at;

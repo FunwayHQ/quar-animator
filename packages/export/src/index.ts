@@ -154,6 +154,7 @@ export {
 // ============================================================================
 
 export { probeVideo, type VideoInfo, type VideoProbe, type VideoProblem } from './video/probe';
+export { GIF_TYPE, isAnimatedGif } from './video/gif';
 export {
   makeVideoStrip,
   stillIndexAt,

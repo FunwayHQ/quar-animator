@@ -11,6 +11,7 @@ import {
   gifFrameAt,
   gifHasTransparency,
   gifMayBeTransparent,
+  isAnimatedGif,
   isGifData,
   isGifFile,
   readGif,
@@ -118,6 +119,15 @@ describe('readGif', () => {
     expect(isGifData(fixture('clip-no-audio.mp4'))).toBe(false);
     expect(await isGifFile(new Blob([fixture('gif-counter.gif')]))).toBe(true);
     expect(await isGifFile(new Blob([fixture('clip-vp9-alpha.webm')]))).toBe(false);
+  });
+});
+
+describe('isAnimatedGif', () => {
+  it('is a GIF of more than one frame', async () => {
+    expect(await isAnimatedGif(new Blob([fixture('gif-counter.gif')]))).toBe(true);
+    expect(await isAnimatedGif(new Blob([fixture('gif-still.gif')]))).toBe(false);
+    expect(await isAnimatedGif(new Blob([fixture('clip-no-audio.mp4')]))).toBe(false);
+    expect(await isAnimatedGif(new Blob([fixture('gif-counter.gif').subarray(0, 30)]))).toBe(false);
   });
 });
 

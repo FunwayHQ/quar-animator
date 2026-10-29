@@ -2,16 +2,19 @@
  * What's in a video file brought into the editor: its picture's size, its
  * length and frame rate, whether it can be transparent and has sound — and
  * whether this browser can decode it (and show its transparency), or what
- * stands in the way, said so it can be told to whoever imports it.
+ * stands in the way, said so it can be told to whoever imports it. An
+ * animated GIF is a video without sound, read by the GIF decoder (any
+ * browser shows it).
  */
 
 import type { InputVideoTrack } from 'mediabunny';
+import { GIF_TYPE, gifHasTransparency, isGifFile, readGif, type GifInfo } from './gif';
 import { openMedia, type Mediabunny } from './media';
 
 export interface VideoInfo {
-  /** The container, as people know it: MP4, MOV, WebM */
+  /** The container, as people know it: MP4, MOV, WebM, GIF */
   format: string;
-  /** The container's type: video/mp4, video/quicktime, video/webm */
+  /** The container's type: video/mp4, video/quicktime, video/webm, image/gif */
   mimeType: string;
   /** Its picture's size as shown (rotation applied), in pixels */
   width: number;
@@ -22,7 +25,7 @@ export interface VideoInfo {
   frameRate: number;
   /** Whether its pictures may be transparent (WebM with alpha) */
   hasAlpha: boolean;
-  /** Its video's codec: H.264, HEVC (H.265), VP8, VP9, AV1, ProRes */
+  /** Its video's codec: H.264, HEVC (H.265), VP8, VP9, AV1, ProRes (a GIF's: GIF) */
   videoCodec: string;
   /** Its sound's codec (AAC, Opus…), null without sound */
   audioCodec: string | null;
@@ -30,8 +33,13 @@ export interface VideoInfo {
   canDecodeAudio: boolean;
 }
 
-/** Why a file can't be a video layer. */
-export type VideoProblem = 'not-a-video' | 'no-video-track' | 'undecodable' | 'transparency';
+/** Why a file can't be a video layer (a GIF of one frame is a still picture). */
+export type VideoProblem =
+  | 'not-a-video'
+  | 'no-video-track'
+  | 'undecodable'
+  | 'transparency'
+  | 'still-picture';
 
 export type VideoProbe =
   | { ok: true; info: VideoInfo }
@@ -76,20 +84,55 @@ const problem = (kind: VideoProblem, reason: string): VideoProbe => ({
   reason,
 });
 
+const roundRate = (rate: number) => Math.round(rate * 1000) / 1000;
+
+/**
+ * What a GIF is: its size, its length (its delays together), its frames
+ * over its length as its frame rate, whether any frame shows through —
+ * and no sound. One of a single frame is a still picture.
+ */
+async function probeGif(file: Blob): Promise<VideoProbe> {
+  let gif: GifInfo;
+  let bytes: Uint8Array;
+  try {
+    bytes = new Uint8Array(await file.arrayBuffer());
+    gif = readGif(bytes);
+  } catch {
+    return problem('not-a-video', 'It isn’t a GIF this editor can read.');
+  }
+  if (gif.frames.length < 2) {
+    return problem('still-picture', 'It’s a still picture, not an animated GIF.');
+  }
+  return {
+    ok: true,
+    info: {
+      format: 'GIF',
+      mimeType: GIF_TYPE,
+      width: gif.width,
+      height: gif.height,
+      duration: gif.duration,
+      frameRate: roundRate(gif.frames.length / gif.duration),
+      hasAlpha: await gifHasTransparency(bytes, gif),
+      videoCodec: 'GIF',
+      audioCodec: null,
+      canDecodeAudio: false,
+    },
+  };
+}
+
 /** Frames a second, to the thousandth: as the frames keep to, else their average. */
 async function frameRateOf(track: InputVideoTrack): Promise<number> {
-  const round = (rate: number) => Math.round(rate * 1000) / 1000;
   try {
     const { bestGuessFrameRate } = await track.computeFrameRateMetrics();
     if (bestGuessFrameRate > 0 && Number.isFinite(bestGuessFrameRate)) {
-      return round(bestGuessFrameRate);
+      return roundRate(bestGuessFrameRate);
     }
   } catch {
     // Too few frames to tell: their average is next best
   }
   const { averagePacketRate } = await track.computePacketStats(256);
   return averagePacketRate > 0 && Number.isFinite(averagePacketRate)
-    ? round(averagePacketRate)
+    ? roundRate(averagePacketRate)
     : 30;
 }
 
@@ -164,13 +207,17 @@ async function showsTransparency(mb: Mediabunny, track: InputVideoTrack): Promis
 /**
  * What a video file is and whether this browser can show it: a decodable
  * video track (its codec named when it isn't), its size, length, frame rate
- * and sound.
+ * and sound. A GIF (known by its first bytes) is read as one.
  */
 export async function probeVideo(file: Blob): Promise<VideoProbe> {
+  if (await isGifFile(file)) return probeGif(file);
   const { mb, input } = await openMedia(file);
   try {
     if (!(await input.canRead())) {
-      return problem('not-a-video', 'It isn’t a video this editor can read (MP4, MOV or WebM).');
+      return problem(
+        'not-a-video',
+        'It isn’t a video this editor can read (MP4, MOV, WebM or GIF).'
+      );
     }
     const format = await input.getFormat();
     const track = await input.getPrimaryVideoTrack();
@@ -219,7 +266,7 @@ export async function probeVideo(file: Blob): Promise<VideoProbe> {
     };
   } catch {
     // Its insides couldn't be made sense of
-    return problem('not-a-video', 'It isn’t a video this editor can read (MP4, MOV or WebM).');
+    return problem('not-a-video', 'It isn’t a video this editor can read (MP4, MOV, WebM or GIF).');
   } finally {
     input.dispose();
   }

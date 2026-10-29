@@ -181,7 +181,7 @@ describe('probeVideo', () => {
     expect(await probeVideo(fixture('not-a-video.mp4'))).toEqual({
       ok: false,
       problem: 'not-a-video',
-      reason: 'It isn’t a video this editor can read (MP4, MOV or WebM).',
+      reason: 'It isn’t a video this editor can read (MP4, MOV, WebM or GIF).',
     });
   });
 
@@ -195,6 +195,53 @@ describe('probeVideo', () => {
       ok: false,
       problem: 'no-video-track',
       reason: 'It has sound but no pictures.',
+    });
+  });
+});
+
+describe('probeVideo with a GIF', () => {
+  it('reads an animated GIF: its size, its length, its frames over its length, no sound', async () => {
+    expect(await probeVideo(fixture('gif-counter.gif'))).toEqual({
+      ok: true,
+      info: {
+        format: 'GIF',
+        mimeType: 'image/gif',
+        width: 64,
+        height: 36,
+        duration: 1,
+        frameRate: 10,
+        hasAlpha: false,
+        videoCodec: 'GIF',
+        audioCodec: null,
+        canDecodeAudio: false,
+      },
+    });
+  });
+
+  it('knows a GIF that shows through somewhere', async () => {
+    const probe = await probeVideo(fixture('gif-transparent.gif'));
+    expect(probe).toMatchObject({ ok: true, info: { hasAlpha: true, duration: 1 } });
+  });
+
+  it('knows a GIF by its bytes, whatever the file is called', async () => {
+    const untyped = new Blob([await fixture('gif-counter.gif').arrayBuffer()], { type: '' });
+    expect(await probeVideo(untyped)).toMatchObject({ ok: true, info: { mimeType: 'image/gif' } });
+  });
+
+  it('turns away a GIF of one frame: it’s a picture', async () => {
+    expect(await probeVideo(fixture('gif-still.gif'))).toEqual({
+      ok: false,
+      problem: 'still-picture',
+      reason: 'It’s a still picture, not an animated GIF.',
+    });
+  });
+
+  it('turns away a GIF with no pictures in it', async () => {
+    const header = (await fixture('gif-counter.gif').arrayBuffer()).slice(0, 40);
+    expect(await probeVideo(new Blob([header]))).toEqual({
+      ok: false,
+      problem: 'not-a-video',
+      reason: 'It isn’t a GIF this editor can read.',
     });
   });
 });
