@@ -243,11 +243,10 @@ export function SoundLaneTrack({
   useLayoutEffect(() => {
     const lane = laneRef.current;
     if (!lane) return;
-    setLaneWidth(lane.getBoundingClientRect().width);
+    const measure = () => setLaneWidth(lane.getBoundingClientRect().width);
+    measure();
     if (typeof ResizeObserver === 'undefined') return;
-    const observer = new ResizeObserver(([entry]) => {
-      if (entry) setLaneWidth(entry.contentRect.width);
-    });
+    const observer = new ResizeObserver(measure);
     observer.observe(lane);
     return () => observer.disconnect();
   }, []);
