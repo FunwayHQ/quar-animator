@@ -196,6 +196,13 @@ export {
   type VideoStillOptions,
   type VideoStillSource,
 } from './video/still';
+export {
+  createExportVideoFrames,
+  type ExportVideoFrames,
+  type ExportVideoFramesOptions,
+  type ExportVideoSize,
+  type VideoExportSources,
+} from './video/exportFrames';
 
 export {
   stretch,
