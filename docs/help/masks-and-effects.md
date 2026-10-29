@@ -119,4 +119,4 @@ keyframes, so a shadow can grow or a blur can clear over time.
 > Effects and blend modes are drawn for shapes, text, pictures, boolean groups
 > and symbol instances. A plain group's own effects and blend mode don't
 > reach the layers in it: to give a group of layers one shadow, make them a
-> symbol and give the instance the shadow.
+> [symbol](symbols.md) and give the instance the shadow.

@@ -128,6 +128,7 @@ To mirror the selection, choose **Edit › Flip Horizontal** ([[Shift+H]]) or
 **Edit › Flip Vertical** ([[Shift+V]]), or pick them from the canvas's
 right-click menu. Several layers flip together, around the middle of the
 selection, so they stay where they are. Their keyframes are flipped with them.
+Locked layers and bones aren't flipped.
 
 ## Groups {#groups}
 
@@ -197,8 +198,8 @@ them (**Delete 3 Layers**, **Group 3 Layers**…) and also makes masks: see
   it's still there.
 - **Duplicate:** [[Mod+D]], or **Edit › Duplicate**: copy and paste in one.
 
-Copies keep their animation and their rigging, and the symbols they use come
-with them.
+Copies keep their animation and their rigging, and the
+[symbols](symbols.md) they use come with them.
 
 **Between windows and browsers.** Copied layers go onto your computer's
 clipboard, so you can paste them into Quar Animator in another tab, another
