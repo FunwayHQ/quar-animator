@@ -84,6 +84,8 @@ interface Plan {
   moments: number[];
   /** Which of them each shot shows (-1: nothing) */
   at: Int32Array;
+  /** The last shot that shows it */
+  last: number;
 }
 
 /** A video opened to decode. */
@@ -293,9 +295,19 @@ export function createExportVideoFrames(
     if (reader.shown) current.set(plan.node.id, reader.shown);
   }
 
+  /** A layer no shot from here on shows: its pass and pictures let go (drawn again, it starts afresh). */
+  function release(reader: Reader): void {
+    endRun(reader);
+    reader.sink = null;
+    reader.shown = null;
+    reader.shownAt = -1;
+    reader.pulled = -1;
+  }
+
   async function prepareShot(shot: number): Promise<void> {
     if (disposed) return;
     current.clear();
+    for (const reader of readers) if (reader.plan.last < shot && reader.sink) release(reader);
     await Promise.all(
       readers.map((reader) =>
         (reader.plan.at[shot] ?? -1) < 0 ? undefined : prepareReader(reader, shot)
@@ -348,6 +360,7 @@ function planShots(shots: readonly Shot<FrameRenderContext>[], size: ExportVideo
             height: layer.height,
             moments: [],
             at: new Int32Array(shots.length).fill(-1),
+            last: -1,
           };
           plans.set(layer.node.id, plan);
         }
@@ -360,6 +373,7 @@ function planShots(shots: readonly Shot<FrameRenderContext>[], size: ExportVideo
         if (seconds === null) continue;
         if (plan.moments.at(-1) !== seconds) plan.moments.push(seconds);
         plan.at[index] = plan.moments.length - 1;
+        plan.last = index;
       }
     }
   }

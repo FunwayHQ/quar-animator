@@ -215,9 +215,11 @@ const range = (from: number, to: number, step = 1) =>
   Array.from({ length: Math.floor((to - from) / step) + 1 }, (_, i) => from + i * step);
 
 describe('createExportVideoFrames', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     for (const source of made) source.dispose();
     made = [];
+    // The passes they stopped finish stopping
+    await new Promise((resolve) => setTimeout(resolve, 0));
     mocks.files.clear();
     mocks.inputs = 0;
     mocks.disposed = 0;
@@ -380,6 +382,34 @@ describe('createExportVideoFrames', () => {
     ]);
     // Each frame decoded once: the transition holds the pictures it has
     expect(mocks.drawn).toEqual([0, 1, 2, 3, 60, 61, 62]);
+  });
+
+  it('lets a layer’s decoding and pictures go once no shot after shows it', async () => {
+    const first = videoLayer('first');
+    const second = videoLayer('second');
+    const sg = scene([
+      [artboard('a', 0, 0, 320, 180)],
+      [first, 'a'],
+      [artboard('b', 400, 0, 320, 180)],
+      [second, 'b'],
+    ]);
+    const slide = (id: string) => ({
+      ctx: context(sg, { exportRootIds: [id] }),
+      frameCount: 3,
+    });
+    const { shots } = sampleSlides([slide('a'), slide('b')], { frameRate: 30 });
+    const source = frames(shots, { videoFile: () => file() });
+
+    await play(source, 3, [first, second]);
+    expect(mocks.stopped).toBe(0);
+    // The second slide's first frame: the first slide's pass is over
+    await source.prepare(3);
+    expect(mocks.stopped).toBe(1);
+    expect(shown(source, second)).toBe(0);
+    // Drawn again from the start (a GIF's second pass), it's decoded afresh
+    await source.prepare(0);
+    expect(shown(source, first)).toBe(0);
+    expect(mocks.sinks).toHaveLength(3);
   });
 
   it('starts over when the export draws its frames again (a GIF’s second pass)', async () => {
