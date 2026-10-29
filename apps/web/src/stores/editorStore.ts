@@ -62,7 +62,12 @@ import { createVideoActions, type VideoActions } from './videoActions';
 import { createVideoClipActions, type VideoClipActions } from './videoClipActions';
 import { keepVideoFiles } from '../services/videoFiles';
 import { deleteVideoSoundsToo } from '../services/videoSoundQuestion';
-import { soundsLinkedToRemoved, withLinkedSoundsResolved } from './videoSounds';
+import {
+  soundsLinkedToRemoved,
+  videoLayersIn,
+  withLinkedSoundsFollowing,
+  withLinkedSoundsResolved,
+} from './videoSounds';
 import {
   pastedVideoSounds,
   retimeVideoClips,
@@ -2729,6 +2734,9 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     if (!node) return;
     const m = reparentMatrix(sceneGraph, id, parentId);
     sceneGraph.moveNode(id, parentId, index);
+    // Its videos' sounds go onto the timeline they now play on
+    const followed = withLinkedSoundsFollowing(sceneGraph, get().timeline, [id]);
+    if (followed !== get().timeline) set({ timeline: followed, isDirty: true });
     if (!m) return;
 
     const base = placementOf(node.transform);
@@ -4626,6 +4634,11 @@ function createSymbolActions(
       const state = get();
       const selectedIds = Array.from(state.selectedNodeIds);
       if (selectedIds.length === 0) return null;
+      // A symbol has no timeline for a video's clip to play on
+      if (videoLayersIn(sceneGraph, selectedIds).length > 0) {
+        toast.info('Symbols can’t hold videos yet: leave the video layers out of the selection.');
+        return null;
+      }
 
       // Push undo
       state.pushUndo(sceneGraph);
