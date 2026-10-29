@@ -2,8 +2,7 @@
 
 Import a video (or an animated GIF) and place it on the timeline as a clip, its
 sound track separated onto the Sound lane. Decided with the owner on
-2026-10-29; nothing is built yet. Starts once the October bug batches are
-merged.
+2026-10-29; steps 1–3 are built (below).
 
 ## Decisions
 
@@ -170,6 +169,36 @@ frame, fps)` (null outside the clip; frame f begins at f/fps seconds, as
   copy/paste in the window (the video with it; between windows the system
   clipboard can't carry a video: it says so), moving into or out of an
   artboard (its linked sound moves to that timeline), pages, symbols.
+
+## Steps 2 and 3 (as built)
+
+- **Clip features:** `VideoClip.speed` (0.25×–4×), `loop` with `loopFor`
+  (a looped clip's length, past the video's end), `holdLastFrame`; the
+  timing a sound clip shares (`clipSeconds`, `clipMomentAt`,
+  `trimmedVideoStart`/`End`, `withClipSpeed`, `withLoop` in
+  `VideoClips.ts`). A linked sound takes the clip's start, offset,
+  duration, speed and loop; its speed keeps the pitch (a WSOLA rendition,
+  `packages/export/src/audio/timeStretch.ts`, made once per speed and
+  shared by playback and exports). Playing runs to the last video clip's
+  end; a looped sound dips 5 ms at each join.
+- **Raster exports** (MP4, WebM, GIF, PNG sequence, sprite sheet, the
+  Properties panel's PNG): `createExportVideoFrames(shots, size, sources)`
+  (`packages/export/src/video/exportFrames.ts`) plans every shot's moments
+  up front (slides and transitions too), decodes each layer's frames in
+  shot order through one `canvasesAtTimestamps` pass, at the layer's
+  largest size on the export, and is awaited (`prepare(i)`) before each
+  synchronous `renderFrame`. A file that's missing or won't decode falls
+  back to its strip (its name in `problems`).
+- **Lottie, SVG, PDF:** a still of the moment shown
+  (`packages/export/src/video/still.ts`, `videoStills.ts`; app
+  `services/videoStills.ts`), put in the posed copy as a picture in the
+  layer's place. Lottie shows the first picture in the exported range as a
+  still image layer there while the clip is. The Export dialog says so.
+- **Renderer:** a drawing's own pictures (`FrameRenderContext.videoFrames`,
+  the presenter's) win over the export's (`FrameRenderOptions.videoFrames`).
+- **Presenter:** readers of its own (`createVideoFrames()`), decoding ahead
+  while a slide plays; the loader waits (5 s at most) for each video's
+  first picture. **Thumbnails** draw strip stills.
 
 ## Steps
 
