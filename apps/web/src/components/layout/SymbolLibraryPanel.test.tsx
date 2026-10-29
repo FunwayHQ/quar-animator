@@ -269,6 +269,73 @@ describe('SymbolLibraryPanel', () => {
     expect(screen.getByText('0')).toBeDefined();
   });
 
+  describe('instance counts', () => {
+    const instance = (id: string, parent: string | null = null) =>
+      ({
+        id,
+        name: id,
+        type: 'symbol-instance',
+        parent,
+        children: [],
+        transform: makeSymbolDef('x', 'x').sceneGraphJSON.nodes[0]!.transform,
+        visible: true,
+        locked: false,
+        opacity: 1,
+        blendMode: 'normal',
+        symbolId: 'sym-1',
+        overrides: [],
+      }) as SymbolInstanceNode;
+    const count = () => screen.getByTestId('symbol-count-sym-1');
+
+    beforeEach(() => {
+      act(() => {
+        useEditorStore.getState().resetProject();
+        useEditorStore.setState({ symbols: [makeSymbolDef('sym-1', 'Badge')] });
+      });
+    });
+
+    it('follows the canvas as instances come and go, nested ones too', () => {
+      renderWithProvider(<SymbolLibraryPanel />);
+      const sg = testSceneGraphRef!;
+      expect(count()).toHaveTextContent('0');
+
+      act(() => useEditorStore.getState().placeSymbolInstance(sg, 'sym-1'));
+      expect(count()).toHaveTextContent('1');
+
+      act(() => {
+        sg.addNode({ ...instance('group'), type: 'group' } as unknown as SymbolInstanceNode);
+        sg.addNode(instance('nested', 'group'), 'group');
+      });
+      expect(count()).toHaveTextContent('2');
+
+      act(() => sg.removeNode('group'));
+      expect(count()).toHaveTextContent('1');
+    });
+
+    it('counts the instances on every page, whichever is open', () => {
+      renderWithProvider(<SymbolLibraryPanel />);
+      const sg = testSceneGraphRef!;
+      const firstPage = useEditorStore.getState().activePageId;
+      act(() => {
+        sg.addNode(instance('on-page-1'));
+        useEditorStore.getState().addPage(sg);
+        sg.addNode(instance('on-page-2'));
+        sg.addNode(instance('also-on-page-2'));
+      });
+      expect(count()).toHaveTextContent('3');
+      expect(count()).toHaveAttribute('title', '3 instances on all pages');
+
+      act(() => useEditorStore.getState().switchPage(firstPage, sg));
+      expect(count()).toHaveTextContent('3');
+
+      // While a symbol is edited, the page's instances still count
+      act(() => useEditorStore.getState().enterSymbolEdit('sym-1', sg));
+      expect(count()).toHaveTextContent('3');
+      act(() => useEditorStore.getState().exitSymbolEdit(sg));
+      expect(count()).toHaveTextContent('3');
+    });
+  });
+
   it('hides empty state when symbols exist', () => {
     useEditorStore.setState({
       symbols: [makeSymbolDef('sym-1', 'Button')],

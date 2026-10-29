@@ -4,12 +4,78 @@
  * supports click-to-place, double-click-to-edit, right-click context menu.
  */
 
-import { useState, useCallback, useRef } from 'react';
-import type { SymbolDefinition } from '@quar/types';
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
+import type { SceneGraph } from '@quar/core';
+import type { Node, SymbolDefinition } from '@quar/types';
 import { useSceneGraph } from '../../contexts/SceneGraphContext';
 import { useEditorStore } from '../../stores/editorStore';
 import { ContextMenu, type ContextMenuEntry } from '../common/ContextMenu';
 import styles from './SymbolLibraryPanel.module.css';
+
+/** How many instances of each symbol these layers hold. */
+function countInstances(layers: Iterable<Node>, counts = new Map<string, number>()) {
+  for (const node of layers) {
+    if (node.type === 'symbol-instance')
+      counts.set(node.symbolId, (counts.get(node.symbolId) ?? 0) + 1);
+  }
+  return counts;
+}
+
+/** The layers on the canvas now, every one of them. */
+function canvasLayers(sceneGraph: SceneGraph): Node[] {
+  const layers: Node[] = [];
+  sceneGraph.traverse((node) => {
+    layers.push(node);
+  });
+  return layers;
+}
+
+/**
+ * The instances of each symbol on all the document's pages: the open page
+ * as it is on the canvas (followed as layers come and go), the others as
+ * they were left — while a symbol is edited, its page as it was left too.
+ */
+function useInstanceCounts(sceneGraph: SceneGraph): Map<string, number> {
+  const [onCanvas, setOnCanvas] = useState(() => countInstances(canvasLayers(sceneGraph)));
+  useEffect(() => {
+    const recount = () => setOnCanvas(countInstances(canvasLayers(sceneGraph)));
+    recount();
+    // A page opened, or a project, replaces the whole graph at once (graphReplaced)
+    const off = (['nodeAdded', 'nodeRemoved', 'graphReplaced'] as const).map((type) =>
+      sceneGraph.on(type, recount)
+    );
+    return () => off.forEach((unsubscribe) => unsubscribe());
+  }, [sceneGraph]);
+
+  const pages = useEditorStore((state) => state.pages);
+  const activePageId = useEditorStore((state) => state.activePageId);
+  const editedPage = useEditorStore((state) => state.editingSymbolPrevState?.sceneData);
+  return useMemo(() => {
+    const counts = countInstances(editedPage ? editedPage.nodes : []);
+    for (const page of pages) {
+      if (page.id !== activePageId) countInstances(page.sceneGraphJSON.nodes, counts);
+    }
+    if (!editedPage) {
+      for (const [symbolId, count] of onCanvas)
+        counts.set(symbolId, (counts.get(symbolId) ?? 0) + count);
+    }
+    return counts;
+  }, [onCanvas, pages, activePageId, editedPage]);
+}
+
+function InstanceCount({ count, symbolId }: { count: number; symbolId: string }) {
+  const label = `${count} ${count === 1 ? 'instance' : 'instances'} on all pages`;
+  return (
+    <span
+      className={styles.instanceCount}
+      title={label}
+      aria-label={label}
+      data-testid={`symbol-count-${symbolId}`}
+    >
+      {count}
+    </span>
+  );
+}
 
 export default function SymbolLibraryPanel() {
   const sceneGraph = useSceneGraph();
@@ -27,19 +93,7 @@ export default function SymbolLibraryPanel() {
     symbolId: string;
   } | null>(null);
 
-  // Count instances per symbol across the scene graph
-  const getInstanceCount = useCallback(
-    (symbolId: string): number => {
-      let count = 0;
-      sceneGraph.traverse((node) => {
-        if (node.type === 'symbol-instance' && node.symbolId === symbolId) {
-          count++;
-        }
-      });
-      return count;
-    },
-    [sceneGraph]
-  );
+  const instanceCounts = useInstanceCounts(sceneGraph);
 
   // A double-click fires click, click, dblclick — debounce single-click
   // placement so a double-click (enter-edit) cancels the stray instance (F018).
@@ -169,7 +223,7 @@ export default function SymbolLibraryPanel() {
                 ) : (
                   <span className={styles.symbolName}>{symbol.name}</span>
                 )}
-                <span className={styles.instanceCount}>{getInstanceCount(symbol.id)}</span>
+                <InstanceCount count={instanceCounts.get(symbol.id) ?? 0} symbolId={symbol.id} />
               </div>
             ))}
           </div>
