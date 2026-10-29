@@ -76,6 +76,129 @@ describe('soundsPlayed', () => {
   });
 });
 
+describe('clips at a speed and looped', () => {
+  it('play a sped-up or slowed clip from its rendition at that speed, in its seconds', () => {
+    // 4 s of the sound from 1 s in, twice as fast: 2 s of the timeline
+    const [fast] = soundsPlayed([clip('a', 30, 4, { offset: 1, speed: 2 })], 30, 0, 299);
+    expect(fast).toEqual({
+      clipId: 'a',
+      soundId: 's-a',
+      at: 1,
+      offset: 0.5,
+      duration: 2,
+      gain: 1,
+      rate: 1,
+      speed: 2,
+    });
+    // Half as fast: 2 s of it last 4 s, from 2 s into the slowed rendition
+    const [slow] = soundsPlayed([clip('a', 0, 2, { offset: 1, speed: 0.5 })], 30, 0, 299);
+    expect(slow).toMatchObject({ at: 0, offset: 2, duration: 4, speed: 0.5 });
+    // A speed out of range plays at the nearest it can; 1× plays the sound itself
+    expect(soundsPlayed([clip('a', 0, 2, { speed: 10 })], 30, 0, 299)[0]?.speed).toBe(4);
+    expect(soundsPlayed([clip('a', 0, 2, { speed: 1 })], 30, 0, 299)[0]).not.toHaveProperty(
+      'speed'
+    );
+  });
+
+  it('play a sped-up clip from where it has got to, cut where the range ends', () => {
+    // Frame 45 is half a second into a clip twice as fast: 1 s of its sound in, 0.5 s of its rendition
+    const [play] = soundsPlayed([clip('a', 30, 4, { speed: 2 })], 30, 45, 59);
+    expect(play).toMatchObject({ at: 0, offset: 0.5, duration: 0.5, speed: 2 });
+  });
+
+  it('play a looped clip a pass at a time, the last cut where the clip ends', () => {
+    // Its 2 s from 1 s in, looped for 5 s
+    const looped = clip('a', 0, 2, { offset: 1, loop: true, loopFor: 5 });
+    const passes = soundsPlayed([looped], 30, 0, 299);
+    expect(passes.map(({ at, offset, duration }) => ({ at, offset, duration }))).toEqual([
+      { at: 0, offset: 1, duration: 2 },
+      { at: 2, offset: 1, duration: 2 },
+      { at: 4, offset: 1, duration: 1 },
+    ]);
+    // Looped but not lengthened: one pass
+    expect(soundsPlayed([clip('b', 0, 2, { loop: true })], 30, 0, 299)).toHaveLength(1);
+  });
+
+  it('play a looped clip from the middle of a pass, and only the passes in the range', () => {
+    const looped = clip('a', 0, 2, { offset: 1, loop: true, loopFor: 5 });
+    // From 1.5 s (frame 45) to 4.5 s (frame 134)
+    const passes = soundsPlayed([looped], 30, 45, 134);
+    const shown = passes.map(({ at, offset, duration }) => ({ at, offset, duration }));
+    expect(shown).toHaveLength(3);
+    expect(shown[0]).toEqual({ at: 0, offset: 2.5, duration: 0.5 });
+    expect(shown[1]).toEqual({ at: 0.5, offset: 1, duration: 2 });
+    expect(shown[2]!.at).toBeCloseTo(2.5);
+    expect(shown[2]!.offset).toBe(1);
+    expect(shown[2]!.duration).toBeCloseTo(0.5);
+  });
+
+  it('loop at a speed: each pass its part of the rendition', () => {
+    // 2 s of sound twice as fast is a 1 s pass, looped for 2.5 s
+    const looped = clip('a', 0, 2, { offset: 1, speed: 2, loop: true, loopFor: 2.5 });
+    const passes = soundsPlayed([looped], 30, 0, 299);
+    expect(passes.map(({ at, offset, duration, speed }) => [at, offset, duration, speed])).toEqual([
+      [0, 0.5, 1, 2],
+      [1, 0.5, 1, 2],
+      [2, 0.5, 0.5, 2],
+    ]);
+  });
+
+  it('play at the timeline’s own speed too, pitched with it', () => {
+    const looped = clip('a', 30, 2, { speed: 2, loop: true, loopFor: 2 });
+    const passes = soundsPlayed([looped], 30, 0, 299, 2);
+    // Its passes of 1 s from 1 s in, the timeline twice as fast: at 0.5 s and 1 s of the video
+    expect(passes.map(({ at, duration, rate, speed }) => [at, duration, rate, speed])).toEqual([
+      [0.5, 1, 2, 2],
+      [1, 1, 2, 2],
+    ]);
+  });
+
+  it('fade over the clip’s whole length on the timeline: in on its first pass, out on its last', () => {
+    const looped = clip('a', 0, 2, { loop: true, loopFor: 5, fadeIn: 1, fadeOut: 1.5 });
+    const [first, second, third] = soundsPlayed([looped], 30, 0, 299);
+    expect(first!.levels).toEqual([
+      { time: 0, level: 0 },
+      { time: 1, level: 1 },
+      { time: 2, level: 1 },
+    ]);
+    expect(second!.levels?.map(({ time, level }) => [time, +level.toFixed(4)])).toEqual([
+      [0, 1],
+      [1.5, 1],
+      [2, 0.6667],
+    ]);
+    expect(third!.levels?.map(({ time, level }) => [time, +level.toFixed(4)])).toEqual([
+      [0, 0.6667],
+      [1, 0],
+    ]);
+  });
+
+  it('fade a sped-up clip over its time on the timeline, the fades fitted to it', () => {
+    // 4 s of sound twice as fast: 2 s long, so fades of 1.5 s each are 1 s each
+    const fast = clip('a', 0, 4, { speed: 2, fadeIn: 1.5, fadeOut: 1.5 });
+    expect(clipFades(fast)).toEqual({ fadeIn: 1, fadeOut: 1 });
+    expect(clipLevel(fast, 0.5)).toBe(0.5);
+    expect(clipLevel(fast, 1.5)).toBe(0.5);
+    const [play] = soundsPlayed([fast], 30, 0, 299);
+    expect(play!.levels).toEqual([
+      { time: 0, level: 0 },
+      { time: 1, level: 1 },
+      { time: 2, level: 0 },
+    ]);
+    // Set within what's left of its time on the timeline
+    expect(fadedClip(clip('b', 0, 4, { speed: 2 }), { fadeIn: 5 })).toMatchObject({ fadeIn: 2 });
+  });
+
+  it('end where their time on the timeline does, at their speed and looped', () => {
+    expect(clipEndFrame(clip('a', 10, 3, { speed: 2 }), 30)).toBe(55);
+    expect(clipEndFrame(clip('a', 10, 3, { speed: 0.5 }), 30)).toBe(190);
+    expect(clipEndFrame(clip('a', 10, 3, { loop: true, loopFor: 4 }), 30)).toBe(130);
+    expect(lastSoundFrame([clip('a', 0, 3, { speed: 2, loop: true, loopFor: 10 })], 30)).toBe(299);
+    // Rows follow their length on the timeline: a sped-up clip leaves room after it
+    const { rows } = soundRows([clip('a', 0, 4, { speed: 2 }), clip('b', 60, 1)], 30);
+    expect(rows.get('b')).toBe(0);
+  });
+});
+
 describe('fades', () => {
   it('rise from silence and fall to it, straight', () => {
     const faded = clip('a', 0, 4, { fadeIn: 1, fadeOut: 2 });

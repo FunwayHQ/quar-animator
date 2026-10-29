@@ -34,7 +34,9 @@ export function clipSpeed(clip: Pick<ClipTiming, 'speed'>): number {
  * of the file at its speed, or, looped, as long as it's made to (one pass
  * when it hasn't been).
  */
-export function clipSeconds(clip: ClipTiming): number {
+export function clipSeconds(
+  clip: Pick<ClipTiming, 'duration' | 'speed' | 'loop' | 'loopFor'>
+): number {
   const pass = Math.max(0, clip.duration) / clipSpeed(clip);
   if (!clip.loop) return pass;
   const { loopFor } = clip;
