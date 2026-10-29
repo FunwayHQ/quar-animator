@@ -13,7 +13,7 @@ import type {
   Matrix3,
   ImageNode,
 } from '@quar/types';
-import { BaseTool, type ToolContext } from './BaseTool';
+import { BaseTool, artboardLabelAt, type ToolContext } from './BaseTool';
 import { vec2, mat3, rect } from '../math';
 import {
   convertPointType as convertPointTypeUtil,
@@ -359,8 +359,14 @@ export class DirectSelectionTool extends BaseTool {
 
   /** A click off any point or handle: select, enter or convert the layer there. */
   private handleNodeClick(worldPos: Vector2, shiftKey: boolean): void {
-    // No path point/handle hit — try node-level hit testing (groups, other shapes)
-    const rawHit = this.hitTestNode(worldPos);
+    // No path point/handle hit — try node-level hit testing (groups, other
+    // shapes); an artboard is picked by its name label, as with Selection
+    const rawHit =
+      artboardLabelAt(
+        this.context.sceneGraph,
+        this.context.camera,
+        this.context.camera.worldToScreen(worldPos)
+      ) ?? this.hitTestNode(worldPos);
     const enteredGroupId = this.context.getEnteredGroupId?.() ?? null;
     const hitNode = rawHit ? this.resolveHitToScope(rawHit) : null;
 
@@ -431,13 +437,7 @@ export class DirectSelectionTool extends BaseTool {
     if (rawHit && !hitNode && enteredGroupId) {
       this.context.setEnteredGroupId?.(null);
       this.clearPointSelection();
-      let rootNode = rawHit;
-      while (rootNode.parent) {
-        const p = this.context.sceneGraph.getNode(rootNode.parent);
-        if (!p) break;
-        rootNode = p;
-      }
-      this.context.setSelectedIds([rootNode.id]);
+      this.context.setSelectedIds([this.resolveToRootScope(rawHit).id]);
       return;
     }
 
@@ -1149,20 +1149,28 @@ export class DirectSelectionTool extends BaseTool {
   // --------------------------------------------------------------------------
 
   /**
+   * Walk a hit node up to its root-level selectable ancestor. Artboards are a
+   * scope of their own, as for the Selection tool: what's on one is edited
+   * as on the page, not taken for the artboard. Bones aren't groups either.
+   */
+  private resolveToRootScope(hitNode: Node): Node {
+    let current = hitNode;
+    while (current.parent !== null) {
+      const parent = this.context.sceneGraph.getNode(current.parent);
+      if (!parent) break;
+      if (parent.type === 'bone' || parent.type === 'artboard') break;
+      current = parent;
+    }
+    return current;
+  }
+
+  /**
    * Walk a hit node up to the appropriate scope level based on enteredGroupId.
    */
   private resolveHitToScope(hitNode: Node): Node | null {
     const enteredGroupId = this.context.getEnteredGroupId?.() ?? null;
 
-    if (enteredGroupId === null) {
-      let current = hitNode;
-      while (current.parent !== null) {
-        const parent = this.context.sceneGraph.getNode(current.parent);
-        if (!parent) break;
-        current = parent;
-      }
-      return current;
-    }
+    if (enteredGroupId === null) return this.resolveToRootScope(hitNode);
 
     let current = hitNode;
     if (current.id === enteredGroupId) return null;

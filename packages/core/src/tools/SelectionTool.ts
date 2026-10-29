@@ -12,7 +12,7 @@ import type {
   TextNode,
   TextResize,
 } from '@quar/types';
-import { BaseTool, type ToolContext } from './BaseTool';
+import { BaseTool, artboardLabelAt, type ToolContext } from './BaseTool';
 import { vec2, rect, mat3 } from '../math';
 import { SelectionManager } from '../selection/SelectionManager';
 import { TransformHandles } from '../selection/TransformHandles';
@@ -726,34 +726,7 @@ export class SelectionTool extends BaseTool {
 
   /** Find an artboard whose top-left corner label was clicked. */
   private hitTestArtboardCorner(screenPoint: Vector2): Node | null {
-    const candidates: Array<{ node: Node; distance: number }> = [];
-
-    this.context.sceneGraph.traverseVisible((node) => {
-      if (node.type !== 'artboard' || node.locked) return;
-
-      const worldTransform = this.context.sceneGraph.getWorldTransform(node.id);
-      const localTopLeft = {
-        x: -node.width * node.transform.anchor.x,
-        y: node.height * (1 - node.transform.anchor.y),
-      };
-      const worldTopLeft = mat3.transformPoint(worldTransform, localTopLeft);
-      const screenTopLeft = this.context.camera.worldToScreen(worldTopLeft);
-      const distance = Math.hypot(screenPoint.x - screenTopLeft.x, screenPoint.y - screenTopLeft.y);
-      const dimensionsLabel = `${Math.round(node.width)} x ${Math.round(node.height)}`;
-      // Match the visible artboard title above the frame, keeping its hit area
-      // screen-sized just like the overlay text at every canvas zoom level.
-      const labelWidth = Math.max(32, node.name.length * 6.5 + dimensionsLabel.length * 5.5 + 6);
-      const isInCornerLabel =
-        screenPoint.x >= screenTopLeft.x - 6 &&
-        screenPoint.x <= screenTopLeft.x + labelWidth &&
-        screenPoint.y >= screenTopLeft.y - 20 &&
-        screenPoint.y <= screenTopLeft.y + 4;
-
-      if (isInCornerLabel) candidates.push({ node, distance });
-    });
-
-    candidates.sort((a, b) => a.distance - b.distance);
-    return candidates[0]?.node ?? null;
+    return artboardLabelAt(this.context.sceneGraph, this.context.camera, screenPoint);
   }
 
   /** Walk a hit node up to its root-level selectable ancestor. */

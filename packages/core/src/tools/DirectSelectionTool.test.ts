@@ -6,6 +6,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { DirectSelectionTool } from './DirectSelectionTool';
 import type { ToolContext } from './BaseTool';
 import type {
+  ArtboardNode,
   Node,
   PathNode,
   PathPoint,
@@ -2631,6 +2632,202 @@ describe('DirectSelectionTool', () => {
       const points = (context.sceneGraph.getNode(moving.id) as PathNode).points;
       expect(points[1]!.position).toEqual({ x: 200, y: 50 });
       expect(points[0]!.position).toEqual({ x: 100, y: 50 });
+    });
+  });
+
+  describe('inside an artboard', () => {
+    /** An artboard 400×300 centred at (200, 200): a scope of its own, like the page. */
+    function addArtboard(): ArtboardNode {
+      const transform = createDefaultTransform();
+      transform.position = { x: 200, y: 200 };
+      const artboard: ArtboardNode = {
+        id: 'art',
+        name: 'Artboard',
+        type: 'artboard',
+        parent: null,
+        children: [],
+        transform,
+        visible: true,
+        locked: false,
+        opacity: 1,
+        blendMode: 'normal',
+        width: 400,
+        height: 300,
+        fills: [
+          { type: 'solid', color: { r: 255, g: 255, b: 255, a: 1 }, opacity: 1, visible: true },
+        ],
+        clipContent: true,
+      };
+      context.sceneGraph.addNode(artboard);
+      return artboard;
+    }
+
+    /** Move a node made at the root into a parent, keeping its local transform. */
+    function moveInto<T extends Node>(node: T, parentId: string): T {
+      context.sceneGraph.removeNode(node.id);
+      context.sceneGraph.addNode({ ...node, parent: null }, parentId);
+      return context.sceneGraph.getNode(node.id) as T;
+    }
+
+    const click = (at: { x: number; y: number }) => {
+      tool.onPointerDown(
+        createMockPointerEvent({
+          worldPosition: at,
+          screenPosition: context.camera.worldToScreen(at),
+          button: 0,
+        })
+      );
+      tool.onPointerUp(createMockPointerEvent({ worldPosition: at }));
+    };
+
+    it('picks and drags a point of a path on the artboard, not the artboard', () => {
+      const artboard = addArtboard();
+      // Local to the artboard: its points are drawn at (200, 200) and (300, 200)
+      const path = moveInto(
+        createTestPath(context, [createPoint(0, 0), createPoint(100, 0)]),
+        artboard.id
+      );
+
+      tool.onPointerDown(createMockPointerEvent({ worldPosition: { x: 300, y: 200 }, button: 0 }));
+      tool.onPointerMove(createMockPointerEvent({ worldPosition: { x: 320, y: 230 } }));
+      tool.onPointerUp(createMockPointerEvent({ worldPosition: { x: 320, y: 230 } }));
+
+      expect(tool.getSelectedPoints()).toEqual([{ nodeId: path.id, pointIndex: 1 }]);
+      expect([...context.getSelectedIds()]).toEqual([path.id]);
+      expect((context.sceneGraph.getNode(path.id) as PathNode).points[1]!.position).toEqual({
+        x: 120,
+        y: 30,
+      });
+    });
+
+    it('a click on the path selects it, and a marquee picks its points', () => {
+      const artboard = addArtboard();
+      const path = moveInto(
+        createTestPath(context, [createPoint(0, 0), createPoint(100, 0), createPoint(100, 100)]),
+        artboard.id
+      );
+
+      click({ x: 250, y: 200 });
+      expect([...context.getSelectedIds()]).toEqual([path.id]);
+
+      tool.onPointerDown(createMockPointerEvent({ worldPosition: { x: 180, y: 180 }, button: 0 }));
+      tool.onPointerMove(createMockPointerEvent({ worldPosition: { x: 320, y: 220 } }));
+      tool.onPointerUp(createMockPointerEvent({ worldPosition: { x: 320, y: 220 } }));
+      expect(tool.getSelectedPoints()).toEqual([
+        { nodeId: path.id, pointIndex: 0 },
+        { nodeId: path.id, pointIndex: 1 },
+      ]);
+    });
+
+    it("picks a picture's corner on the artboard", () => {
+      const artboard = addArtboard();
+      const image: ImageNode = {
+        id: 'img',
+        name: 'Picture',
+        type: 'image',
+        parent: null,
+        children: [],
+        transform: createDefaultTransform(),
+        visible: true,
+        locked: false,
+        opacity: 1,
+        blendMode: 'normal',
+        src: 'data:image/png;base64,test',
+        width: 100,
+        height: 100,
+        naturalWidth: 100,
+        naturalHeight: 100,
+        cornerRadius: [0, 0, 0, 0],
+      };
+      context.sceneGraph.addNode(image, artboard.id);
+
+      // Anchored at its middle: its bottom-left corner is drawn at (150, 150)
+      click({ x: 150, y: 150 });
+
+      expect(tool.getSelectedPoints()).toEqual([{ nodeId: 'img', pointIndex: 0 }]);
+    });
+
+    it('turns a rectangle on the artboard into a path to edit', () => {
+      const artboard = addArtboard();
+      const rect: RectangleNode = {
+        id: 'rect',
+        name: 'Rectangle',
+        type: 'rectangle',
+        parent: null,
+        children: [],
+        transform: createDefaultTransform(),
+        visible: true,
+        locked: false,
+        opacity: 1,
+        blendMode: 'normal',
+        width: 100,
+        height: 100,
+        cornerRadius: [0, 0, 0, 0],
+        fills: [context.defaultFill],
+        strokes: [],
+      };
+      context.sceneGraph.addNode(rect, artboard.id);
+      const convertShapeToPath = vi.fn(() => null);
+      context.convertShapeToPath = convertShapeToPath;
+
+      click({ x: 210, y: 210 });
+
+      expect(convertShapeToPath).toHaveBeenCalledWith('rect');
+    });
+
+    it('selects a group on the artboard, then enters it to edit its paths', () => {
+      const artboard = addArtboard();
+      const group = {
+        id: 'group',
+        name: 'Group',
+        type: 'group',
+        parent: null,
+        children: [],
+        transform: createDefaultTransform(),
+        visible: true,
+        locked: false,
+        opacity: 1,
+        blendMode: 'normal',
+      } as Node;
+      context.sceneGraph.addNode(group, artboard.id);
+      const path = moveInto(
+        createTestPath(context, [createPoint(0, 0), createPoint(100, 0)]),
+        'group'
+      );
+      let entered: string | null = null;
+      context.getEnteredGroupId = () => entered;
+      context.setEnteredGroupId = (id) => {
+        entered = id;
+      };
+
+      // As on the page, its points are in reach once the group is entered
+      click({ x: 300, y: 200 });
+      expect([...context.getSelectedIds()]).toEqual(['group']);
+      expect(tool.getSelectedPoints()).toEqual([]);
+      click({ x: 250, y: 200 });
+      expect(entered).toBe('group');
+
+      click({ x: 300, y: 200 });
+      expect(tool.getSelectedPoints()).toEqual([{ nodeId: path.id, pointIndex: 1 }]);
+    });
+
+    it("clears the selection on the artboard's empty area, and picks the artboard by its label", () => {
+      const artboard = addArtboard();
+      const path = moveInto(
+        createTestPath(context, [createPoint(0, 0), createPoint(100, 0)]),
+        artboard.id
+      );
+      click({ x: 300, y: 200 });
+      expect(context.getSelectedIds().has(path.id)).toBe(true);
+
+      click({ x: 100, y: 300 });
+      expect(context.getSelectedIds().size).toBe(0);
+      expect(tool.getSelectedPoints()).toEqual([]);
+
+      // The name label sits just above the top-left corner, (0, 350)
+      const corner = context.camera.worldToScreen({ x: 0, y: 350 });
+      click(context.camera.screenToWorld({ x: corner.x + 30, y: corner.y - 8 }));
+      expect([...context.getSelectedIds()]).toEqual(['art']);
     });
   });
 });
