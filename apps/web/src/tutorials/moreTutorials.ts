@@ -325,8 +325,8 @@ function ikPage(ids: TutorialNodes): TutorialPage {
     ids,
     '3 · IK & poses',
     'Pose with IK',
-    'Select the last bone of a chain (here, the hand) and choose Rigging > Create IK Chain. A target appears at its tip: drag it, and the bones above follow, like pulling a hand.\n\n' +
-      'To animate, press K for auto-keyframe, move the playhead and pose again: rotations and the target get keyframes. Press Space to see the wave on the right, made from bone rotations alone.'
+    'Press Space to see the wave on the right, made from bone rotations alone. Then select the last bone of the chain (here, the hand) and choose Rigging > Create IK Chain. A target appears at its tip: drag it, and the bones above follow, like pulling a hand.\n\n' +
+      'To animate, press K for auto-keyframe, move the playhead and drag the target again: its position gets a keyframe. While the chain is on, the target decides where the bones point, whatever their keyframes say; clear Enabled under IK Chain in Properties to see the wave again.'
   );
   const { shoulder, elbow, wrist, nodes: armNodes } = arm(ids, board.id, 90, -80, true);
   shoulder.transform.rotation = 60;
@@ -576,11 +576,15 @@ export const MORE_TUTORIALS: Tutorial[] = [
     ]),
     version: 2,
   },
-  build('tutorial-rigging', 'Tutorial 5 · Rigging', 't5', (ids) => [
-    bonesPage(ids),
-    bindPage(ids),
-    ikPage(ids),
-  ]),
+  {
+    // 2: the IK page says what's keyed (the target's position) and that a chain overrides the wave
+    ...build('tutorial-rigging', 'Tutorial 5 · Rigging', 't5', (ids) => [
+      bonesPage(ids),
+      bindPage(ids),
+      ikPage(ids),
+    ]),
+    version: 2,
+  },
   {
     id: 'tutorial-groups-symbols-masks',
     name: 'Tutorial 6 · Groups, symbols & masks',

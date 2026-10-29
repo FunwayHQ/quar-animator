@@ -134,6 +134,39 @@ describe.each(built)('$tutorial.name', ({ tutorial, data }) => {
   });
 });
 
+describe('what the lessons say', () => {
+  const pageOf = (id: string, name: string) => {
+    const page = built
+      .find(({ tutorial }) => tutorial.id === id)!
+      .data.pages.find((p) => p.name === name);
+    expect(page, `${id}: ${name}`).toBeDefined();
+    return page!;
+  };
+  const lessonOf = (page: ProjectDataV2['pages'][number]) =>
+    (page.sceneGraph.nodes.find((n) => n.name === 'Lesson') as Node & TextNode).content;
+
+  it('IK: dragging the target keys its position, and while the chain is on it overrides the wave', () => {
+    const page = pageOf('tutorial-rigging', '3 · IK & poses');
+    const lesson = lessonOf(page);
+    // Dragging an IK target with auto-keyframe keys the target only, not the bones' rotations
+    expect(lesson).not.toMatch(/rotations and the target get keyframes/);
+    expect(lesson).toContain('drag the target again: its position gets a keyframe');
+    // The wave is the bones' own rotation keyframes, seen before a chain is made
+    expect(lesson.indexOf('Press Space')).toBeLessThan(lesson.indexOf('Create IK Chain'));
+    expect(lesson).toContain('clear Enabled under IK Chain in Properties to see the wave again');
+    const bones = page.sceneGraph.nodes.filter((n) => n.type === 'bone');
+    expect(bones).toHaveLength(3);
+    for (const bone of bones) {
+      expect(
+        page.timeline.tracks.some(
+          (track) => track.nodeId === bone.id && track.property === 'transform.rotation'
+        )
+      ).toBe(true);
+    }
+    expect(page.sceneGraph.nodes.some((n) => n.type === 'ik-target')).toBe(false);
+  });
+});
+
 describe('the tutorial catalog', () => {
   it('has stable, distinct ids', () => {
     const ids = TUTORIALS.map((tutorial) => tutorial.id);
