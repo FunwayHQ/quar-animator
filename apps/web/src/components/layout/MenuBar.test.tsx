@@ -313,6 +313,39 @@ describe('MenuBar', () => {
     });
   });
 
+  describe('back to the projects', () => {
+    beforeEach(() => {
+      window.history.pushState({}, '', '/editor?project=p1');
+    });
+
+    it('the logo goes back to the projects', async () => {
+      useEditorStore.setState({ isDirty: false });
+      render(<MenuBar projectActions={createMockProjectActions()} />);
+      fireEvent.click(screen.getByRole('button', { name: 'Back to your projects' }));
+      await waitFor(() => expect(window.location.pathname).toBe('/'));
+    });
+
+    it('so does File › Back to Projects', async () => {
+      useEditorStore.setState({ isDirty: false });
+      render(<MenuBar projectActions={createMockProjectActions()} />);
+      fireEvent.click(screen.getByTestId('menu-file'));
+      fireEvent.click(screen.getByText('Back to Projects'));
+      await waitFor(() => expect(window.location.pathname).toBe('/'));
+    });
+
+    it('asks first when there are unsaved changes, and stays on Cancel', async () => {
+      useEditorStore.setState({ isDirty: true });
+      render(<MenuBar projectActions={createMockProjectActions()} />);
+      fireEvent.click(screen.getByTestId('back-to-projects'));
+      expect(
+        await screen.findByText('Going back to your projects will discard your unsaved changes.')
+      ).toBeInTheDocument();
+      fireEvent.click(screen.getByTestId('prompt-dialog-cancel'));
+      await waitFor(() => expect(screen.queryByTestId('prompt-dialog')).toBeNull());
+      expect(window.location.pathname).toBe('/editor');
+    });
+  });
+
   describe('the file keys', () => {
     const press = (key: string, shiftKey = false) =>
       act(() => {

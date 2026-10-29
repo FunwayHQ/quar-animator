@@ -87,6 +87,7 @@ export function QuarLogo({ className }: QuarLogoProps) {
           />
         ))}
         <g
+          data-part="frame"
           fill="none"
           strokeWidth={18}
           strokeLinecap="square"

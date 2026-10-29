@@ -28,12 +28,33 @@
   );
 }
 
+/* The logo is the way back to the projects */
 .logo {
   display: flex;
   align-items: center;
   gap: var(--space-sm);
-  padding-right: var(--space-md);
+  padding: 0 var(--space-md) 0 0;
   position: relative;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: inherit;
+  cursor: pointer;
+}
+
+.logo:focus-visible {
+  outline: 2px solid var(--color-accent-primary);
+  outline-offset: 2px;
+}
+
+/* Pointed at, its corner marks come up to full ink */
+.logo [data-part='frame'] {
+  transition: stroke-opacity var(--duration-fast);
+}
+
+.logo:hover [data-part='frame'],
+.logo:focus-visible [data-part='frame'] {
+  stroke-opacity: 1;
 }
 
 .logoImage {

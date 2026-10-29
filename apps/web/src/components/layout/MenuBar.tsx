@@ -4,6 +4,7 @@
  */
 
 import { useState, useCallback, useEffect, useRef, useMemo, type ReactNode } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   useEditorStore,
   useProjectName,
@@ -404,6 +405,12 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
   const closeMenu = useCallback(() => setOpenMenu(null), []);
 
   // --- File menu actions ---
+  const navigate = useNavigate();
+  const handleBackToProjects = useCallback(async () => {
+    closeMenu();
+    if (await okToDiscard('Going back to your projects')) navigate('/');
+  }, [closeMenu, navigate]);
+
   const handleNew = useCallback(async () => {
     closeMenu();
     if (!projectActions) return;
@@ -561,9 +568,16 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
         data-tools-below={toolsBelow || undefined}
       >
         <div className={styles.leading}>
-          <div className={styles.logo}>
+          <button
+            type="button"
+            className={styles.logo}
+            onClick={() => void handleBackToProjects()}
+            title="Back to your projects"
+            aria-label="Back to your projects"
+            data-testid="back-to-projects"
+          >
             <QuarLogo className={styles.logoImage} />
-          </div>
+          </button>
           <BetaBadge />
 
           <nav className={styles.menus}>
@@ -572,6 +586,8 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
               {menuButton('file', 'File', 'menu-file')}
               {openMenu === 'file' && (
                 <div className={styles.dropdown} role="menu" data-testid="file-menu-dropdown">
+                  <MenuItem label="Back to Projects" onClick={() => void handleBackToProjects()} />
+                  <Separator />
                   <MenuItem
                     label="New Project"
                     shortcut="Ctrl+N"
