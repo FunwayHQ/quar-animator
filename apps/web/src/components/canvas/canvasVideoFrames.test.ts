@@ -5,7 +5,11 @@
 import { describe, it, expect, vi } from 'vitest';
 import { SceneGraph, type VideoFrameImage } from '@quar/core';
 import { artboard, videoLayer } from '../../test/videoLayer';
-import { createCanvasVideoFrames, type CanvasVideoMoment } from './canvasVideoFrames';
+import {
+  createCanvasVideoFrames,
+  selectionShowsNothing,
+  type CanvasVideoMoment,
+} from './canvasVideoFrames';
 
 const still: VideoFrameImage = { source: document.createElement('canvas'), key: 'k' };
 
@@ -134,5 +138,45 @@ describe('createCanvasVideoFrames', () => {
     );
     expect(provider(videoLayer('v', 'film'))).toBeNull();
     expect(frameAt).not.toHaveBeenCalled();
+  });
+});
+
+describe('selectionShowsNothing', () => {
+  const at = (frame: number, scope: string | null = null) => ({ scope, frame, frameRate: 24 });
+
+  function scene() {
+    const sceneGraph = new SceneGraph();
+    // 1 s from frame 12 (to 36); another held after it ends
+    sceneGraph.addNode(videoLayer('v', 'film', { start: 12, duration: 1 }));
+    sceneGraph.addNode(videoLayer('held', 'film', { start: 12, duration: 1, holdLastFrame: true }));
+    sceneGraph.addNode(artboard('board'));
+    sceneGraph.addNode(videoLayer('inside', 'film', { start: 12, duration: 1 }), 'board');
+    return sceneGraph;
+  }
+
+  it('is true of video layers outside their clips, in the timeline in view', () => {
+    const sceneGraph = scene();
+    expect(selectionShowsNothing(sceneGraph, ['v'], at(5))).toBe(true);
+    expect(selectionShowsNothing(sceneGraph, ['v'], at(36))).toBe(true);
+    expect(selectionShowsNothing(sceneGraph, ['v'], at(20))).toBe(false);
+    // Holding its last frame, it shows that after its clip (not before it)
+    expect(selectionShowsNothing(sceneGraph, ['held'], at(50))).toBe(false);
+    expect(selectionShowsNothing(sceneGraph, ['held'], at(5))).toBe(true);
+  });
+
+  it('is false of a layer in another timeline (it shows its first frame there)', () => {
+    const sceneGraph = scene();
+    expect(selectionShowsNothing(sceneGraph, ['inside'], at(5))).toBe(false);
+    expect(selectionShowsNothing(sceneGraph, ['inside'], at(5, 'board'))).toBe(true);
+    expect(selectionShowsNothing(sceneGraph, ['v'], at(20, 'board'))).toBe(false);
+  });
+
+  it('is false unless every layer selected shows nothing', () => {
+    const sceneGraph = scene();
+    sceneGraph.addNode({ ...artboard('box'), type: 'artboard' });
+    expect(selectionShowsNothing(sceneGraph, ['v', 'held'], at(5))).toBe(true);
+    expect(selectionShowsNothing(sceneGraph, ['v', 'box'], at(5))).toBe(false);
+    expect(selectionShowsNothing(sceneGraph, [], at(5))).toBe(false);
+    expect(selectionShowsNothing(sceneGraph, ['gone'], at(5))).toBe(false);
   });
 });

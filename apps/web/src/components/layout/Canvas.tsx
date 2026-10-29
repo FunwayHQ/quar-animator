@@ -48,7 +48,7 @@ import { DeformedBoundsCache, selectedDeformedBounds } from '../canvas/deformedB
 import { TextEditOverlay } from '../canvas/TextEditOverlay';
 import { BoneOverlay } from '../canvas/BoneOverlay';
 import { GhostSceneCache, poseSceneAtFrame } from '../canvas/onionSkinScenes';
-import { createCanvasVideoFrames } from '../canvas/canvasVideoFrames';
+import { createCanvasVideoFrames, selectionShowsNothing } from '../canvas/canvasVideoFrames';
 import { poseScene } from '../../stores/scenePosing';
 import { fitViewToArtwork } from '../canvas/fitView';
 import { deleteKeyTarget } from '../canvas/deleteKeyTarget';
@@ -585,6 +585,16 @@ export function Canvas({
     return onlyBones ? handles.filter((handle) => handle.position.startsWith('rotate')) : handles;
     // eslint-disable-next-line react-hooks/exhaustive-deps -- the camera pans and zooms in place: cameraVersion says when
   }, [selectionBounds, cameraVersion, selectedNodeIds, sceneGraph]);
+
+  // Video layers outside their clips show nothing: their box is drawn faintly (a
+  // yes or no, so the canvas isn't redrawn for each frame the playhead passes)
+  const selectionUnseen = useEditorStore((state) =>
+    selectionShowsNothing(sceneGraph, state.selectedNodeIds, {
+      scope: state.timelineScope,
+      frame: state.currentFrame,
+      frameRate: state.frameRate,
+    })
+  );
 
   // Convert selection bounds to screen coordinates for overlay
   const screenBounds = useMemo(() => {
@@ -2619,6 +2629,7 @@ export function Canvas({
             // Path tools edit points: no resize/rotate handles in their way
             handles={isDirectSelectionActive || activeTool === 'pen' ? [] : transformHandles}
             rotation={selectionRotation}
+            unseen={selectionUnseen}
             onHandlePointerDown={
               isDirectSelectionActive || activeTool === 'pen' ? undefined : handleOverlayPointerDown
             }

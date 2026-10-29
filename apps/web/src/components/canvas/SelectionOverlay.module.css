@@ -28,3 +28,14 @@
 .handle:hover {
   fill: #dbeafe;
 }
+
+/* Round layers that show nothing now (videos outside their clips): faint, its dashes apart */
+.unseen .selectionBounds {
+  stroke-opacity: 0.55;
+  stroke-dasharray: 2 6;
+}
+
+.unseen .handle {
+  fill-opacity: 0.55;
+  stroke-opacity: 0.55;
+}

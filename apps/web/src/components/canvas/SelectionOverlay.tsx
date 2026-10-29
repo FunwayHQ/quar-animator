@@ -21,6 +21,8 @@ export interface SelectionOverlayProps {
   rotation?: number;
   /** Callback when a handle is clicked/dragged */
   onHandlePointerDown?: (handle: TransformHandle, event: React.PointerEvent) => void;
+  /** The selection shows nothing now (video layers outside their clips): drawn faintly */
+  unseen?: boolean;
 }
 
 // ============================================================================
@@ -39,6 +41,7 @@ export function SelectionOverlay({
   handleSize = DEFAULT_HANDLE_SIZE,
   rotation = 0,
   onHandlePointerDown,
+  unseen = false,
 }: SelectionOverlayProps) {
   if (!bounds) {
     return null;
@@ -59,7 +62,11 @@ export function SelectionOverlay({
     rotation !== 0 ? `rotate(${-rotation} ${center.x} ${center.y})` : undefined;
 
   return (
-    <svg className={styles.overlay} data-testid="selection-overlay">
+    <svg
+      className={`${styles.overlay} ${unseen ? styles.unseen : ''}`}
+      data-unseen={unseen || undefined}
+      data-testid="selection-overlay"
+    >
       <g transform={rotationTransform}>
         {/* Selection bounds rectangle (dashed) */}
         <rect

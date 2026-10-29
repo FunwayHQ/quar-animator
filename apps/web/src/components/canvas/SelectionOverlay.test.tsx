@@ -11,12 +11,7 @@ import type { SelectionBounds, TransformHandle, HandlePosition } from '@quar/cor
 // Test Helpers
 // ============================================================================
 
-function createTestBounds(
-  x: number,
-  y: number,
-  width: number,
-  height: number
-): SelectionBounds {
+function createTestBounds(x: number, y: number, width: number, height: number): SelectionBounds {
   return {
     rect: { x, y, width, height },
     center: { x: x + width / 2, y: y + height / 2 },
@@ -105,9 +100,14 @@ describe('SelectionOverlay', () => {
       render(<SelectionOverlay bounds={bounds} handles={handles} />);
 
       const resizePositions: HandlePosition[] = [
-        'top-left', 'top', 'top-right',
-        'right', 'bottom-right', 'bottom',
-        'bottom-left', 'left',
+        'top-left',
+        'top',
+        'top-right',
+        'right',
+        'bottom-right',
+        'bottom',
+        'bottom-left',
+        'left',
       ];
 
       for (const position of resizePositions) {
@@ -199,13 +199,7 @@ describe('SelectionOverlay', () => {
       const bounds = createTestBounds(100, 100, 200, 150);
       const handles = createAllHandles(bounds);
 
-      render(
-        <SelectionOverlay
-          bounds={bounds}
-          handles={handles}
-          handleSize={12}
-        />
-      );
+      render(<SelectionOverlay bounds={bounds} handles={handles} handleSize={12} />);
 
       const topLeft = screen.getByTestId('handle-top-left');
       expect(topLeft).toHaveAttribute('width', '12');
@@ -216,18 +210,23 @@ describe('SelectionOverlay', () => {
       const bounds = createTestBounds(100, 100, 200, 150);
       const handles = createAllHandles(bounds);
 
-      render(
-        <SelectionOverlay
-          bounds={bounds}
-          handles={handles}
-          handleSize={12}
-        />
-      );
+      render(<SelectionOverlay bounds={bounds} handles={handles} handleSize={12} />);
 
       const topLeft = screen.getByTestId('handle-top-left');
       // Handle at (100, 100) with size 12 should have x = 100 - 6 = 94
       expect(topLeft.getAttribute('x')).toBe('94');
       expect(topLeft.getAttribute('y')).toBe('94');
     });
+  });
+
+  it('is drawn faintly round a selection that shows nothing now, its handles still there', () => {
+    const bounds = createTestBounds(100, 100, 200, 150);
+    const { rerender } = render(
+      <SelectionOverlay bounds={bounds} handles={createAllHandles(bounds)} />
+    );
+    expect(screen.getByTestId('selection-overlay')).not.toHaveAttribute('data-unseen');
+    rerender(<SelectionOverlay bounds={bounds} handles={createAllHandles(bounds)} unseen />);
+    expect(screen.getByTestId('selection-overlay')).toHaveAttribute('data-unseen', 'true');
+    expect(screen.getByTestId('handle-top-left')).toBeInTheDocument();
   });
 });
