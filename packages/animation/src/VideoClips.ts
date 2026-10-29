@@ -208,6 +208,16 @@ export function withLoop<C extends ClipTiming>(clip: C, on: boolean): C {
   return changed;
 }
 
+/**
+ * The clip looping until `frame` of its timeline, for a pass at least (at
+ * its speed): how a GIF fills the rest of the timeline it's put on.
+ */
+export function loopedUntil<C extends ClipTiming>(clip: C, frame: number, frameRate: number): C {
+  const pass = Math.max(0, clip.duration) / clipSpeed(clip);
+  const until = (frame - clip.start) / Math.max(1, frameRate);
+  return { ...clip, loop: true, loopFor: Math.max(pass, until) };
+}
+
 /** The clip holding its last frame after it ends, or not. */
 export function withHold(clip: VideoClip, on: boolean): VideoClip {
   if (on ? clip.holdLastFrame === true : clip.holdLastFrame === undefined) return clip;

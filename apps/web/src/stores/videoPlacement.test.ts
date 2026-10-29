@@ -160,6 +160,42 @@ describe('placeVideoLayer', () => {
     expect(scopeDuration(store().timeline, null)).toBe(420);
   });
 
+  describe('a GIF', () => {
+    const gif = (overrides: Partial<Video> = {}) =>
+      video({ id: 'gif-1', name: 'Wave', mimeType: 'image/gif', duration: 1, ...overrides });
+
+    it('loops to fill the rest of the timeline from where it starts', () => {
+      const sg = new SceneGraph();
+      // 300 frames at 30 fps: from frame 60, 240 frames are left
+      const id = placeVideoLayer(sg, gif(), null, 60);
+      expect((sg.getNode(id) as VideoNode).clip).toEqual({
+        start: 60,
+        offset: 0,
+        duration: 1,
+        loop: true,
+        loopFor: 8,
+      });
+      expect(store().timelineDuration).toBe(300);
+    });
+
+    it('plays a pass at least, the timeline lengthened for it', () => {
+      const sg = new SceneGraph();
+      const id = placeVideoLayer(sg, gif({ duration: 4 }), null, 290);
+      expect((sg.getNode(id) as VideoNode).clip.loopFor).toBe(4);
+      expect(store().timelineDuration).toBe(410);
+    });
+
+    it('fills the timeline of the artboard it goes into, at that one’s length', () => {
+      const sg = new SceneGraph();
+      artboard(sg, 'board', 0, 0, 400, 400);
+      store().setTimelineScope('board');
+      store().setTimelineDuration(90);
+      const id = placeVideoLayer(sg, gif(), null, 30);
+      expect((sg.getNode(id) as VideoNode).clip.loopFor).toBe(2);
+      expect(scopeDuration(store().timeline, 'board')).toBe(90);
+    });
+  });
+
   it('is one undo step: the layer, its sound clip and the timeline’s length together', () => {
     const sg = new SceneGraph();
     const steps = store().undoStack.length;

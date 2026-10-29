@@ -6,6 +6,7 @@ import {
   clipSpeed,
   lastVideoFrame,
   linkedSoundClip,
+  loopedUntil,
   movedVideoClip,
   trimmedVideoEnd,
   trimmedVideoStart,
@@ -312,6 +313,18 @@ describe('a clip’s speed, loop and hold set', () => {
     expect(withLoop(clip({ loop: true, loopFor: 10 }), false)).toEqual(clip());
     const plain = clip();
     expect(withLoop(plain, false)).toBe(plain);
+  });
+
+  it('loops to last until a frame of its timeline, a pass at least', () => {
+    // From frame 30 to 300 at 30 fps: 9 s, over two passes of its 4 s
+    const filling = loopedUntil(clip(), 300, 30);
+    expect(filling).toEqual({ ...clip(), loop: true, loopFor: 9 });
+    expect(videoClipEndFrame(filling, 30)).toBe(300);
+    // Too near its start for a pass: a pass
+    expect(loopedUntil(clip(), 60, 30).loopFor).toBe(4);
+    expect(loopedUntil(clip(), 10, 30).loopFor).toBe(4);
+    // A pass at its speed
+    expect(loopedUntil(clip({ speed: 2 }), 60, 30).loopFor).toBe(2);
   });
 
   it('holds its last frame, or doesn’t', () => {

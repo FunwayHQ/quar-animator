@@ -1,15 +1,22 @@
 /**
  * Placing an imported video: its layer fitted to the artboard in view (or,
  * outside every artboard, the canvas view) and centred, its clip from the
- * playhead for the whole video, and its sound on the same timeline as a
- * clip linked to the layer — all one undo step, the timeline lengthened to
- * play it through.
+ * playhead for the whole video (a GIF's looping to fill the rest of the
+ * timeline), and its sound on the same timeline as a clip linked to the
+ * layer — all one undo step, the timeline lengthened to play it through.
  */
 
 import { SelectionManager, artboardAt, createDefaultTransform } from '@quar/core';
 import type { SceneGraph } from '@quar/core';
-import { generateId, scopeSounds, videoClipEndFrame, withScopeSounds } from '@quar/animation';
-import type { Node, Rect, Sound, SoundClip, Video, VideoNode } from '@quar/types';
+import {
+  generateId,
+  loopedUntil,
+  scopeSounds,
+  videoClipEndFrame,
+  withScopeSounds,
+} from '@quar/animation';
+import { GIF_TYPE } from '@quar/export';
+import type { Node, Rect, Sound, SoundClip, Video, VideoClip, VideoNode } from '@quar/types';
 
 import { useEditorStore } from './editorStore';
 import { layerScope } from './videoSounds';
@@ -50,7 +57,8 @@ function placeFor(sceneGraph: SceneGraph, artboard: Node | undefined): Rect | nu
 
 /**
  * Put a video of the library on the canvas, its clip starting on `frame`
- * (the playhead's by default), and its sound, if it has one, on the same
+ * (the playhead's by default) — a GIF's looping on to the timeline's end,
+ * for a pass at least — and its sound, if it has one, on the same
  * timeline linked to it (the sound added to the library if it's new). One
  * undo step; the layer is selected. Returns the layer's id.
  */
@@ -71,6 +79,12 @@ export function placeVideoLayer(
 
   const box = placeFor(sceneGraph, artboard);
   const scale = box ? Math.min(box.width / video.width, box.height / video.height) : 1;
+  const start = Math.max(0, Math.round(frame ?? state.currentFrame));
+  const whole: VideoClip = { start, offset: 0, duration: video.duration };
+  const clip =
+    video.mimeType === GIF_TYPE
+      ? loopedUntil(whole, state.timelineDuration, state.timeline.frameRate)
+      : whole;
   const id = generateId('video');
   const node: VideoNode = {
     id,
@@ -93,11 +107,7 @@ export function placeVideoLayer(
     naturalWidth: video.width,
     naturalHeight: video.height,
     cornerRadius: [0, 0, 0, 0],
-    clip: {
-      start: Math.max(0, Math.round(frame ?? state.currentFrame)),
-      offset: 0,
-      duration: video.duration,
-    },
+    clip,
   };
   sceneGraph.addNode(node);
   if (artboard) state.moveNodeKeepingPlacement(sceneGraph, id, artboard.id);
