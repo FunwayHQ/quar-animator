@@ -100,10 +100,11 @@ near it.
 - Rectangles, ellipses, polygons and stars, paths and pictures can be bound.
   Text can't: turn it into paths first with
   [**Convert to Path**](paths.md#convert) ([[Mod+Shift+P]]).
-- To bind the shapes and pictures in a group, right-click the group and
-  choose **Bind to Bones**.
+- To bind the shapes and pictures in a group, select the group and choose
+  **Rigging › Bind Selection to Bones**, or right-click it and choose
+  **Bind to Bones**. **Unbind Mesh** unbinds them all again.
 - **Bind Selection to Bones** is greyed out until the page has a bone and a
-  shape or picture is selected.
+  shape, a picture or a group with one in it is selected.
 - A bound layer has a **Rigging** section in the Properties panel: how many
   bones it's **Bound** to, a **Bone** list, and the **Weight Paint** and
   **Unbind** buttons. The next chapter,

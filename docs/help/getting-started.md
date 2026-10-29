@@ -104,8 +104,8 @@ before it discards them.
    [The timeline](keyframes.md#timeline).
 
 > [!TIP]
-> **Help › Keyboard Shortcuts** lists the main shortcuts, and
-> [Keyboard shortcuts](shortcuts.md) all of them. Tools have one-key
+> **Help › Keyboard Shortcuts** lists every shortcut, as does
+> [Keyboard shortcuts](shortcuts.md). Tools have one-key
 > shortcuts that work as long as you're not typing in a field.
 
 ## Pages {#pages}
@@ -188,7 +188,7 @@ To open a `.quar` file, your backup or one someone sent you, do one of these:
   canvas.
 
 It opens in the editor as a project of its own, saved beside the ones you
-have.
+have. A `.quar` file of up to 512 MB opens.
 
 > [!TIP]
 > Download a backup of work you care about now and then, and always before you
@@ -230,7 +230,7 @@ Properties panel (see [The background](shapes.md#background)).
   and resize it from its left edge or its bottom-right corner; it opens where
   you left it. Its buttons go back, show the contents, open the page in a tab
   of its own and close it. [[Esc]] closes it too.
-- **Help › Keyboard Shortcuts** lists the main shortcuts.
+- **Help › Keyboard Shortcuts** lists every shortcut.
 - **Help › Restore Tutorials** brings back tutorials you've deleted.
 - **Help › Report Issues** opens Quar Animator's issues on GitHub, where you
   can tell us about a problem.

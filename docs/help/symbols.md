@@ -10,12 +10,14 @@ symbols for things that appear many times — a logo, a tree, a button, a
 character's eye.
 
 Symbols belong to the whole project: the Symbols panel, below the Layers
-panel, lists them on every page.
+panel, lists them on every page. The number beside a symbol is how many
+instances of it there are, on all the pages.
 
 ## Make a symbol {#create}
 
 1. Select the layers that make it up.
-2. Choose **Edit › Create Symbol** ([[Mod+Shift+K]]).
+2. Choose **Edit › Create Symbol** ([[Mod+Shift+K]]). **Edit › Undo** puts the
+   layers back as they were and takes the symbol out of the panel.
 
 The layers become a symbol, listed in the Symbols panel (1), and in their place
 on the canvas is one instance of it (2), selected. A symbol made of one layer
@@ -29,10 +31,10 @@ layers inside it: they're the symbol's.
 
 ## Add instances {#place}
 
-- **Click a symbol** in the Symbols panel: a new instance of it is added at the
-  middle of the page, where both rulers read 0, and selected. It goes at the
-  top of the page's layers, outside any artboard; drag its row into one if you
-  want it there.
+- **Click a symbol** in the Symbols panel: a new instance of it is added in
+  the middle of the canvas as you see it, and selected. If that's on an
+  artboard, it goes into the artboard; otherwise at the top of the page's
+  layers. **Edit › Undo** takes it away again.
 - **Duplicate an instance** ([[Mod+D]]), or copy and paste it.
 
 Copied into another project, an instance brings its symbol with it.

@@ -207,9 +207,9 @@ clipboard, so you can paste them into Quar Animator in another tab, another
 window, or another browser on the same computer. Their keyframes come too,
 retimed if the other project plays at a different frame rate.
 
-To paste there, press [[Mod+V]]. **Edit › Paste** is only offered once you've
-copied something in that window, and it reads the clipboard through the
-browser, which may ask you to allow that.
+To paste there, press [[Mod+V]] or choose **Edit › Paste**. The menu reads
+the clipboard through the browser, which may ask you to allow that. If the
+browser doesn't let it, a message says so: press [[Mod+V]] instead.
 
 **Delete:** press [[Delete]] or [[Backspace]], or choose **Edit › Delete**.
 

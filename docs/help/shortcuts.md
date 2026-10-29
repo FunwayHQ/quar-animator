@@ -4,16 +4,18 @@ order: 21
 summary: Every key the editor knows, grouped by what you're doing.
 ---
 
-Shortcuts are shown here for Windows and Linux. On a Mac, [[Mod]] is Cmd and
-[[Alt]] is Option; the editor also takes Ctrl in place of Cmd. The menus list
-their own shortcuts beside their items, and **Help › Keyboard Shortcuts**
-shows the main ones in a window.
+Shortcuts are shown here as your computer's keyboard has them: [[Mod]] is
+Ctrl on Windows and Linux and Cmd on a Mac, and [[Alt]] is Option on a Mac.
+On a Mac the editor also takes Ctrl in place of Cmd. The menus list their own
+shortcuts beside their items, with ⌘, ⌥ and ⇧ on a Mac, and
+**Help › Keyboard Shortcuts** shows every one of them in a window, in the
+same groups as this chapter.
 
-![The Keyboard Shortcuts window, listing tools, view, edit, arrange and animation shortcuts](img/shortcuts-dialog.png 'Help › Keyboard Shortcuts. It scrolls to show the rest.')
+![The Keyboard Shortcuts window, its groups in columns: tools, drawing, files, edit, arrange and the rest](img/shortcuts-dialog.png 'Help › Keyboard Shortcuts. It scrolls to show the rest.')
 
 Shortcuts work wherever you are in the editor, but not while you're typing in
-a field: there, keys type. After a click on the timeline, [[Delete]] and the
-arrow keys are the timeline's. [[Esc]], to select nothing or give up on what
+a field: there, keys type. After a click on the timeline, [[Delete]], the
+arrow keys, [[Mod+C]] and [[Mod+V]] are the timeline's. [[Esc]], to select nothing or give up on what
 you're drawing, goes to the canvas: it works once you've clicked on it.
 
 > [!NOTE]
