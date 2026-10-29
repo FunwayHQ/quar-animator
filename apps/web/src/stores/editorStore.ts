@@ -80,6 +80,7 @@ import {
 import { flipInParentSpace, flipMatrix, flipPlacement, type FlipAxis } from './flip';
 import { symbolsUsedBy, type ClipboardPayload } from '../services/systemClipboard';
 import { withBuiltInProfiles } from '../services/brushProfiles';
+import { canvasViewCenter } from '../services/canvasView';
 import { pastedArtboardTimelines, pastedTracks, type RootMove } from './clipboardAnimation';
 import {
   closedContour,
@@ -115,8 +116,9 @@ import {
   resolveSymbolInstance,
   cutContour,
   mat3,
+  artboardAt,
 } from '@quar/core';
-import type { OnionSkinSettings, BooleanOp } from '@quar/core';
+import type { OnionSkinSettings, BooleanOp, SceneGraph } from '@quar/core';
 import { applySkinSnapshots, DEFAULT_WIND_SETTINGS } from '@quar/rigging';
 import { toast } from '../components/common/Toast';
 import { skinBinding, type BindOptions } from '../components/canvas/bindToBones';
@@ -1247,7 +1249,15 @@ export interface EditorStore extends SequenceActions, SoundActions, TransitionAc
   deleteSymbol: (symbolId: string, sceneGraph: SceneGraphLike) => void;
   renameSymbol: (symbolId: string, name: string) => void;
   detachInstance: (sceneGraph: SceneGraphLike) => void;
-  placeSymbolInstance: (sceneGraph: SceneGraphLike, symbolId: string) => void;
+  /**
+   * An instance of the symbol, in the middle of the canvas view (`at`, when
+   * given) and in the artboard there if any; selected, one undo step.
+   */
+  placeSymbolInstance: (
+    sceneGraph: SceneGraphLike,
+    symbolId: string,
+    at?: import('@quar/types').Vector2
+  ) => void;
   enterSymbolEdit: (symbolId: string, sceneGraph: SceneGraphLike) => void;
   exitSymbolEdit: (sceneGraph: SceneGraphLike) => void;
   setInstanceOverride: (
@@ -4847,13 +4857,19 @@ function createSymbolActions(
       });
     },
 
-    placeSymbolInstance: (sceneGraph: SceneGraphLike, symbolId: string) => {
+    placeSymbolInstance: (
+      sceneGraph: SceneGraphLike,
+      symbolId: string,
+      at?: import('@quar/types').Vector2
+    ) => {
       const state = get();
       const definition = state.symbols.find((s) => s.id === symbolId);
       if (!definition) return;
 
       state.pushUndo(sceneGraph);
 
+      // In the middle of what the canvas shows (the origin with no canvas)
+      const place = at ?? canvasViewCenter() ?? { x: 0, y: 0 };
       const instanceId = `inst-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
       const instanceNode: SymbolInstanceNode = {
         id: instanceId,
@@ -4862,7 +4878,7 @@ function createSymbolActions(
         parent: null,
         children: [],
         transform: {
-          position: { x: 0, y: 0 },
+          position: { x: place.x, y: place.y },
           rotation: 0,
           scale: { x: 1, y: 1 },
           anchor: { x: 0, y: 0 },
@@ -4877,6 +4893,9 @@ function createSymbolActions(
       };
 
       sceneGraph.addNode(instanceNode);
+      // Into the artboard there, keeping its place, as a layer drawn there goes
+      const artboard = artboardAt(sceneGraph as unknown as SceneGraph, place);
+      if (artboard) get().moveNodeKeepingPlacement(sceneGraph, instanceId, artboard.id);
 
       set({
         selectedNodeIds: new Set([instanceId]),

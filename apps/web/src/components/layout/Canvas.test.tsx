@@ -7,6 +7,7 @@ import { toast } from '../common/Toast';
 import { Camera } from '@quar/core';
 import type { SceneGraph } from '@quar/core';
 import { Canvas } from './Canvas';
+import { canvasViewCenter } from '../../services/canvasView';
 
 // Counts the canvas's renders: the smart guides are drawn on every one
 const smartGuides = vi.hoisted(() => ({ renders: 0 }));
@@ -157,6 +158,17 @@ describe('Canvas', () => {
     expect(groups.flatMap((group) => group.children)).toHaveLength(4);
     expect(useEditorStore.getState().selectedNodeIds).toEqual(new Set([groups[1]!.id]));
     expect(useEditorStore.getState().undoStack.length).toBe(undoSteps + 2);
+  });
+
+  it('tells where it is looking, for a symbol placed from the Symbols panel', () => {
+    expect(canvasViewCenter()).toBeNull();
+    const { unmount } = renderCanvas();
+
+    const center = canvasViewCenter();
+    expect(Number.isFinite(center?.x)).toBe(true);
+    expect(Number.isFinite(center?.y)).toBe(true);
+    unmount();
+    expect(canvasViewCenter()).toBeNull();
   });
 
   describe('Edit > Paste', () => {

@@ -29,6 +29,7 @@ import {
 import type { DynamicChainState } from '@quar/types';
 import type { PointMagnetTool, WeightPaintTool } from '@quar/core';
 import { intoArtboardBeneath } from '../../services/intoArtboard';
+import { setCanvasViewCenter } from '../../services/canvasView';
 import { isSoundFile } from '../../services/soundFiles';
 import { importSoundFiles } from '../../services/soundImport';
 import { useCanvasTools } from '../../hooks/useCanvasTools';
@@ -1338,6 +1339,13 @@ export function Canvas({
       y: (canvasRef.current?.clientHeight ?? 600) / 2,
     });
   }, []);
+
+  // What's put in the middle of the canvas from elsewhere (a symbol from the
+  // Symbols panel) goes where this canvas is looking
+  useEffect(() => {
+    setCanvasViewCenter(getCanvasCenter);
+    return () => setCanvasViewCenter(null);
+  }, [getCanvasCenter]);
 
   const importSvgString = useCallback(
     (svgString: string) => {
