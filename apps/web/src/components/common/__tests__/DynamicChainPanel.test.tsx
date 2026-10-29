@@ -14,11 +14,12 @@ vi.mock('../../../stores/editorStore', () => ({
   useEditorStore: (selector: (s: Record<string, unknown>) => unknown) => selector(mockState),
 }));
 
+const mockSceneGraph = {
+  getNode: vi.fn(),
+  getChildren: vi.fn(() => []),
+};
 vi.mock('../../../contexts/SceneGraphContext', () => ({
-  useSceneGraph: () => ({
-    getNode: vi.fn(),
-    getChildren: vi.fn(() => []),
-  }),
+  useSceneGraph: () => mockSceneGraph,
 }));
 
 describe('DynamicChainPanel', () => {
@@ -109,9 +110,11 @@ describe('DynamicChainPanel', () => {
     render(<DynamicChainPanel boneId="bone-1" />);
     const slider = screen.getByTestId('stiffness-slider');
     fireEvent.change(slider, { target: { value: '0.8' } });
-    expect(mockState.updateDynamicChainSettings).toHaveBeenCalledWith('dc-1', {
-      stiffness: 0.8,
-    });
+    expect(mockState.updateDynamicChainSettings).toHaveBeenCalledWith(
+      'dc-1',
+      { stiffness: 0.8 },
+      mockSceneGraph
+    );
   });
 
   it('updates gravity via number input', () => {
@@ -134,9 +137,11 @@ describe('DynamicChainPanel', () => {
     render(<DynamicChainPanel boneId="bone-1" />);
     const input = screen.getByTestId('gravity-input');
     fireEvent.change(input, { target: { value: '200' } });
-    expect(mockState.updateDynamicChainSettings).toHaveBeenCalledWith('dc-1', {
-      gravity: 200,
-    });
+    expect(mockState.updateDynamicChainSettings).toHaveBeenCalledWith(
+      'dc-1',
+      { gravity: 200 },
+      mockSceneGraph
+    );
   });
 
   it('removes chain on × click', () => {

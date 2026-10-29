@@ -194,6 +194,7 @@ interface HistorySnapshot {
 /** Document-wide settings, by their store fields. */
 interface StepSettings {
   documentBackground?: Color;
+  globalWind?: WindSettings;
 }
 
 /** These settings as they are now. */
@@ -756,9 +757,11 @@ export interface EditorStore extends SequenceActions, SoundActions, TransitionAc
     actionId: string,
     enabled: boolean
   ) => void;
+  /** A Smart Bone's driver range; undoable (part of a morph recording's step during one). */
   updateSmartBoneDriver: (
     actionId: string,
-    updates: { rangeMin?: number; rangeMax?: number }
+    updates: { rangeMin?: number; rangeMax?: number },
+    sceneGraph: SceneGraphLike
   ) => void;
   addMorphTarget: (sceneGraph: SceneGraphLike, actionId: string, driverValue: number) => void;
   removeMorphTarget: (sceneGraph: SceneGraphLike, actionId: string, targetId: string) => void;
@@ -818,11 +821,14 @@ export interface EditorStore extends SequenceActions, SoundActions, TransitionAc
   createDynamicChain: (sceneGraph: SceneGraphLike, rootBoneId: string) => void;
   removeDynamicChain: (sceneGraph: SceneGraphLike, chainId: string) => void;
   setDynamicChainEnabled: (sceneGraph: SceneGraphLike, chainId: string, enabled: boolean) => void;
+  /** A dynamic chain's physics; undoable (a slider drag in an undo group is one step). */
   updateDynamicChainSettings: (
     chainId: string,
-    settings: Partial<Omit<DynamicChain, 'id' | 'name' | 'rootBoneId' | 'boneIds'>>
+    settings: Partial<Omit<DynamicChain, 'id' | 'name' | 'rootBoneId' | 'boneIds'>>,
+    sceneGraph: SceneGraphLike
   ) => void;
-  setGlobalWind: (settings: Partial<WindSettings>) => void;
+  /** The wind on every dynamic chain; undoable. */
+  setGlobalWind: (settings: Partial<WindSettings>, sceneGraph: SceneGraphLike) => void;
 
   // Aspect ratio lock
   aspectRatioLocked: boolean;
@@ -1801,7 +1807,9 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     });
   },
 
-  updateSmartBoneDriver: (actionId: string, updates: { rangeMin?: number; rangeMax?: number }) => {
+  updateSmartBoneDriver: (actionId, updates, sceneGraph) => {
+    // A morph recording is one step, whatever changes during it
+    if (!get().smartBoneRecordingActionId) get().pushUndo(sceneGraph);
     set({
       smartBoneActions: get().smartBoneActions.map((a) =>
         a.id === actionId
@@ -2164,17 +2172,16 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     });
   },
 
-  updateDynamicChainSettings: (
-    chainId: string,
-    settings: Partial<Omit<DynamicChain, 'id' | 'name' | 'rootBoneId' | 'boneIds'>>
-  ) => {
+  updateDynamicChainSettings: (chainId, settings, sceneGraph) => {
+    get().pushUndo(sceneGraph);
     set({
       dynamicChains: get().dynamicChains.map((c) => (c.id === chainId ? { ...c, ...settings } : c)),
       isDirty: true,
     });
   },
 
-  setGlobalWind: (settings: Partial<WindSettings>) => {
+  setGlobalWind: (settings, sceneGraph) => {
+    pushSettingUndo(get, sceneGraph, 'globalWind');
     set({
       globalWind: { ...get().globalWind, ...settings },
       isDirty: true,

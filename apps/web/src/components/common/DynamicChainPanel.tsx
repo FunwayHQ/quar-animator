@@ -88,7 +88,7 @@ export function DynamicChainPanel({ boneId }: DynamicChainPanelProps) {
           min={0}
           max={1}
           step={0.01}
-          onChange={(v) => updateDynamicChainSettings(chain.id, { stiffness: v })}
+          onChange={(v) => updateDynamicChainSettings(chain.id, { stiffness: v }, sceneGraph)}
           testId="stiffness"
         />
 
@@ -99,7 +99,7 @@ export function DynamicChainPanel({ boneId }: DynamicChainPanelProps) {
           min={0}
           max={1}
           step={0.01}
-          onChange={(v) => updateDynamicChainSettings(chain.id, { damping: v })}
+          onChange={(v) => updateDynamicChainSettings(chain.id, { damping: v }, sceneGraph)}
           testId="damping"
         />
 
@@ -110,7 +110,7 @@ export function DynamicChainPanel({ boneId }: DynamicChainPanelProps) {
           min={0}
           max={500}
           step={1}
-          onChange={(v) => updateDynamicChainSettings(chain.id, { gravity: v })}
+          onChange={(v) => updateDynamicChainSettings(chain.id, { gravity: v }, sceneGraph)}
           testId="gravity"
         />
 
@@ -122,7 +122,7 @@ export function DynamicChainPanel({ boneId }: DynamicChainPanelProps) {
           max={180}
           step={1}
           suffix="°"
-          onChange={(v) => updateDynamicChainSettings(chain.id, { gravityAngle: v })}
+          onChange={(v) => updateDynamicChainSettings(chain.id, { gravityAngle: v }, sceneGraph)}
           testId="gravity-angle"
         />
 
@@ -133,7 +133,7 @@ export function DynamicChainPanel({ boneId }: DynamicChainPanelProps) {
           min={0}
           max={2}
           step={0.01}
-          onChange={(v) => updateDynamicChainSettings(chain.id, { windInfluence: v })}
+          onChange={(v) => updateDynamicChainSettings(chain.id, { windInfluence: v }, sceneGraph)}
           testId="wind-influence"
         />
 
@@ -144,7 +144,7 @@ export function DynamicChainPanel({ boneId }: DynamicChainPanelProps) {
           min={0}
           max={1}
           step={0.01}
-          onChange={(v) => updateDynamicChainSettings(chain.id, { elasticity: v })}
+          onChange={(v) => updateDynamicChainSettings(chain.id, { elasticity: v }, sceneGraph)}
           testId="elasticity"
         />
 
@@ -157,9 +157,14 @@ export function DynamicChainPanel({ boneId }: DynamicChainPanelProps) {
             <select
               value={chain.freezeAxis ?? 'none'}
               onChange={(e) =>
-                updateDynamicChainSettings(chain.id, {
-                  freezeAxis: e.target.value === 'none' ? undefined : (e.target.value as 'x' | 'y'),
-                })
+                updateDynamicChainSettings(
+                  chain.id,
+                  {
+                    freezeAxis:
+                      e.target.value === 'none' ? undefined : (e.target.value as 'x' | 'y'),
+                  },
+                  sceneGraph
+                )
               }
               style={{
                 flex: 1,

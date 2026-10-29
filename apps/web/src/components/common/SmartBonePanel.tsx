@@ -67,7 +67,7 @@ export function SmartBonePanel({ boneId }: SmartBonePanelProps) {
             setSmartBoneActionEnabled(sceneGraph, action.id, enabled)
           }
           onUpdateDriver={(updates: { rangeMin?: number; rangeMax?: number }) =>
-            updateSmartBoneDriver(action.id, updates)
+            updateSmartBoneDriver(action.id, updates, sceneGraph)
           }
           onAddTarget={(driverValue: number) => addMorphTarget(sceneGraph, action.id, driverValue)}
           onRemoveTarget={(targetId: string) => removeMorphTarget(sceneGraph, action.id, targetId)}

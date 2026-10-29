@@ -101,6 +101,60 @@ describe('undo and rigging', () => {
     expect(store().vitruvianControllers).toHaveLength(0);
   });
 
+  it('undoes a dynamic chain’s settings, a slider drag in one step', () => {
+    addArm(sg);
+    store().createDynamicChain(sg, 'b1');
+    const chain = () => store().dynamicChains[0]!;
+    const stiffness = chain().stiffness;
+    const steps = store().undoStack.length;
+
+    const group = store().beginUndoGroup();
+    for (const v of [0.2, 0.3, 0.4]) {
+      store().updateDynamicChainSettings(chain().id, { stiffness: v }, sg);
+    }
+    store().endUndoGroup(group);
+    expect(chain().stiffness).toBe(0.4);
+    expect(store().undoStack).toHaveLength(steps + 1);
+
+    store().undo(sg);
+    expect(chain().stiffness).toBe(stiffness);
+    store().redo(sg);
+    expect(chain().stiffness).toBe(0.4);
+  });
+
+  it('undoes a Smart Bone’s range', () => {
+    addArm(sg);
+    store().createSmartBoneAction(sg, 'b2');
+    const driver = () => store().smartBoneActions[0]!.driver;
+    const { rangeMin, rangeMax } = driver();
+
+    store().updateSmartBoneDriver(store().smartBoneActions[0]!.id, { rangeMin: -45 }, sg);
+    store().updateSmartBoneDriver(store().smartBoneActions[0]!.id, { rangeMax: 135 }, sg);
+    expect([driver().rangeMin, driver().rangeMax]).toEqual([-45, 135]);
+
+    store().undo(sg);
+    expect([driver().rangeMin, driver().rangeMax]).toEqual([-45, rangeMax]);
+    store().undo(sg);
+    expect([driver().rangeMin, driver().rangeMax]).toEqual([rangeMin, rangeMax]);
+  });
+
+  it('undoes the Global Wind, and leaves it alone when undoing other edits', () => {
+    const before = { ...store().globalWind };
+    store().setGlobalWind({ strength: 120, enabled: true }, sg);
+    expect(store().globalWind.strength).toBe(120);
+
+    // Another edit after it: undoing that one keeps the wind
+    store().pushUndo(sg);
+    sg.addNode(rect('r1'));
+    store().undo(sg);
+    expect(store().globalWind.strength).toBe(120);
+
+    store().undo(sg);
+    expect(store().globalWind).toEqual(before);
+    store().redo(sg);
+    expect(store().globalWind).toEqual({ ...before, strength: 120, enabled: true });
+  });
+
   it('marks enable toggles as unsaved changes', () => {
     addArm(sg);
     store().createIKChain(sg, 'b2');

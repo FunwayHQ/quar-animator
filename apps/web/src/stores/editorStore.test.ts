@@ -2210,7 +2210,9 @@ describe('EditorStore', () => {
       useEditorStore.getState().createSmartBoneAction(rigSg, 'bone-1');
       const actionId = useEditorStore.getState().smartBoneActions[0].id;
 
-      useEditorStore.getState().updateSmartBoneDriver(actionId, { rangeMin: -45, rangeMax: 135 });
+      useEditorStore
+        .getState()
+        .updateSmartBoneDriver(actionId, { rangeMin: -45, rangeMax: 135 }, rigSg);
       const driver = useEditorStore.getState().smartBoneActions[0].driver;
       expect(driver.rangeMin).toBe(-45);
       expect(driver.rangeMax).toBe(135);
@@ -2501,17 +2503,21 @@ describe('EditorStore', () => {
       } as any;
       useEditorStore.getState().createDynamicChain(sg, 'bone-1');
       const chainId = useEditorStore.getState().dynamicChains[0].id;
-      useEditorStore.getState().updateDynamicChainSettings(chainId, {
-        stiffness: 0.9,
-        gravity: 200,
-      });
+      useEditorStore.getState().updateDynamicChainSettings(
+        chainId,
+        {
+          stiffness: 0.9,
+          gravity: 200,
+        },
+        sg
+      );
       const chain = useEditorStore.getState().dynamicChains[0];
       expect(chain.stiffness).toBe(0.9);
       expect(chain.gravity).toBe(200);
     });
 
     it('setGlobalWind updates wind settings', () => {
-      useEditorStore.getState().setGlobalWind({ strength: 100, enabled: true });
+      useEditorStore.getState().setGlobalWind({ strength: 100, enabled: true }, rigSg);
       const wind = useEditorStore.getState().globalWind;
       expect(wind.strength).toBe(100);
       expect(wind.enabled).toBe(true);

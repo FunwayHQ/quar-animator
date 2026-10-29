@@ -6,10 +6,12 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return */
 
 import { useEditorStore } from '../../stores/editorStore';
+import { useSceneGraph } from '../../contexts/SceneGraphContext';
 import type { WindSettings } from '@quar/types';
 import styles from './SmartBonePanel.module.css';
 
 export function WindPanel() {
+  const sceneGraph = useSceneGraph();
   const globalWind: WindSettings = useEditorStore((state) => state.globalWind);
   const setGlobalWind = useEditorStore((state) => state.setGlobalWind);
 
@@ -21,7 +23,7 @@ export function WindPanel() {
           <input
             type="checkbox"
             checked={globalWind.enabled}
-            onChange={(e) => setGlobalWind({ enabled: e.target.checked })}
+            onChange={(e) => setGlobalWind({ enabled: e.target.checked }, sceneGraph)}
             aria-label="Enable wind"
           />
           <span className={styles.toggleTrack} />
@@ -36,7 +38,7 @@ export function WindPanel() {
           min={0}
           max={500}
           step={1}
-          onChange={(v) => setGlobalWind({ strength: v })}
+          onChange={(v) => setGlobalWind({ strength: v }, sceneGraph)}
           testId="wind-strength"
         />
 
@@ -48,7 +50,7 @@ export function WindPanel() {
           max={180}
           step={1}
           suffix="°"
-          onChange={(v) => setGlobalWind({ direction: v })}
+          onChange={(v) => setGlobalWind({ direction: v }, sceneGraph)}
           testId="wind-direction"
         />
 
@@ -59,7 +61,7 @@ export function WindPanel() {
           min={0}
           max={1}
           step={0.01}
-          onChange={(v) => setGlobalWind({ turbulence: v })}
+          onChange={(v) => setGlobalWind({ turbulence: v }, sceneGraph)}
           testId="wind-turbulence"
         />
 
@@ -70,7 +72,7 @@ export function WindPanel() {
           min={0}
           max={10}
           step={0.1}
-          onChange={(v) => setGlobalWind({ frequency: v })}
+          onChange={(v) => setGlobalWind({ frequency: v }, sceneGraph)}
           testId="wind-frequency"
         />
       </div>

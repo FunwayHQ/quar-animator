@@ -10,6 +10,7 @@ import { SceneGraphProvider, useSceneGraph } from '../../contexts/SceneGraphCont
 import { createDefaultTransform } from '@quar/core';
 import type { SceneGraph } from '@quar/core';
 import type { RectangleNode } from '@quar/types';
+import { createBoneNode } from '@quar/rigging';
 import { PropertiesPanel } from './PropertiesPanel';
 import { useEditorStore } from '../../stores/editorStore';
 
@@ -234,5 +235,67 @@ describe('document background and undo', () => {
     expect(store().documentBackground).toEqual({ r: 240, g: 236, b: 228, a: 1 });
     act(() => store().undo(sg));
     expect(store().documentBackground).toEqual({ r: 26, g: 26, b: 26, a: 1 });
+  });
+});
+
+describe('rig panels and undo', () => {
+  let sg: SceneGraph;
+
+  beforeEach(() => {
+    act(() => {
+      store().resetProject();
+      store().clearHistory();
+    });
+    sg = renderPanel();
+    act(() => {
+      sg.addNode(createBoneNode('b1', 'Upper', { x: 0, y: 0 }, 100));
+      sg.addNode(createBoneNode('b2', 'Lower', { x: 100, y: 0 }, 80), 'b1');
+      store().createDynamicChain(sg, 'b1');
+      store().createSmartBoneAction(sg, 'b1');
+      store().setSelection(['b1']);
+    });
+  });
+
+  /** Drag a slider: press, a few changes, release. */
+  function drag(slider: HTMLElement, values: string[]) {
+    fireEvent.pointerDown(slider, { pointerId: 1 });
+    for (const value of values) fireEvent.change(slider, { target: { value } });
+    fireEvent.pointerUp(slider, { pointerId: 1 });
+  }
+
+  it('undoes a dynamic chain slider drag in one step', () => {
+    const before = store().dynamicChains[0]!.stiffness;
+    const steps = store().undoStack.length;
+    drag(screen.getByTestId('stiffness-slider'), ['0.2', '0.3', '0.4']);
+    expect(store().dynamicChains[0]!.stiffness).toBe(0.4);
+    expect(store().undoStack).toHaveLength(steps + 1);
+
+    act(() => store().undo(sg));
+    expect(store().dynamicChains[0]!.stiffness).toBe(before);
+  });
+
+  it('undoes a Global Wind slider drag in one step', () => {
+    const before = store().globalWind.strength;
+    const steps = store().undoStack.length;
+    drag(screen.getByTestId('wind-strength-slider'), ['100', '150', '200']);
+    expect(store().globalWind.strength).toBe(200);
+    expect(store().undoStack).toHaveLength(steps + 1);
+
+    act(() => store().undo(sg));
+    expect(store().globalWind.strength).toBe(before);
+  });
+
+  it('undoes a typed Smart Bone minimum in one step', () => {
+    const before = store().smartBoneActions[0]!.driver.rangeMin;
+    const steps = store().undoStack.length;
+    const min = screen.getByTestId('range-min');
+    act(() => min.focus());
+    type(min, '-30');
+    act(() => min.blur());
+    expect(store().smartBoneActions[0]!.driver.rangeMin).toBe(-30);
+    expect(store().undoStack).toHaveLength(steps + 1);
+
+    act(() => store().undo(sg));
+    expect(store().smartBoneActions[0]!.driver.rangeMin).toBe(before);
   });
 });
