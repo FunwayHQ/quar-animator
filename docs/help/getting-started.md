@@ -78,8 +78,9 @@ before it discards them.
 
 ![The editor with Tutorial 1 open, its six parts numbered](img/editor-layout.png 'The editor, with Tutorial 1 open. The numbers match the list below.')
 
-1. **The menu bar.** The menus are on the left: File, Edit, View, Animation,
-   Rigging, Export and Help. The tools are in the middle: Selection,
+1. **The menu bar.** The logo at the far left takes you back to the Projects
+   page. The menus come after it: File, Edit, View, Animation, Rigging, Export
+   and Help. The tools are in the middle: Selection,
    Direct Selection, Hand, the shapes, Pen, Brush, Eraser, Text, Artboard and
    Bone. Point at a tool to see its name and its one-key shortcut. When the
    page has an artboard, a play button after the tools presents the artboards
@@ -141,12 +142,15 @@ To keep the project as it is and carry on in a copy, choose
 **File › Save As…** ([[Mod+Shift+S]]) and name the copy. From then on you're
 working in the copy.
 
-To open another project, choose **File › Open Project…**, or go back to the
-Projects page with your browser's Back button.
+To open another project, choose **File › Open Project…** ([[Mod+O]]), or go
+back to the Projects page: click the logo at the far left of the menu bar, or
+choose **File › Back to Projects**.
 
-> [!CAUTION]
-> The editor doesn't ask before you close its tab, reload it, or open another
-> project: changes since the last save are lost. Save before you leave.
+If there are changes you haven't saved, the editor asks before anything takes
+the project's place: a new project, another one opened or imported, going back
+to the Projects page. **Discard** lets the changes go; **Cancel** keeps you
+where you are, so you can save first. Your browser asks too before you close
+the tab or reload it.
 
 ### Where your projects are kept {#storage}
 
@@ -168,7 +172,7 @@ every page and its animation, the symbols, the pictures and the sounds.
 2. Your browser saves it to your downloads, named after the project:
    `My first animation.quar`, say.
 
-![The File menu, open in the editor](img/file-menu.png 'The File menu: save, save a copy, download a backup, import one.')
+![The File menu, open in the editor](img/file-menu.png 'The File menu: back to the projects, save, save a copy, download a backup, import one.')
 
 To open a `.quar` file, your backup or one someone sent you, do one of these:
 
