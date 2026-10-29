@@ -168,4 +168,19 @@ describe('confirmDialog', () => {
 
     await expect(result).resolves.toBe(false);
   });
+
+  it('names its other answer, when that isn’t Cancel', async () => {
+    vi.useFakeTimers();
+    render(<PromptDialogHost />);
+
+    let result!: Promise<boolean>;
+    act(() => {
+      result = confirmDialog({ title: 'Delete it?', confirmLabel: 'Delete', cancelLabel: 'Keep' });
+    });
+    expect(screen.queryByRole('button', { name: 'Cancel' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Keep' }));
+    act(() => vi.advanceTimersByTime(120));
+
+    await expect(result).resolves.toBe(false);
+  });
 });

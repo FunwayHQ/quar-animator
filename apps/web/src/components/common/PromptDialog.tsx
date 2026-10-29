@@ -38,6 +38,8 @@ export interface PromptDialogProps {
   placeholder?: string;
   defaultValue?: string;
   confirmLabel?: string;
+  /** The other answer's button (Escape and clicking outside answer it too). */
+  cancelLabel?: string;
   onConfirm: (value: string) => void;
   onCancel: () => void;
 }
@@ -55,6 +57,7 @@ export function PromptDialog({
   placeholder = '',
   defaultValue = '',
   confirmLabel = 'Create',
+  cancelLabel = 'Cancel',
   onConfirm,
   onCancel,
 }: PromptDialogProps) {
@@ -149,7 +152,7 @@ export function PromptDialog({
             onClick={() => close(false)}
             data-testid="prompt-dialog-cancel"
           >
-            Cancel
+            {cancelLabel}
           </button>
           <button
             ref={confirmRef}
@@ -180,6 +183,7 @@ interface PromptRequest {
   placeholder?: string;
   defaultValue?: string;
   confirmLabel?: string;
+  cancelLabel?: string;
   resolve: (value: string | null) => void;
 }
 
@@ -202,12 +206,15 @@ export function promptDialog(opts: {
 
 /**
  * Ask a yes/no question in the same dialog, without an input. Resolves true
- * when confirmed. Needs <PromptDialogHost /> mounted, like promptDialog.
+ * when confirmed; false for the other answer (`cancelLabel`, Cancel unless
+ * named), Escape and clicking outside. Needs <PromptDialogHost /> mounted,
+ * like promptDialog.
  */
 export function confirmDialog(opts: {
   title: string;
   message?: string;
   confirmLabel?: string;
+  cancelLabel?: string;
 }): Promise<boolean> {
   return new Promise((resolve) => {
     const req: PromptRequest = {
@@ -252,6 +259,7 @@ export function PromptDialogHost() {
       placeholder={request.placeholder}
       defaultValue={request.defaultValue}
       confirmLabel={request.confirmLabel}
+      cancelLabel={request.cancelLabel}
       onConfirm={answer}
       onCancel={() => answer(null)}
     />

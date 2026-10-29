@@ -38,6 +38,7 @@ import type {
   SkinData,
   BoneGroup,
   Matrix3,
+  SoundClip,
 } from '@quar/types';
 import type { AnimationSequence, KeyframeClipboard, GraphViewTransform } from '@quar/animation';
 import {
@@ -60,6 +61,8 @@ import { createSoundActions, type SoundActions } from './soundActions';
 import { createVideoActions, type VideoActions } from './videoActions';
 import { createVideoClipActions, type VideoClipActions } from './videoClipActions';
 import { keepVideoFiles } from '../services/videoFiles';
+import { deleteVideoSoundsToo } from '../services/videoSoundQuestion';
+import { soundsLinkedToRemoved, withLinkedSoundsResolved } from './videoSounds';
 import { createTransitionActions, type TransitionActions } from './transitionActions';
 import {
   captureClipboardExtras,
@@ -945,6 +948,11 @@ export interface EditorStore
    */
   pastePayload: (sceneGraph: SceneGraphLike, payload: ClipboardPayload) => void;
   duplicateSelection: (sceneGraph: SceneGraphLike) => void;
+  /**
+   * Delete the selected layers. With video layers whose sounds are on the
+   * Sound lane it first asks whether those go too (else they stay,
+   * unlinked), and deletes once answered: one undo step either way.
+   */
   deleteSelection: (sceneGraph: SceneGraphLike) => void;
   selectAll: (sceneGraph: SceneGraphLike) => void;
   groupSelection: (sceneGraph: SceneGraphLike) => void;
@@ -2523,13 +2531,22 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     get().pasteClipboard(sceneGraph);
   },
   deleteSelection: (sceneGraph: SceneGraphLike) => {
-    const { selectedNodeIds, enteredGroupId } = get();
-    if (selectedNodeIds.size === 0) return;
-    get().pushUndo(sceneGraph);
-    const clearGroup = !!enteredGroupId;
-    set(removeLayers(sceneGraph, selectedNodeIds, get()));
-    // Clear enteredGroupId if the entered group no longer exists
-    if (clearGroup && !sceneGraph.getNode(enteredGroupId)) set({ enteredGroupId: null });
+    const ids = new Set(get().selectedNodeIds);
+    if (ids.size === 0) return;
+    const remove = (linkedSounds: SoundClip[], keepSounds: boolean) => {
+      if (![...ids].some((id) => sceneGraph.getNode(id))) return;
+      const { enteredGroupId } = get();
+      get().pushUndo(sceneGraph);
+      // The videos' sounds kept as sounds of their own, or deleted with them
+      set({ timeline: withLinkedSoundsResolved(get().timeline, linkedSounds, keepSounds) });
+      set(removeLayers(sceneGraph, ids, get()));
+      // Clear enteredGroupId if the entered group no longer exists
+      if (enteredGroupId && !sceneGraph.getNode(enteredGroupId)) set({ enteredGroupId: null });
+    };
+    // Video layers whose sounds are on the Sound lane: asked about once
+    const linked = soundsLinkedToRemoved(sceneGraph, get().timeline, ids);
+    if (linked.length === 0) remove([], true);
+    else void deleteVideoSoundsToo(linked.length).then((deleteToo) => remove(linked, !deleteToo));
   },
   selectAll: (sceneGraph: SceneGraphLike) => {
     const allIds: string[] = [];
@@ -4295,7 +4312,10 @@ function createHistoryActions(
       // Copy to clipboard
       copySelection(sceneGraph);
 
-      // Delete selection (inline to avoid double pushUndo)
+      // Delete selection (inline to avoid double pushUndo), the videos' sounds
+      // with them: they're on the clipboard with their layers
+      const linked = soundsLinkedToRemoved(sceneGraph, get().timeline, selectedNodeIds);
+      set({ timeline: withLinkedSoundsResolved(get().timeline, linked, false) });
       set(removeLayers(sceneGraph, selectedNodeIds, get()));
     },
   };
