@@ -55,6 +55,7 @@ export const KEYS = {
   guides: 'Shift+G',
   onionSkin: 'Shift+O',
   animationSequence: 'Shift+A',
+  workArea: 'Alt+W',
   // Timeline and playback
   playPause: 'Space',
   previousFrame: ',',
@@ -221,9 +222,17 @@ export const SHORTCUT_GROUPS: ShortcutGroup[] = [
       key(KEYS.autoKeyframe, 'Auto-Keyframe'),
       key('G', 'Graph editor, and back'),
       pair(['I', 'Shift+I'], 'Work area: start / end it here'),
-      key('Alt+W', 'Work area on or off (Windows, Linux)'),
+      key(KEYS.workArea, 'Work area on or off'),
       key(KEYS.onionSkin, 'Onion Skinning'),
       key(KEYS.animationSequence, 'Animation Sequence window'),
+    ],
+  },
+  {
+    title: 'Timeline rows',
+    entries: [
+      key('Delete', 'Delete the selected keyframes'),
+      key(KEYS.copy, 'Copy them'),
+      key(KEYS.paste, 'Paste them at the playhead'),
     ],
   },
   {

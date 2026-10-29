@@ -752,7 +752,7 @@ describe('MenuBar', () => {
         ['Flip Vertical', 'Shift+V'],
         ['Graph editor, and back', 'G'],
         ['Work area: start / end it here', 'I / Shift+I'],
-        ['Work area on or off (Windows, Linux)', 'Alt+W'],
+        ['Work area on or off', 'Alt+W'],
         ['10 frames back / on', 'Shift+, / Shift+.'],
         ['Save', 'Ctrl+S'],
         ['Save As…', 'Ctrl+Shift+S'],
@@ -794,6 +794,7 @@ describe('MenuBar', () => {
         'Editing text',
         'View',
         'Timeline and playback',
+        'Timeline rows',
         'Graph editor',
         'Sound lane',
         'Rigging',
@@ -808,7 +809,7 @@ describe('MenuBar', () => {
       try {
         const dialog = openShortcuts();
         expect(keysFor(dialog, 'Redo')).toBe('⇧⌘Z or ⌘Y');
-        expect(keysFor(dialog, 'Work area on or off (Windows, Linux)')).toBe('⌥W');
+        expect(keysFor(dialog, 'Work area on or off')).toBe('⌥W');
         expect(keysFor(dialog, 'Flip Horizontal')).toBe('⇧H');
         // Delete and Backspace are one key on a Mac
         expect(keysFor(dialog, 'Delete')).toBe('⌫');
