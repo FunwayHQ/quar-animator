@@ -119,8 +119,9 @@ come:
 - moves, turns, scales and slants, so everything lands where it was drawn;
 - styles written in the shapes, as attributes, or in the SVG's style sheet.
 
-Elements hidden with `display: none` are left out, and so are some kinds of
-artwork:
+Elements hidden with `display: none` or `visibility: hidden` are left out
+(though, as in a browser, a layer inside a hidden group that sets
+`visibility: visible` comes in), and so are some kinds of artwork:
 
 - text: turn it into outlines in your drawing app before you export;
 - embedded pictures;

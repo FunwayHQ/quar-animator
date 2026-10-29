@@ -42,8 +42,13 @@ its own.
 4. Set its **Duration**, in seconds: from 0.1 to 10. [[Up]] and [[Down]] in
    the field add or take away a tenth of a second, with [[Shift]] a whole
    second.
+5. Choose its **Easing**, how it speeds up and slows down: **Ease In Out
+   Cubic** unless you change it, so it starts and ends gently. The list has
+   **Linear** and the families of the
+   [Easing Editor](easing.md#custom); those that overshoot, **Back** and
+   **Elastic**, hold at the ends instead.
 
-![The Slide section of the Properties panel: Push chosen, the left arrow of Direction picked, Duration 0.5 s and Apply to all slides](img/presenting-transition.png 'A push in from the right, half a second long.')
+![The Slide section of the Properties panel: Push chosen, the left arrow of Direction picked, Duration 0.5 s, Easing and Apply to all slides](img/presenting-transition.png 'A push in from the right, half a second long.')
 
 - **Fade**: the slide fades in over the one before.
 - **Fade Through**: the one before fades out to the background, then the
@@ -59,8 +64,8 @@ number giving way to the next. Point at it to play it again.
 page.
 
 The first slide opens the show, so nothing plays into it: its controls are
-greyed out. Transitions start and end gently, and they're kept in the
-project and copied with their artboard. Changing one is a step you can undo.
+greyed out. Transitions are kept in the project and copied with their
+artboard, their easing too. Changing one is a step you can undo.
 
 ## Present {#present}
 

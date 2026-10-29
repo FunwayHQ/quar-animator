@@ -25,10 +25,11 @@ They go into a new group called Mask, which is selected. The topmost of them
 that can be a mask becomes the mask: it isn't drawn itself, it decides what of
 the others shows.
 
-![Tutorial 6's mask page: in the Layers panel, the Mask group with its Clip badge and the Window circle marked as its mask source; on the canvas, coloured stripes showing only inside the circle](img/masks-and-effects-mask.png 'The mask group, its kind (1) and its mask (2). The stripes show through the round window.')
+![Tutorial 6's mask page: in the Layers panel, the Mask group with its Clip badge and the Window circle marked with the mask icon; on the canvas, coloured stripes showing only inside the circle](img/masks-and-effects-mask.png 'The mask group, its kind (1) and its mask (2). The stripes show through the round window.')
 
 In the Layers panel, the group shows its kind (1) — **Clip**, **Alpha** or
-**Luma** — and the mask is marked **Mask source** (2).
+**Luma** — and the mask is marked with a half-filled circle (2): point at it
+and it says **Mask source**.
 
 | Kind          | The layers show                                                                                                           |
 | ------------- | ------------------------------------------------------------------------------------------------------------------------- |

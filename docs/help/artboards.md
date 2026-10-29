@@ -31,8 +31,8 @@ artboard, so you can work on them without moving the frame.
 
 - **Move it:** drag its label. Its layers move with it.
 - **Resize it:** drag its handles, or type its **Position** and **Size** in
-  the Properties panel's Transform section. Unlike a shape, it doesn't turn
-  when you drag outside a corner.
+  the Properties panel's Transform section. Unlike a shape, it doesn't turn:
+  dragging outside a corner does nothing, and it has no **Rotation** field.
 - **Rename it:** double-click its row in the Layers panel. The label shows the
   new name.
 - **Change its background:** its **Fill**, under Appearance in the Properties
@@ -69,7 +69,9 @@ The frame rate (**FPS**) is the same for the whole project. (More in
 
 The timeline shows one of them at a time. Selecting a layer brings up its
 artboard's timeline, and the picker at the top of the timeline's layer list (1)
-chooses one: each artboard by name, or **Page (outside artboards)**.
+chooses one: each artboard by name, or **Page (outside artboards)**. Where
+artboards share a name, the list numbers them in the Layers panel's order:
+`Artboard · 1`, `Artboard · 2`.
 
 ![The timeline's picker set to the Intro artboard, with Intro and its circle listed below it](img/artboards-timeline.png 'The picker (1): Intro’s timeline is in view.')
 

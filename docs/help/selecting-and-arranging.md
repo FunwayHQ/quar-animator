@@ -63,7 +63,8 @@ Press [[Esc]] before you let go to put things back as they were.
 
 The **Transform** section of the Properties panel (scroll down past the
 animation presets) holds the selected layer's **Position**, **Size** and
-**Rotation**.
+**Rotation**. A bone shows its **Length** in place of a size, and an
+artboard has no **Rotation**: it stays upright.
 
 ![The Transform section of the Properties panel: Position, Size, Corner Radius and Rotation, with the X label, the aspect lock and the grid button numbered](img/selecting-and-arranging-transform.png 'Drag a field’s letter to change it (1). The lock (2) keeps width and height in proportion; the grid button (3) turns snapping to the grid on and off.')
 
