@@ -5,7 +5,16 @@
 
 import { beforeEach, describe, expect, it } from 'vitest';
 import { SceneGraph } from '@quar/core';
-import { createTimeline, scopeSounds } from '@quar/animation';
+import {
+  createTimeline,
+  scopeDuration,
+  scopeSounds,
+  trimmedVideoEnd,
+  trimmedVideoStart,
+  withClipSpeed,
+  withHold,
+  withLoop,
+} from '@quar/animation';
 import type { VideoNode } from '@quar/types';
 import { useEditorStore } from './editorStore';
 import { artboard, linkedSound, testVideo, videoLayer } from '../test/videoLayer';
@@ -104,6 +113,108 @@ describe('moving a video clip', () => {
     store().undo(sg);
     store().undo(sg);
     expect(scopeSounds(store().timeline, null)[0]?.linkedTo).toBe('v');
+  });
+});
+
+describe('changing a video clip', () => {
+  beforeEach(() => store().resetProject());
+
+  const sound = () => scopeSounds(store().timeline, null)[0];
+
+  it('trims the clip, its linked sound with it, in one step', () => {
+    const sg = scene();
+    store().updateVideoClip(sg, 'v', (clip) => trimmedVideoStart(clip, 60, 30));
+    expect(layer(sg).clip).toEqual({ start: 60, offset: 1, duration: 3 });
+    expect(sound()).toMatchObject({ id: 's', start: 60, offset: 1, duration: 3, gain: 1 });
+    expect(store().undoStack).toHaveLength(1);
+    expect(store().isDirty).toBe(true);
+    store().undo(sg);
+    expect(layer(sg).clip).toEqual({ start: 30, offset: 0, duration: 4 });
+    expect(sound()).toMatchObject({ start: 30, offset: 0, duration: 4 });
+  });
+
+  it('gives its sound its speed and loop, and lengthens the timeline to play it to its end', () => {
+    const sg = scene();
+    // A quarter as fast: 16 s from frame 30, to frame 510
+    store().updateVideoClip(sg, 'v', (clip) => withClipSpeed(clip, 0.25));
+    expect(sound()).toMatchObject({ start: 30, duration: 4, speed: 0.25 });
+    expect(store().timelineDuration).toBe(510);
+    store().updateVideoClip(sg, 'v', (clip) => withClipSpeed(withLoop(clip, true), 1));
+    store().updateVideoClip(sg, 'v', (clip) => trimmedVideoEnd(clip, 630, 30, 4));
+    expect(layer(sg).clip).toEqual({ start: 30, offset: 0, duration: 4, loop: true, loopFor: 20 });
+    expect(sound()).toMatchObject({ loop: true, loopFor: 20 });
+    expect(sound()).not.toHaveProperty('speed');
+    expect(store().timelineDuration).toBe(630);
+    expect(store().undoStack).toHaveLength(3);
+    store().undo(sg);
+    expect(store().timelineDuration).toBe(510);
+    store().undo(sg);
+    store().undo(sg);
+    expect(store().timelineDuration).toBe(300);
+    expect(sound()).not.toHaveProperty('speed');
+  });
+
+  it('holds its last frame without lengthening the timeline, or touching its sound', () => {
+    const sg = scene();
+    const before = store().timeline;
+    store().updateVideoClip(sg, 'v', (clip) => withHold(clip, true));
+    expect(layer(sg).clip.holdLastFrame).toBe(true);
+    expect(store().timeline).toBe(before);
+    expect(store().timelineDuration).toBe(300);
+    expect(store().undoStack).toHaveLength(1);
+  });
+
+  it('records no step when nothing changes, and none while a drag goes on', () => {
+    const sg = scene();
+    store().updateVideoClip(sg, 'v', (clip) => clip);
+    store().updateVideoClip(sg, 'nothing', (clip) => withHold(clip, true));
+    expect(store().undoStack).toHaveLength(0);
+    store().updateVideoClip(sg, 'v', (clip) => trimmedVideoEnd(clip, 120, 30, 4));
+    store().updateVideoClip(sg, 'v', (clip) => trimmedVideoEnd(clip, 100, 30, 4), false);
+    expect(store().undoStack).toHaveLength(1);
+    store().undo(sg);
+    expect(layer(sg).clip.duration).toBe(4);
+  });
+
+  it('lengthens the timeline as a drag ends, not while it goes on', () => {
+    const sg = scene();
+    // Looped, then lengthened past the timeline's end, as a drag of its end does
+    store().updateVideoClip(sg, 'v', (clip) => withLoop(clip, true), true, false);
+    store().updateVideoClip(sg, 'v', (clip) => trimmedVideoEnd(clip, 400, 30, 4), false, false);
+    expect(store().timelineDuration).toBe(300);
+    store().fitTimelineToVideoClip(sg, 'v');
+    expect(store().timelineDuration).toBe(400);
+    // One step for it all
+    expect(store().undoStack).toHaveLength(1);
+    store().undo(sg);
+    expect(store().timelineDuration).toBe(300);
+    expect(layer(sg).clip).toEqual({ start: 30, offset: 0, duration: 4 });
+  });
+
+  it('lengthens the timeline its layer plays on, not the one in view', () => {
+    const sg = new SceneGraph();
+    sg.addNode(artboard('slide'));
+    sg.addNode(videoLayer('v', 'beach'), 'slide');
+    useEditorStore.setState({
+      timeline: createTimeline({
+        duration: 300,
+        frameRate: 30,
+        artboards: { slide: { duration: 200 } },
+      }),
+    });
+    store().updateVideoClip(sg, 'v', (clip) => withClipSpeed(clip, 0.5));
+    // 8 s from frame 30: 270 frames
+    expect(scopeDuration(store().timeline, 'slide')).toBe(270);
+    expect(store().timelineDuration).toBe(300);
+    expect(scopeDuration(store().timeline, null)).toBe(300);
+  });
+
+  it('still moves a clip, as it did', () => {
+    const sg = scene();
+    store().moveVideoClip(sg, 'v', 250);
+    // Moving doesn’t lengthen the timeline: a drag does as it ends
+    expect(store().timelineDuration).toBe(300);
+    expect(sound()?.start).toBe(250);
   });
 });
 
