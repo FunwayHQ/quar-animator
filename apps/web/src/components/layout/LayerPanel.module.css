@@ -89,6 +89,9 @@
   cursor: pointer;
   transition: all var(--duration-fast) var(--easing-default);
   position: relative;
+  /* Shift-click picks a range of layers, not the text of their names */
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .layerRow::before {
@@ -293,6 +296,9 @@
 
 /* Inline rename input */
 .renameInput {
+  /* A name being renamed is text to select, inside a row that isn't */
+  user-select: text;
+  -webkit-user-select: text;
   flex: 1;
   height: 22px;
   padding: 0 4px;

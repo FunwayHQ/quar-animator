@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, act, fireEvent } from '../../test/utils';
 import userEvent from '@testing-library/user-event';
@@ -351,6 +353,14 @@ describe('LayerPanel', () => {
   // ========================================================================
 
   describe('multi-selection', () => {
+    it('Shift-click picks layers, not the text of their names (rename still selects text)', () => {
+      // Styles aren't applied in jsdom: the rules are read from the stylesheet
+      const css = readFileSync(resolve(__dirname, 'LayerPanel.module.css'), 'utf8');
+      const rule = (name: string) => new RegExp(`^\\.${name} \\{([^}]*)\\}`, 'm').exec(css)?.[1];
+      expect(rule('layerRow')).toMatch(/\suser-select: none;/);
+      expect(rule('renameInput')).toMatch(/\suser-select: text;/);
+    });
+
     it('Ctrl+click toggles selection', async () => {
       const user = userEvent.setup();
       let sg: SceneGraph | null = null;
