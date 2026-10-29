@@ -163,6 +163,7 @@ vi.mock('../stores/editorStore', () => ({
 
 import { useProjectActions } from './useProjectActions';
 import { useEditorStore } from '../stores/editorStore';
+import { keepVideoFiles, setVideoFile, videoFile } from '../services/videoFiles';
 
 // ============================================================================
 // Setup
@@ -650,6 +651,51 @@ describe('useProjectActions', () => {
       const groupId = (mockSceneGraph.addNode.mock.calls[0]?.[0] as { id: string }).id;
       expect(mockIntoArtboard).toHaveBeenCalledWith(mockSceneGraph, groupId);
       expect(mockSceneGraph.moveNode).toHaveBeenCalledWith('a', groupId);
+    });
+  });
+
+  describe('videos', () => {
+    const library = [{ id: 'clip', name: 'clip.mp4', mimeType: 'video/mp4' }];
+
+    beforeEach(() => {
+      keepVideoFiles(new Set());
+      mockEditorState.videos = [];
+    });
+
+    it('saves the video library with the project', async () => {
+      mockEditorState.videos = library;
+      const { result } = renderProjectActions();
+
+      await act(async () => {
+        await result.current.saveProject();
+      });
+
+      expect(mockSerialize).toHaveBeenCalledWith(
+        'Untitled Project',
+        mockSceneGraph,
+        expect.objectContaining({ videos: library }),
+        undefined
+      );
+    });
+
+    it("gives the document the files of an imported file's videos, and lets the last project's go", async () => {
+      setVideoFile('old', new Blob(['old video']));
+      const file = new Blob(['video'], { type: 'video/mp4' });
+      mockDeserialize.mockImplementationOnce(
+        (_data: unknown, _sceneGraph: unknown, apply: (state: object) => void) =>
+          apply({ videos: library, videoFiles: new Map([['clip', file]]) })
+      );
+      const { result } = renderProjectActions();
+
+      await act(async () => {
+        await result.current.importProjectFile(new File(['project'], 'clips.quar'));
+      });
+
+      expect(videoFile('clip')).toBe(file);
+      expect(videoFile('old')).toBeUndefined();
+      // The library in the store, the files beside it
+      expect(mockEditorState.videos).toEqual(library);
+      expect('videoFiles' in mockEditorState).toBe(false);
     });
   });
 

@@ -19,6 +19,7 @@ import type {
   Color,
   Sound,
   BrushProfile,
+  Video,
 } from '@quar/types';
 import type { OnionSkinSettings } from '@quar/core';
 import type { SceneGraph } from '@quar/core';
@@ -37,12 +38,15 @@ import {
   DEFAULT_DOCUMENT_BACKGROUND,
   DEFAULT_ONION_SKIN_SETTINGS,
   writeQuarFile,
+  writeQuarBlob,
   parseQuarFile,
   migrateV1ToV2,
   mat3,
 } from '@quar/core';
 import type { Guide, PageData } from '../stores/editorStore';
 import { readSoundClips, readSounds } from './soundData';
+import { mendVideoNodes, readVideos } from './videoData';
+import { videoFile } from './videoFiles';
 import { customBrushProfiles, readBrushProfiles, withBuiltInProfiles } from './brushProfiles';
 
 // ============================================================================
@@ -118,8 +122,20 @@ export interface ProjectDataV2 {
   symbols?: SymbolDefinition[];
   /** The sounds the pages' timelines play (each clip names one) */
   sounds?: Sound[];
+  /** The videos the layers show, on the pages and in the symbols (each layer names one) */
+  videos?: SavedVideo[];
   /** The brush profiles made in the document (its brush strokes name them) */
   brushProfiles?: BrushProfile[];
+}
+
+/**
+ * A video as a project file keeps it: what's known about it, and its file
+ * when the file holds it — a buffer of the .quar (its JSON names it
+ * "buffer:N"), a Blob once read. The browser's storage keeps the files
+ * apart, so its copy of a project has none.
+ */
+export interface SavedVideo extends Video {
+  file?: Blob;
 }
 
 /** v3.0 binary format (same structure as v2.0, different version tag) */
@@ -150,6 +166,8 @@ export interface EditorStateSnapshot {
   activePageId?: string;
   symbols?: SymbolDefinition[];
   sounds?: Sound[];
+  /** The video library (the files are kept apart: services/videoFiles) */
+  videos?: Video[];
   /** Every brush profile, the built-in ones too (those aren't saved) */
   brushProfiles?: BrushProfile[];
   /**
@@ -158,6 +176,15 @@ export interface EditorStateSnapshot {
    */
   pageScene?: { nodes: Node[]; rootNodeIds: string[] };
 }
+
+/**
+ * What opening a project applies: the editor's state, and the files of the
+ * videos the project file held, by video id (for services/videoFiles, not
+ * the store). Always there, empty for a file without them.
+ */
+export type OpenedProjectState = Partial<EditorStateSnapshot & { currentFrame: number }> & {
+  videoFiles?: Map<string, Blob>;
+};
 
 // ============================================================================
 // Serialization
@@ -262,6 +289,14 @@ export function serializeProject(
     symbols: editorState.symbols ? structuredClone(editorState.symbols) : [],
     // Only the sounds some clip plays: one taken off the timeline goes with it
     sounds: soundsPlayedOn(pages, editorState.sounds ?? []),
+    // And only the videos some layer shows
+    videos: videosShownIn(
+      [
+        ...pages.map((page) => page.sceneGraph),
+        ...(editorState.symbols ?? []).map((symbol) => symbol.sceneGraphJSON),
+      ],
+      editorState.videos ?? []
+    ),
     brushProfiles: customBrushProfiles(editorState.brushProfiles ?? []),
   };
 }
@@ -271,6 +306,15 @@ function soundsPlayedOn(pages: SerializedPage[], sounds: Sound[]): Sound[] {
   const used = new Set<string>();
   for (const page of pages) for (const id of soundIdsUsed(page.timeline)) used.add(id);
   return sounds.filter((sound) => used.has(sound.id)).map((sound) => ({ ...sound }));
+}
+
+/** The library's videos that layers in these scenes (pages, symbols) show. */
+function videosShownIn(scenes: Array<{ nodes: Node[] }>, videos: Video[]): Video[] {
+  const shown = new Set<string>();
+  for (const scene of scenes) {
+    for (const node of scene.nodes) if (node.type === 'video') shown.add(node.videoId);
+  }
+  return videos.filter((video) => shown.has(video.id)).map((video) => ({ ...video }));
 }
 
 /**
@@ -288,10 +332,35 @@ export function serializeProjectToBinary(
 
 /**
  * A project already serialized (serializeProject), as a v3.0 binary .quar
- * file — for callers that also need the serialized data itself.
+ * file — for callers that also need the serialized data itself. Without its
+ * videos' files: the copy the browser's storage keeps, which keeps those
+ * apart (projectFileBlob writes the whole file).
  */
 export function projectDataToBinary(data: ProjectData): ArrayBuffer {
   return writeQuarFile(data as unknown as Record<string, unknown>);
+}
+
+/**
+ * A project already serialized, as the whole .quar file: each video's file
+ * in it too, a buffer of its own (`files` gives them, by video id; one it
+ * lacks is left out, the video kept). A Blob put together from its parts, so
+ * the videos are never read into memory to be written.
+ */
+export function projectFileBlob(
+  data: ProjectData,
+  files: (videoId: string) => Blob | undefined = videoFile
+): Blob {
+  const videos = 'videos' in data ? data.videos : undefined;
+  return writeQuarBlob({
+    ...data,
+    ...(videos && {
+      videos: videos.map((video) => {
+        const file = files(video.id) ?? video.file;
+        // Typed as its video is, which is what the file names its buffer
+        return file ? { ...video, file: new Blob([file], { type: video.mimeType }) } : video;
+      }),
+    }),
+  } as unknown as Record<string, unknown>);
 }
 
 /**
@@ -301,7 +370,7 @@ export function projectDataToBinary(data: ProjectData): ArrayBuffer {
 export function deserializeProjectFromBinary(
   data: ArrayBuffer | string,
   sceneGraph: SceneGraph,
-  applyEditorState: (state: Partial<EditorStateSnapshot & { currentFrame: number }>) => void
+  applyEditorState: (state: OpenedProjectState) => void
 ): Record<string, unknown> {
   const parsed = parseQuarFile(data);
   deserializeProject(parsed as unknown as ProjectData, sceneGraph, applyEditorState);
@@ -534,7 +603,7 @@ function readAnimationSequence(sequence: AnimationSequence | undefined): Animati
 export function deserializeProject(
   data: ProjectData,
   sceneGraph: SceneGraph,
-  applyEditorState: (state: Partial<EditorStateSnapshot & { currentFrame: number }>) => void
+  applyEditorState: (state: OpenedProjectState) => void
 ): void {
   // Normalize to v2.0 structure (v3.0 has same structure as v2.0)
   const v2 =
@@ -546,6 +615,9 @@ export function deserializeProject(
   // touched, so a file that can't be read leaves it as it was rather than half
   // replaced (and open to being autosaved that way)
   for (const page of v2.pages) migrateSkinBindings(page.sceneGraph.nodes);
+  for (const page of v2.pages) mendVideoNodes(page.sceneGraph.nodes);
+  for (const symbol of v2.symbols ?? []) mendVideoNodes(symbol.sceneGraphJSON?.nodes ?? []);
+  const { videos, files: videoFiles } = readVideos(v2.videos);
 
   // Find the active page (or first page as fallback)
   const activePage = v2.pages.find((p) => p.id === v2.activePageId) ?? v2.pages[0]!;
@@ -589,6 +661,8 @@ export function deserializeProject(
     activePageId: activePage.id,
     symbols: v2.symbols ?? [],
     sounds: readSounds(v2.sounds),
+    videos,
+    videoFiles,
     brushProfiles: withBuiltInProfiles(readBrushProfiles(v2.brushProfiles)),
   };
 
@@ -609,9 +683,13 @@ export function deserializeProject(
 // File Download / Upload
 // ============================================================================
 
-export function downloadProjectFile(name: string, data: ProjectData): void {
-  const binary = projectDataToBinary(data);
-  const blob = new Blob([binary], { type: 'application/octet-stream' });
+/** Download the whole .quar file: each video's file in it (from `files`, by video id). */
+export function downloadProjectFile(
+  name: string,
+  data: ProjectData,
+  files: (videoId: string) => Blob | undefined = videoFile
+): void {
+  const blob = projectFileBlob(data, files);
   const url = URL.createObjectURL(blob);
 
   const a = document.createElement('a');
@@ -634,12 +712,12 @@ export class ProjectFileCancelledError extends Error {
 
 const MB = 1024 * 1024;
 /**
- * The biggest .quar file that opens. A project keeps each sound (up to 50 MB)
- * and picture (up to 10 MB) in it, so a backup can be far bigger than any
- * one of them. The file is read whole into memory, and its pictures and
- * sounds become data URIs about a third bigger again, so opening one this
- * size takes well over a gigabyte for a moment: as much as a browser tab
- * comfortably has.
+ * The biggest .quar file that opens. A project keeps each sound (up to 50 MB),
+ * picture (up to 10 MB) and video (up to 100 MB) in it, so a backup can be
+ * far bigger than any one of them. The file is read whole into memory, its
+ * pictures and sounds become data URIs about a third bigger again and its
+ * videos Blobs of their own, so opening one this size takes well over a
+ * gigabyte for a moment: as much as a browser tab comfortably has.
  */
 const MAX_PROJECT_FILE_SIZE = 512 * MB;
 

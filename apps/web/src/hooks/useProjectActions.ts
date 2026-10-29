@@ -28,7 +28,8 @@ import {
   readProjectFile,
   ProjectFileCancelledError,
 } from '../services/projectSerializer';
-import type { ProjectData } from '../services/projectSerializer';
+import type { OpenedProjectState, ProjectData } from '../services/projectSerializer';
+import { keepVideoFiles, setVideoFile } from '../services/videoFiles';
 import { importSvg, createGroupNode } from '@quar/core';
 import type { ProjectListItem } from '../services/projectStorage';
 
@@ -112,13 +113,18 @@ export function useProjectActions(options: UseProjectActionsOptions = {}): Proje
           )
         : state.symbols,
       sounds: state.sounds,
+      videos: state.videos,
       brushProfiles: state.brushProfiles,
       ...(editing && { pageScene: editing.page }),
     };
   }, [sceneGraph]);
 
-  // Apply editor state from deserialized data
-  const applyEditorState = useCallback((state: Record<string, unknown>) => {
+  // Apply editor state from deserialized data: the videos' files first, so
+  // whatever reads the library finds them (the last project's let go)
+  const applyEditorState = useCallback(({ videoFiles, ...state }: OpenedProjectState) => {
+    const files = videoFiles ?? new Map<string, Blob>();
+    keepVideoFiles(new Set(files.keys()));
+    for (const [id, file] of files) setVideoFile(id, file);
     useEditorStore.setState(state);
   }, []);
 
