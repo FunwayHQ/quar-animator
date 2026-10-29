@@ -148,6 +148,19 @@ describe('BoneTool', () => {
 
       expect(context.onTransformStart).toHaveBeenCalled();
     });
+
+    it('reports no move for a bone drawn, so auto-key keys nothing (as for a shape drawn)', () => {
+      tool.onPointerDown(createPointerEvent(0, 0));
+      tool.onPointerMove(createPointerEvent(100, 0));
+      tool.onPointerUp(createPointerEvent(100, 0));
+      // Chained on from its tip, too
+      tool.onPointerDown(createPointerEvent(100, 0));
+      tool.onPointerMove(createPointerEvent(200, 0));
+      tool.onPointerUp(createPointerEvent(200, 0));
+
+      expect(context.sceneGraph.getNodeCount()).toBe(2);
+      expect(context.onTransformComplete).not.toHaveBeenCalled();
+    });
   });
 
   // --------------------------------------------------------------------------

@@ -144,11 +144,8 @@ export class BoneTool extends BaseTool {
         // Create standalone bone
         this.createStandaloneBone(length, rotation);
       }
-
-      // Notify completion
-      if (this.lastCreatedBoneId) {
-        this.context.onTransformComplete?.(new Set([this.lastCreatedBoneId]), 'move');
-      }
+      // Drawn, not moved: no transform to report, so auto-key keys nothing,
+      // as for a shape just drawn
     }
 
     this.previewNode = null;
