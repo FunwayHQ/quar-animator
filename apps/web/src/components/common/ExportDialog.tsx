@@ -103,6 +103,8 @@ interface ExportDialogState {
   progress: ExportProgress | null;
   cancelled: boolean;
   error: string | null;
+  /** The videos the last export couldn't decode, by name: their preview stills were drawn */
+  videoProblems: string[];
 }
 
 const EXIT_MS = 120;
@@ -258,6 +260,14 @@ function formatSeconds(seconds: number): string {
   return `${Number.isInteger(seconds) ? seconds : seconds.toFixed(1)} s`;
 }
 
+/** What's said of the videos an export couldn't decode: “A”, “B” and “C”. */
+function describeVideoProblems(names: string[]): string {
+  const quoted = names.map((name) => `“${name}”`);
+  const list =
+    quoted.length > 1 ? `${quoted.slice(0, -1).join(', ')} and ${quoted.at(-1)}` : quoted[0];
+  return `Exported. Couldn’t decode ${list}; ${names.length > 1 ? 'their' : 'its'} preview stills were used.`;
+}
+
 // ============================================================================
 // Component
 // ============================================================================
@@ -333,9 +343,12 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
     progress: null,
     cancelled: false,
     error: null,
+    videoProblems: [],
   }));
 
   const cancelledRef = useRef(false);
+  /** The videos the export under way couldn't decode */
+  const videoProblemsRef = useRef<string[]>([]);
 
   const close = useCallback(() => {
     setExiting(true);
@@ -470,7 +483,19 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
     };
     const frameRenderRoots = selectedArtboard ? [selectedArtboard.node] : sceneGraph.getRootNodes();
     // Video layers show their exact frames, decoded from the document's files
-    const videoSources = { videos: useEditorStore.getState().videos, videoFile };
+    const videoSources = {
+      videos: useEditorStore.getState().videos,
+      videoFile,
+      onVideoProblems: (names: string[]) => {
+        videoProblemsRef.current = [...new Set([...videoProblemsRef.current, ...names])];
+      },
+    };
+    /** Downloaded: closed, unless a video couldn't be decoded — that's said first */
+    const finish = (problems: readonly string[] = []) => {
+      const names = [...new Set([...videoProblemsRef.current, ...problems])];
+      if (names.length === 0) close();
+      else setState((s) => ({ ...s, exporting: false, progress: null, videoProblems: names }));
+    };
     // Each artboard over its own timeline, fitted into the export's size
     const slideFrames = slidesExport
       ? slideShow(slides, frameRenderContext, state.width, state.height)
@@ -531,7 +556,14 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
     }
 
     cancelledRef.current = false;
-    setState((s) => ({ ...s, exporting: true, progress: null, cancelled: false }));
+    videoProblemsRef.current = [];
+    setState((s) => ({
+      ...s,
+      exporting: true,
+      progress: null,
+      cancelled: false,
+      videoProblems: [],
+    }));
     // Auto-save pauses, and the frames the export poses aren't edits
     useEditorStore.getState().setExporting(true);
 
@@ -637,7 +669,7 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
         );
         if (blob && !cancelledRef.current) {
           downloadBlob(blob, 'animation.gif');
-          close();
+          finish();
         }
       } else if (state.tab === 'mp4') {
         const { exportMp4 } = await import('@quar/export');
@@ -664,7 +696,7 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
         );
         if (blob && !cancelledRef.current) {
           downloadBlob(blob, 'animation.mp4');
-          close();
+          finish();
         }
       } else if (state.tab === 'webm') {
         const { exportWebm } = await import('@quar/export');
@@ -692,7 +724,7 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
         );
         if (blob && !cancelledRef.current) {
           downloadBlob(blob, 'animation.webm');
-          close();
+          finish();
         }
       } else if (state.tab === 'png-sequence') {
         // PNG Sequence requires dynamic import of frameRenderer (WebGL)
@@ -774,7 +806,7 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
             }));
             const zipBlob = await zip.generateAsync({ type: 'blob' });
             downloadBlob(zipBlob, 'png-sequence.zip');
-            close();
+            finish(videoFrames.problems);
           }
         } finally {
           videoFrames.dispose();
@@ -905,7 +937,7 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
               downloadBlob(metaBlob, 'spritesheet.json');
             }
 
-            close();
+            finish(videoFrames.problems);
           }
         } finally {
           videoFrames.dispose();
@@ -1437,11 +1469,18 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
           </div>
         )}
 
+        {state.videoProblems.length > 0 && !state.exporting && (
+          <div className={styles.warning} role="status" data-testid="export-video-problems">
+            <AlertTriangle size={14} className={styles.warningIcon} />
+            <span className={styles.warningText}>{describeVideoProblems(state.videoProblems)}</span>
+          </div>
+        )}
+
         {/* Footer */}
         {!state.exporting && (
           <div className={styles.footer}>
             <button className={styles.btnCancel} onClick={close} data-testid="export-dialog-cancel">
-              Cancel
+              {state.videoProblems.length > 0 ? 'Close' : 'Cancel'}
             </button>
             <button
               className={styles.btnPrimary}

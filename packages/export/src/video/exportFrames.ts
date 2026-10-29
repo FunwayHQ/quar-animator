@@ -35,6 +35,11 @@ export interface VideoExportSources {
   videos?: readonly Video[];
   /** A video's file (none: its strip's stills are drawn) */
   videoFile?: (videoId: string) => Blob | null | undefined;
+  /**
+   * Hears the videos that couldn't be decoded, by name (their strips'
+   * stills were drawn instead), once the export is done with its pictures
+   */
+  onVideoProblems?: (names: string[]) => void;
 }
 
 export interface ExportVideoFramesOptions {
@@ -55,7 +60,10 @@ export interface ExportVideoFrames {
   prepare(index: number): Promise<void>;
   /** The videos that couldn't be decoded, by name: their strips' stills were drawn */
   readonly problems: readonly string[];
-  /** Stop decoding and let the files and pictures go (a shot being prepared too). */
+  /**
+   * Stop decoding and let the files and pictures go (a shot being prepared
+   * too), telling `onVideoProblems` of the videos that couldn't be decoded.
+   */
   dispose(): void;
 }
 
@@ -335,6 +343,7 @@ export function createExportVideoFrames(
       current.clear();
       stills.clear();
       stop();
+      if (problems.length > 0) sources.onVideoProblems?.([...problems]);
     },
   };
 }

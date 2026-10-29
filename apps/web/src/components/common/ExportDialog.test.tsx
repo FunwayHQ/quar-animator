@@ -59,6 +59,8 @@ const videoFrames = vi.hoisted(() => ({
   log: [] as string[],
   provider: () => null,
   disposed: 0,
+  /** The videos that couldn't be decoded, told on disposing as the real thing does */
+  problems: [] as string[],
 }));
 
 // Mock export functions (the scene's extent is the real thing: it decides the framing)
@@ -82,13 +84,15 @@ vi.mock('@quar/export', async () => {
       videoFrames.made.push({ shots, size, sources });
       return {
         provider: videoFrames.provider,
-        problems: [],
+        problems: videoFrames.problems,
         prepare: async (index: number) => {
           await Promise.resolve();
           videoFrames.log.push(`prepare ${index}`);
         },
         dispose: () => {
           videoFrames.disposed++;
+          const { onVideoProblems } = sources as { onVideoProblems?: (names: string[]) => void };
+          if (videoFrames.problems.length > 0) onVideoProblems?.([...videoFrames.problems]);
         },
       };
     },
@@ -765,6 +769,7 @@ describe('ExportDialog', () => {
       videoFrames.made = [];
       videoFrames.log = [];
       videoFrames.disposed = 0;
+      videoFrames.problems = [];
       frameRenderer.renderFrame.mockImplementation(() => {
         videoFrames.log.push('render');
         return document.createElement('canvas');
@@ -817,6 +822,57 @@ describe('ExportDialog', () => {
       });
       expect(videoFrames.made[0]!.shots).toHaveLength(2);
       expect(videoFrames.disposed).toBe(1);
+    });
+
+    it('says after a video export which videos couldn’t be decoded, and stays open to say so', async () => {
+      vi.mocked(exportMp4).mockImplementationOnce(async (_ctx, options) => {
+        options.onVideoProblems?.(['Beach at dusk']);
+        return new Blob(['mp4'], { type: 'video/mp4' });
+      });
+      render(<ExportDialogHost />);
+      act(() => showExportDialog('mp4'));
+      fireEvent.click(screen.getByTestId('export-dialog-export'));
+      await waitFor(() => expect(downloadBlob).toHaveBeenCalled());
+
+      expect(await screen.findByTestId('export-video-problems')).toHaveTextContent(
+        'Exported. Couldn’t decode “Beach at dusk”; its preview stills were used.'
+      );
+      expect(screen.getByTestId('export-dialog')).toBeInTheDocument();
+      expect(screen.getByTestId('export-dialog-cancel')).toHaveTextContent('Close');
+    });
+
+    it('names each video a PNG sequence couldn’t decode', async () => {
+      videoFrames.problems = ['Clip', 'Smoke'];
+      render(<ExportDialogHost />);
+      act(() => showExportDialog('png-sequence'));
+      fireEvent.change(screen.getByTestId('export-end-frame'), { target: { value: '1' } });
+      fireEvent.click(screen.getByTestId('export-dialog-export'));
+
+      expect(await screen.findByTestId('export-video-problems')).toHaveTextContent(
+        'Exported. Couldn’t decode “Clip” and “Smoke”; their preview stills were used.'
+      );
+      expect(downloadBlob).toHaveBeenCalledWith(expect.any(Blob), 'png-sequence.zip');
+    });
+
+    it('says nothing of the videos, and closes, when they all decoded', async () => {
+      render(<ExportDialogHost />);
+      act(() => showExportDialog('sprite-sheet'));
+      fireEvent.change(screen.getByTestId('export-end-frame'), { target: { value: '1' } });
+      fireEvent.click(screen.getByTestId('export-dialog-export'));
+      await waitFor(() => expect(screen.queryByTestId('export-dialog')).toBeNull());
+    });
+
+    it('starts the next export without the last one’s notice', async () => {
+      videoFrames.problems = ['Clip'];
+      render(<ExportDialogHost />);
+      act(() => showExportDialog('sprite-sheet'));
+      fireEvent.change(screen.getByTestId('export-end-frame'), { target: { value: '1' } });
+      fireEvent.click(screen.getByTestId('export-dialog-export'));
+      await screen.findByTestId('export-video-problems');
+
+      videoFrames.problems = [];
+      fireEvent.click(screen.getByTestId('export-dialog-export'));
+      await waitFor(() => expect(screen.queryByTestId('export-dialog')).toBeNull());
     });
 
     it('show each frame’s pictures in a sprite sheet, decoded before it’s drawn', async () => {

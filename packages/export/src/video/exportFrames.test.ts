@@ -467,6 +467,38 @@ describe('createExportVideoFrames', () => {
     expect(mocks.inputs).toBe(0);
   });
 
+  it('tells whoever exports the videos it couldn’t decode, once it’s done', async () => {
+    const missing = videoLayer('missing');
+    const fine = videoLayer('fine');
+    const ctx = context(scene([[missing], [fine]]));
+    const shots = rangeShots(ctx, 0, 30, 2);
+    const onVideoProblems = vi.fn();
+    const source = frames(shots, {
+      videos: [libraryEntry('video-missing'), libraryEntry('video-fine')],
+      videoFile: (videoId) => (videoId === 'video-fine' ? file() : undefined),
+      onVideoProblems,
+    });
+
+    await play(source, shots.length, [missing, fine]);
+    expect(onVideoProblems).not.toHaveBeenCalled();
+    source.dispose();
+    source.dispose();
+    expect(onVideoProblems).toHaveBeenCalledOnce();
+    expect(onVideoProblems).toHaveBeenCalledWith(['video-missing.mp4']);
+  });
+
+  it('tells nothing when every video decoded', async () => {
+    const layer = videoLayer('clip');
+    const ctx = context(scene([[layer]]));
+    const shots = rangeShots(ctx, 0, 2);
+    const onVideoProblems = vi.fn();
+    const source = frames(shots, { videoFile: () => file(), onVideoProblems });
+
+    await play(source, shots.length, [layer]);
+    source.dispose();
+    expect(onVideoProblems).not.toHaveBeenCalled();
+  });
+
   it('goes on with the strip when a video stops decoding', async () => {
     const layer = videoLayer('breaks');
     const ctx = context(scene([[layer]]));
