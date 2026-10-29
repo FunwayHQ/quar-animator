@@ -202,7 +202,8 @@ path's fills decides what's filled:
 
 ## Combine shapes {#boolean}
 
-Rectangles, ellipses, polygons and paths can be combined into new shapes.
+Rectangles, ellipses, polygons, stars and paths can be combined into new
+shapes, and so can the groups this makes.
 
 1. Select two shapes or more (hold [[Shift]] and click them, or drag a box
    around them with the Selection tool: see
@@ -219,12 +220,13 @@ Rectangles, ellipses, polygons and paths can be combined into new shapes.
 ![A circle cut out of a rectangle, and the Boolean Subtract group holding them in the Layers panel](img/paths-boolean.png 'A circle subtracted from a rectangle. The shapes are still there, inside the group.')
 
 The result is a [group](selecting-and-arranging.md#groups), named after what
-it does (1), with the shapes inside it. It takes the lowest shape's fill and stroke, and you can change them as
-you would a shape's. The shapes inside stay as they are: move or reshape one
-and the result follows.
+it does (1), with the shapes inside it. It takes the lowest shape's fill and
+stroke, and you can change them as you would a shape's. The shapes inside stay
+as they are: move or reshape one and the result follows.
 
 With the group selected, the Properties panel's **Boolean Operation** section
-changes how it combines them. Its buttons, also in the Edit menu:
+(or **Change to…** in the canvas's right-click menu) changes how it combines
+them. Its buttons, also in the Edit menu:
 
 - **Flatten Boolean** makes the result one path, for good.
 - **Release Boolean** takes the shapes out of the group, separate again.

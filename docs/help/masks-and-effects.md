@@ -51,29 +51,13 @@ window over still artwork.
 
 ## Combine shapes {#booleans}
 
-A boolean group draws two or more shapes as one: joined, cut, overlapped or
-excluded. The shapes stay in it, so you can still move or reshape them.
-
-1. Select two or more shapes: rectangles, ellipses, polygons, stars, paths or
-   other boolean groups.
-2. Choose one of these from **Edit › Boolean**, the canvas's right-click menu,
-   or the **Boolean Operations** buttons that the Properties panel shows for
-   them:
-
-| Choose        | Shortcut        | The result                                       |
-| ------------- | --------------- | ------------------------------------------------ |
-| **Union**     | [[Mod+Shift+U]] | all the shapes, joined                           |
-| **Subtract**  | [[Mod+Shift+D]] | the bottom shape, with the ones above it cut out |
-| **Intersect** | [[Mod+Shift+I]] | only where the shapes overlap                    |
-| **Exclude**   | [[Mod+Shift+X]] | where they don't overlap                         |
-
-The group, called Boolean Union, Boolean Subtract and so on, takes its fill
-and stroke from the bottom shape. With it selected:
-
-- **Boolean Operation** in the Properties panel (or **Change to…** in the
-  canvas's right-click menu) switches to another operation.
-- **Flatten Boolean** makes the result one path.
-- **Release Boolean** separates the shapes again.
+A boolean group draws two or more shapes as one: joined (**Union**), cut
+(**Subtract**), overlapped (**Intersect**) or excluded (**Exclude**). The
+shapes stay in it, so you can still move or reshape them. Select the shapes
+and choose one from **Edit › Boolean**, the canvas's right-click menu, or the
+**Boolean Operations** buttons in the Properties panel.
+[Combine shapes](paths.md#boolean) tells the rest: the shortcuts, and how to
+change, flatten or release a boolean group.
 
 ## Opacity {#opacity}
 
