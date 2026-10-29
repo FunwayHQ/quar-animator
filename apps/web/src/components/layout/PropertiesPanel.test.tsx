@@ -214,6 +214,20 @@ describe('PropertiesPanel', () => {
     expect(screen.getByText('Rotation')).toBeInTheDocument();
   });
 
+  it('names a star Star in its header, a polygon Polygon', () => {
+    const sg = renderWithSceneGraph();
+    act(() => {
+      sg.addNode(createTestPolygon('hex', 'Hexagon'));
+      sg.addNode({ ...createTestPolygon('star', 'Star'), innerRadius: 20 });
+      useEditorStore.getState().setSelection(['star']);
+    });
+    const header = () => screen.getByRole('heading', { name: 'Properties' }).parentElement!;
+    expect(header()).toHaveTextContent(/^PropertiesStar$/);
+
+    act(() => useEditorStore.getState().setSelection(['hex']));
+    expect(header()).toHaveTextContent(/^PropertiesPolygon$/);
+  });
+
   it('adds presets as Animation Sequence steps while the sequence window is open', () => {
     const sg = renderWithSceneGraph();
     act(() => {

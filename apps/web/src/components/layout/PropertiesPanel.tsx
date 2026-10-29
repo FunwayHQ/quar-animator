@@ -1614,7 +1614,11 @@ export function PropertiesPanel() {
     }
   };
 
-  const nodeTypeLabel = node.type.charAt(0).toUpperCase() + node.type.slice(1);
+  // A star is a polygon with an inner radius, as the Layers panel's icon tells them apart
+  const nodeTypeLabel =
+    node.type === 'polygon' && node.innerRadius !== undefined
+      ? 'Star'
+      : node.type.charAt(0).toUpperCase() + node.type.slice(1);
 
   return (
     <div className={styles.panel} {...editHandlers}>
