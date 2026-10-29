@@ -3373,7 +3373,9 @@ export function PropertiesPanel() {
           })()}
 
         {/* What a video layer shows, and when */}
-        {node.type === 'video' && selectedNodeIds.size === 1 && <VideoSection node={node} />}
+        {node.type === 'video' && selectedNodeIds.size === 1 && (
+          <VideoSection node={node} sceneGraph={sceneGraph} />
+        )}
 
         {/* An artboard at the top of the page is a slide: how it comes on after the one before */}
         {node.type === 'artboard' && node.parent === null && selectedNodeIds.size === 1 && (

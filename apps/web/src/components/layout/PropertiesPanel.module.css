@@ -1194,3 +1194,58 @@
 .videoFactUnit {
   color: var(--color-text-tertiary);
 }
+
+/* The clip's settings: a label beside each control, then what it plays */
+.videoClip {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.videoClipRow {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.videoClipLabel {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-tertiary);
+}
+
+.videoSpeed {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.videoSpeedOption {
+  width: auto;
+  padding: 0 7px;
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-2xs);
+}
+
+.videoClipToggles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  padding-left: calc(44px + var(--space-sm));
+}
+
+.videoClipToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.videoClipToggle input {
+  margin: 0;
+  accent-color: var(--color-accent-primary);
+}

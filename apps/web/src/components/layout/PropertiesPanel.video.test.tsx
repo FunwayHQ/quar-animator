@@ -11,7 +11,7 @@ import type { SceneGraph } from '@quar/core';
 import type { VideoClip, VideoNode } from '@quar/types';
 import { PropertiesPanel } from './PropertiesPanel';
 import { useEditorStore } from '../../stores/editorStore';
-import { testVideo, videoLayer } from '../../test/videoLayer';
+import { linkedSound, testVideo, videoLayer } from '../../test/videoLayer';
 
 function SceneGraphCapture({ onCapture }: { onCapture: (sg: SceneGraph) => void }) {
   const sg = useSceneGraph();
@@ -121,9 +121,96 @@ describe('PropertiesPanel - video layer', () => {
     it('shows where its clip starts and how long it plays, at the document’s frame rate', () => {
       selectVideo({ start: 12, offset: 2, duration: 4 });
       const section = within(screen.getByTestId('video-section'));
-      expect(section.getByTestId('video-clip-start')).toHaveTextContent('Frame 12');
+      expect(section.getByTestId('video-clip-start')).toHaveValue('12');
       expect(section.getByTestId('video-clip-length')).toHaveTextContent('0:04.0');
       expect(section.getByTestId('video-clip-length')).toHaveTextContent('96 frames');
+      // The part of the video it plays
+      expect(section.getByTestId('video-clip-part')).toHaveTextContent('0:02.0 – 0:06.0');
+    });
+
+    it('moves its clip to the frame typed, its sound with it, in one step', () => {
+      const sg = selectVideo({ start: 12, offset: 2, duration: 4 });
+      act(() => {
+        const timeline = useEditorStore.getState().timeline;
+        useEditorStore.setState({
+          timeline: { ...timeline, sounds: [linkedSound('s', sg.getNode('v') as VideoNode)] },
+        });
+      });
+      const steps = useEditorStore.getState().undoStack.length;
+      const start = screen.getByTestId('video-clip-start');
+      // Typed into as it is, focused (Enter leaves it: what comes next is a step of its own)
+      act(() => {
+        start.focus();
+        fireEvent.change(start, { target: { value: '40' } });
+        fireEvent.keyDown(start, { key: 'Enter' });
+      });
+      expect((sg.getNode('v') as VideoNode).clip.start).toBe(40);
+      expect(useEditorStore.getState().timeline.sounds?.[0]?.start).toBe(40);
+      expect(useEditorStore.getState().undoStack.length).toBe(steps + 1);
+      // Nudged by the arrow keys, Shift ten frames
+      act(() => {
+        start.focus();
+        fireEvent.keyDown(start, { key: 'ArrowUp', shiftKey: true });
+        start.blur();
+      });
+      expect((sg.getNode('v') as VideoNode).clip.start).toBe(50);
+      // Nonsense goes back to what it was
+      act(() => {
+        fireEvent.change(start, { target: { value: 'soon' } });
+        fireEvent.blur(start);
+      });
+      expect(start).toHaveValue('50');
+      act(() => useEditorStore.getState().undo(sg));
+      act(() => useEditorStore.getState().undo(sg));
+      expect((sg.getNode('v') as VideoNode).clip.start).toBe(12);
+      expect(useEditorStore.getState().timeline.sounds?.[0]?.start).toBe(12);
+    });
+
+    it('sets its speed, loop and hold, each one step', () => {
+      useEditorStore.getState().setTimelineDuration(300);
+      const sg = selectVideo({ start: 12, offset: 2, duration: 4 });
+      const clip = () => (sg.getNode('v') as VideoNode).clip;
+      const steps = () => useEditorStore.getState().undoStack.length;
+      const before = steps();
+      act(() => {
+        fireEvent.click(screen.getByTestId('video-section-speed-2'));
+      });
+      expect(clip().speed).toBe(2);
+      // 4 s at 2×: 2 s, 48 frames at 24 fps
+      expect(screen.getByTestId('video-clip-length')).toHaveTextContent('48 frames');
+      expect(screen.getByTestId('video-section-speed-2')).toHaveAttribute('aria-pressed', 'true');
+      // Typed, kept to 0.25×–4×: 16 s from frame 12 at 24 fps lengthens the timeline
+      const field = screen.getByTestId('video-section-speed');
+      act(() => {
+        field.focus();
+        fireEvent.change(field, { target: { value: '0.1' } });
+        fireEvent.keyDown(field, { key: 'Enter' });
+      });
+      expect(clip().speed).toBe(0.25);
+      expect(field).toHaveValue('0.25');
+      expect(useEditorStore.getState().timelineDuration).toBe(396);
+      act(() => {
+        fireEvent.click(screen.getByTestId('video-section-loop'));
+      });
+      expect(clip().loop).toBe(true);
+      act(() => {
+        fireEvent.click(screen.getByTestId('video-section-hold'));
+      });
+      expect(clip().holdLastFrame).toBe(true);
+      expect(steps()).toBe(before + 4);
+      act(() => useEditorStore.getState().undo(sg));
+      expect(clip()).not.toHaveProperty('holdLastFrame');
+      act(() => useEditorStore.getState().undo(sg));
+      expect(clip()).not.toHaveProperty('loop');
+    });
+
+    it('says how long a looped clip plays and how often it starts over', () => {
+      selectVideo({ start: 12, offset: 2, duration: 4, loop: true, loopFor: 10 });
+      const length = screen.getByTestId('video-clip-length');
+      expect(length).toHaveTextContent('0:10.0');
+      expect(length).toHaveTextContent('240 frames');
+      expect(screen.getByTestId('video-clip-part')).toHaveTextContent('looped');
+      expect(screen.getByTestId('video-section-loop')).toBeChecked();
     });
 
     it('shows its first still', () => {
@@ -138,7 +225,7 @@ describe('PropertiesPanel - video layer', () => {
       const section = within(screen.getByTestId('video-section'));
       expect(section.getByTestId('video-missing')).toBeInTheDocument();
       // The clip is still the layer's own
-      expect(section.getByTestId('video-clip-start')).toHaveTextContent('Frame 30');
+      expect(section.getByTestId('video-clip-start')).toHaveValue('30');
     });
 
     it('isn’t shown for a picture', () => {
