@@ -185,6 +185,29 @@ describe('videos in a project file', () => {
     expect(sceneGraph.getNode('a')).toMatchObject({ type: 'video', videoId: 'clip' });
   });
 
+  it('keeps a GIF as it keeps a video: its file a buffer of the .quar, typed as a GIF, its clip looping', async () => {
+    const gifBytes = fixture('gif-counter.gif');
+    const gif: Video = { ...video('wave', 'image/gif'), name: 'wave', byteLength: gifBytes.length };
+    const layer: VideoNode = {
+      ...videoNode('g', 'wave'),
+      clip: { start: 30, offset: 0, duration: 1, loop: true, loopFor: 9 },
+    };
+    const data = serializeProject('Waves', scene(layer), editorState([gif]));
+    const blob = projectFileBlob(data, (id) =>
+      id === 'wave' ? new Blob([gifBytes], { type: 'image/gif' }) : undefined
+    );
+    const decoded = decodeQuarBinary((await bytesOf(blob)).buffer as ArrayBuffer);
+    expect(decoded.buffers.map((buffer) => buffer.mimeType)).toContain('image/gif');
+
+    const sceneGraph = new SceneGraph();
+    const applied = open(await readProjectFile(new File([blob], 'Waves.quar')), sceneGraph);
+    expect(applied.videos).toEqual([gif]);
+    const file = applied.videoFiles?.get('wave');
+    expect(file?.type).toBe('image/gif');
+    expect(sameBytes(await bytesOf(file!), gifBytes)).toBe(true);
+    expect((sceneGraph.getNode('g') as VideoNode).clip).toEqual(layer.clip);
+  });
+
   it('keeps a video whose file the document lacks, without one', async () => {
     const data = serializeProject(
       'Clips',
