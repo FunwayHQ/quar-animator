@@ -39,6 +39,7 @@ import {
 import { useSceneGraph } from '../../contexts/SceneGraphContext';
 import { useEditorStore, DEFAULT_FILL, DEFAULT_STROKE } from '../../stores/editorStore';
 import { isPosingScene } from '../../stores/scenePosing';
+import { useUndoable, useUndoableEdits } from '../../hooks/useUndoableEdits';
 import { ScrubLabel } from '../common/ScrubLabel';
 import { SlideSection } from './SlideSection';
 import { setBoneLength } from '../../stores/boneLength';
@@ -471,8 +472,10 @@ function liveFrame(): number {
 
 /** With nothing selected: the document's own settings, its background. */
 function DocumentProperties() {
+  const sceneGraph = useSceneGraph();
   const background = useEditorStore((s) => s.documentBackground);
-  const setBackground = useEditorStore((s) => s.setDocumentBackground);
+  const setDocumentBackground = useEditorStore((s) => s.setDocumentBackground);
+  const setBackground = (color: Color) => setDocumentBackground(color, sceneGraph);
   const swatchRef = useRef<HTMLDivElement>(null);
   const [pickerAt, setPickerAt] = useState<{ x: number; y: number } | null>(null);
   const hex = colorToHex(background);
@@ -533,7 +536,10 @@ function DocumentProperties() {
 }
 
 export function PropertiesPanel() {
-  const sceneGraph = useSceneGraph();
+  // Each edit made here is an undo step: through this scene graph, the store
+  // actions wrapped with useUndoable, or the actions' own; a gesture (a drag,
+  // typing in a field) is one step, marked by the handlers on the panel
+  const { sceneGraph, editHandlers } = useUndoableEdits(useSceneGraph());
   const selectedNodeIds = useEditorStore((state) => state.selectedNodeIds);
   const aspectRatioLocked = useEditorStore((state) => state.aspectRatioLocked);
   const toggleAspectRatioLock = useEditorStore((state) => state.toggleAspectRatioLock);
@@ -548,8 +554,14 @@ export function PropertiesPanel() {
   });
   // Redrawn as playback starts and stops: it then shows the values it stopped on
   useEditorStore((state) => state.isPlaying);
-  const addKeyframeAtFrame = useEditorStore((state) => state.addKeyframeAtFrame);
-  const removeKeyframeAtFrame = useEditorStore((state) => state.removeKeyframeAtFrame);
+  const addKeyframeAtFrame = useUndoable(
+    useEditorStore((state) => state.addKeyframeAtFrame),
+    sceneGraph
+  );
+  const removeKeyframeAtFrame = useUndoable(
+    useEditorStore((state) => state.removeKeyframeAtFrame),
+    sceneGraph
+  );
   const timeline = useEditorStore((state) => state.timeline);
   const snapToGrid = useEditorStore((state) => state.snapToGrid);
   const toggleSnapToGrid = useEditorStore((state) => state.toggleSnapToGrid);
@@ -1475,7 +1487,7 @@ export function PropertiesPanel() {
 
   if (!node) {
     return (
-      <div className={styles.panel}>
+      <div className={styles.panel} {...editHandlers}>
         <div className={styles.header}>
           <h3 className={styles.title}>Properties</h3>
         </div>
@@ -1581,7 +1593,7 @@ export function PropertiesPanel() {
   const nodeTypeLabel = node.type.charAt(0).toUpperCase() + node.type.slice(1);
 
   return (
-    <div className={styles.panel}>
+    <div className={styles.panel} {...editHandlers}>
       <div className={styles.header}>
         <h3 className={styles.title}>Properties</h3>
         <span className={styles.nodeTypeLabel}>{nodeTypeLabel}</span>

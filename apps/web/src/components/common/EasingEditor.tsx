@@ -19,6 +19,7 @@ import {
   EASING_CATEGORIES,
 } from '@quar/animation';
 import { EasingCurvePreview } from './EasingCurvePreview';
+import { useEditGestures } from '../../hooks/useUndoableEdits';
 import styles from './EasingEditor.module.css';
 
 export interface EasingEditorProps {
@@ -52,6 +53,8 @@ function easingEqual(a: EasingFunction, b: EasingFunction): boolean {
 
 export function EasingEditor({ easing, onChange, anchorX, anchorY, onClose }: EasingEditorProps) {
   const editorRef = useRef<HTMLDivElement>(null);
+  // Typing a number in it is one undo step, not one a keystroke
+  const editHandlers = useEditGestures();
   const svgRef = useRef<SVGSVGElement>(null);
 
   // Local editing state: either cubic bezier points or a named easing
@@ -297,6 +300,7 @@ export function EasingEditor({ easing, onChange, anchorX, anchorY, onClose }: Ea
         className={styles.editor}
         style={{ left: anchorX, top: anchorY }}
         data-testid="easing-editor"
+        {...editHandlers}
       >
         {/* Header */}
         <div className={styles.header}>

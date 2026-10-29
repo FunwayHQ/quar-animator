@@ -183,7 +183,63 @@ interface HistorySnapshot {
    * (The library isn't in snapshots: symbol editing keeps its own history.)
    */
   symbolsAdded?: SymbolDefinition[];
+  /**
+   * Document-wide settings the step changed, as they were before it: put back
+   * on undo, and the step that redoes it holds them as they were undone.
+   * (Snapshots don't hold them: a page's history would undo another's.)
+   */
+  settings?: StepSettings;
 }
+
+/** Document-wide settings, by their store fields. */
+interface StepSettings {
+  documentBackground?: Color;
+}
+
+/** These settings as they are now. */
+function settingsNow(state: EditorStore, keys: Array<keyof StepSettings>): StepSettings {
+  const now: StepSettings = {};
+  for (const key of keys) Object.assign(now, { [key]: structuredClone(state[key]) });
+  return now;
+}
+
+/** The settings an undo step changed. */
+function settingKeys(settings: StepSettings): Array<keyof StepSettings> {
+  return Object.keys(settings) as Array<keyof StepSettings>;
+}
+
+/**
+ * Make a change to a document-wide setting an undo step: push one (or join
+ * the edit's) and note the setting as it was, for undo to put back.
+ */
+function pushSettingUndo(
+  get: () => EditorStore,
+  sceneGraph: SceneGraphLike,
+  key: keyof StepSettings
+) {
+  get().pushUndo(sceneGraph);
+  const state = get();
+  const step = state.undoStack[state.undoStack.length - 1];
+  if (!step || (step.settings && key in step.settings)) return;
+  step.settings = { ...step.settings, ...settingsNow(state, [key]) };
+}
+
+/**
+ * The settings a step changed back as they were; the step that takes its
+ * place (redo for undo, and back) holds them as they are now.
+ */
+function restoredSettings(
+  snapshot: HistorySnapshot,
+  now: HistorySnapshot,
+  state: EditorStore
+): StepSettings {
+  if (!snapshot.settings) return {};
+  now.settings = settingsNow(state, settingKeys(snapshot.settings));
+  return structuredClone(snapshot.settings);
+}
+
+/** The step the code running now pushed (forgotten once it has run). */
+let pushedNow: HistorySnapshot | null = null;
 
 /**
  * An undo group, from beginUndoGroup(): the edits made while it's open — a
@@ -966,7 +1022,8 @@ export interface EditorStore extends SequenceActions, SoundActions, TransitionAc
 
   // Document background: the canvas color behind everything
   documentBackground: Color;
-  setDocumentBackground: (color: Color) => void;
+  /** The document's background; undoable when given the scene graph (an edit's). */
+  setDocumentBackground: (color: Color, sceneGraph?: SceneGraphLike) => void;
 
   // Guides
   guides: Guide[];
@@ -1049,6 +1106,12 @@ export interface EditorStore extends SequenceActions, SoundActions, TransitionAc
   canUndo: boolean;
   canRedo: boolean;
   pushUndo: (sceneGraph: SceneGraphLike) => void;
+  /**
+   * Push an undo step for an edit about to be made, unless it's part of one
+   * pushed already: by the undo group open, or by the code making it (an
+   * action that pushed, then edits). Panels' edits record undo this way.
+   */
+  pushUndoStep: (sceneGraph: SceneGraphLike) => void;
   /**
    * Begin an undo group: until it ends, the edits made are one undo step (the
    * first push lands, later ones join it). Takes the place of any group open.
@@ -3188,7 +3251,10 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
   // Document background
   documentBackground: { ...DEFAULT_DOCUMENT_BACKGROUND },
-  setDocumentBackground: (color: Color) => set({ documentBackground: { ...color }, isDirty: true }),
+  setDocumentBackground: (color, sceneGraph) => {
+    if (sceneGraph) pushSettingUndo(get, sceneGraph, 'documentBackground');
+    set({ documentBackground: { ...color }, isDirty: true });
+  },
 
   // Guides
   guides: [],
@@ -3949,12 +4015,23 @@ function createHistoryActions(
         newStack.shift();
       }
       if (undoGroup) undoGroup.step = snapshot;
+      pushedNow = snapshot;
+      queueMicrotask(() => {
+        if (pushedNow === snapshot) pushedNow = null;
+      });
       set({
         undoStack: newStack,
         redoStack: [],
         canUndo: true,
         canRedo: false,
       });
+    },
+
+    pushUndoStep: (sceneGraph: SceneGraphLike) => {
+      const { undoStack } = get();
+      // Outside an undo group, the edit joins the step the code making it just pushed
+      if (!undoGroup && pushedNow && pushedNow === undoStack[undoStack.length - 1]) return;
+      get().pushUndo(sceneGraph);
     },
 
     beginUndoGroup: (): UndoGroup => {
@@ -4001,6 +4078,7 @@ function createHistoryActions(
         enteredGroupId: null,
         isDirty: true,
         ...restoredFieldsFrom(snapshot, state, now.sceneData),
+        ...restoredSettings(snapshot, now, state),
       });
     },
 
@@ -4038,6 +4116,7 @@ function createHistoryActions(
         enteredGroupId: null,
         isDirty: true,
         ...restoredFieldsFrom(snapshot, state, now.sceneData),
+        ...restoredSettings(snapshot, now, state),
       });
     },
 

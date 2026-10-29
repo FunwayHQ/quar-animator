@@ -536,6 +536,26 @@ describe('Timeline', () => {
       expect(easings()).toEqual(['easeInOutCubic', 'easeInOutCubic', 'linear']);
     });
 
+    it('makes typing a number in the custom easing editor one undo step', () => {
+      const { ids, diamonds, graph } = renderThreeKeyframes();
+      act(() => useEditorStore.setState({ selectedKeyframeIds: new Set([ids[1]!]) }));
+      fireEvent.contextMenu(diamonds[1]!, { clientX: 20 });
+      fireEvent.click(screen.getByRole('menuitem', { name: /Custom Easing/ }));
+
+      const x1 = screen.getByTestId('easing-input-x1');
+      act(() => x1.focus());
+      for (const text of ['0', '0.', '0.4']) {
+        fireEvent.keyDown(x1, { key: text.slice(-1) });
+        fireEvent.change(x1, { target: { value: text } });
+      }
+      act(() => x1.blur());
+      expect(useEditorStore.getState().timeline.tracks[0]!.keyframes[1]!.easing).not.toBe('linear');
+      expect(useEditorStore.getState().undoStack).toHaveLength(1);
+
+      act(() => useEditorStore.getState().undo(graph));
+      expect(easings()).toEqual(['linear', 'linear', 'linear']);
+    });
+
     it('selects only the clicked keyframe on a click without a drag', () => {
       const { ids, diamonds } = renderThreeKeyframes();
       useEditorStore.setState({ selectedKeyframeIds: new Set(ids) });
