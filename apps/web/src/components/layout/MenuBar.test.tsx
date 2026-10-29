@@ -857,6 +857,7 @@ describe('MenuBar', () => {
         'Timeline rows',
         'Graph editor',
         'Sound lane',
+        'Video clips',
         'Rigging',
         'Number fields',
         'Presenting',

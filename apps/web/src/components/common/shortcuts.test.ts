@@ -41,6 +41,11 @@ describe('the shortcut list', () => {
     expect(missing).toEqual([]);
   });
 
+  it('lists the keys of a clicked video clip, as the Sound lane has its own', () => {
+    const group = SHORTCUT_GROUPS.find((g) => g.title === 'Video clips');
+    expect(group?.entries.flatMap((e) => e.keys)).toEqual(['Left', 'Right', 'Enter']);
+  });
+
   it('gives each group some keys', () => {
     for (const group of SHORTCUT_GROUPS) expect(group.entries.length).toBeGreaterThan(0);
   });

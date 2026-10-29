@@ -253,6 +253,13 @@ export const SHORTCUT_GROUPS: ShortcutGroup[] = [
     ],
   },
   {
+    title: 'Video clips',
+    entries: [
+      pair(['Left', 'Right'], 'Move the clicked clip a frame (with Shift: 10)'),
+      key('Enter', 'Its settings'),
+    ],
+  },
+  {
     title: 'Rigging',
     entries: [
       pair(['[', ']'], 'Weight Paint: brush smaller / bigger'),
