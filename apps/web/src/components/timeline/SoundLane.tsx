@@ -27,6 +27,7 @@ import { useEditorStore } from '../../stores/editorStore';
 import { useSceneGraph } from '../../contexts/SceneGraphContext';
 import { decodedSound, isSoundFile, soundPeaks, waveformPath } from '../../services/soundFiles';
 import { chooseSoundFiles, importSoundFiles } from '../../services/soundImport';
+import { importVideoFiles, isVideoFile } from '../../services/videoImport';
 import { ContextMenu } from '../common/ContextMenu';
 import type { ContextMenuEntry } from '../common/ContextMenu';
 import styles from './SoundLane.module.css';
@@ -95,7 +96,7 @@ export function SoundLaneLabel() {
 }
 
 // ============================================================================
-// Dropping sound files on the timeline
+// Dropping sound (and video) files on the timeline
 // ============================================================================
 
 /** Whether a drag carries files (their kinds aren't known until they're dropped). */
@@ -105,7 +106,8 @@ function carriesFiles(event: React.DragEvent): boolean {
 
 /**
  * Handlers for an element of the timeline that takes sound files: each
- * dropped lands at the frame under the pointer (`frameAt`).
+ * dropped lands at the frame under the pointer (`frameAt`). Video files
+ * dropped there go on the canvas, their clips (and sounds) from that frame.
  */
 export function useSoundDrop(frameAt: (clientX: number) => number) {
   const sceneGraph = useSceneGraph();
@@ -129,9 +131,12 @@ export function useSoundDrop(frameAt: (clientX: number) => number) {
       if (!carriesFiles(event)) return;
       event.preventDefault();
       setDropFrame(null);
-      const sounds = Array.from(event.dataTransfer.files).filter(isSoundFile);
-      if (sounds.length === 0) return;
-      void importSoundFiles(sceneGraph, sounds, Math.max(0, Math.round(frameAt(event.clientX))));
+      const files = Array.from(event.dataTransfer.files);
+      const frame = Math.max(0, Math.round(frameAt(event.clientX)));
+      const sounds = files.filter(isSoundFile);
+      if (sounds.length > 0) void importSoundFiles(sceneGraph, sounds, frame);
+      const videos = files.filter(isVideoFile);
+      if (videos.length > 0) void importVideoFiles(sceneGraph, videos, frame);
     },
     [frameAt, sceneGraph]
   );

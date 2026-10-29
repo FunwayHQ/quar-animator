@@ -32,6 +32,7 @@ import { intoArtboardBeneath } from '../../services/intoArtboard';
 import { setCanvasViewBounds, setCanvasViewCenter } from '../../services/canvasView';
 import { isSoundFile } from '../../services/soundFiles';
 import { importSoundFiles } from '../../services/soundImport';
+import { importVideoFiles, isVideoFile } from '../../services/videoImport';
 import { useCanvasTools } from '../../hooks/useCanvasTools';
 import { useToolShortcuts } from '../../hooks/useToolShortcuts';
 import { useEditShortcuts } from '../../hooks/useEditShortcuts';
@@ -2450,13 +2451,18 @@ export function Canvas({
       if (soundFiles.length > 0 && sceneForSounds) {
         void importSoundFiles(sceneForSounds, soundFiles);
       }
+      // Videos fitted to the artboard in view, their clips from the playhead
+      const videoFiles = files.filter(isVideoFile);
+      if (videoFiles.length > 0 && sceneForSounds) {
+        void importVideoFiles(sceneForSounds, videoFiles);
+      }
 
       const isSvgFile = (file: File) =>
         file.type === 'image/svg+xml' || file.name.toLowerCase().endsWith('.svg');
       const imageFile = files.find((file) => file.type.startsWith('image/') || isSvgFile(file));
       if (!imageFile) {
-        if (soundFiles.length === 0) {
-          toast.info('Drop an image, SVG, sound, or .quar project file onto the canvas');
+        if (soundFiles.length === 0 && videoFiles.length === 0) {
+          toast.info('Drop an image, SVG, video, sound, or .quar project file onto the canvas');
         }
         return;
       }
@@ -2549,7 +2555,7 @@ export function Canvas({
     >
       {isFileDragOver && (
         <div className={styles.fileDropOverlay} role="status" aria-live="polite">
-          Drop an image, SVG, sound, or project file to import
+          Drop an image, SVG, video, sound, or project file to import
         </div>
       )}
       {/* Symbol editing banner */}

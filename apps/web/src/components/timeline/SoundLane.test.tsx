@@ -19,6 +19,11 @@ const mocks = vi.hoisted(() => ({
   chooseSoundFiles: vi.fn(),
 }));
 vi.mock('../../services/soundImport', () => mocks);
+const importVideoFiles = vi.hoisted(() => vi.fn(async () => {}));
+vi.mock('../../services/videoImport', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../services/videoImport')>()),
+  importVideoFiles,
+}));
 
 // Decoding takes as long as a test needs: it's done only where a test does it
 const decodedSound = vi.hoisted(() => vi.fn(() => new Promise<AudioBuffer>(() => {})));
@@ -308,6 +313,19 @@ describe('the sound lane', () => {
 
     expect(mocks.importSoundFiles).toHaveBeenCalledWith(sceneGraph, [sound], 120);
     expect(screen.queryByTestId('sound-drop-marker')).not.toBeInTheDocument();
+  });
+
+  it('puts video files dropped on the tracks on the canvas, their clips from where they’re dropped', () => {
+    renderTimeline();
+    laneOfWidth();
+    const tracks = screen.getByTestId('timeline-tracks');
+    const clip = new File(['mp4'], 'clip.mp4', { type: 'video/mp4' });
+    const drop = createEvent.drop(tracks, { dataTransfer: { types: ['Files'], files: [clip] } });
+    Object.defineProperty(drop, 'clientX', { value: 120 });
+    fireEvent(tracks, drop);
+
+    expect(importVideoFiles).toHaveBeenCalledWith(sceneGraph, [clip], 120);
+    expect(mocks.importSoundFiles).not.toHaveBeenCalled();
   });
 
   it('shows the artboard’s clips when its timeline is in view', () => {

@@ -12,6 +12,7 @@ import {
   type SceneGraphLike,
 } from '../../stores/editorStore';
 import { useSceneGraph } from '../../contexts/SceneGraphContext';
+import { chooseVideoFiles, importVideoFiles } from '../../services/videoImport';
 import { flipSelected } from '../canvas/flipSelected';
 import { bindableLayers } from '../canvas/bindToBones';
 import { hasGoogleFontsConsent, setGoogleFontsConsent } from '../common/ConsentBanner';
@@ -509,6 +510,13 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
     projectActions.importSound();
   }, [projectActions, closeMenu]);
 
+  // Videos are placed on the canvas: the scene graph itself, not the store's view of it
+  const scene = useSceneGraph();
+  const handleImportVideo = useCallback(() => {
+    closeMenu();
+    chooseVideoFiles((files) => void importVideoFiles(scene, files));
+  }, [scene, closeMenu]);
+
   // The file keys do what the File menu does: the same questions and dialogs
   const fileShortcuts = useMemo(
     () => ({
@@ -609,6 +617,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                   />
                   <MenuItem label="Import Image..." onClick={handleImportImage} />
                   <MenuItem label="Import Sound..." onClick={handleImportSound} />
+                  <MenuItem label="Import Video..." onClick={handleImportVideo} />
                 </div>
               )}
             </div>

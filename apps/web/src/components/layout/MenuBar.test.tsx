@@ -26,6 +26,16 @@ const restoreMocks = vi.hoisted(() => ({
   error: vi.fn(),
 }));
 
+const videoMocks = vi.hoisted(() => ({
+  chosen: [] as File[],
+  importVideoFiles: vi.fn(async () => {}),
+}));
+
+vi.mock('../../services/videoImport', () => ({
+  chooseVideoFiles: (onChosen: (files: File[]) => void) => onChosen(videoMocks.chosen),
+  importVideoFiles: videoMocks.importVideoFiles,
+}));
+
 vi.mock('../../tutorials/seedTutorials', () => ({
   restoreTutorials: restoreMocks.restoreTutorials,
 }));
@@ -415,6 +425,27 @@ describe('MenuBar', () => {
     fireEvent.click(screen.getByTestId('menu-file'));
     fireEvent.click(screen.getByText('Import Sound...'));
     expect(actions.importSound).toHaveBeenCalledOnce();
+  });
+
+  it('imports the videos chosen from File > Import Video onto the canvas', () => {
+    const clip = new File(['mp4'], 'clip.mp4', { type: 'video/mp4' });
+    videoMocks.chosen = [clip];
+    let scene: SceneGraph | null = null;
+    function Scene() {
+      scene = useSceneGraph();
+      return null;
+    }
+    render(
+      <>
+        <Scene />
+        <MenuBar projectActions={createMockProjectActions()} />
+      </>
+    );
+    fireEvent.click(screen.getByTestId('menu-file'));
+    fireEvent.click(screen.getByText('Import Video...'));
+    expect(videoMocks.importVideoFiles).toHaveBeenCalledWith(scene, [clip]);
+    // The menu closes
+    expect(screen.queryByText('Import Video...')).not.toBeInTheDocument();
   });
 
   describe('Edit > Paste', () => {

@@ -15,6 +15,11 @@ import { textIn } from '../../test/textNode';
 const smartGuides = vi.hoisted(() => ({ renders: 0 }));
 const importSoundFiles = vi.hoisted(() => vi.fn(async () => {}));
 vi.mock('../../services/soundImport', () => ({ importSoundFiles }));
+const importVideoFiles = vi.hoisted(() => vi.fn(async () => {}));
+vi.mock('../../services/videoImport', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../services/videoImport')>()),
+  importVideoFiles,
+}));
 
 vi.mock('../canvas/SmartGuidesOverlay', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../canvas/SmartGuidesOverlay')>();
@@ -251,7 +256,7 @@ describe('Canvas', () => {
     fireEvent.dragOver(dropZone, { dataTransfer: { types: ['Files'] } });
 
     expect(
-      screen.getByText('Drop an image, SVG, sound, or project file to import')
+      screen.getByText('Drop an image, SVG, video, sound, or project file to import')
     ).toBeInTheDocument();
   });
 
@@ -276,6 +281,20 @@ describe('Canvas', () => {
     fireEvent.drop(dropZone, { dataTransfer: { files: [voice, music], types: ['Files'] } });
 
     expect(importSoundFiles).toHaveBeenCalledWith(expect.anything(), [voice, music]);
+  });
+
+  it('puts dropped video files on the canvas, their sounds with them', () => {
+    const sceneGraph = renderCanvasWithScene();
+    const dropZone = screen.getByTestId('canvas-drop-zone');
+    const clip = new File(['mp4'], 'clip.mp4', { type: 'video/mp4' });
+    // Some systems give no type: known by its name
+    const phone = new File(['mov'], 'phone.MOV', { type: '' });
+    const voice = new File(['RIFF'], 'voice.wav', { type: 'audio/wav' });
+
+    fireEvent.drop(dropZone, { dataTransfer: { files: [clip, voice, phone], types: ['Files'] } });
+
+    expect(importVideoFiles).toHaveBeenCalledWith(sceneGraph, [clip, phone]);
+    expect(importSoundFiles).toHaveBeenCalledWith(expect.anything(), [voice]);
   });
 
   describe('editing keys', () => {
