@@ -18,6 +18,7 @@ Binary layout (little-endian):
 from __future__ import annotations
 
 import base64
+import hashlib
 import json
 import re
 import struct
@@ -26,6 +27,13 @@ from typing import Any
 from app.config import Config
 
 DATA_URI_PATTERN = re.compile(r"^data:(image/[^;]+);base64,(.+)$")
+
+# A video's file is kept whole in a buffer of its own, which its library
+# entry's `file` names ("buffer:N"). While a project is open its bytes are
+# held here, its `file` naming them by their hash, so the project stays plain
+# JSON (and its buffers can be numbered afresh when it's saved).
+FILE_REF_PREFIX = "file:sha256:"
+_open_files: dict[str, tuple[str, bytes]] = {}
 
 
 def decode_quar_binary(data: bytes) -> tuple[dict[str, Any], list[tuple[str, bytes]]]:
@@ -110,6 +118,7 @@ def extract_image_buffers(obj: Any, buffers: list[tuple[str, bytes]], seen: dict
     """Walk JSON tree, extract data URI 'src' fields to binary buffers.
 
     Replaces data URIs with 'buffer:N' references. Deduplicates identical images.
+    A video's `file`, named by its hash while open, gets a buffer of its own too.
     """
     if seen is None:
         seen = {}
@@ -117,7 +126,19 @@ def extract_image_buffers(obj: Any, buffers: list[tuple[str, bytes]], seen: dict
     if isinstance(obj, dict):
         result = {}
         for key, value in obj.items():
-            if key == "src" and isinstance(value, str):
+            if key == "file" and isinstance(value, str) and value.startswith(FILE_REF_PREFIX):
+                held = _open_files.get(value[len(FILE_REF_PREFIX) :])
+                if held is None:
+                    # Not one this server read: left as it is
+                    result[key] = value
+                elif value in seen:
+                    result[key] = f"buffer:{seen[value]}"
+                else:
+                    idx = len(buffers)
+                    buffers.append(held)
+                    seen[value] = idx
+                    result[key] = f"buffer:{idx}"
+            elif key == "src" and isinstance(value, str):
                 match = DATA_URI_PATTERN.match(value)
                 if match:
                     if value in seen:
@@ -141,11 +162,24 @@ def extract_image_buffers(obj: Any, buffers: list[tuple[str, bytes]], seen: dict
 
 
 def restore_image_buffers(obj: Any, buffers: list[tuple[str, bytes]]) -> Any:
-    """Walk JSON tree, restore 'buffer:N' references to data URIs."""
+    """Walk JSON tree, restore 'buffer:N' references to data URIs.
+
+    A `file` reference (a video's file) names its bytes by their hash instead,
+    the bytes held until the project is saved.
+    """
     if isinstance(obj, dict):
         result = {}
         for key, value in obj.items():
-            if key == "src" and isinstance(value, str) and value.startswith("buffer:"):
+            if key == "file" and isinstance(value, str) and value.startswith("buffer:"):
+                idx = int(value.split(":")[1])
+                if 0 <= idx < len(buffers):
+                    mime_type, raw = buffers[idx]
+                    digest = hashlib.sha256(raw).hexdigest()
+                    _open_files[digest] = (mime_type, raw)
+                    result[key] = f"{FILE_REF_PREFIX}{digest}"
+                else:
+                    result[key] = value
+            elif key == "src" and isinstance(value, str) and value.startswith("buffer:"):
                 idx = int(value.split(":")[1])
                 if 0 <= idx < len(buffers):
                     mime_type, raw = buffers[idx]

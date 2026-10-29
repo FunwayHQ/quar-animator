@@ -189,3 +189,61 @@ def test_decode_too_small():
         assert False, "Should have raised ValueError"
     except ValueError as e:
         assert "too small" in str(e)
+
+
+# A video's file is kept whole in a buffer of its own, which its library
+# entry's `file` names, as the editor writes it
+
+
+PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 16
+MP4 = b"\x00\x00\x00\x18ftypmp42" + b"\x01" * 64
+
+
+def _video_project(file_first: bool) -> tuple[dict, list]:
+    image_ref, file_ref = ("buffer:1", "buffer:0") if file_first else ("buffer:0", "buffer:1")
+    project = {
+        "version": "3.0",
+        "pages": [{"id": "p", "sceneGraph": {"nodes": [{"id": "img1", "type": "image", "src": image_ref}]}}],
+        "videos": [{"id": "v1", "name": "Clip", "mimeType": "video/mp4", "file": file_ref}],
+    }
+    image = ("image/png", PNG)
+    video = ("video/mp4", MP4)
+    return project, [video, image] if file_first else [image, video]
+
+
+@pytest.mark.parametrize("file_first", [True, False])
+def test_load_and_save_keep_a_videos_file(tmp_path: Path, file_first: bool):
+    from app.quar_format import load_quar_file, save_quar_file
+
+    project, buffers = _video_project(file_first)
+    source = tmp_path / "in.quar"
+    source.write_bytes(encode_quar_binary(project, buffers))
+
+    loaded = load_quar_file(str(source))
+    # Loaded, the project is plain JSON (as the tools show it)
+    json.dumps(loaded)
+    out = tmp_path / "out.quar"
+    save_quar_file(str(out), loaded)
+
+    saved, saved_buffers = decode_quar_binary(out.read_bytes())
+    file_index = int(saved["videos"][0]["file"].split(":")[1])
+    image_index = int(saved["pages"][0]["sceneGraph"]["nodes"][0]["src"].split(":")[1])
+    assert saved_buffers[file_index] == ("video/mp4", MP4)
+    assert saved_buffers[image_index] == ("image/png", PNG)
+
+
+def test_a_videos_file_survives_a_copy_of_the_project(tmp_path: Path):
+    from app.quar_format import load_quar_file, save_quar_file
+
+    project, buffers = _video_project(False)
+    source = tmp_path / "in.quar"
+    source.write_bytes(encode_quar_binary(project, buffers))
+
+    # Tools edit deep copies of the project
+    edited = copy.deepcopy(load_quar_file(str(source)))
+    edited["name"] = "Edited"
+    out = tmp_path / "out.quar"
+    save_quar_file(str(out), edited)
+
+    saved, saved_buffers = decode_quar_binary(out.read_bytes())
+    assert saved_buffers[int(saved["videos"][0]["file"].split(":")[1])] == ("video/mp4", MP4)
