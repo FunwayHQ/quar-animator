@@ -392,8 +392,16 @@ export interface VideoClip {
   start: number;
   /** Where in the video it starts, in seconds (what's trimmed off its beginning) */
   offset: number;
-  /** How much of the video it plays from there, in seconds */
+  /** How much of the video it plays from there, in seconds (one pass of it) */
   duration: number;
+  /** How fast it plays: 2 twice as fast, its linked sound with it, keeping its pitch (1 when absent) */
+  speed?: number;
+  /** Whether it starts over when it gets to its end, for as long as `loopFor` */
+  loop?: boolean;
+  /** A looped clip's length on its timeline, in seconds (one pass when absent) */
+  loopFor?: number;
+  /** Whether its last picture stays on after it ends (else the layer shows nothing there) */
+  holdLastFrame?: boolean;
 }
 
 export type BoneStyle = 'stick' | 'octahedral';
@@ -793,7 +801,7 @@ export interface SoundClip {
   start: number;
   /** Where in the sound it starts, in seconds (what's trimmed off its beginning) */
   offset: number;
-  /** How much of the sound it plays from there, in seconds */
+  /** How much of the sound it plays from there, in seconds of the sound (one pass of it) */
   duration: number;
   /** 1 plays it as recorded, 0.5 at half the amplitude */
   gain: number;
@@ -807,6 +815,12 @@ export interface SoundClip {
    * clip until it's unlinked (none: a sound of its own)
    */
   linkedTo?: string;
+  /** How fast it plays, keeping its pitch: 2 twice as fast (1 when absent) */
+  speed?: number;
+  /** Whether it starts over when it gets to its end, for as long as `loopFor` */
+  loop?: boolean;
+  /** A looped clip's length on its timeline, in seconds (one pass when absent) */
+  loopFor?: number;
 }
 
 /**
