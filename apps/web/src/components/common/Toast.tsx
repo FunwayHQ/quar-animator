@@ -7,6 +7,7 @@
  *   toast.success('Saved!');
  *   toast.error('Something went wrong');
  *   toast.info('Tip: press V for selection tool');
+ *   const progress = toast.progress('Importing…'); progress.update('…40%'); progress.done();
  *
  * Mount <ToastContainer /> once in the app root.
  */
@@ -25,7 +26,18 @@ export interface ToastItem {
   id: string;
   message: string;
   variant: ToastVariant;
+  /** Milliseconds it stays up; Infinity until it's dismissed */
   duration: number;
+  /** Takes the toast with this id down */
+  dismiss?: boolean;
+  /** A new message for the toast with this id, if it's still up */
+  update?: boolean;
+}
+
+/** A toast that stays up while something goes on, saying how far it has got. */
+export interface ProgressToast {
+  update(message: string): void;
+  done(): void;
 }
 
 // ============================================================================
@@ -74,6 +86,21 @@ export const toast = {
   info(message: string, duration?: number): void {
     createToast(message, 'info', duration);
   },
+  progress(message: string): ProgressToast {
+    const id = `toast_${++nextId}`;
+    let shown = true;
+    emit({ id, message, variant: 'info', duration: Infinity });
+    return {
+      update(next) {
+        if (shown) emit({ id, message: next, variant: 'info', duration: Infinity, update: true });
+      },
+      done() {
+        if (!shown) return;
+        shown = false;
+        emit({ id, message: '', variant: 'info', duration: 0, dismiss: true });
+      },
+    };
+  },
 };
 
 // ============================================================================
@@ -97,6 +124,8 @@ function Toast({ item, onRemove }: ToastProps) {
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
+    // A progress toast stays until it's done
+    if (!Number.isFinite(item.duration)) return;
     timerRef.current = setTimeout(() => {
       onRemove(item.id);
     }, item.duration);
@@ -136,12 +165,6 @@ const EXIT_ANIMATION_MS = 150;
 export function ToastContainer() {
   const [toasts, setToasts] = useState<ToastState[]>([]);
 
-  useEffect(() => {
-    return subscribe((item) => {
-      setToasts((prev) => [...prev, { ...item, exiting: false }]);
-    });
-  }, []);
-
   const removeToast = useCallback((id: string) => {
     // Set exiting flag for slide-out animation
     setToasts((prev) => prev.map((t) => (t.id === id ? { ...t, exiting: true } : t)));
@@ -150,6 +173,21 @@ export function ToastContainer() {
       setToasts((prev) => prev.filter((t) => t.id !== id));
     }, EXIT_ANIMATION_MS);
   }, []);
+
+  useEffect(() => {
+    return subscribe((item) => {
+      if (item.dismiss) {
+        removeToast(item.id);
+        return;
+      }
+      // A progress toast says how far it has got in its own place
+      setToasts((prev) =>
+        item.update
+          ? prev.map((t) => (t.id === item.id ? { ...t, message: item.message } : t))
+          : [...prev, { ...item, exiting: false }]
+      );
+    });
+  }, [removeToast]);
 
   if (toasts.length === 0) return null;
 
