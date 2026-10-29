@@ -17,6 +17,8 @@
   cursor: grab;
   touch-action: none;
   user-select: none;
+  /* Its layers stay inside it: the row's keyframes lie over all of it */
+  isolation: isolate;
   transition:
     background var(--duration-fast),
     border-color var(--duration-fast),
