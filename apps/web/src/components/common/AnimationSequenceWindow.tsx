@@ -110,7 +110,7 @@ export function addStepHint(
     return `Only ${animated.length} of ${selected.length} selected objects have keyframes of their own; the others are skipped.`;
   }
   return animated.length === 1
-    ? `Turns “${animated[0]!.name}”’s keyframes into a step.`
+    ? `Turns the keyframes of “${animated[0]!.name}” into a step.`
     : `Turns the keyframes of ${animated.length} objects into steps.`;
 }
 

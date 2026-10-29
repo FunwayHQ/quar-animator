@@ -283,7 +283,7 @@ describe('AnimationSequenceWindow', () => {
 
     act(() => store().setSelection(['title']));
     expect(addButton()).toBeEnabled();
-    expect(hint()).toHaveTextContent('Turns “Title”’s keyframes into a step.');
+    expect(hint()).toHaveTextContent('Turns the keyframes of “Title” into a step.');
   });
 
   it('asks for a selection before adding a preset, and stays quiet once there is one', () => {
