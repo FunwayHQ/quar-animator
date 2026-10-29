@@ -435,6 +435,10 @@ describe('Timeline', () => {
       useEditorStore.setState({
         timeline: createTimeline({ tracks: [track] }),
         selectedKeyframeIds: new Set<string>(),
+        undoStack: [],
+        redoStack: [],
+        canUndo: false,
+        canRedo: false,
       });
       render(
         <SceneGraphProvider>
@@ -455,11 +459,13 @@ describe('Timeline', () => {
         Object.defineProperty(diamond, 'setPointerCapture', { value: vi.fn() });
         return diamond;
       });
-      return { ids: keyframes.map((kf) => kf.id), diamonds };
+      return { ids: keyframes.map((kf) => kf.id), diamonds, graph: graph! };
     }
 
     const times = () =>
       useEditorStore.getState().timeline.tracks[0]!.keyframes.map((kf) => kf.time);
+    const easings = () =>
+      useEditorStore.getState().timeline.tracks[0]!.keyframes.map((kf) => kf.easing);
 
     it('keeps every selected keyframe selected after dragging them', () => {
       const { ids, diamonds } = renderThreeKeyframes();
@@ -474,6 +480,60 @@ describe('Timeline', () => {
 
       expect(times()).toEqual([15, 25, 35]);
       expect(useEditorStore.getState().selectedKeyframeIds).toEqual(new Set(ids));
+    });
+
+    it('undoes a whole drag in one step, and redoes it', () => {
+      const { ids, diamonds, graph } = renderThreeKeyframes();
+      act(() => useEditorStore.setState({ selectedKeyframeIds: new Set(ids) }));
+
+      const first = diamonds[0]!;
+      fireEvent.pointerDown(first, { button: 0, clientX: 10, pointerId: 1 });
+      fireEvent.pointerMove(first, { clientX: 12, pointerId: 1 });
+      fireEvent.pointerMove(first, { clientX: 15, pointerId: 1 });
+      fireEvent.pointerMove(first, { clientX: 18, pointerId: 1 });
+      fireEvent.pointerUp(first, { clientX: 18, pointerId: 1 });
+      expect(times()).toEqual([18, 28, 38]);
+      expect(useEditorStore.getState().undoStack).toHaveLength(1);
+
+      act(() => useEditorStore.getState().undo(graph));
+      expect(times()).toEqual([10, 20, 30]);
+      act(() => useEditorStore.getState().redo(graph));
+      expect(times()).toEqual([18, 28, 38]);
+
+      // The next drag is a step of its own
+      fireEvent.pointerDown(first, { button: 0, clientX: 18, pointerId: 1 });
+      fireEvent.pointerMove(first, { clientX: 20, pointerId: 1 });
+      fireEvent.pointerUp(first, { clientX: 20, pointerId: 1 });
+      expect(useEditorStore.getState().undoStack).toHaveLength(2);
+    });
+
+    it('pushes no undo step for a click without a drag', () => {
+      const { diamonds } = renderThreeKeyframes();
+      fireEvent.pointerDown(diamonds[1]!, { button: 0, clientX: 20, pointerId: 1 });
+      fireEvent.pointerUp(diamonds[1]!, { clientX: 20, pointerId: 1 });
+      expect(useEditorStore.getState().canUndo).toBe(false);
+    });
+
+    it('undoes deleting and re-easing keyframes from their menu', () => {
+      const { ids, diamonds, graph } = renderThreeKeyframes();
+      act(() => useEditorStore.setState({ selectedKeyframeIds: new Set([ids[0]!, ids[1]!]) }));
+
+      fireEvent.contextMenu(diamonds[0]!, { clientX: 10 });
+      fireEvent.click(screen.getByRole('menuitem', { name: /Ease In\/Out/ }));
+      expect(easings()).toEqual(['easeInOutCubic', 'easeInOutCubic', 'linear']);
+      // Both keyframes in one step
+      expect(useEditorStore.getState().undoStack).toHaveLength(1);
+
+      fireEvent.contextMenu(diamonds[0]!, { clientX: 10 });
+      fireEvent.click(screen.getByRole('menuitem', { name: /Delete Keyframes/ }));
+      expect(times()).toEqual([30]);
+
+      act(() => useEditorStore.getState().undo(graph));
+      expect(times()).toEqual([10, 20, 30]);
+      act(() => useEditorStore.getState().undo(graph));
+      expect(easings()).toEqual(['linear', 'linear', 'linear']);
+      act(() => useEditorStore.getState().redo(graph));
+      expect(easings()).toEqual(['easeInOutCubic', 'easeInOutCubic', 'linear']);
     });
 
     it('selects only the clicked keyframe on a click without a drag', () => {

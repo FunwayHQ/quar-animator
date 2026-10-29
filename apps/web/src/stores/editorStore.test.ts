@@ -1043,7 +1043,7 @@ describe('EditorStore', () => {
       useEditorStore.setState({ selectedKeyframeIds: new Set([kfId]) });
 
       const map = new Map([[kfId, { nodeId: 'node1', property: 'opacity' }]]);
-      removeSelectedKeyframes(map);
+      removeSelectedKeyframes(map, new SceneGraph());
 
       const { timeline, selectedKeyframeIds } = useEditorStore.getState();
       expect(timeline.tracks.length).toBe(0);
@@ -1076,7 +1076,7 @@ describe('EditorStore', () => {
       copySelectedKeyframes(map);
       expect(useEditorStore.getState().keyframeClipboard).not.toBeNull();
 
-      pasteKeyframes('node2', 50);
+      pasteKeyframes('node2', 50, new SceneGraph());
       const { timeline } = useEditorStore.getState();
       // Should now have tracks for node1 and node2
       const node2Tracks = timeline.tracks.filter((t: { nodeId: string }) => t.nodeId === 'node2');
@@ -1093,7 +1093,7 @@ describe('EditorStore', () => {
       useEditorStore.setState({ selectedKeyframeIds: new Set([kfId]) });
 
       const map = new Map([[kfId, { nodeId: 'node1', property: 'opacity' }]]);
-      moveSelectedKeyframes(map, 5);
+      moveSelectedKeyframes(map, 5, new SceneGraph());
 
       expect(useEditorStore.getState().timeline.tracks[0].keyframes[0].time).toBe(15);
     });

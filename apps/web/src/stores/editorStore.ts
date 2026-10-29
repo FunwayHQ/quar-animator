@@ -185,6 +185,28 @@ interface HistorySnapshot {
   symbolsAdded?: SymbolDefinition[];
 }
 
+/**
+ * An undo group, from beginUndoGroup(): the edits made while it's open — a
+ * drag, typing in a field — are one undo step.
+ */
+export interface UndoGroup {
+  /** False once it has ended, or another group began in its place. */
+  readonly open: boolean;
+}
+
+interface OpenUndoGroup extends UndoGroup {
+  open: boolean;
+  /** The step it pushed: later pushes join it while it's on top of the stack. */
+  step: HistorySnapshot | null;
+}
+
+let undoGroup: OpenUndoGroup | null = null;
+
+function closeUndoGroup() {
+  if (undoGroup) undoGroup.open = false;
+  undoGroup = null;
+}
+
 interface HistoryCapturable {
   selectedNodeIds: Set<string>;
   timeline: Timeline;
@@ -848,20 +870,30 @@ export interface EditorStore extends SequenceActions, SoundActions, TransitionAc
     value: unknown,
     easing?: EasingFunction
   ) => void;
-  removeSelectedKeyframes: (keyframeMap: Map<string, { nodeId: string; property: string }>) => void;
+  /** Delete the selected keyframes (not a sequence's); undoable. */
+  removeSelectedKeyframes: (
+    keyframeMap: Map<string, { nodeId: string; property: string }>,
+    sceneGraph: SceneGraphLike
+  ) => void;
   /** Remove every animation track of these layers (not their children); undoable. */
   deleteLayerAnimation: (sceneGraph: SceneGraphLike, nodeIds: string[]) => void;
+  /** One keyframe's easing, no undo step: edits use setSelectedKeyframesEasing. */
   setKeyframeEasing: (
     nodeId: string,
     property: string,
     keyframeId: string,
     easing: EasingFunction
   ) => void;
+  /** Ease every selected keyframe (not a sequence's) alike; one undo step. */
+  setSelectedKeyframesEasing: (easing: EasingFunction, sceneGraph: SceneGraphLike) => void;
   copySelectedKeyframes: (keyframeMap: Map<string, { nodeId: string; property: string }>) => void;
-  pasteKeyframes: (nodeId: string, frame: number) => void;
+  /** Paste the copied keyframes onto a layer from a frame on; undoable. */
+  pasteKeyframes: (nodeId: string, frame: number, sceneGraph: SceneGraphLike) => void;
+  /** Move the selected keyframes; undoable (a drag in an undo group is one step). */
   moveSelectedKeyframes: (
     keyframeMap: Map<string, { nodeId: string; property: string }>,
-    deltaFrames: number
+    deltaFrames: number,
+    sceneGraph: SceneGraphLike
   ) => void;
   removeKeyframeAtFrame: (nodeId: string, property: string, frame: number) => void;
   /**
@@ -1017,6 +1049,13 @@ export interface EditorStore extends SequenceActions, SoundActions, TransitionAc
   canUndo: boolean;
   canRedo: boolean;
   pushUndo: (sceneGraph: SceneGraphLike) => void;
+  /**
+   * Begin an undo group: until it ends, the edits made are one undo step (the
+   * first push lands, later ones join it). Takes the place of any group open.
+   */
+  beginUndoGroup: () => UndoGroup;
+  /** End this undo group if it's still open (none given: whichever is). */
+  endUndoGroup: (group?: UndoGroup) => void;
   undo: (sceneGraph: SceneGraphLike) => void;
   redo: (sceneGraph: SceneGraphLike) => void;
   clearHistory: () => void;
@@ -3001,7 +3040,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     // Trigger re-render by creating a new timeline reference
     set({ timeline: { ...timeline }, isDirty: true });
   },
-  removeSelectedKeyframes: (keyframeMap: Map<string, { nodeId: string; property: string }>) => {
+  removeSelectedKeyframes: (keyframeMap, sceneGraph) => {
     const { timeline, selectedKeyframeIds } = get();
     if (selectedKeyframeIds.size === 0) return;
     const mgr = new KeyframeManager(timeline);
@@ -3012,6 +3051,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         toRemove.push({ nodeId: info.nodeId, property: info.property, keyframeId: kfId });
       }
     }
+    if (toRemove.length > 0) get().pushUndo(sceneGraph);
     mgr.removeKeyframes(toRemove);
     set({ timeline: { ...timeline }, selectedKeyframeIds: new Set<string>(), isDirty: true });
   },
@@ -3055,6 +3095,21 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     mgr.setKeyframeEasing(nodeId, property, keyframeId, easing);
     set({ timeline: { ...timeline }, isDirty: true });
   },
+  setSelectedKeyframesEasing: (easing, sceneGraph) => {
+    const { timeline, selectedKeyframeIds } = get();
+    const targets = timeline.tracks.flatMap((track) =>
+      track.keyframes
+        .filter((kf) => selectedKeyframeIds.has(kf.id) && kf.sequenceStepId === undefined)
+        .map((kf) => ({ nodeId: track.nodeId, property: track.property, keyframeId: kf.id }))
+    );
+    if (targets.length === 0) return;
+    get().pushUndo(sceneGraph);
+    const mgr = new KeyframeManager(timeline);
+    for (const { nodeId, property, keyframeId } of targets) {
+      mgr.setKeyframeEasing(nodeId, property, keyframeId, easing);
+    }
+    set({ timeline: { ...timeline }, isDirty: true });
+  },
   copySelectedKeyframes: (keyframeMap: Map<string, { nodeId: string; property: string }>) => {
     const { timeline, selectedKeyframeIds } = get();
     if (selectedKeyframeIds.size === 0) return;
@@ -3069,9 +3124,10 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     const clipboard = mgr.copyKeyframes(entries);
     if (clipboard) set({ keyframeClipboard: clipboard });
   },
-  pasteKeyframes: (nodeId: string, frame: number) => {
+  pasteKeyframes: (nodeId, frame, sceneGraph) => {
     const { timeline, keyframeClipboard } = get();
     if (!keyframeClipboard) return;
+    get().pushUndo(sceneGraph);
     const mgr = new KeyframeManager(timeline);
     const pasted = mgr.pasteKeyframes(keyframeClipboard, nodeId, frame);
     set({
@@ -3080,10 +3136,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       isDirty: true,
     });
   },
-  moveSelectedKeyframes: (
-    keyframeMap: Map<string, { nodeId: string; property: string }>,
-    deltaFrames: number
-  ) => {
+  moveSelectedKeyframes: (keyframeMap, deltaFrames, sceneGraph) => {
     const { timeline, selectedKeyframeIds } = get();
     if (selectedKeyframeIds.size === 0) return;
     const mgr = new KeyframeManager(timeline);
@@ -3097,6 +3150,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       entries.push({ nodeId: info.nodeId, property: info.property, keyframeId: kfId });
     }
     if (entries.length === 0) return;
+    get().pushUndo(sceneGraph);
     mgr.moveKeyframes(entries, deltaFrames);
     set({ timeline: { ...timeline }, isDirty: true });
   },
@@ -3887,17 +3941,30 @@ function createHistoryActions(
     pushUndo: (sceneGraph: SceneGraphLike) => {
       const state = get();
       const { undoStack } = state;
+      // In an undo group, the step it pushed takes this edit too (until it's undone)
+      if (undoGroup?.step && undoGroup.step === undoStack[undoStack.length - 1]) return;
       const snapshot = makeHistorySnapshot(sceneGraph, state);
       const newStack = [...undoStack, snapshot];
       if (newStack.length > MAX_UNDO_STACK_SIZE) {
         newStack.shift();
       }
+      if (undoGroup) undoGroup.step = snapshot;
       set({
         undoStack: newStack,
         redoStack: [],
         canUndo: true,
         canRedo: false,
       });
+    },
+
+    beginUndoGroup: (): UndoGroup => {
+      closeUndoGroup();
+      undoGroup = { open: true, step: null };
+      return undoGroup;
+    },
+
+    endUndoGroup: (group?: UndoGroup) => {
+      if (!group || group === undoGroup) closeUndoGroup();
     },
 
     undo: (sceneGraph: SceneGraphLike) => {
@@ -3975,6 +4042,7 @@ function createHistoryActions(
     },
 
     clearHistory: () => {
+      closeUndoGroup();
       set({
         undoStack: [],
         redoStack: [],
@@ -3991,6 +4059,7 @@ function createHistoryActions(
       // Single source of truth for a fresh project. The Zustand store is a global
       // singleton, so New Project must clear every project-scoped field or the
       // previous project's pages/symbols/timeline/rigging leak into the new one.
+      closeUndoGroup();
       const defaultPage = createDefaultPage();
       set({
         projectId: null,

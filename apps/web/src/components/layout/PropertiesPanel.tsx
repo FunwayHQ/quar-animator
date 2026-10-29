@@ -572,7 +572,7 @@ export function PropertiesPanel() {
   const setIKChainEnabled = useEditorStore((state) => state.setIKChainEnabled);
   const dsPoints = useEditorStore((state) => state.directSelectionPoints);
   const selectedKeyframeIds = useEditorStore((state) => state.selectedKeyframeIds);
-  const setKeyframeEasing = useEditorStore((state) => state.setKeyframeEasing);
+  const setSelectedKeyframesEasing = useEditorStore((state) => state.setSelectedKeyframesEasing);
   const weightPaintBoneId = useEditorStore((state) => state.weightPaintBoneId);
   const setWeightPaintBoneId = useEditorStore((state) => state.setWeightPaintBoneId);
   const weightPaintBrushSize = useEditorStore((state) => state.weightPaintBrushSize);
@@ -4472,17 +4472,7 @@ export function PropertiesPanel() {
                       easing={kfEasing}
                       anchorX={easingEditorState.x}
                       anchorY={easingEditorState.y}
-                      onChange={(newEasing) => {
-                        for (const selKfId of selectedKeyframeIds) {
-                          for (const track of timeline.tracks) {
-                            for (const kf of track.keyframes) {
-                              if (kf.id === selKfId) {
-                                setKeyframeEasing(track.nodeId, track.property, selKfId, newEasing);
-                              }
-                            }
-                          }
-                        }
-                      }}
+                      onChange={(newEasing) => setSelectedKeyframesEasing(newEasing, sceneGraph)}
                       onClose={() => setEasingEditorState(null)}
                     />
                   )}

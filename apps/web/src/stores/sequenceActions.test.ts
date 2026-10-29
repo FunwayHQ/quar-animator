@@ -175,11 +175,11 @@ describe('Animation Sequence actions', () => {
         .keyframes.find((kf) => kf.time === 60)!.id;
       store().setSelectedKeyframeIds([managedId(), ownId]);
 
-      store().moveSelectedKeyframes(keyframeMap(), 6);
+      store().moveSelectedKeyframes(keyframeMap(), 6, sg);
       expect(opacityKeyframes().map((kf) => kf.time)).toEqual([0, 24, 66]);
 
       store().setSelectedKeyframeIds([managedId(), ownId]);
-      store().removeSelectedKeyframes(keyframeMap());
+      store().removeSelectedKeyframes(keyframeMap(), sg);
       expect(opacityKeyframes().map((kf) => [kf.time, kf.managed])).toEqual([
         [0, true],
         [24, true],
@@ -192,7 +192,7 @@ describe('Animation Sequence actions', () => {
         .timeline.tracks.find((track) => track.property === 'opacity')!
         .keyframes.find((kf) => kf.time === 30)!.id;
       store().setSelectedKeyframeIds([ownId]);
-      store().moveSelectedKeyframes(keyframeMap(), -6);
+      store().moveSelectedKeyframes(keyframeMap(), -6, sg);
       store().updateKeyframeTimeAndValueById('a', 'opacity', ownId, 0, 0.5);
       expect(opacityKeyframes().map((kf) => kf.time)).toEqual([0, 24, 30]);
     });

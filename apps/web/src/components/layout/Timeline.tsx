@@ -2,6 +2,7 @@ import { useRef, useCallback, useState, useEffect, useMemo, useLayoutEffect } fr
 import { useSceneGraph } from '../../contexts/SceneGraphContext';
 import { useEditorStore } from '../../stores/editorStore';
 import { isPosingScene } from '../../stores/scenePosing';
+import { undoGroupUntilRelease } from '../../stores/undoGroups';
 import { formatTimecode, getAnimationSpans, getTracksByNode } from '@quar/animation';
 import type { AnimationSpan } from '@quar/animation';
 import { getRulerScale } from './timelineRuler';
@@ -129,7 +130,7 @@ export function Timeline({ playback }: TimelineProps = {}) {
   const setSelectedKeyframeIds = useEditorStore((s) => s.setSelectedKeyframeIds);
   const setSelection = useEditorStore((s) => s.setSelection);
   const addKeyframeAtFrame = useEditorStore((s) => s.addKeyframeAtFrame);
-  const setKeyframeEasing = useEditorStore((s) => s.setKeyframeEasing);
+  const setSelectedKeyframesEasing = useEditorStore((s) => s.setSelectedKeyframesEasing);
   const copySelectedKeyframes = useEditorStore((s) => s.copySelectedKeyframes);
   const pasteKeyframes = useEditorStore((s) => s.pasteKeyframes);
   const moveSelectedKeyframes = useEditorStore((s) => s.moveSelectedKeyframes);
@@ -762,6 +763,8 @@ export function Timeline({ playback }: TimelineProps = {}) {
       const rect = tracks.getBoundingClientRect();
       const startFrame = Math.round(((e.clientX - rect.left) / rect.width) * duration);
       dragRef.current = { startX: e.clientX, startFrame, trackWidth: rect.width };
+      // The whole drag is one undo step
+      undoGroupUntilRelease();
       // Ensure this keyframe is selected
       if (!selectedKeyframeIds.has(kfId)) {
         if (e.shiftKey) {
@@ -781,12 +784,12 @@ export function Timeline({ playback }: TimelineProps = {}) {
       const dx = e.clientX - dragRef.current.startX;
       const deltaFrames = Math.round((dx / dragRef.current.trackWidth) * duration);
       if (deltaFrames !== 0) {
-        moveSelectedKeyframes(keyframeMap, deltaFrames);
+        moveSelectedKeyframes(keyframeMap, deltaFrames, sceneGraph);
         dragRef.current.startX = e.clientX;
         keyframeDraggedRef.current = true;
       }
     },
-    [duration, keyframeMap, moveSelectedKeyframes]
+    [duration, keyframeMap, moveSelectedKeyframes, sceneGraph]
   );
 
   const handleKeyframePointerUp = useCallback(() => {
@@ -970,7 +973,7 @@ export function Timeline({ playback }: TimelineProps = {}) {
         items.push({
           id: 'paste-layer-keyframes',
           label: `Paste Keyframes at Frame ${contextMenu.frame}`,
-          onClick: () => pasteKeyframes(nodeId, contextMenu.frame),
+          onClick: () => pasteKeyframes(nodeId, contextMenu.frame, sceneGraph),
         });
       }
       items.push({ type: 'separator' }, deleteAnimationItem(nodeId));
@@ -1001,15 +1004,8 @@ export function Timeline({ playback }: TimelineProps = {}) {
         items.push({
           id: `easing-${typeof preset.value === 'string' ? preset.value : 'custom'}`,
           label: isActive ? `\u2713 ${preset.label}` : `\u2003${preset.label}`,
-          onClick: () => {
-            // Apply to all selected keyframes
-            for (const kfId of selectedKeyframeIds) {
-              const info = keyframeMap.get(kfId);
-              if (info) {
-                setKeyframeEasing(info.nodeId, info.property, kfId, preset.value);
-              }
-            }
-          },
+          // All the selected keyframes, as one undo step
+          onClick: () => setSelectedKeyframesEasing(preset.value, sceneGraph),
         });
       }
 
@@ -1041,7 +1037,7 @@ export function Timeline({ playback }: TimelineProps = {}) {
         label: 'Delete Keyframes',
         shortcut: 'Del',
         danger: true,
-        onClick: () => removeSelectedKeyframes(keyframeMap),
+        onClick: () => removeSelectedKeyframes(keyframeMap, sceneGraph),
       });
 
       return items;
@@ -1060,6 +1056,7 @@ export function Timeline({ playback }: TimelineProps = {}) {
         disabled: selectedNodeIds.size === 0,
         onClick: () => {
           setCurrentFrame(contextMenu.frame);
+          useEditorStore.getState().pushUndo(sceneGraph);
           for (const nodeId of selectedNodeIds) {
             const node = sceneGraph.getNode(nodeId);
             if (node) addKeyframeAtFrame(nodeId, 'opacity', contextMenu.frame, node.opacity);
@@ -1123,7 +1120,7 @@ export function Timeline({ playback }: TimelineProps = {}) {
         id: 'paste-keyframes',
         label: 'Paste Keyframes',
         shortcut: 'Ctrl+V',
-        onClick: () => pasteKeyframes(pasteTargetId, contextMenu.frame),
+        onClick: () => pasteKeyframes(pasteTargetId, contextMenu.frame, sceneGraph),
       });
     }
 
@@ -1143,7 +1140,7 @@ export function Timeline({ playback }: TimelineProps = {}) {
     setIsPlaying,
     addKeyframeAtFrame,
     sceneGraph,
-    setKeyframeEasing,
+    setSelectedKeyframesEasing,
     copySelectedKeyframes,
     removeSelectedKeyframes,
     deleteLayerAnimation,
@@ -1807,14 +1804,7 @@ export function Timeline({ playback }: TimelineProps = {}) {
           easing={easingEditor.easing}
           anchorX={easingEditor.x}
           anchorY={easingEditor.y}
-          onChange={(newEasing) => {
-            for (const kfId of selectedKeyframeIds) {
-              const info = keyframeMap.get(kfId);
-              if (info) {
-                setKeyframeEasing(info.nodeId, info.property, kfId, newEasing);
-              }
-            }
-          }}
+          onChange={(newEasing) => setSelectedKeyframesEasing(newEasing, sceneGraph)}
           onClose={() => setEasingEditor(null)}
         />
       )}

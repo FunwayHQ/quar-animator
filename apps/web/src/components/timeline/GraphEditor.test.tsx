@@ -1,11 +1,12 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { fireEvent } from '@testing-library/react';
+import { act, fireEvent } from '@testing-library/react';
 import { render, screen } from '../../test/utils';
 import { GraphEditor } from './GraphEditor';
 import { SceneGraphProvider } from '../../contexts/SceneGraphContext';
 import { useEditorStore } from '../../stores/editorStore';
 import { DEFAULT_FILL, DEFAULT_STROKE } from '../../stores/editorStore';
 import { createTimeline, graphToScreen, KeyframeManager } from '@quar/animation';
+import { SceneGraph } from '@quar/core';
 
 function renderGraphEditor() {
   return render(
@@ -198,6 +199,88 @@ describe('GraphEditor', () => {
           [60, 150],
         ].sort((a, b) => a[0]! - b[0]!)
       );
+    });
+  });
+
+  describe('undo', () => {
+    const xKeys = () =>
+      useEditorStore
+        .getState()
+        .timeline.tracks.find((t) => t.property === 'transform.position.x')!
+        .keyframes.map((kf) => [kf.time, kf.value, kf.easing]);
+
+    function renderWithSelected(index: number) {
+      const tl = setupTimelineWithKeyframes();
+      const kf = tl.tracks[0]!.keyframes[index]!;
+      useEditorStore.setState({
+        timeline: tl,
+        selectedKeyframeIds: new Set([kf.id]),
+        undoStack: [],
+        redoStack: [],
+        canUndo: false,
+        canRedo: false,
+      });
+      const view = renderGraphEditor();
+      return { view, area: screen.getByTestId('graph-editor-area') };
+    }
+
+    const undo = () => useEditorStore.getState().undo(new SceneGraph());
+
+    it('undoes a whole keyframe drag in one step', () => {
+      const { view, area } = renderWithSelected(1);
+      const before = xKeys();
+      const transform = useEditorStore.getState().graphViewTransform;
+      const at = graphToScreen(30, 200, transform);
+      const dot = [...view.container.querySelectorAll('circle[class*="keyframeDot"]')].find(
+        (c) => Math.abs(Number(c.getAttribute('cx')) - at.x) < 0.01
+      );
+      fireEvent.mouseDown(dot!, { button: 0, clientX: at.x, clientY: at.y });
+      fireEvent.mouseMove(area, { clientX: at.x + 20, clientY: at.y });
+      fireEvent.mouseMove(area, { clientX: at.x + 40, clientY: at.y - 10 });
+      fireEvent.mouseMove(area, { clientX: at.x + 60, clientY: at.y - 20 });
+      fireEvent.mouseUp(area);
+      expect(xKeys()).not.toEqual(before);
+      expect(useEditorStore.getState().undoStack).toHaveLength(1);
+
+      act(() => undo());
+      expect(xKeys()).toEqual(before);
+    });
+
+    it('undoes a whole tangent handle drag in one step', () => {
+      const { view, area } = renderWithSelected(1);
+      const before = xKeys();
+      const handle = view.container.querySelector('circle[class*="tangentHandle"]');
+      expect(handle).not.toBeNull();
+      const x = Number(handle!.getAttribute('cx'));
+      const y = Number(handle!.getAttribute('cy'));
+      fireEvent.mouseDown(handle!, { button: 0, clientX: x, clientY: y });
+      fireEvent.mouseMove(area, { clientX: x + 5, clientY: y - 30 });
+      fireEvent.mouseMove(area, { clientX: x + 10, clientY: y - 60 });
+      fireEvent.mouseUp(area);
+      expect(xKeys()).not.toEqual(before);
+      expect(useEditorStore.getState().undoStack).toHaveLength(1);
+
+      act(() => undo());
+      expect(xKeys()).toEqual(before);
+    });
+
+    it('undoes nudging and deleting keyframes with the keys, a step a press', () => {
+      const { area } = renderWithSelected(1);
+      const before = xKeys();
+      fireEvent.mouseDown(area, { button: 0, shiftKey: true });
+      fireEvent.mouseUp(area);
+      fireEvent.keyDown(area, { key: 'ArrowRight' });
+      fireEvent.keyDown(area, { key: 'ArrowUp' });
+      const nudged = xKeys();
+      fireEvent.keyDown(area, { key: 'Delete' });
+      expect(xKeys()).toHaveLength(2);
+      expect(useEditorStore.getState().undoStack).toHaveLength(3);
+
+      act(() => undo());
+      expect(xKeys()).toEqual(nudged);
+      act(() => undo());
+      act(() => undo());
+      expect(xKeys()).toEqual(before);
     });
   });
 

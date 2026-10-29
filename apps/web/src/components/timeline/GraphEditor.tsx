@@ -8,6 +8,7 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-return, jsx-a11y/no-static-element-interactions -- @quar/animation types resolve to any without built dist */
 import { useRef, useCallback, useState, useEffect, useMemo } from 'react';
 import { useEditorStore } from '../../stores/editorStore';
+import { undoGroupUntilRelease } from '../../stores/undoGroups';
 import { useSceneGraph } from '../../contexts/SceneGraphContext';
 import type { PropertyTrack, Timeline } from '@quar/types';
 import {
@@ -269,6 +270,8 @@ export function GraphEditor() {
         selectKeyframe(kfId);
       }
 
+      // The whole drag is one undo step
+      undoGroupUntilRelease();
       setDragMode({
         type: 'keyframe',
         kfId,
@@ -295,6 +298,7 @@ export function GraphEditor() {
       time: number,
       value: number
     ) => {
+      undoGroupUntilRelease();
       setDragMode({
         type: 'tangent',
         kfId,
@@ -363,6 +367,8 @@ export function GraphEditor() {
         // Snap time to integer frames
         newTime = Math.max(0, Math.round(newTime));
 
+        // The drag's undo step (its first move pushes it, the rest join it)
+        useEditorStore.getState().pushUndo(sceneGraph);
         // Id-based + dedup-safe: dragging across an occupied frame replaces it
         // instead of leaving two keyframes on one frame (F020).
         updateKeyframeTimeAndValueById(
@@ -417,6 +423,7 @@ export function GraphEditor() {
           const tangentIn = currentTangents?.tangentIn ?? { x: -dt / 3, y: -dv / 3 };
           const newEasing = tangentsToEasing(tangentDelta, tangentIn, dt, dv);
           // Update via store: set easing on the next keyframe
+          useEditorStore.getState().pushUndo(sceneGraph);
           const state = useEditorStore.getState();
           const newKeyframes = [...track.keyframes];
           newKeyframes[kfIndex + 1] = { ...nextKf, easing: newEasing };
@@ -442,6 +449,7 @@ export function GraphEditor() {
           const tangentOut = currentTangents?.tangentOut ?? { x: dt / 3, y: dv / 3 };
           const newEasing = tangentsToEasing(tangentOut, tangentDelta, dt, dv);
           // Update via store: set easing on this keyframe (after.easing convention)
+          useEditorStore.getState().pushUndo(sceneGraph);
           const state = useEditorStore.getState();
           const newKeyframes = [...track.keyframes];
           newKeyframes[kfIndex] = { ...kf, easing: newEasing };
@@ -456,7 +464,14 @@ export function GraphEditor() {
         return;
       }
     },
-    [dragMode, graphViewTransform, timeline, setGraphViewTransform, updateKeyframeTimeAndValueById]
+    [
+      dragMode,
+      graphViewTransform,
+      timeline,
+      setGraphViewTransform,
+      updateKeyframeTimeAndValueById,
+      sceneGraph,
+    ]
   );
 
   const handleMouseUp = useCallback(() => {
@@ -546,7 +561,7 @@ export function GraphEditor() {
             }
           }
         }
-        state.removeSelectedKeyframes(keyframeMap);
+        state.removeSelectedKeyframes(keyframeMap, sceneGraph);
       }
 
       // Arrow keys nudge selected keyframes
@@ -592,10 +607,15 @@ export function GraphEditor() {
 
         if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
           // Cascade-safe, direction-ordered move (KeyframeManager.moveKeyframes).
-          state.moveSelectedKeyframes(keyframeMap, e.key === 'ArrowLeft' ? -delta : delta);
+          state.moveSelectedKeyframes(
+            keyframeMap,
+            e.key === 'ArrowLeft' ? -delta : delta,
+            sceneGraph
+          );
         } else {
           // Value nudge only — time is unchanged, so id-based updates can't collide.
           const dv = e.key === 'ArrowUp' ? delta : -delta;
+          if (valueTargets.length > 0) state.pushUndo(sceneGraph);
           for (const t of valueTargets) {
             state.updateKeyframeTimeAndValueById(
               t.nodeId,
@@ -611,7 +631,7 @@ export function GraphEditor() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  }, [sceneGraph]);
 
   // Double-click to fit view
   const handleDoubleClick = useCallback(() => {
