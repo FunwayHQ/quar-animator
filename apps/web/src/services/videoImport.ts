@@ -87,6 +87,8 @@ async function importVideoFile(
       return false;
     }
     const { info } = probe;
+    // The file's type as its buffer will be kept, and checked when it's read back
+    const mimeType = info.mimeType.toLowerCase();
     const strip = await makeVideoStrip(file, info, (done) =>
       progress.update(`Importing ${label}: frames ${Math.round(done * 100)}%`)
     );
@@ -104,7 +106,7 @@ async function importVideoFile(
     const video: Video = {
       id: `video_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
       name,
-      mimeType: info.mimeType,
+      mimeType,
       byteLength: file.size,
       width: info.width,
       height: info.height,
@@ -114,10 +116,7 @@ async function importVideoFile(
       strip,
     };
     // Kept typed as what it is, whatever the system called it
-    setVideoFile(
-      video.id,
-      file.type === info.mimeType ? file : new Blob([file], { type: info.mimeType })
-    );
+    setVideoFile(video.id, file.type === mimeType ? file : new Blob([file], { type: mimeType }));
     const store = useEditorStore.getState();
     store.addVideo(video);
     const before = store.timelineDuration;
@@ -156,5 +155,12 @@ export async function importVideoFiles(
   files: readonly File[],
   frame?: number
 ): Promise<void> {
+  // A symbol has no timeline for a video's clip to play on
+  if (useEditorStore.getState().editingSymbolId) {
+    toast.error(
+      'Videos can’t be imported while a symbol is edited: symbols can’t hold videos yet.'
+    );
+    return;
+  }
   for (const file of files) await importVideoFile(sceneGraph, file, frame);
 }

@@ -12,6 +12,7 @@ import { generateId, scopeSounds, videoClipEndFrame, withScopeSounds } from '@qu
 import type { Node, Rect, Sound, SoundClip, Video, VideoNode } from '@quar/types';
 
 import { useEditorStore } from './editorStore';
+import { layerScope } from './videoSounds';
 import { canvasViewBounds, canvasViewCenter } from '../services/canvasView';
 
 /** How much of the canvas view a video placed outside every artboard fills, at most */
@@ -101,7 +102,8 @@ export function placeVideoLayer(
   sceneGraph.addNode(node);
   if (artboard) state.moveNodeKeepingPlacement(sceneGraph, id, artboard.id);
 
-  // Its sound, where its clip is, moving with it until it's unlinked
+  // Its sound, where its clip is and on the timeline it plays on, moving with it until it's unlinked
+  const soundScope = layerScope(sceneGraph, id);
   const soundClip: SoundClip | null = sound
     ? {
         id: generateId('sound'),
@@ -116,7 +118,7 @@ export function placeVideoLayer(
   const { timeline, sounds } = useEditorStore.getState();
   useEditorStore.setState({
     timeline: soundClip
-      ? withScopeSounds(timeline, scope, [...scopeSounds(timeline, scope), soundClip])
+      ? withScopeSounds(timeline, soundScope, [...scopeSounds(timeline, soundScope), soundClip])
       : timeline,
     sounds: sound && !sounds.some((known) => known.id === sound.id) ? [...sounds, sound] : sounds,
     selectedNodeIds: new Set([id]),

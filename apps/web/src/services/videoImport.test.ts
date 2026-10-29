@@ -171,6 +171,31 @@ describe('importVideoFiles', () => {
     );
   });
 
+  it('takes no video in while a symbol is edited: symbols can’t hold them', async () => {
+    useEditorStore.setState({ editingSymbolId: 'symbol-1' });
+    const sg = new SceneGraph();
+    await importVideoFiles(sg, [new File(['mp4'], 'a.mp4'), new File(['mp4'], 'b.mp4')]);
+    expect(toast.error).toHaveBeenCalledOnce();
+    expect(toast.error).toHaveBeenCalledWith(
+      'Videos can’t be imported while a symbol is edited: symbols can’t hold videos yet.'
+    );
+    expect(mocks.probeVideo).not.toHaveBeenCalled();
+    expect(store().videos).toEqual([]);
+    useEditorStore.setState({ editingSymbolId: null });
+  });
+
+  it('keeps the video’s type in lower case, whatever the file says', async () => {
+    mocks.probeVideo.mockResolvedValue({
+      ok: true,
+      info: { ...info, mimeType: 'video/QuickTime' },
+    });
+    const file = new File(['mov'], 'clip.mov', { type: '' });
+    await importVideoFiles(new SceneGraph(), [file]);
+    const [video] = store().videos;
+    expect(video?.mimeType).toBe('video/quicktime');
+    expect(videoFile(video!.id)?.type).toBe('video/quicktime');
+  });
+
   it('turns away a video over 100 MB before reading it', async () => {
     const big = new File(['x'], 'huge.mp4', { type: 'video/mp4' });
     Object.defineProperty(big, 'size', { value: MAX_VIDEO_BYTES + 1 });
