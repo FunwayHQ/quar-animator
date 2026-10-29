@@ -6,10 +6,11 @@ import type { FrameRenderContext, FrameSlide } from './frameRenderer';
 import { createFrameRenderer, framePlan, getFrameCount, preloadShots } from './frameRenderer';
 import { sampleSlides, sampleTimeline, type ExportSlide, type PlaybackTiming } from './exportUtils';
 import { createShotRenderer } from './slideTransition';
+import { createExportVideoFrames, type VideoExportSources } from './video/exportFrames';
 import type { ExportProgress } from './index';
 
-/** `fps` defaults to the timeline's, at most 50. */
-export interface GifExportOptions extends PlaybackTiming {
+/** `fps` defaults to the timeline's, at most 50; video layers show their exact frames. */
+export interface GifExportOptions extends PlaybackTiming, VideoExportSources {
   width: number;
   height: number;
   transparent?: boolean;
@@ -159,13 +160,21 @@ export async function exportGif(
   const backgroundColor: Color | null = transparent
     ? null
     : { ...(options.backgroundColor ?? DEFAULT_DOCUMENT_BACKGROUND), a: 1 };
-  const renderer = createFrameRenderer({ width, height, backgroundColor });
+  // Each frame's video pictures, decoded before it's drawn (in each pass)
+  const videoFrames = createExportVideoFrames(shots, { width, height }, options);
+  const renderer = createFrameRenderer({
+    width,
+    height,
+    backgroundColor,
+    videoFrames: videoFrames.provider,
+  });
   const sampleCanvas = document.createElement('canvas');
   sampleCanvas.width = width;
   sampleCanvas.height = height;
   const sampleContext = sampleCanvas.getContext('2d', { willReadFrequently: true });
   if (!sampleContext) {
     renderer.dispose();
+    videoFrames.dispose();
     throw new Error('Could not create a canvas for GIF color conversion.');
   }
 
@@ -184,6 +193,7 @@ export async function exportGif(
     let sampleOffset = 0;
 
     for (let i = 0; i < frameCount; i++) {
+      await videoFrames.prepare(i);
       if (isCancelled()) return null;
       const canvas = draw.render(shots[i]!);
       sampleContext.clearRect(0, 0, width, height);
@@ -258,6 +268,7 @@ export async function exportGif(
     const colorPalette = transparent ? palette : palette.slice(0, -1);
 
     for (let i = 0; i < frameCount; i++) {
+      await videoFrames.prepare(i);
       if (isCancelled()) return null;
       const canvas = draw.render(shots[i]!);
       sampleContext.clearRect(0, 0, width, height);
@@ -301,6 +312,7 @@ export async function exportGif(
     onProgress?.({ phase: 'finalizing', current: frameCount, total: frameCount, percentage: 100 });
     return new Blob([buffer], { type: 'image/gif' });
   } finally {
+    videoFrames.dispose();
     renderer.dispose();
   }
 }
