@@ -90,7 +90,7 @@ const SUGGESTIONS: Record<VideoProblem, string> = {
   'not-a-video': 'Try an MP4 (H.264) file.',
   'no-video-track': 'File › Import Sound takes its sound.',
   undecodable: 'Try an MP4 (H.264) file, or another browser.',
-  transparency: 'Try it in Chrome or Edge.',
+  transparency: 'Try it in Chrome, Edge or Safari.',
   'still-picture': 'File › Import Image… takes it.',
 };
 

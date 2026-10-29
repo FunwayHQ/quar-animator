@@ -274,7 +274,7 @@ describe('importVideoFiles', () => {
     const sg = new SceneGraph();
     await importVideoFiles(sg, [new File(['webm'], 'smoke.webm')]);
     expect(toast.error).toHaveBeenCalledWith(
-      '“smoke.webm” can’t be imported. This browser can’t show its transparency correctly. Try it in Chrome or Edge.'
+      '“smoke.webm” can’t be imported. This browser can’t show its transparency correctly. Try it in Chrome, Edge or Safari.'
     );
     expect(mocks.makeVideoStrip).not.toHaveBeenCalled();
     expect(store().videos).toEqual([]);
