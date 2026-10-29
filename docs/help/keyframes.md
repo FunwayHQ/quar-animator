@@ -29,8 +29,10 @@ The timeline is along the bottom of the editor.
 6. **The ruler and the playhead.** The red line is the playhead: the frame
    shown on the canvas.
 7. **A row for each layer,** in the same order as the Layers panel, with the
-   layer's keyframes on it. The selected layer's name is highlighted.
-8. **The Sound lane,** where sound clips go (see [Sound](sound.md)).
+   layer's keyframes on it. The selected layer's name is highlighted. A video
+   layer's row also holds its clip (see [Video clips](#video-clips)).
+8. **The Sound lane,** where sound clips go, a video's sound among them (see
+   [Sound](sound.md)).
 
 ### The timeline's buttons {#buttons}
 
@@ -76,9 +78,9 @@ The **Animation** menu has all of these too, and **Loop Playback** and
 **Auto-Keyframe**. Stepping works while the animation is stopped.
 
 Playing doesn't run on to the end of the timeline: it stops at the last
-keyframe, or at the end of the last sound if that's later. With **Loop** on,
-it starts over from the beginning there. A timeline with no keyframes and no
-sounds plays to its end. [[End]], **Go to end**, **Animation › Go to End**
+keyframe, or at the end of the last sound or video clip if that's later.
+With **Loop** on, it starts over from the beginning there. A timeline with no
+keyframes, sounds or video clips plays to its end. [[End]], **Go to end**, **Animation › Go to End**
 and **Go To End** on the ruler's right-click menu all take you to that same
 last frame. **Go To Last Frame** on the ruler's menu goes to the timeline's
 very last frame, past the end of the animation, say to key something after
@@ -99,6 +101,8 @@ Keyframes keep their frame numbers when you change the frame rate, so a
 higher **FPS** plays the same animation faster and a lower one plays it more
 slowly. That's how you change the speed of the whole animation. (GIF, MP4 and
 WebM exports also have a [**Speed**](exporting.md#gif) setting of their own.)
+Sounds and videos still start on the same frames, but play at their own
+pace.
 
 ## The playhead and the ruler {#ruler}
 
@@ -218,6 +222,21 @@ Keyframes made by an Animation Sequence step are hollow diamonds. They belong
 to the step: clicking one opens it in the Animation Sequence window (see
 [How steps become keyframes](presets-and-sequences.md#keyframes)).
 
+### Video clips on the rows {#video-clips}
+
+A [video or GIF](video-clips.md) layer's row holds its clip: a bar with a
+strip of the video's pictures, from the frame it starts on to the frame it
+ends. The layer's keyframes sit on top of it.
+
+- Drag the bar to move the clip, and its ends to trim it. Its sound on the
+  Sound lane moves and trims with it.
+- Double-click it for its speed, loop and hold (see
+  [Clip settings](video-clips.md#settings)).
+- Right-click it, or its row, for **Clip Settings…** and
+  **Stop Clip at Playhead**, above the row's usual commands.
+
+More in [The clip on the timeline](video-clips.md#clip-bar).
+
 ### Copy keyframes to another frame or layer {#copy-paste}
 
 1. Select the keyframes.
@@ -281,6 +300,7 @@ or a [slide](presenting.md) with its own timing.
 - The timeline picker at the top left of the timeline switches between them:
   each artboard by name, and **Page (outside artboards)**.
 
-Each timeline has its own length (**Frames**) and its own sounds. **FPS** is
-the same for all of them. Switching to another timeline stops playing and
+Each timeline has its own length (**Frames**) and its own sounds, and a
+video plays on the timeline its layer is on. **FPS** is the same for all of
+them. Switching to another timeline stops playing and
 takes away the work area.
