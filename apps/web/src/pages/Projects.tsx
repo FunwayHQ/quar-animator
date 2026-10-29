@@ -14,6 +14,7 @@ import {
   loadProject as dbLoad,
 } from '../services/projectStorage';
 import { ProjectFileCancelledError, uploadProjectFile } from '../services/projectSerializer';
+import { videoFilesIn } from '../services/videoData';
 import { useEditorStore } from '../stores/editorStore';
 import { toast } from '../components/common/Toast';
 import { setUiTheme, useUiTheme } from '../hooks/useUiTheme';
@@ -202,7 +203,13 @@ export function Projects() {
       const id = `proj_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
       // Persist the same binary format we use for regular saves. This keeps
       // imported image assets compact and exercises the normal load path.
-      await dbSave(id, data.name, writeQuarFile(data as unknown as Record<string, unknown>));
+      // Its videos' files are stored apart from it, as a save stores them.
+      await dbSave(
+        id,
+        data.name,
+        writeQuarFile(data as unknown as Record<string, unknown>),
+        videoFilesIn(data)
+      );
       navigate(`/editor?project=${encodeURIComponent(id)}`);
     } catch (error) {
       if (error instanceof ProjectFileCancelledError) return;

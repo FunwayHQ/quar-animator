@@ -18,6 +18,7 @@ const mockList = vi.fn().mockResolvedValue([]);
 const mockDelete = vi.fn().mockResolvedValue(undefined);
 const mockGetLastProjectId = vi.fn().mockResolvedValue(undefined);
 const mockSetLastProjectId = vi.fn().mockResolvedValue(undefined);
+const mockLoadVideoFiles = vi.fn().mockResolvedValue(new Map());
 
 vi.mock('../services/projectStorage', () => ({
   saveProject: (...args: unknown[]) => mockSave(...args),
@@ -26,6 +27,7 @@ vi.mock('../services/projectStorage', () => ({
   deleteProject: (...args: unknown[]) => mockDelete(...args),
   getLastProjectId: (...args: unknown[]) => mockGetLastProjectId(...args),
   setLastProjectId: (...args: unknown[]) => mockSetLastProjectId(...args),
+  loadVideoFiles: (...args: unknown[]) => mockLoadVideoFiles(...args),
 }));
 
 // Mock projectSerializer
@@ -164,6 +166,7 @@ vi.mock('../stores/editorStore', () => ({
 import { useProjectActions } from './useProjectActions';
 import { useEditorStore } from '../stores/editorStore';
 import { keepVideoFiles, setVideoFile, videoFile } from '../services/videoFiles';
+import { toast } from '../components/common/Toast';
 
 // ============================================================================
 // Setup
@@ -320,7 +323,7 @@ describe('useProjectActions', () => {
       const data: unknown = mockSerialize.mock.results[0]?.value;
       expect(mockProjectDataToBinary).toHaveBeenCalledWith(data);
       const binary: unknown = mockProjectDataToBinary.mock.results[0]?.value;
-      expect(mockSave).toHaveBeenCalledWith('existing-id', 'Untitled Project', binary);
+      expect(mockSave).toHaveBeenCalledWith('existing-id', 'Untitled Project', binary, new Map());
       // The store keeps the creation time the file was written with
       expect(mockEditorState.projectCreatedAt).toBe('2024-01-01');
     });
@@ -352,7 +355,12 @@ describe('useProjectActions', () => {
       });
 
       // A was saved, but B stays the project to reopen, with its own state
-      expect(mockSave).toHaveBeenCalledWith('A', expect.anything(), expect.anything());
+      expect(mockSave).toHaveBeenCalledWith(
+        'A',
+        expect.anything(),
+        expect.anything(),
+        expect.anything()
+      );
       expect(mockSetLastProjectId).not.toHaveBeenCalledWith('A');
       expect(mockEditorState.isDirty).toBe(true);
       expect(mockEditorState.projectCreatedAt).toBe('B created');
@@ -685,6 +693,7 @@ describe('useProjectActions', () => {
         (_data: unknown, _sceneGraph: unknown, apply: (state: object) => void) =>
           apply({ videos: library, videoFiles: new Map([['clip', file]]) })
       );
+      mockSerialize.mockReturnValueOnce({ name: 'Dropped Project', videos: library });
       const { result } = renderProjectActions();
 
       await act(async () => {
@@ -696,6 +705,75 @@ describe('useProjectActions', () => {
       // The library in the store, the files beside it
       expect(mockEditorState.videos).toEqual(library);
       expect('videoFiles' in mockEditorState).toBe(false);
+      // The copy stored keeps them, apart from the project
+      expect(mockSave).toHaveBeenCalledWith(
+        expect.any(String),
+        'Dropped Project',
+        expect.any(ArrayBuffer),
+        new Map([['clip', file]])
+      );
+    });
+
+    it('stores the files of the videos the project shows, with it (each written once)', async () => {
+      const file = new Blob(['video'], { type: 'video/mp4' });
+      setVideoFile('clip', file);
+      const clips = { name: 'Clips', createdAt: '2024-01-01', videos: library };
+      mockSerialize.mockReturnValueOnce(clips).mockReturnValueOnce(clips);
+      mockEditorState.projectId = 'proj_1';
+      const { result } = renderProjectActions();
+
+      await act(async () => {
+        await result.current.saveProject();
+      });
+      expect(mockSave).toHaveBeenLastCalledWith(
+        'proj_1',
+        'Untitled Project',
+        expect.any(ArrayBuffer),
+        new Map([['clip', file]])
+      );
+
+      // A copy saved as another stores them as its own
+      await act(async () => {
+        await result.current.saveProjectAs('Clips copy');
+      });
+      const [copyId, , , copied] = mockSave.mock.calls.at(-1) as unknown[];
+      expect(copyId).not.toBe('proj_1');
+      expect(copied).toEqual(new Map([['clip', file]]));
+    });
+
+    it("opens a stored project with its videos' files, kept apart from it", async () => {
+      const file = new Blob(['video'], { type: 'video/mp4' });
+      mockLoad.mockResolvedValueOnce({ data: new ArrayBuffer(8) });
+      mockLoadVideoFiles.mockResolvedValueOnce(new Map([['clip', file]]));
+      mockDeserializeFromBinary.mockImplementationOnce(
+        (_data: unknown, _sceneGraph: unknown, apply: (state: object) => void) => {
+          apply({ videos: library, videoFiles: new Map() });
+          return { name: 'Clips', createdAt: '' };
+        }
+      );
+      const { result } = renderProjectActions();
+
+      await act(async () => {
+        await result.current.openProject('proj_clips');
+      });
+
+      expect(mockLoadVideoFiles).toHaveBeenCalledWith('proj_clips');
+      expect(videoFile('clip')).toBe(file);
+      expect(mockEditorState.projectId).toBe('proj_clips');
+    });
+
+    it("opens a project whose videos can't be read, saying so", async () => {
+      mockLoad.mockResolvedValueOnce({ data: new ArrayBuffer(8) });
+      mockLoadVideoFiles.mockRejectedValueOnce(new Error('unreadable'));
+      const { result } = renderProjectActions();
+
+      await act(async () => {
+        await result.current.openProject('proj_clips');
+      });
+
+      expect(toast.error).toHaveBeenCalledWith("This project's videos couldn't be read");
+      expect(mockDeserializeFromBinary).toHaveBeenCalled();
+      expect(mockEditorState.projectId).toBe('proj_clips');
     });
   });
 

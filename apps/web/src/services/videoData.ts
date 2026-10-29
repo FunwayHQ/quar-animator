@@ -63,6 +63,11 @@ export function readVideos(videos: unknown): { videos: Video[]; files: Map<strin
   return { videos: read, files };
 }
 
+/** The files a project file read holds for its videos, by video id (the browser's storage keeps them apart). */
+export function videoFilesIn(project: object): Map<string, Blob> {
+  return readVideos('videos' in project ? project.videos : undefined).files;
+}
+
 /** A clip as the timing can use it: a whole start frame, a place in the video and a length (none: it shows nothing). */
 export function readVideoClip(clip: unknown): VideoClip {
   const parts = (clip && typeof clip === 'object' ? clip : {}) as Partial<

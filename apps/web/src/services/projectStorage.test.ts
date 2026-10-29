@@ -4,11 +4,15 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import 'fake-indexeddb/auto';
+// Node's Blobs, which the fake database can keep (jsdom's it can't)
+import { Blob as NodeBlob } from 'node:buffer';
 import {
   initDB,
+  initVideoDB,
   resetDB,
   saveProject,
   loadProject,
+  loadVideoFiles,
   listProjects,
   deleteProject,
   getLastProjectId,
@@ -252,6 +256,128 @@ describe('ProjectStorage', () => {
     it('should not fail when deleting non-existent project', async () => {
       await initDB();
       await expect(deleteProject('nonexistent')).resolves.not.toThrow();
+    });
+  });
+
+  describe('video files', () => {
+    const file = (text: string) => new NodeBlob([text], { type: 'video/mp4' }) as unknown as Blob;
+    const contents = async (files: Map<string, Blob>) =>
+      Object.fromEntries(
+        await Promise.all(
+          [...files].map(async ([id, blob]) => [id, `${blob.type} ${await blob.text()}`] as const)
+        )
+      );
+
+    beforeEach(() => {
+      // As in a browser, the Blobs the database gives back are Blobs
+      vi.stubGlobal('Blob', NodeBlob);
+    });
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+      vi.unstubAllGlobals();
+    });
+
+    it('keeps each video file apart from the project, and gives them back', async () => {
+      const data = new ArrayBuffer(8);
+      await saveProject(
+        'p',
+        'Clips',
+        data,
+        new Map([
+          ['v1', file('one')],
+          ['v2', file('two')],
+        ])
+      );
+
+      expect((await loadProject('p'))?.data).toEqual(data);
+      expect(await contents(await loadVideoFiles('p'))).toEqual({
+        v1: 'video/mp4 one',
+        v2: 'video/mp4 two',
+      });
+      // The projects database is as earlier versions made it
+      expect((await initDB()).version).toBe(1);
+    });
+
+    it("writes a video's file once: saving again (autosave) doesn't rewrite it", async () => {
+      await saveProject('p', 'Clips', '{}', new Map([['v1', file('one')]]));
+      const puts: unknown[] = [];
+      const put = IDBObjectStore.prototype.put;
+      vi.spyOn(IDBObjectStore.prototype, 'put').mockImplementation(function (
+        this: IDBObjectStore,
+        ...args: Parameters<IDBObjectStore['put']>
+      ) {
+        if (this.transaction.db.name === 'quar-animator-videos') puts.push(args[0]);
+        return put.apply(this, args);
+      });
+
+      await saveProject('p', 'Clips', '{}', new Map([['v1', file('one, read again')]]));
+      await saveProject('p', 'Clips', '{}', new Map([['v1', file('one, read again')]]));
+
+      expect(puts).toEqual([]);
+      expect(await contents(await loadVideoFiles('p'))).toEqual({ v1: 'video/mp4 one' });
+    });
+
+    it('lets go of the files of videos the project no longer shows', async () => {
+      await saveProject(
+        'p',
+        'Clips',
+        '{}',
+        new Map([
+          ['v1', file('one')],
+          ['v2', file('two')],
+        ])
+      );
+      // A video shown whose file the document lacks keeps the one stored
+      await saveProject('p', 'Clips', '{}', new Map([['v1', undefined]]));
+
+      expect(await contents(await loadVideoFiles('p'))).toEqual({ v1: 'video/mp4 one' });
+    });
+
+    it('leaves the files as they are when a save names no videos (a rename)', async () => {
+      await saveProject('p', 'Clips', '{}', new Map([['v1', file('one')]]));
+      await saveProject('p', 'Renamed', '{}');
+
+      expect([...(await loadVideoFiles('p')).keys()]).toEqual(['v1']);
+    });
+
+    it("keeps each project's files its own: a copy saved as another has its own", async () => {
+      await saveProject('p', 'Clips', '{}', new Map([['v1', file('one')]]));
+      await saveProject('copy', 'Clips copy', '{}', new Map([['v1', file('one')]]));
+
+      await deleteProject('p');
+
+      expect((await loadVideoFiles('p')).size).toBe(0);
+      expect(await contents(await loadVideoFiles('copy'))).toEqual({ v1: 'video/mp4 one' });
+    });
+
+    it("rejects with StorageQuotaError when a video's file doesn't fit, writing no project", async () => {
+      const db = await initVideoDB();
+      const fakeTx = {
+        error: new DOMException('quota', 'QuotaExceededError'),
+        objectStore: () =>
+          ({ getAllKeys: () => ({}), put: () => undefined }) as unknown as IDBObjectStore,
+      } as unknown as IDBTransaction & { onabort?: () => void };
+      vi.spyOn(db, 'transaction').mockReturnValueOnce(fakeTx);
+
+      const saving = saveProject('p', 'Clips', '{}', new Map([['v1', file('big')]]));
+      await new Promise((r) => setTimeout(r, 0)); // let handler registration run
+      fakeTx.onabort?.();
+
+      await expect(saving).rejects.toBeInstanceOf(StorageQuotaError);
+      expect(await loadProject('p')).toBeUndefined();
+    });
+
+    it('saves a project without videos when the video files cannot be opened', async () => {
+      const open = indexedDB.open.bind(indexedDB);
+      vi.spyOn(indexedDB, 'open').mockImplementation((name, version) => {
+        if (name === 'quar-animator-videos') throw new Error('unavailable');
+        return open(name, version);
+      });
+
+      await saveProject('p', 'Plain', '{}', new Map());
+
+      expect((await loadProject('p'))?.name).toBe('Plain');
     });
   });
 

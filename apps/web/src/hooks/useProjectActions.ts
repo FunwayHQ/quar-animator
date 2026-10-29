@@ -12,6 +12,7 @@ import { toast } from '../components/common/Toast';
 import {
   saveProject as dbSave,
   loadProject as dbLoad,
+  loadVideoFiles as dbLoadVideoFiles,
   listProjects as dbList,
   deleteProject as dbDelete,
   getLastProjectId,
@@ -19,7 +20,6 @@ import {
 } from '../services/projectStorage';
 import {
   serializeProject,
-  serializeProjectToBinary,
   projectDataToBinary,
   deserializeProject,
   deserializeProjectFromBinary,
@@ -28,8 +28,8 @@ import {
   readProjectFile,
   ProjectFileCancelledError,
 } from '../services/projectSerializer';
-import type { OpenedProjectState, ProjectData } from '../services/projectSerializer';
-import { keepVideoFiles, setVideoFile } from '../services/videoFiles';
+import type { OpenedProjectState, ProjectData, ProjectDataV2 } from '../services/projectSerializer';
+import { keepVideoFiles, setVideoFile, videoFile } from '../services/videoFiles';
 import { importSvg, createGroupNode } from '@quar/core';
 import type { ProjectListItem } from '../services/projectStorage';
 
@@ -46,6 +46,33 @@ function generateProjectId(): string {
 // ============================================================================
 
 const AUTO_SAVE_INTERVAL = 30_000;
+
+// ============================================================================
+// Video files
+// ============================================================================
+
+/**
+ * The videos a serialized project shows, by id, with their files where the
+ * document has them: the browser's storage writes each once, apart from the
+ * project, so saving again (autosave) never rewrites one.
+ */
+function videoFilesOf(data: ProjectDataV2): Map<string, Blob | undefined> {
+  return new Map((data.videos ?? []).map((video) => [video.id, videoFile(video.id)]));
+}
+
+/**
+ * The files of a stored project's videos; none when they can't be read. The
+ * project opens all the same (its videos show nothing), and the files stay
+ * stored: a save lets go only of those of videos it no longer shows.
+ */
+async function storedVideoFiles(projectId: string): Promise<Map<string, Blob>> {
+  try {
+    return await dbLoadVideoFiles(projectId);
+  } catch {
+    toast.error("This project's videos couldn't be read");
+    return new Map();
+  }
+}
 
 // ============================================================================
 // Hook
@@ -119,14 +146,18 @@ export function useProjectActions(options: UseProjectActionsOptions = {}): Proje
     };
   }, [sceneGraph]);
 
-  // Apply editor state from deserialized data: the videos' files first, so
-  // whatever reads the library finds them (the last project's let go)
-  const applyEditorState = useCallback(({ videoFiles, ...state }: OpenedProjectState) => {
-    const files = videoFiles ?? new Map<string, Blob>();
-    keepVideoFiles(new Set(files.keys()));
-    for (const [id, file] of files) setVideoFile(id, file);
-    useEditorStore.setState(state);
-  }, []);
+  // Apply editor state from deserialized data: the videos' files first (those
+  // the file held, or the browser's storage keeps apart), so whatever reads
+  // the library finds them; the last project's are let go
+  const applyEditorState = useCallback(
+    ({ videoFiles, ...state }: OpenedProjectState, storedFiles?: ReadonlyMap<string, Blob>) => {
+      const files = new Map([...(storedFiles ?? []), ...(videoFiles ?? [])]);
+      keepVideoFiles(new Set(files.keys()));
+      for (const [id, file] of files) setVideoFile(id, file);
+      useEditorStore.setState(state);
+    },
+    []
+  );
 
   // ------ New Project ------
   const newProject = useCallback(() => {
@@ -161,7 +192,7 @@ export function useProjectActions(options: UseProjectActionsOptions = {}): Proje
         state.projectCreatedAt ?? undefined
       );
       const binary = projectDataToBinary(data);
-      await dbSave(projectId, state.projectName, binary);
+      await dbSave(projectId, state.projectName, binary, videoFilesOf(data));
       // Another project opened while this one was being written is the one to
       // reopen next time, and the state below is its own, not this one's
       if (useEditorStore.getState().projectId !== projectId) return;
@@ -191,7 +222,8 @@ export function useProjectActions(options: UseProjectActionsOptions = {}): Proje
 
       const data = serializeProject(name, sceneGraph, getEditorSnapshot());
       const binary = projectDataToBinary(data);
-      await dbSave(newId, name, binary);
+      // The copy stores the videos' files too, as its own
+      await dbSave(newId, name, binary, videoFilesOf(data));
       // Unless another project was opened meanwhile (see saveProject)
       if (useEditorStore.getState().projectId !== newId) return;
       await setLastProjectId(newId);
@@ -210,8 +242,11 @@ export function useProjectActions(options: UseProjectActionsOptions = {}): Proje
     async (id: string) => {
       const stored = await dbLoad(id);
       if (!stored) return;
+      const videoFiles = await storedVideoFiles(id);
 
-      const data = deserializeProjectFromBinary(stored.data, sceneGraph, applyEditorState);
+      const data = deserializeProjectFromBinary(stored.data, sceneGraph, (state) =>
+        applyEditorState(state, videoFiles)
+      );
 
       useEditorStore.setState({
         projectId: id,
@@ -257,9 +292,9 @@ export function useProjectActions(options: UseProjectActionsOptions = {}): Proje
         selectedKeyframeIds: new Set<string>(),
       });
 
-      // Re-serialize to binary for storage
-      const binary = serializeProjectToBinary(name, sceneGraph, getEditorSnapshot(), createdAt);
-      await dbSave(newId, name, binary);
+      // Re-serialize to binary for storage, the videos' files stored apart
+      const saved = serializeProject(name, sceneGraph, getEditorSnapshot(), createdAt);
+      await dbSave(newId, name, projectDataToBinary(saved), videoFilesOf(saved));
       await setLastProjectId(newId);
       useEditorStore.getState().clearHistory();
       toast.success(`Imported "${name}"`);
@@ -442,8 +477,12 @@ export function useProjectActions(options: UseProjectActionsOptions = {}): Proje
 
         const stored = await dbLoad(targetId);
         if (cancelled || !stored) return;
+        const videoFiles = await storedVideoFiles(targetId);
+        if (cancelled) return;
 
-        const data = deserializeProjectFromBinary(stored.data, sceneGraph, applyEditorState);
+        const data = deserializeProjectFromBinary(stored.data, sceneGraph, (state) =>
+          applyEditorState(state, videoFiles)
+        );
 
         if (!cancelled) {
           useEditorStore.setState({

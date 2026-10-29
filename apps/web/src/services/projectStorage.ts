@@ -17,6 +17,15 @@ const LIST_DB_NAME = 'quar-animator-project-list';
 const LIST_DB_VERSION = 1;
 const LIST_STORE = 'projects';
 
+// The files of each project's videos, one record per project and video, kept
+// apart from the project (whose record holds what's known about them): a
+// save writes a file only when it isn't there yet, so autosave never rewrites
+// a video. A database of its own, as the list is, so the projects database
+// still needs no upgrade.
+const VIDEO_DB_NAME = 'quar-animator-videos';
+const VIDEO_DB_VERSION = 1;
+const VIDEO_STORE = 'videos';
+
 // ============================================================================
 // Types
 // ============================================================================
@@ -32,6 +41,13 @@ export interface ProjectListItem {
   id: string;
   name: string;
   updatedAt: string;
+}
+
+/** A video's file, as the browser's storage keeps it for a project */
+interface StoredVideoFile {
+  projectId: string;
+  videoId: string;
+  file: Blob;
 }
 
 // ============================================================================
@@ -101,10 +117,45 @@ function initListDB(): Promise<IDBDatabase> {
   return listDbPromise;
 }
 
+let videoDbPromise: Promise<IDBDatabase> | null = null;
+
+export function initVideoDB(): Promise<IDBDatabase> {
+  if (videoDbPromise) return videoDbPromise;
+
+  videoDbPromise = new Promise<IDBDatabase>((resolve, reject) => {
+    const request = indexedDB.open(VIDEO_DB_NAME, VIDEO_DB_VERSION);
+
+    request.onerror = () => {
+      videoDbPromise = null; // allow retry on next call
+      reject(request.error);
+    };
+
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains(VIDEO_STORE)) {
+        db.createObjectStore(VIDEO_STORE, { keyPath: ['projectId', 'videoId'] });
+      }
+    };
+
+    request.onsuccess = () => {
+      const db = request.result;
+      // Let a later version upgrade it rather than wait on this tab
+      db.onversionchange = () => {
+        db.close();
+        videoDbPromise = null;
+      };
+      resolve(db);
+    };
+  });
+
+  return videoDbPromise;
+}
+
 /** Reset the cached DB promises (for testing) */
 export function resetDB(): void {
   dbPromise = null;
   listDbPromise = null;
+  videoDbPromise = null;
 }
 
 // ============================================================================
@@ -119,11 +170,28 @@ export class StorageQuotaError extends Error {
   }
 }
 
+/** What a failed write rejects with: a StorageQuotaError when the storage is full. */
+function writeError(tx: IDBTransaction): Error {
+  const error = tx.error;
+  if (error?.name === 'QuotaExceededError') return new StorageQuotaError();
+  return error ?? new DOMException('Transaction aborted', 'AbortError');
+}
+
+/**
+ * Save a project. `videoFiles` names the videos it shows, each with its file
+ * where the document has it: a file is written only when the project hasn't
+ * one stored for that video yet, and those of videos it no longer shows are
+ * let go. Without it (a rename, a tutorial) the stored files stay as they are.
+ */
 export async function saveProject(
   id: string,
   name: string,
-  data: string | ArrayBuffer
+  data: string | ArrayBuffer,
+  videoFiles?: ReadonlyMap<string, Blob | undefined>
 ): Promise<void> {
+  // The files before the project naming them
+  const unused = videoFiles ? await storeVideoFiles(id, videoFiles) : [];
+
   const db = await initDB();
   const record: StoredProject = {
     id,
@@ -136,15 +204,7 @@ export async function saveProject(
     const tx = db.transaction(PROJECTS_STORE, 'readwrite');
     tx.objectStore(PROJECTS_STORE).put(record);
     tx.oncomplete = () => resolve();
-    const rejectWithQuota = () => {
-      // Detect quota exceeded errors
-      const error = tx.error;
-      if (error?.name === 'QuotaExceededError') {
-        reject(new StorageQuotaError());
-      } else {
-        reject(error ?? new DOMException('Transaction aborted', 'AbortError'));
-      }
-    };
+    const rejectWithQuota = () => reject(writeError(tx));
     tx.onerror = rejectWithQuota;
     // A quota failure detected only at commit fires onabort (not onerror), so the
     // Promise would otherwise hang forever.
@@ -152,6 +212,8 @@ export async function saveProject(
   });
 
   await updateList({ put: [{ id, name, updatedAt: record.updatedAt }] });
+  // Once the project no longer names them
+  if (unused.length > 0) await removeVideoFiles(id, unused);
 }
 
 export async function loadProject(id: string): Promise<StoredProject | undefined> {
@@ -218,6 +280,97 @@ export async function deleteProject(id: string): Promise<void> {
   });
 
   await updateList({ remove: [id] });
+  await removeVideoFiles(id);
+}
+
+// ============================================================================
+// Video files
+// ============================================================================
+
+/** The keys of a project's video files: [projectId, videoId] for any video id. */
+function videoFileRange(projectId: string): IDBKeyRange {
+  return IDBKeyRange.bound([projectId], [projectId, []]);
+}
+
+/**
+ * Write the files of a project's videos it hasn't stored yet. Returns the
+ * ids of the videos it has files for but no longer shows.
+ */
+async function storeVideoFiles(
+  projectId: string,
+  files: ReadonlyMap<string, Blob | undefined>
+): Promise<string[]> {
+  let db: IDBDatabase;
+  try {
+    db = await initVideoDB();
+  } catch (error) {
+    // With no file to write, only the tidying up is missed: the project saves
+    if ([...files.values()].some(Boolean)) throw error;
+    return [];
+  }
+
+  return new Promise<string[]>((resolve, reject) => {
+    const tx = db.transaction(VIDEO_STORE, 'readwrite');
+    const store = tx.objectStore(VIDEO_STORE);
+    let unused: string[] = [];
+    // Just the keys: a file stored is never read to be compared
+    const request = store.getAllKeys(videoFileRange(projectId));
+    request.onsuccess = () => {
+      const stored = new Set(
+        request.result.flatMap((key) =>
+          Array.isArray(key) && typeof key[1] === 'string' ? [key[1]] : []
+        )
+      );
+      for (const [videoId, file] of files) {
+        if (!file || stored.has(videoId)) continue;
+        const record: StoredVideoFile = { projectId, videoId, file };
+        store.put(record);
+      }
+      unused = [...stored].filter((videoId) => !files.has(videoId));
+    };
+    tx.oncomplete = () => resolve(unused);
+    const rejectWithQuota = () => reject(writeError(tx));
+    tx.onerror = rejectWithQuota;
+    tx.onabort = rejectWithQuota;
+  });
+}
+
+/** The files of a project's videos, by video id. */
+export async function loadVideoFiles(projectId: string): Promise<Map<string, Blob>> {
+  const db = await initVideoDB();
+
+  const records = await new Promise<unknown[]>((resolve, reject) => {
+    const tx = db.transaction(VIDEO_STORE, 'readonly');
+    const request = tx.objectStore(VIDEO_STORE).getAll(videoFileRange(projectId));
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+  const files = new Map<string, Blob>();
+  for (const record of records as Partial<StoredVideoFile>[]) {
+    if (typeof record.videoId === 'string' && record.file instanceof Blob) {
+      files.set(record.videoId, record.file);
+    }
+  }
+  return files;
+}
+
+/** Let go of the files of these videos of a project (all of them when none are named). */
+async function removeVideoFiles(projectId: string, videoIds?: string[]): Promise<void> {
+  try {
+    const db = await initVideoDB();
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(VIDEO_STORE, 'readwrite');
+      const store = tx.objectStore(VIDEO_STORE);
+      if (videoIds) for (const videoId of videoIds) store.delete([projectId, videoId]);
+      else store.delete(videoFileRange(projectId));
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error ?? new DOMException('Transaction aborted', 'AbortError'));
+    });
+  } catch {
+    // The project is saved or deleted, which is what matters: files left over
+    // take room until its next save lets them go (a deleted project's stay)
+  }
 }
 
 // ============================================================================

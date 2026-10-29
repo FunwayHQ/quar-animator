@@ -284,6 +284,54 @@ describe('Projects', () => {
     expect(mockNavigate).toHaveBeenCalledWith(`/editor?project=${encodeURIComponent(id)}`);
   });
 
+  it("stores an imported file's videos apart from the project, as a save does", async () => {
+    const file = new Blob(['video bytes'], { type: 'video/mp4' });
+    const clip = {
+      id: 'clip',
+      name: 'clip.mp4',
+      mimeType: 'video/mp4',
+      byteLength: 11,
+      width: 160,
+      height: 90,
+      duration: 2,
+      frameRate: 30,
+      hasAlpha: false,
+      strip: { rate: 4, height: 90, frames: [] },
+    };
+    vi.mocked(uploadProjectFile).mockResolvedValue({
+      version: '3.0',
+      name: 'Clips',
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+      pages: [
+        {
+          id: 'page-1',
+          name: 'Main',
+          sceneGraph: { nodes: [], rootNodeIds: [] },
+          timeline: { tracks: [], duration: 60, frameRate: 24 },
+        },
+      ],
+      activePageId: 'page-1',
+      settings: { timelineDuration: 60, frameRate: 24, autoKeyframe: false, onionSkin: {} },
+      videos: [{ ...clip, file }],
+    } as ProjectData);
+
+    render(<Projects />);
+    fireEvent.click(await screen.findByTestId('import-button'));
+
+    await waitFor(() => expect(mockSaveProject).toHaveBeenCalledOnce());
+    const [, , saved, videoFiles] = mockSaveProject.mock.calls[0] as [
+      string,
+      string,
+      ArrayBuffer,
+      Map<string, Blob>,
+    ];
+    expect(videoFiles).toEqual(new Map([['clip', file]]));
+    expect(videoFiles.get('clip')).toBe(file);
+    // The project's record knows the video, its file kept apart
+    expect(parseQuarFile(saved).videos).toEqual([clip]);
+  });
+
   it('should require double-click to delete a project', async () => {
     render(<Projects />);
     await waitFor(() => {
