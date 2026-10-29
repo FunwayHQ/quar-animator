@@ -4,15 +4,15 @@ order: 22
 summary: Where your work is kept and how not to lose it, what the editor sends to anyone (only fonts, and only if you allow them), and what to do when something goes wrong.
 ---
 
-This chapter answers what to do when saving, the canvas, playback or an export
-goes wrong, and how to tell us about a problem. It also says plainly what the
-editor keeps, where, and what it sends to anyone.
+This chapter answers what to do when saving, the canvas, playback, a video
+or an export goes wrong, and how to tell us about a problem. It also says
+plainly what the editor keeps, where, and what it sends to anyone.
 
 ## Where your projects are kept {#storage}
 
 The free editor keeps your projects in your browser's own storage, on this
-computer: each project with its pages, symbols, pictures and sounds. Nothing
-is kept anywhere else. So:
+computer: each project with its pages, symbols, pictures, sounds and videos.
+Nothing is kept anywhere else. So:
 
 - Another browser, another computer, or a private window doesn't have them.
   What you save in a private window is gone when you close it.
@@ -29,15 +29,21 @@ your browser's data, and now and then for work you care about.
 If "Failed to save project" (or "Auto-save failed") appears at the bottom
 right, the project in the editor hasn't been saved. A common reason is that
 the browser's storage for the site is full: browsers give each site a share of
-the disk, and pictures and sounds make projects big (a
+the disk, and pictures, sounds and videos make projects big (a
 [picture](pictures-and-svg.md#import-picture) can be up to 10 MB, a
-[sound](sound.md#add) up to 50 MB).
+[sound](sound.md#add) up to 50 MB, a [video](video-clips.md#import) up to
+100 MB).
 
 1. Don't close the tab: your work is still in the editor.
 2. Choose **File › Download as .quar** to keep it as a file.
 3. Make room: on the Projects page, delete projects you've backed up and
    don't need in the browser, or free some space on your disk.
 4. Save again ([[Mod+S]]).
+
+> [!CAUTION]
+> In a Safari private window, a project with a video in it can't be saved at
+> all: the browser won't store the video. Keep it with
+> **File › Download as .quar**, then open that file in an ordinary window.
 
 ## Fonts and Google {#google-fonts}
 
@@ -69,8 +75,9 @@ Google, and fonts already loaded stay until you reload.
 
 ## What stays on your computer {#privacy}
 
-- Your projects, pictures and sounds stay in your browser, and the editor
-  sends them nowhere. There's no account to make, and no cookies or tracking.
+- Your projects, pictures, sounds and videos stay in your browser, and the
+  editor sends them nowhere. There's no account to make, and no cookies or
+  tracking.
 - The editor shows only pictures that are in the project itself: it doesn't
   load pictures from other websites.
 - The links in the menus and on the Projects page — GitHub, TikTok, Facebook,
@@ -120,6 +127,31 @@ smoothly:
 
 Exports aren't affected: they draw every frame in full, however long it takes.
 
+## A video won't import {#video-import}
+
+When a video can't come in, a message at the bottom right says why (see
+[When a video won't come in](video-clips.md#problems)). What to try:
+
+- **Its kind of video:** browsers can't all play every kind (HEVC and
+  ProRes, for two). Make an MP4 with H.264 in a video app, or try another
+  browser, such as a recent Chrome or Edge.
+- **Its size:** a video can be up to 100 MB. Make it shorter, or smaller in
+  pixels, first.
+- **A GIF that doesn't move:** it's a picture, not a clip: use
+  **File › Import Image…**.
+- **A transparent WebM in Firefox:** Firefox can't show its see-through
+  parts correctly, so it isn't imported. Use Chrome, Edge or Safari for it.
+- **A symbol is open for editing:** symbols can't hold videos. Go back to the
+  page first.
+
+If a video comes in without its sound, the browser can't play the sound:
+try another browser, or [import the sound](sound.md#add) from a file of
+its own.
+
+A very big GIF can take a while to come in: the editor looks at each of its
+frames to find out whether any part is see-through. Wait for the message
+saying it was added.
+
 ## An export fails {#exports}
 
 When an export can't be made, the Export dialog says why (see
@@ -133,6 +165,12 @@ When an export can't be made, the Export dialog says why (see
 - **Sound:** if the browser can't encode the sound, turn **Sound** off in the
   Export dialog to export the video without it.
 - **Size:** width and height must be between 1 and 8192 pixels.
+
+A video layer that's still in an export isn't a failure: Lottie, SVG and PDF
+can't play video, and show a still picture of it (the dialog warns you). If
+the dialog says a video couldn't be decoded, its preview stills were used:
+export in a browser that plays that video. See
+[Videos in exports](exporting.md#video-layers).
 
 ## Report a problem {#report}
 
