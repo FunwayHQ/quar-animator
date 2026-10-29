@@ -74,6 +74,32 @@ document's background color behind the artwork. To change it, select
 nothing and set **Background** under **Document** in the Properties panel
 (see [The background](shapes.md#background)).
 
+## Videos in exports {#video-layers}
+
+How a [video or GIF clip](video-clips.md) comes out depends on the format:
+
+| Format                          | The video                                                    |
+| ------------------------------- | ------------------------------------------------------------ |
+| MP4 and WebM                    | plays, each frame exactly, its sound with it (see **Sound**) |
+| GIF, PNG Sequence, Sprite Sheet | plays, each frame exactly                                    |
+| Lottie JSON                     | a still: the clip's first picture in the frames you export   |
+| SVG                             | a still of the frame you export                              |
+| PDF                             | a still of the frame each page shows                         |
+
+For Lottie, SVG and PDF, the dialog warns you: "1 video layer will show as a
+still picture" (or 2, and so on).
+
+A transparent video stays see-through in a sprite sheet, and in a WebM, a GIF
+or a PNG sequence with **Transparent** ticked (in a GIF, each pixel either
+shows or doesn't). An MP4 draws it over the background.
+
+If the browser can't read a video while it exports (say, the project was
+made in a browser that plays it and you export in one that doesn't), the
+export uses the small pictures of it made when it was imported. The file is
+still made, and the dialog stays open to say which video it was:
+"Exported. Couldn't decode “sunrise”; its preview stills were used."
+Click **Close** to close it.
+
 ## GIF {#gif}
 
 GIFs play everywhere and loop forever.
@@ -104,7 +130,7 @@ Videos for sharing, for video editors and for the web.
   show a transparent WebM.
 - **Sound**: when the timeline has [sound clips](sound.md), this box (**With
   its 2 sound clips**, say) puts them in the video, as they play in the
-  editor. A slides
+  editor. A video layer's sound is one of them. A slides
   export plays each slide's sounds with it. Clear it for a silent video.
 - **Frame rate** and **Speed** work as for a GIF, with rates up to 60 frames
   a second (and the project's own).
@@ -153,7 +179,8 @@ The dialog counts the layers Lottie gets, and warns about what it can't take:
   out;
 - [blend modes](masks-and-effects.md#blend), which export as normal;
 - pictures bound to bones, which don't bend. Shapes bound to bones bend as
-  they do in the editor.
+  they do in the editor;
+- [video layers](#video-layers), which show as still pictures.
 
 A Lottie file has no sound.
 
@@ -169,6 +196,7 @@ for frame 0, say.
 - **Frame**: which frame. It starts at the playhead's.
 - Shapes bent by their bones are written as their bent outlines. Pictures
   bound to bones aren't bent.
+- Video layers are a still picture of the frame.
 
 ## PDF {#pdf}
 
@@ -184,7 +212,7 @@ A one-page PDF is named after its frame: `frame_149.pdf` for a timeline of
 
 Layers with a [blur or a drop shadow](masks-and-effects.md#effects), and
 pictures bent by bones or [adjusted](pictures-and-svg.md#adjust), go in as
-pictures, not vectors.
+pictures, not vectors. Video layers are a still picture of the page's frame.
 
 ## Export selected layers {#export-selection}
 
@@ -205,4 +233,6 @@ of what's selected, as it is at the playhead.
   `selection-2-items.png` and so on for several layers.
 - A PNG is transparent around the artwork. An artboard's PNG has its
   background color, unless you clear **Include background**.
+- A video layer shows the frame at the playhead: in a PNG as it is, in an
+  SVG as a still picture.
 - The rows are kept with the layer, so the next export takes one click.
