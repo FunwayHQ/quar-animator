@@ -629,6 +629,93 @@ describe('MenuBar', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Close the User Guide' }));
   });
 
+  describe('Help > Keyboard Shortcuts', () => {
+    const openShortcuts = () => {
+      render(<MenuBar />);
+      fireEvent.click(screen.getByTestId('menu-help'));
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Keyboard Shortcuts' }));
+      return screen.getByRole('dialog', { name: 'Keyboard Shortcuts' });
+    };
+    /** The keys on the dialog's first line saying `label`. */
+    const keysFor = (dialog: HTMLElement, label: string) => {
+      const row = within(dialog)
+        .getAllByTestId('shortcut-row')
+        .find((r) => within(r).getByTestId('shortcut-label').textContent === label);
+      return row ? within(row).getByTestId('shortcut-keys').textContent : undefined;
+    };
+
+    it('lists the keys it used to leave out', () => {
+      const dialog = openShortcuts();
+      const expected: Array<[string, string]> = [
+        ['Artboard', 'F'],
+        ['Show Guides', 'Shift+G'],
+        ['Flip Horizontal', 'Shift+H'],
+        ['Flip Vertical', 'Shift+V'],
+        ['Graph editor, and back', 'G'],
+        ['Work area: start / end it here', 'I / Shift+I'],
+        ['Work area on or off (Windows, Linux)', 'Alt+W'],
+        ['10 frames back / on', 'Shift+, / Shift+.'],
+        ['Save', 'Ctrl+S'],
+        ['Save As…', 'Ctrl+Shift+S'],
+        ['Open Project…', 'Ctrl+O'],
+        ['New Project', 'Ctrl+N'],
+        ['Import SVG…', 'Ctrl+I'],
+        ['Select All', 'Ctrl+A'],
+        ['Delete', 'Delete or Backspace'],
+        ['Redo', 'Ctrl+Shift+Z or Ctrl+Y'],
+        ['Join', 'Ctrl+J'],
+        ['Union', 'Ctrl+Shift+U'],
+        ['Subtract', 'Ctrl+Shift+D'],
+        ['Intersect', 'Ctrl+Shift+I'],
+        ['Exclude', 'Ctrl+Shift+X'],
+        ['Convert to Path', 'Ctrl+Shift+P'],
+        ['Outline Stroke', 'Ctrl+Shift+O'],
+        ['Create Symbol', 'Ctrl+Shift+K'],
+        ['Select nothing; in a group, come out of it', 'Esc'],
+        ['Nudge by 1 (with Shift: 10)', '↑ ↓ ← →'],
+        ['Next slide (in a transition: skip it)', '↓ or Page Down'],
+      ];
+      for (const [label, keys] of expected)
+        expect([label, keysFor(dialog, label)]).toEqual([label, keys]);
+    });
+
+    it('groups them as the user guide does', () => {
+      const dialog = openShortcuts();
+      const titles = within(dialog)
+        .getAllByRole('heading', { level: 4 })
+        .map((heading) => heading.textContent);
+      expect(titles).toEqual([
+        'Tools',
+        'While you draw',
+        'Files',
+        'Edit',
+        'Arrange',
+        'Shapes and paths',
+        'Editing points (Direct Selection)',
+        'Editing text',
+        'View',
+        'Timeline and playback',
+        'Graph editor',
+        'Sound lane',
+        'Rigging',
+        'Number fields',
+        'Presenting',
+        'Help',
+      ]);
+    });
+
+    it('the menus show the keys the dialog lists', () => {
+      const dialog = openShortcuts();
+      const save = keysFor(dialog, 'Save');
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Close' }));
+      expect(screen.queryByRole('dialog', { name: 'Keyboard Shortcuts' })).toBeNull();
+      fireEvent.click(screen.getByTestId('menu-file'));
+      expect(screen.getByRole('menuitem', { name: /^Save(?! As)/ })).toHaveTextContent(
+        `Save${save}`
+      );
+    });
+  });
+
   it('Help > Report Issues opens the project on GitHub', () => {
     const open = vi.spyOn(window, 'open').mockReturnValue(null);
     render(<MenuBar />);

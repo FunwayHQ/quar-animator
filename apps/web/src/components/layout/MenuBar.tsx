@@ -34,6 +34,7 @@ import { useProjectShortcuts } from '../../hooks/useProjectShortcuts';
 import { getAnimationEnd } from '../../hooks/usePlayback';
 import { okToDiscard } from '../../services/unsavedChanges';
 import { QuarLogo } from '../common/QuarLogo';
+import { KEYS, SHORTCUT_GROUPS, formatShortcut, type ShortcutEntry } from '../common/shortcuts';
 
 // ============================================================================
 // Types
@@ -591,21 +592,25 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                   <Separator />
                   <MenuItem
                     label="New Project"
-                    shortcut="Ctrl+N"
+                    shortcut={KEYS.newProject}
                     onClick={() => void handleNew()}
                   />
                   <MenuItem
                     label="Open Project..."
-                    shortcut="Ctrl+O"
+                    shortcut={KEYS.openProject}
                     onClick={() => void handleOpen()}
                   />
                   <Separator />
-                  <MenuItem label="Save" shortcut="Ctrl+S" onClick={handleSave} />
-                  <MenuItem label="Save As..." shortcut="Ctrl+Shift+S" onClick={handleSaveAs} />
+                  <MenuItem label="Save" shortcut={KEYS.save} onClick={handleSave} />
+                  <MenuItem label="Save As..." shortcut={KEYS.saveAs} onClick={handleSaveAs} />
                   <Separator />
                   <MenuItem label="Download as .quar" onClick={handleDownload} />
                   <MenuItem label="Import .quar..." onClick={() => void handleImport()} />
-                  <MenuItem label="Import SVG..." shortcut="Ctrl+I" onClick={handleImportSvg} />
+                  <MenuItem
+                    label="Import SVG..."
+                    shortcut={KEYS.importSvg}
+                    onClick={handleImportSvg}
+                  />
                   <MenuItem label="Import Image..." onClick={handleImportImage} />
                   <MenuItem label="Import Sound..." onClick={handleImportSound} />
                 </div>
@@ -619,7 +624,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                 <div className={styles.dropdown} role="menu" data-testid="edit-menu-dropdown">
                   <MenuItem
                     label="Undo"
-                    shortcut="Ctrl+Z"
+                    shortcut={KEYS.undo}
                     disabled={!canUndo}
                     onClick={() => {
                       closeMenu();
@@ -628,7 +633,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                   />
                   <MenuItem
                     label="Redo"
-                    shortcut="Ctrl+Shift+Z"
+                    shortcut={KEYS.redo}
                     disabled={!canRedo}
                     onClick={() => {
                       closeMenu();
@@ -638,7 +643,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                   <Separator />
                   <MenuItem
                     label="Cut"
-                    shortcut="Ctrl+X"
+                    shortcut={KEYS.cut}
                     disabled={!hasSelection}
                     onClick={() => {
                       closeMenu();
@@ -647,7 +652,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                   />
                   <MenuItem
                     label="Copy"
-                    shortcut="Ctrl+C"
+                    shortcut={KEYS.copy}
                     disabled={!hasSelection}
                     onClick={() => {
                       closeMenu();
@@ -656,7 +661,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                   />
                   <MenuItem
                     label="Paste"
-                    shortcut="Ctrl+V"
+                    shortcut={KEYS.paste}
                     disabled={!clipboard}
                     onClick={() => {
                       closeMenu();
@@ -665,7 +670,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                   />
                   <MenuItem
                     label="Duplicate"
-                    shortcut="Ctrl+D"
+                    shortcut={KEYS.duplicate}
                     disabled={!hasSelection}
                     onClick={() => {
                       closeMenu();
@@ -674,7 +679,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                   />
                   <MenuItem
                     label="Delete"
-                    shortcut="Del"
+                    shortcut={KEYS.delete}
                     disabled={!hasSelection}
                     onClick={() => {
                       closeMenu();
@@ -683,7 +688,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                   />
                   <MenuItem
                     label="Select All"
-                    shortcut="Ctrl+A"
+                    shortcut={KEYS.selectAll}
                     onClick={() => {
                       closeMenu();
                       selectAllAction(sceneGraph);
@@ -693,7 +698,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                   <SectionHeader label="Arrange" />
                   <MenuItem
                     label="Group"
-                    shortcut="Ctrl+G"
+                    shortcut={KEYS.group}
                     disabled={!hasMultipleSelected}
                     onClick={() => {
                       closeMenu();
@@ -702,7 +707,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                   />
                   <MenuItem
                     label="Ungroup"
-                    shortcut="Ctrl+Shift+G"
+                    shortcut={KEYS.ungroup}
                     disabled={!hasGroupSelected}
                     onClick={() => {
                       closeMenu();
@@ -712,7 +717,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                   <Separator />
                   <MenuItem
                     label="Bring Forward"
-                    shortcut="Ctrl+]"
+                    shortcut={KEYS.bringForward}
                     disabled={!hasSelection}
                     onClick={() => {
                       closeMenu();
@@ -721,7 +726,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                   />
                   <MenuItem
                     label="Bring to Front"
-                    shortcut="Ctrl+Shift+]"
+                    shortcut={KEYS.bringToFront}
                     disabled={!hasSelection}
                     onClick={() => {
                       closeMenu();
@@ -730,7 +735,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                   />
                   <MenuItem
                     label="Send Backward"
-                    shortcut="Ctrl+["
+                    shortcut={KEYS.sendBackward}
                     disabled={!hasSelection}
                     onClick={() => {
                       closeMenu();
@@ -739,7 +744,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                   />
                   <MenuItem
                     label="Send to Back"
-                    shortcut="Ctrl+Shift+["
+                    shortcut={KEYS.sendToBack}
                     disabled={!hasSelection}
                     onClick={() => {
                       closeMenu();
@@ -749,7 +754,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                   <Separator />
                   <MenuItem
                     label="Flip Horizontal"
-                    shortcut="Shift+H"
+                    shortcut={KEYS.flipHorizontal}
                     disabled={!hasSelection}
                     onClick={() => {
                       closeMenu();
@@ -758,7 +763,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                   />
                   <MenuItem
                     label="Flip Vertical"
-                    shortcut="Shift+V"
+                    shortcut={KEYS.flipVertical}
                     disabled={!hasSelection}
                     onClick={() => {
                       closeMenu();
@@ -769,7 +774,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                   <SectionHeader label="Boolean" />
                   <MenuItem
                     label="Union"
-                    shortcut="Ctrl+Shift+U"
+                    shortcut={KEYS.union}
                     disabled={!hasMultipleSelected}
                     onClick={() => {
                       closeMenu();
@@ -778,7 +783,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                   />
                   <MenuItem
                     label="Subtract"
-                    shortcut="Ctrl+Shift+D"
+                    shortcut={KEYS.subtract}
                     disabled={!hasMultipleSelected}
                     onClick={() => {
                       closeMenu();
@@ -787,7 +792,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                   />
                   <MenuItem
                     label="Intersect"
-                    shortcut="Ctrl+Shift+I"
+                    shortcut={KEYS.intersect}
                     disabled={!hasMultipleSelected}
                     onClick={() => {
                       closeMenu();
@@ -796,7 +801,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                   />
                   <MenuItem
                     label="Exclude"
-                    shortcut="Ctrl+Shift+X"
+                    shortcut={KEYS.exclude}
                     disabled={!hasMultipleSelected}
                     onClick={() => {
                       closeMenu();
@@ -847,7 +852,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                   />
                   <MenuItem
                     label="Join"
-                    shortcut="Ctrl+J"
+                    shortcut={KEYS.join}
                     disabled={!selectedPathNodes.some((path) => !path.closed)}
                     onClick={() => {
                       closeMenu();
@@ -866,7 +871,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                   <SectionHeader label="Convert" />
                   <MenuItem
                     label="Convert to Path"
-                    shortcut="Ctrl+Shift+P"
+                    shortcut={KEYS.convertToPath}
                     disabled={!hasConvertibleSelected}
                     onClick={() => {
                       closeMenu();
@@ -875,7 +880,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                   />
                   <MenuItem
                     label="Outline Stroke"
-                    shortcut="Ctrl+Shift+O"
+                    shortcut={KEYS.outlineStroke}
                     disabled={!hasStrokeSelected}
                     onClick={() => {
                       closeMenu();
@@ -886,7 +891,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                   <SectionHeader label="Symbols" />
                   <MenuItem
                     label="Create Symbol"
-                    shortcut="Ctrl+Shift+K"
+                    shortcut={KEYS.createSymbol}
                     disabled={selectedNodeIds.size === 0}
                     onClick={() => {
                       closeMenu();
@@ -917,7 +922,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                 <div className={styles.dropdown} role="menu" data-testid="view-menu-dropdown">
                   <MenuItem
                     label="Zoom In"
-                    shortcut="Ctrl+="
+                    shortcut={KEYS.zoomIn}
                     onClick={() => {
                       closeMenu();
                       dispatchViewEvent(VIEW_EVENTS.ZOOM_IN);
@@ -925,7 +930,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                   />
                   <MenuItem
                     label="Zoom Out"
-                    shortcut="Ctrl+-"
+                    shortcut={KEYS.zoomOut}
                     onClick={() => {
                       closeMenu();
                       dispatchViewEvent(VIEW_EVENTS.ZOOM_OUT);
@@ -933,7 +938,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                   />
                   <MenuItem
                     label="Zoom to 100%"
-                    shortcut="Ctrl+1"
+                    shortcut={KEYS.zoom100}
                     onClick={() => {
                       closeMenu();
                       dispatchViewEvent(VIEW_EVENTS.ZOOM_100);
@@ -941,7 +946,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                   />
                   <MenuItem
                     label="Fit to Window"
-                    shortcut="Ctrl+0"
+                    shortcut={KEYS.fitToWindow}
                     onClick={() => {
                       closeMenu();
                       dispatchViewEvent(VIEW_EVENTS.FIT_TO_WINDOW);
@@ -950,7 +955,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                   <Separator />
                   <MenuItem
                     label="Show Rulers"
-                    shortcut="Shift+R"
+                    shortcut={KEYS.rulers}
                     checked={showRulers}
                     onClick={() => {
                       closeMenu();
@@ -968,7 +973,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                   <Separator />
                   <MenuItem
                     label="Show Guides"
-                    shortcut="Shift+G"
+                    shortcut={KEYS.guides}
                     checked={showGuides}
                     onClick={() => {
                       closeMenu();
@@ -993,7 +998,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                   <Separator />
                   <MenuItem
                     label="Onion Skinning"
-                    shortcut="Shift+O"
+                    shortcut={KEYS.onionSkin}
                     checked={onionSkinEnabled}
                     onClick={() => {
                       closeMenu();
@@ -1002,7 +1007,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                   />
                   <MenuItem
                     label="Animation Sequence"
-                    shortcut="Shift+A"
+                    shortcut={KEYS.animationSequence}
                     checked={sequenceWindowOpen}
                     onClick={() => {
                       closeMenu();
@@ -1029,7 +1034,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                 <div className={styles.dropdown} role="menu" data-testid="animation-menu-dropdown">
                   <MenuItem
                     label={isPlaying ? 'Pause' : 'Play'}
-                    shortcut="Space"
+                    shortcut={KEYS.playPause}
                     onClick={() => {
                       closeMenu();
                       setIsPlayingAction(!isPlaying);
@@ -1038,7 +1043,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                   <Separator />
                   <MenuItem
                     label="Previous Frame"
-                    shortcut=","
+                    shortcut={KEYS.previousFrame}
                     disabled={isPlaying}
                     onClick={() => {
                       closeMenu();
@@ -1048,7 +1053,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                   />
                   <MenuItem
                     label="Next Frame"
-                    shortcut="."
+                    shortcut={KEYS.nextFrame}
                     disabled={isPlaying}
                     onClick={() => {
                       closeMenu();
@@ -1059,7 +1064,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                   />
                   <MenuItem
                     label="Jump Backward 10"
-                    shortcut="Shift+,"
+                    shortcut={KEYS.back10}
                     disabled={isPlaying}
                     onClick={() => {
                       closeMenu();
@@ -1069,7 +1074,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                   />
                   <MenuItem
                     label="Jump Forward 10"
-                    shortcut="Shift+."
+                    shortcut={KEYS.forward10}
                     disabled={isPlaying}
                     onClick={() => {
                       closeMenu();
@@ -1080,7 +1085,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                   <Separator />
                   <MenuItem
                     label="Go to Start"
-                    shortcut="Home"
+                    shortcut={KEYS.goToStart}
                     onClick={() => {
                       closeMenu();
                       setCurrentFrameAction(0);
@@ -1099,7 +1104,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                   <Separator />
                   <MenuItem
                     label="Loop Playback"
-                    shortcut="L"
+                    shortcut={KEYS.loop}
                     checked={isLooping}
                     onClick={() => {
                       closeMenu();
@@ -1108,7 +1113,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                   />
                   <MenuItem
                     label="Auto-Keyframe"
-                    shortcut="K"
+                    shortcut={KEYS.autoKeyframe}
                     checked={autoKeyframe}
                     onClick={() => {
                       closeMenu();
@@ -1126,7 +1131,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                 <div className={styles.dropdown} role="menu" data-testid="rigging-menu-dropdown">
                   <MenuItem
                     label="Bone Tool"
-                    shortcut="J"
+                    shortcut={KEYS.boneTool}
                     checked={activeTool === 'bone'}
                     onClick={() => {
                       closeMenu();
@@ -1135,7 +1140,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                   />
                   <MenuItem
                     label="Weight Paint Tool"
-                    shortcut="W"
+                    shortcut={KEYS.weightPaintTool}
                     checked={activeTool === 'weight-paint'}
                     onClick={() => {
                       closeMenu();
@@ -1346,7 +1351,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                 <div className={styles.dropdown} role="menu" data-testid="help-menu-dropdown">
                   <MenuItem
                     label="User Guide"
-                    shortcut="F1"
+                    shortcut={KEYS.userGuide}
                     onClick={() => {
                       closeMenu();
                       openHelp();
@@ -1490,63 +1495,21 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
               <h3 className={styles.saveAsTitle}>Keyboard Shortcuts</h3>
               <button
                 className={styles.shortcutsClose}
+                aria-label="Close"
                 onClick={() => setShowShortcutsDialog(false)}
               >
                 &times;
               </button>
             </div>
             <div className={styles.shortcutsContent}>
-              <div className={styles.shortcutsColumn}>
-                <h4 className={styles.shortcutsCategoryTitle}>Tools</h4>
-                <ShortcutRow keys="V" label="Selection Tool" />
-                <ShortcutRow keys="A" label="Direct Selection" />
-                <ShortcutRow keys="H" label="Hand Tool" />
-                <ShortcutRow keys="R" label="Rectangle" />
-                <ShortcutRow keys="O" label="Ellipse" />
-                <ShortcutRow keys="U" label="Polygon" />
-                <ShortcutRow keys="S" label="Star" />
-                <ShortcutRow keys="P" label="Pen" />
-                <ShortcutRow keys="B" label="Brush" />
-                <ShortcutRow keys="E" label="Eraser" />
-                <ShortcutRow keys="T" label="Text" />
-                <ShortcutRow keys="J" label="Bone" />
-                <ShortcutRow keys="W" label="Weight Paint" />
-
-                <h4 className={styles.shortcutsCategoryTitle}>View</h4>
-                <ShortcutRow keys="Ctrl+=" label="Zoom In" />
-                <ShortcutRow keys="Ctrl+-" label="Zoom Out" />
-                <ShortcutRow keys="Ctrl+1" label="Zoom 100%" />
-                <ShortcutRow keys="Ctrl+0" label="Fit to Window" />
-                <ShortcutRow keys="Shift+R" label="Toggle Rulers" />
-                <ShortcutRow keys="Shift+O" label="Onion Skinning" />
-                <ShortcutRow keys="Shift+A" label="Animation Sequence" />
-                <ShortcutRow keys="F1" label="User Guide" />
-              </div>
-              <div className={styles.shortcutsColumn}>
-                <h4 className={styles.shortcutsCategoryTitle}>Edit</h4>
-                <ShortcutRow keys="Ctrl+Z" label="Undo" />
-                <ShortcutRow keys="Ctrl+Shift+Z" label="Redo" />
-                <ShortcutRow keys="Ctrl+X" label="Cut" />
-                <ShortcutRow keys="Ctrl+C" label="Copy" />
-                <ShortcutRow keys="Ctrl+V" label="Paste" />
-                <ShortcutRow keys="Ctrl+D" label="Duplicate" />
-                <ShortcutRow keys="Ctrl+G" label="Group" />
-                <ShortcutRow keys="Ctrl+Shift+G" label="Ungroup" />
-
-                <h4 className={styles.shortcutsCategoryTitle}>Arrange</h4>
-                <ShortcutRow keys="Ctrl+]" label="Bring Forward" />
-                <ShortcutRow keys="Ctrl+Shift+]" label="Bring to Front" />
-                <ShortcutRow keys="Ctrl+[" label="Send Backward" />
-                <ShortcutRow keys="Ctrl+Shift+[" label="Send to Back" />
-
-                <h4 className={styles.shortcutsCategoryTitle}>Animation</h4>
-                <ShortcutRow keys="Space" label="Play / Pause" />
-                <ShortcutRow keys="Home" label="Go to Start" />
-                <ShortcutRow keys="End" label="Go to End" />
-                <ShortcutRow keys=",  ." label="Prev / Next Frame" />
-                <ShortcutRow keys="L" label="Toggle Loop" />
-                <ShortcutRow keys="K" label="Auto-Keyframe" />
-              </div>
+              {SHORTCUT_GROUPS.map((group) => (
+                <section key={group.title} className={styles.shortcutsGroup}>
+                  <h4 className={styles.shortcutsCategoryTitle}>{group.title}</h4>
+                  {group.entries.map((entry) => (
+                    <ShortcutRow key={`${entry.keys.join()} ${entry.label}`} entry={entry} />
+                  ))}
+                </section>
+              ))}
             </div>
           </div>
         </>
@@ -1580,11 +1543,27 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
 // Shortcut Row Helper
 // ============================================================================
 
-function ShortcutRow({ keys, label }: { keys: string; label: string }) {
+const JOINERS: Record<NonNullable<ShortcutEntry['join']>, string> = {
+  or: ' or ',
+  '/': ' / ',
+  ' ': ' ',
+};
+
+function ShortcutRow({ entry }: { entry: ShortcutEntry }) {
+  const joiner = JOINERS[entry.join ?? 'or'];
   return (
-    <div className={styles.shortcutRow}>
-      <span className={styles.shortcutLabel}>{label}</span>
-      <kbd className={styles.shortcutKbd}>{keys}</kbd>
+    <div className={styles.shortcutRow} data-testid="shortcut-row">
+      <span className={styles.shortcutLabel} data-testid="shortcut-label">
+        {entry.label}
+      </span>
+      <span className={styles.shortcutKeys} data-testid="shortcut-keys">
+        {entry.keys.map((keys, index) => (
+          <span key={keys}>
+            {index > 0 && <span className={styles.shortcutJoiner}>{joiner}</span>}
+            <kbd className={styles.shortcutKbd}>{formatShortcut(keys)}</kbd>
+          </span>
+        ))}
+      </span>
     </div>
   );
 }
