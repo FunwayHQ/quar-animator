@@ -88,7 +88,8 @@ export function loadFont({ family, weight }: FontUse): Promise<unknown> {
   return getFontManager().loadGoogleFont(family, weight);
 }
 
-// Asked once a session: declining isn't stored, and shouldn't ask again on every paste
+// Asked once a session: declining isn't stored, and shouldn't ask again on every
+// paste. Turning Google Fonts on afterwards (the Help menu, say) undoes it.
 let declined = false;
 
 /**
@@ -101,6 +102,7 @@ export async function loadDocumentFonts(
 ): Promise<number> {
   const fm = getFontManager();
   const missing = notLoaded(uses);
+  if (hasGoogleFontsConsent()) declined = false;
   if (missing.length === 0 || declined) return 0;
   if (!(await allow())) {
     declined = true;

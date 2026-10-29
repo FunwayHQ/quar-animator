@@ -14,6 +14,7 @@ import {
   resetDocumentFontsForTests,
 } from './documentFonts';
 import { textIn } from '../test/textNode';
+import { setGoogleFontsConsent } from '../components/common/ConsentBanner';
 import { useEditorStore } from '../stores/editorStore';
 import type { PageData } from '../stores/editorStore';
 
@@ -124,6 +125,20 @@ describe('loadDocumentFonts', () => {
 
     expect(allow).toHaveBeenCalledTimes(1);
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('loads them once Google Fonts are turned on, though they were declined before', async () => {
+    const decline = vi.fn().mockResolvedValue(false);
+    expect(await loadDocumentFonts([{ family: 'Outfit', weight: 800 }], decline)).toBe(0);
+
+    // Help › Use Google Fonts (or the first-visit note) after saying no
+    setGoogleFontsConsent(true);
+    try {
+      await loadDocumentFonts([{ family: 'Outfit', weight: 800 }]);
+      expect(fetchMock).toHaveBeenCalledWith(urlOf('Outfit', 800));
+    } finally {
+      setGoogleFontsConsent(false);
+    }
   });
 
   it('lists, without asking, the fonts still to load when Google Fonts are allowed', () => {

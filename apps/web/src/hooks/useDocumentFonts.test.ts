@@ -10,6 +10,10 @@ import { resetDocumentFontsForTests } from '../services/documentFonts';
 import { textIn } from '../test/textNode';
 import { useDocumentFonts } from './useDocumentFonts';
 
+// The question Google Fonts are asked with, answered by each test
+const confirmMock = vi.hoisted(() => vi.fn<[], Promise<boolean>>());
+vi.mock('../components/common/PromptDialog', () => ({ confirmDialog: confirmMock }));
+
 const urlOf = (family: string, weight: number) =>
   GOOGLE_FONTS_CATALOG.find((entry) => entry.family === family)!.url(weight);
 
@@ -49,5 +53,23 @@ describe('useDocumentFonts', () => {
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(urlOf('DM Sans', 500)));
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('loads the open document’s fonts as soon as Google Fonts are turned on, after a no', async () => {
+    setGoogleFontsConsent(false);
+    // The question asked as the document opens: Cancel
+    confirmMock.mockResolvedValueOnce(false);
+    const sg = new SceneGraph();
+    sg.addNode(textIn('title', 'Outfit', 800));
+    renderHook(() => useDocumentFonts(sg));
+    await waitFor(() => expect(confirmMock).toHaveBeenCalledTimes(1));
+    await Promise.resolve();
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    // Help › Use Google Fonts: nothing reloaded, no text added
+    setGoogleFontsConsent(true);
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(urlOf('Outfit', 800)));
+    expect(confirmMock).toHaveBeenCalledTimes(1);
   });
 });

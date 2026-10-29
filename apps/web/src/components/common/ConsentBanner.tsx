@@ -26,8 +26,22 @@ export function hasGoogleFontsConsent(): boolean {
   }
 }
 
+const consentListeners = new Set<(enabled: boolean) => void>();
+
+/**
+ * Be told when Google Fonts are turned on or off (Help › Use Google Fonts, the
+ * first-visit note, the font picker's question). Returns the unsubscribe.
+ */
+export function onGoogleFontsConsentChange(listener: (enabled: boolean) => void): () => void {
+  consentListeners.add(listener);
+  return () => {
+    consentListeners.delete(listener);
+  };
+}
+
 /** Set Google Fonts consent */
 export function setGoogleFontsConsent(enabled: boolean): void {
+  const was = hasGoogleFontsConsent();
   try {
     if (enabled) {
       localStorage.setItem(GOOGLE_FONTS_CONSENT_KEY, 'true');
@@ -37,6 +51,7 @@ export function setGoogleFontsConsent(enabled: boolean): void {
   } catch {
     // localStorage not available
   }
+  if (enabled !== was) consentListeners.forEach((listener) => listener(enabled));
 }
 
 /**

@@ -1,13 +1,14 @@
 /**
  * useDocumentFonts Hook
- * Loads the Google fonts the open document's text uses, when it opens and
- * whenever text arrives in it.
+ * Loads the Google fonts the open document's text uses, when it opens,
+ * whenever text arrives in it, and as soon as Google Fonts are turned on.
  */
 
 import { useEffect } from 'react';
 import type { SceneGraph } from '@quar/core';
 import { useEditorStore } from '../stores/editorStore';
 import { googleFontsUsed, loadDocumentFonts } from '../services/documentFonts';
+import { onGoogleFontsConsentChange } from '../components/common/ConsentBanner';
 
 export function useDocumentFonts(sceneGraph: SceneGraph): void {
   useEffect(() => {
@@ -25,7 +26,14 @@ export function useDocumentFonts(sceneGraph: SceneGraph): void {
       });
     };
     check();
-    const unsubs = [sceneGraph.on('graphReplaced', check), sceneGraph.on('nodeAdded', check)];
+    const unsubs = [
+      sceneGraph.on('graphReplaced', check),
+      sceneGraph.on('nodeAdded', check),
+      // Allowed after a no: the text in a stand-in font gets its own, no reload needed
+      onGoogleFontsConsentChange((enabled) => {
+        if (enabled) check();
+      }),
+    ];
     return () => unsubs.forEach((unsub) => unsub());
   }, [sceneGraph]);
 }
