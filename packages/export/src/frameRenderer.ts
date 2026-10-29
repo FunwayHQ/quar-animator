@@ -14,9 +14,10 @@ import type {
   IKChain,
   SmartBoneAction,
   SymbolDefinition,
+  VideoNode,
   WindSettings,
 } from '@quar/types';
-import type { SceneGraph } from '@quar/core';
+import type { SceneGraph, VideoFrameImage } from '@quar/core';
 import { WebGLRenderer, ShapeRenderer, mat3 } from '@quar/core';
 import { evaluateTimelineAtFrame, applyAnimatedValues } from '@quar/animation';
 import {
@@ -65,6 +66,11 @@ export interface FrameRenderContext {
   viewportBounds?: { x: number; y: number; width: number; height: number };
   /** Definitions symbol instances are drawn from (without them, instances draw nothing). */
   symbols?: SymbolDefinition[];
+  /**
+   * The picture each video layer shows at the frame drawn (null: nothing);
+   * without, video layers draw nothing.
+   */
+  videoFrames?: (node: VideoNode, frame: number) => VideoFrameImage | null;
 }
 
 export interface FrameRendererHandle {
@@ -176,6 +182,10 @@ export function createFrameRenderer(options: FrameRenderOptions): FrameRendererH
         gl.clearColor(0, 0, 0, 0);
       }
       gl.clear(gl.COLOR_BUFFER_BIT);
+
+      // Video layers show this drawing's pictures of them at this frame
+      const videoFrames = ctx.videoFrames;
+      shapeRenderer.setVideoFrames(videoFrames ? (node) => videoFrames(node, frame) : null);
 
       // Render scene
       shapeRenderer.render(sceneGraph, vpMatrix, new Set(), null, morphOffsets, ctx.exportRootIds);

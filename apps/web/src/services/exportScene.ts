@@ -96,7 +96,7 @@ export function slidesSeconds(slides: ReturnType<typeof getSlides>, frameRate: n
  */
 export function slideShow(
   slides: ReturnType<typeof getSlides>,
-  base: Pick<FrameRenderContext, 'sceneGraph' | 'timeline' | 'rig' | 'symbols'>,
+  base: Pick<FrameRenderContext, 'sceneGraph' | 'timeline' | 'rig' | 'symbols' | 'videoFrames'>,
   width: number,
   height: number
 ): FrameSlide[] {

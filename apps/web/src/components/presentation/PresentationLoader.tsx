@@ -1,8 +1,9 @@
 /**
  * The presentation's loading screen: shown, full screen, while the slides
  * get ready (their pictures, the sounds they play, the fonts their text is
- * set in), with how far that has got. An outline of the first slide, at its
- * shape, stands in for it until it starts.
+ * set in, their videos' first pictures), with how far that has got. An
+ * outline of the first slide, at its shape, stands in for it until it
+ * starts.
  */
 
 import type { CSSProperties } from 'react';
@@ -19,17 +20,20 @@ export interface Preparing {
   slides: Part;
   sounds: Part;
   fonts: Part;
+  /** The first picture of each video the slides show */
+  videos: Part;
 }
 
 const LABELS: Record<keyof Preparing, string> = {
   slides: 'Slides',
+  videos: 'Videos',
   sounds: 'Sounds',
   fonts: 'Fonts',
 };
 
 /** How much of it all is ready, in whole percent. */
 export function percentReady(preparing: Preparing): number {
-  const parts: Part[] = [preparing.slides, preparing.sounds, preparing.fonts];
+  const parts: Part[] = [preparing.slides, preparing.videos, preparing.sounds, preparing.fonts];
   const total = parts.reduce((sum, part) => sum + part.total, 0);
   const done = parts.reduce((sum, part) => sum + Math.min(part.done, part.total), 0);
   return total > 0 ? Math.floor((100 * done) / total) : 100;

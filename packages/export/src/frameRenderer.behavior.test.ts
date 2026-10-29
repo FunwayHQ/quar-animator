@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => ({
   mat3Multiply: vi.fn(() => new Float32Array([1, 0, 0, 1, 0, 0])),
   setDrawRigHelpers: vi.fn(),
   setSymbolDefinitions: vi.fn(),
+  setVideoFrames: vi.fn(),
   loseContext: vi.fn(),
   evaluateIKChains: vi.fn(),
   evaluateDynamicChainsAtFrame: vi.fn(),
@@ -37,6 +38,7 @@ vi.mock('@quar/core', () => ({
     preloadTextures = mocks.preloadTextures;
     setDrawRigHelpers = mocks.setDrawRigHelpers;
     setSymbolDefinitions = mocks.setSymbolDefinitions;
+    setVideoFrames = mocks.setVideoFrames;
     dispose = mocks.shapeRendererDispose;
 
     constructor() {
@@ -199,6 +201,29 @@ describe('createFrameRenderer', () => {
     handle.renderFrame({ sceneGraph: sceneGraph as any, timeline, symbols }, 1);
     expect(mocks.setSymbolDefinitions).toHaveBeenCalledOnce();
     expect(mocks.setSymbolDefinitions).toHaveBeenCalledWith(new Map([['sym-1', symbol]]));
+  });
+
+  it('gives video layers the pictures the drawing has for the frame drawn', () => {
+    const node = { id: 'clip', opacity: 1 };
+    const sceneGraph = createSceneGraph(node);
+    const timeline = { tracks: [] } as unknown as Timeline;
+    const picture = { source: {} as TexImageSource, key: 'clip@7' };
+    const videoFrames = vi.fn(() => picture);
+    const handle = createFrameRenderer({ width: 10, height: 10 });
+
+    handle.renderFrame({ sceneGraph: sceneGraph as any, timeline, videoFrames }, 7);
+    const provider = mocks.setVideoFrames.mock.calls.at(-1)?.[0];
+    const video = { id: 'clip', type: 'video' };
+    expect(provider(video)).toBe(picture);
+    expect(videoFrames).toHaveBeenCalledWith(video, 7);
+    // Set before the scene is drawn
+    expect(mocks.setVideoFrames.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.render.mock.invocationCallOrder[0]!
+    );
+
+    // A drawing without them draws no video
+    handle.renderFrame({ sceneGraph: sceneGraph as any, timeline }, 8);
+    expect(mocks.setVideoFrames).toHaveBeenLastCalledWith(null);
   });
 
   it('maps the selected artboard bounds to the output and renders only that subtree', () => {

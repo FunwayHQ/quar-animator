@@ -8,10 +8,13 @@
  * outgoing slide held on the frame it got to, the incoming one on its
  * first; then the incoming slide's timeline and sounds start. ↓ again
  * during it skips to its end. Going back (and Home, End) cuts.
+ * Video layers play in step with their slide's timeline, decoded by
+ * readers of the player's own.
  * It draws a copy of the page as it was when it began, so the editor
  * behind it doesn't move. The first slide starts once all of them are
- * ready (their pictures, the sounds they play, their fonts); a loading
- * screen shows how far that has got, if it takes more than a moment.
+ * ready (their pictures, the sounds they play, their fonts, the first
+ * picture of each video); a loading screen shows how far that has got, if
+ * it takes more than a moment.
  */
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
@@ -31,6 +34,7 @@ import { useSceneGraph } from '../../contexts/SceneGraphContext';
 import { fontsToLoad, googleFontsUsed, loadFont, type FontUse } from '../../services/documentFonts';
 import { exportRig, getSlides, slideShow } from '../../services/exportScene';
 import { SoundPlayer } from '../../services/soundPlayer';
+import { createVideoFrames, type VideoFrames } from '../../services/videoFrames';
 import { useEditorStore } from '../../stores/editorStore';
 import {
   FORWARD,
@@ -42,15 +46,18 @@ import {
   usePresentation,
 } from './presentation';
 import { PresentationLoader, type Preparing } from './PresentationLoader';
+import { firstPictures, presentationVideoFrames, type VideoDrawing } from './presentationVideo';
 import styles from './PresentationPlayer.module.css';
 
 type Sounds = Pick<SoundPlayer, 'play' | 'stop' | 'prepare' | 'warm' | 'dispose'>;
+type Videos = Pick<VideoFrames, 'pick' | 'decode' | 'dispose'>;
 
 interface PlayerProps {
   /** Stand-ins, for tests */
   createRenderer?: (options: FrameRenderOptions) => FrameRendererHandle;
   createSoundPlayer?: () => Sounds;
   loadFont?: (font: FontUse) => Promise<unknown>;
+  createVideoFrames?: () => Videos;
 }
 
 /** How long the keys stay on screen once the first slide starts. */
@@ -65,6 +72,8 @@ export const LOADER_MIN_MS = 500;
 export const LOADER_LEAVE_MS = 280;
 /** How long a font may take to arrive before the slides start without it (it comes from the network). */
 const FONT_WAIT_MS = 8000;
+/** How long the videos' first pictures may take, all told, before the slides start without them. */
+export const VIDEO_WAIT_MS = 5000;
 
 /**
  * Where the player is: getting ready (quietly at first, then with the
@@ -97,8 +106,11 @@ export function PresentationHost(props: PlayerProps) {
   return open ? <PresentationPlayer {...props} /> : null;
 }
 
-/** The slides, from a copy of the page as it is now. */
-function useDeck() {
+/**
+ * The slides, from a copy of the page as it is now; their video layers'
+ * pictures from `videos`, drawn as `drawing` says.
+ */
+function useDeck(videos: Videos, drawing: VideoDrawing) {
   const sceneGraph = useSceneGraph();
   const [deck] = useState(() => {
     const state = useEditorStore.getState();
@@ -116,6 +128,7 @@ function useDeck() {
         timeline,
         rig: exportRig(state, timeline.frameRate),
         symbols: state.symbols,
+        videoFrames: presentationVideoFrames(videos, timeline.frameRate, drawing),
       },
       timeline,
       background: state.documentBackground,
@@ -123,6 +136,8 @@ function useDeck() {
       played: state.sounds.filter((sound) => played.has(sound.id)),
       clips,
       fonts: fontsToLoad(googleFontsUsed(shown, state.symbols)),
+      // The first picture each video layer shows, decoded before the first slide starts
+      videos: firstPictures(scene, slides, timeline.frameRate),
     };
   });
   return deck;
@@ -132,8 +147,12 @@ function PresentationPlayer({
   createRenderer = createFrameRenderer,
   createSoundPlayer = () => new SoundPlayer(),
   loadFont: loadEach = loadFont,
+  createVideoFrames: createVideos = createVideoFrames,
 }: PlayerProps) {
-  const deck = useDeck();
+  // The video layers' pictures, from readers of the player's own; how it's drawing them
+  const [videos] = useState(createVideos);
+  const [drawing] = useState<VideoDrawing>(() => ({ playing: false, pending: false }));
+  const deck = useDeck(videos, drawing);
   const stage = useRef<HTMLDivElement>(null);
   // The slide shown, how many times it has been started over, and how it came on
   const [{ index, take, entrance }, setShown] = useState<{
@@ -153,6 +172,7 @@ function PresentationPlayer({
     slides: { done: 0, total: deck.slides.length },
     sounds: { done: 0, total: deck.played.length },
     fonts: { done: 0, total: deck.fonts.length },
+    videos: { done: 0, total: deck.videos.length },
   }));
   const [pictures, setPictures] = useState(false);
   const [assets, setAssets] = useState(false);
@@ -309,11 +329,16 @@ function PresentationPlayer({
     };
   }, [size, count, deck, createRenderer]);
 
-  // The sounds the slides play, decoded ahead, and the fonts their text is
-  // set in (each given a while); the sounds gone with the player
+  // The videos' pictures go with the player
+  useEffect(() => () => videos.dispose(), [videos]);
+
+  // The sounds the slides play, decoded ahead, the fonts their text is set
+  // in (each given a while), and the first picture of each video (a while
+  // for them all: one that won't decode can't hold the show up); the
+  // sounds gone with the player
   useEffect(() => {
     let alive = true;
-    const step = (part: 'sounds' | 'fonts') => () => {
+    const step = (part: 'sounds' | 'fonts' | 'videos') => () => {
       if (!alive) return;
       setPreparing((was) => ({ ...was, [part]: { ...was[part], done: was[part].done + 1 } }));
     };
@@ -322,15 +347,23 @@ function PresentationPlayer({
     const fonts = deck.fonts.map((font) =>
       Promise.race([load(font).catch(() => null), later(FONT_WAIT_MS)]).then(step('fonts'))
     );
+    const pictures = (async () => {
+      const until = performance.now() + VIDEO_WAIT_MS;
+      for (const { videoId, seconds } of deck.videos) {
+        if (!alive) return;
+        await videos.decode(videoId, seconds, Math.max(0, until - performance.now()));
+        step('videos')();
+      }
+    })();
     const done = () => {
       if (alive) setAssets(true);
     };
-    void Promise.all([sounds, ...fonts]).then(done, done);
+    void Promise.all([sounds, ...fonts, pictures]).then(done, done);
     return () => {
       alive = false;
       sound.dispose();
     };
-  }, [sound, deck, load]);
+  }, [sound, deck, load, videos]);
 
   // A slide starts from its first frame, shown or started over — after the
   // transition into it, if it came on through one (the sounds playing stop
@@ -387,6 +420,9 @@ function PresentationPlayer({
             drawn.index !== at.index ||
             drawn.progress !== progress
           ) {
+            // Both slides held: their videos too
+            drawing.playing = false;
+            drawing.pending = false;
             put(
               shown.shots.render({
                 ctx: current.ctx,
@@ -424,17 +460,22 @@ function PresentationPlayer({
         drawn?.renderer === shown.renderer &&
         drawn.index === at.index &&
         drawn.frame === frame &&
-        drawn.progress === null
+        drawn.progress === null &&
+        // A video's picture that wasn't its moment's: drawn again until it is
+        !drawing.pending
       ) {
         return;
       }
+      // Its videos decode on ahead while it plays; held on its last frame, they stop
+      drawing.playing = at.began !== null && frame < current.frameCount - 1;
+      drawing.pending = false;
       put(shown.shots.render({ ctx: current.ctx, frame }));
       at.frame = frame;
       drawn = { renderer: shown.renderer, index: at.index, frame, progress: null };
     };
     frameRequest = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frameRequest);
-  }, [deck, sound]);
+  }, [deck, sound, drawing]);
 
   // The keys are the presentation's while it's on: none reach the editor.
   // Escape leaves at any time; the slides move once the first has started
