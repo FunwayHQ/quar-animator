@@ -79,6 +79,7 @@ import {
   updateHandleWithSymmetry,
   colorToHex,
   hexToColor,
+  mat3,
 } from '@quar/core';
 import { findTrack, getEasingDisplayName } from '@quar/animation';
 import type { SceneGraph } from '@quar/core';
@@ -298,16 +299,36 @@ function numericInputProps(
   };
 }
 
-function getGroupPosition(node: Node, sceneGraph: SceneGraph): { x: number; y: number } {
-  const childIds = new Set(sceneGraph.getDescendants(node.id).map((n: Node) => n.id));
-  const bounds = groupBoundsManager.getSelectionBounds(childIds, sceneGraph);
-  if (bounds) {
-    return {
-      x: bounds.rect.x + bounds.rect.width / 2,
-      y: bounds.rect.y + bounds.rect.height / 2,
-    };
+/**
+ * The top-left corner (least X, greatest Y: Y counts up) of what a group or
+ * symbol instance draws, in its parent's space as other layers' positions
+ * are. Its own position is only where its layers are placed from, whatever
+ * its anchor, so it says nothing of where they are. Null for other layers
+ * (their corner comes from their size and anchor) and for an empty group.
+ */
+function getPlacedTopLeft(
+  node: Node,
+  sceneGraph: SceneGraph,
+  symbols: SymbolDefinition[]
+): { x: number; y: number } | null {
+  if (node.type !== 'group' && node.type !== 'symbol-instance') return null;
+  groupBoundsManager.setSymbolDefinitions(symbols);
+  const box = groupBoundsManager.getSelectionBounds(new Set([node.id]), sceneGraph)?.rect;
+  if (!box) return null;
+  const toParent = node.parent ? mat3.invert(sceneGraph.getWorldTransform(node.parent)) : null;
+  let x = Infinity;
+  let y = -Infinity;
+  for (const [cx, cy] of [
+    [box.x, box.y],
+    [box.x + box.width, box.y],
+    [box.x, box.y + box.height],
+    [box.x + box.width, box.y + box.height],
+  ] as const) {
+    const corner = toParent ? mat3.transformPoint(toParent, { x: cx, y: cy }) : { x: cx, y: cy };
+    x = Math.min(x, corner.x);
+    y = Math.max(y, corner.y);
   }
-  return node.transform.position;
+  return { x, y };
 }
 
 function isSizeEditable(node: Node): boolean {
@@ -632,18 +653,12 @@ export function PropertiesPanel() {
       const snappedTL = snap ? Math.round(num / grid) * grid : num;
       const anchor = currentNode.transform.anchor ?? { x: 0.5, y: 0.5 };
       const nodeSize = getNodeSize(currentNode, sceneGraph, symbols);
+      // A group's or instance's corner is that of what it draws: moved by
+      // as far as it is from where it's typed
+      const placed = getPlacedTopLeft(currentNode, sceneGraph, symbols);
       let centerValue: number;
-      if (currentNode.type === 'group') {
-        // For groups, display value comes from children world bounds, not directly
-        // from node.transform.position. Use delta-based approach: compute the difference
-        // between desired display and current display, apply that to transform.position.
-        const currentCenter = getGroupPosition(currentNode, sceneGraph);
-        const currentTL =
-          axis === 'x'
-            ? currentCenter.x - nodeSize.width * anchor.x
-            : currentCenter.y + nodeSize.height * (1 - anchor.y);
-        const delta = snappedTL - currentTL;
-        centerValue = currentNode.transform.position[axis] + delta;
+      if (placed) {
+        centerValue = currentNode.transform.position[axis] + snappedTL - placed[axis];
       } else {
         centerValue =
           axis === 'x'
@@ -1352,15 +1367,24 @@ export function PropertiesPanel() {
         if (!n) continue;
         const a = n.transform.anchor ?? { x: 0.5, y: 0.5 };
         const ns = getNodeSize(n, sceneGraph, symbols);
-        // Compute visual top-left from center (Y-up world: top = max Y)
-        const tlX = n.transform.position.x - ns.width * a.x;
-        const tlY = n.transform.position.y + ns.height * (1 - a.y);
-        // Snap visual top-left to grid
-        const snappedTLX = Math.round(tlX / grid) * grid;
-        const snappedTLY = Math.round(tlY / grid) * grid;
-        // Convert back to center
-        const newCenterX = snappedTLX + ns.width * a.x;
-        const newCenterY = snappedTLY - ns.height * (1 - a.y);
+        let newCenterX: number;
+        let newCenterY: number;
+        const placed = getPlacedTopLeft(n, sceneGraph, symbols);
+        if (placed) {
+          // A group's or instance's corner is that of what it draws: moved onto the grid
+          newCenterX = n.transform.position.x + Math.round(placed.x / grid) * grid - placed.x;
+          newCenterY = n.transform.position.y + Math.round(placed.y / grid) * grid - placed.y;
+        } else {
+          // Compute visual top-left from center (Y-up world: top = max Y)
+          const tlX = n.transform.position.x - ns.width * a.x;
+          const tlY = n.transform.position.y + ns.height * (1 - a.y);
+          // Snap visual top-left to grid
+          const snappedTLX = Math.round(tlX / grid) * grid;
+          const snappedTLY = Math.round(tlY / grid) * grid;
+          // Convert back to center
+          newCenterX = snappedTLX + ns.width * a.x;
+          newCenterY = snappedTLY - ns.height * (1 - a.y);
+        }
         if (newCenterX !== n.transform.position.x || newCenterY !== n.transform.position.y) {
           sceneGraph.updateNode(id, {
             transform: { ...n.transform, position: { x: newCenterX, y: newCenterY } },
@@ -1476,10 +1500,10 @@ export function PropertiesPanel() {
   const isGroup = node.type === 'group';
   const size = getNodeSize(node, sceneGraph, symbols);
   // Display top-left corner position (not center)
-  const center = isGroup ? getGroupPosition(node, sceneGraph) : node.transform.position;
+  const center = node.transform.position;
   const anchor = node.transform.anchor ?? { x: 0.5, y: 0.5 };
   // Visual top-left on screen: left edge (world min X), top edge (world max Y in Y-up)
-  const pos = {
+  const pos = getPlacedTopLeft(node, sceneGraph, symbols) ?? {
     x: center.x - size.width * anchor.x,
     y: center.y + size.height * (1 - anchor.y),
   };
