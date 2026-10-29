@@ -76,6 +76,31 @@ describe('useDirtyTracking', () => {
     expect(useEditorStore.getState().isDirty).toBe(true);
   });
 
+  it('leaves it clean when a symbol is opened for editing and closed, until an edit inside', () => {
+    const sg = new SceneGraph();
+    useEditorStore.getState().resetProject();
+    sg.addNode(createGroupNode('badge', 'Badge'));
+    useEditorStore.setState({ selectedNodeIds: new Set(['badge']) });
+    const symbolId = useEditorStore.getState().createSymbol(sg)!;
+    renderHook(() => useDirtyTracking(sg));
+    useEditorStore.setState({ isDirty: false });
+
+    useEditorStore.getState().enterSymbolEdit(symbolId, sg);
+    expect(useEditorStore.getState().isDirty).toBe(false);
+    useEditorStore.getState().exitSymbolEdit(sg);
+    expect(useEditorStore.getState().isDirty).toBe(false);
+
+    // An edit inside counts, and stays unsaved once back on the page
+    useEditorStore.getState().enterSymbolEdit(symbolId, sg);
+    const [inside] = sg.getRootNodes();
+    sg.updateNode(inside!.id, { opacity: 0.5 });
+    expect(useEditorStore.getState().isDirty).toBe(true);
+    useEditorStore.getState().exitSymbolEdit(sg);
+    expect(useEditorStore.getState().isDirty).toBe(true);
+    const symbol = useEditorStore.getState().symbols.find((s) => s.id === symbolId);
+    expect(symbol?.sceneGraphJSON.nodes[0]?.opacity).toBe(0.5);
+  });
+
   it('stops listening when unmounted', () => {
     const sg = new SceneGraph();
     const { unmount } = renderHook(() => useDirtyTracking(sg));

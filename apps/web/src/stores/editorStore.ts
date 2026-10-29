@@ -4927,6 +4927,8 @@ function createSymbolActions(
       // Load symbol definition into scene graph
       sceneGraph.fromJSON(structuredClone(definition.sceneGraphJSON));
 
+      // Opening it changes nothing: only edits made inside are unsaved changes
+      // (the scene's own events mark those, see useDirtyTracking)
       set({
         editingSymbolId: symbolId,
         editingSymbolPrevState: prevState,
@@ -4936,7 +4938,6 @@ function createSymbolActions(
         redoStack: [],
         canUndo: false,
         canRedo: false,
-        isDirty: true,
       });
     },
 
@@ -4960,6 +4961,7 @@ function createSymbolActions(
       const restoredUndo = state.editingSymbolPrevState.undoStack;
       const restoredRedo = state.editingSymbolPrevState.redoStack;
 
+      // Closing it is no change either: edits made inside marked the project
       set({
         symbols: updatedSymbols,
         editingSymbolId: null,
@@ -4970,7 +4972,6 @@ function createSymbolActions(
         redoStack: restoredRedo,
         canUndo: restoredUndo.length > 0,
         canRedo: restoredRedo.length > 0,
-        isDirty: true,
       });
     },
 
