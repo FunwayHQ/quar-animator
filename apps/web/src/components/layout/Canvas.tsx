@@ -50,7 +50,13 @@ import { poseScene } from '../../stores/scenePosing';
 import { fitViewToArtwork } from '../canvas/fitView';
 import { deleteKeyTarget } from '../canvas/deleteKeyTarget';
 import { flipSelected } from '../canvas/flipSelected';
-import { copyLayers } from '../../hooks/useSystemClipboard';
+import {
+  MENU_PASTE_EVENT,
+  copyLayers,
+  isClipboardRefusal,
+  pasteOwnClipboard,
+  type SystemPaste,
+} from '../../hooks/useSystemClipboard';
 import { decodeClipboard } from '../../services/systemClipboard';
 import { bindLayersToBones } from '../canvas/bindToBones';
 import { ArtboardOverlay } from '../canvas/ArtboardOverlay';
@@ -1393,10 +1399,12 @@ export function Canvas({
 
   /**
    * Read system clipboard via Clipboard API and import SVG/images.
-   * Returns true if external content was found, false if should fall back to internal paste.
+   * 'pasted' if external content was found; else fall back to internal paste
+   * ('refused': the browser didn't let us read the clipboard).
    */
-  const pasteFromSystemClipboard = useCallback(async (): Promise<boolean> => {
-    if (!navigator.clipboard) return false;
+  const pasteFromSystemClipboard = useCallback(async (): Promise<SystemPaste> => {
+    if (!navigator.clipboard) return 'nothing';
+    let refused = false;
 
     // 1. Try readText() first — auto-grants in user gesture context (no permission prompt).
     //    Handles SVG copied from Figma/Illustrator/Inkscape/browsers as text.
@@ -1406,17 +1414,18 @@ export function Canvas({
       const layers = decodeClipboard(text);
       if (layers && sceneGraphRef.current) {
         useEditorStore.getState().pastePayload(sceneGraphRef.current, layers);
-        return true;
+        return 'pasted';
       }
       if (text) {
         const svgMatch = text.match(/<svg[\s\S]*?<\/svg>/i);
         if (svgMatch) {
           importSvgString(svgMatch[0]);
-          return true;
+          return 'pasted';
         }
       }
-    } catch {
+    } catch (error) {
       // readText denied or unavailable
+      refused = isClipboardRefusal(error);
     }
 
     // 2. Try read() for text/html (Figma/Illustrator put SVG there) and images.
@@ -1438,12 +1447,12 @@ export function Canvas({
                 const layers = decodeClipboard(null, html);
                 if (layers && sceneGraphRef.current) {
                   useEditorStore.getState().pastePayload(sceneGraphRef.current, layers);
-                  return true;
+                  return 'pasted';
                 }
                 const svgMatch = html.match(/<svg[\s\S]*?<\/svg>/i);
                 if (svgMatch) {
                   importSvgString(svgMatch[0]);
-                  return true;
+                  return 'pasted';
                 }
                 // Detect Figma proprietary format
                 if (html.includes('figmeta') || html.includes('data-buffer')) {
@@ -1451,7 +1460,7 @@ export function Canvas({
                     'Figma uses a proprietary format. In Figma, right-click → Copy/Paste as → Copy as SVG, then paste here.',
                     8000
                   );
-                  return true; // Handled (with message), don't fall through to internal paste
+                  return 'pasted'; // Handled (with message), don't fall through to internal paste
                 }
               } catch {
                 // Failed to read text/html
@@ -1464,18 +1473,28 @@ export function Canvas({
               if (type.startsWith('image/')) {
                 const imageBlob = await item.getType(type);
                 importImageBlob(imageBlob);
-                return true;
+                return 'pasted';
               }
             }
           }
         }
       }
-    } catch {
+    } catch (error) {
       // clipboard.read denied or unavailable
+      refused ||= isClipboardRefusal(error);
     }
 
-    return false;
+    return refused ? 'refused' : 'nothing';
   }, [importSvgString, importImageBlob, sceneGraphRef]);
+
+  // Paste from a menu (this canvas's, or Edit > Paste): as Ctrl+V does, and
+  // when nothing pasted, say why
+  const pasteFromMenus = useCallback(() => {
+    void pasteFromSystemClipboard().then((result) => {
+      const sg = sceneGraphRef.current;
+      if (result !== 'pasted' && sg) pasteOwnClipboard(sg, result === 'refused');
+    });
+  }, [pasteFromSystemClipboard, sceneGraphRef]);
 
   // Handle native paste event (backup for when Clipboard API is unavailable)
   const handlePaste = useCallback(
@@ -1579,8 +1598,8 @@ export function Canvas({
         const sg = sceneGraphRef.current;
         if (!sg) return;
         void pasteFromSystemClipboard()
-          .then((handled) => {
-            if (!handled) pasteClipboard(sg);
+          .then((result) => {
+            if (result !== 'pasted') pasteClipboard(sg);
           })
           .catch(() => {
             pasteClipboard(sg);
@@ -1593,13 +1612,21 @@ export function Canvas({
       handlePaste(e);
     };
 
+    // Edit > Paste: the canvas pastes it (useSystemClipboard's pasteFromMenu)
+    const handleMenuPaste = (e: Event) => {
+      e.preventDefault();
+      pasteFromMenus();
+    };
+
     document.addEventListener('keydown', handleGlobalKeyDown);
     document.addEventListener('paste', handleGlobalPaste);
+    window.addEventListener(MENU_PASTE_EVENT, handleMenuPaste);
     return () => {
       document.removeEventListener('keydown', handleGlobalKeyDown);
       document.removeEventListener('paste', handleGlobalPaste);
+      window.removeEventListener(MENU_PASTE_EVENT, handleMenuPaste);
     };
-  }, [handlePaste, pasteFromSystemClipboard, pasteClipboard, sceneGraphRef]);
+  }, [handlePaste, pasteFromSystemClipboard, pasteFromMenus, pasteClipboard, sceneGraphRef]);
 
   // --------------------------------------------------------------------------
   // Keyboard Handlers
@@ -2218,13 +2245,7 @@ export function Canvas({
         id: 'paste',
         label: 'Paste',
         shortcut: 'Ctrl+V',
-        onClick: () => {
-          void pasteFromSystemClipboard().then((handled) => {
-            if (!handled) {
-              pasteClipboard(sceneGraph);
-            }
-          });
-        },
+        onClick: pasteFromMenus,
       },
       { type: 'separator' },
       {
@@ -2238,8 +2259,7 @@ export function Canvas({
     selectedNodeIds,
     sceneGraph,
     duplicateSelection,
-    pasteClipboard,
-    pasteFromSystemClipboard,
+    pasteFromMenus,
     deleteSelection,
     selectAll,
     groupSelection,

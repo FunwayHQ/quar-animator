@@ -1,5 +1,5 @@
 import type { ComponentProps } from 'react';
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { act, render, screen, fireEvent } from '../../test/utils';
 import { SceneGraphProvider, useSceneGraph } from '../../contexts/SceneGraphContext';
 import { useEditorStore } from '../../stores/editorStore';
@@ -157,6 +157,51 @@ describe('Canvas', () => {
     expect(groups.flatMap((group) => group.children)).toHaveLength(4);
     expect(useEditorStore.getState().selectedNodeIds).toEqual(new Set([groups[1]!.id]));
     expect(useEditorStore.getState().undoStack.length).toBe(undoSteps + 2);
+  });
+
+  describe('Edit > Paste', () => {
+    // While the clipboard's promises settle, no frame is drawn: the test's WebGL is a stub
+    let noFrames: { mockRestore(): void } | undefined;
+    beforeEach(() => {
+      noFrames = vi.spyOn(window, 'requestAnimationFrame').mockReturnValue(0);
+    });
+    afterEach(() => {
+      noFrames?.mockRestore();
+      Reflect.deleteProperty(navigator, 'clipboard');
+    });
+
+    const menuPaste = async () => {
+      await act(async () => {
+        window.dispatchEvent(new CustomEvent('menubar:paste', { cancelable: true }));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+    };
+    const clipboardWith = (clipboard: Partial<Clipboard>) =>
+      Object.defineProperty(navigator, 'clipboard', { value: clipboard, configurable: true });
+
+    it('pastes an SVG off the system clipboard, as Ctrl+V does', async () => {
+      const sceneGraph = renderCanvasWithScene();
+      clipboardWith({ readText: () => Promise.resolve(TWO_SHAPES_SVG) });
+
+      await menuPaste();
+
+      expect(sceneGraph.getRootNodes()).toHaveLength(1);
+      expect(sceneGraph.getRootNodes()[0]!.children).toHaveLength(2);
+    });
+
+    it('says why nothing pasted when the browser won’t let it read the clipboard', async () => {
+      const sceneGraph = renderCanvasWithScene();
+      const info = vi.spyOn(toast, 'info');
+      const refuse = () => Promise.reject(new DOMException('Denied', 'NotAllowedError'));
+      clipboardWith({ readText: refuse, read: refuse });
+      useEditorStore.setState({ clipboard: null });
+
+      await menuPaste();
+
+      expect(sceneGraph.getRootNodes()).toHaveLength(0);
+      expect(info).toHaveBeenCalledWith(expect.stringMatching(/didn’t let .* read the clipboard/));
+      info.mockRestore();
+    });
   });
 
   it('an SVG with nothing to import says so and leaves no undo step (F078)', () => {

@@ -9,11 +9,9 @@
 import { useEffect } from 'react';
 import type { SceneGraphLike } from '../stores/editorStore';
 import { useEditorStore } from '../stores/editorStore';
-import {
-  decodeClipboard,
-  encodeClipboard,
-  type ClipboardPayload,
-} from '../services/systemClipboard';
+import { decodeClipboard, encodeClipboard } from '../services/systemClipboard';
+import { toast } from '../components/common/Toast';
+import { KEYS, formatShortcut } from '../components/common/shortcuts';
 
 function isTextField(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
@@ -99,19 +97,63 @@ export function copyLayers(sceneGraph: SceneGraphLike, kind: 'copy' | 'cut'): vo
   if (payload) void navigator.clipboard?.writeText(encodeClipboard(payload).text).catch(() => {});
 }
 
-/** Layers on the system clipboard, read through the async API (for menu Paste). */
-export async function readClipboardLayers(): Promise<ClipboardPayload | null> {
-  try {
-    return decodeClipboard(await navigator.clipboard.readText());
-  } catch {
-    return null;
-  }
+/**
+ * Edit › Paste: the canvas pastes as Ctrl+V does — layers, SVG or a picture
+ * from the system clipboard, else what was copied here.
+ */
+export const MENU_PASTE_EVENT = 'menubar:paste';
+
+/** How reading the system clipboard for a paste went. */
+export type SystemPaste = 'pasted' | 'refused' | 'nothing';
+
+/**
+ * Whether a menu may read the system clipboard: the browser has the
+ * Clipboard API (reading it may still ask for permission first).
+ */
+export function canReadSystemClipboard(): boolean {
+  return typeof navigator !== 'undefined' && typeof navigator.clipboard?.readText === 'function';
 }
 
-/** Paste from a menu: layers on the system clipboard if any, else the app's own clipboard. */
-export async function pasteLayers(sceneGraph: SceneGraphLike): Promise<void> {
-  const payload = await readClipboardLayers();
+/** The browser said no to reading the clipboard (permission refused, or the page not focused). */
+export function isClipboardRefusal(error: unknown): boolean {
+  return error instanceof DOMException && error.name === 'NotAllowedError';
+}
+
+/**
+ * Paste what was copied here, when the system clipboard had nothing to
+ * paste; with nothing here either, say why nothing was pasted.
+ */
+export function pasteOwnClipboard(sceneGraph: SceneGraphLike, refused: boolean): void {
   const state = useEditorStore.getState();
-  if (payload) state.pastePayload(sceneGraph, payload);
-  else state.pasteClipboard(sceneGraph);
+  if (state.clipboard?.length) {
+    state.pasteClipboard(sceneGraph);
+    return;
+  }
+  toast.info(
+    refused
+      ? `The browser didn’t let Quar Animator read the clipboard. To paste what you copied, press ${formatShortcut(KEYS.paste)}.`
+      : 'Nothing to paste: copy some layers, an SVG or a picture first.'
+  );
+}
+
+/** Paste from a menu: the canvas pastes when it's there, else layers off the system clipboard. */
+export function pasteFromMenu(sceneGraph: SceneGraphLike): Promise<void> {
+  const event = new CustomEvent(MENU_PASTE_EVENT, { cancelable: true });
+  if (!window.dispatchEvent(event)) return Promise.resolve();
+  return pasteLayers(sceneGraph);
+}
+
+/** Layers on the system clipboard if any, else the app's own clipboard. */
+export async function pasteLayers(sceneGraph: SceneGraphLike): Promise<void> {
+  let refused = false;
+  try {
+    const payload = decodeClipboard(await navigator.clipboard.readText());
+    if (payload) {
+      useEditorStore.getState().pastePayload(sceneGraph, payload);
+      return;
+    }
+  } catch (error) {
+    refused = isClipboardRefusal(error);
+  }
+  pasteOwnClipboard(sceneGraph, refused);
 }

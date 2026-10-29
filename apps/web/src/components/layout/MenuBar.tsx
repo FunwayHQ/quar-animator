@@ -15,7 +15,7 @@ import { useSceneGraph } from '../../contexts/SceneGraphContext';
 import { flipSelected } from '../canvas/flipSelected';
 import { bindableLayers } from '../canvas/bindToBones';
 import { hasGoogleFontsConsent, setGoogleFontsConsent } from '../common/ConsentBanner';
-import { copyLayers, pasteLayers } from '../../hooks/useSystemClipboard';
+import { canReadSystemClipboard, copyLayers, pasteFromMenu } from '../../hooks/useSystemClipboard';
 import type { SceneGraph } from '@quar/core';
 import type { ProjectActions } from '../../hooks/useProjectActions';
 import type { ProjectListItem } from '../../services/projectStorage';
@@ -658,10 +658,11 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                   <MenuItem
                     label="Paste"
                     shortcut={KEYS.paste}
-                    disabled={!clipboard}
+                    // What was copied here, or maybe what was copied elsewhere
+                    disabled={!clipboard && !canReadSystemClipboard()}
                     onClick={() => {
                       closeMenu();
-                      void pasteLayers(sceneGraph);
+                      void pasteFromMenu(sceneGraph);
                     }}
                   />
                   <MenuItem

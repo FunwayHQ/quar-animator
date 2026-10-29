@@ -2,12 +2,19 @@
  * Tests for copying layers onto the system clipboard and pasting them back
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { renderHook } from '@testing-library/react';
 import { SceneGraph, createDefaultTransform } from '@quar/core';
 import type { Node, RectangleNode, SymbolDefinition } from '@quar/types';
 import { useEditorStore } from '../stores/editorStore';
-import { copyLayers, useSystemClipboard } from './useSystemClipboard';
+import { toast } from '../components/common/Toast';
+import {
+  MENU_PASTE_EVENT,
+  canReadSystemClipboard,
+  copyLayers,
+  pasteFromMenu,
+  useSystemClipboard,
+} from './useSystemClipboard';
 import { decodeClipboard, encodeClipboard } from '../services/systemClipboard';
 
 function rect(id: string, extra: Partial<Node> = {}): RectangleNode {
@@ -181,5 +188,90 @@ describe('pastePayload', () => {
 
     useEditorStore.getState().undo(target);
     expect(ids()).toEqual(['already-here']);
+  });
+});
+
+describe('Paste from a menu', () => {
+  let sceneGraph: SceneGraph;
+  const clipboardWith = (readText: () => Promise<string>) =>
+    Object.defineProperty(navigator, 'clipboard', { value: { readText }, configurable: true });
+  const refusal = () =>
+    Promise.reject(new DOMException('Read permission denied.', 'NotAllowedError'));
+
+  beforeEach(() => {
+    sceneGraph = new SceneGraph();
+    useEditorStore.setState({
+      selectedNodeIds: new Set(),
+      clipboard: null,
+      clipboardExtras: null,
+      symbols: [],
+    });
+  });
+  let info: ReturnType<typeof vi.spyOn>;
+  beforeEach(() => {
+    info = vi.spyOn(toast, 'info');
+  });
+  afterEach(() => {
+    Reflect.deleteProperty(navigator, 'clipboard');
+    info.mockRestore();
+  });
+
+  it('may read the system clipboard when the browser has the Clipboard API', () => {
+    Reflect.deleteProperty(navigator, 'clipboard');
+    expect(canReadSystemClipboard()).toBe(false);
+    clipboardWith(() => Promise.resolve(''));
+    expect(canReadSystemClipboard()).toBe(true);
+  });
+
+  it('pastes layers copied in another window', async () => {
+    const copied = encodeClipboard({ nodes: [rect('elsewhere')], extras: null, symbols: [] });
+    clipboardWith(() => Promise.resolve(copied.text));
+
+    await pasteFromMenu(sceneGraph);
+
+    expect(sceneGraph.getRootNodes().map((node) => node.name)).toEqual(['elsewhere']);
+  });
+
+  it('says why nothing pasted when the browser won’t let it read the clipboard', async () => {
+    clipboardWith(refusal);
+
+    await pasteFromMenu(sceneGraph);
+
+    expect(sceneGraph.getRootNodes()).toHaveLength(0);
+    expect(info).toHaveBeenCalledWith(
+      expect.stringMatching(/didn’t let .* read the clipboard.*Ctrl\+V/)
+    );
+  });
+
+  it('pastes what was copied here when the clipboard can’t be read', async () => {
+    clipboardWith(refusal);
+    useEditorStore.setState({ clipboard: [rect('here')] });
+
+    await pasteFromMenu(sceneGraph);
+
+    expect(sceneGraph.getRootNodes().map((node) => node.name)).toEqual(['here']);
+    expect(info).not.toHaveBeenCalled();
+  });
+
+  it('says so when there is nothing to paste', async () => {
+    clipboardWith(() => Promise.resolve('just some text'));
+
+    await pasteFromMenu(sceneGraph);
+
+    expect(sceneGraph.getRootNodes()).toHaveLength(0);
+    expect(info).toHaveBeenCalledWith(expect.stringMatching(/^Nothing to paste/));
+  });
+
+  it('leaves the paste to the canvas when there is one, as Ctrl+V does', async () => {
+    const readText = vi.fn(() => Promise.resolve(''));
+    clipboardWith(readText);
+    const canvas = vi.fn((event: Event) => event.preventDefault());
+    window.addEventListener(MENU_PASTE_EVENT, canvas);
+
+    await pasteFromMenu(sceneGraph);
+    window.removeEventListener(MENU_PASTE_EVENT, canvas);
+
+    expect(canvas).toHaveBeenCalledOnce();
+    expect(readText).not.toHaveBeenCalled();
   });
 });

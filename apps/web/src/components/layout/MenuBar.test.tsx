@@ -2,7 +2,7 @@
  * Tests for MenuBar Component
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render as baseRender, screen, fireEvent, act, within, waitFor } from '../../test/utils';
 import { useEditorStore, DEFAULT_FILL, DEFAULT_STROKE } from '../../stores/editorStore';
 import { createTimeline } from '@quar/animation';
@@ -415,6 +415,40 @@ describe('MenuBar', () => {
     fireEvent.click(screen.getByTestId('menu-file'));
     fireEvent.click(screen.getByText('Import Sound...'));
     expect(actions.importSound).toHaveBeenCalledOnce();
+  });
+
+  describe('Edit > Paste', () => {
+    const pasteItem = () => screen.getByRole('menuitem', { name: /^Paste/ });
+    afterEach(() => Reflect.deleteProperty(navigator, 'clipboard'));
+
+    it('can paste what another window copied, with nothing copied here', () => {
+      Object.defineProperty(navigator, 'clipboard', {
+        value: { readText: () => Promise.resolve('') },
+        configurable: true,
+      });
+      render(<MenuBar />);
+      fireEvent.click(screen.getByTestId('menu-edit'));
+      expect(pasteItem()).not.toBeDisabled();
+
+      // It pastes as Ctrl+V does: the canvas takes it
+      const canvasPaste = vi.fn((event: Event) => event.preventDefault());
+      window.addEventListener('menubar:paste', canvasPaste);
+      fireEvent.click(pasteItem());
+      window.removeEventListener('menubar:paste', canvasPaste);
+      expect(canvasPaste).toHaveBeenCalledOnce();
+    });
+
+    it('is greyed out only with nothing copied here and no clipboard to read', () => {
+      Reflect.deleteProperty(navigator, 'clipboard');
+      render(<MenuBar />);
+      fireEvent.click(screen.getByTestId('menu-edit'));
+      expect(pasteItem()).toBeDisabled();
+      fireEvent.click(screen.getByTestId('menu-edit'));
+
+      act(() => useEditorStore.setState({ clipboard: [{ id: 'copied' } as unknown as Node] }));
+      fireEvent.click(screen.getByTestId('menu-edit'));
+      expect(pasteItem()).not.toBeDisabled();
+    });
   });
 
   it('closes dropdown after clicking a menu item', () => {
