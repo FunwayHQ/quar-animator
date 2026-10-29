@@ -59,7 +59,7 @@ export function useUndoable<A extends unknown[], R>(
 }
 
 /** Inputs pressed or toggled, not typed in. */
-const CONTROL_INPUTS = new Set([
+export const CONTROL_INPUTS = new Set([
   'button',
   'checkbox',
   'color',

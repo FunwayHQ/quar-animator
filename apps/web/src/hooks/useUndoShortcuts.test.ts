@@ -53,6 +53,26 @@ describe('useUndoShortcuts', () => {
     expect(undo).not.toHaveBeenCalled();
   });
 
+  it('undoes from a slider, checkbox or list just used (they have no undo of their own)', () => {
+    renderHook(() => useUndoShortcuts(sg));
+    const controls = [
+      Object.assign(document.createElement('input'), { type: 'range' }),
+      Object.assign(document.createElement('input'), { type: 'checkbox' }),
+      document.createElement('select'),
+    ];
+    for (const control of controls) {
+      document.body.appendChild(control);
+      expect(press('z', { metaKey: true }, control).defaultPrevented).toBe(true);
+    }
+    expect(undo).toHaveBeenCalledTimes(3);
+
+    // A number field keeps its own
+    const number = Object.assign(document.createElement('input'), { type: 'number' });
+    document.body.appendChild(number);
+    press('z', { ctrlKey: true }, number);
+    expect(undo).toHaveBeenCalledTimes(3);
+  });
+
   it('ignores Z without a modifier', () => {
     renderHook(() => useUndoShortcuts(sg));
     press('z');
