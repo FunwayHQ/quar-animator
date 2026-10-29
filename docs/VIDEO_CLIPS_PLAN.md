@@ -2,26 +2,26 @@
 
 Import a video (or an animated GIF) and place it on the timeline as a clip, its
 sound track separated onto the Sound lane. Decided with the owner on
-2026-10-29; steps 1–3 are built (below).
+2026-10-29; steps 1–4 are built (below).
 
 ## Decisions
 
-| Question                      | Decision                                                                                                                                                                                                                                                                            |
-| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| What a video is               | A **video layer** on the canvas (moved, scaled, rotated, faded, masked and keyframed like a picture) whose playing is a **clip**: the frame it starts on, the part of the video it plays. It sits in whatever timeline its layer is in (an artboard's or the page's).               |
-| Its sound                     | Extracted at import into the sound library and put on the Sound lane under the video as an ordinary sound clip, **linked**: moving, trimming or changing the speed of the video does the same to its sound until they're unlinked. Fades, gain and mute work as for any sound clip. |
-| Storage                       | **Inside the .quar**, like pictures and sounds, one copy per distinct file. **100 MB per video** at most.                                                                                                                                                                           |
-| Formats                       | **MP4 and MOV** (H.264, HEVC where the browser decodes it), **WebM** (VP8, VP9, AV1) **with transparency**, **animated GIF**.                                                                                                                                                       |
-| GIF                           | A clip without sound that **loops to fill** its clip.                                                                                                                                                                                                                               |
-| Clip features (first version) | **Trim** in/out, **Loop**, **Speed** (the linked sound changes speed **keeping its pitch**), **Hold last frame**.                                                                                                                                                                   |
-| Outside the clip              | The layer shows **nothing** before the clip starts and after it ends, unless Hold last frame is on.                                                                                                                                                                                 |
-| On the timeline               | On the **layer's own row**: a bar with a strip of frames, its keyframe diamonds on top.                                                                                                                                                                                             |
-| Placement                     | **Fitted to the artboard in view** (else the canvas view), centred; the clip **starts at the playhead**.                                                                                                                                                                            |
-| On a video layer              | **Masks and clipping, effects and blend modes, opacity, adjustments** (as pictures have). Not corner pull or bones.                                                                                                                                                                 |
-| Lottie, SVG, PDF              | **A still of the frame** at that moment (Lottie: a still picture layer), with a warning in the Export dialog that the video doesn't play there.                                                                                                                                     |
-| Unsupported file or browser   | **Say so and don't import**: name the problem, suggest MP4 (H.264) or another browser.                                                                                                                                                                                              |
-| Server renders                | A **frame strip** made at import (small stills, a few a second) kept with the video; renders that can't decode video draw those. The strip also draws the clip bar on the timeline.                                                                                                 |
-| Shipping                      | **In steps**, each tested and deployed (below).                                                                                                                                                                                                                                     |
+| Question                      | Decision                                                                                                                                                                                                                                                                             |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| What a video is               | A **video layer** on the canvas (moved, scaled, rotated, faded, masked and keyframed like a picture) whose playing is a **clip**: the frame it starts on, the part of the video it plays. It sits in whatever timeline its layer is in (an artboard's or the page's).                |
+| Its sound                     | Extracted at import into the sound library and put on the Sound lane under the video as an ordinary sound clip, **linked**: moving, trimming or changing the speed of the video does the same to its sound until they're unlinked. Fades, gain and mute work as for any sound clip.  |
+| Storage                       | **Inside the .quar**, like pictures and sounds, one copy per distinct file. **100 MB per video** at most.                                                                                                                                                                            |
+| Formats                       | **MP4 and MOV** (H.264, HEVC where the browser decodes it), **WebM** (VP8, VP9, AV1) **with transparency**, **animated GIF**.                                                                                                                                                        |
+| GIF                           | A clip without sound that **loops** (looping to fill the timeline when its file loops forever) and **can be stopped at any frame** (owner, 2026-10-29): Loop off plays it once and holds its last frame; Stop here, or the bar's end dragged, freezes it on the frame showing there. |
+| Clip features (first version) | **Trim** in/out, **Loop**, **Speed** (the linked sound changes speed **keeping its pitch**), **Hold last frame**.                                                                                                                                                                    |
+| Outside the clip              | The layer shows **nothing** before the clip starts and after it ends, unless Hold last frame is on.                                                                                                                                                                                  |
+| On the timeline               | On the **layer's own row**: a bar with a strip of frames, its keyframe diamonds on top.                                                                                                                                                                                              |
+| Placement                     | **Fitted to the artboard in view** (else the canvas view), centred; the clip **starts at the playhead**.                                                                                                                                                                             |
+| On a video layer              | **Masks and clipping, effects and blend modes, opacity, adjustments** (as pictures have). Not corner pull or bones.                                                                                                                                                                  |
+| Lottie, SVG, PDF              | **A still of the frame** at that moment (Lottie: a still picture layer), with a warning in the Export dialog that the video doesn't play there.                                                                                                                                      |
+| Unsupported file or browser   | **Say so and don't import**: name the problem, suggest MP4 (H.264) or another browser.                                                                                                                                                                                               |
+| Server renders                | A **frame strip** made at import (small stills, a few a second) kept with the video; renders that can't decode video draw those. The strip also draws the clip bar on the timeline.                                                                                                  |
+| Shipping                      | **In steps**, each tested and deployed (below).                                                                                                                                                                                                                                      |
 
 ## Data
 
@@ -199,6 +199,31 @@ frame, fps)` (null outside the clip; frame f begins at f/fps seconds, as
 - **Presenter:** readers of its own (`createVideoFrames()`), decoding ahead
   while a slide plays; the loader waits (5 s at most) for each video's
   first picture. **Thumbnails** draw strip stills.
+
+## Step 4 (as built)
+
+- **Canvas:** a video's pictures are uploaded premultiplied
+  (`UNPACK_PREMULTIPLY_ALPHA_WEBGL`) and the picture shader takes the colour
+  back (`u_premultiplied`), so see-through edges filter without dark
+  fringes. Pictures are still uploaded straight.
+- **Alpha as stored:** mediabunny stretched a WebM's alpha stream as limited
+  range whenever its header said so (libvpx and Chrome always do), reading
+  128 as 130 and 0–16 as clear. A pnpm patch
+  (`patches/mediabunny@1.61.4.patch`) takes it as stored, as ffmpeg and the
+  browsers' own players do; `alphaMerge.test.ts` runs mediabunny's worker
+  code and fails if the stretch comes back (re-check on upgrading).
+- **Import:** `probeVideo` decodes a transparent video's first frame and
+  refuses it (`'transparency'`) when the frame loses its alpha or the
+  browser draws RGBA frames as if premultiplied (Firefox); WebKit and
+  Chromium import. Projects already holding one still draw it wrong in
+  Firefox.
+- **Exports:** every raster export, the strips and the stills keep the
+  alpha (PDF as an SMask); MP4 and opaque outputs composite over the
+  background; GIF keeps its one-bit rule. `VideoExportSources.onVideoProblems`
+  tells the Export dialog which videos fell back to their strips; it stays
+  open saying so. The Properties PNG and the Lottie/SVG/PDF stills only
+  `console.warn` theirs.
+- **Properties:** the Video section's "Alpha · Transparent" line.
 
 ## Steps
 
