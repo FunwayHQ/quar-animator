@@ -4,7 +4,8 @@
  * playhead, started over when playing loops or jumps or the clips change,
  * stopped when it stops. Stopped, the playhead dragged or stepped to a frame
  * plays a moment of the sounds there (unless scrubbing is turned off). The
- * library's sounds are decoded ahead, so they play at once.
+ * library's sounds are decoded ahead, and their renditions at the speeds
+ * the clips in view play them at made ahead, so they play at once.
  */
 
 import { useEffect } from 'react';
@@ -29,10 +30,10 @@ function toPlay(state: EditorState): SoundsToPlay {
   };
 }
 
-/** Each sound decoded ahead (failures are silent: the clip just doesn't sound). */
+/** Each sound decoded ahead, at the clips' speeds (failures are silent: the clip just doesn't sound). */
 function decodeAhead(state: EditorState, player: SoundPlayer) {
   keepDecodedSounds(state.sounds);
-  void player.prepare(state.sounds);
+  void player.prepare(state.sounds, undefined, clipsOf(state.timeline, state.timelineScope));
 }
 
 /** The playhead moved to another frame of the same timeline, with it stopped. */
@@ -60,7 +61,12 @@ export function useSoundPlayback(createPlayer: () => SoundPlayer = () => new Sou
     window.addEventListener('keydown', warm, true);
 
     const unsubscribe = useEditorStore.subscribe((curr, prev) => {
-      if (curr.sounds !== prev.sounds) decodeAhead(curr, player);
+      if (
+        curr.sounds !== prev.sounds ||
+        clipsOf(curr.timeline, curr.timelineScope) !== clipsOf(prev.timeline, prev.timelineScope)
+      ) {
+        decodeAhead(curr, player);
+      }
       if (!curr.isPlaying || curr.isExporting) {
         if (prev.isPlaying && !prev.isExporting) player.stop();
         else if (scrubbed(curr, prev)) player.scrub(curr.currentFrame, toPlay(curr));

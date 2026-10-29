@@ -105,10 +105,9 @@ function useDeck() {
     const scene = copyScene(sceneGraph);
     const { timeline } = state;
     const slides = getSlides(scene, timeline);
-    // What they wait for: the sounds their clips play, the fonts their text is in
-    const played = new Set(
-      slides.flatMap((slide) => scopeSounds(timeline, slide.node.id).map((clip) => clip.soundId))
-    );
+    // What they wait for: the sounds their clips play (at their speeds), the fonts their text is in
+    const clips = slides.flatMap((slide) => scopeSounds(timeline, slide.node.id));
+    const played = new Set(clips.map((clip) => clip.soundId));
     const shown = slides.flatMap((slide) => [slide.node, ...scene.getDescendants(slide.node.id)]);
     return {
       slides,
@@ -122,6 +121,7 @@ function useDeck() {
       background: state.documentBackground,
       sounds: state.sounds,
       played: state.sounds.filter((sound) => played.has(sound.id)),
+      clips,
       fonts: fontsToLoad(googleFontsUsed(shown, state.symbols)),
     };
   });
@@ -318,7 +318,7 @@ function PresentationPlayer({
       setPreparing((was) => ({ ...was, [part]: { ...was[part], done: was[part].done + 1 } }));
     };
     sound.warm();
-    const sounds = sound.prepare(deck.played, step('sounds'));
+    const sounds = sound.prepare(deck.played, step('sounds'), deck.clips);
     const fonts = deck.fonts.map((font) =>
       Promise.race([load(font).catch(() => null), later(FONT_WAIT_MS)]).then(step('fonts'))
     );

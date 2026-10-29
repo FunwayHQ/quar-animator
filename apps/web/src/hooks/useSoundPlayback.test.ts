@@ -117,9 +117,18 @@ describe('useSoundPlayback scrubbing', () => {
   });
 
   it('gets the library ready, and again as it changes', () => {
-    expect(player.prepare).toHaveBeenCalledWith([voice]);
+    expect(player.prepare).toHaveBeenCalledWith([voice], undefined, [clip('a', 30)]);
     set({ sounds: [] });
-    expect(player.prepare).toHaveBeenLastCalledWith([]);
+    expect(player.prepare).toHaveBeenLastCalledWith([], undefined, [clip('a', 30)]);
+  });
+
+  it('makes the renditions the clips in view play at, as their speeds change', () => {
+    const fast = { ...clip('a', 30), speed: 2 };
+    set({ timeline: { ...useEditorStore.getState().timeline, sounds: [fast] } });
+    expect(player.prepare).toHaveBeenLastCalledWith([voice], undefined, [fast]);
+    const timeline = withScopeSounds(useEditorStore.getState().timeline, 'slide', [clip('s', 0)]);
+    set({ timeline, timelineScope: 'slide' });
+    expect(player.prepare).toHaveBeenLastCalledWith([voice], undefined, [clip('s', 0)]);
   });
 
   it('plays the frame the playhead is dragged or stepped to, stopped', () => {

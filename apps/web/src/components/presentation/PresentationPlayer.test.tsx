@@ -8,7 +8,7 @@ import {
   withScopeTransition,
 } from '@quar/animation';
 import type { FrameRenderContext, FrameRendererHandle } from '@quar/export';
-import type { Sound } from '@quar/types';
+import type { Sound, SoundClip } from '@quar/types';
 
 import { SceneGraphProvider, useSceneGraph } from '../../contexts/SceneGraphContext';
 import type { FontUse } from '../../services/documentFonts';
@@ -72,7 +72,9 @@ function fakeSounds() {
   return {
     play: vi.fn(),
     stop: vi.fn(),
-    prepare: vi.fn(async (_sounds: Sound[], _decoded?: (sound: Sound) => void) => undefined),
+    prepare: vi.fn(
+      async (_sounds: Sound[], _decoded?: (sound: Sound) => void, _clips?: SoundClip[]) => undefined
+    ),
     warm: vi.fn(),
     dispose: vi.fn(),
   };
@@ -394,7 +396,10 @@ describe('the presentation', () => {
       expect(up.getByText('Intro')).toBeTruthy();
       expect(up.getByText('2 slides')).toBeTruthy();
       expect(up.getByText('1/2')).toBeTruthy();
-      expect(sounds.prepare).toHaveBeenCalledWith([voice], expect.any(Function));
+      // Its renditions at the speeds the slides' clips play it at made ahead too
+      expect(sounds.prepare).toHaveBeenCalledWith([voice], expect.any(Function), [
+        expect.objectContaining({ id: 'c', soundId: 'voice' }),
+      ]);
       expect(fonts).toHaveBeenCalledWith({ family: 'Outfit', weight: 700 });
       expect(up.getByRole('progressbar').getAttribute('aria-valuenow')).toBe('25');
       // Nothing drawn or heard yet, the keys not shown, and the slides don't move

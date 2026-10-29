@@ -1,14 +1,16 @@
 /**
  * Sound Player
  * The editor's playback of a timeline's sound clips (Web Audio): started
- * from a frame, each clip from where it has got to, and told each frame
- * shown so the timeline's playback can start it again from the frame it's
- * on when the two part (a loop, a jump of the playhead, a stalled tab).
- * Stopped, it plays a moment of the sounds at a frame as the playhead is
- * dragged or stepped there (scrubbing).
+ * from a frame, each clip from where it has got to (one at a speed of its
+ * own from the sound's rendition at it, one looped a pass at a time), and
+ * told each frame shown so the timeline's playback can start it again from
+ * the frame it's on when the two part (a loop, a jump of the playhead, a
+ * stalled tab). Stopped, it plays a moment of the sounds at a frame as the
+ * playhead is dragged or stepped there (scrubbing).
  */
 
-import { playLevel, schedulePlayGain, soundsPlayed } from '@quar/animation';
+import { clipSpeed, playLevel, schedulePlayGain, soundsPlayed } from '@quar/animation';
+import type { SoundDecoder } from '@quar/export';
 import type { Sound, SoundClip } from '@quar/types';
 import { decodedSound } from './soundFiles';
 
@@ -31,7 +33,24 @@ const SCRUB_EDGE = 0.005;
 
 export interface SoundPlayerOptions {
   createContext?: () => AudioContext;
-  decode?: (sound: Sound) => Promise<AudioBuffer>;
+  /** A sound decoded, or its rendition at a clip's speed */
+  decode?: SoundDecoder;
+}
+
+/** The speeds each sound is played at by these clips, other than 1×. */
+function speedsPlayed(clips: readonly SoundClip[] | undefined): Map<string, Set<number>> {
+  const speeds = new Map<string, Set<number>>();
+  for (const clip of clips ?? []) {
+    const speed = clipSpeed(clip);
+    if (speed === 1) continue;
+    let known = speeds.get(clip.soundId);
+    if (!known) {
+      known = new Set();
+      speeds.set(clip.soundId, known);
+    }
+    known.add(speed);
+  }
+  return speeds;
 }
 
 export class SoundPlayer {
@@ -41,10 +60,10 @@ export class SoundPlayer {
   private run = 0;
   /** The frame playing started from, when (on the audio clock), at what rate */
   private origin: { frame: number; time: number; rate: number } | null = null;
-  /** The sounds decoded so far, to scrub at once */
-  private ready = new Map<string, AudioBuffer>();
+  /** The sounds decoded so far (and their renditions, by speed), to scrub at once */
+  private ready = new Map<string, Map<number, AudioBuffer>>();
   private readonly createContext: () => AudioContext;
-  private readonly decode: (sound: Sound) => Promise<AudioBuffer>;
+  private readonly decode: SoundDecoder;
 
   constructor(options: SoundPlayerOptions = {}) {
     this.createContext = options.createContext ?? (() => new AudioContext());
@@ -61,24 +80,45 @@ export class SoundPlayer {
   }
 
   /**
-   * Decodes the library's sounds ahead, so they play (and scrub) at once;
-   * lets go of the rest. Settles once each is decoded (or found not to
-   * decode), `decoded` told as each one is.
+   * Decodes the library's sounds ahead, and makes their renditions at the
+   * speeds `clips` play them at, so they play (and scrub) at once; lets go
+   * of the rest. Settles once each is ready (or found not to decode),
+   * `decoded` told as each sound is, with its renditions.
    */
-  prepare(sounds: readonly Sound[], decoded?: (sound: Sound) => void): Promise<void> {
+  prepare(
+    sounds: readonly Sound[],
+    decoded?: (sound: Sound) => void,
+    clips?: readonly SoundClip[]
+  ): Promise<void> {
     const kept = new Set(sounds.map((sound) => sound.id));
     for (const id of this.ready.keys()) if (!kept.has(id)) this.ready.delete(id);
+    const speeds = speedsPlayed(clips);
     return Promise.all(
-      sounds.map((sound) => this.prepared(sound).then(() => decoded?.(sound)))
+      sounds.map((sound) =>
+        Promise.all(
+          [1, ...(speeds.get(sound.id) ?? [])].map((speed) => this.prepared(sound, speed))
+        ).then(() => decoded?.(sound))
+      )
     ).then(() => undefined);
   }
 
-  private prepared(sound: Sound): Promise<void> {
-    if (this.ready.has(sound.id)) return Promise.resolve();
-    return this.decode(sound).then(
-      (buffer) => {
-        this.ready.set(sound.id, buffer);
-      },
+  private buffer(soundId: string, speed = 1): AudioBuffer | undefined {
+    return this.ready.get(soundId)?.get(speed);
+  }
+
+  private keep(soundId: string, speed: number, buffer: AudioBuffer): void {
+    let known = this.ready.get(soundId);
+    if (!known) {
+      known = new Map();
+      this.ready.set(soundId, known);
+    }
+    known.set(speed, buffer);
+  }
+
+  private prepared(sound: Sound, speed = 1): Promise<void> {
+    if (this.buffer(sound.id, speed)) return Promise.resolve();
+    return this.decode(sound, speed).then(
+      (buffer) => this.keep(sound.id, speed, buffer),
       // A sound that can't be decoded stays silent
       () => undefined
     );
@@ -106,10 +146,10 @@ export class SoundPlayer {
     if (!context) return;
     const begin = context.currentTime + SCRUB_EDGE;
     for (const play of plays) {
-      const buffer = this.ready.get(play.soundId);
+      const buffer = this.buffer(play.soundId, play.speed);
       const sound = library.get(play.soundId);
       if (!buffer) {
-        if (sound) void this.prepared(sound);
+        if (sound) void this.prepared(sound, play.speed);
         continue;
       }
       const source = context.createBufferSource();
@@ -147,11 +187,12 @@ export class SoundPlayer {
     for (const play of plays) {
       const sound = library.get(play.soundId);
       if (!sound) continue;
-      this.decode(sound).then(
+      const speed = play.speed ?? 1;
+      this.decode(sound, speed).then(
         (buffer) => {
-          this.ready.set(sound.id, buffer);
+          this.keep(sound.id, speed, buffer);
           if (run !== this.run) return;
-          // Decoded after it was due: from where it has got to
+          // Decoded (or its rendition made) after it was due: from where it has got to
           const late = Math.max(0, context.currentTime - (begin + play.at));
           if (late >= play.duration) return;
           const source = context.createBufferSource();

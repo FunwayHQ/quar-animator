@@ -90,7 +90,11 @@ const what = (clips: SoundClip[], sounds = [sound('voice')]): SoundsToPlay => ({
   lastFrame: 299,
 });
 
-function player(decode = vi.fn(async (s: Sound) => ({ decoded: s.id }) as unknown as AudioBuffer)) {
+/** A sound decoded, or its rendition at a speed (which it says). */
+const decodedAt = (s: Sound, speed = 1) =>
+  (speed === 1 ? { decoded: s.id } : { decoded: s.id, speed }) as unknown as AudioBuffer;
+
+function player(decode = vi.fn(async (s: Sound, speed?: number) => decodedAt(s, speed))) {
   const context = new FakeContext();
   const createContext = vi.fn(() => context as unknown as AudioContext);
   return { context, createContext, decode, player: new SoundPlayer({ createContext, decode }) };
@@ -250,6 +254,76 @@ describe('SoundPlayer', () => {
     await p.prepare([sound('voice')], each);
     expect(each).toHaveBeenCalledTimes(3);
     expect(decode).toHaveBeenCalledTimes(2);
+  });
+
+  it('plays a clip at a speed of its own from the sound’s rendition at it, a looped one a pass at a time', async () => {
+    const { player: p, context, decode } = player();
+    // From frame 15: half a second into a clip twice as fast (1 s of its sound, 0.5 s of the rendition)
+    p.play(
+      15,
+      what([clip('a', 0, { speed: 2, offset: 1 }), clip('b', 60, { loop: true, loopFor: 3 })])
+    );
+    await settle();
+    expect(decode.mock.calls.map(([s, speed]) => [s.id, speed])).toEqual([
+      ['voice', 2],
+      ['voice', 1],
+      ['voice', 1],
+    ]);
+    const round = (value: number) => Math.round(value * 1e6) / 1e6;
+    expect(
+      context.started.map(({ buffer, when, offset, duration }) => [
+        buffer,
+        round(when),
+        round(offset),
+        round(duration),
+      ])
+    ).toEqual([
+      [{ decoded: 'voice', speed: 2 }, 10.03, 1, 0.5],
+      // A 2 s pass from 1.5 s on, then the second, cut to the 3 s it loops for
+      [{ decoded: 'voice' }, 11.53, 0, 2],
+      [{ decoded: 'voice' }, 13.53, 0, 1],
+    ]);
+  });
+
+  it('plays a rendition made after it was due from where it has got to', async () => {
+    let made: (buffer: AudioBuffer) => void = () => {};
+    const decode = vi.fn(() => new Promise<AudioBuffer>((resolve) => (made = resolve)));
+    const { player: p, context } = player(decode);
+    p.play(0, what([clip('a', 0, { speed: 0.5 })]));
+    // Made 1.5 s in: of the 4 s it lasts, from 1.5 s into the rendition
+    context.currentTime = 11.53;
+    made({} as AudioBuffer);
+    await settle();
+    expect(context.started[0]).toMatchObject({ when: 11.53, duration: 2.5 });
+    expect(context.started[0]!.offset).toBeCloseTo(1.5);
+  });
+
+  it('makes the renditions the clips play ahead, a sound ready once all of its are', async () => {
+    const { player: p, decode } = player();
+    const each = vi.fn();
+    await p.prepare([sound('voice')], each, [
+      clip('a', 0, { speed: 2 }),
+      clip('b', 0, { speed: 2 }),
+      clip('c', 0, { speed: 0.5 }),
+      clip('d', 0, { soundId: 'other', speed: 3 }),
+    ]);
+    expect(decode.mock.calls.map(([s, speed]) => [s.id, speed])).toEqual([
+      ['voice', 1],
+      ['voice', 2],
+      ['voice', 0.5],
+    ]);
+    expect(each).toHaveBeenCalledOnce();
+  });
+
+  it('scrubs a sped-up, looped clip at the moment of it under the playhead', async () => {
+    const { player: p, context } = player();
+    const looped = clip('a', 0, { offset: 1, speed: 2, loop: true, loopFor: 4 });
+    await p.prepare([sound('voice')], undefined, [looped]);
+    // Frame 45 is 1.5 s in: half a second into its second pass of 1 s
+    p.scrub(45, what([looped]));
+    expect(context.started).toHaveLength(1);
+    expect(context.started[0]).toMatchObject({ buffer: { decoded: 'voice', speed: 2 } });
+    expect(context.started[0]!.offset).toBeCloseTo(1);
   });
 
   it('wakes a suspended context, and closes it when done', () => {
