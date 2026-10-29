@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Video } from '@quar/types';
 
 import { useEditorStore } from '../stores/editorStore';
-import { setVideoFile } from './videoFiles';
+import { keepVideoFiles, setVideoFile } from './videoFiles';
 
 /** A frame source stood in for: it gives whatever the test says it has decoded. */
 interface FakeSource {
@@ -143,6 +143,16 @@ describe('videoFrameAt', () => {
     videoFrameAt('v1', 0);
     setVideoFile('v1', new Blob(['new']));
     videoFrameAt('v1', 0);
+    expect(sources.map((s) => s.disposed)).toEqual([true, false]);
+  });
+
+  it('lets a video’s decoding go when the document lets its file go', () => {
+    setVideoFile('v1', new Blob(['v1']));
+    setVideoFile('v2', new Blob(['v2']));
+    videoFrameAt('v1', 0);
+    videoFrameAt('v2', 0);
+    // A project closed: v1 is gone, v2 stays
+    keepVideoFiles(new Set(['v2']));
     expect(sources.map((s) => s.disposed)).toEqual([true, false]);
   });
 

@@ -8,6 +8,7 @@
  */
 
 const files = new Map<string, Blob>();
+const letGo = new Set<(videoId: string) => void>();
 
 /** Keep a video's file (an import, or a project opened). */
 export function setVideoFile(videoId: string, file: Blob): void {
@@ -21,5 +22,15 @@ export function videoFile(videoId: string): Blob | undefined {
 
 /** Let go of the files no video in `keep` uses (a project closed, the library pruned). */
 export function keepVideoFiles(keep: ReadonlySet<string>): void {
-  for (const id of [...files.keys()]) if (!keep.has(id)) files.delete(id);
+  for (const id of [...files.keys()]) {
+    if (keep.has(id)) continue;
+    files.delete(id);
+    for (const listener of letGo) listener(id);
+  }
+}
+
+/** Hears each video whose file is let go (its decoding can stop); returns how to stop hearing. */
+export function onVideoFileLetGo(listener: (videoId: string) => void): () => void {
+  letGo.add(listener);
+  return () => letGo.delete(listener);
 }

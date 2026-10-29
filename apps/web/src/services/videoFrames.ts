@@ -14,7 +14,7 @@ import type { VideoFrameImage } from '@quar/core';
 import type { VideoStrip } from '@quar/types';
 
 import { useEditorStore } from '../stores/editorStore';
-import { videoFile } from './videoFiles';
+import { onVideoFileLetGo, videoFile } from './videoFiles';
 
 /** Each video's frame source, and the file it decodes */
 const decoders = new Map<string, { file: Blob; source: VideoFrameSource }>();
@@ -107,3 +107,6 @@ export function releaseVideoFrames(videoId: string): void {
   decoders.delete(videoId);
   strips.delete(videoId);
 }
+
+// A video whose file the document lets go (a project closed) is decoded no more
+onVideoFileLetGo(releaseVideoFrames);
