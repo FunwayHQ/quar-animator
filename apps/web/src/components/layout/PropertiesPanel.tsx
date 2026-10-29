@@ -1549,6 +1549,13 @@ export function PropertiesPanel() {
     y: center.y + size.height * (1 - anchor.y),
   };
   const rotation = node.transform.rotation;
+  // Artboards are slides and export frames: they stay upright, as their
+  // handles keep them. One already turned (in an older file) keeps the field,
+  // to be put straight again
+  const showRotation =
+    node.type !== 'artboard' ||
+    rotation !== 0 ||
+    getKeyframeState(timeline, nodeId, 'transform.rotation', currentFrame) !== 'none';
 
   // Keep numericRef in sync for wheel handlers
   numericRef.current = {
@@ -2760,41 +2767,43 @@ export function PropertiesPanel() {
                   </>
                 );
               })()}
-            <div className={styles.propertyRow}>
-              <div className={styles.propertyHeader}>
-                <label className={styles.propertyLabel} htmlFor="prop-rotation">
-                  Rotation
-                </label>
-                <KeyframeIndicator
-                  state={getKeyframeState(timeline, nodeId, 'transform.rotation', currentFrame)}
-                  onToggle={() => toggleKeyframe('transform.rotation', rotation)}
-                />
-              </div>
-              <div className={styles.propertyInputs}>
-                <div className={styles.inputGroup}>
-                  <ScrubLabel
-                    onScrubStart={handleScrubStart}
-                    label="R"
-                    value={Math.round(rotation) || 0}
-                    onChange={(v) => handleRotationChange(String(v))}
-                    sensitivity={1}
-                    min={-360}
-                    max={360}
-                  />
-                  <input
-                    id="prop-rotation"
-                    type="text"
-                    className={styles.input}
-                    value={`${fmt1(rotation)}\u00B0`}
-                    onChange={(e) => handleRotationChange(e.target.value)}
-                    {...numericInputProps(
-                      () => numericRef.current.rotation,
-                      (v) => numericRef.current.handleRotationChange(v)
-                    )}
+            {showRotation && (
+              <div className={styles.propertyRow}>
+                <div className={styles.propertyHeader}>
+                  <label className={styles.propertyLabel} htmlFor="prop-rotation">
+                    Rotation
+                  </label>
+                  <KeyframeIndicator
+                    state={getKeyframeState(timeline, nodeId, 'transform.rotation', currentFrame)}
+                    onToggle={() => toggleKeyframe('transform.rotation', rotation)}
                   />
                 </div>
+                <div className={styles.propertyInputs}>
+                  <div className={styles.inputGroup}>
+                    <ScrubLabel
+                      onScrubStart={handleScrubStart}
+                      label="R"
+                      value={Math.round(rotation) || 0}
+                      onChange={(v) => handleRotationChange(String(v))}
+                      sensitivity={1}
+                      min={-360}
+                      max={360}
+                    />
+                    <input
+                      id="prop-rotation"
+                      type="text"
+                      className={styles.input}
+                      value={`${fmt1(rotation)}\u00B0`}
+                      onChange={(e) => handleRotationChange(e.target.value)}
+                      {...numericInputProps(
+                        () => numericRef.current.rotation,
+                        (v) => numericRef.current.handleRotationChange(v)
+                      )}
+                    />
+                  </div>
+                </div>
               </div>
-            </div>
+            )}
             {/* Shape keyframe indicator for path nodes */}
             {node.type === 'path' && (
               <div className={styles.propertyRow} data-testid="shape-tween-row">

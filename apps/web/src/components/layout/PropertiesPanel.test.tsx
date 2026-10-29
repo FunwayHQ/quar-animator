@@ -1910,6 +1910,27 @@ describe('PropertiesPanel', () => {
       expect(node.fills[0].color!.b).toBe(0);
     });
 
+    it('has no Rotation field: artboards stay upright, as their handles keep them', () => {
+      const sg = renderWithSceneGraph();
+      act(() => {
+        sg.addNode(createTestArtboard('art1', 'Artboard'));
+        sg.addNode({
+          ...createTestArtboard('turned', 'Turned'),
+          transform: { ...createDefaultTransform(), rotation: 15 },
+        });
+        useEditorStore.getState().setSelection(['art1']);
+      });
+      expect(screen.getByText('Position')).toBeInTheDocument();
+      expect(screen.queryByText('Rotation')).toBeNull();
+
+      // One turned already (an older file) shows it, to be put straight
+      act(() => useEditorStore.getState().setSelection(['turned']));
+      act(() => {
+        fireEvent.change(screen.getByLabelText('Rotation'), { target: { value: '0' } });
+      });
+      expect(sg.getNode('turned')!.transform.rotation).toBe(0);
+    });
+
     it('toggles clipContent checkbox', () => {
       const sg = renderWithSceneGraph();
 
