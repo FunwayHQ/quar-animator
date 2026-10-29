@@ -1342,6 +1342,7 @@ describe('nodeTypeIcon', () => {
       'path',
       'text',
       'image',
+      'video',
       'bone',
       'ik-target',
       'vitruvian',
@@ -1353,6 +1354,10 @@ describe('nodeTypeIcon', () => {
       nodeTypeIcon('group', group()).key,
     ];
     expect(new Set(keys).size).toBe(keys.length);
+  });
+
+  it('shows a video layer as film', () => {
+    expect(nodeTypeIcon('video').key).toBe('video');
   });
 
   it('tells masks, booleans and stars apart', () => {

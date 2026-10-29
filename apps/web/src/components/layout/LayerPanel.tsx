@@ -5,6 +5,7 @@ import {
   Component,
   Contrast,
   Crosshair,
+  Film,
   Folder,
   Frame,
   Hexagon,
@@ -119,6 +120,8 @@ export function nodeTypeIcon(type: string, node?: Node): LayerIcon {
       return { key: 'text', Icon: Type };
     case 'image':
       return { key: 'image', Icon: ImageIcon };
+    case 'video':
+      return { key: 'video', Icon: Film };
     case 'bone':
       return { key: 'bone', Icon: Bone };
     case 'ik-target':
