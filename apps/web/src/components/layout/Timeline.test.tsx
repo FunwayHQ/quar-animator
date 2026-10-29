@@ -55,6 +55,21 @@ describe('Timeline', () => {
     expect(screen.getByTitle('Go to end (End)')).toBeInTheDocument();
   });
 
+  it('names the keys of its buttons as a Mac prints them, on a Mac', () => {
+    const platform = vi.spyOn(navigator, 'platform', 'get').mockReturnValue('MacIntel');
+    renderTimeline();
+
+    expect(screen.getByTestId('work-area-toggle')).toHaveAttribute(
+      'title',
+      'Toggle work area (⌥W)'
+    );
+    expect(screen.getByTitle('Animation Sequence (⇧A)')).toBeInTheDocument();
+    expect(
+      screen.getByTitle('Onion skin settings (right-click turns it on or off, ⇧O)')
+    ).toBeInTheDocument();
+    platform.mockRestore();
+  });
+
   it('renders option buttons', () => {
     renderTimeline();
 

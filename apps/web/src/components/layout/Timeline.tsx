@@ -4,6 +4,7 @@ import { useEditorStore } from '../../stores/editorStore';
 import { isPosingScene } from '../../stores/scenePosing';
 import { getAnimationEnd } from '../../hooks/usePlayback';
 import { undoGroupUntilRelease } from '../../stores/undoGroups';
+import { KEYS, formatShortcut } from '../common/shortcuts';
 import { formatTimecode, getAnimationSpans, getTracksByNode } from '@quar/animation';
 import type { AnimationSpan } from '@quar/animation';
 import { getRulerScale } from './timelineRuler';
@@ -1558,7 +1559,7 @@ export function Timeline({ playback }: TimelineProps = {}) {
           <button
             className={`${styles.optionButton} ${workAreaEnabled ? styles.active : ''}`}
             onClick={toggleWorkArea}
-            title="Toggle work area (Alt+W)"
+            title={`Toggle work area (${formatShortcut(KEYS.workArea)})`}
             aria-label="Toggle work area"
             data-testid="work-area-toggle"
           >
@@ -1597,7 +1598,7 @@ export function Timeline({ playback }: TimelineProps = {}) {
           <button
             className={`${styles.optionButton} ${sequenceWindowOpen ? styles.active : ''}`}
             onClick={toggleSequenceWindow}
-            title="Animation Sequence (Shift+A)"
+            title={`Animation Sequence (${formatShortcut(KEYS.animationSequence)})`}
             aria-label="Toggle Animation Sequence window"
             aria-pressed={sequenceWindowOpen}
             data-testid="sequence-window-toggle"
@@ -1623,7 +1624,7 @@ export function Timeline({ playback }: TimelineProps = {}) {
           <div style={{ position: 'relative' }}>
             <button
               className={`${styles.optionButton} ${onionSkinEnabled ? styles.active : ''}`}
-              title="Onion skin settings (right-click turns it on or off, Shift+O)"
+              title={`Onion skin settings (right-click turns it on or off, ${formatShortcut(KEYS.onionSkin)})`}
               aria-label="Onion skin settings"
               onClick={() => setShowOnionSkinPanel(!showOnionSkinPanel)}
               onContextMenu={(e) => {
