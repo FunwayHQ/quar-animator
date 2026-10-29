@@ -59,6 +59,7 @@ import { GuideOverlay } from '../canvas/GuideOverlay';
 import { SmartGuidesOverlay } from '../canvas/SmartGuidesOverlay';
 import { WeightPaintOverlay } from '../canvas/WeightPaintOverlay';
 import { PointMagnetOverlay } from '../canvas/PointMagnetOverlay';
+import { CanvasUnavailable, type CanvasProblem } from '../canvas/CanvasUnavailable';
 import { ContextMenu } from '../common/ContextMenu';
 import type { ContextMenuEntry } from '../common/ContextMenu';
 import { promptDialog } from '../common/PromptDialog';
@@ -72,6 +73,8 @@ import styles from './Canvas.module.css';
 const MIN_ZOOM = 0.1;
 const MAX_ZOOM = 32;
 const ZOOM_SPEED = 0.001;
+/** How long lost graphics may take to come back before the canvas says they haven't. */
+const CONTEXT_RESTORE_WAIT_MS = 3000;
 
 /** Shows a world position in the status bar; set by the readout while it's mounted. */
 type ShowPointerPosition = (worldPos: Vector2) => void;
@@ -204,6 +207,8 @@ export function Canvas({
   const [zoomPercent, setZoomPercent] = useState(100);
   const showPointerPositionRef = useRef<ShowPointerPosition | null>(null);
   const [cameraReady, setCameraReady] = useState(false);
+  // Why the canvas can't be drawn (no WebGL 2, lost graphics), said over it
+  const [canvasProblem, setCanvasProblem] = useState<CanvasProblem | null>(null);
   const [sceneGraphVersion, setSceneGraphVersion] = useState(0);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
   const [viewportSize, setViewportSize] = useState<{ width: number; height: number }>({
@@ -968,18 +973,32 @@ export function Canvas({
       // WebGLRenderer has already dropped its stale program/buffer wrappers;
       // recreate the renderers so their programs/VAOs/buffers are re-made on the
       // fresh context, reassign the closure vars (the render loop reads them) and
-      // the refs, and re-apply the last known viewport.
+      // the refs, and re-apply the last known viewport. (The timer says the
+      // graphics are lost when they don't come back: see below.)
+      let lostTimer: ReturnType<typeof setTimeout> | undefined;
       renderer.setContextRestoredHandler(() => {
-        grid = new Grid(renderer, { majorSpacing: 100, minorDivisions: 5 });
-        gridRef.current = grid;
-        gridBackground = null;
-        shapeRenderer = new ShapeRenderer(renderer);
-        shapeRendererRef.current = shapeRenderer;
-        onionSkinRenderer = new OnionSkinRenderer(shapeRenderer);
-        onionSkinRendererRef.current = onionSkinRenderer;
-        if (lastWidth > 0 && lastHeight > 0) {
-          renderer.setViewport(lastWidth, lastHeight);
+        clearTimeout(lostTimer);
+        try {
+          grid = new Grid(renderer, { majorSpacing: 100, minorDivisions: 5 });
+          gridRef.current = grid;
+          gridBackground = null;
+          shapeRenderer = new ShapeRenderer(renderer);
+          shapeRendererRef.current = shapeRenderer;
+          onionSkinRenderer = new OnionSkinRenderer(shapeRenderer);
+          onionSkinRendererRef.current = onionSkinRenderer;
+          if (lastWidth > 0 && lastHeight > 0) {
+            renderer.setViewport(lastWidth, lastHeight);
+          }
+          setCanvasProblem(null);
+        } catch (error) {
+          console.error('Failed to restore WebGL:', error);
+          setCanvasProblem('context-lost');
         }
+      });
+      // Lost graphics usually come back at once; when they don't, say so
+      renderer.setContextLostHandler(() => {
+        clearTimeout(lostTimer);
+        lostTimer = setTimeout(() => setCanvasProblem('context-lost'), CONTEXT_RESTORE_WAIT_MS);
       });
 
       // Cleanup
@@ -989,6 +1008,7 @@ export function Canvas({
         activeDragCleanupRef.current = null;
 
         cancelAnimationFrame(animationFrameRef.current);
+        clearTimeout(lostTimer);
         resizeObserver.disconnect();
         unsubscribe();
         grid.dispose();
@@ -998,6 +1018,7 @@ export function Canvas({
       };
     } catch (error) {
       console.error('Failed to initialize WebGL:', error);
+      setCanvasProblem('no-webgl2');
       return;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- initialization should only run once on mount
@@ -2758,6 +2779,7 @@ export function Canvas({
             />
           );
         })()}
+      {canvasProblem && <CanvasUnavailable problem={canvasProblem} />}
       <div className={styles.statusBar}>
         <PointerPosition showRef={showPointerPositionRef} />
         <span className={styles.zoom}>{zoomPercent}%</span>
