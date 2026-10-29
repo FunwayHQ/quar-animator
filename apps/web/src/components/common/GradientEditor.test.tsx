@@ -59,6 +59,37 @@ describe('GradientEditor', () => {
     expect(screen.getByTestId('stop-handle-1')).toBeInTheDocument();
   });
 
+  it('shows the handles at once when a gradient is chosen from Solid', () => {
+    const onActivate = vi.fn();
+    render(
+      <GradientEditor
+        fillType="solid"
+        onFillTypeChange={onFillTypeChange}
+        gradient={makeGradient()}
+        onChange={onChange}
+        onActivate={onActivate}
+      />
+    );
+    fireEvent.click(screen.getByTestId('fill-type-radial'));
+    expect(onFillTypeChange).toHaveBeenCalledWith('radial');
+    expect(onActivate).toHaveBeenCalledOnce();
+  });
+
+  it('shows no handles when Solid is chosen again', () => {
+    const onActivate = vi.fn();
+    render(
+      <GradientEditor
+        fillType="solid"
+        onFillTypeChange={onFillTypeChange}
+        gradient={makeGradient()}
+        onChange={onChange}
+        onActivate={onActivate}
+      />
+    );
+    fireEvent.click(screen.getByTestId('fill-type-solid'));
+    expect(onActivate).not.toHaveBeenCalled();
+  });
+
   it('shows only type tabs in solid mode', () => {
     renderEditor('solid');
     expect(screen.getByTestId('fill-type-solid')).toBeInTheDocument();
@@ -98,9 +129,7 @@ describe('GradientEditor', () => {
     fireEvent.change(screen.getByTestId('stop-offset'), { target: { value: '50' } });
     expect(onChange).toHaveBeenCalledWith(
       expect.objectContaining({
-        stops: expect.arrayContaining([
-          expect.objectContaining({ offset: 0.5 }),
-        ]),
+        stops: expect.arrayContaining([expect.objectContaining({ offset: 0.5 })]),
       })
     );
   });

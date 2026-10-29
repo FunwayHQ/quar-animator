@@ -256,44 +256,38 @@ export function GradientEditor({
     return () => document.removeEventListener('click', handleClick);
   }, [stopContextMenu]);
 
+  // Fill type tabs. Choosing a gradient shows its handles on the canvas at
+  // once, from Solid too (they showed only once its kind was clicked again)
+  const typeTabs = (
+    <div className={styles.typeTabs}>
+      {(['solid', 'linear', 'radial', 'conic'] as FillType[]).map((type) => (
+        <button
+          key={type}
+          className={`${styles.typeTab} ${fillType === type ? styles.typeTabActive : ''}`}
+          onClick={() => {
+            onFillTypeChange(type);
+            if (type !== 'solid') onActivate?.();
+          }}
+          data-testid={`fill-type-${type}`}
+        >
+          {type.charAt(0).toUpperCase() + type.slice(1)}
+        </button>
+      ))}
+    </div>
+  );
+
   // Don't render gradient controls if solid fill
   if (fillType === 'solid') {
     return (
       <div className={styles.editor} data-testid="gradient-editor">
-        <div className={styles.typeTabs}>
-          {(['solid', 'linear', 'radial', 'conic'] as FillType[]).map((type) => (
-            <button
-              key={type}
-              className={`${styles.typeTab} ${fillType === type ? styles.typeTabActive : ''}`}
-              onClick={() => onFillTypeChange(type)}
-              data-testid={`fill-type-${type}`}
-            >
-              {type.charAt(0).toUpperCase() + type.slice(1)}
-            </button>
-          ))}
-        </div>
+        {typeTabs}
       </div>
     );
   }
 
   return (
     <div className={styles.editor} data-testid="gradient-editor">
-      {/* Fill Type Tabs */}
-      <div className={styles.typeTabs}>
-        {(['solid', 'linear', 'radial', 'conic'] as FillType[]).map((type) => (
-          <button
-            key={type}
-            className={`${styles.typeTab} ${fillType === type ? styles.typeTabActive : ''}`}
-            onClick={() => {
-              onFillTypeChange(type);
-              if (type !== 'solid') onActivate?.();
-            }}
-            data-testid={`fill-type-${type}`}
-          >
-            {type.charAt(0).toUpperCase() + type.slice(1)}
-          </button>
-        ))}
-      </div>
+      {typeTabs}
 
       {/* Gradient Bar */}
       <div
