@@ -5,7 +5,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import type { ReactNode } from 'react';
-import { getAnimationEnd, usePlayback } from './usePlayback';
+import { getAnimationEnd, getAnimationStart, usePlayback } from './usePlayback';
 import { useEditorStore, DEFAULT_FILL, DEFAULT_STROKE } from '../stores/editorStore';
 import { SceneGraphProvider, useSceneGraph } from '../contexts/SceneGraphContext';
 import type { Node } from '@quar/types';
@@ -530,5 +530,39 @@ describe('getAnimationEnd: where End and Animation › Go to End go', () => {
     }
     expect(endOf([12, 45])).toBe(45);
     expect(endOf([])).toBe(299);
+  });
+});
+
+describe('getAnimationStart: where Home and Animation › Go to Start go', () => {
+  const startOf = (workArea?: [number, number]) =>
+    getAnimationStart({
+      timelineDuration: 300,
+      workAreaEnabled: workArea !== undefined,
+      workAreaStart: workArea?.[0] ?? 0,
+    });
+
+  /** Where the playback controller's goToStart() goes for the same work area */
+  async function controllerStart(workArea?: [number, number]) {
+    const actual = await vi.importActual<typeof import('@quar/animation')>('@quar/animation');
+    const ctrl = new actual.PlaybackController({
+      duration: 300,
+      frameRate: 30,
+      looping: false,
+      requestFrame: () => 0,
+      cancelFrame: () => {},
+    });
+    if (workArea) ctrl.setWorkArea(true, workArea[0], workArea[1]);
+    ctrl.goToFrame(150);
+    ctrl.goToStart();
+    return ctrl.currentFrame;
+  }
+
+  it('is the work area’s start while it is on, else frame 0, as for the controller', async () => {
+    const cases: Array<[number, number] | undefined> = [undefined, [0, 100], [40, 120], [200, 299]];
+    for (const workArea of cases) {
+      expect(startOf(workArea)).toBe(await controllerStart(workArea));
+    }
+    expect(startOf()).toBe(0);
+    expect(startOf([40, 120])).toBe(40);
   });
 });

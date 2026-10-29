@@ -68,6 +68,18 @@ export function getAnimationEnd(
   return playbackEndFrame(range, getPlayEnd(inView));
 }
 
+/**
+ * The frame Home goes to, the start of the animation, as the playback
+ * controller's goToStart() works it out: the work area's start while it's
+ * on, else frame 0. For the menus, which have no controller of their own.
+ */
+export function getAnimationStart(
+  state: Pick<EditorState, 'timelineDuration' | 'workAreaEnabled' | 'workAreaStart'>
+): number {
+  if (!state.workAreaEnabled) return 0;
+  return Math.max(0, Math.min(Math.round(state.workAreaStart), state.timelineDuration - 1));
+}
+
 /** Apply animated values to ALL scene graph nodes (including children in groups). */
 function applyFrame(
   sg: ReturnType<typeof useSceneGraph>,

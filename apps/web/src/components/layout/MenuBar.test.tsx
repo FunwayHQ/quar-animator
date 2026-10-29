@@ -527,6 +527,30 @@ describe('MenuBar', () => {
       expect(useEditorStore.getState().isPlaying).toBe(false);
     });
 
+    it('goes to the start of the work area with Go to Start while it is on, where Home goes', () => {
+      render(<MenuBar />);
+      act(() =>
+        useEditorStore.setState({
+          currentFrame: 90,
+          workAreaEnabled: true,
+          workAreaStart: 40,
+          workAreaEnd: 120,
+          isPlaying: true,
+        })
+      );
+
+      fireEvent.click(screen.getByTestId('menu-animation'));
+      fireEvent.click(screen.getByText('Go to Start'));
+      expect(useEditorStore.getState().currentFrame).toBe(40);
+      expect(useEditorStore.getState().isPlaying).toBe(false);
+
+      // With the work area off, frame 0
+      act(() => useEditorStore.setState({ currentFrame: 90, workAreaEnabled: false }));
+      fireEvent.click(screen.getByTestId('menu-animation'));
+      fireEvent.click(screen.getByText('Go to Start'));
+      expect(useEditorStore.getState().currentFrame).toBe(0);
+    });
+
     it('Bind Selection to Bones needs bones in the scene', () => {
       let sceneGraph: SceneGraph | null = null;
       function Grab() {

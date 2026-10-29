@@ -2,7 +2,7 @@ import { useRef, useCallback, useState, useEffect, useMemo, useLayoutEffect } fr
 import { useSceneGraph } from '../../contexts/SceneGraphContext';
 import { useEditorStore } from '../../stores/editorStore';
 import { isPosingScene } from '../../stores/scenePosing';
-import { getAnimationEnd } from '../../hooks/usePlayback';
+import { getAnimationEnd, getAnimationStart } from '../../hooks/usePlayback';
 import { undoGroupUntilRelease } from '../../stores/undoGroups';
 import { KEYS, formatShortcut } from '../common/shortcuts';
 import { formatTimecode, getAnimationSpans, getTracksByNode } from '@quar/animation';
@@ -704,12 +704,13 @@ export function Timeline({ playback }: TimelineProps = {}) {
     }
   }, [playback, isPlaying, setIsPlaying]);
 
+  // The start of the animation (as Home): the work area's start while it's on
   const goToStart = useCallback(() => {
     if (playback) {
       playback.stop();
     } else {
-      setCurrentFrame(0);
       setIsPlaying(false);
+      setCurrentFrame(getAnimationStart(useEditorStore.getState()));
     }
   }, [playback, setCurrentFrame, setIsPlaying]);
 
@@ -1155,10 +1156,8 @@ export function Timeline({ playback }: TimelineProps = {}) {
         id: 'go-to-start',
         label: 'Go To Start',
         shortcut: 'Home',
-        onClick: () => {
-          setCurrentFrame(0);
-          setIsPlaying(false);
-        },
+        // What Home and the Go to start button do: the work area's start while it's on
+        onClick: goToStart,
       },
       {
         id: 'go-to-end',
@@ -1246,6 +1245,7 @@ export function Timeline({ playback }: TimelineProps = {}) {
     setWorkAreaStart,
     setWorkAreaEnd,
     clearWorkArea,
+    goToStart,
     goToEnd,
   ]);
 

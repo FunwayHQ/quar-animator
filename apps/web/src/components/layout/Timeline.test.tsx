@@ -1189,6 +1189,31 @@ describe('Timeline', () => {
     expect(useEditorStore.getState().currentFrame).toBe(299);
   });
 
+  it('goes to the work area’s start with the ruler’s Go To Start and the Go to start button while it is on', async () => {
+    useEditorStore.setState({
+      currentFrame: 90,
+      workAreaEnabled: true,
+      workAreaStart: 40,
+      workAreaEnd: 120,
+    });
+    renderTimeline();
+    const ruler = screen.getByTestId('timeline-ruler');
+    Object.defineProperty(ruler, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => ({ left: 0, top: 0, width: 300, height: 20 }) as DOMRect,
+    });
+
+    fireEvent.contextMenu(ruler, { clientX: 10 });
+    const start = screen.getByRole('menuitem', { name: /^Go To Start/ });
+    expect(start).toHaveTextContent('Home');
+    fireEvent.click(start);
+    expect(useEditorStore.getState().currentFrame).toBe(40);
+
+    act(() => useEditorStore.setState({ currentFrame: 90 }));
+    await userEvent.setup().click(screen.getByTitle(/^Go to start/));
+    expect(useEditorStore.getState().currentFrame).toBe(40);
+  });
+
   it('does not go below frame 0', async () => {
     const user = userEvent.setup();
     renderTimeline();

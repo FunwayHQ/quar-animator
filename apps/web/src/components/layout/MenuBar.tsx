@@ -32,7 +32,7 @@ import { openHelp } from '../help/helpPanel';
 import styles from './MenuBar.module.css';
 import { useToolsBelowMenus } from './useToolsBelowMenus';
 import { useProjectShortcuts } from '../../hooks/useProjectShortcuts';
-import { getAnimationEnd } from '../../hooks/usePlayback';
+import { getAnimationEnd, getAnimationStart } from '../../hooks/usePlayback';
 import { okToDiscard } from '../../services/unsavedChanges';
 import { QuarLogo } from '../common/QuarLogo';
 import { KEYS, SHORTCUT_GROUPS, formatShortcut, type ShortcutEntry } from '../common/shortcuts';
@@ -1085,7 +1085,9 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                     shortcut={KEYS.goToStart}
                     onClick={() => {
                       closeMenu();
-                      setCurrentFrameAction(0);
+                      // Where Home goes: the work area's start while it's on
+                      setIsPlayingAction(false);
+                      setCurrentFrameAction(getAnimationStart(useEditorStore.getState()));
                     }}
                   />
                   <MenuItem
