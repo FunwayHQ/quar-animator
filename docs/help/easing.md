@@ -63,10 +63,13 @@ Each change goes to the keyframes at once (a handle's when you let go of
 it). When a keyframe's easing isn't one of those on its menu, the menu ticks
 **Custom Easing…**.
 
-The curve has handles to drag when it's a curve of your own, or one of the
-**CSS Standard** curves other than **Linear**. The easings in the other
-groups are worked out another way and have no handles: to adjust one, start
-from the nearest **CSS Standard** curve.
+The curve has handles to drag, and numbers in **X1** to **Y2**, when it's a
+curve of your own, a **CSS Standard** curve, or **In Quad**, **Out Quad**,
+**In Cubic**, **Out Cubic**, **In Back** or **Out Back**. The others, the
+**In Out** ones among them, are worked out another way that no pair of
+handles can draw: their fields are empty and greyed, and a note under them
+says so. To adjust one of those, start from a curve with handles that's
+close to it.
 
 ## The graph editor {#graph-editor}
 
@@ -122,16 +125,17 @@ opens its step in the Animation Sequence window, where you change it (see
 
 ### Bend a curve with its handles {#handles}
 
-Select a keyframe and handles appear beside it for its curves that were
-drawn in the Easing Editor: the handle before it shapes the curve arriving
-at it, the one after it the curve leaving it. Drag a handle to bend that
-curve; the easing changes as if you'd drawn it in the Easing Editor. A curve
-between two keyframes with the same value stays flat.
+Select a keyframe and handles appear beside it for the curves that have
+them: the handle before it shapes the curve arriving at it, the one after it
+the curve leaving it. Drag a handle to bend that curve; the easing changes
+as if you'd drawn it in the Easing Editor, starting from the curve it had. A
+curve between two keyframes with the same value stays flat.
 
-The easings on the keyframe menu, **Linear** among them, show no handles. To
-bend their curves, give them one from the Easing Editor first: right-click
-them on the timeline, choose **Custom Easing…**, and pick **Ease In Out**
-from **CSS Standard**, say.
+Of the easings on the keyframe menu, **Linear**, **Ease In**, **Ease Out**,
+**Ease In Back** and **Ease Out Back** have handles. **Ease In/Out**,
+**Ease Out Bounce** and **Ease Out Elastic** don't: to bend one of those,
+right-click it on the timeline, choose **Custom Easing…**, and pick
+**Ease In Out** from **CSS Standard**, say, which has handles.
 
 ## How rotation turns {#rotation}
 

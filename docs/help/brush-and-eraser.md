@@ -21,8 +21,22 @@ Press [[Esc]] before you let go to throw the stroke away.
 
 With a pen on a tablet, or a screen that feels how hard you press, the stroke
 is wider where you press harder and thinner where you press lightly. With a
-mouse it's thin and even, and you can make it wider afterwards (see
-[Change a stroke's width](#brush-width)).
+mouse it's even all along. You can make it wider or thinner afterwards too
+(see [Change a stroke's width](#brush-width)).
+
+### The Brush's settings {#brush-settings}
+
+While the Brush is chosen, the top of the Properties panel has a **Brush**
+section, whatever is selected:
+
+- **Size**, from 1 to 100: how wide the stroke is where a pen presses
+  hardest. A mouse paints about half as wide. It starts at 5.
+- **Smoothing**, from 0 to 100: how much a shaky hand is smoothed. At 0 the
+  stroke follows the pointer exactly. It starts at 50.
+
+Drag a slider or type a number. The line above them is a sample stroke that
+changes as you do, to give you the feel of the settings. They're for the
+strokes you paint next; strokes already painted keep theirs.
 
 A brush stroke is a filled shape, not a line: its color is its **Fill** in the
 Properties panel, cornflower blue to begin with, and it has no stroke. Color it
@@ -68,10 +82,10 @@ You can draw a profile of your own:
 The new profile is at the end of the **Profile** list of every brush stroke.
 It's measured along the shape's longer side.
 
-> [!NOTE]
-> Profiles you make last until you reload or close the browser tab: they
-> aren't saved with the project. Strokes you've drawn with them keep their
-> shape.
+Profiles you make are saved with the project and belong to it: another
+project has its own. A stroke pasted into a project that doesn't have its
+profile keeps its shape, but changing its **Width** or **Profile** there
+makes it **Uniform**.
 
 ## Rub out with the Eraser {#eraser}
 
@@ -94,10 +108,26 @@ It's measured along the shape's longer side.
   circle above is. A shape rubbed out entirely is deleted.
 
 The Eraser is the same size on the screen whatever the zoom: zoom in to rub out
-fine details, out for broad strokes. To make it bigger or smaller, press
+fine details, out for broad strokes. A ring round the pointer shows how far it
+reaches. To make it bigger or smaller, press
 <kbd class="keys"><kbd>]</kbd></kbd> or <kbd class="keys"><kbd>[</kbd></kbd>.
 Each press changes its size by 5, from 1 to 100. It starts at 10, which rubs
 out a trail 20 pixels wide.
+
+### The Eraser's settings {#eraser-settings}
+
+While the Eraser is chosen, the top of the Properties panel has an
+**Eraser** section:
+
+- **Mode:**
+  - **Cut shapes**, the usual one, cuts the trail out of every shape it
+    crosses, as above.
+  - **Delete points** deletes the points of the paths it touches instead. A
+    closed path it takes points from is left open, and one left with fewer
+    than two points is deleted. It works on paths and brush strokes only,
+    and leaves rectangles, ellipses, polygons and stars alone. The keyframes
+    of the points it deletes go; the other points keep theirs.
+- **Size:** the size <kbd class="keys"><kbd>[</kbd></kbd> and <kbd class="keys"><kbd>]</kbd></kbd> change, as a slider and a number.
 
 A shape the Eraser cuts stays the same layer, with its name, its
 [effects](masks-and-effects.md#effects), its colors and its animation; a brush

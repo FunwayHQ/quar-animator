@@ -173,7 +173,7 @@ More in [Move around the canvas](selecting-and-arranging.md#view) and
 | [[K]]                     | Auto-Keyframe on or off                                  |
 | [[G]]                     | switch the timeline's rows to the graph editor, and back |
 | [[I]] / [[Shift+I]]       | start / end the work area (the range that plays) here    |
-| [[Alt+W]]                 | the work area on or off (Windows and Linux)              |
+| [[Alt+W]]                 | the work area on or off                                  |
 | [[Shift+O]]               | Onion Skinning on or off                                 |
 | [[Shift+A]]               | the Animation Sequence window                            |
 
@@ -181,6 +181,10 @@ More in [Play your animation](keyframes.md#playing),
 [The work area](keyframes.md#work-area),
 [Onion skin](keyframes.md#onion-skin) and
 [The Animation Sequence window](presets-and-sequences.md#sequence).
+
+On the timeline's [**rows of keyframes**](keyframes.md#dope-sheet), after you
+click in them: [[Delete]] deletes the selected keyframes, [[Mod+C]] copies
+them and [[Mod+V]] pastes them at the playhead.
 
 In the [**graph editor**](easing.md#graph-keyframes), after you click in it:
 [[Delete]] deletes the selected keyframes, [[Left]] and [[Right]] move them a

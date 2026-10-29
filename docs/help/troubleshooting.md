@@ -55,7 +55,8 @@ allow it. You can allow Google Fonts:
 
 Opening a project whose text is set in a Google font asks too. If you say no,
 that text shows in a stand-in font, and opening or pasting more of it doesn't
-ask again until you reload.
+ask again until you reload. Turn Google Fonts on later, from the Help menu or
+the font picker, and the open project's fonts load at once, with no reload.
 
 **What it sends.** Once they're allowed, the editor asks Google's servers for
 each font you pick or a project uses, and, for the font picker to show each
@@ -86,9 +87,15 @@ also linked from the foot of the Projects page.
 ## The canvas stays empty {#webgl}
 
 The canvas is drawn with WebGL 2, the graphics part of your browser. If the
-browser can't provide it, the canvas stays dark and empty: the rulers have no
-numbers and nothing you draw shows, though the Layers panel still lists your
-layers. No message says why.
+browser can't provide it, the canvas says so: **This browser can't draw the
+canvas**, with the steps below and a link to this section. The Layers panel,
+the other panels and the menus still work, so you can still keep a copy of
+your project with **File › Download as .quar**.
+
+If the browser's graphics stop working while you're using the editor and
+don't come back within a few seconds, the canvas says **The canvas stopped
+drawing**. Your work is still in the editor: save it (**File › Save**), then
+reload the page. If it goes on happening, try the steps below.
 
 To fix it:
 

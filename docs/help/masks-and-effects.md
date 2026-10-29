@@ -91,7 +91,8 @@ layer. Click **+** (1) and choose:
 ![A blue rectangle on a white artboard with a soft shadow below and to the right of it, and its Drop Shadow settings in the Effects section](img/masks-and-effects-effects.png 'A drop shadow. Add effects with + (1); hide one with its eye (2), remove it with × (3).')
 
 A shadow has a color (click the swatch), **Op** (its opacity), **X** and **Y**
-(how far it falls from the layer: a positive Y moves it down), **Blur** (how
+(how far it falls from the layer; Y counts upward, as everywhere in the
+editor, so a negative Y puts the shadow below), **Blur** (how
 soft it is) and **Spread** (how much bigger than the layer it is). A blur has
 a **Radius**. Type the values, or drag the names left and right.
 

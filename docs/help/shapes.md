@@ -141,8 +141,8 @@ To make one:
 1. Select the shape.
 2. In the fill's row, click **Linear**, **Radial** or **Conic**. (For the
    stroke, use the stroke's row.)
-3. To place a linear or radial gradient on the shape, click its kind again:
-   handles appear on the canvas.
+3. For a linear or radial gradient, handles appear on the canvas at once:
+   drag them to place it on the shape.
 
 ![A rectangle with a radial gradient, its handles on the canvas, and the gradient's stops in Properties, numbered](img/shapes-gradient.png 'A radial gradient, pulled off center by its focal point.')
 

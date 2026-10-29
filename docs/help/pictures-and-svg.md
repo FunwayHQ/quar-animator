@@ -89,6 +89,7 @@ you can select, recolor, reshape and animate each one.
 2. Choose an `.svg` file.
 
 The artwork comes in at its own size, in the middle of the page, and selected.
+If that's on an artboard, it [goes into it](artboards.md#layers).
 A message says how many elements came in. If the SVG has several shapes at its top
 level, they're put in a group called Imported SVG.
 

@@ -40,7 +40,7 @@ The timeline is along the bottom of the editor.
    [Auto-keyframe](#auto-keyframe)).
 2. **Loop** ([[L]]): playing starts over when it reaches the end. It's on
    unless you turn it off.
-3. **Work area** ([[Alt+W]] on Windows and Linux): plays only part of the
+3. **Work area** ([[Alt+W]]): plays only part of the
    timeline (see [The work area](#work-area)).
 4. **Graph editor** ([[G]]): shows the keyframes as curves instead (see
    [Easing and the graph editor](easing.md)).
@@ -78,9 +78,11 @@ The **Animation** menu has all of these too, and **Loop Playback** and
 Playing doesn't run on to the end of the timeline: it stops at the last
 keyframe, or at the end of the last sound if that's later. With **Loop** on,
 it starts over from the beginning there. A timeline with no keyframes and no
-sounds plays to its end. [[End]] and **Go to end** take you to that same last
-frame; **Animation › Go to End**, and **Go To End** on the ruler's right-click
-menu, take you to the last frame of the timeline.
+sounds plays to its end. [[End]], **Go to end**, **Animation › Go to End**
+and **Go To End** on the ruler's right-click menu all take you to that same
+last frame. **Go To Last Frame** on the ruler's menu goes to the timeline's
+very last frame, past the end of the animation, say to key something after
+it.
 
 ## Frames and FPS {#frames-and-fps}
 
@@ -89,6 +91,9 @@ menu, take you to the last frame of the timeline.
   frames long: 10 seconds.
 - **FPS** is the frame rate, from 1 to 120 frames per second. It's the same
   for the whole document: every page and every artboard plays at it.
+
+**Edit › Undo** ([[Mod+Z]]) takes back a change to either. Undoing the frame
+rate puts it back on every page.
 
 Keyframes keep their frame numbers when you change the frame rate, so a
 higher **FPS** plays the same animation faster and a lower one plays it more
@@ -108,7 +113,7 @@ The ruler above the rows is numbered in frames.
 
 Right-click the ruler (or an empty part of a row) for **Go To Frame**,
 **Add Opacity Keyframe at Frame** (for the selected layers), **Go To Start**,
-**Go To End** and the work area's commands. The frame you clicked on is in
+**Go To End**, **Go To Last Frame** and the work area's commands. The frame you clicked on is in
 their names.
 
 ### Play part of the timeline: the work area {#work-area}
@@ -123,7 +128,7 @@ watch one move over and over.
 To change it, drag its ends or its middle. [[I]] puts its start at the
 playhead and [[Shift+I]] its end; so do **Set Work Area Start** and
 **Set Work Area End** on the ruler's right-click menu. **Work area**
-(or [[Alt+W]], though not on a Mac) turns it off and on again, and
+(or [[Alt+W]]) turns it off and on again, and
 **Clear Work Area** on the ruler's menu takes it away. While it's on, [[Home]] goes to its start.
 
 ## Animate with keyframes {#animate}
@@ -178,27 +183,32 @@ project.
 
 ## Work with keyframes on the timeline {#dope-sheet}
 
-Each layer's row shows all its keyframes as diamonds, whichever property they
-belong to. A line joins a layer's keyframes where it changes between them;
-where there's no line, it holds still.
+Each layer's row shows its keyframes as diamonds, whichever property they
+belong to. One diamond stands for all the layer's keyframes on that frame:
+key **Position** and **Rotation** on frame 30, and there's one diamond at
+30 for both. A line joins a layer's keyframes where it changes between
+them; where there's no line, it holds still.
 
-- **Select a keyframe:** click its diamond. [[Shift]]-click to add more.
-  Click an empty part of the rows to select none.
-- **See what it is:** point at a diamond. Its property and frame appear.
+- **Select keyframes:** click a diamond. That selects every keyframe it
+  stands for. [[Shift]]-click to add more. Click an empty part of the rows
+  to select none.
+- **See what it is:** point at a diamond. The properties keyed there and the
+  frame appear.
 - **Move keyframes:** drag a selected diamond along its row. All the selected
   keyframes move with it, a frame at a time.
-- **Delete keyframes:** right-click one of the selected diamonds and choose
-  **Delete Keyframes**.
+- **Delete keyframes:** press [[Delete]] or [[Backspace]], or right-click one
+  of the selected diamonds and choose **Delete Keyframes**.
 - **Change the easing:** right-click a diamond and choose one (see
   [Easing and the graph editor](easing.md)).
 
 Each of these is one step for **Edit › Undo** ([[Mod+Z]]): a drag, however
 far, a deletion, a paste, a change of easing.
 
-Where a layer has several properties keyed on the same frame, their diamonds
-lie on top of each other and a click selects only the top one. To select all
-of a layer's keyframes, right-click its name at the left of the timeline and
-choose **Select Keyframes**.
+To select all of a layer's keyframes, right-click its name at the left of
+the timeline and choose **Select Keyframes**. To work on one property's
+keyframes apart from the others, use the
+[graph editor](easing.md#graph-editor), which shows each property on its
+own.
 
 ![The right-click menu of a layer's name on the timeline](img/keyframes-layer-menu.png "Right-click a layer's name for its keyframes.")
 
@@ -209,10 +219,16 @@ to the step: clicking one opens it in the Animation Sequence window (see
 ### Copy keyframes to another frame or layer {#copy-paste}
 
 1. Select the keyframes.
-2. Right-click one of them and choose **Copy Keyframes**.
+2. Press [[Mod+C]], or right-click one of them and choose **Copy Keyframes**.
 3. Right-click the row you want them on, at the frame where they should
    start, and choose **Paste Keyframes**. Or right-click the layer's name and
    choose **Paste Keyframes at Frame**, which pastes at the playhead.
+
+With the keyboard: select the layer to paste on, move the playhead to the
+frame, click in the timeline and press [[Mod+V]]. With no layer selected,
+they go back onto the layer they came from. These keys work on keyframes
+while the timeline has the focus, which a click in it gives it; on the
+canvas, [[Mod+C]] and [[Mod+V]] copy and paste layers.
 
 The first keyframe you copied lands on that frame, and the others keep their
 spacing after it. Keyframes copied from one layer go onto the layer you paste

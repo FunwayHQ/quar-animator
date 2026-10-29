@@ -90,7 +90,8 @@ export default [
           for (const [index, value] of [
             [0, '40'],
             [1, '14'],
-            [2, '14'],
+            // Y counts up: below the layer
+            [2, '-14'],
             [3, '24'],
           ]) {
             await fields.nth(index).fill(value);

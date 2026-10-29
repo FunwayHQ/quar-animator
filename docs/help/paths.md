@@ -143,7 +143,9 @@ With points picked, the Properties panel shows a **Vertex** section:
 The diamonds beside **X**, **Y** and **R** are for animating the point (see
 [The diamonds in Properties](keyframes.md#diamonds)). To morph the whole
 outline from one shape into another, key the path's **Shape** row under
-**Transform** instead: see [Shape tweening](shape-tweening.md#morph).
+**Transform** instead: see [Shape tweening](shape-tweening.md#morph). Once the
+Shape is keyed, every change you make in this section keys the Shape at the
+playhead.
 
 ## Path commands {#path-commands}
 

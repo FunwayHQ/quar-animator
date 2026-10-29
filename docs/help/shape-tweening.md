@@ -57,10 +57,9 @@ handles, bending a segment, nudging points with the arrow keys, changing a
 point from corner to smooth. On a frame that already has a Shape keyframe,
 that keyframe takes the new outline.
 
-> [!CAUTION]
-> Typing a point's position into **X** and **Y** under **Vertex** in the
-> Properties panel doesn't key the Shape, so the point goes back when you
-> move to another frame. Drag the point on the canvas instead.
+The **Vertex** section of the Properties panel does the same: typing a
+point's **X** and **Y**, its corner radius **R** or its handles' positions,
+or picking its point type, keys the whole Shape at the playhead.
 
 Changing the number of points works too. When you add a point to the path or
 delete one (with the [Pen](paths.md#pen-points) or Direct Selection), it's
@@ -105,5 +104,8 @@ of its animation. Its size keyframes — width and height, radius, corner
 radius, the number of sides — become **Shape** keyframes: at each of their
 frames, the outline the shape had there. The path morphs from one of those
 outlines to the next, and from then on you can edit them like any path's.
+Each outline has the same points in the same order, so the morph stays even:
+a corner that's rounded on some keyframes and sharp on others rounds
+smoothly between them.
 
 ![Onion skin showing a converted rounded rectangle growing wider over the frames after the playhead](img/shape-tweening-converted.png 'A rounded rectangle whose width was animated, converted to a path: its width keyframes are Shape keyframes now.')

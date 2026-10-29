@@ -113,7 +113,7 @@ The first time you pick a Google font, the editor asks:
 
 Opening a project whose text uses Google fonts asks the same question. If you
 don't allow it, that text shows in a stand-in font. To see it in its own font
-after all, turn Google Fonts on (below), save, and reload the page.
+after all, turn Google Fonts on (below): the project's fonts load at once.
 
 To change your mind later, choose **Help › Use Google Fonts**: it's ticked while
 Google Fonts are allowed, and choosing it again turns them off. Turned off,
