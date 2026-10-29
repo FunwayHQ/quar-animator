@@ -8,6 +8,7 @@ import {
   clipLevel,
   fadedClip,
   findSoundClip,
+  loopedClip,
   lastSoundFrame,
   movedClip,
   playLevel,
@@ -15,6 +16,7 @@ import {
   soundIdsUsed,
   soundRows,
   soundsPlayed,
+  spedClip,
   trimmedEnd,
   trimmedStart,
   withSoundClip,
@@ -318,6 +320,89 @@ describe('moving and trimming', () => {
     expect(trimmedEnd(clip('a', 30, 4), 10, 30, 10).duration).toBeCloseTo(1 / 30);
     // A sound of 4.5 s played from 1 s in: 3.5 s of it left
     expect(trimmedEnd(clip('a', 30, 2, { offset: 1 }), 900, 30, 4.5).duration).toBe(3.5);
+  });
+});
+
+describe('trimming a clip at its speed, and looped', () => {
+  it('trims the start at its speed: a frame is more of the sound when it’s faster', () => {
+    // 4 s twice as fast: frames 30 to 90; 15 frames on is a second of the sound
+    const fast = trimmedStart(clip('a', 30, 4, { speed: 2 }), 45, 30);
+    expect(fast).toMatchObject({ start: 45, offset: 1, duration: 3, speed: 2 });
+    expect(clipEndFrame(fast, 30)).toBeCloseTo(90);
+    // A quarter as fast: 30 frames on is a quarter of a second
+    const slow = trimmedStart(clip('a', 30, 4, { speed: 0.25 }), 60, 30);
+    expect(slow).toMatchObject({ start: 60, offset: 0.25, duration: 3.75 });
+    // Back as far as the sound's start: 1 s trimmed off at 0.5× is 60 frames
+    expect(trimmedStart(clip('a', 90, 2, { offset: 1, speed: 0.5 }), 0, 30)).toMatchObject({
+      start: 30,
+      offset: 0,
+      duration: 3,
+    });
+  });
+
+  it('trims a looped clip’s first pass, its end staying where it is', () => {
+    const looped = clip('a', 30, 4, { offset: 2, loop: true, loopFor: 10 });
+    const trimmed = trimmedStart(looped, 60, 30);
+    expect(trimmed).toMatchObject({ start: 60, offset: 3, duration: 3, loopFor: 9 });
+    expect(clipEndFrame(trimmed, 30)).toBeCloseTo(330);
+    // No further than a frame short of the first pass's end (frame 150)
+    expect(trimmedStart(looped, 400, 30).start).toBe(149);
+    // Looped but not lengthened: one pass, ending where it did
+    const once = trimmedStart(clip('b', 30, 4, { loop: true }), 60, 30);
+    expect(once).not.toHaveProperty('loopFor');
+    expect(clipEndFrame(once, 30)).toBeCloseTo(150);
+  });
+
+  it('trims the end at its speed, not past the sound’s end', () => {
+    // 2×: 30 frames are 2 s of the sound
+    expect(trimmedEnd(clip('a', 30, 4, { speed: 2 }), 60, 30, 10).duration).toBe(2);
+    // From 2 s into a 10 s sound, twice as fast: the 8 s left last 120 frames
+    const longest = trimmedEnd(clip('a', 30, 4, { offset: 2, speed: 2 }), 900, 30, 10);
+    expect(longest.duration).toBe(8);
+    expect(clipEndFrame(longest, 30)).toBe(150);
+    // A quarter as fast: a frame is 1/120 s of the sound
+    expect(trimmedEnd(clip('a', 30, 4, { speed: 0.25 }), 0, 30, 10).duration).toBeCloseTo(1 / 120);
+  });
+
+  it('lengthens a looped clip past the sound’s end, its pass as it was', () => {
+    const looped = trimmedEnd(clip('a', 30, 4, { offset: 2, loop: true }), 600, 30, 10);
+    expect(looped).toMatchObject({ duration: 4, loop: true, loopFor: 19 });
+    expect(clipEndFrame(looped, 30)).toBe(600);
+    expect(trimmedEnd(clip('a', 30, 4, { loop: true, speed: 2 }), 10, 30, 10).loopFor).toBeCloseTo(
+      1 / 30
+    );
+  });
+});
+
+describe('a clip’s speed and loop set', () => {
+  it('plays at a speed from where it starts, ending sooner or later; 1× has none', () => {
+    const fast = spedClip(clip('a', 30, 4), 2);
+    expect(fast).toEqual(clip('a', 30, 4, { speed: 2 }));
+    expect(clipEndFrame(fast, 30)).toBe(90);
+    expect(spedClip(fast, 1)).toEqual(clip('a', 30, 4));
+    expect(spedClip(clip('a', 0, 1), 10).speed).toBe(4);
+    expect(spedClip(clip('a', 0, 1), 0.1).speed).toBe(0.25);
+    expect(spedClip(fast, 2)).toBe(fast);
+    expect(spedClip(fast, Number.NaN)).toBe(fast);
+    expect(spedClip(fast, 0)).toBe(fast);
+  });
+
+  it('keeps a looped clip as long as it was made at another speed', () => {
+    const looped = spedClip(clip('a', 30, 4, { loop: true, loopFor: 10 }), 2);
+    expect(looped.loopFor).toBe(10);
+    expect(clipEndFrame(looped, 30)).toBe(330);
+  });
+
+  it('loops for a pass until it’s lengthened, and stops looping, its length gone with it', () => {
+    const looped = loopedClip(clip('a', 30, 4), true);
+    expect(looped).toEqual(clip('a', 30, 4, { loop: true }));
+    expect(clipEndFrame(looped, 30)).toBe(150);
+    expect(loopedClip(looped, true)).toBe(looped);
+    expect(loopedClip(clip('a', 30, 4, { loop: true, loopFor: 10 }), false)).toEqual(
+      clip('a', 30, 4)
+    );
+    const plain = clip('a', 30, 4);
+    expect(loopedClip(plain, false)).toBe(plain);
   });
 });
 

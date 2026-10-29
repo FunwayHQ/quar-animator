@@ -11,7 +11,7 @@
 import type { SoundClip, Timeline } from '@quar/types';
 import type { TimelineScope } from './TimelineScope';
 import { scopeSounds, withScopeSounds } from './TimelineScope';
-import { clipSeconds, clipSpeed } from './VideoClips';
+import { MAX_CLIP_SPEED, MIN_CLIP_SPEED, clipSeconds, clipSpeed } from './VideoClips';
 
 /** Where a clip stops sounding on its timeline, in frames (not whole: a sound ends where it ends). */
 export function clipEndFrame(clip: SoundClip, frameRate: number): number {
@@ -237,29 +237,52 @@ export function movedClip(clip: SoundClip, frame: number): SoundClip {
   return start === clip.start ? clip : { ...clip, start };
 }
 
+/** Small enough a slip in the sums not to round a frame away. */
+const SLIP = 1e-6;
+
+/** A looped clip's length as it was made, in seconds (none: one pass). */
+function loopLength(clip: SoundClip): number | undefined {
+  const { loopFor } = clip;
+  return clip.loop && loopFor !== undefined && Number.isFinite(loopFor) && loopFor > 0
+    ? loopFor
+    : undefined;
+}
+
 /**
  * The clip's beginning trimmed to `frame`: the sound before it is skipped,
- * or (moved earlier) more of it plays — back to the sound's start, and
- * never past its end less a frame.
+ * or (moved earlier) more of it plays — at its speed, a frame of the
+ * timeline being `speed` frames' worth of the sound — back to the sound's
+ * start (and the timeline's first frame), and never past the end of its
+ * first pass, or its own, less a frame. Its end stays where it is: a looped
+ * clip's length changes with its pass.
  */
 export function trimmedStart(clip: SoundClip, frame: number, frameRate: number): SoundClip {
   const rate = Math.max(1, frameRate);
-  // Small enough a slip in the sums not to round a frame away
-  const earliest = Math.max(0, Math.ceil(clip.start - clip.offset * rate - 1e-6));
-  const latest = Math.floor(clipEndFrame(clip, rate) + 1e-6) - 1;
+  const speed = clipSpeed(clip);
+  const earliest = Math.max(0, Math.ceil(clip.start - (clip.offset * rate) / speed - SLIP));
+  const passEnd = clip.start + (Math.max(0, clip.duration) / speed) * rate;
+  const latest = Math.floor(Math.min(passEnd, clipEndFrame(clip, rate)) + SLIP) - 1;
   if (latest < earliest) return clip;
   const start = Math.min(latest, Math.max(earliest, Math.round(frame)));
   if (start === clip.start) return clip;
-  const shift = (start - clip.start) / rate;
-  return {
+  const moved = (start - clip.start) / rate;
+  const trimmed: SoundClip = {
     ...clip,
     start,
-    offset: Math.max(0, clip.offset + shift),
-    duration: clip.duration - shift,
+    offset: Math.max(0, clip.offset + moved * speed),
+    duration: clip.duration - moved * speed,
   };
+  const loopFor = loopLength(clip);
+  if (loopFor !== undefined) trimmed.loopFor = loopFor - moved;
+  return trimmed;
 }
 
-/** The clip's end trimmed to `frame`: at least a frame long, and not past the sound's end. */
+/**
+ * The clip's end trimmed to `frame` (at least a frame after its start): an
+ * unlooped clip plays more or less of the sound at its speed, not past the
+ * sound's end (`soundDuration` seconds); a looped one lasts that long, as
+ * far past the sound's end as it's made to, its pass as it was.
+ */
 export function trimmedEnd(
   clip: SoundClip,
   frame: number,
@@ -267,9 +290,36 @@ export function trimmedEnd(
   soundDuration: number
 ): SoundClip {
   const rate = Math.max(1, frameRate);
+  const length = Math.max(1, Math.round(frame) - clip.start) / rate;
+  if (clip.loop) return length === clip.loopFor ? clip : { ...clip, loopFor: length };
   const longest = Math.max(0, soundDuration - clip.offset);
-  const duration = Math.min(longest, Math.max(1 / rate, (Math.round(frame) - clip.start) / rate));
+  const duration = Math.min(longest, length * clipSpeed(clip));
   return duration === clip.duration ? clip : { ...clip, duration };
+}
+
+/**
+ * The clip played at `speed`, keeping its pitch (kept to 0.25×–4×; a wrong
+ * one changes nothing), from where it starts: it ends sooner or later, but
+ * a looped one lasts as long as it was made to.
+ */
+export function spedClip(clip: SoundClip, speed: number): SoundClip {
+  if (!Number.isFinite(speed) || speed <= 0) return clip;
+  const next = Math.min(MAX_CLIP_SPEED, Math.max(MIN_CLIP_SPEED, speed));
+  if (clip.speed === (next === 1 ? undefined : next)) return clip;
+  // 1× is playing as recorded: no speed of its own
+  if (next === 1) {
+    const { speed: _speed, ...recorded } = clip;
+    return recorded;
+  }
+  return { ...clip, speed: next };
+}
+
+/** The clip looping (for a pass until it's lengthened), or not (its looped length gone with it). */
+export function loopedClip(clip: SoundClip, on: boolean): SoundClip {
+  if (on) return clip.loop ? clip : { ...clip, loop: true };
+  if (clip.loop === undefined && clip.loopFor === undefined) return clip;
+  const { loop: _loop, loopFor: _for, ...once } = clip;
+  return once;
 }
 
 /**
