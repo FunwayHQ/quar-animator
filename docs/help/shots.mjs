@@ -8,23 +8,7 @@
  * [class*="_leftPanel_"] matches the class `leftPanel` of Editor.module.css.
  */
 
-/** The editor's parts, as the layout picture numbers them. */
-const PARTS = {
-  tools: '[data-testid="menubar-toolbar"]',
-  pages: '[data-testid="page-tabs"]',
-  layers: '[class*="_leftPanel_"]',
-  canvas: '[class*="_canvasArea_"]',
-  properties: '[class*="_rightPanel_"]',
-  timeline: '[class*="_timeline_"]',
-};
-
-/** A new project with a rectangle drawn in it (the Rectangle tool is R). */
-const newProjectWithShape = [
-  { open: 'new' },
-  { press: 'r' },
-  { drag: { from: [300, 170], to: [520, 330] } },
-  { wait: 300 },
-];
+import { PARTS, newProjectWithShape } from './shots/_kit.mjs';
 
 /** @type {import('../../apps/web/scripts/help/shot-kit.mjs').Shot[]} */
 export default [

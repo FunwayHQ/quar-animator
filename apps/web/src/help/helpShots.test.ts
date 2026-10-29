@@ -112,6 +112,23 @@ describe('loading the shot lists', () => {
     ]);
   });
 
+  it('reads the chapters’ own lists in shots/, by name, but not _helpers', async () => {
+    const free = folder(`[{ name: 'one', steps: [{ open: 'projects' }] }]`);
+    fs.mkdirSync(path.join(free, 'shots'));
+    const own = (file: string, shots: string) =>
+      fs.writeFileSync(path.join(free, 'shots', file), `export default ${shots};\n`);
+    own('text.mjs', `[{ name: 'text-box', steps: [{ open: 'new' }] }]`);
+    own('shapes.mjs', `[{ name: 'shapes-rectangle', steps: [{ open: 'new' }] }]`);
+    own('_steps.mjs', `{ not: 'a list' }`);
+    const { shots, problems } = await loadShotLists([{ dir: free }]);
+    expect(problems).toEqual([]);
+    expect(shots.map((s) => [s.name, s.outDir])).toEqual([
+      ['one', path.join(free, 'img')],
+      ['shapes-rectangle', path.join(free, 'img')],
+      ['text-box', path.join(free, 'img')],
+    ]);
+  });
+
   it('won’t have two folders’ shots share a name (they’d share a picture)', async () => {
     const free = folder(`[{ name: 'same', steps: [{ open: 'projects' }] }]`);
     const cloud = folder(`[{ name: 'same', steps: [{ open: 'new' }] }]`);

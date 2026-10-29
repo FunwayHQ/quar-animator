@@ -61,9 +61,12 @@ inline styles or scripts.
 ## Pictures
 
 Every picture is a screenshot taken by a script, so they can all be taken
-again when the editor changes. They're described in `shots.mjs` beside the
-chapters and written to `img/<name>.png` (committed: the guide is built
-without a browser).
+again when the editor changes. They're described beside the chapters, each
+chapter's in `shots/<chapter>.mjs` (the first chapter's are in `shots.mjs`;
+helpers they share are in `shots/_kit.mjs`: a file starting with `_` is no
+list), and written to `img/<name>.png` (committed: the guide is built without
+a browser). Start a chapter's shot names with its own name (`text-box`), so
+they stay apart.
 
 ```sh
 pnpm --filter @quar/web exec playwright install chromium   # once

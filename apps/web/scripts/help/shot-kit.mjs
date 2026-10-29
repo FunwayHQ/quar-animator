@@ -165,7 +165,9 @@ export function validateShots(shots, origin = 'shots.mjs') {
 }
 
 /**
- * Read the shot lists beside the chapters.
+ * Read the shot lists beside the chapters: each folder's shots.mjs, then the
+ * lists in its shots/ folder (a chapter's own, `shots/<chapter>.mjs`), by
+ * name; a file whose name starts with `_` is a helper, not a list.
  *
  * @param {{ dir: string, optional?: boolean }[]} sourceDirs
  * @returns {Promise<{ shots: (object & { name: string, outDir: string, list: string })[], problems: string[] }>}
@@ -175,22 +177,38 @@ export async function loadShotLists(sourceDirs) {
   const problems = [];
   const names = new Map();
   for (const source of sourceDirs) {
-    const list = path.join(source.dir, 'shots.mjs');
-    if (!fs.existsSync(list)) continue;
-    const loaded = (await import(pathToFileURL(list).href)).default;
-    const where = path.relative(process.cwd(), list) || list;
-    problems.push(...validateShots(loaded, where));
-    if (!Array.isArray(loaded)) continue;
-    for (const shot of loaded) {
-      if (names.has(shot?.name)) {
-        problems.push(`${where}: shot "${shot.name}" is also in ${names.get(shot.name)}`);
-        continue;
+    for (const list of shotListFiles(source.dir)) {
+      const loaded = (await import(pathToFileURL(list).href)).default;
+      const where = path.relative(process.cwd(), list) || list;
+      problems.push(...validateShots(loaded, where));
+      if (!Array.isArray(loaded)) continue;
+      for (const shot of loaded) {
+        if (names.has(shot?.name)) {
+          problems.push(`${where}: shot "${shot.name}" is also in ${names.get(shot.name)}`);
+          continue;
+        }
+        names.set(shot?.name, where);
+        shots.push({ ...shot, outDir: path.join(source.dir, 'img'), list: where });
       }
-      names.set(shot?.name, where);
-      shots.push({ ...shot, outDir: path.join(source.dir, 'img'), list: where });
     }
   }
   return { shots, problems };
+}
+
+/**
+ * A folder's shot lists: shots.mjs, then shots/*.mjs by name (not _helpers).
+ *
+ * @param {string} dir
+ */
+function shotListFiles(dir) {
+  const lists = [path.join(dir, 'shots.mjs')].filter((file) => fs.existsSync(file));
+  const own = path.join(dir, 'shots');
+  if (fs.existsSync(own)) {
+    for (const file of fs.readdirSync(own).sort()) {
+      if (file.endsWith('.mjs') && !file.startsWith('_')) lists.push(path.join(own, file));
+    }
+  }
+  return lists;
 }
 
 /**
