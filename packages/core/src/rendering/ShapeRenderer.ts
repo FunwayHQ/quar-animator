@@ -60,7 +60,7 @@ import {
 } from '../path/pathUtils';
 import { trimPathToProgress } from '../path/pathReveal';
 import { isDocumentImage } from './imageSource';
-import type { VideoFrameProvider } from './videoFrames';
+import type { VideoFrameImage, VideoFrameProvider } from './videoFrames';
 import { clockwiseFrom, dashPolyline, pieceAlign } from '../path/dashes';
 import earcut from 'earcut';
 import {
@@ -1839,7 +1839,13 @@ export class ShapeRenderer {
    * closed meanwhile): it's tried again on the next frame.
    */
   private videoTexture(node: VideoNode): WebGLTexture | null {
-    const frame = this.videoFrames?.(node) ?? null;
+    let frame: VideoFrameImage | null;
+    try {
+      frame = this.videoFrames?.(node) ?? null;
+    } catch {
+      // A layer whose picture can't be had (damaged data) draws nothing, the rest go on
+      return null;
+    }
     if (!frame) return null;
     let entry = this.videoTextures.get(node.id);
     if (entry?.key === frame.key) {

@@ -3,13 +3,16 @@
  * (ShapeRenderer.setVideoFrames): a layer of the timeline in view shows
  * the moment of its clip the playhead is at (nothing outside its clip); one
  * of another timeline (another artboard's, or the page's while an
- * artboard's is in view) or a symbol's shows its clip's first picture, so
- * it's never blank there. The pictures come from the video frame source.
+ * artboard's is in view) shows its clip's first picture, so it's never
+ * blank there. A layer with no video, or a clip mended to nothing (a
+ * damaged file), shows nothing. The pictures come from the video frame
+ * source.
  */
 
-import { timelineScopeOf, type SceneGraph, type VideoFrameProvider } from '@quar/core';
+import type { SceneGraph, VideoFrameProvider } from '@quar/core';
 import { videoPosterTime, videoTimeAt } from '@quar/animation';
 import { videoFrameAt } from '../../services/videoFrames';
+import { layerScope } from '../../stores/videoSounds';
 
 /** Where the canvas is in time: the timeline in view and its playhead. */
 export interface CanvasVideoMoment {
@@ -32,11 +35,11 @@ export function createCanvasVideoFrames(
 ): VideoFrameProvider {
   return (node) => {
     const sceneGraph = getSceneGraph();
-    if (!sceneGraph) return null;
+    if (!sceneGraph || !node.videoId || !(node.clip.duration > 0)) return null;
     const { scope, frame, frameRate, playing } = getMoment();
-    // A symbol's layers (drawn through an instance) aren't on the page
+    // A layer not on the page (drawn from elsewhere) has no timeline in view
     const inView =
-      sceneGraph.getNode(node.id) !== undefined && timelineScopeOf(sceneGraph, node.id) === scope;
+      sceneGraph.getNode(node.id) !== undefined && layerScope(sceneGraph, node.id) === scope;
     if (!inView) return frameAt(node.videoId, videoPosterTime(node.clip), false);
     const seconds = videoTimeAt(node.clip, frame, frameRate);
     return seconds === null ? null : frameAt(node.videoId, seconds, playing);

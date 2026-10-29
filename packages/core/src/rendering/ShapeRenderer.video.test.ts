@@ -200,6 +200,18 @@ describe('ShapeRenderer - video layers', () => {
     expect(quadsDrawn()).toBe(1);
   });
 
+  it('draws nothing, and goes on drawing the rest, when the provider fails', () => {
+    sceneGraph.addNode(createVideoNode('broken'));
+    sceneGraph.addNode(createVideoNode('fine'));
+    frames.set('fine', { source: picture(), key: 1 });
+    provider.mockImplementation((node) => {
+      if (node.id === 'broken') throw new Error('no file for this video');
+      return frames.get(node.id) ?? null;
+    });
+    expect(() => render()).not.toThrow();
+    expect(quadsDrawn()).toBe(1);
+  });
+
   it('draws nothing for a picture with no size', () => {
     sceneGraph.addNode(createVideoNode('v'));
     frames.set('v', { source: picture(0, 0), key: 'f0' });
