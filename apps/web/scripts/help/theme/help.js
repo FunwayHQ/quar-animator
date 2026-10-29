@@ -61,7 +61,8 @@
 
 document.addEventListener('DOMContentLoaded', function () {
   var helpRoot = (document.querySelector('meta[name="help-root"]') || {}).content || '';
-  var isMac = /Mac|iPhone|iPad|iPod/.test(
+  // Chrome's userAgentData says "macOS", navigator.platform "MacIntel"
+  var isMac = /mac|iphone|ipad|ipod/i.test(
     (navigator.userAgentData && navigator.userAgentData.platform) ||
       navigator.platform ||
       navigator.userAgent
