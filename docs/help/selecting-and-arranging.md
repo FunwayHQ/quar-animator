@@ -186,7 +186,7 @@ Right-click a row for its menu: **Rename**, **Duplicate**, **Delete**,
 **Group**, **Ungroup**, the stacking order, **Hide** or **Show**, and
 **Lock** or **Unlock**. With several layers selected, the menu works on all of
 them (**Delete 3 Layers**, **Group 3 Layers**…) and also makes masks: see
-Masks, blending and effects.
+[Masks, blending and effects](masks-and-effects.md#masks).
 
 ## Copy, paste and duplicate {#clipboard}
 
