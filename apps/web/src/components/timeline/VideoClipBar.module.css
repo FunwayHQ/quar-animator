@@ -137,3 +137,392 @@
   flex-shrink: 0;
   color: var(--color-timeline-video);
 }
+
+/* Its speed when it isn't 1×: a small tag, as on an editor's clip */
+.speed {
+  padding: 0 3px;
+  border-radius: 2px;
+  background: var(--color-timeline-video);
+  color: var(--color-bg-primary);
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-2xs);
+  font-weight: var(--font-weight-semibold);
+  line-height: 12px;
+}
+
+/* ---- Trimming: grab an end ---- */
+
+.edgeStart,
+.edgeEnd {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 3;
+  width: 6px;
+  cursor: ew-resize;
+}
+
+.edgeStart {
+  left: 0;
+}
+
+.edgeEnd {
+  right: 0;
+}
+
+/* A bracket at each end, shown on hover and while the clip is selected */
+.bar:hover .edgeStart,
+.bar.selected .edgeStart,
+.bar.trimming .edgeStart {
+  background: linear-gradient(90deg, var(--color-timeline-video) 0 3px, transparent 3px);
+}
+
+.bar:hover .edgeEnd,
+.bar.selected .edgeEnd,
+.bar.trimming .edgeEnd {
+  background: linear-gradient(270deg, var(--color-timeline-video) 0 3px, transparent 3px);
+}
+
+.bar.trimming {
+  cursor: ew-resize;
+}
+
+/* ---- Looping: where each pass starts over, a splice across the film ---- */
+
+.loopMark {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 2;
+  width: 0;
+  border-left: 1px solid var(--color-timeline-video);
+  box-shadow:
+    -1px 0 0 color-mix(in srgb, var(--color-bg-primary) 55%, transparent),
+    1px 0 0 color-mix(in srgb, var(--color-bg-primary) 55%, transparent);
+  pointer-events: none;
+}
+
+/* A notch on the film's top edge */
+.loopMark::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -4.5px;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 5px solid var(--color-timeline-video);
+}
+
+/* ---- Holding the last frame: a frozen still, fading, to the timeline's end ---- */
+
+.hold {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  box-sizing: border-box;
+  border: 1px dashed color-mix(in srgb, var(--color-timeline-video) 45%, transparent);
+  border-left: none;
+  border-radius: 0 4px 4px 0;
+  background: repeating-linear-gradient(
+    -45deg,
+    color-mix(in srgb, var(--color-timeline-video) 16%, transparent) 0 2px,
+    transparent 2px 6px
+  );
+  overflow: hidden;
+  pointer-events: none;
+  mask-image: linear-gradient(90deg, #000 0, #000 40px, rgba(0, 0, 0, 0.55) 160px);
+}
+
+.holdStill {
+  position: absolute;
+  top: 2px;
+  left: 0;
+  height: calc(100% - 4px);
+  opacity: 0.45;
+  filter: saturate(0.5);
+}
+
+/* ---- Settings card ---- */
+
+.settingsLayer {
+  display: contents;
+}
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-color-picker);
+}
+
+.settings {
+  position: fixed;
+  z-index: var(--z-color-picker);
+  width: 256px;
+  padding: 12px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-lg);
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--color-timeline-video) 6%, transparent) 0,
+      transparent 56px
+    ),
+    var(--color-bg-elevated);
+  box-shadow:
+    var(--shadow-xl),
+    0 0 1px rgba(0, 0, 0, 0.6),
+    inset 0 1px 0 var(--color-glass-highlight);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  animation: settingsEnter 0.12s var(--easing-default) both;
+}
+
+@keyframes settingsEnter {
+  from {
+    opacity: 0;
+    transform: translateY(4px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.settingsHeader {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.settingsIcon {
+  width: 16px;
+  height: 16px;
+  margin-top: 2px;
+  color: var(--color-timeline-video);
+  flex-shrink: 0;
+}
+
+.settingsTitle {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.settingsTitle strong {
+  color: var(--color-text-primary);
+  font-weight: var(--font-weight-semibold);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.settingsTitle span {
+  color: var(--color-text-tertiary);
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-2xs);
+}
+
+.speedHeader {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.speedValue {
+  color: var(--color-timeline-video);
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  font-variant-numeric: tabular-nums;
+}
+
+.speedSlider {
+  width: 100%;
+  margin: 6px 0 0;
+  accent-color: var(--color-timeline-video);
+}
+
+.speedSlider:focus-visible {
+  outline: 1px solid var(--color-accent-primary);
+  outline-offset: 2px;
+}
+
+/* 0.25×, 1× and 4× under the slider: 1× in the middle, each doubling as far as the next */
+.speedScale {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  color: var(--color-text-tertiary);
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-2xs);
+}
+
+.speedScale span:last-child {
+  text-align: right;
+}
+
+.speedRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.speedPresets {
+  display: inline-flex;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.speedPreset {
+  padding: 3px 9px;
+  border: none;
+  border-left: 1px solid var(--color-border-subtle);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-2xs);
+  cursor: pointer;
+  transition:
+    background var(--duration-fast),
+    color var(--duration-fast);
+}
+
+.speedPreset:first-child {
+  border-left: none;
+}
+
+.speedPreset:hover {
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
+}
+
+.speedPreset:focus-visible {
+  outline: 1px solid var(--color-accent-primary);
+  outline-offset: -1px;
+}
+
+.speedPresetOn,
+.speedPresetOn:hover {
+  background: var(--color-timeline-video-fill-selected);
+  color: var(--color-text-primary);
+  box-shadow: inset 0 -2px 0 var(--color-timeline-video);
+}
+
+.speedField {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.speedField input {
+  width: 52px;
+  padding: 3px 6px;
+  appearance: textfield;
+  -moz-appearance: textfield;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-secondary);
+  color: var(--color-text-primary);
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-2xs);
+  text-align: right;
+}
+
+.speedField input::-webkit-inner-spin-button,
+.speedField input::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.speedField input:focus-visible {
+  outline: none;
+  border-color: var(--color-timeline-video);
+  box-shadow: 0 0 0 1px var(--color-timeline-video);
+}
+
+.speedUnit {
+  color: var(--color-text-tertiary);
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-2xs);
+}
+
+.toggles {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--color-border-subtle);
+}
+
+.toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  color: var(--color-text-primary);
+  cursor: pointer;
+}
+
+.toggle input {
+  margin: 1px 0 0;
+  accent-color: var(--color-timeline-video);
+}
+
+.toggle > span {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.toggle small {
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-2xs);
+}
+
+.settingsActions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--color-border-subtle);
+}
+
+.settingsNote {
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-2xs);
+  line-height: 1.35;
+}
+
+.unlinkButton {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 5px;
+  padding: 4px 8px;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font: inherit;
+  cursor: pointer;
+}
+
+.unlinkButton svg {
+  width: 12px;
+  height: 12px;
+}
+
+.unlinkButton:hover {
+  border-color: var(--color-timeline-video);
+  color: var(--color-text-primary);
+  background: var(--color-timeline-video-fill);
+}
+
+.unlinkButton:focus-visible {
+  outline: 1px solid var(--color-accent-primary);
+  outline-offset: 1px;
+}

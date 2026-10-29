@@ -11,7 +11,7 @@ import { getRulerScale } from './timelineRuler';
 import type { Node, EasingFunction } from '@quar/types';
 import { ContextMenu } from '../common/ContextMenu';
 import { SoundLaneLabel, SoundLaneTrack, useSoundDrop } from '../timeline/SoundLane';
-import { VideoClipBar } from '../timeline/VideoClipBar';
+import { openVideoClipSettings, VideoClipBar } from '../timeline/VideoClipBar';
 import type { ContextMenuEntry } from '../common/ContextMenu';
 import { OnionSkinPanel } from '../common/OnionSkinPanel';
 import { EasingEditor } from '../common/EasingEditor';
@@ -1137,8 +1137,23 @@ export function Timeline({ playback }: TimelineProps = {}) {
       return items;
     }
 
-    // Timeline ruler context menu
+    // Timeline ruler context menu (a video layer's lane: its clip's settings first)
+    const videoId =
+      contextMenu.layerNodeId && sceneGraph.getNode(contextMenu.layerNodeId)?.type === 'video'
+        ? contextMenu.layerNodeId
+        : null;
     const items: ContextMenuEntry[] = [
+      ...(videoId
+        ? [
+            {
+              id: 'video-clip-settings',
+              label: 'Clip Settings...',
+              shortcut: 'Enter',
+              onClick: () => openVideoClipSettings(videoId, contextMenu.x, contextMenu.y),
+            },
+            { type: 'separator' as const },
+          ]
+        : []),
       {
         id: 'go-to-frame',
         label: `Go To Frame ${contextMenu.frame}`,
