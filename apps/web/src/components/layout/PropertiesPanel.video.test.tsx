@@ -122,6 +122,19 @@ describe('PropertiesPanel - video layer', () => {
       expect(section.getByTestId('video-name')).toHaveTextContent('Beach at dusk.mp4');
       expect(section.getByTestId('video-length')).toHaveTextContent('1:15.3');
       expect(section.getByTestId('video-size')).toHaveTextContent('1280 × 720');
+      // It's opaque: nothing said of transparency
+      expect(section.queryByTestId('video-transparent')).not.toBeInTheDocument();
+    });
+
+    it('says the video is transparent when it is, and shows its still over a checkerboard', () => {
+      useEditorStore.setState({ videos: [{ ...VIDEO, hasAlpha: true }] });
+      selectVideo();
+      const section = within(screen.getByTestId('video-section'));
+      expect(section.getByTestId('video-transparent')).toHaveTextContent('Transparent');
+      expect(section.getByText('Alpha')).toBeInTheDocument();
+      expect(section.getByTestId('video-still').parentElement?.className).toMatch(
+        /videoStillAlpha/
+      );
     });
 
     it('shows where its clip starts and how long it plays, at the document’s frame rate', () => {

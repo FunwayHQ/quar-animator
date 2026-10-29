@@ -1,11 +1,12 @@
 /**
  * The Video section of the Properties panel, for a video layer: the video
- * it shows (a still of it, its file's name, its length and size) and its
- * clip on the timeline — the frame it starts on, how fast it plays, whether
- * it loops and holds its last frame, set here, and how long it plays and
- * which part of the video, at the document's frame rate. Its ends are
- * trimmed on its bar on the timeline. Each change is one undo step, its
- * linked sound and the timeline following (the store's updateVideoClip).
+ * it shows (a still of it, its file's name, its length and size, whether
+ * it's transparent) and its clip on the timeline — the frame it starts on,
+ * how fast it plays, whether it loops and holds its last frame, set here,
+ * and how long it plays and which part of the video, at the document's
+ * frame rate. Its ends are trimmed on its bar on the timeline. Each change
+ * is one undo step, its linked sound and the timeline following (the
+ * store's updateVideoClip).
  */
 
 import { useEffect, useState, type CSSProperties, type KeyboardEvent } from 'react';
@@ -99,6 +100,15 @@ export function VideoSection({
                 <span className={styles.videoFactUnit}> px</span>
               </dd>
             </div>
+            {video.hasAlpha && (
+              <div className={styles.videoFact}>
+                <dt>Alpha</dt>
+                <dd className={styles.videoTransparent} data-testid="video-transparent">
+                  <span className={styles.videoAlphaChip} aria-hidden="true" />
+                  Transparent
+                </dd>
+              </div>
+            )}
           </dl>
         )}
 
