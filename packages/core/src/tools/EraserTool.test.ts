@@ -239,7 +239,7 @@ describe('EraserTool', () => {
       tool.setSize(20);
     });
 
-    it('should subtract from a rectangle when eraser passes through it', () => {
+    it('cuts a rectangle it passes through in two: the rectangle, now a path, and a copy', () => {
       // Large rectangle at origin
       const rect = createTestRectangle(0, 0, 200, 200);
       context.sceneGraph.addNode(rect);
@@ -248,11 +248,13 @@ describe('EraserTool', () => {
       // Erase through the center of the rectangle
       performStrokeErase({ x: 0, y: -150 }, { x: 0, y: 150 });
 
-      // The rectangle should be replaced by a PathNode (with hole cut out)
-      expect(context.sceneGraph.getNodeCount()).toBe(1);
-      const resultNode = context.sceneGraph.getRootNodes()[0]!;
-      expect(resultNode.type).toBe('path');
-      expect(resultNode.id).not.toBe(rect.id);
+      // One half is still the rectangle's layer; the other half a copy above it
+      expect(context.sceneGraph.getNodeCount()).toBe(2);
+      const [kept, copy] = context.sceneGraph.getRootNodes();
+      expect(kept!.id).toBe(rect.id);
+      expect(kept!.type).toBe('path');
+      expect(copy!.type).toBe('path');
+      expect(copy!.name).toBe('Test Rectangle 2');
     });
 
     it('should fully remove a small shape when eraser covers it entirely', () => {
@@ -285,11 +287,9 @@ describe('EraserTool', () => {
       // Erase through the center
       performStrokeErase({ x: 0, y: -150 }, { x: 0, y: 150 });
 
-      // Should be replaced by a path (with a chunk removed)
-      expect(context.sceneGraph.getNodeCount()).toBe(1);
-      const resultNode = context.sceneGraph.getRootNodes()[0]!;
-      expect(resultNode.type).toBe('path');
-      expect(resultNode.id).not.toBe(ellipse.id);
+      // Cut in two: the ellipse's layer, now a path, and a copy
+      expect(context.sceneGraph.getNodeCount()).toBe(2);
+      expect(context.sceneGraph.getNode(ellipse.id)!.type).toBe('path');
     });
 
     it('should subtract from multiple shapes', () => {
@@ -302,14 +302,12 @@ describe('EraserTool', () => {
       // Erase line that cuts through both rectangles
       performStrokeErase({ x: -150, y: 0 }, { x: 150, y: 0 });
 
-      // Both should be replaced by path nodes
+      // Both cut in two, each still its own layer with a copy for its other half
       const roots = context.sceneGraph.getRootNodes();
-      expect(roots.length).toBe(2);
-      for (const n of roots) {
-        expect(n.type).toBe('path');
-        expect(n.id).not.toBe(rect1.id);
-        expect(n.id).not.toBe(rect2.id);
-      }
+      expect(roots.length).toBe(4);
+      for (const n of roots) expect(n.type).toBe('path');
+      expect(roots[0]!.id).toBe(rect1.id);
+      expect(roots[2]!.id).toBe(rect2.id);
     });
 
     it('should preserve fills and strokes from original node', () => {
@@ -377,11 +375,9 @@ describe('EraserTool', () => {
 
       performStrokeErase({ x: 0, y: -150 }, { x: 0, y: 150 });
 
-      // Should be replaced
-      expect(context.sceneGraph.getNodeCount()).toBe(1);
-      const resultNode = context.sceneGraph.getRootNodes()[0]!;
-      expect(resultNode.type).toBe('path');
-      expect(resultNode.id).not.toBe(path.id);
+      // Cut in two: the path and a copy of it
+      expect(context.sceneGraph.getNodeCount()).toBe(2);
+      expect(context.sceneGraph.getRootNodes()[0]!.id).toBe(path.id);
     });
 
     it('should skip locked nodes', () => {
@@ -485,11 +481,9 @@ describe('EraserTool', () => {
 
       performStrokeErase({ x: 0, y: -150 }, { x: 0, y: 150 });
 
-      // Should be replaced by a path node
-      expect(context.sceneGraph.getNodeCount()).toBe(1);
-      const resultNode = context.sceneGraph.getRootNodes()[0]!;
-      expect(resultNode.type).toBe('path');
-      expect(resultNode.id).not.toBe(polygon.id);
+      // Cut in two: the polygon's layer, now a path, and a copy
+      expect(context.sceneGraph.getNodeCount()).toBe(2);
+      expect(context.sceneGraph.getNode(polygon.id)!.type).toBe('path');
     });
 
     it('should handle single-click (circle subtraction)', () => {
@@ -520,8 +514,129 @@ describe('EraserTool', () => {
       expect(roots.map((node) => node.id)).not.toContain(tiny.id);
       expect(roots).toHaveLength(2);
       expect(roots[0]!.type).toBe('path'); // the cut shape, still below
-      expect(roots[0]!.id).not.toBe(cut.id);
+      expect(roots[0]!.id).toBe(cut.id);
       expect(roots[1]!.id).toBe(missed.id);
+    });
+  });
+
+  // ==========================================================================
+  // What a cut layer keeps
+  // ==========================================================================
+
+  describe('a cut layer stays itself', () => {
+    beforeEach(() => {
+      tool.setMode('stroke');
+      tool.setSize(10);
+    });
+
+    /** Where a layer's outline is drawn: its world-space box. */
+    function worldBox(id: string) {
+      const node = context.sceneGraph.getNode(id)!;
+      const rings = nodeToPolygon(node, context.sceneGraph.getWorldTransform(id))!.flat();
+      const xs = rings.flatMap((ring) => ring.map(([x]) => x));
+      const ys = rings.flatMap((ring) => ring.map(([, y]) => y));
+      return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
+    }
+
+    it('keeps its id, name, transform, look and effects, its outline where it was', () => {
+      const rect = createTestRectangle(50, 20, 200, 100);
+      rect.name = 'Card';
+      rect.opacity = 0.6;
+      rect.blendMode = 'multiply';
+      rect.transform.rotation = 30;
+      rect.transform.scale = { x: 1.5, y: 0.5 };
+      rect.effects = [{ id: 'blur', type: 'layer-blur', visible: true, radius: 4 }];
+      rect.exports = [{ format: 'png', multiplier: 2 }];
+      context.sceneGraph.addNode(rect);
+      const before = worldBox(rect.id);
+      const onErase = vi.fn();
+      context.onErase = onErase;
+
+      // A hole in its middle
+      performClickErase({ x: 50, y: 20 });
+
+      const result = context.sceneGraph.getNode<PathNode>(rect.id)!;
+      expect(result.type).toBe('path');
+      expect(result.subpaths).toHaveLength(1);
+      expect(result.name).toBe('Card');
+      expect(result.opacity).toBe(0.6);
+      expect(result.blendMode).toBe('multiply');
+      expect(result.transform).toEqual(rect.transform);
+      expect(result.effects).toEqual(rect.effects);
+      expect(result.exports).toEqual(rect.exports);
+      expect(result.fills).toEqual(rect.fills);
+      expect(result.strokes).toEqual(rect.strokes);
+      expect('width' in result).toBe(false);
+      const after = worldBox(rect.id);
+      after.forEach((value, i) => expect(value).toBeCloseTo(before[i]!, 3));
+      expect(onErase).toHaveBeenCalledWith([{ id: rect.id, copies: [] }]);
+    });
+
+    it('cut in two: the larger piece keeps the layer, the other is a copy of it', () => {
+      const path = createClosedRectPath(0, 0, 300, 100);
+      path.name = 'Bar';
+      path.effects = [{ id: 'blur', type: 'layer-blur', visible: true, radius: 2 }];
+      path.strokeProgress = 0.5;
+      context.sceneGraph.addNode(path);
+      const onErase = vi.fn();
+      context.onErase = onErase;
+
+      // Across it, a third of the way along: the right piece is the larger
+      performStrokeErase({ x: -50, y: -100 }, { x: -50, y: 100 });
+
+      const [kept, copy] = context.sceneGraph.getRootNodes() as PathNode[];
+      expect(kept!.id).toBe(path.id);
+      expect(Math.min(...kept!.points.map((p) => p.position.x))).toBeGreaterThan(-50);
+      expect(Math.max(...copy!.points.map((p) => p.position.x))).toBeLessThan(-50);
+      expect(copy!.name).toBe('Bar 2');
+      expect(copy!.effects).toEqual(path.effects);
+      expect(copy!.strokeProgress).toBe(0.5);
+      expect(copy!.transform).toEqual(path.transform);
+      expect(onErase).toHaveBeenCalledWith([{ id: path.id, copies: [copy!.id] }]);
+    });
+
+    it("leaves a layer of several separate parts one layer when they're cut", () => {
+      // Two squares side by side in one path
+      const path = createClosedRectPath(-100, 0, 80, 80);
+      path.subpaths = [
+        [
+          { x: 160, y: -40 },
+          { x: 240, y: -40 },
+          { x: 240, y: 40 },
+          { x: 160, y: 40 },
+        ].map((p) => ({ position: p, handleIn: null, handleOut: null, type: 'corner' as const })),
+      ];
+      context.sceneGraph.addNode(path);
+
+      performStrokeErase({ x: -100, y: -100 }, { x: -100, y: 100 });
+
+      expect(context.sceneGraph.getNodeCount()).toBe(1);
+      expect(context.sceneGraph.getNode<PathNode>(path.id)!.subpaths).toHaveLength(2);
+    });
+
+    it("keeps a brush stroke's Width and Profile, and what was erased in its own space", () => {
+      const stroke = createClosedRectPath(100, 0, 200, 40);
+      stroke.brushData = {
+        spine: [
+          { position: { x: -100, y: 0 }, handleIn: null, handleOut: null, type: 'corner' },
+          { position: { x: 100, y: 0 }, handleIn: null, handleOut: null, type: 'corner' },
+        ],
+        widths: [40, 40],
+        profileId: 'taper',
+        baseWidth: 40,
+      };
+      context.sceneGraph.addNode(stroke);
+
+      // A bite out of its top edge, at x = 100 in the world (0 in its own space)
+      performClickErase({ x: 100, y: 20 });
+
+      const result = context.sceneGraph.getNode<PathNode>(stroke.id)!;
+      expect(result.brushData!.profileId).toBe('taper');
+      expect(result.brushData!.baseWidth).toBe(40);
+      expect(result.brushData!.spine).toEqual(stroke.brushData.spine);
+      const [taken] = result.brushData!.erased!;
+      const xs = taken!.flat().map((p) => p.x);
+      expect((Math.min(...xs) + Math.max(...xs)) / 2).toBeCloseTo(0, 0);
     });
   });
 
@@ -535,20 +650,16 @@ describe('EraserTool', () => {
       tool.setSize(20);
     });
 
-    it('should update selection to new replacement node ID', () => {
+    it('keeps a cut layer selected, with the piece cut off it', () => {
       const rect = createTestRectangle(0, 0, 200, 200);
       context.sceneGraph.addNode(rect);
       context.setSelectedIds([rect.id]);
 
       performStrokeErase({ x: 0, y: -150 }, { x: 0, y: 150 });
 
-      // Selection should now contain the new node ID (not the old one)
-      const selectedIds = context.getSelectedIds();
-      expect(selectedIds.has(rect.id)).toBe(false);
-      expect(selectedIds.size).toBe(1);
-
-      const newNode = context.sceneGraph.getRootNodes()[0]!;
-      expect(selectedIds.has(newNode.id)).toBe(true);
+      const [kept, copy] = context.sceneGraph.getRootNodes();
+      expect([...context.getSelectedIds()]).toEqual([kept!.id, copy!.id]);
+      expect(kept!.id).toBe(rect.id);
     });
 
     it('should clear selection for fully erased nodes', () => {
@@ -595,13 +706,14 @@ describe('EraserTool', () => {
 
       performStrokeErase({ x: 0, y: -150 }, { x: 0, y: 150 });
 
-      // The group should still exist with one child (the replacement node)
+      // The group holds both halves: the rectangle's layer and its copy
       const updatedGroup = context.sceneGraph.getNode(group.id)!;
-      expect(updatedGroup.children.length).toBe(1);
-      const childId = updatedGroup.children[0]!;
-      const child = context.sceneGraph.getNode(childId)!;
-      expect(child.type).toBe('path');
-      expect(child.parent).toBe(group.id);
+      expect(updatedGroup.children).toHaveLength(2);
+      expect(updatedGroup.children[0]).toBe(rect.id);
+      for (const child of context.sceneGraph.getChildren(group.id)) {
+        expect(child.type).toBe('path');
+        expect(child.parent).toBe(group.id);
+      }
     });
 
     it('keeps cut shapes in their place among the group layers', () => {
@@ -629,13 +741,19 @@ describe('EraserTool', () => {
 
       performStrokeErase({ x: -350, y: 0 }, { x: 350, y: 0 });
 
+      // Each cut in two: its piece cut off just above it
       const children = context.sceneGraph.getChildren(group.id);
-      expect(children).toHaveLength(3);
-      expect(children[0]!.type).toBe('path');
-      expect(children[0]!.id).not.toBe(firstCut.id);
-      expect(children[1]!.id).toBe(missed.id);
-      expect(children[2]!.type).toBe('path');
-      expect(children[2]!.id).not.toBe(secondCut.id);
+      expect(children.map((child) => child.name)).toEqual([
+        'Test Rectangle',
+        'Test Rectangle 2',
+        'Test Rectangle',
+        'Test Rectangle',
+        'Test Rectangle 2',
+      ]);
+      expect(children[0]!.id).toBe(firstCut.id);
+      expect(children[2]!.id).toBe(missed.id);
+      expect(children[3]!.id).toBe(secondCut.id);
+      expect(children.filter((child) => child.type === 'path')).toHaveLength(4);
     });
 
     /** A world-space box around a list of world points. */
@@ -680,15 +798,16 @@ describe('EraserTool', () => {
       const midY = (before.minY + before.maxY) / 2;
       performStrokeErase({ x: before.minX - 50, y: midY }, { x: before.maxX + 50, y: midY });
 
-      const resultId = context.sceneGraph.getNode(group.id)!.children[0]!;
-      const result = context.sceneGraph.getNode<PathNode>(resultId)!;
-      expect(result.type).toBe('path');
-      expect(result.subpaths).toHaveLength(1); // cut in two
-      const world = context.sceneGraph.getWorldTransform(resultId);
+      // Cut in two layers, which together cover what the shape did
+      const pieces = context.sceneGraph.getChildren(group.id) as PathNode[];
+      expect(pieces).toHaveLength(2);
       const after = boxOf(
-        [...result.points, ...result.subpaths!.flat()].map((p) =>
-          mat3.transformPoint(world, p.position)
-        )
+        pieces.flatMap((piece) => {
+          const world = context.sceneGraph.getWorldTransform(piece.id);
+          return [...piece.points, ...(piece.subpaths ?? []).flat()].map((p) =>
+            mat3.transformPoint(world, p.position)
+          );
+        })
       );
       expect(after.minX).toBeCloseTo(before.minX, 3);
       expect(after.maxX).toBeCloseTo(before.maxX, 3);

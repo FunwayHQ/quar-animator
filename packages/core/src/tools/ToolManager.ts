@@ -12,7 +12,13 @@ import type {
   PathNode,
   Vector2,
 } from '@quar/types';
-import { BaseTool, type ToolContext, type TransformType, type PathPointsChange } from './BaseTool';
+import {
+  BaseTool,
+  type ErasedLayer,
+  type ToolContext,
+  type TransformType,
+  type PathPointsChange,
+} from './BaseTool';
 import { SelectionTool } from './SelectionTool';
 import { DirectSelectionTool } from './DirectSelectionTool';
 import { RectangleTool } from './RectangleTool';
@@ -48,6 +54,7 @@ export interface ToolManagerOptions {
   onTransformStart?: () => void;
   onTransformComplete?: (nodeIds: Set<string>, type: TransformType) => void;
   onPathPointsChange?: (nodeId: string, before: PathNode, change: PathPointsChange) => void;
+  onErase?: (cuts: ErasedLayer[]) => void;
   strokeAt?: (point: Vector2) => Stroke;
   getSnapToGrid?: () => boolean;
   getGridSize?: () => number;
@@ -273,6 +280,7 @@ export class ToolManager {
       onTransformStart: options.onTransformStart,
       onTransformComplete: options.onTransformComplete,
       onPathPointsChange: options.onPathPointsChange,
+      onErase: options.onErase,
       strokeAt: options.strokeAt,
       getSnapToGrid: options.getSnapToGrid,
       getGridSize: options.getGridSize,

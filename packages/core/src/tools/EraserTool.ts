@@ -9,24 +9,21 @@
 
 import type {
   CanvasPointerEvent,
+  EllipseNode,
   Node,
   PathNode,
   PathPoint,
+  PolygonNode,
+  RectangleNode,
   Vector2,
-  Fill,
-  Stroke,
 } from '@quar/types';
-import { BaseTool, type ToolContext } from './BaseTool';
+import { BaseTool, type ErasedLayer, type ToolContext } from './BaseTool';
 import { vec2, mat3 } from '../math';
 import { tessellatePathToVertices, createPolygonPath } from '../path/pathUtils';
 import { generateBrushOutline, cornerPoint } from '../path/brushOutline';
-import {
-  nodeToPolygon,
-  performBoolean,
-  polygonToContours,
-  createBooleanResultNode,
-} from '../boolean/booleanOps';
-import type { MultiPolygon, Ring } from 'polygon-clipping';
+import { transformContour } from '../path/pathEditing';
+import { nodeToPolygon, performBoolean, polygonToContours } from '../boolean/booleanOps';
+import type { MultiPolygon, Polygon, Ring } from 'polygon-clipping';
 
 // ============================================================================
 // Types
@@ -356,7 +353,7 @@ export class EraserTool extends BaseTool {
 
     // Collect candidate nodes (don't modify during traversal)
     const candidates: Array<{
-      node: Node;
+      node: ErasableNode;
       parentId: string | null;
     }> = [];
 
@@ -381,7 +378,7 @@ export class EraserTool extends BaseTool {
     });
 
     // Process each candidate
-    const oldToNew = new Map<string, string>();
+    const cuts: ErasedLayer[] = [];
     const removedIds = new Set<string>();
 
     for (const { node, parentId } of candidates) {
@@ -470,42 +467,27 @@ export class EraserTool extends BaseTool {
         if (same) continue; // No change
       }
 
-      // Get fills/strokes from original node
-      const fills: Fill[] = 'fills' in node ? (node as { fills: Fill[] }).fills : [];
-      const strokes: Stroke[] = 'strokes' in node ? (node as { strokes: Stroke[] }).strokes : [];
-
-      // The result is in world space; inside a group it goes back into the
-      // group's space, so a rotated or scaled group doesn't turn it twice
-      let localContours = contours;
-      if (parentId) {
-        const invParent = mat3.invert(this.context.sceneGraph.getWorldTransform(parentId));
-        if (invParent) {
-          localContours = contours.map((contour) =>
-            contour.map((pt) => ({
-              ...pt,
-              position: mat3.transformPoint(invParent, pt.position),
-            }))
-          );
-        }
-      }
-
-      // Create result node
-      const resultNode = createBooleanResultNode(
-        localContours,
-        fills,
-        strokes,
-        node.name,
-        this.context.generateId
+      // The result is in world space: back into the layer's own space, so it
+      // stays itself (its id, transform, look and animation), only its
+      // outline erased
+      const toLocal = mat3.invert(worldMatrix);
+      if (!toLocal) continue;
+      // A brush stroke keeps what was erased, to take it out again when
+      // its Width or Profile redraws it
+      const erased = eraserPoly.map((polygon) =>
+        polygon.map((ring) => ring.map(([x, y]) => mat3.transformPoint(toLocal, { x, y })))
       );
-      if (!resultNode) {
+      // The largest piece stays this layer; each other one is a copy of it
+      const [first, ...rest] = erasedPieces(shapePoly, result)
+        .map((polygons) => polygonToContours(polygons).map((c) => transformContour(c, toLocal)))
+        .filter((piece) => piece.length > 0)
+        .map((piece) => erasedLayer(node, piece, erased));
+      if (!first) {
         this.ensureUndo();
+        removedIds.add(node.id);
         this.context.sceneGraph.removeNode(node.id);
         continue;
       }
-
-      // Copy opacity and blendMode from original
-      resultNode.opacity = node.opacity;
-      resultNode.blendMode = node.blendMode ?? 'normal';
 
       this.ensureUndo();
 
@@ -516,38 +498,32 @@ export class EraserTool extends BaseTool {
         : this.context.sceneGraph.getRootNodes().map((n) => n.id);
       const index = siblingIds.indexOf(node.id);
 
-      // Remove old node and add new one at the same position
+      // The layer stays in its place, the copies just above it (as the
+      // pieces of a path cut at a point are)
       this.context.sceneGraph.removeNode(node.id);
-      this.context.sceneGraph.addNode(resultNode, parentId ?? undefined);
-
-      // Move to correct index position if needed
-      if (index >= 0) {
-        this.context.sceneGraph.moveNode(resultNode.id, parentId, index);
-      }
-
-      oldToNew.set(node.id, resultNode.id);
+      this.context.sceneGraph.addNode(first, parentId ?? undefined);
+      if (index >= 0) this.context.sceneGraph.moveNode(node.id, parentId, index);
+      const copies = rest.map((piece, k) => {
+        const copy = { ...piece, id: this.context.generateId(), name: `${node.name} ${k + 2}` };
+        this.context.sceneGraph.addNode(copy, parentId ?? undefined);
+        if (index >= 0) this.context.sceneGraph.moveNode(copy.id, parentId, index + 1 + k);
+        return copy.id;
+      });
+      cuts.push({ id: node.id, copies });
     }
 
-    // Update selection: map old selected IDs to new replacement IDs, remove erased ones
-    if (oldToNew.size > 0 || removedIds.size > 0) {
+    if (cuts.length > 0) this.context.onErase?.(cuts);
+
+    // Update selection: a cut layer stays picked with its pieces; erased ones go
+    if (cuts.length > 0 || removedIds.size > 0) {
       const selectedIds = this.context.getSelectedIds();
-      const newSelection: string[] = [];
-      let changed = false;
-      for (const id of selectedIds) {
-        const newId = oldToNew.get(id);
-        if (newId) {
-          newSelection.push(newId);
-          changed = true;
-        } else if (removedIds.has(id)) {
-          // Node was fully erased
-          changed = true;
-        } else {
-          newSelection.push(id);
-        }
-      }
-      if (changed) {
-        this.context.setSelectedIds(newSelection);
-      }
+      const copiesOf = new Map(cuts.map((cut) => [cut.id, cut.copies]));
+      const newSelection = [...selectedIds]
+        .filter((id) => !removedIds.has(id))
+        .flatMap((id) => [id, ...(copiesOf.get(id) ?? [])]);
+      const changed =
+        newSelection.length !== selectedIds.size || newSelection.some((id) => !selectedIds.has(id));
+      if (changed) this.context.setSelectedIds(newSelection);
     }
   }
 
@@ -633,4 +609,87 @@ export class EraserTool extends BaseTool {
       this.resetState();
     }
   }
+}
+
+// ============================================================================
+// Cut Layers
+// ============================================================================
+
+type ErasableNode = PathNode | RectangleNode | EllipseNode | PolygonNode;
+
+/**
+ * What's left of a shape, as the layers it makes: a shape of one part the
+ * stroke cuts into several becomes one layer for each, largest first; any
+ * other shape (one already of several parts, say a word in outlines) stays
+ * one layer.
+ */
+function erasedPieces(shape: MultiPolygon, left: MultiPolygon): MultiPolygon[] {
+  if (left.length < 2) return [left];
+  let parts: number;
+  try {
+    parts = performBoolean(shape, [], 'union').length;
+  } catch {
+    parts = shape.length;
+  }
+  if (parts !== 1) return [left];
+  return [...left].sort((a, b) => polygonArea(b) - polygonArea(a)).map((polygon) => [polygon]);
+}
+
+/** A polygon's area: its outline's, less its holes'. */
+function polygonArea([outline, ...holes]: Polygon): number {
+  const ringArea = (ring: Ring) => {
+    let sum = 0;
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      sum += (ring[j]![0] + ring[i]![0]) * (ring[j]![1] - ring[i]![1]);
+    }
+    return Math.abs(sum) / 2;
+  };
+  return outline ? holes.reduce((area, hole) => area - ringArea(hole), ringArea(outline)) : 0;
+}
+
+/**
+ * The layer a shape becomes once erased: the same layer — its id, name,
+ * place, transform, look, effects and binding — as a path of `contours`
+ * (in its own space). A brush stroke also keeps its painted line, Width and
+ * Profile, with what was `erased` noted to take out again when it's redrawn.
+ */
+function erasedLayer(node: ErasableNode, contours: PathPoint[][], erased: Vector2[][][]): PathNode {
+  const [points, ...subpaths] = contours;
+  const outline = {
+    points: points ?? [],
+    subpaths: subpaths.length > 0 ? subpaths : undefined,
+    closed: true,
+  };
+  if (node.type === 'path') {
+    const path = structuredClone(node);
+    return {
+      ...path,
+      ...outline,
+      fillRule: outline.subpaths ? 'evenodd' : path.fillRule,
+      ...(path.brushData
+        ? {
+            brushData: { ...path.brushData, erased: [...(path.brushData.erased ?? []), ...erased] },
+          }
+        : {}),
+    };
+  }
+  return {
+    id: node.id,
+    name: node.name,
+    type: 'path',
+    parent: node.parent,
+    children: [],
+    transform: structuredClone(node.transform),
+    visible: node.visible,
+    locked: node.locked,
+    opacity: node.opacity,
+    blendMode: node.blendMode ?? 'normal',
+    ...(node.effects ? { effects: structuredClone(node.effects) } : {}),
+    ...(node.exports ? { exports: structuredClone(node.exports) } : {}),
+    ...(node.skinData ? { skinData: structuredClone(node.skinData) } : {}),
+    ...outline,
+    fillRule: outline.subpaths ? 'evenodd' : undefined,
+    fills: structuredClone(node.fills),
+    strokes: structuredClone(node.strokes),
+  };
 }

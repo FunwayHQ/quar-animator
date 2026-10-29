@@ -107,6 +107,7 @@ import {
   convertTextToPathGroup as convertTextToPathGroupFn,
   outlineStroke as outlineStrokeFn,
   generateBrushOutline,
+  reshapedBrushStroke,
   tessellatePathToPoints,
   getShapeOutlinePoints,
   invalidateSymbolCache,
@@ -1258,7 +1259,8 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         bd.baseWidth != null && bd.baseWidth > 0 ? spine.map(() => bd.baseWidth as number) : widths;
       const newOutline = generateBrushOutline(spine, effectiveWidths, profile ?? undefined);
       sceneGraph.updateNode(nodeId, {
-        points: newOutline,
+        // What the Eraser took out stays out
+        ...reshapedBrushStroke(newOutline, node),
         brushData: { ...bd, profileId },
       } as any);
     }
@@ -1288,7 +1290,8 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       const effectiveWidths = spine.map(() => baseWidth);
       const newOutline = generateBrushOutline(spine, effectiveWidths, profile ?? undefined);
       sceneGraph.updateNode(nodeId, {
-        points: newOutline,
+        // What the Eraser took out stays out
+        ...reshapedBrushStroke(newOutline, node),
         brushData: { ...bd, baseWidth },
       } as any);
     }

@@ -15,11 +15,12 @@ import {
 } from '@quar/animation';
 
 /** The properties of a rectangle, ellipse or polygon that shape its outline. */
-const GEOMETRY = /^(width|height|radiusX|radiusY|radius|innerRadius|sides|cornerRadius(\.\d+)?)$/;
+export const SHAPE_GEOMETRY =
+  /^(width|height|radiusX|radiusY|radius|innerRadius|sides|cornerRadius(\.\d+)?)$/;
 
 export function shapeTracksToOutline(timeline: Timeline, node: Node): Timeline {
   const shapeTracks = timeline.tracks.filter(
-    (track) => track.nodeId === node.id && GEOMETRY.test(track.property)
+    (track) => track.nodeId === node.id && SHAPE_GEOMETRY.test(track.property)
   );
   if (shapeTracks.length === 0) return timeline;
 

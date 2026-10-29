@@ -38,6 +38,15 @@ export type PathPointsChange =
   /** An open path continued from one end (its main contour): these points added there */
   | { kind: 'extend'; at: 'start' | 'end'; points: PathPoint[] };
 
+/**
+ * A layer the Eraser cut: still itself (`id`), a path with its outline
+ * erased, and `copies` the further pieces it was cut into, copies of it.
+ */
+export interface ErasedLayer {
+  id: string;
+  copies: string[];
+}
+
 export interface ToolContext {
   sceneGraph: SceneGraph;
   camera: Camera;
@@ -55,6 +64,8 @@ export interface ToolContext {
   onTransformComplete?: (nodeIds: Set<string>, type: TransformType) => void;
   /** A path gained or lost points; `before` is the path as it was. */
   onPathPointsChange?: (nodeId: string, before: PathNode, change: PathPointsChange) => void;
+  /** The Eraser cut these layers: their keyframes are the app's to follow. */
+  onErase?: (cuts: ErasedLayer[]) => void;
   getSnapToGrid?: () => boolean;
   getGridSize?: () => number;
   getEnteredGroupId?: () => string | null;

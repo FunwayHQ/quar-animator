@@ -17,7 +17,7 @@ import {
   pathShapeOf,
   type SmartGuide,
 } from '@quar/core';
-import type { TransformType, PathPointsChange } from '@quar/core';
+import type { TransformType, PathPointsChange, ErasedLayer } from '@quar/core';
 import { findTrack } from '@quar/animation';
 import { compactMorphOffsets, getBoneVisibility } from '@quar/rigging';
 import type { MorphVertexOffset } from '@quar/types';
@@ -33,6 +33,7 @@ import type {
 } from '@quar/types';
 import { useEditorStore } from '../stores/editorStore';
 import { remapVertexTracks } from '../stores/vertexTracks';
+import { tracksAfterErase } from '../stores/eraseTracks';
 import { backdropColorAt, strokeAgainst } from '../components/canvas/backdrop';
 import { toast } from '../components/common/Toast';
 
@@ -471,6 +472,12 @@ export function useCanvasTools(options: UseCanvasToolsOptions): UseCanvasToolsRe
         // Keep the path's per-point keyframes on their points
         const { timeline } = useEditorStore.getState();
         const next = remapVertexTracks(timeline, nodeId, before, change);
+        if (next !== timeline) useEditorStore.setState({ timeline: next, isDirty: true });
+      },
+      onErase: (cuts: ErasedLayer[]) => {
+        // The cut layers keep their animation, and the pieces cut off get it
+        const { timeline } = useEditorStore.getState();
+        const next = tracksAfterErase(timeline, cuts);
         if (next !== timeline) useEditorStore.setState({ timeline: next, isDirty: true });
       },
       getSnapToGrid,

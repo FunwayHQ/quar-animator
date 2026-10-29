@@ -108,6 +108,11 @@ export interface BrushData {
   widths: number[]; // Per-spine-point width values (world units)
   profileId: string | null; // Currently applied profile ID (null = uniform)
   baseWidth?: number; // Override: uniform width for profile shaping (world units)
+  /**
+   * What the Eraser took out of the stroke, in its own space: polygons (an
+   * outline, then its holes), taken out again when Width or Profile redraws it
+   */
+  erased?: Vector2[][][];
 }
 
 // ============================================================================

@@ -7,6 +7,7 @@ import { renderHook, act } from '@testing-library/react';
 import { useCanvasTools } from './useCanvasTools';
 import { useEditorStore, DEFAULT_FILL, DEFAULT_STROKE } from '../stores/editorStore';
 import { Camera, SceneGraph } from '@quar/core';
+import { createKeyframe, createTimeline, createTrack } from '@quar/animation';
 import { toast } from '../components/common/Toast';
 import type React from 'react';
 
@@ -449,6 +450,65 @@ describe('useCanvasTools', () => {
       );
       expect(scaleX?.keyframes[0]?.value).toBeCloseTo(1.5, 5);
       useEditorStore.setState({ symbols: [], autoKeyframe: false });
+    });
+  });
+
+  describe('erasing an animated shape', () => {
+    it('keeps its animation, but not its size keyframes, and the piece cut off gets it too', () => {
+      sceneGraph.addNode({
+        id: 'card',
+        name: 'Card',
+        type: 'rectangle',
+        parent: null,
+        children: [],
+        transform: {
+          position: { x: 0, y: 0 },
+          rotation: 0,
+          scale: { x: 1, y: 1 },
+          anchor: { x: 0.5, y: 0.5 },
+          skew: { x: 0, y: 0 },
+        },
+        visible: true,
+        locked: false,
+        opacity: 1,
+        blendMode: 'normal',
+        width: 200,
+        height: 100,
+        cornerRadius: [0, 0, 0, 0],
+        fills: [],
+        strokes: [],
+      });
+      useEditorStore.setState({
+        activeTool: 'eraser',
+        eraserMode: 'stroke',
+        eraserSize: 10,
+        timeline: {
+          ...createTimeline(),
+          tracks: [
+            createTrack('card', 'transform.position.x', [createKeyframe(0, 0)]),
+            createTrack('card', 'width', [createKeyframe(0, 200)]),
+          ],
+        },
+      });
+      const { result } = renderHook(() => useCanvasTools({ camera, sceneGraph }));
+
+      // Across it, left of its middle
+      const at = (x: number, y: number) => [camera.worldToScreen({ x, y }), { x, y }] as const;
+      act(() => result.current.handlePointerDown(...at(-40, -100), createMockPointerEvent()));
+      act(() => result.current.handlePointerMove(...at(-40, 100), createMockPointerEvent()));
+      act(() => result.current.handlePointerUp(...at(-40, 100), createMockPointerEvent()));
+
+      const [kept, copy] = sceneGraph.getRootNodes();
+      expect(kept!.id).toBe('card');
+      expect(kept!.type).toBe('path');
+      const tracksOf = (id: string) =>
+        useEditorStore
+          .getState()
+          .timeline.tracks.filter((track) => track.nodeId === id)
+          .map((track) => track.property);
+      expect(tracksOf('card')).toEqual(['transform.position.x']);
+      expect(tracksOf(copy!.id)).toEqual(['transform.position.x']);
+      useEditorStore.setState({ activeTool: 'selection', timeline: createTimeline() });
     });
   });
 

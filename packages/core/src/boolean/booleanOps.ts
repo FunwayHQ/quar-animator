@@ -358,6 +358,54 @@ export function createBooleanResultNode(
 }
 
 // ============================================================================
+// Erased Brush Strokes
+// ============================================================================
+
+/**
+ * A brush stroke redrawn (its Width or Profile changed) as `outline`, with
+ * what the Eraser took out of it (brushData.erased) taken out again. Only
+ * the parts over the stroke as it is now are kept, so a piece the Eraser cut
+ * off stays that piece. With nothing erased, the outline as it is; with
+ * nothing left, the stroke as it was.
+ */
+export function reshapedBrushStroke(
+  outline: PathPoint[],
+  stroke: PathNode
+): Pick<PathNode, 'points' | 'subpaths' | 'fillRule'> {
+  const erased = stroke.brushData?.erased;
+  if (!erased || erased.length === 0) {
+    return { points: outline, subpaths: undefined, fillRule: stroke.fillRule };
+  }
+  const unchanged = { points: stroke.points, subpaths: stroke.subpaths, fillRule: stroke.fillRule };
+  const identity = mat3.identity();
+  const redrawn = nodeToPolygon(
+    { ...stroke, points: outline, subpaths: undefined, closed: true },
+    identity
+  );
+  const now = nodeToPolygon(stroke, identity);
+  if (!redrawn) return unchanged;
+  const taken: MultiPolygon = erased.map((polygon) =>
+    polygon.map((ring) => ring.map((p): [number, number] => [p.x, p.y]))
+  );
+
+  let kept: MultiPolygon;
+  try {
+    const left = performBoolean(redrawn, taken, 'subtract');
+    kept = now
+      ? left.filter((polygon) => performBoolean([polygon], now, 'intersect').length > 0)
+      : left;
+  } catch {
+    return unchanged; // polygon-clipping can throw on degenerate input
+  }
+  const contours = polygonToContours(kept);
+  const [points, ...subpaths] = contours;
+  if (!points) return unchanged;
+  return subpaths.length > 0
+    ? { points, subpaths, fillRule: 'evenodd' }
+    : { points, subpaths: undefined, fillRule: stroke.fillRule };
+}
+
+// ============================================================================
 // Boolean Group Computation (non-destructive)
 // ============================================================================
 

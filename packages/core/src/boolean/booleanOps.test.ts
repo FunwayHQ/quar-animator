@@ -10,6 +10,7 @@ import {
   polygonToContours,
   createBooleanResultNode,
   booleanOperation,
+  reshapedBrushStroke,
 } from './booleanOps';
 import type { BooleanOp } from './booleanOps';
 import type { Node, PathNode, PathPoint, Fill, Stroke, Matrix3 } from '@quar/types';
@@ -928,5 +929,77 @@ describe('booleanOperation', () => {
     // With only one valid polygon and one skip, accum stays as rect polygon
     // Result depends on implementation — accum is still valid, just the rect
     expect(result).not.toBeNull();
+  });
+});
+
+// ============================================================================
+// reshapedBrushStroke
+// ============================================================================
+
+describe('reshapedBrushStroke', () => {
+  const corner = (x: number, y: number): PathPoint => ({
+    position: { x, y },
+    handleIn: null,
+    handleOut: null,
+    type: 'corner',
+  });
+  const box = (x0: number, y0: number, x1: number, y1: number) => [
+    corner(x0, y0),
+    corner(x1, y0),
+    corner(x1, y1),
+    corner(x0, y1),
+  ];
+  /** A stroke along x from -100 to 100; the Eraser took a band across it at x = 0. */
+  function erasedStroke(points: PathPoint[]): PathNode {
+    return {
+      ...(makeRect('s', 0, 0, 1, 1) as unknown as PathNode),
+      type: 'path',
+      points,
+      closed: true,
+      fills: [],
+      strokes: [],
+      brushData: {
+        spine: [corner(-100, 0), corner(100, 0)],
+        widths: [20, 20],
+        profileId: null,
+        erased: [
+          [
+            [
+              { x: -5, y: -50 },
+              { x: 5, y: -50 },
+              { x: 5, y: 50 },
+              { x: -5, y: 50 },
+              { x: -5, y: -50 },
+            ],
+          ],
+        ],
+      },
+    };
+  }
+  const xsOf = (points: PathPoint[]) => points.map((p) => p.position.x);
+  const ysOf = (points: PathPoint[]) => points.map((p) => p.position.y);
+
+  it('is the redrawn outline when nothing was erased', () => {
+    const stroke = { ...erasedStroke(box(-100, -10, 100, 10)), brushData: undefined };
+    const outline = box(-100, -20, 100, 20);
+    expect(reshapedBrushStroke(outline, stroke).points).toBe(outline);
+  });
+
+  it('takes what was erased out of the redrawn outline, keeping the piece it is', () => {
+    // The left piece of the cut stroke, redrawn twice as wide
+    const left = erasedStroke(box(-100, -10, -5, 10));
+    const reshaped = reshapedBrushStroke(box(-100, -20, 100, 20), left);
+
+    expect(reshaped.subpaths).toBeUndefined();
+    expect(Math.min(...xsOf(reshaped.points))).toBeCloseTo(-100);
+    expect(Math.max(...xsOf(reshaped.points))).toBeCloseTo(-5);
+    expect(Math.max(...ysOf(reshaped.points))).toBeCloseTo(20);
+  });
+
+  it('leaves the stroke as it was when nothing of it would be left', () => {
+    const left = erasedStroke(box(-100, -10, -5, 10));
+    // Redrawn only where the eraser was
+    const reshaped = reshapedBrushStroke(box(-4, -20, 4, 20), left);
+    expect(reshaped.points).toBe(left.points);
   });
 });

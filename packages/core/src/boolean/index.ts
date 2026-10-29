@@ -3,6 +3,7 @@ export {
   performBoolean,
   polygonToContours,
   createBooleanResultNode,
+  reshapedBrushStroke,
   booleanOperation,
   computeBooleanGroupResult,
   type BooleanOp,
