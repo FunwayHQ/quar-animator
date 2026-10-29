@@ -188,9 +188,9 @@
 }
 
 .maskSourceBadge {
+  display: inline-flex;
   flex-shrink: 0;
   color: var(--color-text-tertiary);
-  font-size: 10px;
 }
 
 .layerRow:hover .layerName {

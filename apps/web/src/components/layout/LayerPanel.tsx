@@ -313,7 +313,18 @@ function LayerRow({
         ) : (
           <span className={styles.layerName}>{node.name}</span>
         )}
-        {isMaskSource && <span className={styles.maskSourceBadge}>Mask source</span>}
+        {/* An icon, not words: the name keeps its room in a nested row */}
+        {isMaskSource && (
+          <span
+            className={styles.maskSourceBadge}
+            role="img"
+            aria-label="Mask source"
+            title="Mask source: this layer masks the rest of its group"
+            data-testid={`mask-source-badge-${node.id}`}
+          >
+            <Contrast size={12} aria-hidden="true" />
+          </span>
+        )}
         {node.type === 'group' && node.maskNodeId && (
           <span className={styles.maskBadge} data-testid={`mask-badge-${node.id}`}>
             {node.maskMode === 'luminance' ? 'Luma' : node.maskMode === 'alpha' ? 'Alpha' : 'Clip'}

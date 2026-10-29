@@ -979,6 +979,29 @@ describe('LayerPanel', () => {
       expect(group.maskMode).toBe('clip');
       expect(screen.getByTestId(`mask-badge-${groupId}`)).toHaveTextContent('Clip');
     });
+
+    it('marks the mask source with an icon, leaving its name the room', () => {
+      let sg: SceneGraph | null = null;
+      render(
+        <SceneGraphProvider>
+          <SceneGraphCapture onCapture={(s) => (sg = s)} />
+          <LayerPanel />
+        </SceneGraphProvider>
+      );
+      act(() => {
+        sg!.addNode({ ...createTestGroup('masked', 'Masked'), maskNodeId: 'window' });
+        sg!.addNode(createTestEllipse('window', 'Window'), 'masked');
+        sg!.addNode(createTestRect('stripe', 'Stripe'), 'masked');
+      });
+
+      const row = screen.getByTestId('layer-row-window');
+      expect(screen.getByRole('img', { name: 'Mask source' })).toBeInTheDocument();
+      // No words beside the name, the badge says it in its tooltip
+      expect(row).toHaveTextContent(/^Window$/);
+      expect(screen.getByTestId('layer-row-stripe')).not.toContainElement(
+        screen.getByRole('img', { name: 'Mask source' })
+      );
+    });
   });
 
   // ========================================================================
