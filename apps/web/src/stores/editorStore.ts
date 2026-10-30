@@ -3103,12 +3103,14 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       if (r === state.frameRate && r === state.timeline.frameRate) return {};
       // Clips run in seconds: a timeline that would cut one short at the new rate grows to fit it
       const fitted = atFrameRateFitted(r, state, sceneGraph);
-      const timelineDuration = scopeDuration(fitted.timeline, state.timelineScope);
+      const grown = scopeDuration(fitted.timeline, state.timelineScope);
+      if (grown <= scopeDuration(state.timeline, state.timelineScope)) {
+        return { ...fitted, isDirty: true };
+      }
       return {
         ...fitted,
-        timelineDuration,
-        currentFrame: Math.min(state.currentFrame, timelineDuration - 1),
-        ...workAreaFor(timelineDuration, state),
+        timelineDuration: grown,
+        ...workAreaFor(grown, state),
         isDirty: true,
       };
     });
