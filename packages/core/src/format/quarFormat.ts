@@ -103,11 +103,12 @@ function base64ToBytes(base64: string): Uint8Array {
 
 function bytesToBase64(bytes: Uint8Array): string {
   if (typeof btoa === 'function') {
-    let binary = '';
-    for (let i = 0; i < bytes.length; i++) {
-      binary += String.fromCharCode(bytes[i]!);
+    // A chunk of characters at a time, not one: a picture of megabytes
+    const parts: string[] = [];
+    for (let i = 0; i < bytes.length; i += 0x8000) {
+      parts.push(String.fromCharCode(...bytes.subarray(i, i + 0x8000)));
     }
-    return btoa(binary);
+    return btoa(parts.join(''));
   }
   // Node.js fallback
   return Buffer.from(bytes).toString('base64');
@@ -222,6 +223,26 @@ function extractBuffers(
  */
 export function restoreImageBuffers(json: unknown, buffers: QuarBuffer[]): unknown {
   const BUFFER_REF_REGEX = /^buffer:(\d+)$/;
+  // Each buffer made into its data URI, or Blob, once: however many places
+  // refer to it (a file can name one picture thousands of times), they share it
+  const uris = new Map<number, string>();
+  const blobs = new Map<number, Blob>();
+  const uriOf = (index: number, buf: QuarBuffer) => {
+    let uri = uris.get(index);
+    if (uri === undefined) {
+      uri = `data:${buf.mimeType};base64,${bytesToBase64(buf.data)}`;
+      uris.set(index, uri);
+    }
+    return uri;
+  };
+  const blobOf = (index: number, buf: QuarBuffer) => {
+    let blob = blobs.get(index);
+    if (blob === undefined) {
+      blob = new Blob([blobPart(buf.data)], { type: buf.mimeType });
+      blobs.set(index, blob);
+    }
+    return blob;
+  };
 
   function walk(obj: unknown): unknown {
     if (obj === null || obj === undefined) return obj;
@@ -242,17 +263,17 @@ export function restoreImageBuffers(json: unknown, buffers: QuarBuffer[]): unkno
           if (match) {
             const index = parseInt(match[1]!, 10);
             if (index >= 0 && index < buffers.length) {
-              const buf = buffers[index]!;
-              result[key] = `data:${buf.mimeType};base64,${bytesToBase64(buf.data)}`;
+              result[key] = uriOf(index, buffers[index]!);
               continue;
             }
           }
         }
         if (key === 'file' && typeof value === 'string' && typeof Blob !== 'undefined') {
           const match = BUFFER_REF_REGEX.exec(value);
-          const buf = match ? buffers[parseInt(match[1]!, 10)] : undefined;
+          const index = match ? parseInt(match[1]!, 10) : -1;
+          const buf = buffers[index];
           if (buf) {
-            result[key] = new Blob([blobPart(buf.data)], { type: buf.mimeType });
+            result[key] = blobOf(index, buf);
             continue;
           }
         }

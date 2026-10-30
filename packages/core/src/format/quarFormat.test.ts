@@ -368,6 +368,23 @@ describe('quarFormat', () => {
   // ============================================================================
 
   describe('restoreImageBuffers', () => {
+    it('makes one picture named thousands of times into its data URI once', () => {
+      // A small file naming one 512 KB picture 3,000 times
+      const picture = new Uint8Array(512 * 1024).map((_, i) => (i * 31) % 251);
+      const buffers: QuarBuffer[] = [{ data: picture, mimeType: 'image/png' }];
+      const json = {
+        nodes: Array.from({ length: 3000 }, (_, i) => ({ id: `n${i}`, src: 'buffer:0' })),
+      };
+      const started = performance.now();
+      const restored = restoreImageBuffers(json, buffers) as { nodes: { src: string }[] };
+      // Encoded each time, this took tens of seconds and gigabytes of strings
+      expect(performance.now() - started).toBeLessThan(10_000);
+      expect(restored.nodes[2999]!.src).toBe(restored.nodes[0]!.src);
+      // ...and encoded right
+      const base64 = restored.nodes[0]!.src.split(',')[1]!;
+      expect(Uint8Array.from(atob(base64), (c) => c.charCodeAt(0))).toEqual(picture);
+    });
+
     it('should restore buffer references to data URIs', () => {
       const buffers: QuarBuffer[] = [
         {
