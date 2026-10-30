@@ -114,3 +114,71 @@ describe('fontMeasure', () => {
     expect(fontMeasure(font as never, 20, 2)('abc')).toBe(30);
   });
 });
+
+describe('breakTextLines on long words', () => {
+  /** The breaker as it was: measuring every longer piece in turn */
+  function wrapReference(text: string, measure: MeasureText, wrap: number): string[] {
+    const chars = [...text];
+    const slice = (from: number, to: number) => chars.slice(from, to).join('');
+    const isSpace = (c: string) => c === ' ' || c === '\t';
+    const out: string[] = [];
+    let lineStart = 0;
+    let lineEnd = 0;
+    let i = 0;
+    while (i < chars.length) {
+      if (isSpace(chars[i]!)) {
+        i++;
+        continue;
+      }
+      let wordEnd = i;
+      while (wordEnd < chars.length && !isSpace(chars[wordEnd]!)) wordEnd++;
+      if (lineEnd > lineStart && measure(slice(lineStart, wordEnd)) > wrap) {
+        out.push(slice(lineStart, lineEnd));
+        lineStart = i;
+      }
+      while (measure(slice(lineStart, wordEnd)) > wrap && wordEnd - lineStart > 1) {
+        let fit = Math.max(lineStart + 1, i + 1);
+        while (fit < wordEnd && measure(slice(lineStart, fit + 1)) <= wrap) fit++;
+        out.push(slice(lineStart, fit));
+        lineStart = fit;
+      }
+      lineEnd = wordEnd;
+      i = wordEnd;
+    }
+    out.push(slice(lineStart, lineEnd > lineStart ? lineEnd : lineStart));
+    return out;
+  }
+
+  // Letters of different widths, as a font's are
+  const measure: MeasureText = (text) =>
+    [...text].reduce((width, c) => width + (c === 'W' ? 11 : c === 'i' ? 3 : c === ' ' ? 4 : 7), 0);
+
+  it('breaks lines where it always did', () => {
+    const texts = [
+      'Make it move',
+      'Supercalifragilisticexpialidocious and then some more words',
+      'a  b\tc   dd eee ffff ggggg',
+      'WWWWWWWWWWWWWWWWWWWWWWWW i i i iiiiiiiiiiiii',
+      'x',
+      '',
+    ];
+    for (const text of texts) {
+      for (const wrap of [0.5, 5, 12, 40, 80, 133.3, 200, 1000]) {
+        const now = breakTextLines(text, measure, wrap).map((line) => line.text);
+        expect(now, `${text} at ${wrap}`).toEqual(wrapReference(text, measure, wrap));
+      }
+    }
+  });
+
+  it('measures about what fits, not the rest of a long word for each line', () => {
+    let measured = 0;
+    const counting: MeasureText = (text) => {
+      measured += text.length;
+      return measure(text);
+    };
+    const lines = breakTextLines('m'.repeat(10_000), counting, 0.001);
+    expect(lines).toHaveLength(10_000);
+    // Measuring the rest of the word for each line was 50 million characters
+    expect(measured).toBeLessThan(200_000);
+  });
+});

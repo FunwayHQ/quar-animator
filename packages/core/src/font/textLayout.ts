@@ -116,6 +116,37 @@ function wrapParagraph(
     const text = slice(from, to);
     out.push({ text, start: offset + from, width: measure(text) });
   };
+  const wider = (from: number, to: number) => measure(slice(from, to)) > wrapWidth;
+  // A piece's width only grows as characters are added, so these decide as
+  // measuring every longer piece would — measuring about twice what fits, not
+  // the rest of a long word for each line (a long word in a narrow box took
+  // minutes). Whether chars [from, to) are wider than the wrap: their first
+  // 2, 4, 8… characters, until a piece is
+  const over = (from: number, to: number): boolean => {
+    for (let end = Math.min(from + 2, to); ; end = Math.min(from + 2 * (end - from), to)) {
+      if (wider(from, end)) return true;
+      if (end === to) return false;
+    }
+  };
+  // Where the longest piece from `from` that fits ends, at `least` or after
+  // and at `to` at most: doubling past it, then halving back
+  const fitsTo = (from: number, least: number, to: number): number => {
+    let fits = least;
+    let tooWide = to + 1;
+    for (let step = 1; least + step <= to; step *= 2) {
+      if (wider(from, least + step)) {
+        tooWide = least + step;
+        break;
+      }
+      fits = least + step;
+    }
+    while (tooWide - fits > 1) {
+      const mid = fits + Math.floor((tooWide - fits) / 2);
+      if (wider(from, mid)) tooWide = mid;
+      else fits = mid;
+    }
+    return fits;
+  };
 
   // Line being filled: chars [lineStart, lineEnd) are set; spaces after it
   // only count if a word follows on the same line
@@ -130,16 +161,15 @@ function wrapParagraph(
     let wordEnd = i;
     while (wordEnd < chars.length && !isSpace(chars[wordEnd]!)) wordEnd++;
 
-    if (lineEnd > lineStart && measure(slice(lineStart, wordEnd)) > wrapWidth) {
+    if (lineEnd > lineStart && over(lineStart, wordEnd)) {
       // The word doesn't fit after what's on the line: it starts the next one
       emit(lineStart, lineEnd);
       lineStart = i;
     }
     // A word too wide for any line breaks between letters, a letter at least
     // per line so the text always advances
-    while (measure(slice(lineStart, wordEnd)) > wrapWidth && wordEnd - lineStart > 1) {
-      let fit = Math.max(lineStart + 1, i + 1);
-      while (fit < wordEnd && measure(slice(lineStart, fit + 1)) <= wrapWidth) fit++;
+    while (wordEnd - lineStart > 1 && over(lineStart, wordEnd)) {
+      const fit = fitsTo(lineStart, Math.max(lineStart + 1, i + 1), wordEnd);
       emit(lineStart, fit);
       lineStart = fit;
     }
