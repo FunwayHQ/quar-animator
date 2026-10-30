@@ -182,7 +182,14 @@ export interface EditorStateSnapshot {
  * videos the project file held, by video id (for services/videoFiles, not
  * the store). Always there, empty for a file without them.
  */
-export type OpenedProjectState = Partial<EditorStateSnapshot & { currentFrame: number }> & {
+export type OpenedProjectState = Partial<
+  EditorStateSnapshot & {
+    currentFrame: number;
+    workAreaEnabled: boolean;
+    workAreaStart: number;
+    workAreaEnd: number;
+  }
+> & {
   videoFiles?: Map<string, Blob>;
 };
 
@@ -672,10 +679,15 @@ export function deserializeProject(
   // the animation
   sceneGraph.fromJSON(activePage.sceneGraph);
   const scope = openingScope(sceneGraph, activePage.timeline);
+  const duration = scopeDuration(activePage.timeline, scope);
   applyEditorState({
     ...editorState,
     timelineScope: scope,
-    timelineDuration: scopeDuration(activePage.timeline, scope),
+    timelineDuration: duration,
+    // The work area isn't kept in the file: the whole timeline, off
+    workAreaEnabled: false,
+    workAreaStart: 0,
+    workAreaEnd: duration - 1,
   });
 }
 

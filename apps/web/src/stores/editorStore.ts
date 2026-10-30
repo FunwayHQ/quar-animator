@@ -1250,8 +1250,9 @@ export interface EditorStore
   clearHistory: () => void;
   /**
    * Clear what belongs to the editing session rather than the file — undo,
-   * the selection, a symbol open for editing — as another project is opened
-   * (just before it's read in).
+   * the selection, a symbol open for editing, the group entered, playback, a
+   * gradient being edited, a Smart Bone recording — as another project is
+   * opened (just before it's read in; the file sets the work area).
    */
   forgetSession: () => void;
   /** Reset all project-scoped state to a fresh empty project (F024). */
@@ -4300,6 +4301,10 @@ function createHistoryActions(
         // symbol edit (and the page it put aside) mustn't be saved into it
         editingSymbolId: null,
         editingSymbolPrevState: null,
+        enteredGroupId: null,
+        isPlaying: false,
+        editingGradient: null,
+        smartBoneRecordingDiscard: false,
       });
     },
 

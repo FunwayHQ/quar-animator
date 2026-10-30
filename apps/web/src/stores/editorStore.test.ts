@@ -1832,6 +1832,23 @@ describe('EditorStore', () => {
       expect(state.selectedSoundClipId).toBeNull();
     });
 
+    it('forgetSession also leaves the group entered, playback and gradient editing behind', () => {
+      useEditorStore.setState({
+        enteredGroupId: 'g',
+        isPlaying: true,
+        editingGradient: { nodeId: 'n', fillIndex: 0, source: 'fill' },
+        smartBoneRecordingDiscard: true,
+      });
+
+      useEditorStore.getState().forgetSession();
+
+      const state = useEditorStore.getState();
+      expect(state.enteredGroupId).toBeNull();
+      expect(state.isPlaying).toBe(false);
+      expect(state.editingGradient).toBeNull();
+      expect(state.smartBoneRecordingDiscard).toBe(false);
+    });
+
     it('cutSelection snapshots before cutting', () => {
       const sg = createMockSceneGraphWithHistory();
       sg._addTestNode(makeTestRect('rect1'));

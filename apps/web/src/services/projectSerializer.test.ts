@@ -380,6 +380,11 @@ describe('ProjectSerializer', () => {
       return applied;
     };
 
+    it('open with the whole timeline as the work area, off (it isn’t kept in the file)', () => {
+      const applied = load(project());
+      expect(applied).toMatchObject({ workAreaEnabled: false, workAreaStart: 0, workAreaEnd: 29 });
+    });
+
     it('load with no wind instead of none at all', () => {
       expect(load(project()).globalWind).toEqual({
         strength: 0,
