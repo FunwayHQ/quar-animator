@@ -245,6 +245,8 @@ export function useProjectActions(options: UseProjectActionsOptions = {}): Proje
       if (!stored) return;
       const videoFiles = await storedVideoFiles(id);
 
+      // Nothing of the last project's session (its undo, its selection) carries over
+      useEditorStore.getState().forgetSession();
       const data = deserializeProjectFromBinary(stored.data, sceneGraph, (state) =>
         applyEditorState(state, videoFiles)
       );
@@ -254,10 +256,7 @@ export function useProjectActions(options: UseProjectActionsOptions = {}): Proje
         projectName: data.name as string,
         isDirty: false,
         projectCreatedAt: data.createdAt as string,
-        selectedNodeIds: new Set<string>(),
-        selectedKeyframeIds: new Set<string>(),
       });
-      useEditorStore.getState().clearHistory();
 
       await setLastProjectId(id);
     },
@@ -279,6 +278,8 @@ export function useProjectActions(options: UseProjectActionsOptions = {}): Proje
 
   const loadImportedProject = useCallback(
     async (data: ProjectData) => {
+      // Nothing of the last project's session carries over (see openProject)
+      useEditorStore.getState().forgetSession();
       deserializeProject(data, sceneGraph, applyEditorState);
 
       const newId = generateProjectId();
@@ -493,6 +494,8 @@ export function useProjectActions(options: UseProjectActionsOptions = {}): Proje
         const videoFiles = await storedVideoFiles(targetId);
         if (cancelled) return;
 
+        // Opened from the Projects page after another: none of its session (see openProject)
+        useEditorStore.getState().forgetSession();
         const data = deserializeProjectFromBinary(stored.data, sceneGraph, (state) =>
           applyEditorState(state, videoFiles)
         );

@@ -1809,6 +1809,29 @@ describe('EditorStore', () => {
       expect(useEditorStore.getState().canRedo).toBe(false);
     });
 
+    it('forgetSession leaves nothing of the last project’s undo or selection', () => {
+      const sg = createMockSceneGraphWithHistory();
+      useEditorStore.getState().pushUndo(sg);
+      useEditorStore.getState().pushUndo(sg);
+      useEditorStore.getState().undo(sg);
+      useEditorStore.setState({
+        selectedNodeIds: new Set(['a']),
+        selectedKeyframeIds: new Set(['k']),
+        selectedSoundClipId: 's',
+      });
+
+      useEditorStore.getState().forgetSession();
+
+      const state = useEditorStore.getState();
+      expect(state.undoStack).toHaveLength(0);
+      expect(state.redoStack).toHaveLength(0);
+      expect(state.canUndo).toBe(false);
+      expect(state.canRedo).toBe(false);
+      expect(state.selectedNodeIds.size).toBe(0);
+      expect(state.selectedKeyframeIds.size).toBe(0);
+      expect(state.selectedSoundClipId).toBeNull();
+    });
+
     it('cutSelection snapshots before cutting', () => {
       const sg = createMockSceneGraphWithHistory();
       sg._addTestNode(makeTestRect('rect1'));

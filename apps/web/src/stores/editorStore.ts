@@ -1248,6 +1248,11 @@ export interface EditorStore
   undo: (sceneGraph: SceneGraphLike) => void;
   redo: (sceneGraph: SceneGraphLike) => void;
   clearHistory: () => void;
+  /**
+   * Clear what belongs to the editing session rather than the file — undo,
+   * the selection — as another project is opened (just before it's read in).
+   */
+  forgetSession: () => void;
   /** Reset all project-scoped state to a fresh empty project (F024). */
   resetProject: () => void;
   cutSelection: (sceneGraph: SceneGraphLike) => void;
@@ -4281,6 +4286,15 @@ function createHistoryActions(
         smartBoneRecordingTargetId: null,
         smartBoneRecordingPrevTool: null,
         smartBoneRecordingPrevRotation: null,
+      });
+    },
+
+    forgetSession: () => {
+      get().clearHistory();
+      set({
+        selectedNodeIds: new Set<string>(),
+        selectedKeyframeIds: new Set<string>(),
+        selectedSoundClipId: null,
       });
     },
 

@@ -154,6 +154,7 @@ const mockEditorState: Record<string, unknown> = {
   timelineDuration: 300,
   frameRate: 30,
   clearHistory: vi.fn(),
+  forgetSession: vi.fn(),
   resetProject: vi.fn(),
   flushSequenceEdits: vi.fn(),
   pushUndo: vi.fn(),
@@ -247,6 +248,8 @@ describe('useProjectActions', () => {
       });
 
       expect(mockReadProjectFile).toHaveBeenCalledWith(file);
+      // Nothing of the last project's session carries over
+      expect(mockEditorState.forgetSession).toHaveBeenCalled();
       expect(mockDeserialize).toHaveBeenCalledWith(
         expect.objectContaining({ name: 'Dropped Project' }),
         mockSceneGraph,
@@ -559,7 +562,7 @@ describe('useProjectActions', () => {
       );
     });
 
-    it('clears history after loading', async () => {
+    it('forgets the last project’s session (undo, selection) before reading it in', async () => {
       mockLoad.mockResolvedValueOnce({
         data: JSON.stringify({ name: 'P', createdAt: '', nodes: [], settings: {} }),
       });
@@ -575,7 +578,29 @@ describe('useProjectActions', () => {
         await result.current.openProject('proj_789');
       });
 
-      expect(mockEditorState.clearHistory).toHaveBeenCalled();
+      const forget = mockEditorState.forgetSession as ReturnType<typeof vi.fn>;
+      expect(forget).toHaveBeenCalledTimes(1);
+      expect(forget.mock.invocationCallOrder[0]).toBeLessThan(
+        mockDeserializeFromBinary.mock.invocationCallOrder[0]!
+      );
+    });
+
+    it('forgets it too when the project is opened from the Projects page', async () => {
+      mockLoad.mockResolvedValueOnce({ data: new ArrayBuffer(8) });
+      mockDeserializeFromBinary.mockReturnValueOnce({
+        name: 'B',
+        createdAt: '',
+        version: '3.0',
+      });
+
+      renderProjectActions({ loadProjectId: 'proj_b' });
+
+      await vi.waitFor(() => expect(mockDeserializeFromBinary).toHaveBeenCalled());
+      const forget = mockEditorState.forgetSession as ReturnType<typeof vi.fn>;
+      expect(forget).toHaveBeenCalledTimes(1);
+      expect(forget.mock.invocationCallOrder[0]).toBeLessThan(
+        mockDeserializeFromBinary.mock.invocationCallOrder[0]!
+      );
     });
 
     it('does nothing if project not found', async () => {
