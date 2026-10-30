@@ -169,7 +169,14 @@ function render(ui: ReactElement) {
   return baseRender(<SceneGraphProvider>{ui}</SceneGraphProvider>);
 }
 
-function ArtboardSeeder({ fills = [] }: { fills?: ArtboardNode['fills'] }) {
+function ArtboardSeeder({
+  fills = [],
+  size = { width: 640, height: 360 },
+}: {
+  fills?: ArtboardNode['fills'];
+  size?: { width: number; height: number };
+}) {
+  const { width, height } = size;
   const sceneGraph = useSceneGraph();
   useEffect(() => {
     const artboard: ArtboardNode = {
@@ -183,8 +190,8 @@ function ArtboardSeeder({ fills = [] }: { fills?: ArtboardNode['fills'] }) {
       locked: false,
       opacity: 1,
       blendMode: 'normal',
-      width: 640,
-      height: 360,
+      width,
+      height,
       fills,
       clipContent: true,
     };
@@ -207,14 +214,18 @@ function ArtboardSeeder({ fills = [] }: { fills?: ArtboardNode['fills'] }) {
       strokes: [],
     } as unknown as Node;
     sceneGraph.addNode(child, artboard.id);
-  }, [sceneGraph, fills]);
+  }, [sceneGraph, fills, width, height]);
   return null;
 }
 
-function renderWithArtboard(ui: ReactElement, fills?: ArtboardNode['fills']) {
+function renderWithArtboard(
+  ui: ReactElement,
+  fills?: ArtboardNode['fills'],
+  size?: { width: number; height: number }
+) {
   return baseRender(
     <SceneGraphProvider>
-      <ArtboardSeeder fills={fills} />
+      <ArtboardSeeder fills={fills} size={size} />
       {ui}
     </SceneGraphProvider>
   );
@@ -705,6 +716,24 @@ describe('ExportDialog', () => {
     fireEvent.change(screen.getByTestId('export-width'), { target: { value: '500' } });
     fireEvent.click(screen.getByTestId('export-tab-gif'));
     expect(screen.getByTestId('export-width')).toHaveValue(500);
+  });
+
+  it('starts an MP4 at an even size, and says at once when one typed is odd', async () => {
+    mockStore.selectedNodeIds = new Set(['artboard-1']);
+    const odd = { width: 641, height: 361 };
+    renderWithArtboard(<ExportDialogHost />, undefined, odd);
+    act(() => showExportDialog('mp4'));
+    // H.264 takes only even sides: the next even size up
+    expect(screen.getByTestId('export-width')).toHaveValue(642);
+    expect(screen.getByTestId('export-height')).toHaveValue(362);
+    // An odd one typed is turned away before anything is drawn
+    fireEvent.change(screen.getByTestId('export-height'), { target: { value: '529' } });
+    fireEvent.click(screen.getByTestId('export-dialog-export'));
+    expect(await screen.findByText(/even width and height.*642 × 530/)).toBeInTheDocument();
+    expect(exportMp4).not.toHaveBeenCalled();
+    // Other formats keep the size as it is
+    fireEvent.click(screen.getByTestId('export-tab-gif'));
+    expect(screen.getByTestId('export-height')).toHaveValue(529);
   });
 
   it('passes the chosen MP4 frame rate and speed to the exporter', async () => {

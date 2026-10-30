@@ -303,11 +303,14 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
   );
   // The first slide's size, when there are slides — but a Lottie of the
   // whole page is framed to fit all the artwork, so it starts at that size
-  const defaultSizeFor = (tab: ExportTab) =>
-    defaultExportSize(
+  const defaultSizeFor = (tab: ExportTab) => {
+    const size = defaultExportSize(
       selectedArtboard?.bounds ??
         (slides.length > 1 && tab !== 'lottie' ? slides[0]!.bounds : sceneScope)
     );
+    // H.264 takes only even sides: an MP4 starts at the next even size up
+    return tab === 'mp4' ? { width: evenUp(size.width), height: evenUp(size.height) } : size;
+  };
   const defaultSize = defaultSizeFor(initialTab);
 
   const [exiting, setExiting] = useState(false);
@@ -552,6 +555,14 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
         state.height > 8192)
     ) {
       setState((s) => ({ ...s, error: 'Export dimensions must be between 1 and 8192 pixels.' }));
+      return;
+    }
+    // Said now, not once the frames are drawn
+    if (state.tab === 'mp4' && (state.width % 2 !== 0 || state.height % 2 !== 0)) {
+      setState((s) => ({
+        ...s,
+        error: `MP4 needs an even width and height (H.264): try ${evenUp(s.width)} × ${evenUp(s.height)}.`,
+      }));
       return;
     }
 
@@ -1533,6 +1544,11 @@ function effectNames(types: readonly string[]): string {
   return list.length > 1
     ? `${list.slice(0, -1).join(', ')} and ${list.at(-1)}`
     : (list[0] ?? 'effects');
+}
+
+/** The even number at or above `n` (H.264 takes only even sides). */
+function evenUp(n: number): number {
+  return n % 2 === 0 ? n : n + 1;
 }
 
 export function ExportDialogHost() {
