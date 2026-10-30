@@ -3,6 +3,8 @@ import { Component, type ReactNode, type ErrorInfo } from 'react';
 interface ErrorBoundaryProps {
   children: ReactNode;
   fallback?: ReactNode;
+  /** What went wrong, in words for the part it guards (the canvas's by default) */
+  message?: string;
 }
 
 interface ErrorBoundaryState {
@@ -21,7 +23,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
-    console.error('Canvas error caught by ErrorBoundary:', error, errorInfo);
+    console.error('Error caught by ErrorBoundary:', error, errorInfo);
   }
 
   handleRetry = (): void => {
@@ -53,8 +55,8 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
             Something went wrong
           </h2>
           <p style={{ margin: 0, maxWidth: '400px' }}>
-            The canvas encountered an error. This may be caused by a WebGL context loss or a
-            rendering issue.
+            {this.props.message ??
+              'The canvas encountered an error. This may be caused by a WebGL context loss or a rendering issue.'}
           </p>
           {this.state.error && (
             <code

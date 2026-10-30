@@ -25,6 +25,16 @@ describe('ErrorBoundary', () => {
     expect(screen.getByTestId('child')).toBeInTheDocument();
   });
 
+  it('says what went wrong in the words it is given', () => {
+    render(
+      <ErrorBoundary message="The Projects page couldn’t be shown.">
+        <ThrowingChild shouldThrow={true} />
+      </ErrorBoundary>
+    );
+    expect(screen.getByText('The Projects page couldn’t be shown.')).toBeInTheDocument();
+    expect(screen.queryByText(/canvas encountered an error/)).not.toBeInTheDocument();
+  });
+
   it('renders fallback UI when child throws', () => {
     render(
       <ErrorBoundary>
@@ -91,7 +101,7 @@ describe('ErrorBoundary', () => {
     );
 
     expect(consoleSpy).toHaveBeenCalledWith(
-      'Canvas error caught by ErrorBoundary:',
+      'Error caught by ErrorBoundary:',
       expect.any(Error),
       expect.any(Object)
     );

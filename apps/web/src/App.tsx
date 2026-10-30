@@ -6,6 +6,7 @@ import { ToastContainer } from './components/common/Toast';
 import { ConsentBanner } from './components/common/ConsentBanner';
 import { PromptDialogHost } from './components/common/PromptDialog';
 import { DesktopOnlyGate } from './components/common/DesktopOnlyGate';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { loadBundledFonts } from './services/bundledFonts';
 
 export function App() {
@@ -31,7 +32,15 @@ function AppRoutes() {
       <ConsentBanner />
       <PromptDialogHost />
       <Routes>
-        <Route path="/" element={<Projects />} />
+        <Route
+          path="/"
+          element={
+            // One project the page can't show mustn't blank the whole app
+            <ErrorBoundary message="The Projects page couldn’t be shown. Your projects are still saved in this browser: try again, or reload the page.">
+              <Projects />
+            </ErrorBoundary>
+          }
+        />
         <Route path="/editor" element={<Editor />} />
       </Routes>
     </Router>
