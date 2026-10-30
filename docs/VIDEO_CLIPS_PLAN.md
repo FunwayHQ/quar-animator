@@ -2,7 +2,7 @@
 
 Import a video (or an animated GIF) and place it on the timeline as a clip, its
 sound track separated onto the Sound lane. Decided with the owner on
-2026-10-29; steps 1–5 and 7 are built (below); step 6 is under way in the cloud repositories.
+2026-10-29; all seven steps are built (below).
 
 ## Decisions
 
@@ -262,6 +262,23 @@ frame, fps)` (null outside the clip; frame f begins at f/fps seconds, as
   transparency (slow for very large ones); the Video section's title says
   "Video" for a GIF; saving a project with any video fails in WebKit
   private windows (its storage refuses the file).
+
+## Step 6 (as built)
+
+Built in the cloud edition's own repositories; their docs have the details.
+
+- **Sync:** a project's video files go to the cloud once each and are kept
+  once each, however many versions and projects show them; saves after that
+  send the project without them. Opening a project on another device
+  fetches each file once and keeps it for offline playing; Keep both keeps
+  the videos with the copy.
+- **Server renders** (AI apps' pictures, version history) draw a video
+  layer from its frame strip, the stills the editor makes on import.
+- **AI apps** see video layers, edit them as pictures (place, size, masks,
+  colour, effects) and arrange their clips (move, trim, speed, loop, hold,
+  stop on a frame, unlink the sound), the linked sound following. They
+  can't import a video; they ask the person to.
+- **Fonts:** the server draws Inter at every weight the editor ships.
 
 ## Step 7 (as built)
 
