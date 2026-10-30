@@ -657,6 +657,51 @@ describe('useProjectActions', () => {
     });
   });
 
+  describe('opening a project from the Projects page', () => {
+    it('lets the last project go at once, so nothing saves over it while the next is read', async () => {
+      mockEditorState.projectId = 'proj_a';
+      mockEditorState.isDirty = true;
+      mockLoad.mockImplementationOnce(() => new Promise(() => {}));
+
+      const { result } = renderProjectActions({ loadProjectId: 'proj_b' });
+
+      expect(mockEditorState.projectId).toBeNull();
+      expect(mockEditorState.isDirty).toBe(false);
+      // A save while it's read does nothing (the scene is still empty)
+      await act(async () => {
+        await result.current.saveProject();
+        await result.current.saveProjectAs('Copy');
+      });
+      expect(mockSave).not.toHaveBeenCalled();
+    });
+
+    it('starts a new project when the one asked for isn’t there', async () => {
+      mockEditorState.projectId = 'proj_a';
+      mockLoad.mockResolvedValueOnce(null);
+
+      renderProjectActions({ loadProjectId: 'gone' });
+
+      await vi.waitFor(() => expect(mockEditorState.resetProject).toHaveBeenCalled());
+      expect(toast.error).toHaveBeenCalled();
+      expect(mockDeserializeFromBinary).not.toHaveBeenCalled();
+    });
+
+    it('starts a new project when it can’t be read', async () => {
+      mockEditorState.projectId = 'proj_a';
+      mockLoad.mockRejectedValueOnce(new Error('broken'));
+
+      const { result } = renderProjectActions({ loadProjectId: 'proj_b' });
+
+      await vi.waitFor(() => expect(mockEditorState.resetProject).toHaveBeenCalled());
+      expect(toast.error).toHaveBeenCalled();
+      // And saving works again afterwards (as a new project)
+      await act(async () => {
+        await result.current.saveProject();
+      });
+      expect(mockSave).toHaveBeenCalled();
+    });
+  });
+
   describe('downloadProject', () => {
     it('serializes and downloads project', () => {
       const { result } = renderProjectActions();

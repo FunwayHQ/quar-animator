@@ -122,6 +122,8 @@ export function useProjectActions(options: UseProjectActionsOptions = {}): Proje
   const { loadProjectId } = options;
   const sceneGraph = useSceneGraph();
   const autoSaveTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // While the project asked for (from the Projects page) is still being read
+  const openingRef = useRef(false);
 
   // Snapshot editor state for serialization
   const getEditorSnapshot = useCallback(() => {
@@ -193,6 +195,8 @@ export function useProjectActions(options: UseProjectActionsOptions = {}): Proje
 
   // ------ Save Project ------
   const saveProject = useCallback(async () => {
+    // The scene is still empty: the project asked for is being read in
+    if (openingRef.current) return;
     manualSavingRef.current = true;
     try {
       const state = useEditorStore.getState();
@@ -228,6 +232,7 @@ export function useProjectActions(options: UseProjectActionsOptions = {}): Proje
   // ------ Save As ------
   const saveProjectAs = useCallback(
     async (name: string) => {
+      if (openingRef.current) return;
       const newId = generateProjectId();
 
       useEditorStore.setState({
@@ -488,6 +493,13 @@ export function useProjectActions(options: UseProjectActionsOptions = {}): Proje
     let cancelled = false;
 
     async function loadOnMount() {
+      // The store still holds the project left for this one (the Projects page
+      // changes nothing): it's let go at once, so nothing in the gap — an
+      // autosave, a save — writes this editor's empty scene over it
+      if (loadProjectId !== null) {
+        useEditorStore.setState({ projectId: null, isDirty: false });
+        openingRef.current = true;
+      }
       try {
         let targetId: string | undefined;
 
@@ -501,7 +513,13 @@ export function useProjectActions(options: UseProjectActionsOptions = {}): Proje
         if (cancelled || !targetId) return;
 
         const stored = await dbLoad(targetId);
-        if (cancelled || !stored) return;
+        if (cancelled) return;
+        if (!stored) {
+          // Not on this computer (any more): a new project, not the last one's state
+          newProject();
+          toast.error('That project isn’t here any more — starting with an empty project');
+          return;
+        }
         const videoFiles = await storedVideoFiles(targetId);
         if (cancelled) return;
 
@@ -520,7 +538,10 @@ export function useProjectActions(options: UseProjectActionsOptions = {}): Proje
           });
         }
       } catch {
+        if (!cancelled) newProject();
         toast.error('Failed to load project — starting with empty project');
+      } finally {
+        if (!cancelled) openingRef.current = false;
       }
     }
 
@@ -528,7 +549,7 @@ export function useProjectActions(options: UseProjectActionsOptions = {}): Proje
     return () => {
       cancelled = true;
     };
-  }, [sceneGraph, applyEditorState, loadProjectId]);
+  }, [sceneGraph, applyEditorState, loadProjectId, newProject]);
 
   // ------ Auto-save every 30s when dirty ------
   const autoSavingRef = useRef(false);
