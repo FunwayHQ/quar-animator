@@ -95,6 +95,9 @@ export function encodeWav(channels: readonly Float32Array[], sampleRate: number)
   return new Blob([view.buffer], { type: 'audio/wav' });
 }
 
+/** How late a video's sound may start (in seconds) and still be copied out as it is. */
+const COPY_STARTS_WITHIN = 0.05;
+
 /** The track's stream copied, as it is, into an audio file of its own; null where it can't be. */
 async function copiedOut(
   mb: Mediabunny,
@@ -180,7 +183,10 @@ export async function extractVideoSound(
   try {
     const track = await input.getPrimaryAudioTrack();
     if (!track) return null;
-    const copy = await copiedOut(mb, file, await track.getCodec());
+    // A copy starts at once: a sound starting later in the video would play
+    // early by as much. That one's decoded, each stretch where it plays
+    const startsLate = (await track.getFirstTimestamp()) > COPY_STARTS_WITHIN;
+    const copy = startsLate ? null : await copiedOut(mb, file, await track.getCodec());
     if (copy) {
       try {
         return { ...copy, audio: await decode(copy.file), copied: true };

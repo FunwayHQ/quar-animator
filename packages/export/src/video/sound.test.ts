@@ -170,6 +170,16 @@ describe('extractVideoSound', () => {
     expect((await wavSamples(sound!.file)).samples).toEqual([[0, 0, 16384, 16384, 0, 0, 32767]]);
   });
 
+  it('decodes a sound that starts after the video does, so it doesn’t play early', async () => {
+    // The fixture's sound starts 0.476 s in (a copy would start it at once)
+    decodedParts([{ timestamp: 0.5, channels: [[1, 1]] }]);
+    const sound = await extractVideoSound(fixture('clip-late-sound.mp4'), {
+      decode: async () => ({ duration: 1 }) as AudioBuffer,
+    });
+    expect(sound?.copied).toBe(false);
+    expect((await wavSamples(sound!.file)).samples).toEqual([[0, 0, 0, 0, 32767, 32767]]);
+  });
+
   it('says so when this browser can’t play the sound either way', async () => {
     decodedParts([{ timestamp: 0, channels: [[0]] }]);
     await expect(
