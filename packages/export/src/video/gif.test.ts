@@ -14,6 +14,7 @@ import {
   isAnimatedGif,
   isGifData,
   isGifFile,
+  MAX_GIF_FRAMES,
   readGif,
 } from './gif';
 
@@ -123,6 +124,58 @@ describe('readGif', () => {
     const gif = readGif(bytes.subarray(0, Math.floor(bytes.length * 0.6)));
     expect(gif.frames.length).toBeGreaterThan(0);
     expect(gif.frames.length).toBeLessThan(10);
+  });
+
+  describe('a GIF made to ask for more than it holds', () => {
+    /** A GIF89a header for a screen of this size, with a two-colour palette */
+    const header = (width: number, height: number) => [
+      ...[71, 73, 70, 56, 57, 97],
+      width & 255,
+      width >> 8,
+      height & 255,
+      height >> 8,
+      0x80,
+      0,
+      0,
+      ...[0, 0, 0, 255, 255, 255],
+    ];
+    /** One frame at the top left, `width` × `height` as it says (its data is a 1 × 1's) */
+    const frame = (width = 1, height = 1) => [
+      44,
+      0,
+      0,
+      0,
+      0,
+      width & 255,
+      width >> 8,
+      height & 255,
+      height >> 8,
+      0,
+      2,
+      2,
+      84,
+      1,
+      0,
+    ];
+
+    it('throws for a screen, or a frame, bigger than 4096 × 4096', () => {
+      // 33 bytes asking for 65535 × 65535 pixels (17 GB)
+      expect(() => readGif(new Uint8Array([...header(65535, 65535), ...frame(), 59]))).toThrow(
+        /too big/
+      );
+      expect(() => readGif(new Uint8Array([...header(1, 1), ...frame(65535, 65535), 59]))).toThrow(
+        /too big/
+      );
+    });
+
+    it('reads no more than its most frames, and composites that many', () => {
+      const frames: number[] = [];
+      for (let i = 0; i < MAX_GIF_FRAMES + 10; i++) frames.push(...frame());
+      const bytes = new Uint8Array([...header(1, 1), ...frames, 59]);
+      const gif = readGif(bytes);
+      expect(gif.frames).toHaveLength(MAX_GIF_FRAMES);
+      expect(() => createGifCompositor(bytes, gif).pictureAt(MAX_GIF_FRAMES - 1)).not.toThrow();
+    });
   });
 
   it('throws for what isn’t a GIF, or has no pictures', () => {

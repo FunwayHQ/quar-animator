@@ -104,10 +104,19 @@ function skipSubBlocks(bytes: Uint8Array, at: number): number {
   return -1;
 }
 
+/** The biggest GIF read, its screen or any frame: 4096 × 4096 (64 MB a picture). */
+export const MAX_GIF_PIXELS = 4096 * 4096;
+/** The most frames read from a GIF (those past it are left out). */
+export const MAX_GIF_FRAMES = 20_000;
+/** The most pixels its frames have together (what drawing them all once reads). */
+export const MAX_GIF_FRAME_PIXELS = 2_000_000_000;
+
 /**
  * A GIF's size and frames, read from its blocks (no picture decoded). A
  * file cut short keeps the frames it has whole; one with none, or that
- * isn't a GIF, throws.
+ * isn't a GIF, throws — and so does one bigger than MAX_GIF_PIXELS (its
+ * header says so in a few bytes, whatever the file's size). Frames past
+ * MAX_GIF_FRAMES, or MAX_GIF_FRAME_PIXELS, are left out.
  */
 export function readGif(bytes: Uint8Array): GifInfo {
   if (!isGifData(bytes) || bytes.length < 13) throw new Error('It isn’t a GIF.');
@@ -128,7 +137,10 @@ export function readGif(bytes: Uint8Array): GifInfo {
   /** Hundredths of a second so far */
   let elapsed = 0;
   let loopCount: number | null = null;
-  while (p < bytes.length) {
+  let framePixels = 0;
+  const tooBig = () => new Error('This GIF is too big: it can be at most 4096 × 4096 pixels.');
+  if (width * height > MAX_GIF_PIXELS) throw tooBig();
+  while (p < bytes.length && frames.length < MAX_GIF_FRAMES) {
     const block = bytes[p]!;
     if (block === 0x3b) break;
     if (block === 0x21) {
@@ -170,10 +182,14 @@ export function readGif(bytes: Uint8Array): GifInfo {
     const end = skipSubBlocks(bytes, dataOffset);
     if (end < 0) break;
     p = end;
+    if (frameWidth * frameHeight > MAX_GIF_PIXELS) throw tooBig();
+    framePixels += frameWidth * frameHeight;
+    if (framePixels > MAX_GIF_FRAME_PIXELS) break;
     // A screen of no size is as big as its first picture
     if (frames.length === 0) {
       if (width === 0) width = left + frameWidth;
       if (height === 0) height = top + frameHeight;
+      if (width * height > MAX_GIF_PIXELS) throw tooBig();
     }
     const delay = control.delay < FASTEST_DELAY ? SLOW_DELAY : control.delay;
     frames.push({
@@ -392,7 +408,10 @@ export function createGifCompositor(
   const { width, height, frames } = gif;
   const size = width * height * 4;
   const picture = new Uint8ClampedArray(size);
-  const indices = new Uint8Array(Math.max(1, ...frames.map((f) => f.width * f.height)));
+  // (A loop, not a spread: a GIF can have more frames than a call takes arguments)
+  let largest = 1;
+  for (const frame of frames) largest = Math.max(largest, frame.width * frame.height);
+  const indices = new Uint8Array(largest);
   const blank = drawnOntoNothing(gif);
   const most = Math.floor((options.keepBytes ?? KEEP_BYTES) / Math.max(1, size));
   const every = most > 0 ? Math.max(1, Math.ceil(frames.length / most)) : Infinity;

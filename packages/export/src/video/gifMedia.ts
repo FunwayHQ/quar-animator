@@ -103,9 +103,19 @@ function composedPictures(file: Blob, info: GifInfo): GifPictures {
   /** The GIF at its own size, scaled from into canvases of other sizes */
   let full: Canvas | null = null;
   let image: ImageData | null = null;
+  let warned = false;
   return {
     async draw(index, canvas) {
-      const picture = (await compositor).pictureAt(index);
+      let picture: Uint8ClampedArray;
+      try {
+        picture = (await compositor).pictureAt(index);
+      } catch (error) {
+        // A GIF this editor can't draw shows nothing, rather than stopping what draws it
+        if (!warned) console.warn('A GIF frame could not be drawn:', error);
+        warned = true;
+        contextOf(canvas).clearRect(0, 0, canvas.width, canvas.height);
+        return;
+      }
       const same = canvas.width === info.width && canvas.height === info.height;
       const target = same ? canvas : (full ??= newCanvas(info.width, info.height));
       const context = contextOf(target);
