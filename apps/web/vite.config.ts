@@ -1,13 +1,32 @@
 /// <reference types="vitest" />
-import { defineConfig } from 'vite';
+import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
 // The user guide at /help/, built from docs/help/ before `vite` and `vite build`
 import { helpPages } from './scripts/help/vite-plugin.mjs';
 
+/**
+ * A build's page runs scripts only from the editor itself: none written into
+ * a page, or loaded from elsewhere — but for workers made from blob: URLs,
+ * as mediabunny makes its (video and sound). Not on the dev server, whose own
+ * hot-reload script is written into the page.
+ */
+function scriptsFromHereOnly(): Plugin {
+  return {
+    name: 'quar-scripts-from-here-only',
+    apply: 'build',
+    transformIndexHtml(html) {
+      const policy = "object-src 'none'";
+      if (!html.includes(policy))
+        throw new Error('index.html has lost its Content-Security-Policy');
+      return html.replace(policy, `script-src 'self'; worker-src 'self' blob:; ${policy}`);
+    },
+  };
+}
+
 export default defineConfig({
   base: './',
-  plugins: [react(), helpPages()],
+  plugins: [react(), helpPages(), scriptsFromHereOnly()],
   test: {
     globals: true,
     environment: 'jsdom',
