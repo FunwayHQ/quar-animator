@@ -116,3 +116,35 @@ describe('Canvas whose WebGL context is lost', () => {
     expect(screen.queryByTestId('canvas-unavailable')).not.toBeInTheDocument();
   });
 });
+
+describe('Canvas drawing', () => {
+  it('keeps drawing after a frame that fails, and says so once', async () => {
+    const { useEditorStore } = await import('../../stores/editorStore');
+    const frames: FrameRequestCallback[] = [];
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+      frames.push(callback);
+      return frames.length;
+    });
+    const logged = quiet();
+    renderCanvas();
+    await vi.waitFor(() => expect(frames.length).toBeGreaterThan(0));
+    const background = useEditorStore.getState().documentBackground;
+
+    // Something in the scene the frame can't draw (here: no background at all)
+    act(() => useEditorStore.setState({ documentBackground: null as never }));
+    for (let i = 0; i < 3; i++) {
+      const asked = frames.length;
+      frames[frames.length - 1]!(0);
+      // The next frame was asked for all the same
+      expect(frames.length).toBe(asked + 1);
+    }
+    const failures = logged.mock.calls.filter(
+      ([said]) => said === 'A canvas frame failed to draw:'
+    );
+    expect(failures).toHaveLength(1);
+
+    act(() => useEditorStore.setState({ documentBackground: background }));
+    logged.mockRestore();
+    vi.mocked(window.requestAnimationFrame).mockRestore();
+  });
+});

@@ -732,11 +732,8 @@ export function Canvas({
       resizeObserver.observe(container);
 
       // Start render loop
-      const render = () => {
-        if (renderer.isContextLost()) {
-          animationFrameRef.current = requestAnimationFrame(render);
-          return;
-        }
+      const drawFrame = () => {
+        if (renderer.isContextLost()) return;
 
         // The document background, with a grid that reads on it
         const { documentBackground } = useEditorStore.getState();
@@ -994,8 +991,21 @@ export function Canvas({
             }
           }
         }
+      };
 
+      // The next frame is asked for whatever this one does: a frame that
+      // fails (a damaged file's node) is reported once, and drawing goes on
+      let lastFailure = '';
+      const render = () => {
         animationFrameRef.current = requestAnimationFrame(render);
+        try {
+          drawFrame();
+          lastFailure = '';
+        } catch (error) {
+          const said = error instanceof Error ? error.message : String(error);
+          if (said !== lastFailure) console.error('A canvas frame failed to draw:', error);
+          lastFailure = said;
+        }
       };
 
       animationFrameRef.current = requestAnimationFrame(render);
