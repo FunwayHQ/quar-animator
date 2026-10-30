@@ -221,6 +221,25 @@ describe('videoFrameAt', () => {
     }
   });
 
+  it('lets a video nobody has drawn for a while go, once another is drawn', async () => {
+    vi.useFakeTimers();
+    try {
+      setVideoFile('v1', new Blob(['v1']));
+      setVideoFile('v2', new Blob(['v2']));
+      videoFrameAt('v1', 0);
+      videoFrameAt('v2', 0);
+      // Only v2 is drawn from here on (v1's layer was deleted, say)
+      for (let i = 0; i < 12; i++) {
+        await vi.advanceTimersByTimeAsync(1000);
+        videoFrameAt('v2', i / 30);
+      }
+      expect(sources.map((s) => s.disposed)).toEqual([true, false]);
+    } finally {
+      vi.useRealTimers();
+      releaseVideoFrames('v2');
+    }
+  });
+
   it('lets a video’s decoding go when the document lets its file go', () => {
     setVideoFile('v1', new Blob(['v1']));
     setVideoFile('v2', new Blob(['v2']));

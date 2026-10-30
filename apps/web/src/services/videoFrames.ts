@@ -39,6 +39,8 @@ const MAX_READERS = 3;
 const READER_SPAN = 1;
 /** A reader not asked of for this long goes (the first one stays), in ms */
 const READER_IDLE = 3000;
+/** A video none of whose readers is asked of for this long has them all go, in ms */
+const VIDEO_IDLE = 10_000;
 /** How far either side of the still wanted a loaded one is looked for */
 const STILL_REACH = 8;
 /** How often waiting for a frame looks whether it's decoded, in ms */
@@ -116,6 +118,14 @@ export function createVideoFrames(): VideoFrames {
       decoders.set(videoId, decoder);
     }
     const now = Date.now();
+    // Other videos nobody's drawn for a while (their layers deleted, or
+    // hidden) let their decoders go: each holds a decoder and its pictures
+    for (const [otherId, other] of decoders) {
+      if (otherId !== videoId && other.readers.every((r) => now - r.used > VIDEO_IDLE)) {
+        for (const reader of other.readers) reader.source.dispose();
+        decoders.delete(otherId);
+      }
+    }
     decoder.readers = decoder.readers.filter((reader, index) => {
       const idle = index > 0 && now - reader.used > READER_IDLE;
       if (idle) reader.source.dispose();

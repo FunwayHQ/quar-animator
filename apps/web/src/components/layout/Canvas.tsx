@@ -76,6 +76,7 @@ import type { ContextMenuEntry } from '../common/ContextMenu';
 import { promptDialog } from '../common/PromptDialog';
 import { toast } from '../common/Toast';
 import styles from './Canvas.module.css';
+import { releaseVideoFrames } from '../../services/videoFrames';
 
 // ============================================================================
 // Constants
@@ -345,7 +346,15 @@ export function Canvas({
       if (!renderer) return;
       if (event.nodeId) renderer.invalidateCache(event.nodeId);
       const removed = event.node;
-      if (removed?.type === 'video') renderer.disposeVideoTexture(removed.id);
+      if (removed?.type === 'video') {
+        renderer.disposeVideoTexture(removed.id);
+        // Its decoding goes too, when no other layer here shows that video
+        let stillShown = false;
+        sceneGraph.traverse((n) => {
+          if (n.type === 'video' && n.videoId === removed.videoId) stillShown = true;
+        });
+        if (!stillShown) releaseVideoFrames(removed.videoId);
+      }
       if (removed?.type === 'image') {
         // The node is already out of the graph here (removeNode emits after
         // deleting), so only free the shared GPU texture when no OTHER image node
