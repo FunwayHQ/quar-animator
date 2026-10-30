@@ -591,6 +591,45 @@ describe('EditorStore', () => {
       expect(useEditorStore.getState().frameRate).toBe(120);
     });
 
+    it('lengthens a timeline that would cut a clip short at a higher frame rate', () => {
+      // 10 s of sound, and a 10 s video clip, on 300 frames at 30 fps
+      const sound = { id: 's', soundId: 'voice', start: 0, offset: 0, duration: 10, gain: 1 };
+      useEditorStore.setState({
+        frameRate: 30,
+        timelineDuration: 300,
+        timelineScope: null,
+        timeline: { ...createTimeline({ duration: 300, frameRate: 30 }), sounds: [sound] },
+      });
+      const scene = new SceneGraph();
+      scene.addNode({
+        id: 'clip',
+        name: 'Clip',
+        type: 'video',
+        parent: null,
+        children: [],
+        transform: createDefaultTransform(),
+        visible: true,
+        locked: false,
+        opacity: 1,
+        blendMode: 'normal',
+        videoId: 'v',
+        width: 160,
+        height: 90,
+        naturalWidth: 160,
+        naturalHeight: 90,
+        cornerRadius: [0, 0, 0, 0],
+        clip: { start: 60, offset: 0, duration: 10 },
+      } as never);
+      useEditorStore.getState().setFrameRate(60, scene);
+      const state = useEditorStore.getState();
+      // The video ends at frame 60 + 10 s × 60: the timeline holds it
+      expect(state.timeline.duration).toBe(660);
+      expect(state.timelineDuration).toBe(660);
+      // Back down, nothing is cut: it stays as long
+      useEditorStore.getState().setFrameRate(24, scene);
+      expect(useEditorStore.getState().timeline.duration).toBe(660);
+    });
+
     it('should set timeline expanded', () => {
       const { setTimelineExpanded } = useEditorStore.getState();
       setTimelineExpanded(false);

@@ -39,16 +39,20 @@ import type {
   BoneGroup,
   Matrix3,
   SoundClip,
+  VideoNode,
 } from '@quar/types';
 import type { AnimationSequence, KeyframeClipboard, GraphViewTransform } from '@quar/animation';
 import {
+  clipEndFrame,
   createAnimationSequence,
   createTimeline,
   KeyframeManager,
   openingScope,
   scopeDuration,
+  scopeSounds,
   tangentsToEasing,
   tracksAfterListItemRemoved,
+  videoClipEndFrame,
   withScopeDuration,
 } from '@quar/animation';
 import {
@@ -135,6 +139,8 @@ import {
   cutContour,
   mat3,
   artboardAt,
+  inTimelineScope,
+  SceneGraph as PageScene,
 } from '@quar/core';
 import type { OnionSkinSettings, BooleanOp, SceneGraph } from '@quar/core';
 import { applySkinSnapshots, DEFAULT_WIND_SETTINGS } from '@quar/rigging';
@@ -680,6 +686,60 @@ function atFrameRate(
     pages: state.pages.map((page) => ({
       ...page,
       timeline: { ...page.timeline, frameRate: rate },
+    })),
+  };
+}
+
+/**
+ * A timeline lengthened where its clips would be cut short at `rate`: sound
+ * and video clips run in seconds, so a higher frame rate needs more frames
+ * for them. Each of its timelines (the page's, each artboard's) fits the
+ * clips playing on it; none is ever shortened.
+ */
+function fittedToClips(timeline: Timeline, scene: SceneGraphLike, rate: number): Timeline {
+  const videos: VideoNode[] = [];
+  scene.traverse((node) => {
+    if (node.type === 'video' && node.clip) videos.push(node);
+  });
+  let fitted = timeline;
+  for (const scope of [null, ...Object.keys(timeline.artboards ?? {})]) {
+    const inScope = inTimelineScope(scene, scope);
+    let end = 0;
+    for (const clip of scopeSounds(timeline, scope)) end = Math.max(end, clipEndFrame(clip, rate));
+    for (const video of videos) {
+      if (inScope(video.id)) end = Math.max(end, videoClipEndFrame(video.clip, rate));
+    }
+    const frames = Math.ceil(end - 1e-6);
+    if (frames > scopeDuration(fitted, scope)) fitted = withScopeDuration(fitted, scope, frames);
+  }
+  return fitted;
+}
+
+/** The document at a new frame rate, every timeline fitted to its clips (see fittedToClips). */
+function atFrameRateFitted(
+  rate: number,
+  state: Pick<EditorStore, 'timeline' | 'pages' | 'activePageId'>,
+  sceneGraph: SceneGraphLike | undefined
+): Pick<EditorStore, 'frameRate' | 'timeline' | 'pages'> {
+  const at = atFrameRate(rate, state);
+  const sceneOf = (json: { nodes: Node[]; rootNodeIds: string[] }) => {
+    const scene = new PageScene();
+    scene.fromJSON(structuredClone(json));
+    return scene;
+  };
+  const activePage = state.pages.find((page) => page.id === state.activePageId);
+  const activeScene =
+    sceneGraph ?? (activePage ? sceneOf(activePage.sceneGraphJSON) : new PageScene());
+  return {
+    frameRate: rate,
+    timeline: fittedToClips(at.timeline, activeScene, rate),
+    pages: at.pages.map((page) => ({
+      ...page,
+      timeline: fittedToClips(
+        page.timeline,
+        page.id === state.activePageId ? activeScene : sceneOf(page.sceneGraphJSON),
+        rate
+      ),
     })),
   };
 }
@@ -3040,7 +3100,16 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     if (sceneGraph && r !== get().frameRate) pushSettingUndo(get, sceneGraph, 'frameRate');
     set((state) => {
       if (r === state.frameRate && r === state.timeline.frameRate) return {};
-      return { ...atFrameRate(r, state), isDirty: true };
+      // Clips run in seconds: a timeline that would cut one short at the new rate grows to fit it
+      const fitted = atFrameRateFitted(r, state, sceneGraph);
+      const timelineDuration = scopeDuration(fitted.timeline, state.timelineScope);
+      return {
+        ...fitted,
+        timelineDuration,
+        currentFrame: Math.min(state.currentFrame, timelineDuration - 1),
+        ...workAreaFor(timelineDuration, state),
+        isDirty: true,
+      };
     });
   },
   setTimelineExpanded: (expanded: boolean) => set({ timelineExpanded: expanded }),
