@@ -217,6 +217,9 @@ export {
 
 export {
   decodeSound,
+  MAX_SOUND_SECONDS,
+  SoundTooLong,
+  soundDuration,
   mixSoundtrack,
   slideSoundtrackParts,
   soundAtSpeed,

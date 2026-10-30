@@ -24,10 +24,46 @@ export function soundBytes(src: string): Uint8Array<ArrayBuffer> {
   return bytes;
 }
 
-/** A sound decoded, at the soundtrack's rate (or `context`'s). */
-export async function decodeSound(src: string, context?: BaseAudioContext): Promise<AudioBuffer> {
+/**
+ * The longest sound decoded, in seconds: decoded, a sound takes about 23 MB
+ * a minute (two channels at 48 kHz) — and a file of a few megabytes can
+ * hold hours of quiet speech.
+ */
+export const MAX_SOUND_SECONDS = 30 * 60;
+
+/** A sound that plays longer than may be decoded (MAX_SOUND_SECONDS). */
+export class SoundTooLong extends Error {
+  constructor(readonly maxSeconds: number) {
+    super(`The sound is too long: it can be at most ${Math.round(maxSeconds / 60)} minutes.`);
+  }
+}
+
+/** How long a sound file plays, read from its container (null: it can't be told that way). */
+export async function soundDuration(bytes: Uint8Array): Promise<number | null> {
+  try {
+    const mb = await import('mediabunny');
+    const input = new mb.Input({ source: new mb.BufferSource(bytes), formats: mb.ALL_FORMATS });
+    const duration = await input.computeDuration();
+    return Number.isFinite(duration) && duration > 0 ? duration : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * A sound decoded, at the soundtrack's rate (or `context`'s) — unless it
+ * plays longer than `maxSeconds`, which throws before anything is decoded.
+ */
+export async function decodeSound(
+  src: string,
+  context?: BaseAudioContext,
+  maxSeconds = MAX_SOUND_SECONDS
+): Promise<AudioBuffer> {
+  const bytes = soundBytes(src);
+  const duration = await soundDuration(bytes);
+  if (duration !== null && duration > maxSeconds) throw new SoundTooLong(maxSeconds);
   const decoder = context ?? new OfflineAudioContext(1, 1, SOUNDTRACK_RATE);
-  return decoder.decodeAudioData(soundBytes(src).buffer);
+  return decoder.decodeAudioData(bytes.buffer);
 }
 
 /**

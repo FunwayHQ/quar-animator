@@ -3,7 +3,11 @@ import type { Sound } from '@quar/types';
 
 const decodeSound = vi.hoisted(() => vi.fn());
 const soundAtSpeed = vi.hoisted(() => vi.fn());
-vi.mock('@quar/export', () => ({ decodeSound, soundAtSpeed }));
+vi.mock('@quar/export', async (actual) => ({
+  SoundTooLong: (await actual<typeof import('@quar/export')>()).SoundTooLong,
+  decodeSound,
+  soundAtSpeed,
+}));
 
 import {
   MAX_SOUND_BYTES,
@@ -15,6 +19,7 @@ import {
   soundType,
   waveformPath,
 } from './soundFiles';
+import { SoundTooLong } from '@quar/export';
 
 function audio(duration: number, ...channels: number[][]): AudioBuffer {
   return {
@@ -64,6 +69,11 @@ describe('readSoundFile', () => {
     decodeSound.mockRejectedValueOnce(new Error('EncodingError'));
     await expect(readSoundFile(new File(['x'], 'odd.flac'))).rejects.toThrow(
       'this browser can’t read its format'
+    );
+    // Hours of speech in a few megabytes: refused before it's decoded
+    decodeSound.mockRejectedValueOnce(new SoundTooLong(30 * 60));
+    await expect(readSoundFile(new File(['x'], 'lecture.opus'))).rejects.toThrow(
+      '“lecture.opus” is too long: a sound can be up to 30 minutes.'
     );
   });
 });

@@ -5,7 +5,7 @@
  * waveforms and video exports alike, so they all sound the same.
  */
 
-import { decodeSound, soundAtSpeed } from '@quar/export';
+import { SoundTooLong, decodeSound, soundAtSpeed } from '@quar/export';
 import type { Sound } from '@quar/types';
 
 /** The largest sound file read: the project keeps the whole file. */
@@ -68,7 +68,12 @@ export async function readSoundFile(file: File): Promise<Sound> {
   let audio: AudioBuffer;
   try {
     audio = await decodeSound(src);
-  } catch {
+  } catch (error) {
+    if (error instanceof SoundTooLong) {
+      throw new Error(
+        `“${file.name}” is too long: a sound can be up to ${error.maxSeconds / 60} minutes.`
+      );
+    }
     throw new Error(`“${file.name}” can’t be played: this browser can’t read its format.`);
   }
   return keptDecoded(file.name.replace(/\.[^.]+$/, '') || 'Sound', src, audio);
