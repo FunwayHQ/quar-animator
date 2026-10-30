@@ -152,6 +152,22 @@ describe('importVideoFiles', () => {
     expect(toast.success).toHaveBeenCalledWith('Added “Beach day” (4 s) with its sound');
   });
 
+  it('comes in without a sound larger than a sound can be, saying so', async () => {
+    const huge = new Blob(['x']);
+    Object.defineProperty(huge, 'size', { value: 50 * 1024 * 1024 + 1 });
+    mocks.extractVideoSound.mockResolvedValue({
+      file: huge,
+      mimeType: 'audio/wav',
+      audio,
+      copied: false,
+    });
+    const sg = new SceneGraph();
+    await importVideoFiles(sg, [new File(['mp4'], 'long.mp4')]);
+    expect(store().videos).toHaveLength(1);
+    expect(store().sounds).toEqual([]);
+    expect(toast.info).toHaveBeenCalledWith(expect.stringContaining('larger than a sound can be'));
+  });
+
   it('isn’t added to another project opened while it was read', async () => {
     const sg = new SceneGraph();
     useEditorStore.setState({ projectId: 'first' });

@@ -23,7 +23,7 @@ import type { Sound, Video } from '@quar/types';
 import { useEditorStore } from '../stores/editorStore';
 import { placeVideoLayer } from '../stores/videoPlacement';
 import { toast } from '../components/common/Toast';
-import { soundFromDecoded } from './soundFiles';
+import { MAX_SOUND_BYTES, soundFromDecoded } from './soundFiles';
 import { setVideoFile } from './videoFiles';
 
 /** The largest video file taken: the project keeps the whole file. */
@@ -135,12 +135,17 @@ async function importVideoFile(
     const name = file.name.replace(/\.[^.]+$/, '') || 'Video';
     let sound: Sound | null = null;
     let soundUnplayable = false;
+    let soundTooLarge = false;
     // A video without sound (a GIF) has none to take out
     if (info.audioCodec !== null) {
       progress.update(`Importing ${label}: its sound…`);
       try {
         const extracted = await extractVideoSound(file);
-        if (extracted) sound = await soundFromDecoded(name, extracted.file, extracted.audio);
+        // As big as an imported sound may be (the project keeps it whole, in every save)
+        if (extracted && extracted.file.size > MAX_SOUND_BYTES) soundTooLarge = true;
+        else if (extracted) {
+          sound = await soundFromDecoded(name, extracted.file, extracted.audio);
+        }
       } catch {
         soundUnplayable = true;
       }
@@ -184,6 +189,11 @@ async function importVideoFile(
     );
     if (soundUnplayable) {
       toast.info(`“${name}” came in without its sound: this browser can’t play it.`);
+    }
+    if (soundTooLarge) {
+      toast.info(
+        `“${name}” came in without its sound: taken out of the video, it’s larger than a sound can be (50 MB).`
+      );
     }
     return true;
   } catch (error) {
