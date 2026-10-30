@@ -3451,6 +3451,45 @@ describe('EditorStore', () => {
       expect(symNodeIds).toContain('symbol-extra');
     });
 
+    it('opening another symbol while one is open closes that one first, keeping the page', () => {
+      const sg = createMockSceneGraphForSymbols();
+      sg._addTestNode(makeTestRect('keep'));
+      sg._addTestNode(makeTestRect('r1'));
+      sg._addTestNode(makeTestRect('r2'));
+      useEditorStore.setState({ selectedNodeIds: new Set(['r1']) });
+      const first = useEditorStore.getState().createSymbol(sg)!;
+      useEditorStore.setState({ selectedNodeIds: new Set(['r2']) });
+      const second = useEditorStore.getState().createSymbol(sg)!;
+      useEditorStore.getState().pushUndo(sg);
+      const pageIds = sg
+        .toJSON()
+        .nodes.map((n) => n.id)
+        .sort();
+      const pageUndo = useEditorStore.getState().undoStack.length;
+
+      // Edit the first symbol, then open the second (and the second again)
+      useEditorStore.getState().enterSymbolEdit(first, sg);
+      sg._addTestNode(makeTestRect('in-first'));
+      useEditorStore.getState().enterSymbolEdit(second, sg);
+      useEditorStore.getState().enterSymbolEdit(second, sg);
+      expect(useEditorStore.getState().editingSymbolId).toBe(second);
+
+      // The first symbol kept its change
+      const firstDef = useEditorStore.getState().symbols.find((s) => s.id === first)!;
+      expect(firstDef.sceneGraphJSON.nodes.map((n) => n.id)).toContain('in-first');
+
+      // Closing the second returns to the page as it was, with its own undo
+      useEditorStore.getState().exitSymbolEdit(sg);
+      expect(useEditorStore.getState().editingSymbolId).toBeNull();
+      expect(
+        sg
+          .toJSON()
+          .nodes.map((n) => n.id)
+          .sort()
+      ).toEqual(pageIds);
+      expect(useEditorStore.getState().undoStack).toHaveLength(pageUndo);
+    });
+
     it('setInstanceOverride adds override to instance', () => {
       const sg = createMockSceneGraphForSymbols();
       const rect = makeTestRect('r1');

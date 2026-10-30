@@ -4982,6 +4982,11 @@ function createSymbolActions(
     },
 
     enterSymbolEdit: (symbolId: string, sceneGraph: SceneGraphLike) => {
+      if (!get().symbols.some((s) => s.id === symbolId)) return;
+      // One symbol is edited at a time: the scene holds the open one's layers,
+      // so it's closed first (its changes kept), and the next opens from the page
+      if (get().editingSymbolId === symbolId) return;
+      if (get().editingSymbolId) get().exitSymbolEdit(sceneGraph);
       const state = get();
       const definition = state.symbols.find((s) => s.id === symbolId);
       if (!definition) return;
