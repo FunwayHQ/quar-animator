@@ -1250,7 +1250,8 @@ export interface EditorStore
   clearHistory: () => void;
   /**
    * Clear what belongs to the editing session rather than the file — undo,
-   * the selection — as another project is opened (just before it's read in).
+   * the selection, a symbol open for editing — as another project is opened
+   * (just before it's read in).
    */
   forgetSession: () => void;
   /** Reset all project-scoped state to a fresh empty project (F024). */
@@ -4295,6 +4296,10 @@ function createHistoryActions(
         selectedNodeIds: new Set<string>(),
         selectedKeyframeIds: new Set<string>(),
         selectedSoundClipId: null,
+        // The scene is about to hold the next project's page: the last one's
+        // symbol edit (and the page it put aside) mustn't be saved into it
+        editingSymbolId: null,
+        editingSymbolPrevState: null,
       });
     },
 

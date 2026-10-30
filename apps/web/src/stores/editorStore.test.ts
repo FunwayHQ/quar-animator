@@ -3513,6 +3513,25 @@ describe('EditorStore', () => {
       expect(useEditorStore.getState().undoStack).toHaveLength(pageUndo);
     });
 
+    it('a symbol open for editing doesn’t carry into the next project opened', () => {
+      const sg = createMockSceneGraphForSymbols();
+      sg._addTestNode(makeTestRect('r1'));
+      useEditorStore.setState({ selectedNodeIds: new Set(['r1']) });
+      const symbolId = useEditorStore.getState().createSymbol(sg)!;
+      useEditorStore.getState().enterSymbolEdit(symbolId, sg);
+
+      // Another project is opened (its file read in just after)
+      useEditorStore.getState().forgetSession();
+      expect(useEditorStore.getState().editingSymbolId).toBeNull();
+      expect(useEditorStore.getState().editingSymbolPrevState).toBeNull();
+
+      // Escape there finds no symbol edit: the new project's page stays as it is
+      sg._addTestNode(makeTestRect('next-project'));
+      const before = JSON.stringify(sg.toJSON());
+      useEditorStore.getState().exitSymbolEdit(sg);
+      expect(JSON.stringify(sg.toJSON())).toBe(before);
+    });
+
     it('setInstanceOverride adds override to instance', () => {
       const sg = createMockSceneGraphForSymbols();
       const rect = makeTestRect('r1');
