@@ -2938,9 +2938,45 @@ describe('EditorStore', () => {
       const state = useEditorStore.getState();
       expect(state.pages.length).toBe(2);
       expect(state.pages[1]!.name).toBe('Page 1 Copy');
-      // The duplicated page should have the same scene graph content
+      // The same layers, with ids of their own
+      const [copy] = state.pages[1]!.sceneGraphJSON.nodes;
       expect(state.pages[1]!.sceneGraphJSON.nodes.length).toBe(1);
-      expect(state.pages[1]!.sceneGraphJSON.nodes[0]!.id).toBe('rect1');
+      expect(copy!.name).toBe('rect1');
+      expect(copy!.id).not.toBe('rect1');
+      expect(state.pages[1]!.sceneGraphJSON.rootNodeIds).toEqual([copy!.id]);
+    });
+
+    it('duplicatePage gives the copy’s bones a rig of their own, and its animation follows', () => {
+      const sg = createMockSceneGraph();
+      sg._addTestNode(makeTestNode('bone1'));
+      sg._addTestNode(makeTestNode('target1'));
+      const chain = {
+        id: 'chain1',
+        name: 'Arm',
+        rootBoneId: 'bone1',
+        endEffectorBoneId: 'bone1',
+        targetNodeId: 'target1',
+      };
+      const track = { id: 't1', nodeId: 'bone1', property: 'transform.rotation', keyframes: [] };
+      useEditorStore.setState({
+        ikChains: [chain as never],
+        timeline: { ...useEditorStore.getState().timeline, tracks: [track as never] },
+      });
+      const page1Id = useEditorStore.getState().activePageId;
+      useEditorStore.getState().duplicatePage(page1Id, sg);
+
+      const state = useEditorStore.getState();
+      const copyIds = new Map(
+        state.pages[1]!.sceneGraphJSON.nodes.map((node) => [node.name, node.id])
+      );
+      // The original's chain stays as it was; the copy's bones have one of their own
+      expect(state.ikChains).toHaveLength(2);
+      expect(state.ikChains[0]).toMatchObject({ id: 'chain1', rootBoneId: 'bone1' });
+      expect(state.ikChains[1]).toMatchObject({
+        rootBoneId: copyIds.get('bone1'),
+        targetNodeId: copyIds.get('target1'),
+      });
+      expect(state.pages[1]!.timeline.tracks[0]!.nodeId).toBe(copyIds.get('bone1'));
     });
 
     it('duplicatePage does not switch to the new page', () => {

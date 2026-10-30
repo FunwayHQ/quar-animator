@@ -87,6 +87,7 @@ import {
   remapSkinData,
   type ClipboardExtras,
 } from './clipboardRig';
+import { withNewIds } from './duplicatePage';
 import {
   applyPlacement,
   mapPlacement,
@@ -4590,14 +4591,23 @@ function createPageActions(
         sourcePage = updatedPages.find((p) => p.id === pageId) ?? sourcePage;
       }
 
+      // Its layers get ids of their own, and its bones' rigs a copy for them
+      let idCounter = Date.now();
+      const nextId = (prefix: string) =>
+        `${prefix}_${idCounter++}_${Math.random().toString(36).slice(2, 8)}`;
+      const { content, added } = withNewIds(
+        {
+          sceneGraphJSON: sourcePage.sceneGraphJSON,
+          timeline: sourcePage.timeline,
+          animationSequence: sourcePage.animationSequence ?? createAnimationSequence(),
+        },
+        state,
+        nextId
+      );
       const newPage: PageData = {
         id: generatePageId(),
         name: `${sourcePage.name} Copy`,
-        sceneGraphJSON: structuredClone(sourcePage.sceneGraphJSON),
-        timeline: structuredClone(sourcePage.timeline),
-        animationSequence: structuredClone(
-          sourcePage.animationSequence ?? createAnimationSequence()
-        ),
+        ...content,
         selectedNodeIds: [],
         undoStack: [],
         redoStack: [],
@@ -4608,7 +4618,14 @@ function createPageActions(
       const newPages = [...updatedPages];
       newPages.splice(sourceIndex + 1, 0, newPage);
 
-      set({ pages: newPages, isDirty: true });
+      set({
+        pages: newPages,
+        ikChains: [...state.ikChains, ...added.ikChains],
+        dynamicChains: [...state.dynamicChains, ...added.dynamicChains],
+        smartBoneActions: [...state.smartBoneActions, ...added.smartBoneActions],
+        vitruvianControllers: [...state.vitruvianControllers, ...added.vitruvianControllers],
+        isDirty: true,
+      });
     },
 
     switchPage: (pageId: string, sceneGraph: SceneGraphLike) => {
