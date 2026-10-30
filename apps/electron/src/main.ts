@@ -1,5 +1,6 @@
 import { app, BrowserWindow, dialog, shell } from 'electron';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 function createWindow(): void {
   const window = new BrowserWindow({
@@ -19,6 +20,18 @@ function createWindow(): void {
       void shell.openExternal(url);
     }
     return { action: 'deny' };
+  });
+
+  // The window stays on the editor: a file dropped outside the canvas, or a
+  // link followed, doesn't take it elsewhere (a file:// page can read other
+  // files); web links open in the browser instead
+  const home = app.isPackaged
+    ? pathToFileURL(path.join(process.resourcesPath, 'web') + path.sep).href
+    : 'http://localhost:3000/';
+  window.webContents.on('will-navigate', (event, url) => {
+    if (url.startsWith(home)) return;
+    event.preventDefault();
+    if (url.startsWith('https://') || url.startsWith('http://')) void shell.openExternal(url);
   });
 
   // The editor holds the window while there are unsaved changes (beforeunload);
