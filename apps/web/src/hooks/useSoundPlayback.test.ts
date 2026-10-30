@@ -3,7 +3,7 @@ import { act, renderHook } from '@testing-library/react';
 import { createTimeline, withScopeSounds } from '@quar/animation';
 import type { Sound, SoundClip } from '@quar/types';
 import { useEditorStore } from '../stores/editorStore';
-import { useSoundPlayback } from './useSoundPlayback';
+import { DECODE_AHEAD_AFTER_MS, useSoundPlayback } from './useSoundPlayback';
 import { getPlayEnd } from './usePlayback';
 import type { SoundPlayer } from '../services/soundPlayer';
 
@@ -116,19 +116,56 @@ describe('useSoundPlayback scrubbing', () => {
     renderHook(() => useSoundPlayback(() => player as unknown as SoundPlayer));
   });
 
+  /** The changes settled: what the clips play is made ahead */
+  const settle = () => vi.advanceTimersByTime(DECODE_AHEAD_AFTER_MS);
+
   it('gets the library ready, and again as it changes', () => {
-    expect(player.prepare).toHaveBeenCalledWith([voice], undefined, [clip('a', 30)]);
-    set({ sounds: [] });
-    expect(player.prepare).toHaveBeenLastCalledWith([], undefined, [clip('a', 30)]);
+    vi.useFakeTimers();
+    try {
+      expect(player.prepare).toHaveBeenCalledWith([voice], undefined, [clip('a', 30)]);
+      set({ sounds: [] });
+      settle();
+      expect(player.prepare).toHaveBeenLastCalledWith([], undefined, [clip('a', 30)]);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('makes the renditions the clips in view play at, as their speeds change', () => {
-    const fast = { ...clip('a', 30), speed: 2 };
-    set({ timeline: { ...useEditorStore.getState().timeline, sounds: [fast] } });
-    expect(player.prepare).toHaveBeenLastCalledWith([voice], undefined, [fast]);
-    const timeline = withScopeSounds(useEditorStore.getState().timeline, 'slide', [clip('s', 0)]);
-    set({ timeline, timelineScope: 'slide' });
-    expect(player.prepare).toHaveBeenLastCalledWith([voice], undefined, [clip('s', 0)]);
+    vi.useFakeTimers();
+    try {
+      const fast = { ...clip('a', 30), speed: 2 };
+      set({ timeline: { ...useEditorStore.getState().timeline, sounds: [fast] } });
+      settle();
+      expect(player.prepare).toHaveBeenLastCalledWith([voice], undefined, [fast]);
+      const timeline = withScopeSounds(useEditorStore.getState().timeline, 'slide', [clip('s', 0)]);
+      set({ timeline, timelineScope: 'slide' });
+      settle();
+      expect(player.prepare).toHaveBeenLastCalledWith([voice], undefined, [clip('s', 0)]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('makes no rendition for each speed a Speed slider passes, only the one it stops at', () => {
+    vi.useFakeTimers();
+    try {
+      vi.mocked(player.prepare).mockClear();
+      // Dragged from 1× down to 0.5×, a value at a time
+      for (let hundredths = 99; hundredths >= 50; hundredths--) {
+        const at = { ...clip('a', 30), speed: hundredths / 100 };
+        set({ timeline: { ...useEditorStore.getState().timeline, sounds: [at] } });
+        vi.advanceTimersByTime(16);
+      }
+      expect(player.prepare).not.toHaveBeenCalled();
+      settle();
+      expect(player.prepare).toHaveBeenCalledOnce();
+      expect(player.prepare).toHaveBeenCalledWith([voice], undefined, [
+        { ...clip('a', 30), speed: 0.5 },
+      ]);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('plays the frame the playhead is dragged or stepped to, stopped', () => {

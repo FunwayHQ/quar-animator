@@ -156,6 +156,39 @@ describe('a sound at a clip’s speed', () => {
   });
 });
 
+describe('renditions no clip plays', () => {
+  const sound = (id: string): Sound => ({
+    id,
+    name: id,
+    src: `data:audio/wav;base64,${id}`,
+    duration: 1,
+  });
+  const clipAt = (soundId: string, speed: number) =>
+    ({ id: `c${speed}`, soundId, start: 0, offset: 0, duration: 1, gain: 1, speed }) as never;
+
+  it('are let go of, and one still being made stops', async () => {
+    decodeSound.mockResolvedValue(audio(1, [0]));
+    const stretches: { speed: number; cancelled: () => boolean }[] = [];
+    soundAtSpeed.mockImplementation(
+      (from: AudioBuffer, speed: number, options: { cancelled: () => boolean }) => {
+        stretches.push({ speed, cancelled: options.cancelled });
+        return new Promise(() => undefined); // still being made
+      }
+    );
+    const voice = sound('voice-pruned');
+    void decodedSound(voice, 0.5);
+    void decodedSound(voice, 0.75);
+    await vi.waitFor(() => expect(stretches).toHaveLength(2));
+    // Only 0.75× is played now: 0.5× is let go of, its stretch told to stop
+    keepDecodedSounds([voice], [clipAt('voice-pruned', 0.75)]);
+    expect(stretches.find((s) => s.speed === 0.5)!.cancelled()).toBe(true);
+    expect(stretches.find((s) => s.speed === 0.75)!.cancelled()).toBe(false);
+    // ...and asked for again, it's made again
+    void decodedSound(voice, 0.5);
+    await vi.waitFor(() => expect(stretches).toHaveLength(3));
+  });
+});
+
 describe('waveforms', () => {
   it('takes the loudest sample of each hundredth of a second, over the channels', () => {
     // 0.02 s at 200 samples a second: two peaks of two samples each

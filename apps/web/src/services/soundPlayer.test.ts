@@ -315,6 +315,19 @@ describe('SoundPlayer', () => {
     expect(each).toHaveBeenCalledOnce();
   });
 
+  it('lets go of renditions at speeds no clip plays any more', async () => {
+    const { player: p, decode } = player();
+    await p.prepare([sound('voice')], undefined, [clip('a', 0, { speed: 2 })]);
+    await p.prepare([sound('voice')], undefined, [clip('a', 0, { speed: 0.5 })]);
+    decode.mockClear();
+    // Back at 2×: let go of, it's made again (1× and 0.5× it kept)
+    await p.prepare([sound('voice')], undefined, [
+      clip('a', 0, { speed: 2 }),
+      clip('b', 0, { speed: 0.5 }),
+    ]);
+    expect(decode.mock.calls.map(([s, speed]) => [s.id, speed])).toEqual([['voice', 2]]);
+  });
+
   it('scrubs a sped-up, looped clip at the moment of it under the playhead', async () => {
     const { player: p, context } = player();
     const looped = clip('a', 0, { offset: 1, speed: 2, loop: true, loopFor: 4 });

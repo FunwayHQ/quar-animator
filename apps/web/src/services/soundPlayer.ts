@@ -9,10 +9,10 @@
  * playhead is dragged or stepped there (scrubbing).
  */
 
-import { clipSpeed, playLevel, schedulePlayGain, soundsPlayed } from '@quar/animation';
+import { playLevel, schedulePlayGain, soundsPlayed } from '@quar/animation';
 import type { SoundDecoder } from '@quar/export';
 import type { Sound, SoundClip } from '@quar/types';
-import { decodedSound } from './soundFiles';
+import { decodedSound, speedsPlayed } from './soundFiles';
 
 /** What plays: the clips of the timeline in view, up to where playing loops. */
 export interface SoundsToPlay {
@@ -35,22 +35,6 @@ export interface SoundPlayerOptions {
   createContext?: () => AudioContext;
   /** A sound decoded, or its rendition at a clip's speed */
   decode?: SoundDecoder;
-}
-
-/** The speeds each sound is played at by these clips, other than 1×. */
-function speedsPlayed(clips: readonly SoundClip[] | undefined): Map<string, Set<number>> {
-  const speeds = new Map<string, Set<number>>();
-  for (const clip of clips ?? []) {
-    const speed = clipSpeed(clip);
-    if (speed === 1) continue;
-    let known = speeds.get(clip.soundId);
-    if (!known) {
-      known = new Set();
-      speeds.set(clip.soundId, known);
-    }
-    known.add(speed);
-  }
-  return speeds;
 }
 
 export class SoundPlayer {
@@ -93,6 +77,13 @@ export class SoundPlayer {
     const kept = new Set(sounds.map((sound) => sound.id));
     for (const id of this.ready.keys()) if (!kept.has(id)) this.ready.delete(id);
     const speeds = speedsPlayed(clips);
+    // Renditions at speeds no clip plays any more go too (a Speed slider
+    // dragged passes dozens of them)
+    for (const [id, known] of this.ready) {
+      for (const speed of known.keys()) {
+        if (speed !== 1 && !speeds.get(id)?.has(speed)) known.delete(speed);
+      }
+    }
     return Promise.all(
       sounds.map((sound) =>
         Promise.all(

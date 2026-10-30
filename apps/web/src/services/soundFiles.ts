@@ -5,8 +5,9 @@
  * waveforms and video exports alike, so they all sound the same.
  */
 
+import { clipSpeed } from '@quar/animation';
 import { SoundTooLong, decodeSound, soundAtSpeed } from '@quar/export';
-import type { Sound } from '@quar/types';
+import type { Sound, SoundClip } from '@quar/types';
 
 /** The largest sound file read: the project keeps the whole file. */
 export const MAX_SOUND_BYTES = 50 * 1024 * 1024;
@@ -118,22 +119,53 @@ function rendition(sound: Sound, speed: number): Promise<AudioBuffer> {
     made = new Map();
     renditions.set(sound.id, made);
   }
-  let audio = made.get(speed);
-  if (!audio) {
-    const kept = made;
-    audio = decodedSound(sound).then((original) => soundAtSpeed(original, speed));
-    kept.set(speed, audio);
-    // Made again next time it's wanted
-    audio.catch(() => kept.delete(speed));
-  }
+  const existing = made.get(speed);
+  if (existing) return existing;
+  const kept = made;
+  // Stopped part way once it's let go of (no clip plays at that speed any more)
+  const audio: Promise<AudioBuffer> = decodedSound(sound).then((original) =>
+    soundAtSpeed(original, speed, {
+      cancelled: () => renditions.get(sound.id)?.get(speed) !== audio,
+    })
+  );
+  kept.set(speed, audio);
+  // Made again next time it's wanted
+  audio.catch(() => {
+    if (kept.get(speed) === audio) kept.delete(speed);
+  });
   return audio;
 }
 
-/** Lets go of the decoded audio (and renditions) of sounds the library no longer has. */
-export function keepDecodedSounds(sounds: readonly Sound[]): void {
+/** The speeds each sound is played at by these clips, other than 1×. */
+export function speedsPlayed(clips: readonly SoundClip[] | undefined): Map<string, Set<number>> {
+  const speeds = new Map<string, Set<number>>();
+  for (const clip of clips ?? []) {
+    const speed = clipSpeed(clip);
+    if (speed === 1) continue;
+    let known = speeds.get(clip.soundId);
+    if (!known) {
+      known = new Set();
+      speeds.set(clip.soundId, known);
+    }
+    known.add(speed);
+  }
+  return speeds;
+}
+
+/**
+ * Lets go of the decoded audio (and renditions) of sounds the library no
+ * longer has — and, given the clips, of renditions at speeds none plays
+ * (one still being made stops).
+ */
+export function keepDecodedSounds(sounds: readonly Sound[], clips?: readonly SoundClip[]): void {
   const kept = new Set(sounds.map((sound) => sound.id));
   for (const id of decoded.keys()) if (!kept.has(id)) decoded.delete(id);
   for (const id of renditions.keys()) if (!kept.has(id)) renditions.delete(id);
+  if (!clips) return;
+  const speeds = speedsPlayed(clips);
+  for (const [id, made] of renditions) {
+    for (const speed of made.keys()) if (!speeds.get(id)?.has(speed)) made.delete(speed);
+  }
 }
 
 /** How many peaks a second a waveform is drawn from. */

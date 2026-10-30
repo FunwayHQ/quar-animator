@@ -32,9 +32,17 @@ function toPlay(state: EditorState): SoundsToPlay {
 
 /** Each sound decoded ahead, at the clips' speeds (failures are silent: the clip just doesn't sound). */
 function decodeAhead(state: EditorState, player: SoundPlayer) {
-  keepDecodedSounds(state.sounds);
-  void player.prepare(state.sounds, undefined, clipsOf(state.timeline, state.timelineScope));
+  const clips = clipsOf(state.timeline, state.timelineScope);
+  keepDecodedSounds(state.sounds, clips);
+  void player.prepare(state.sounds, undefined, clips);
 }
+
+/**
+ * How long the clips stay unchanged before what they play is made ahead: a
+ * Speed slider dragged changes them dozens of times a second, and each speed
+ * is a whole time-stretched copy of the sound.
+ */
+export const DECODE_AHEAD_AFTER_MS = 250;
 
 /** The playhead moved to another frame of the same timeline, with it stopped. */
 function scrubbed(curr: EditorState, prev: EditorState): boolean {
@@ -60,12 +68,17 @@ export function useSoundPlayback(createPlayer: () => SoundPlayer = () => new Sou
     window.addEventListener('pointerdown', warm, true);
     window.addEventListener('keydown', warm, true);
 
+    let ahead: ReturnType<typeof setTimeout> | undefined;
     const unsubscribe = useEditorStore.subscribe((curr, prev) => {
       if (
         curr.sounds !== prev.sounds ||
         clipsOf(curr.timeline, curr.timelineScope) !== clipsOf(prev.timeline, prev.timelineScope)
       ) {
-        decodeAhead(curr, player);
+        clearTimeout(ahead);
+        ahead = setTimeout(
+          () => decodeAhead(useEditorStore.getState(), player),
+          DECODE_AHEAD_AFTER_MS
+        );
       }
       if (!curr.isPlaying || curr.isExporting) {
         if (prev.isPlaying && !prev.isExporting) player.stop();
@@ -89,6 +102,7 @@ export function useSoundPlayback(createPlayer: () => SoundPlayer = () => new Sou
     });
 
     return () => {
+      clearTimeout(ahead);
       unsubscribe();
       window.removeEventListener('pointerdown', warm, true);
       window.removeEventListener('keydown', warm, true);
