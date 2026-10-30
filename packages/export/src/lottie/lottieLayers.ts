@@ -9,7 +9,7 @@
  */
 
 import type { ImageNode, Node, Timeline, VideoNode } from '@quar/types';
-import { createRectanglePath } from '@quar/core';
+import { createRectanglePath, isDocumentImage } from '@quar/core';
 import { videoClipEndFrame } from '@quar/animation';
 import { videoStillPicture, type VideoStills } from '../videoStills';
 import type { LottieAsset, LottieLayer, LottieShapeVertices } from './lottieTypes';
@@ -67,7 +67,10 @@ export function buildLayers(nodes: Node[], frame: Frame, ctx: LayerBuildContext)
     if (!node.visible) continue;
 
     if (node.type === 'image') {
-      layers.push(imageLayer(node, ind++, frame, ctx));
+      // Only the document's own pictures (data: and blob:): one linked from
+      // elsewhere would be fetched by whoever plays the file — and the canvas
+      // draws nothing for it either
+      if (isDocumentImage(node.src)) layers.push(imageLayer(node, ind++, frame, ctx));
       continue;
     }
     if (node.type === 'video') {

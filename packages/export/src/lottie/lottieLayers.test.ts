@@ -69,6 +69,16 @@ describe('images → Lottie', () => {
     expect(animation.assets).toEqual([{ id: 'image_0', w: 80, h: 40, u: '', p: PNG, e: 1 }]);
   });
 
+  it('leaves out a picture linked from elsewhere (whoever played the file would fetch it)', () => {
+    const animation = exportToLottieJson(
+      [image('linked', { src: 'https://tracker.example/pixel.png' }), image('own')],
+      timeline,
+      options
+    );
+    expect(animation.layers.map((layer) => layer.nm)).toEqual(['Image own']);
+    expect(animation.assets!.map((asset) => asset.p)).toEqual([PNG]);
+  });
+
   it('embeds a repeated picture once', () => {
     const animation = exportToLottieJson([image('i1'), image('i2')], timeline, options);
     expect(animation.assets).toHaveLength(1);

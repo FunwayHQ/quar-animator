@@ -5,6 +5,7 @@
  * as its pixels, read by the browser as the canvas reads them.
  */
 
+import { isDocumentImage } from '@quar/core';
 import type { DecodedImage } from './pdfWriter';
 
 /** A JPEG's size and color channels, from its frame header; null when it isn't one. */
@@ -82,6 +83,7 @@ async function sourceBytes(src: string): Promise<{ type: string; bytes: Uint8Arr
 
 /** A picture's pixels, as the browser draws it (upright, at its own size). */
 async function pixelsOf(src: string): Promise<DecodedImage | null> {
+  if (!isDocumentImage(src)) return null;
   const image = new Image();
   image.src = src;
   await image.decode();
@@ -97,8 +99,13 @@ async function pixelsOf(src: string): Promise<DecodedImage | null> {
   return { kind: 'pixels', width, height, data: context.getImageData(0, 0, width, height).data };
 }
 
-/** A document picture as a PDF takes it; null when it can't be read. */
+/**
+ * A document picture as a PDF takes it; null when it can't be read — or
+ * isn't the document's own (data: or blob:): one linked from elsewhere is
+ * never fetched.
+ */
 export async function decodeDocumentImage(src: string): Promise<DecodedImage | null> {
+  if (!isDocumentImage(src)) return null;
   const { type, bytes } = await sourceBytes(src);
   if (type === 'image/jpeg') {
     const info = jpegInfo(bytes);

@@ -2,8 +2,8 @@
  * Tests for reading a JPEG's header, to embed it as it is
  */
 
-import { describe, it, expect } from 'vitest';
-import { jpegInfo, jpegOrientation } from './pdfImages';
+import { describe, it, expect, vi } from 'vitest';
+import { decodeDocumentImage, jpegInfo, jpegOrientation } from './pdfImages';
 
 /** A JPEG's markers up to its frame header: optional EXIF orientation, then SOF0. */
 function jpeg({ orientation }: { orientation?: number } = {}): Uint8Array {
@@ -57,5 +57,18 @@ describe('jpegOrientation', () => {
   it('reads EXIF’s orientation, upright without one', () => {
     expect(jpegOrientation(jpeg())).toBe(1);
     expect(jpegOrientation(jpeg({ orientation: 6 }))).toBe(6);
+  });
+});
+
+describe('decodeDocumentImage', () => {
+  it('never fetches a picture linked from elsewhere', async () => {
+    const fetched = vi.fn();
+    vi.stubGlobal('fetch', fetched);
+    try {
+      expect(await decodeDocumentImage('https://tracker.example/pixel.png')).toBeNull();
+      expect(fetched).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });
