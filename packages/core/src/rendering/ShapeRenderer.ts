@@ -27,7 +27,12 @@ import type {
   SkinData,
   Vector2,
 } from '@quar/types';
-import { resolveSymbolInstance, getResolvedRootNodes } from '../symbols/symbolResolver';
+import {
+  MAX_SYMBOL_DEPTH,
+  SYMBOL_NODES_AT_MOST,
+  resolveSymbolInstance,
+  getResolvedRootNodes,
+} from '../symbols/symbolResolver';
 import {
   WebGLRenderer,
   attributeLocation,
@@ -733,6 +738,8 @@ export class ShapeRenderer {
   private drawnInFrame = new WeakMap<ArrayBufferView, number>();
   /** Counts render() calls: when geometry was drawn, and when to free unused buffers */
   private frame = 0;
+  /** What symbols may still draw this frame (SYMBOL_NODES_AT_MOST a frame). */
+  private symbolNodesLeft = SYMBOL_NODES_AT_MOST;
   /** Nodes that couldn't be drawn (broken fields from a damaged file), each reported once */
   private readonly undrawable = new Set<string>();
   /** Triangle strips of cached stroke outlines, open and closed */
@@ -1017,6 +1024,7 @@ export class ShapeRenderer {
     tintColor: [number, number, number]
   ): void {
     if (!this.program || !this.vao) return;
+    this.symbolNodesLeft = SYMBOL_NODES_AT_MOST;
     const gl = this.renderer.context;
     const width = gl.drawingBufferWidth;
     const height = gl.drawingBufferHeight;
@@ -2033,6 +2041,7 @@ export class ShapeRenderer {
     // Checked here; the effect passes below call back into it
     const program = this.program;
     this.frame++;
+    this.symbolNodesLeft = SYMBOL_NODES_AT_MOST;
     if (this.frame % STATIC_SWEEP_EVERY === 0) {
       this.sweepStaticGeometry();
       this.sweepVideoTextures();
@@ -2412,7 +2421,9 @@ export class ShapeRenderer {
     worldTransform: Matrix3,
     within: ReadonlySet<string> = new Set()
   ): void {
-    if (within.has(inst.symbolId)) return;
+    // Not in itself, nor deeper than symbols go, nor past the frame's share
+    if (within.has(inst.symbolId) || within.size >= MAX_SYMBOL_DEPTH) return;
+    if (this.symbolNodesLeft <= 0) return;
     const definition = this.symbolDefinitions.get(inst.symbolId);
     if (!definition) return;
 
@@ -2421,8 +2432,10 @@ export class ShapeRenderer {
     for (const rn of resolvedNodes) nodeMap.set(rn.id, rn);
 
     const inside = new Set(within).add(inst.symbolId);
+    // A node listed twice (or as its own child) draws once
+    const drawn = new Set<string>();
     for (const child of getResolvedRootNodes(resolvedNodes, definition)) {
-      this.renderResolvedNode(child, worldTransform, nodeMap, inside);
+      this.renderResolvedNode(child, worldTransform, nodeMap, inside, drawn);
     }
   }
 
@@ -2435,8 +2448,12 @@ export class ShapeRenderer {
     node: Node,
     parentTransform: Matrix3,
     nodeMap: Map<string, Node>,
-    within: ReadonlySet<string>
+    within: ReadonlySet<string>,
+    drawn: Set<string>
   ): void {
+    if (drawn.has(node.id)) return;
+    drawn.add(node.id);
+    if (this.symbolNodesLeft-- <= 0) return;
     if (!node.visible) return;
     if (node.type === 'ik-target' || node.type === 'vitruvian') return;
 
@@ -2493,14 +2510,14 @@ export class ShapeRenderer {
         this.pushMask(node.id, maskSource.id, node.maskMode, () => {
           // renderResolvedNode multiplies in the source's own opacity.
           this.currentEffectiveOpacity = 1;
-          this.renderResolvedNode(maskSource, worldTransform, nodeMap, within);
+          this.renderResolvedNode(maskSource, worldTransform, nodeMap, within, drawn);
         });
       }
       for (const childId of node.children) {
         if (childId === maskSource?.id) continue;
         const child = nodeMap.get(childId);
         if (child) {
-          this.renderResolvedNode(child, worldTransform, nodeMap, within);
+          this.renderResolvedNode(child, worldTransform, nodeMap, within, drawn);
         }
       }
       if (maskSource) this.popMask(node.id);

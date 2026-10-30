@@ -23,6 +23,7 @@ import type {
 } from '@quar/types';
 import type { OnionSkinSettings } from '@quar/core';
 import type { SceneGraph } from '@quar/core';
+import { cleanSymbolDefinition } from '@quar/core';
 import {
   createAnimationSequence,
   createTimeline,
@@ -434,9 +435,14 @@ function readSymbols(value: unknown): SymbolDefinition[] {
   if (kept.length < value.length) {
     console.warn(`Left out ${value.length - kept.length} symbol(s) the file holds wrongly`);
   }
+  // Each made a clean tree, as a page is when it's read
   return kept.map((symbol) =>
-    typeof symbol.name === 'string' ? symbol : { ...symbol, name: 'Symbol' }
-  ) as unknown as SymbolDefinition[];
+    cleanSymbolDefinition(
+      (typeof symbol.name === 'string'
+        ? symbol
+        : { ...symbol, name: 'Symbol' }) as unknown as SymbolDefinition
+    )
+  );
 }
 
 /**

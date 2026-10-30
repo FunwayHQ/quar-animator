@@ -15,7 +15,9 @@ import {
   getSymbolBounds,
   invalidateSymbolCache,
   getResolvedRootNodes,
+  MAX_SYMBOL_DEPTH,
 } from './symbolResolver';
+import { cleanSymbolDefinition } from './cleanDefinition';
 
 // Helper to create a minimal rectangle node
 function makeRect(id: string, x = 0, y = 0, w = 100, h = 50): RectangleNode {
@@ -460,5 +462,67 @@ describe('symbolResolver', () => {
       // After clear + re-resolve, should be a new object
       expect(resolved2).toBeDefined();
     });
+  });
+});
+
+describe('symbols placed in symbols, from a file made to stall the page', () => {
+  function instance(id: string, symbolId: string, x = 0): SymbolInstanceNode {
+    return {
+      ...makeRect(id, x, 0),
+      type: 'symbol-instance',
+      symbolId,
+      overrides: [],
+    } as unknown as SymbolInstanceNode;
+  }
+
+  it('measures ten symbols of ten of the next in a moment', () => {
+    const symbols: SymbolDefinition[] = Array.from({ length: 10 }, (_, level) => {
+      const nodes: Node[] =
+        level === 9
+          ? [makeRect('leaf', 0, 0, 1, 1)]
+          : Array.from({ length: 10 }, (_, i) => instance(`l${level}-${i}`, `s${level + 1}`, i));
+      return {
+        id: `s${level}`,
+        name: `S${level}`,
+        sceneGraphJSON: { nodes, rootNodeIds: nodes.map((n) => n.id) },
+      };
+    });
+    const started = performance.now();
+    const bounds = getSymbolBounds([instance('top', 's0')], symbols);
+    expect(performance.now() - started).toBeLessThan(5000);
+    expect(bounds.width).toBeGreaterThan(0);
+  });
+
+  it('goes no deeper than symbols are nested', () => {
+    // A chain deeper than allowed, a wide rectangle at its bottom
+    const depth = MAX_SYMBOL_DEPTH + 5;
+    const symbols: SymbolDefinition[] = Array.from({ length: depth }, (_, level) => {
+      const node =
+        level === depth - 1
+          ? makeRect('bottom', 0, 0, 10_000, 1)
+          : instance(`c${level}`, `c${level + 1}`);
+      return {
+        id: `c${level}`,
+        name: `C${level}`,
+        sceneGraphJSON: { nodes: [node], rootNodeIds: [node.id] },
+      };
+    });
+    const bounds = getSymbolBounds([instance('top', 'c0')], symbols);
+    expect(bounds.width).toBeLessThan(10_000);
+  });
+
+  it('makes a definition with tangled nodes a clean tree', () => {
+    const group = { ...makeRect('g'), type: 'group', children: ['g', 'r', 'r'] } as unknown as Node;
+    const rect = { ...makeRect('r'), parent: 'g' };
+    const stray = { ...makeRect('stray'), parent: 'nowhere' };
+    const clean = cleanSymbolDefinition({
+      id: 's',
+      name: 'S',
+      sceneGraphJSON: { nodes: [group, rect, stray], rootNodeIds: ['g'] },
+    });
+    const byId = new Map(clean.sceneGraphJSON.nodes.map((n) => [n.id, n]));
+    expect(byId.get('g')!.children).toEqual(['r']);
+    expect(clean.sceneGraphJSON.rootNodeIds).toEqual(['g', 'stray']);
+    expect(byId.get('stray')!.parent).toBeNull();
   });
 });

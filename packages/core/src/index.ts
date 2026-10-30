@@ -17,6 +17,7 @@ export * from './svg';
 export * from './boolean';
 export * from './font';
 export * from './symbols/symbolResolver';
+export * from './symbols/cleanDefinition';
 export * from './tweening';
 export * from './format';
 

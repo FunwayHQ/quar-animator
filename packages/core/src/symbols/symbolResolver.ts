@@ -15,6 +15,15 @@ import type {
 import { mat3 } from '../math';
 import { getNodeLocalBounds, transformBoundsToWorld } from '../selection/localBounds';
 
+/** Symbols drawn inside symbols, at most this deep. */
+export const MAX_SYMBOL_DEPTH = 16;
+/**
+ * The nodes symbols draw, or are measured by, at most, for a frame or a
+ * measure: symbols placed in symbols multiply (ten in ten in ten… is
+ * billions from a few kilobytes of file), and none of it may stall the page.
+ */
+export const SYMBOL_NODES_AT_MOST = 100_000;
+
 // ============================================================================
 // Cache
 // ============================================================================
@@ -139,7 +148,9 @@ export function getSymbolBounds(
   within: ReadonlySet<string> = new Set()
 ): Rect {
   const extent: Extent = { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity };
-  measureSymbolNodes(resolvedNodes, mat3.identity(), symbols, within, extent);
+  measureSymbolNodes(resolvedNodes, mat3.identity(), symbols, within, extent, {
+    left: SYMBOL_NODES_AT_MOST,
+  });
 
   const { minX, minY, maxX, maxY } = extent;
   if (!isFinite(minX)) {
@@ -160,7 +171,8 @@ function measureSymbolNodes(
   parentMatrix: Matrix3,
   symbols: readonly SymbolDefinition[],
   within: ReadonlySet<string>,
-  extent: Extent
+  extent: Extent,
+  budget: { left: number }
 ): void {
   const byId = new Map<string, Node>();
   for (const node of nodes) byId.set(node.id, node);
@@ -170,6 +182,7 @@ function measureSymbolNodes(
     // A node listed under two parents (or under itself) counts once
     if (measured.has(node.id)) return;
     measured.add(node.id);
+    if (budget.left-- <= 0) return;
     if (!node.visible || !node.transform) return;
 
     const { position, rotation, scale } = node.transform;
@@ -187,12 +200,16 @@ function measureSymbolNodes(
     }
     // A symbol placed inside this one adds its own artwork. One it is already
     // inside of draws nothing: a symbol placed in itself would never end.
-    if (node.type === 'symbol-instance' && !within.has(node.symbolId)) {
+    if (
+      node.type === 'symbol-instance' &&
+      !within.has(node.symbolId) &&
+      within.size < MAX_SYMBOL_DEPTH
+    ) {
       const definition = symbols.find((d) => d.id === node.symbolId);
       if (definition) {
         const inside = new Set(within).add(node.symbolId);
         const nested = resolveSymbolInstance(node, definition);
-        measureSymbolNodes(nested, matrix, symbols, inside, extent);
+        measureSymbolNodes(nested, matrix, symbols, inside, extent, budget);
       }
     }
     for (const childId of node.children) {

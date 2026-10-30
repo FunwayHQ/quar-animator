@@ -13,6 +13,7 @@ import { readSlideTransition } from '@quar/animation';
 import type { ArtboardTimeline, Node, SymbolDefinition } from '@quar/types';
 import type { ClipboardExtras } from '../stores/clipboardRig';
 import { readSoundClips, readSounds } from './soundData';
+import { cleanSymbolDefinition } from '@quar/core';
 
 /** Marks clipboard text as Quar Animator layers. */
 export const CLIPBOARD_TYPE = 'quar-animator/clipboard';
@@ -95,14 +96,17 @@ export function decodeClipboard(
   if (!nodes.every(looksLikeNode)) return null;
 
   const symbols = Array.isArray(data.symbols)
-    ? (data.symbols as unknown[]).filter(
-        (symbol): symbol is SymbolDefinition =>
-          isRecord(symbol) &&
-          typeof symbol.id === 'string' &&
-          isRecord(symbol.sceneGraphJSON) &&
-          Array.isArray(symbol.sceneGraphJSON.nodes) &&
-          (symbol.sceneGraphJSON.nodes as unknown[]).every(looksLikeNode)
-      )
+    ? (data.symbols as unknown[])
+        .filter(
+          (symbol): symbol is SymbolDefinition =>
+            isRecord(symbol) &&
+            typeof symbol.id === 'string' &&
+            isRecord(symbol.sceneGraphJSON) &&
+            Array.isArray(symbol.sceneGraphJSON.nodes) &&
+            (symbol.sceneGraphJSON.nodes as unknown[]).every(looksLikeNode)
+        )
+        // Each made a clean tree, as a page is when it's read
+        .map(cleanSymbolDefinition)
     : [];
   return {
     nodes,

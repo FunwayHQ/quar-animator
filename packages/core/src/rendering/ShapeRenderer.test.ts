@@ -21,7 +21,10 @@ import type {
   Effect,
   Fill,
   Stroke,
+  Node,
+  SymbolDefinition,
 } from '@quar/types';
+import { SYMBOL_NODES_AT_MOST } from '../symbols/symbolResolver';
 
 // ============================================================================
 // Test Setup
@@ -455,6 +458,54 @@ describe('ShapeRenderer', () => {
         sceneGraph.addNode(createInstance('inst', 'loop', 0));
 
         expect(placedRectangles()).toEqual([['loop-rect', 0]]);
+      });
+
+      it('draws at most a frame’s share of symbols placed in symbols', () => {
+        // Ten symbols, each with ten of the next: a billion rectangles in a few kilobytes
+        const definitions = new Map<string, SymbolDefinition>();
+        for (let level = 0; level < 10; level++) {
+          const nodes: Node[] =
+            level === 9
+              ? [createRectangleNode('leaf', 1, 1)]
+              : Array.from({ length: 10 }, (_, i) =>
+                  createInstance(`l${level}-${i}`, `s${level + 1}`, i)
+                );
+          definitions.set(`s${level}`, {
+            id: `s${level}`,
+            name: `S${level}`,
+            sceneGraphJSON: { nodes, rootNodeIds: nodes.map((n) => n.id) },
+          });
+        }
+        shapeRenderer.setSymbolDefinitions(definitions);
+        sceneGraph.addNode(createInstance('inst', 's0', 0));
+        const started = performance.now();
+        const drawn = placedRectangles().length;
+        expect(performance.now() - started).toBeLessThan(10_000);
+        expect(drawn).toBeGreaterThan(0);
+        expect(drawn).toBeLessThan(SYMBOL_NODES_AT_MOST);
+      });
+
+      it('draws a node listed as its own child once', () => {
+        const group = {
+          ...createRectangleNode('self', 10, 10),
+          type: 'group',
+          children: ['self', 'self-rect'],
+        } as unknown as Node;
+        const rect = { ...createRectangleNode('self-rect', 5, 5), parent: 'self' };
+        shapeRenderer.setSymbolDefinitions(
+          new Map([
+            [
+              'tangled',
+              {
+                id: 'tangled',
+                name: 'Tangled',
+                sceneGraphJSON: { nodes: [group, rect], rootNodeIds: ['self'] },
+              },
+            ],
+          ])
+        );
+        sceneGraph.addNode(createInstance('inst', 'tangled', 0));
+        expect(placedRectangles()).toEqual([['self-rect', 0]]);
       });
     });
 

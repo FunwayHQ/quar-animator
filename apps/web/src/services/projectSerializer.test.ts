@@ -429,6 +429,42 @@ describe('ProjectSerializer', () => {
           })
         ).not.toThrow();
       });
+
+      it('a symbol whose layers are tangled opens as a clean tree', () => {
+        const rect = (id: string, parent: string | null) => ({
+          id,
+          name: id,
+          type: 'rectangle',
+          parent,
+          children: [] as string[],
+          transform: { position: { x: 0, y: 0 }, rotation: 0, scale: { x: 1, y: 1 } },
+          visible: true,
+          locked: false,
+          opacity: 1,
+          blendMode: 'normal',
+          width: 10,
+          height: 10,
+          cornerRadius: [0, 0, 0, 0],
+          fills: [],
+          strokes: [],
+        });
+        // A group listing itself among its layers, which drawing followed forever
+        const group = { ...rect('g', null), type: 'group', children: ['g', 'r'] };
+        const data = {
+          ...project(),
+          symbols: [
+            {
+              id: 'tangled',
+              name: 'Tangled',
+              sceneGraphJSON: { nodes: [group, rect('r', 'g')], rootNodeIds: ['g'] },
+            },
+          ],
+        } as unknown as ProjectDataV2;
+        const [symbol] = load(data).symbols as {
+          sceneGraphJSON: { nodes: { id: string; children: string[] }[] };
+        }[];
+        expect(symbol!.sceneGraphJSON.nodes.find((n) => n.id === 'g')!.children).toEqual(['r']);
+      });
     });
 
     it('open with the whole timeline as the work area, off (it isn’t kept in the file)', () => {
