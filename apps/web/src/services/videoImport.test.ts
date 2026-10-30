@@ -152,6 +152,20 @@ describe('importVideoFiles', () => {
     expect(toast.success).toHaveBeenCalledWith('Added “Beach day” (4 s) with its sound');
   });
 
+  it('isn’t added to another project opened while it was read', async () => {
+    const sg = new SceneGraph();
+    useEditorStore.setState({ projectId: 'first' });
+    // Another project is opened while its frames are read
+    mocks.makeVideoStrip.mockImplementation(async () => {
+      useEditorStore.setState({ projectId: 'second' });
+      return strip;
+    });
+    await importVideoFiles(sg, [new File(['mp4'], 'beach.mp4')]);
+    expect(store().videos).toEqual([]);
+    expect(videoNodes(sg)).toEqual([]);
+    expect(toast.info).toHaveBeenCalledWith(expect.stringContaining('wasn’t added'));
+  });
+
   it('says how far it has got while it works, and stops saying so when it’s done', async () => {
     await importVideoFiles(new SceneGraph(), [new File(['mp4'], 'beach.mp4')]);
     expect(toast.progress).toHaveBeenCalledWith('Importing “beach.mp4”…');

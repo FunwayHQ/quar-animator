@@ -112,6 +112,14 @@ async function importVideoFile(
     return false;
   }
   const progress = toast.progress(`Importing ${label}…`);
+  // Where it goes: reading it takes a while, and the project (or page, or
+  // symbol) open meanwhile may not be this one any more
+  const openNow = () => {
+    const { projectId, projectCreatedAt, activePageId, editingSymbolId } =
+      useEditorStore.getState();
+    return [projectId, projectCreatedAt, activePageId, editingSymbolId].join('\n');
+  };
+  const openAtStart = openNow();
   try {
     const probe = await probeVideo(file);
     if (!probe.ok) {
@@ -150,6 +158,12 @@ async function importVideoFile(
       hasAlpha: info.hasAlpha,
       strip,
     };
+    if (openNow() !== openAtStart) {
+      toast.info(
+        `${label} wasn’t added: something else was opened while it was read. Import it again where you want it.`
+      );
+      return false;
+    }
     // Kept typed as what it is, whatever the system called it
     setVideoFile(video.id, file.type === mimeType ? file : new Blob([file], { type: mimeType }));
     const store = useEditorStore.getState();
