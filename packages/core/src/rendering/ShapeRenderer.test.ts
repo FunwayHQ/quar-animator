@@ -245,6 +245,27 @@ describe('ShapeRenderer', () => {
       expect(gl.drawArrays).not.toHaveBeenCalled();
     });
 
+    it('leaves out a node it can’t draw, reported once, and draws the rest', () => {
+      const vpMatrix = mat3.identity();
+      const good = createRectangleNode('good', 40, 20);
+      sceneGraph.addNode(good);
+      vi.clearAllMocks();
+      shapeRenderer.render(sceneGraph, vpMatrix);
+      const drawsForGood = (gl.drawArrays as ReturnType<typeof vi.fn>).mock.calls.length;
+      expect(drawsForGood).toBeGreaterThan(0);
+
+      // A rectangle from a damaged file: no corner radii
+      const bad = createRectangleNode('bad', 40, 20);
+      sceneGraph.addNode({ ...bad, cornerRadius: undefined } as unknown as typeof bad);
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      vi.mocked(gl.drawArrays).mockClear();
+      expect(() => shapeRenderer.render(sceneGraph, vpMatrix)).not.toThrow();
+      expect((gl.drawArrays as ReturnType<typeof vi.fn>).mock.calls.length).toBe(drawsForGood);
+      shapeRenderer.render(sceneGraph, vpMatrix);
+      expect(warn).toHaveBeenCalledTimes(1);
+      warn.mockRestore();
+    });
+
     it('should unbind VAO after rendering', () => {
       const vpMatrix = mat3.identity();
       shapeRenderer.render(sceneGraph, vpMatrix);

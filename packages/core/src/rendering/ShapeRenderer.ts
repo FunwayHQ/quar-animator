@@ -733,6 +733,8 @@ export class ShapeRenderer {
   private drawnInFrame = new WeakMap<ArrayBufferView, number>();
   /** Counts render() calls: when geometry was drawn, and when to free unused buffers */
   private frame = 0;
+  /** Nodes that couldn't be drawn (broken fields from a damaged file), each reported once */
+  private readonly undrawable = new Set<string>();
   /** Triangle strips of cached stroke outlines, open and closed */
   private stripCache = new WeakMap<Float32Array, { open?: Float32Array; closed?: Float32Array }>();
 
@@ -2273,7 +2275,17 @@ export class ShapeRenderer {
         return false; // skip children — they are rendered as part of the boolean result
       }
 
-      const renderShape = () => this.renderNodeGeometry(node, worldTransform, sceneGraph);
+      const renderShape = () => {
+        // A node it can't draw is left out (reported once); the rest still draws
+        try {
+          this.renderNodeGeometry(node, worldTransform, sceneGraph);
+        } catch (error) {
+          if (!this.undrawable.has(node.id)) {
+            this.undrawable.add(node.id);
+            console.warn(`Couldn't draw ${node.name || node.id}:`, error);
+          }
+        }
+      };
 
       // Check if node needs multi-pass rendering (effects or blend mode)
       if (this.effectRenderer.needsMultiPass(node.effects, node.blendMode)) {
