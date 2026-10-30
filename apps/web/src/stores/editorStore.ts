@@ -3424,17 +3424,19 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   guides: [],
   showGuides: true,
   snapToGuides: true,
+  // Guides are saved in the file: changing them is a change to save
   addGuide: (axis: 'x' | 'y', position: number) => {
     const id = `guide-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-    set((state) => ({ guides: [...state.guides, { id, axis, position }] }));
+    set((state) => ({ guides: [...state.guides, { id, axis, position }], isDirty: true }));
   },
   removeGuide: (id: string) =>
-    set((state) => ({ guides: state.guides.filter((g) => g.id !== id) })),
+    set((state) => ({ guides: state.guides.filter((g) => g.id !== id), isDirty: true })),
   updateGuidePosition: (id: string, position: number) =>
     set((state) => ({
       guides: state.guides.map((g) => (g.id === id ? { ...g, position } : g)),
+      isDirty: true,
     })),
-  clearGuides: () => set({ guides: [] }),
+  clearGuides: () => set({ guides: [], isDirty: true }),
   toggleShowGuides: () => set((state) => ({ showGuides: !state.showGuides })),
   toggleSnapToGuides: () => set((state) => ({ snapToGuides: !state.snapToGuides })),
 

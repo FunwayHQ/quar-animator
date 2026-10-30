@@ -2587,6 +2587,21 @@ describe('EditorStore', () => {
       expect(useEditorStore.getState().snapToGuides).toBe(true);
     });
 
+    it('adding, moving, removing and clearing guides are changes to save', () => {
+      const guides = () => useEditorStore.getState().guides;
+      const after = (change: () => void) => {
+        useEditorStore.setState({ isDirty: false });
+        change();
+        return useEditorStore.getState().isDirty;
+      };
+      expect(after(() => useEditorStore.getState().addGuide('x', 100))).toBe(true);
+      const id = guides()[0]!.id;
+      expect(after(() => useEditorStore.getState().updateGuidePosition(id, 120))).toBe(true);
+      expect(after(() => useEditorStore.getState().removeGuide(id))).toBe(true);
+      useEditorStore.getState().addGuide('y', 5);
+      expect(after(() => useEditorStore.getState().clearGuides())).toBe(true);
+    });
+
     it('addGuide creates a guide with unique id', () => {
       useEditorStore.getState().addGuide('x', 100);
       const guides = useEditorStore.getState().guides;
