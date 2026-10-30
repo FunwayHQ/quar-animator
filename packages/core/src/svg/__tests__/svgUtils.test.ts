@@ -6,6 +6,7 @@ import {
   parseUrlRef,
   parseSvgPoints,
   resolveStyle,
+  findSvgMarkup,
 } from '../svgUtils';
 
 // ============================================================================
@@ -296,6 +297,19 @@ describe('resolveStyle', () => {
     expect(resolveStyle(doc.getElementById('c')!).fill).toBe('blue');
   });
 
+  it('reads past comments, and in a moment when one never closes', () => {
+    const doc = new DOMParser().parseFromString(
+      `<svg ${NS}><style>.a { fill: red; } /* .a { fill: blue; } */ .b { fill: green; }${'/* x '.repeat(
+        200_000
+      )}</style><rect id="a" class="a"/><rect id="b" class="b"/></svg>`,
+      'image/svg+xml'
+    );
+    const started = performance.now();
+    expect(resolveStyle(doc.getElementById('a')!).fill).toBe('red');
+    expect(resolveStyle(doc.getElementById('b')!).fill).toBe('green');
+    expect(performance.now() - started).toBeLessThan(2000);
+  });
+
   it('lets the more specific rule win, then the later one', () => {
     const doc = new DOMParser().parseFromString(
       `<svg ${NS}><style>
@@ -373,5 +387,22 @@ describe('resolveStyle', () => {
     const line = doc.querySelector('line')!;
     const style = resolveStyle(line);
     expect(style.strokeDasharray).toEqual([5, 10, 5]);
+  });
+});
+
+describe('findSvgMarkup', () => {
+  it('finds the first SVG in some text', () => {
+    expect(findSvgMarkup('copied: <SVG viewBox="0 0 1 1"><rect/></svg> and <svg></svg>')).toBe(
+      '<SVG viewBox="0 0 1 1"><rect/></svg>'
+    );
+    expect(findSvgMarkup('no picture here')).toBeNull();
+    expect(findSvgMarkup('<svg> never closed')).toBeNull();
+  });
+
+  it('answers in a moment for long text full of unclosed <svg', () => {
+    const text = '<svg '.repeat(80_000);
+    const started = performance.now();
+    expect(findSvgMarkup(text)).toBeNull();
+    expect(performance.now() - started).toBeLessThan(500);
   });
 });

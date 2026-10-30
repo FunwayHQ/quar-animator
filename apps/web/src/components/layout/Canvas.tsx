@@ -13,6 +13,7 @@ import {
   gridColorsFor,
   toGlColor,
   inTimelineScope,
+  findSvgMarkup,
 } from '@quar/core';
 import { scopedTimeline } from '@quar/animation';
 import type { SceneGraph, SceneGraphEvent } from '@quar/core';
@@ -1463,9 +1464,9 @@ export function Canvas({
         return 'pasted';
       }
       if (text) {
-        const svgMatch = text.match(/<svg[\s\S]*?<\/svg>/i);
+        const svgMatch = findSvgMarkup(text);
         if (svgMatch) {
-          importSvgString(svgMatch[0]);
+          importSvgString(svgMatch);
           return 'pasted';
         }
       }
@@ -1495,9 +1496,9 @@ export function Canvas({
                   useEditorStore.getState().pastePayload(sceneGraphRef.current, layers);
                   return 'pasted';
                 }
-                const svgMatch = html.match(/<svg[\s\S]*?<\/svg>/i);
+                const svgMatch = findSvgMarkup(html);
                 if (svgMatch) {
-                  importSvgString(svgMatch[0]);
+                  importSvgString(svgMatch);
                   return 'pasted';
                 }
                 // Detect Figma proprietary format
@@ -1586,9 +1587,9 @@ export function Canvas({
       if (textItem) {
         const capturedImageItem = imageItem;
         textItem.getAsString((text: string) => {
-          const svgMatch = text.match(/<svg[\s\S]*?<\/svg>/i);
+          const svgMatch = findSvgMarkup(text);
           if (svgMatch) {
-            importSvgString(svgMatch[0]);
+            importSvgString(svgMatch);
             return;
           }
           // Detect Figma/proprietary clipboard formats — show helpful message

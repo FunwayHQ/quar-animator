@@ -597,6 +597,36 @@ interface StyleRule {
   declarations: Record<string, string>;
 }
 
+/**
+ * The first SVG document in some text (`<svg …</svg>`), found by searching,
+ * not a pattern: a lazy `<svg[\s\S]*?<\/svg>` takes seconds on long text
+ * with many `<svg` and no end (pasted text can be anything). Null: none.
+ */
+export function findSvgMarkup(text: string): string | null {
+  const lower = text.toLowerCase();
+  const start = lower.indexOf('<svg');
+  if (start < 0) return null;
+  const end = lower.indexOf('</svg>', start);
+  return end < 0 ? null : text.slice(start, end + '</svg>'.length);
+}
+
+/** CSS with its comments taken out, in one pass (an unclosed one runs to the end). */
+function withoutComments(css: string): string {
+  let out = '';
+  let at = 0;
+  for (;;) {
+    const open = css.indexOf('/*', at);
+    if (open < 0) return out + css.slice(at);
+    out += css.slice(at, open);
+    const close = css.indexOf('*/', open + 2);
+    if (close < 0) return out;
+    at = close + 2;
+  }
+}
+
+/** The most stylesheet rules read from an SVG (each is tried on every element). */
+const MAX_STYLE_RULES = 5000;
+
 /** Each document's <style> rules, read once. */
 const documentRules = new WeakMap<Document, StyleRule[]>();
 
@@ -609,8 +639,9 @@ function stylesheetRules(doc: Document): StyleRule[] {
   if (rules) return rules;
   rules = [];
   for (const style of Array.from(doc.getElementsByTagName('style'))) {
-    const css = (style.textContent ?? '').replace(/\/\*[\s\S]*?\*\//g, '');
+    const css = withoutComments(style.textContent ?? '');
     for (const block of css.split('}')) {
+      if (rules.length >= MAX_STYLE_RULES) break;
       const open = block.indexOf('{');
       if (open < 0) continue;
       const selectors = block.slice(0, open).trim();

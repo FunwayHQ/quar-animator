@@ -14,6 +14,7 @@ export {
   parseUrlRef,
   parseSvgPoints,
   type ResolvedStyle,
+  findSvgMarkup,
 } from './svgUtils';
 export {
   exportNodesToSvg,
