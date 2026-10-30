@@ -389,6 +389,57 @@ export function deserializeProjectFromBinary(
 // ============================================================================
 
 /**
+ * Mend, in place, what a readable file can still hold wrongly — a name that
+ * isn't text, guides or symbols of the wrong shape — so it opens, lists and
+ * saves (as they were, they broke the Projects page, or every save). Sound
+ * parts are kept as they are; symbols that can't be read are left out.
+ */
+export function mendProjectData(data: ProjectData): void {
+  const file = data as unknown as Record<string, unknown>;
+  if (typeof file.name !== 'string') file.name = 'Untitled Project';
+  if (typeof file.createdAt !== 'string') file.createdAt = new Date().toISOString();
+  if ('updatedAt' in file && typeof file.updatedAt !== 'string') delete file.updatedAt;
+  const settings = file.settings;
+  if (isRecord(settings) && 'guides' in settings) settings.guides = readGuides(settings.guides);
+  if ('symbols' in file) file.symbols = readSymbols(file.symbols);
+}
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+function readGuides(value: unknown): Guide[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter(
+    (guide): guide is Guide =>
+      isRecord(guide) &&
+      typeof guide.id === 'string' &&
+      (guide.axis === 'x' || guide.axis === 'y') &&
+      typeof guide.position === 'number' &&
+      Number.isFinite(guide.position)
+  );
+}
+
+function readSymbols(value: unknown): SymbolDefinition[] {
+  if (!Array.isArray(value)) return [];
+  const kept = value.filter((symbol): symbol is Record<string, unknown> => {
+    if (!isRecord(symbol) || typeof symbol.id !== 'string') return false;
+    const scene = symbol.sceneGraphJSON;
+    return (
+      isRecord(scene) &&
+      Array.isArray(scene.nodes) &&
+      Array.isArray(scene.rootNodeIds) &&
+      validateNodes(scene.nodes)
+    );
+  });
+  if (kept.length < value.length) {
+    console.warn(`Left out ${value.length - kept.length} symbol(s) the file holds wrongly`);
+  }
+  return kept.map((symbol) =>
+    typeof symbol.name === 'string' ? symbol : { ...symbol, name: 'Symbol' }
+  ) as unknown as SymbolDefinition[];
+}
+
+/**
  * Validates that unknown data conforms to a supported ProjectData shape (v1.0, v2.0, or v3.0).
  * Lightweight structural checks without a schema library.
  */
@@ -612,6 +663,7 @@ export function deserializeProject(
   sceneGraph: SceneGraph,
   applyEditorState: (state: OpenedProjectState) => void
 ): void {
+  mendProjectData(data);
   // Normalize to v2.0 structure (v3.0 has same structure as v2.0)
   const v2 =
     data.version === '2.0' || data.version === '3.0'
@@ -752,7 +804,9 @@ export function readProjectFile(file: File): Promise<ProjectData> {
           reject(new Error('Invalid .quar file format'));
           return;
         }
-        resolve(parsed as unknown as ProjectData);
+        // Its name is stored before it's opened (the Projects page's import)
+        mendProjectData(parsed);
+        resolve(parsed);
       } catch (error) {
         reject(error instanceof Error ? error : new Error('Failed to parse .quar file'));
       }

@@ -117,6 +117,12 @@ describe('ProjectStorage', () => {
       expect(projects).toEqual([]);
     });
 
+    it('lists a project whose stored name isn’t text (a damaged file) as Untitled Project', async () => {
+      await saveProject('odd', {} as unknown as string, '{}');
+      const listed = await listProjects();
+      expect(listed.map((item) => item.name)).toEqual(['Untitled Project']);
+    });
+
     it('should not include data in list items', async () => {
       await saveProject('proj1', 'Test', '{"large":"data"}');
       const projects = await listProjects();

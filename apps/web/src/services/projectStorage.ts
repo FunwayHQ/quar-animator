@@ -254,7 +254,9 @@ export async function listProjects(): Promise<ProjectListItem[]> {
     // read it once (one at a time, not all at once) and list it from now on
     const stored = await loadProject(id);
     if (!stored) continue;
-    const item = { id: stored.id, name: stored.name, updatedAt: stored.updatedAt };
+    // A name stored as something else (from a damaged file) mustn't break the list
+    const name = typeof stored.name === 'string' ? stored.name : 'Untitled Project';
+    const item = { id: stored.id, name, updatedAt: stored.updatedAt };
     projects.push(item);
     found.push(item);
   }

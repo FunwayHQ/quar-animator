@@ -380,6 +380,57 @@ describe('ProjectSerializer', () => {
       return applied;
     };
 
+    describe('a file holding some parts wrongly still opens, lists and saves', () => {
+      it('a name that isn’t text becomes Untitled Project', () => {
+        const data = {
+          ...project(),
+          name: {} as unknown as string,
+          createdAt: 5 as unknown as string,
+        };
+        load(data);
+        expect(data.name).toBe('Untitled Project');
+        expect(typeof data.createdAt).toBe('string');
+      });
+
+      it('guides of the wrong shape are left out', () => {
+        const data = project();
+        (data.settings as Record<string, unknown>).guides = {};
+        expect(load(data).guides).toEqual([]);
+        const mixed = project();
+        (mixed.settings as Record<string, unknown>).guides = [
+          { id: 'g', axis: 'x', position: 10 },
+          { id: 'bad', axis: 'z', position: 1 },
+          'nope',
+        ];
+        expect(load(mixed).guides).toEqual([{ id: 'g', axis: 'x', position: 10 }]);
+      });
+
+      it('symbols that can’t be read are left out, so saving works', () => {
+        const good = {
+          id: 'ok',
+          name: 'Ok',
+          sceneGraphJSON: { nodes: [], rootNodeIds: [] },
+        };
+        const data = {
+          ...project(),
+          symbols: [
+            { id: 's' },
+            good,
+            { id: 't', sceneGraphJSON: { nodes: [{}], rootNodeIds: [] } },
+          ],
+        } as unknown as ProjectDataV2;
+        const applied = load(data);
+        expect((applied.symbols as { id: string }[]).map((symbol) => symbol.id)).toEqual(['ok']);
+        // Saved again, the project's symbols are walked (they used to throw here)
+        const sg = new SceneGraph();
+        expect(() =>
+          serializeProject('P', sg, {
+            ...(applied as unknown as Parameters<typeof serializeProject>[2]),
+          })
+        ).not.toThrow();
+      });
+    });
+
     it('open with the whole timeline as the work area, off (it isn’t kept in the file)', () => {
       const applied = load(project());
       expect(applied).toMatchObject({ workAreaEnabled: false, workAreaStart: 0, workAreaEnd: 29 });
