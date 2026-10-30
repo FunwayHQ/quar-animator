@@ -1,5 +1,6 @@
 import { renderHook } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
+import { whileSaving } from '../services/savesInFlight';
 import { useEditorStore } from '../stores/editorStore';
 import { useLeaveWarning } from './useLeaveWarning';
 
@@ -19,6 +20,17 @@ describe('useLeaveWarning', () => {
   it('lets the tab go when everything is saved', () => {
     useEditorStore.setState({ isDirty: false });
     renderHook(() => useLeaveWarning());
+    expect(leave().defaultPrevented).toBe(false);
+  });
+
+  it('asks while a save is still being written, even with nothing unsaved', async () => {
+    useEditorStore.setState({ isDirty: false });
+    renderHook(() => useLeaveWarning());
+    let finish = () => {};
+    const saving = whileSaving(() => new Promise<void>((done) => (finish = done)));
+    expect(leave().defaultPrevented).toBe(true);
+    finish();
+    await saving;
     expect(leave().defaultPrevented).toBe(false);
   });
 

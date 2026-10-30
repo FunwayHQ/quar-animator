@@ -313,6 +313,29 @@ describe('useProjectActions', () => {
       expect(mockEditorState.isDirty).toBe(true);
     });
 
+    it('leaves an edit made while the save is being written unsaved', async () => {
+      const { result } = renderProjectActions();
+      mockEditorState.projectId = 'existing-id';
+      mockEditorState.isDirty = true;
+      let finish = () => {};
+      mockSave.mockImplementationOnce(() => new Promise<void>((done) => (finish = done)));
+
+      let saving: Promise<void> = Promise.resolve();
+      act(() => {
+        saving = result.current.saveProject();
+      });
+      // Serialized: saved as of now…
+      expect(mockEditorState.isDirty).toBe(false);
+      // …and an edit while it's written marks it unsaved again
+      mockEditorState.isDirty = true;
+      await act(async () => {
+        finish();
+        await saving;
+      });
+
+      expect(mockEditorState.isDirty).toBe(true);
+    });
+
     it('sets last project ID', async () => {
       const { result } = renderProjectActions();
       mockEditorState.projectId = 'existing-id';
@@ -492,6 +515,24 @@ describe('useProjectActions', () => {
       });
 
       expect(mockSetLastProjectId).not.toHaveBeenCalledWith(copyId);
+    });
+
+    it('leaves an edit made while the copy is being written unsaved', async () => {
+      const { result } = renderProjectActions();
+      let finish = () => {};
+      mockSave.mockImplementationOnce(() => new Promise<void>((done) => (finish = done)));
+
+      let saving: Promise<void> = Promise.resolve();
+      act(() => {
+        saving = result.current.saveProjectAs('Copy');
+      });
+      mockEditorState.isDirty = true;
+      await act(async () => {
+        finish();
+        await saving;
+      });
+
+      expect(mockEditorState.isDirty).toBe(true);
     });
 
     it('saves with new name to storage', async () => {

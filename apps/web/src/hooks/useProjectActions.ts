@@ -33,6 +33,7 @@ import type { OpenedProjectState, ProjectData, ProjectDataV2 } from '../services
 import { keepVideoFiles, setVideoFile, videoFile } from '../services/videoFiles';
 import { importSvg, createGroupNode } from '@quar/core';
 import type { ProjectListItem } from '../services/projectStorage';
+import { whileSaving } from '../services/savesInFlight';
 
 // ============================================================================
 // ID Generation
@@ -98,6 +99,23 @@ export interface ProjectActions {
 export interface UseProjectActionsOptions {
   /** If provided, load this project on mount instead of auto-loading the last project. Pass null to skip auto-load entirely. */
   loadProjectId?: string | null;
+}
+
+/**
+ * Write a project just serialized: it's saved as of now, so an edit made
+ * while it's written marks it unsaved again (and the next save takes it);
+ * a write that fails leaves it unsaved, and the error goes to the caller.
+ */
+async function written(projectId: string, write: () => Promise<void>): Promise<void> {
+  useEditorStore.setState({ isDirty: false });
+  try {
+    await whileSaving(write);
+  } catch (error) {
+    if (useEditorStore.getState().projectId === projectId) {
+      useEditorStore.setState({ isDirty: true });
+    }
+    throw error;
+  }
 }
 
 export function useProjectActions(options: UseProjectActionsOptions = {}): ProjectActions {
@@ -193,17 +211,14 @@ export function useProjectActions(options: UseProjectActionsOptions = {}): Proje
         state.projectCreatedAt ?? undefined
       );
       const binary = projectDataToBinary(data);
-      await dbSave(projectId, state.projectName, binary, videoFilesOf(data));
+      await written(projectId, () =>
+        dbSave(projectId, state.projectName, binary, videoFilesOf(data))
+      );
       // Another project opened while this one was being written is the one to
       // reopen next time, and the state below is its own, not this one's
       if (useEditorStore.getState().projectId !== projectId) return;
       await setLastProjectId(projectId);
-      // Clear dirty only after the write succeeds — a failed save must keep the
-      // project marked dirty (and surface the error to the caller).
-      useEditorStore.setState({
-        isDirty: false,
-        projectCreatedAt: data.createdAt,
-      });
+      useEditorStore.setState({ projectCreatedAt: data.createdAt });
       toast.success('Project saved');
     } finally {
       manualSavingRef.current = false;
@@ -224,15 +239,11 @@ export function useProjectActions(options: UseProjectActionsOptions = {}): Proje
       const data = serializeProject(name, sceneGraph, getEditorSnapshot());
       const binary = projectDataToBinary(data);
       // The copy stores the videos' files too, as its own
-      await dbSave(newId, name, binary, videoFilesOf(data));
+      await written(newId, () => dbSave(newId, name, binary, videoFilesOf(data)));
       // Unless another project was opened meanwhile (see saveProject)
       if (useEditorStore.getState().projectId !== newId) return;
       await setLastProjectId(newId);
-      // Clear dirty only after the write succeeds (see saveProject).
-      useEditorStore.setState({
-        isDirty: false,
-        projectCreatedAt: data.createdAt,
-      });
+      useEditorStore.setState({ projectCreatedAt: data.createdAt });
       toast.success(`Project saved as "${name}"`);
     },
     [sceneGraph, getEditorSnapshot]
