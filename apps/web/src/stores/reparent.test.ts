@@ -4,7 +4,7 @@
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import { SceneGraph, createGroupNode, mat3 } from '@quar/core';
-import { addKeyframe, createTimeline, getOrCreateTrack } from '@quar/animation';
+import { addKeyframe, createTimeline, evaluateTrack, getOrCreateTrack } from '@quar/animation';
 import type { Matrix3, RectangleNode, SkinData, Transform } from '@quar/types';
 import { placeSkinData } from '@quar/rigging';
 import {
@@ -173,6 +173,40 @@ describe('keyframes and rest poses', () => {
     expect(values('transform.position.x')).toEqual([expect.closeTo(0), expect.closeTo(-20)]);
     expect(values('transform.position.y')).toEqual([expect.closeTo(10), expect.closeTo(10)]);
     expect(values('transform.rotation')).toEqual([expect.closeTo(90), expect.closeTo(450)]);
+  });
+
+  it('keeps an X-only slide moving when the new space turns it onto Y', () => {
+    const timeline = createTimeline({ duration: 60 });
+    const x = getOrCreateTrack<number>(timeline, 'r', 'transform.position.x');
+    addKeyframe(x, 0, 0, 'easeInOutCubic');
+    addKeyframe(x, 30, 100, 'easeInOutCubic');
+    const base = placementOf(transform({ position: { x: 0, y: 5 } }));
+    const quarterTurn = mat3.rotate(mat3.identity(), Math.PI / 2);
+    const next = reparentTimeline(timeline, 'r', base, quarterTurn);
+    const track = (property: string) => next.tracks.find((t) => t.property === property)!;
+    // The slide runs along Y now, keyed and eased as it was
+    const y = track('transform.position.y');
+    expect(y.nodeId).toBe('r');
+    expect(y.keyframes.map((kf) => [kf.time, kf.value, kf.easing])).toEqual([
+      [0, expect.closeTo(0), 'easeInOutCubic'],
+      [30, expect.closeTo(100), 'easeInOutCubic'],
+    ]);
+    // On screen the same at every frame between
+    for (const frame of [7, 15, 22]) {
+      const before = mapPlacement(
+        { ...base, 'transform.position.x': evaluateTrack(x, frame) as number },
+        quarterTurn
+      );
+      expect(evaluateTrack(track('transform.position.x'), frame)).toBeCloseTo(
+        before['transform.position.x']
+      );
+      expect(evaluateTrack(y, frame)).toBeCloseTo(before['transform.position.y']);
+    }
+    // What stays still gets no track
+    expect(next.tracks.map((t) => t.property).sort()).toEqual([
+      'transform.position.x',
+      'transform.position.y',
+    ]);
   });
 
   it('leaves other nodes and properties alone', () => {

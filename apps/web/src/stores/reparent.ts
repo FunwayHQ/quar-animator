@@ -9,8 +9,8 @@
  */
 
 import { mat3 } from '@quar/core';
-import { evaluateTrack } from '@quar/animation';
-import type { Matrix3, Node, Timeline, Transform } from '@quar/types';
+import { createKeyframe, createTrack, evaluateTrack } from '@quar/animation';
+import type { Keyframe, Matrix3, Node, PropertyTrack, Timeline, Transform } from '@quar/types';
 
 /** Track properties that make up a node's placement. */
 export const PLACEMENT_PROPERTIES = [
@@ -26,6 +26,9 @@ export type Placement = Record<PlacementProperty, number>;
 
 const EPSILON = 1e-9;
 const DEGREES = 180 / Math.PI;
+/** Less than this, a re-expressed property hasn't changed over the animation. */
+const UNCHANGED = 1e-6;
+const POSITION: readonly string[] = ['transform.position.x', 'transform.position.y'];
 
 interface ParentLike {
   getNode(id: string): Node | undefined;
@@ -152,6 +155,10 @@ export function reparentTimeline(
 /**
  * The timeline with the node's placement keyframes passed through `map`,
  * each with the rest of the placement at its time (see reparentTimeline).
+ * A property no track animated may be animated in the new space — an X-only
+ * slide into a group turned 90° runs along Y there — so each one whose value
+ * now changes gets a track, keyed when the others are and eased as they are
+ * (for a slide keyed on one axis, exactly the same motion).
  */
 export function remapPlacementTimeline(
   timeline: Timeline,
@@ -179,22 +186,60 @@ export function remapPlacementTimeline(
     return placement;
   };
 
+  // The node's own keyframes (an Animation Sequence's are made again from its rest pose)
+  const keyedAt = (time: number, property: PlacementProperty): Keyframe | undefined => {
+    const group = (p: string) => POSITION.includes(p) === POSITION.includes(property);
+    const ordered = [...tracks].sort(([a], [b]) => Number(group(b)) - Number(group(a)));
+    for (const [, track] of ordered) {
+      const keyframe = track.keyframes.find((k) => k.time === time && !k.sequenceStepId);
+      if (keyframe) return keyframe;
+    }
+    return undefined;
+  };
+  const times = [
+    ...new Set(
+      [...tracks.values()].flatMap((track) =>
+        track.keyframes.filter((k) => !k.sequenceStepId).map((k) => k.time)
+      )
+    ),
+  ].sort((a, b) => a - b);
+  const mapped = times.map((time) => map(placementAt(time)));
+  const added: PropertyTrack[] = [];
+  for (const property of PLACEMENT_PROPERTIES) {
+    if (tracks.has(property)) continue;
+    const values = mapped.map((placement) => placement[property]);
+    const first = values[0];
+    if (first === undefined || values.every((v) => Math.abs(v - first) < UNCHANGED)) continue;
+    added.push(
+      createTrack(
+        nodeId,
+        property,
+        times.map((time, i) =>
+          createKeyframe(time, values[i] ?? first, keyedAt(time, property)?.easing)
+        )
+      )
+    );
+  }
+
   return {
     ...timeline,
-    tracks: timeline.tracks.map((track) => {
-      if (track.nodeId !== nodeId || !tracks.has(track.property as PlacementProperty)) {
-        return track;
-      }
-      const property = track.property as PlacementProperty;
-      return {
-        ...track,
-        keyframes: track.keyframes.map((keyframe) =>
-          typeof keyframe.value === 'number'
-            ? { ...keyframe, value: map(placementAt(keyframe.time))[property] }
-            : keyframe
-        ),
-      };
-    }),
+    tracks: [
+      ...timeline.tracks.map((track) => {
+        if (track.nodeId !== nodeId || !tracks.has(track.property as PlacementProperty)) {
+          return track;
+        }
+        const property = track.property as PlacementProperty;
+        return {
+          ...track,
+          keyframes: track.keyframes.map((keyframe) =>
+            typeof keyframe.value === 'number'
+              ? { ...keyframe, value: map(placementAt(keyframe.time))[property] }
+              : keyframe
+          ),
+        };
+      }),
+      ...added,
+    ],
   };
 }
 
