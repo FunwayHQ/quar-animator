@@ -385,6 +385,8 @@ describe('Projects', () => {
     const data = writeQuarFile({
       version: '3.0',
       name: 'Walk Cycle',
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
       pages: [{ id: 'page_1', name: 'Scene', sceneGraph: { nodes: [] } }],
       rigging: { dynamicChains: [{ id: 'chain_1' }] },
     });
@@ -404,5 +406,7 @@ describe('Projects', () => {
       pages: [{ id: 'page_1' }],
       rigging: { dynamicChains: [{ id: 'chain_1' }] },
     });
+    // Edited now (so a tutorial renamed is kept, not replaced by its next version)
+    expect(parseQuarFile(saved).updatedAt).not.toBe('2026-01-01T00:00:00.000Z');
   });
 });

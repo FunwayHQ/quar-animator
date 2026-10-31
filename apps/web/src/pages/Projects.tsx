@@ -169,6 +169,8 @@ export function Projects() {
       if (!stored) throw new Error('Project not found');
       const data = parseQuarFile(stored.data);
       data.name = newName;
+      // Changed now: a tutorial renamed isn't replaced by its next version
+      data.updatedAt = new Date().toISOString();
       await dbSave(renamingId, newName, writeQuarFile(data));
       setProjects((prev) => prev.map((p) => (p.id === renamingId ? { ...p, name: newName } : p)));
     } catch {
