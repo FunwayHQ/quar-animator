@@ -206,6 +206,22 @@ describe('path commands (store)', () => {
       expect(node().points).toHaveLength(3);
     });
 
+    it('closes a lone path’s Shape keyframes with it', () => {
+      const shape: PathShape = { points: node().points, closed: false };
+      useEditorStore.setState({
+        timeline: {
+          ...createTimeline(),
+          tracks: [createTrack('p', 'points', [createKeyframe(0, shape)])],
+        },
+      });
+      useEditorStore.getState().joinSelectedPaths(sceneGraph);
+      expect(node().closed).toBe(true);
+      const [keyframe] = useEditorStore.getState().timeline.tracks[0]!.keyframes;
+      expect((keyframe!.value as PathShape).closed).toBe(true);
+      useEditorStore.getState().undo(sceneGraph);
+      expect(useEditorStore.getState().timeline.tracks[0]!.keyframes[0]!.value).toEqual(shape);
+    });
+
     it('joins two paths into the lower one, nearest ends meeting, wherever each sits', () => {
       sceneGraph.addNode(
         path([pt(0), pt(50)], {

@@ -2872,7 +2872,12 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       get().pushUndo(sceneGraph);
       const fill = path.fills.length === 0 ? { fills: [{ ...get().defaultFill }] } : {};
       sceneGraph.updateNode(path.id, { points, closed: true, ...fill });
-      set({ directSelectionPoints: [], isDirty: true });
+      // Its Shape keyframes closed too, as Close Path does
+      set({
+        timeline: closedShapeTracks(timeline, path, true),
+        directSelectionPoints: [],
+        isDirty: true,
+      });
       return;
     }
 
