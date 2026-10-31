@@ -4010,4 +4010,28 @@ describe('the timeline a page opens on', () => {
     expect(useEditorStore.getState().timelineScope).toBe('slide');
     expect(useEditorStore.getState().timelineDuration).toBe(120);
   });
+  it('after an artboard’s deletion is redone, the page’s timeline shows its own length', () => {
+    useEditorStore.getState().resetProject();
+    const sg = new SceneGraph();
+    sg.addNode(layer('slide', 'artboard'));
+    useEditorStore.setState({
+      timeline: createTimeline({ duration: 300, artboards: { slide: { duration: 60 } } }),
+    });
+    useEditorStore.getState().setTimelineScope('slide');
+    expect(useEditorStore.getState().timelineDuration).toBe(60);
+
+    useEditorStore.getState().setSelection(['slide']);
+    useEditorStore.getState().deleteSelection(sg);
+    // As the app does: the artboard in view gone, the page's comes back
+    useEditorStore.getState().setTimelineScope(null);
+    expect(useEditorStore.getState().timelineDuration).toBe(300);
+
+    useEditorStore.getState().undo(sg);
+    expect(sg.getNode('slide')).toBeDefined();
+    useEditorStore.getState().setTimelineScope('slide');
+    useEditorStore.getState().redo(sg);
+    expect(sg.getNode('slide')).toBeUndefined();
+    expect(useEditorStore.getState().timelineScope).toBeNull();
+    expect(useEditorStore.getState().timelineDuration).toBe(300);
+  });
 });

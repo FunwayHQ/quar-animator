@@ -456,11 +456,21 @@ function restoredFieldsFrom(
     ...currentScene.nodes.map((node) => node.id),
     ...snapshot.sceneData.nodes.map((node) => node.id),
   ]);
-  // The timeline in view stays so; its length as it was then, and the work area inside it
-  const timelineDuration = scopeDuration(timeline, current.timelineScope);
+  // The timeline in view stays so — unless its artboard isn't there in the
+  // step restored (a deletion redone: the page's then); its length as it
+  // was then, and the work area inside it
+  const timelineScope =
+    current.timelineScope !== null &&
+    snapshot.sceneData.nodes.some(
+      (node) => node.id === current.timelineScope && node.type === 'artboard'
+    )
+      ? current.timelineScope
+      : null;
+  const timelineDuration = scopeDuration(timeline, timelineScope);
   return {
     selectedNodeIds: new Set(snapshot.selectedNodeIds),
     timeline,
+    timelineScope,
     timelineDuration,
     ...workAreaFor(timelineDuration, current),
     frameRate: current.frameRate,
