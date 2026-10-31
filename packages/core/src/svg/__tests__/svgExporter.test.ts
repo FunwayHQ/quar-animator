@@ -1429,6 +1429,23 @@ describe('exportNodesToSvg: masks, boolean groups and clipping artboards', () =>
     expect(svg.match(/<rect /g)).toHaveLength(2);
   });
 
+  it('doesn’t clip with a mask that left the group, or a hidden one, as the canvas doesn’t', () => {
+    const g = group('masked', { maskNodeId: 'mask', maskMode: 'clip' });
+    sceneGraph.addNode(g);
+    sceneGraph.addNode(square('art', 20, 100), 'masked');
+    // The mask moved out to the top level
+    sceneGraph.addNode(square('mask', 0, 50));
+    const svg = exportNodesToSvg([g], sceneGraph);
+    expect(svg).not.toContain('clip-path');
+    expect(svg).not.toContain('<clipPath');
+
+    const fresh = new SceneGraph();
+    fresh.addNode(g);
+    fresh.addNode({ ...square('mask', 0, 50), visible: false }, 'masked');
+    fresh.addNode(square('art', 20, 100), 'masked');
+    expect(exportNodesToSvg([g], fresh)).not.toContain('clip-path');
+  });
+
   it('masks by alpha or luminance with an SVG mask', () => {
     for (const mode of ['alpha', 'luminance'] as const) {
       const fresh = new SceneGraph();

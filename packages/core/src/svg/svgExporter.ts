@@ -666,9 +666,10 @@ function groupToSvg(
   const opacityAttr = node.opacity < 1 ? ` opacity="${fmt(node.opacity)}"` : '';
   if (node.booleanOp) return booleanGroupToSvg(node, sceneGraph, defs, tfAttr, opacityAttr);
 
-  // A mask group: its mask layer isn't drawn, it clips (or masks) the rest
-  const maskNode =
-    node.maskNodeId && node.maskMode ? sceneGraph.getNode(node.maskNodeId) : undefined;
+  // A mask group: its mask layer isn't drawn, it clips (or masks) the rest —
+  // as on the canvas, only while that's one of its own layers, and shown
+  const named = node.maskNodeId && node.maskMode ? sceneGraph.getNode(node.maskNodeId) : undefined;
+  const maskNode = named && named.parent === node.id && named.visible ? named : undefined;
   const childElements: string[] = [];
   for (const childId of node.children) {
     const child = sceneGraph.getNode(childId);
