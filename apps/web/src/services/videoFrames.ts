@@ -83,7 +83,13 @@ function newReader(file: Blob): Reader {
 }
 
 /** A set of readers and strip stills of the document's videos. */
-export function createVideoFrames(): VideoFrames {
+/**
+ * `stealReaders`: with every reader of a video taken in one drawing, whether
+ * another layer's moment seeks one of them (an export, which waits for each
+ * frame) or shows the strip's still instead (the canvas: a fourth layer of a
+ * video stole a reader every frame, so all of them sought back and forth).
+ */
+export function createVideoFrames({ stealReaders = true } = {}): VideoFrames {
   /** Each video's readers, and the file they decode */
   const decoders = new Map<string, { file: Blob; readers: Reader[] }>();
   /** The readers asked of in this drawing, which asks once for each layer */
@@ -104,7 +110,7 @@ export function createVideoFrames(): VideoFrames {
    * else the nearest nearby that no other layer has asked this time, else any
    * free one (the playhead jumped), else a new one.
    */
-  function readerFor(videoId: string, seconds: number): Reader | null {
+  function readerFor(videoId: string, seconds: number, steal = stealReaders): Reader | null {
     const file = videoFile(videoId);
     // Another file in its place (a project opened again): decoded afresh
     let decoder = decoders.get(videoId);
@@ -150,6 +156,7 @@ export function createVideoFrames(): VideoFrames {
       reader = newReader(file);
       readers.push(reader);
     }
+    if (!reader && !steal) return null;
     reader ??= nearest(readers);
     if (!reader) return null;
     reader.at = seconds;
@@ -213,7 +220,8 @@ export function createVideoFrames(): VideoFrames {
   }
 
   function decode(videoId: string, seconds: number, timeout: number): Promise<boolean> {
-    const reader = readerFor(videoId, seconds);
+    // Waited for: a reader is sought to it whatever else is asked
+    const reader = readerFor(videoId, seconds, true);
     if (!reader) return Promise.resolve(false);
     const until = Date.now() + Math.max(0, timeout);
     return new Promise((resolve) => {
@@ -247,7 +255,7 @@ export function createVideoFrames(): VideoFrames {
 }
 
 /** The canvas's */
-const canvasFrames = createVideoFrames();
+const canvasFrames = createVideoFrames({ stealReaders: false });
 
 /** The picture of a video at `seconds` for the canvas, as far as it's decoded (see VideoFrames.frameAt). */
 export function videoFrameAt(

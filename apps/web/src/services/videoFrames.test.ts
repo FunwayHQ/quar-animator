@@ -202,6 +202,22 @@ describe('videoFrameAt', () => {
     expect(sources).toHaveLength(3);
   });
 
+  it('shows a fourth layer of a video in stills, not seeking the others’ readers', async () => {
+    useEditorStore.setState({ videos: [video('v1')] });
+    setVideoFile('v1', new Blob(['v1']));
+    for (let frame = 0; frame < 3; frame++) {
+      for (const seconds of [0, 0.5, 1, 1.5]) videoFrameAt('v1', seconds);
+      await tick();
+    }
+    // Each reader asked only its own layer's moment
+    expect(sources).toHaveLength(3);
+    for (const [n, seconds] of [0, 0.5, 1].entries()) {
+      expect(new Set(sources[n]?.asked.map(([at]) => at))).toEqual(new Set([seconds]));
+    }
+    // The fourth: the strip's still there (4 a second: the seventh, 1.5 s)
+    expect(videoFrameAt('v1', 1.5)?.key).toBe('v1:still6');
+  });
+
   it('lets a reader no layer has asked of for a while go', async () => {
     vi.useFakeTimers();
     try {
