@@ -261,6 +261,13 @@ export function useProjectActions(options: UseProjectActionsOptions = {}): Proje
       if (!stored) return;
       const videoFiles = await storedVideoFiles(id);
 
+      // The project on screen opened again (a newer version of it, in place):
+      // the page and frame shown stay, while that page is there
+      const shown = useEditorStore.getState();
+      const again = shown.projectId === id;
+      const pageShown = again ? shown.activePageId : null;
+      const frameShown = again ? shown.currentFrame : null;
+
       // Nothing of the last project's session (its undo, its selection) carries over
       useEditorStore.getState().forgetSession();
       const data = deserializeProjectFromBinary(stored.data, sceneGraph, (state) =>
@@ -273,6 +280,18 @@ export function useProjectActions(options: UseProjectActionsOptions = {}): Proje
         isDirty: false,
         projectCreatedAt: data.createdAt as string,
       });
+      if (pageShown !== null) {
+        const loaded = useEditorStore.getState();
+        if (pageShown !== loaded.activePageId && loaded.pages.some((p) => p.id === pageShown)) {
+          loaded.switchPage(pageShown, sceneGraph);
+        }
+      }
+      if (frameShown !== null) {
+        const { timelineDuration } = useEditorStore.getState();
+        useEditorStore.setState({
+          currentFrame: Math.min(frameShown, Math.max(0, timelineDuration - 1)),
+        });
+      }
 
       await setLastProjectId(id);
     },

@@ -644,6 +644,47 @@ describe('useProjectActions', () => {
       );
     });
 
+    it('opened again in place, keeps the page and frame on screen', async () => {
+      const switchPage = vi.fn();
+      Object.assign(mockEditorState, {
+        projectId: 'proj_same',
+        activePageId: 'page-2',
+        currentFrame: 42,
+        timelineDuration: 300,
+        pages: [{ id: 'page-1' }, { id: 'page-2' }],
+        switchPage,
+      });
+      const openAgain = async (id: string, pages: Array<{ id: string }>) => {
+        mockLoad.mockResolvedValueOnce({ data: new ArrayBuffer(8) });
+        // Read in, the file's own page is shown (the first), at frame 0
+        mockDeserializeFromBinary.mockImplementationOnce(() => {
+          Object.assign(mockEditorState, { activePageId: 'page-1', currentFrame: 0, pages });
+          return { name: 'P', createdAt: '', version: '3.0' };
+        });
+        const { result } = renderProjectActions();
+        await act(async () => {
+          await result.current.openProject(id);
+        });
+      };
+
+      // A newer version of the project on screen: the page and frame stay
+      await openAgain('proj_same', [{ id: 'page-1' }, { id: 'page-2' }]);
+      expect(switchPage).toHaveBeenCalledWith('page-2', expect.anything());
+      expect(mockEditorState.currentFrame).toBe(42);
+
+      // The page is gone in it: the file's own
+      switchPage.mockClear();
+      Object.assign(mockEditorState, { activePageId: 'page-2', currentFrame: 42 });
+      await openAgain('proj_same', [{ id: 'page-1' }]);
+      expect(switchPage).not.toHaveBeenCalled();
+
+      // Another project: nothing of this one's view carries over
+      Object.assign(mockEditorState, { activePageId: 'page-2', currentFrame: 42 });
+      await openAgain('proj_other', [{ id: 'page-1' }, { id: 'page-2' }]);
+      expect(switchPage).not.toHaveBeenCalled();
+      expect(mockEditorState.currentFrame).toBe(0);
+    });
+
     it('does nothing if project not found', async () => {
       mockLoad.mockResolvedValueOnce(null);
 
