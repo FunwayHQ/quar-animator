@@ -375,6 +375,7 @@ function StepRow({
  */
 export function AnimationSequenceWindow() {
   const sceneGraph = useSceneGraph();
+  const locale = useLocale();
   const sequence = useEditorStore((s) => s.animationSequence);
   // The timeline in view's (an artboard's, or the page's)
   const timelineDuration = useEditorStore((s) => s.timelineDuration);
@@ -676,12 +677,12 @@ export function AnimationSequenceWindow() {
             <option value={OWN_KEYFRAMES}>{t('Own keyframes')}</option>
           </optgroup>
           {CATEGORIES.map((category) => (
-            <optgroup key={category} label={category}>
+            <optgroup key={category} label={t(category)}>
               {addablePresets
                 .filter((preset) => preset.category === category)
                 .map((preset) => (
                   <option key={preset.id} value={preset.id}>
-                    {preset.name}
+                    {tf(`ui.presets.${preset.id}`, undefined, locale)}
                   </option>
                 ))}
             </optgroup>

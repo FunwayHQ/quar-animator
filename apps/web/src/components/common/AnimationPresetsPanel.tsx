@@ -16,7 +16,7 @@ import { useSceneGraph } from '../../contexts/SceneGraphContext';
 import { useEditorStore } from '../../stores/editorStore';
 import { lengthenedToFit } from '../../stores/timelineLength';
 import styles from './AnimationPresetsPanel.module.css';
-import { t } from '../../i18n';
+import { t, tf, useLocale } from '../../i18n';
 
 const CATEGORIES: AnimationPresetCategory[] = ['Entrance', 'Emphasis', 'Loop', 'Exit'];
 const DURATION_OPTIONS = [0.4, 0.8, 1.2, 1.6];
@@ -29,6 +29,7 @@ export interface AnimationPresetsPanelProps {
 /** A small picker for applying editable keyframe-based motion presets. */
 export function AnimationPresetsPanel({ nodeIds }: AnimationPresetsPanelProps) {
   const sceneGraph = useSceneGraph();
+  const locale = useLocale();
   const [isExpanded, setIsExpanded] = useState(true);
   const [durationSeconds, setDurationSeconds] = useState(0.8);
   const [staggerSeconds, setStaggerSeconds] = useState(0);
@@ -121,10 +122,10 @@ export function AnimationPresetsPanel({ nodeIds }: AnimationPresetsPanelProps) {
         <span className={styles.headerActions}>
           <span className={styles.selectionCount}>
             {sequenceWindowOpen
-              ? 'Adds to sequence'
+              ? tf('ui.presets.adds-to-sequence', undefined, locale)
               : nodeIds.length > 1
-                ? `${nodeIds.length} objects`
-                : 'Presets'}
+                ? tf('ui.presets.object-count', { count: nodeIds.length }, locale)
+                : tf('ui.presets.presets-title', undefined, locale)}
           </span>
           <ChevronDown
             size={14}
@@ -201,7 +202,7 @@ export function AnimationPresetsPanel({ nodeIds }: AnimationPresetsPanelProps) {
           </p>
           {CATEGORIES.map((category) => (
             <div className={styles.category} key={category}>
-              <h4 className={styles.categoryTitle}>{category}</h4>
+              <h4 className={styles.categoryTitle}>{t(category)}</h4>
               <div className={styles.grid}>
                 {availablePresets
                   .filter((preset) => preset.category === category)
@@ -210,11 +211,14 @@ export function AnimationPresetsPanel({ nodeIds }: AnimationPresetsPanelProps) {
                       className={styles.presetButton}
                       key={preset.id}
                       onClick={() => applyPreset(preset.id)}
-                      title={preset.description}
-                      aria-label={`Apply ${preset.name} ${category.toLowerCase()} animation`}
+                      title={t(preset.description)}
+                      aria-label={tf('ui.presets.apply-animation', {
+                        name: tf(`ui.presets.${preset.id}`, undefined, locale),
+                        category: t(category),
+                      })}
                       data-testid={`animation-preset-${preset.id}`}
                     >
-                      {preset.name}
+                      {tf(`ui.presets.${preset.id}`, undefined, locale)}
                     </button>
                   ))}
               </div>

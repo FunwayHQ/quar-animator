@@ -7,7 +7,7 @@ import { useActiveTool, useEditorStore, useSetActiveTool } from '../../stores/ed
 import { isPosingScene } from '../../stores/scenePosing';
 import { startPresentation } from '../presentation/presentation';
 import styles from './Toolbar.module.css';
-import { t } from '../../i18n';
+import { t, tf, useLocale } from '../../i18n';
 
 interface ToolButtonProps {
   tool: ToolType;
@@ -19,11 +19,18 @@ interface ToolButtonProps {
 }
 
 function ToolButton({ tool, icon, label, shortcut, active, onClick }: ToolButtonProps) {
+  const locale = useLocale();
+  // Tools are named by key: "Rectangle" is also a layer name the user may keep
+  // in English, so the dictionary lookup must not go through the English text.
+  const key = `ui.toolbar.${tool}`;
+  const translated = tf(key, undefined, locale);
+  const name = translated === key ? label : translated;
   return (
     <button
       className={`${styles.toolButton} ${active ? styles.active : ''}`}
       onClick={onClick}
-      title={`${label} (${shortcut})`}
+      title={`${name} (${shortcut})`}
+      aria-label={name}
       aria-pressed={active}
       data-tool={tool}
     >

@@ -529,5 +529,8 @@
   "” and its contents will be included.": "ui.export-dialog.only-close-quote",
   " · plays ": "timeline.sound-lane.plays",
   "Missing sound": "timeline.sound-lane.missing-sound",
-  "Handle ": "layout.properties-panel.handle"
+  "Handle ": "layout.properties-panel.handle",
+  "Entrance": "ui.presets.entrance",
+  "Emphasis": "ui.presets.emphasis",
+  "Exit": "ui.presets.exit"
 }

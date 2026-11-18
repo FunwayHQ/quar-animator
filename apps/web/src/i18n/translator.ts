@@ -73,10 +73,14 @@ function shouldSkip(element: Element | null): boolean {
 
 /** Resolve the English source of a node's current text. */
 function sourceOf(raw: string, remembered: string | undefined, locale: Locale): string {
-  if (remembered !== undefined) return remembered;
+  if (remembered !== undefined) {
+    // Trust the remembered source only while it still maps back to what's shown;
+    // a component may have re-rendered the node through `t()`/`tf()` since.
+    if (locale === 'en' || t(remembered, locale) === raw) return remembered;
+  }
   if (locale !== 'en') {
     const reversed = reverseLookup(raw, locale);
-    if (reversed !== undefined) return reversed;
+    if (reversed !== undefined && t(reversed, locale) === raw) return reversed;
   }
   return raw;
 }
@@ -97,6 +101,23 @@ function processTextNode(node: Text, locale: Locale): void {
   }
 }
 
+/**
+ * Attribute text, translated. Tooltips usually read "Label (Shortcut)" — the
+ * whole string is rarely in the catalog, so fall back to translating the label
+ * and keeping the shortcut as it is.
+ */
+function translateAttributeValue(raw: string, locale: Locale): string {
+  const direct = t(raw, locale);
+  if (direct !== raw) return direct;
+  const match = /^(.*?)\s*\(([^()]*)\)$/.exec(raw);
+  if (!match) return raw;
+  const label = (match[1] ?? '').trim();
+  if (!label) return raw;
+  const translated = t(label, locale);
+  if (translated === label) return raw;
+  return `${translated} (${match[2]})`;
+}
+
 function processElement(element: Element, locale: Locale): void {
   if (shouldSkip(element)) return;
   let sources = attributeSources.get(element);
@@ -105,7 +126,7 @@ function processElement(element: Element, locale: Locale): void {
     const raw = element.getAttribute(attr) ?? '';
     if (!raw.trim()) continue;
     const source = sourceOf(raw, sources?.get(attr), locale);
-    const target = t(source, locale);
+    const target = translateAttributeValue(source, locale);
     if (target !== raw) {
       if (!sources) {
         sources = new Map<string, string>();
@@ -157,7 +178,7 @@ function refresh(): void {
       return;
     }
     sources.forEach((source, attr) => {
-      element.setAttribute(attr, t(source, locale));
+      element.setAttribute(attr, translateAttributeValue(source, locale));
     });
   });
   translateTree(document.body, locale);
@@ -175,7 +196,7 @@ function handleMutations(records: MutationRecord[]): void {
         let sources = attributeSources.get(element);
         const raw = element.getAttribute(attr) ?? '';
         const source = sourceOf(raw, sources?.get(attr), locale);
-        const target = t(source, locale);
+        const target = translateAttributeValue(source, locale);
         if (target !== raw) {
           if (!sources) {
             sources = new Map<string, string>();
