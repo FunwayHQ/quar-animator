@@ -37,6 +37,7 @@ import { isPosingScene } from '../../stores/scenePosing';
 import { withClipLoop } from '../../stores/videoClipActions';
 import { findLinkedSound } from '../../stores/videoSounds';
 import styles from './VideoClipBar.module.css';
+import { t } from '../../i18n';
 
 /** The bar's picture strip, in pixels high (the bar less its film edges). */
 const STILL_HEIGHT = 13;
@@ -557,10 +558,10 @@ function VideoClipSettings({
           <div className={styles.settingsTitle}>
             <strong>{name}</strong>
             <span>
-              Frames {clip.start}–{lastFrame}
+              {t("Frames")} {clip.start}–{lastFrame}
             </span>
             <span>
-              Plays {(Math.round(clip.offset * 10) / 10).toFixed(1)}–
+              {t("Plays")} {(Math.round(clip.offset * 10) / 10).toFixed(1)}–
               {seconds(clip.offset + clip.duration)}
               {video ? ` of ${seconds(video.duration)}` : ''}
             </span>
@@ -568,7 +569,7 @@ function VideoClipSettings({
         </div>
 
         <div className={styles.speedHeader}>
-          <span>Speed</span>
+          <span>{t("Speed")}</span>
           <output className={styles.speedValue} data-testid="video-clip-speed-value">
             {speedLabel(speed)}
           </output>
@@ -588,7 +589,7 @@ function VideoClipSettings({
           onPointerUp={endSlide}
           onKeyUp={endSlide}
           onBlur={endSlide}
-          aria-label="Speed"
+          aria-label={t("Speed")}
           aria-valuetext={speedLabel(speed)}
           data-testid="video-clip-speed"
         />
@@ -598,7 +599,7 @@ function VideoClipSettings({
           <span>{speedLabel(MAX_CLIP_SPEED)}</span>
         </div>
         <div className={styles.speedRow}>
-          <div className={styles.speedPresets} role="group" aria-label="Speeds">
+          <div className={styles.speedPresets} role="group" aria-label={t("Speeds")}>
             {SPEED_PRESETS.map((preset) => (
               <button
                 type="button"
@@ -627,7 +628,7 @@ function VideoClipSettings({
               data-testid="video-clip-loop"
             />
             <span>
-              Loop
+              {t("Loop")}
               <small>
                 {clip.loop ? 'Drag its right end to play it longer' : 'Start over at its end'}
               </small>
@@ -644,8 +645,8 @@ function VideoClipSettings({
               data-testid="video-clip-hold"
             />
             <span>
-              Hold last frame
-              <small>Keep showing it after the clip ends</small>
+              {t("Hold last frame")}
+              <small>{t("Keep showing it after the clip ends")}</small>
             </span>
           </label>
         </div>
@@ -664,13 +665,13 @@ function VideoClipSettings({
             data-testid="video-clip-stop"
           >
             <CircleStop aria-hidden="true" />
-            Stop Here
+            {t("Stop Here")}
           </button>
         </div>
 
         {linkedClipId !== undefined && (
           <div className={styles.settingsActions}>
-            <span className={styles.settingsNote}>Its sound moves, trims and speeds with it</span>
+            <span className={styles.settingsNote}>{t("Its sound moves, trims and speeds with it")}</span>
             <button
               type="button"
               className={styles.unlinkButton}
@@ -678,7 +679,7 @@ function VideoClipSettings({
               data-testid="video-clip-unlink"
             >
               <Unlink aria-hidden="true" />
-              Unlink Sound
+              {t("Unlink Sound")}
             </button>
           </div>
         )}
@@ -712,7 +713,7 @@ function SpeedField({ value, onCommit }: { value: number; onCommit: (speed: numb
         onKeyDown={(event) => {
           if (event.key === 'Enter') commit();
         }}
-        aria-label="Speed, as a multiple"
+        aria-label={t("Speed, as a multiple")}
         data-testid="video-clip-speed-field"
       />
       <span className={styles.speedUnit}>×</span>

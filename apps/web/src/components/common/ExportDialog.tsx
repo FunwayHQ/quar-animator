@@ -47,6 +47,7 @@ import {
 } from '../../services/exportScene';
 import { KEYS, formatShortcut } from './shortcuts';
 import styles from './ExportDialog.module.css';
+import { t } from '../../i18n';
 
 // ============================================================================
 // Types
@@ -168,7 +169,7 @@ function TimingFields({
     <>
       <div className={styles.formRow}>
         <label className={styles.label} htmlFor={`export-${format}-fps`}>
-          Frame rate
+          {t('Frame rate')}
         </label>
         <select
           id={`export-${format}-fps`}
@@ -186,7 +187,7 @@ function TimingFields({
       </div>
       <div className={styles.formRow}>
         <label className={styles.label} htmlFor={`export-${format}-speed`}>
-          Speed
+          {t('Speed')}
         </label>
         <select
           id={`export-${format}-speed`}
@@ -197,7 +198,7 @@ function TimingFields({
         >
           {PLAYBACK_SPEEDS.map((choice) => (
             <option key={choice} value={choice}>
-              {choice === 1 ? '1× (normal)' : `${choice}×`}
+              {choice === 1 ? t('1× (normal)') : `${choice}×`}
             </option>
           ))}
         </select>
@@ -231,7 +232,7 @@ function SoundField({
 }) {
   return (
     <div className={styles.formRow}>
-      <span className={styles.label}>Sound</span>
+      <span className={styles.label}>{t('Sound')}</span>
       <label className={styles.checkbox}>
         <input
           type="checkbox"
@@ -998,12 +999,12 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
         className={styles.dialog}
         role="dialog"
         aria-modal="true"
-        aria-label="Export Animation"
+        aria-label={t('Export Animation')}
         data-testid="export-dialog"
       >
         {/* Header */}
         <div className={styles.header}>
-          <h3 className={styles.title}>Export Animation</h3>
+          <h3 className={styles.title}>{t('Export Animation')}</h3>
           <button
             className={styles.closeBtn}
             onClick={requestClose}
@@ -1056,7 +1057,7 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
               }}
               data-testid="export-cancel"
             >
-              Cancel
+              {t('Cancel')}
             </button>
           </div>
         ) : (
@@ -1064,7 +1065,7 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
             {/* Common settings */}
             {state.tab !== 'svg' && state.tab !== 'pdf' && (
               <div className={styles.formRow}>
-                <span className={styles.label}>Size</span>
+                <span className={styles.label}>{t('Size')}</span>
                 <input
                   className={styles.inputSmall}
                   type="number"
@@ -1089,28 +1090,36 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
 
             {selectedArtboard && (
               <div className={styles.scopeNote} data-testid="export-artboard-scope">
-                Only “{selectedArtboard.node.name || 'Artboard'}” and its contents will be included.
+                {t('Only “')}
+                {selectedArtboard.node.name || t('Artboard')}
+                {t('” and its contents will be included.')}
                 {selectedArtboard.implicit &&
                   ` It’s the page’s only artboard: select everything (${formatShortcut(KEYS.selectAll)}) first to export the whole page.`}
               </div>
             )}
             {slidesExport && (
               <div className={styles.scopeNote} data-testid="export-slides-scope">
-                {slides.length} slides, one after another: each artboard over its own timeline, in
-                the Layers panel’s order ({formatSeconds(slidesSeconds)} in all). Select an artboard
-                to export just that.
+                {slides.length}
+                {t(
+                  ' slides, one after another: each artboard over its own timeline, in the Layers panel’s order ('
+                )}
+                {formatSeconds(slidesSeconds)}
+                {t(' in all). Select an artboard to export just that.')}
               </div>
             )}
             {slidesPdf && (
               <div className={styles.scopeNote} data-testid="export-pdf-slides-scope">
-                {slides.length} pages, a slide each: every artboard at its own size, in the Layers
-                panel’s order. Select an artboard to export just that.
+                {slides.length}
+                {t(
+                  ' pages, a slide each: every artboard at its own size, in the Layers panel’s order. Select an artboard to export just that.'
+                )}
               </div>
             )}
             {!selectedArtboard && sceneScope && !slidesExport && !slidesPdf && (
               <div className={styles.scopeNote} data-testid="export-scene-scope">
-                Everything on the page is included, framed to fit its whole animation. Select an
-                artboard to export just that.
+                {t(
+                  'Everything on the page is included, framed to fit its whole animation. Select an artboard to export just that.'
+                )}
               </div>
             )}
 
@@ -1118,7 +1127,7 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
               <>
                 <div className={styles.formRow}>
                   <label className={styles.label} htmlFor="export-svg-frame">
-                    Frame
+                    {t('Frame')}
                   </label>
                   <input
                     id="export-svg-frame"
@@ -1134,18 +1143,20 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
                   />
                 </div>
                 <p className={styles.scopeNote} data-testid="export-svg-note">
-                  A still of this frame, as vectors, at the artwork’s own size. Shapes bent by their
-                  bones are written as their bent outlines; images bound to bones aren’t bent.
+                  {t(
+                    'A still of this frame, as vectors, at the artwork’s own size. Shapes bent by their bones are written as their bent outlines; images bound to bones aren’t bent.'
+                  )}
                 </p>
               </>
             ) : state.tab === 'pdf' ? (
               <p className={styles.scopeNote} data-testid="export-pdf-note">
-                Vector pages, each at its timeline’s last frame, as the canvas draws it. Layers with
-                a blur or a drop shadow, and pictures bent by bones or adjusted, go in as pictures.
+                {t(
+                  'Vector pages, each at its timeline’s last frame, as the canvas draws it. Layers with a blur or a drop shadow, and pictures bent by bones or adjusted, go in as pictures.'
+                )}
               </p>
             ) : slidesExport ? null : (
               <div className={styles.formRow}>
-                <span className={styles.label}>Frame Range</span>
+                <span className={styles.label}>{t('Frame Range')}</span>
                 <input
                   className={styles.inputSmall}
                   type="number"
@@ -1176,7 +1187,7 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
             {state.tab === 'png-sequence' && (
               <>
                 <div className={styles.formRow}>
-                  <span className={styles.label}>Multiplier</span>
+                  <span className={styles.label}>{t('Multiplier')}</span>
                   <select
                     className={styles.select}
                     value={state.pngMultiplier}
@@ -1192,7 +1203,7 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
                   </select>
                 </div>
                 <div className={styles.formRow}>
-                  <span className={styles.label}>Background</span>
+                  <span className={styles.label}>{t('Background')}</span>
                   <label className={styles.checkbox}>
                     <input
                       type="checkbox"
@@ -1200,11 +1211,11 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
                       onChange={(e) => update('pngTransparent', e.target.checked)}
                       data-testid="export-png-transparent"
                     />
-                    <span>Transparent</span>
+                    <span>{t('Transparent')}</span>
                   </label>
                 </div>
                 <div className={styles.formRow}>
-                  <span className={styles.label}>Pattern</span>
+                  <span className={styles.label}>{t('Pattern')}</span>
                   <input
                     className={styles.input}
                     type="text"
@@ -1220,7 +1231,7 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
             {state.tab === 'gif' && (
               <>
                 <div className={styles.formRow}>
-                  <span className={styles.label}>Background</span>
+                  <span className={styles.label}>{t('Background')}</span>
                   <label className={styles.checkbox}>
                     <input
                       type="checkbox"
@@ -1228,7 +1239,7 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
                       onChange={(e) => update('gifTransparent', e.target.checked)}
                       data-testid="export-gif-transparent"
                     />
-                    <span>Transparent</span>
+                    <span>{t('Transparent')}</span>
                   </label>
                 </div>
                 <TimingFields
@@ -1251,7 +1262,7 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
                 />
                 <div className={styles.formRow}>
                   <label className={styles.label} htmlFor="export-gif-compression">
-                    Compression
+                    {t('Compression')}
                   </label>
                   <input
                     id="export-gif-compression"
@@ -1296,8 +1307,9 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
                 />
                 <div className={styles.warning} role="note">
                   <span className={styles.warningText}>
-                    MP4 uses H.264 encoding and a solid background. Availability depends on your
-                    browser and device.
+                    {t(
+                      'MP4 uses H.264 encoding and a solid background. Availability depends on your browser and device.'
+                    )}
                   </span>
                 </div>
               </>
@@ -1306,7 +1318,7 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
             {state.tab === 'webm' && (
               <>
                 <div className={styles.formRow}>
-                  <span className={styles.label}>Background</span>
+                  <span className={styles.label}>{t('Background')}</span>
                   <label className={styles.checkbox}>
                     <input
                       type="checkbox"
@@ -1314,7 +1326,7 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
                       onChange={(e) => update('webmTransparent', e.target.checked)}
                       data-testid="export-webm-transparent"
                     />
-                    <span>Transparent</span>
+                    <span>{t('Transparent')}</span>
                   </label>
                 </div>
                 {soundClipCount > 0 && (
@@ -1337,9 +1349,9 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
                 />
                 <div className={styles.warning} role="note">
                   <span className={styles.warningText}>
-                    WebM uses VP9 (VP8 where VP9 isn’t available) and can keep a transparent
-                    background, which Chrome, Edge and Firefox show. Availability depends on your
-                    browser and device.
+                    {t(
+                      'WebM uses VP9 (VP8 where VP9 isn’t available) and can keep a transparent background, which Chrome, Edge and Firefox show. Availability depends on your browser and device.'
+                    )}
                   </span>
                 </div>
               </>
@@ -1348,33 +1360,33 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
             {state.tab === 'sprite-sheet' && (
               <>
                 <div className={styles.formRow}>
-                  <span className={styles.label}>Layout</span>
+                  <span className={styles.label}>{t('Layout')}</span>
                   <select
                     className={styles.select}
                     value={state.spriteLayout}
                     onChange={(e) => update('spriteLayout', e.target.value as 'grid' | 'packed')}
                     data-testid="export-sprite-layout"
                   >
-                    <option value="grid">Grid</option>
-                    <option value="packed">Packed</option>
+                    <option value="grid">{t('Grid')}</option>
+                    <option value="packed">{t('Packed')}</option>
                   </select>
                 </div>
                 {state.spriteLayout === 'grid' && (
                   <div className={styles.formRow}>
-                    <span className={styles.label}>Columns</span>
+                    <span className={styles.label}>{t('Columns')}</span>
                     <input
                       className={styles.inputSmall}
                       type="number"
                       value={state.spriteColumns}
                       onChange={(e) => update('spriteColumns', parseInt(e.target.value) || 0)}
                       min={0}
-                      placeholder="Auto"
+                      placeholder={t('Auto')}
                       data-testid="export-sprite-columns"
                     />
                   </div>
                 )}
                 <div className={styles.formRow}>
-                  <span className={styles.label}>Padding</span>
+                  <span className={styles.label}>{t('Padding')}</span>
                   <input
                     className={styles.inputSmall}
                     type="number"
@@ -1386,14 +1398,14 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
                   />
                 </div>
                 <div className={styles.formRow}>
-                  <span className={styles.label}>Options</span>
+                  <span className={styles.label}>{t('Options')}</span>
                   <label className={styles.checkbox}>
                     <input
                       type="checkbox"
                       checked={state.spritePowerOfTwo}
                       onChange={(e) => update('spritePowerOfTwo', e.target.checked)}
                     />
-                    <span>Power of Two</span>
+                    <span>{t('Power of Two')}</span>
                   </label>
                   <label className={styles.checkbox}>
                     <input
@@ -1401,7 +1413,7 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
                       checked={state.spriteIncludeMetadata}
                       onChange={(e) => update('spriteIncludeMetadata', e.target.checked)}
                     />
-                    <span>Include JSON</span>
+                    <span>{t('Include JSON')}</span>
                   </label>
                 </div>
               </>
@@ -1410,7 +1422,7 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
             {state.tab === 'lottie' && lottieAnalysis && (
               <>
                 <div className={styles.formRow}>
-                  <span className={styles.label}>Supported</span>
+                  <span className={styles.label}>{t('Supported')}</span>
                   <span style={{ fontSize: 11, color: '#a1a1aa' }}>
                     {lottieAnalysis.supportedCount} nodes
                   </span>
@@ -1419,7 +1431,8 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
                   <div className={styles.warning}>
                     <AlertTriangle size={14} className={styles.warningIcon} />
                     <span className={styles.warningText}>
-                      {lottieAnalysis.unsupportedCount} unsupported node(s) will be skipped:{' '}
+                      {lottieAnalysis.unsupportedCount}
+                      {t(' unsupported node(s) will be skipped:')}{' '}
                       {lottieAnalysis.unsupportedTypes.join(', ')}.
                     </span>
                   </div>
@@ -1428,9 +1441,11 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
                   <div className={styles.warning} data-testid="lottie-unbent-images">
                     <AlertTriangle size={14} className={styles.warningIcon} />
                     <span className={styles.warningText}>
-                      {lottieAnalysis.unbentImageCount} image
-                      {lottieAnalysis.unbentImageCount === 1 ? '' : 's'} bound to bones will export
-                      without bending: Lottie can’t warp images. Shapes bend as in the editor.
+                      {lottieAnalysis.unbentImageCount}{' '}
+                      {lottieAnalysis.unbentImageCount === 1 ? t('image') : t('images')}
+                      {t(
+                        ' bound to bones will export without bending: Lottie can’t warp images. Shapes bend as in the editor.'
+                      )}
                     </span>
                   </div>
                 )}
@@ -1438,9 +1453,11 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
                   <div className={styles.warning} data-testid="lottie-dropped-effects">
                     <AlertTriangle size={14} className={styles.warningIcon} />
                     <span className={styles.warningText}>
-                      {lottieAnalysis.effectNodeCount} layer
-                      {lottieAnalysis.effectNodeCount === 1 ? '' : 's'} will export without{' '}
-                      {effectNames(lottieAnalysis.droppedEffects)}: Lottie doesn’t get effects.
+                      {lottieAnalysis.effectNodeCount}{' '}
+                      {lottieAnalysis.effectNodeCount === 1 ? t('layer') : t('layers')}
+                      {t(' will export without ')}
+                      {effectNames(lottieAnalysis.droppedEffects)}
+                      {t(': Lottie doesn’t get effects.')}
                     </span>
                   </div>
                 )}
@@ -1448,9 +1465,9 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
                   <div className={styles.warning} data-testid="lottie-dropped-blend-modes">
                     <AlertTriangle size={14} className={styles.warningIcon} />
                     <span className={styles.warningText}>
-                      {lottieAnalysis.blendModeNodeCount} layer
-                      {lottieAnalysis.blendModeNodeCount === 1 ? '' : 's'} in a blend mode will
-                      export as normal.
+                      {lottieAnalysis.blendModeNodeCount}{' '}
+                      {lottieAnalysis.blendModeNodeCount === 1 ? t('layer') : t('layers')}
+                      {t(' in a blend mode will export as normal.')}
                     </span>
                   </div>
                 )}
@@ -1463,10 +1480,11 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
                 <AlertTriangle size={14} className={styles.warningIcon} />
                 <span className={styles.warningText}>
                   {stillVideoCount === 1
-                    ? '1 video layer will show as a still picture'
-                    : `${stillVideoCount} video layers will show as still pictures`}
-                  : {stillVideoFormat} doesn’t play video. MP4, WebM, GIF, PNG Sequence and Sprite
-                  Sheet play {stillVideoCount === 1 ? 'it' : 'them'}.
+                    ? t('1 video layer will show as a still picture')
+                    : stillVideoCount + t(' video layers will show as still pictures')}
+                  : {stillVideoFormat}
+                  {t(' doesn’t play video. MP4, WebM, GIF, PNG Sequence and Sprite Sheet play ')}
+                  {stillVideoCount === 1 ? t('it') : t('them')}.
                 </span>
               </div>
             )}
@@ -1499,14 +1517,14 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
         {!state.exporting && (
           <div className={styles.footer}>
             <button className={styles.btnCancel} onClick={close} data-testid="export-dialog-cancel">
-              {state.videoProblems.length > 0 ? 'Close' : 'Cancel'}
+              {state.videoProblems.length > 0 ? t('Close') : t('Cancel')}
             </button>
             <button
               className={styles.btnPrimary}
               onClick={() => void handleExport()}
               data-testid="export-dialog-export"
             >
-              Export
+              {t('Export')}
             </button>
           </div>
         )}

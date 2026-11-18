@@ -15,6 +15,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import styles from './Toast.module.css';
+import { t } from '../../i18n';
 
 // ============================================================================
 // Types
@@ -147,7 +148,7 @@ function Toast({ item, onRemove }: ToastProps) {
       <button
         className={styles.closeButton}
         onClick={() => onRemove(item.id)}
-        aria-label="Close"
+        aria-label={t("Close")}
         data-testid={`toast-close-${item.id}`}
       >
         &#x2715;

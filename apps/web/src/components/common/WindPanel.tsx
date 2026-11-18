@@ -9,6 +9,7 @@ import { useEditorStore } from '../../stores/editorStore';
 import { useSceneGraph } from '../../contexts/SceneGraphContext';
 import type { WindSettings } from '@quar/types';
 import styles from './SmartBonePanel.module.css';
+import { t } from '../../i18n';
 
 export function WindPanel() {
   const sceneGraph = useSceneGraph();
@@ -18,13 +19,13 @@ export function WindPanel() {
   return (
     <div className={styles.container}>
       <div className={styles.header}>
-        <span className={styles.title}>Global Wind</span>
-        <label className={styles.toggle} title="Enable/disable wind">
+        <span className={styles.title}>{t("Global Wind")}</span>
+        <label className={styles.toggle} title={t("Enable/disable wind")}>
           <input
             type="checkbox"
             checked={globalWind.enabled}
             onChange={(e) => setGlobalWind({ enabled: e.target.checked }, sceneGraph)}
-            aria-label="Enable wind"
+            aria-label={t("Enable wind")}
           />
           <span className={styles.toggleTrack} />
         </label>
@@ -33,7 +34,7 @@ export function WindPanel() {
       <div className={styles.actionCard} data-testid="wind-settings">
         {/* Strength */}
         <SliderRow
-          label="Strength"
+          label={t("Strength")}
           value={globalWind.strength}
           min={0}
           max={500}
@@ -44,7 +45,7 @@ export function WindPanel() {
 
         {/* Direction */}
         <SliderRow
-          label="Direction"
+          label={t("Direction")}
           value={globalWind.direction}
           min={-180}
           max={180}
@@ -56,7 +57,7 @@ export function WindPanel() {
 
         {/* Turbulence */}
         <SliderRow
-          label="Turbulence"
+          label={t("Turbulence")}
           value={globalWind.turbulence}
           min={0}
           max={1}
@@ -67,7 +68,7 @@ export function WindPanel() {
 
         {/* Frequency */}
         <SliderRow
-          label="Frequency"
+          label={t("Frequency")}
           value={globalWind.frequency}
           min={0}
           max={10}

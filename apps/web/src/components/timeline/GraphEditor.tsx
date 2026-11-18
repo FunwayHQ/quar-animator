@@ -24,6 +24,7 @@ import { GraphEditorCurves } from './GraphEditorCurves';
 import { GraphEditorKeyframes } from './GraphEditorKeyframes';
 import { GraphEditorPropertyList } from './GraphEditorPropertyList';
 import styles from './GraphEditor.module.css';
+import { t } from '../../i18n';
 
 type DragMode =
   | { type: 'none' }
@@ -672,7 +673,7 @@ export function GraphEditor() {
         ref={containerRef}
         className={styles.graphArea}
         role="application"
-        aria-label="Animation curves"
+        aria-label={t("Animation curves")}
         // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
         tabIndex={0}
         // Before the keyframe dots, which keep the press to themselves
@@ -710,7 +711,7 @@ export function GraphEditor() {
             )}
           </>
         ) : (
-          <div className={styles.noData}>Select nodes with keyframes to view curves</div>
+          <div className={styles.noData}>{t("Select nodes with keyframes to view curves")}</div>
         )}
       </div>
     </div>

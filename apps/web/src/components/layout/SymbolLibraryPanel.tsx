@@ -11,6 +11,7 @@ import { useSceneGraph } from '../../contexts/SceneGraphContext';
 import { useEditorStore } from '../../stores/editorStore';
 import { ContextMenu, type ContextMenuEntry } from '../common/ContextMenu';
 import styles from './SymbolLibraryPanel.module.css';
+import { t } from '../../i18n';
 
 /** How many instances of each symbol these layers hold. */
 function countInstances(layers: Iterable<Node>, counts = new Map<string, number>()) {
@@ -143,7 +144,7 @@ export default function SymbolLibraryPanel() {
     ? [
         {
           id: 'edit-symbol',
-          label: 'Edit Symbol',
+          label: t("Edit Symbol"),
           onClick: () => {
             enterSymbolEdit(contextMenu.symbolId, sceneGraph);
             setContextMenu(null);
@@ -151,7 +152,7 @@ export default function SymbolLibraryPanel() {
         },
         {
           id: 'rename-symbol',
-          label: 'Rename',
+          label: t("Rename"),
           onClick: () => {
             const sym = symbols.find((s) => s.id === contextMenu.symbolId);
             if (sym) handleRenameStart(sym);
@@ -174,12 +175,12 @@ export default function SymbolLibraryPanel() {
   return (
     <div className={styles.panel} data-testid="symbol-library-panel">
       <div className={styles.header}>
-        <h3 className={styles.title}>Symbols</h3>
+        <h3 className={styles.title}>{t("Symbols")}</h3>
       </div>
       <div className={styles.content}>
         {symbols.length === 0 ? (
           <div className={styles.emptyState} data-testid="symbol-empty-state">
-            No symbols yet. Select objects and use Edit &gt; Create Symbol.
+            {t("No symbols yet. Select objects and use Edit &gt; Create Symbol.")}
           </div>
         ) : (
           <div className={styles.symbolList}>
@@ -189,7 +190,7 @@ export default function SymbolLibraryPanel() {
                 className={styles.symbolItem}
                 role="button"
                 tabIndex={0}
-                title="Click to place an instance, double-click to edit"
+                title={t("Click to place an instance, double-click to edit")}
                 onClick={() => handleClick(symbol.id)}
                 onKeyDown={(e) => {
                   // Enter or Space places an instance (not keys typed while renaming)

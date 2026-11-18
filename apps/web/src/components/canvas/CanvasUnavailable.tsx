@@ -9,6 +9,7 @@
 import { BookOpen, MonitorX } from 'lucide-react';
 import { openHelp } from '../help/helpPanel';
 import styles from './CanvasUnavailable.module.css';
+import { t } from '../../i18n';
 
 export type CanvasProblem = 'no-webgl2' | 'context-lost';
 
@@ -76,7 +77,7 @@ export function CanvasUnavailable({ problem }: { problem: CanvasProblem }) {
           onClick={() => openHelp('troubleshooting', 'webgl')}
         >
           <BookOpen size={13} aria-hidden="true" />
-          More in the user guide
+          {t("More in the user guide")}
         </button>
       </section>
     </div>

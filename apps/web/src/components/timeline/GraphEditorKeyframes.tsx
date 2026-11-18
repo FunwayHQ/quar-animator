@@ -7,6 +7,7 @@ import type { Keyframe, PropertyTrack } from '@quar/types';
 import type { GraphViewTransform } from '@quar/animation';
 import { graphToScreen, getTrackColor, isEasingEditable, easingToTangents } from '@quar/animation';
 import styles from './GraphEditor.module.css';
+import { t } from '../../i18n';
 
 interface GraphEditorKeyframesProps {
   tracks: Array<{ track: PropertyTrack<number>; globalIndex: number }>;
@@ -69,7 +70,7 @@ export function GraphEditorKeyframes({
               onManagedKeyframeMouseDown?.(stepId);
             }}
           >
-            <title>Animation Sequence keyframe — click to edit its step</title>
+            <title>{t("Animation Sequence keyframe — click to edit its step")}</title>
           </circle>
         );
         continue;

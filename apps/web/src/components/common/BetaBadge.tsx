@@ -7,6 +7,7 @@
 import { useCallback, useEffect, useId, useRef, useState, type ReactElement } from 'react';
 import { Bug, HardDriveDownload, X } from 'lucide-react';
 import styles from './BetaBadge.module.css';
+import { t } from '../../i18n';
 
 /** Where problems are reported: the project's GitHub issues. */
 export const REPORT_ISSUES_URL = 'https://github.com/FunwayHQ/quar-animator/issues';
@@ -37,8 +38,8 @@ export type BetaStorageNote = () => ReactElement | null;
 function LocalStorageNote(): ReactElement {
   return (
     <>
-      Your projects live in this browser. Keep a copy of work you care about:{' '}
-      <span className={styles.path}>File ▸ Download as .quar</span>
+      {t('Your projects live in this browser. Keep a copy of work you care about:')}{' '}
+      <span className={styles.path}>{t('File ▸ Download as .quar')}</span>
     </>
   );
 }
@@ -129,13 +130,13 @@ export function BetaBadge() {
         aria-expanded={open}
         aria-controls={cardId}
         aria-haspopup="dialog"
-        aria-label="Beta — what that means"
-        title="Quar Animator is in beta"
+        aria-label={t('Beta — what that means')}
+        title={t('Quar Animator is in beta')}
         onClick={toggle}
         data-testid="beta-badge"
       >
         <span className={styles.signal} aria-hidden="true" />
-        Beta
+        {t('Beta')}
       </button>
       {open && (
         <div
@@ -148,23 +149,24 @@ export function BetaBadge() {
           data-testid="beta-notice"
         >
           <div className={styles.header}>
-            <span className={styles.eyebrow}>Public beta</span>
+            <span className={styles.eyebrow}>{t('Public beta')}</span>
             <button
               type="button"
               className={styles.close}
               onClick={close}
-              aria-label="Close"
+              aria-label={t('Close')}
               data-testid="beta-notice-close"
             >
               <X size={14} />
             </button>
           </div>
           <h2 id={titleId} className={styles.title}>
-            Quar Animator is in beta
+            {t('Quar Animator is in beta')}
           </h2>
           <p className={styles.lead}>
-            It’s ready to use and changing fast — features may move, and now and then something may
-            break.
+            {t(
+              'It’s ready to use and changing fast — features may move, and now and then something may break.'
+            )}
           </p>
           <ul className={styles.points}>
             <li>
@@ -179,7 +181,7 @@ export function BetaBadge() {
               <span className={styles.pointIcon} aria-hidden="true">
                 <Bug size={15} />
               </span>
-              <span>Something broken or odd? Tell us — it helps more than you’d think.</span>
+              <span>{t('Something broken or odd? Tell us — it helps more than you’d think.')}</span>
             </li>
           </ul>
           <div className={styles.actions}>
@@ -190,7 +192,7 @@ export function BetaBadge() {
               rel="noopener noreferrer"
               data-testid="beta-notice-report"
             >
-              Report an issue
+              {t('Report an issue')}
             </a>
             <button
               ref={doneRef}
@@ -199,7 +201,7 @@ export function BetaBadge() {
               onClick={close}
               data-testid="beta-notice-done"
             >
-              Got it
+              {t('Got it')}
             </button>
           </div>
         </div>

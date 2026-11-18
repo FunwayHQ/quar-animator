@@ -77,6 +77,7 @@ import { promptDialog } from '../common/PromptDialog';
 import { toast } from '../common/Toast';
 import styles from './Canvas.module.css';
 import { releaseVideoFrames } from '../../services/videoFrames';
+import { t, tf } from '../../i18n';
 
 // ============================================================================
 // Constants
@@ -1013,7 +1014,7 @@ export function Canvas({
           lastFailure = '';
         } catch (error) {
           const said = error instanceof Error ? error.message : String(error);
-          if (said !== lastFailure) console.error('A canvas frame failed to draw:', error);
+          if (said !== lastFailure) console.error(t('A canvas frame failed to draw:'), error);
           lastFailure = said;
         }
       };
@@ -1878,19 +1879,25 @@ export function Canvas({
       return [
         {
           id: 'cut-at-point',
-          label: pointCount === 1 ? 'Cut Path Here' : `Cut Path at ${pointCount} Points`,
+          label:
+            pointCount === 1
+              ? tf('menu.canvas.cut-path-here')
+              : tf('menu.canvas.cut-path-count', { count: pointCount }),
           onClick: () => useEditorStore.getState().cutPathsAtSelectedPoints(sceneGraph),
         },
         {
           id: 'join-path',
-          label: 'Join',
+          label: t('Join'),
           shortcut: 'Ctrl+J',
           onClick: () => useEditorStore.getState().joinSelectedPaths(sceneGraph),
         },
         { type: 'separator' },
         {
           id: 'delete-point',
-          label: pointCount === 1 ? 'Delete Point' : `Delete ${pointCount} Points`,
+          label:
+            pointCount === 1
+              ? tf('menu.canvas.delete-point')
+              : tf('menu.canvas.delete-point-count', { count: pointCount }),
           shortcut: 'Del',
           danger: true,
           onClick: () => deleteDirectSelectionPoints(),
@@ -1928,27 +1935,27 @@ export function Canvas({
       return [
         {
           id: 'copy',
-          label: 'Copy',
+          label: t('Copy'),
           shortcut: 'Ctrl+C',
           onClick: () => copyLayers(sceneGraph, 'copy'),
         },
         {
           id: 'duplicate',
-          label: 'Duplicate',
+          label: t('Duplicate'),
           shortcut: 'Ctrl+D',
           onClick: () => duplicateSelection(sceneGraph),
         },
         { type: 'separator' },
         {
           id: 'group',
-          label: 'Group',
+          label: t('Group'),
           shortcut: 'Ctrl+G',
           disabled: selectedNodeIds.size < 2,
           onClick: () => groupSelection(sceneGraph),
         },
         {
           id: 'ungroup',
-          label: 'Ungroup',
+          label: t('Ungroup'),
           shortcut: 'Ctrl+Shift+G',
           disabled: !hasGroup,
           onClick: () => ungroupSelection(sceneGraph),
@@ -1956,66 +1963,66 @@ export function Canvas({
         { type: 'separator' },
         {
           id: 'bring-to-front',
-          label: 'Bring to Front',
+          label: t('Bring to Front'),
           shortcut: 'Ctrl+Shift+]',
           onClick: () => bringToFront(sceneGraph),
         },
         {
           id: 'bring-forward',
-          label: 'Bring Forward',
+          label: t('Bring Forward'),
           shortcut: 'Ctrl+]',
           onClick: () => bringForward(sceneGraph),
         },
         {
           id: 'send-backward',
-          label: 'Send Backward',
+          label: t('Send Backward'),
           shortcut: 'Ctrl+[',
           onClick: () => sendBackward(sceneGraph),
         },
         {
           id: 'send-to-back',
-          label: 'Send to Back',
+          label: t('Send to Back'),
           shortcut: 'Ctrl+Shift+[',
           onClick: () => sendToBack(sceneGraph),
         },
         { type: 'separator' },
         {
           id: 'flip-horizontal',
-          label: 'Flip Horizontal',
+          label: t('Flip Horizontal'),
           shortcut: 'Shift+H',
           onClick: () => flipSelected(sceneGraph, 'horizontal'),
         },
         {
           id: 'flip-vertical',
-          label: 'Flip Vertical',
+          label: t('Flip Vertical'),
           shortcut: 'Shift+V',
           onClick: () => flipSelected(sceneGraph, 'vertical'),
         },
         { type: 'separator' },
         {
           id: 'boolean-union',
-          label: 'Union',
+          label: t('Union'),
           shortcut: 'Ctrl+Shift+U',
           disabled: !canBoolean,
           onClick: () => booleanUnion(sceneGraph),
         },
         {
           id: 'boolean-subtract',
-          label: 'Subtract',
+          label: t('Subtract'),
           shortcut: 'Ctrl+Shift+D',
           disabled: !canBoolean,
           onClick: () => booleanSubtract(sceneGraph),
         },
         {
           id: 'boolean-intersect',
-          label: 'Intersect',
+          label: t('Intersect'),
           shortcut: 'Ctrl+Shift+I',
           disabled: !canBoolean,
           onClick: () => booleanIntersect(sceneGraph),
         },
         {
           id: 'boolean-exclude',
-          label: 'Exclude',
+          label: t('Exclude'),
           shortcut: 'Ctrl+Shift+X',
           disabled: !canBoolean,
           onClick: () => booleanExclude(sceneGraph),
@@ -2025,33 +2032,33 @@ export function Canvas({
               { type: 'separator' as const },
               {
                 id: 'change-op-union',
-                label: 'Change to Union',
+                label: t('Change to Union'),
                 onClick: () => changeBooleanOp(sceneGraph, 'union' as const),
               },
               {
                 id: 'change-op-subtract',
-                label: 'Change to Subtract',
+                label: t('Change to Subtract'),
                 onClick: () => changeBooleanOp(sceneGraph, 'subtract' as const),
               },
               {
                 id: 'change-op-intersect',
-                label: 'Change to Intersect',
+                label: t('Change to Intersect'),
                 onClick: () => changeBooleanOp(sceneGraph, 'intersect' as const),
               },
               {
                 id: 'change-op-exclude',
-                label: 'Change to Exclude',
+                label: t('Change to Exclude'),
                 onClick: () => changeBooleanOp(sceneGraph, 'exclude' as const),
               },
               { type: 'separator' as const },
               {
                 id: 'release-boolean',
-                label: 'Release Boolean',
+                label: t('Release Boolean'),
                 onClick: () => releaseBooleanGroup(sceneGraph),
               },
               {
                 id: 'flatten-boolean',
-                label: 'Flatten Boolean',
+                label: t('Flatten Boolean'),
                 onClick: () => flattenBooleanGroup(sceneGraph),
               },
             ]
@@ -2061,17 +2068,19 @@ export function Canvas({
               { type: 'separator' as const },
               {
                 id: 'reverse-path',
-                label: 'Reverse Path',
+                label: t('Reverse Path'),
                 onClick: () => useEditorStore.getState().reverseSelectedPaths(sceneGraph),
               },
               {
                 id: 'simplify-path',
-                label: 'Simplify Path',
+                label: t('Simplify Path'),
                 onClick: () => useEditorStore.getState().simplifySelectedPaths(sceneGraph),
               },
               {
                 id: 'close-path',
-                label: pathsClosed ? 'Open Path' : 'Close Path',
+                label: pathsClosed
+                  ? tf('menu.canvas.open-path')
+                  : tf('menu.canvas.close-path'),
                 onClick: () =>
                   useEditorStore.getState().setSelectedPathsClosed(sceneGraph, !pathsClosed),
               },
@@ -2079,7 +2088,7 @@ export function Canvas({
                 ? [
                     {
                       id: 'join-paths',
-                      label: 'Join',
+                      label: t('Join'),
                       shortcut: 'Ctrl+J',
                       onClick: () => useEditorStore.getState().joinSelectedPaths(sceneGraph),
                     },
@@ -2090,7 +2099,7 @@ export function Canvas({
         { type: 'separator' },
         {
           id: 'convert-to-path',
-          label: 'Convert to Path',
+          label: t('Convert to Path'),
           shortcut: 'Ctrl+Shift+P',
           disabled: !Array.from(selectedNodeIds).some((id) => {
             const type = sceneGraph.getNode(id)?.type;
@@ -2102,7 +2111,7 @@ export function Canvas({
         },
         {
           id: 'outline-stroke',
-          label: 'Outline Stroke',
+          label: t('Outline Stroke'),
           shortcut: 'Ctrl+Shift+O',
           disabled: !Array.from(selectedNodeIds).some((id) => {
             const n = sceneGraph.getNode(id);
@@ -2127,12 +2136,12 @@ export function Canvas({
           return [
             {
               id: 'create-brush-profile',
-              label: 'Create Profile from Selection',
+              label: tf('menu.canvas.create-profile'),
               onClick: () => {
                 void promptDialog({
-                  title: 'New Brush Profile',
-                  placeholder: 'Profile name',
-                  confirmLabel: 'Create',
+                  title: tf('menu.canvas.new-brush-profile'),
+                  placeholder: t('Profile name'),
+                  confirmLabel: tf('menu.canvas.create'),
                 }).then((profileName) => {
                   if (profileName) {
                     createBrushProfileFromSelection(sceneGraph, profileName);
@@ -2158,13 +2167,13 @@ export function Canvas({
             if (!existingChain) {
               items.push({
                 id: 'create-ik-chain',
-                label: 'Create IK Chain',
+                label: t('Create IK Chain'),
                 onClick: () => createIKChain(sceneGraph, selNode.id),
               });
             } else {
               items.push({
                 id: 'remove-ik-chain',
-                label: 'Remove IK Chain',
+                label: tf('menu.canvas.remove-ik-chain'),
                 onClick: () => removeIKChain(sceneGraph, existingChain.id),
               });
             }
@@ -2178,7 +2187,7 @@ export function Canvas({
               { type: 'separator' },
               {
                 id: 'remove-ik-chain',
-                label: 'Remove IK Chain',
+                label: tf('menu.canvas.remove-ik-chain'),
                 onClick: () => removeIKChain(sceneGraph, chainId),
               },
             ];
@@ -2202,7 +2211,7 @@ export function Canvas({
           if (!hasSkinData && boneIds.length > 0) {
             items.push({
               id: 'bind-to-bones',
-              label: 'Bind to Bones',
+              label: tf('menu.canvas.bind-to-bones'),
               onClick: () =>
                 bindLayersToBones(
                   sceneGraph,
@@ -2216,7 +2225,7 @@ export function Canvas({
           if (hasSkinData) {
             items.push({
               id: 'unbind-mesh',
-              label: 'Unbind Mesh',
+              label: t('Unbind Mesh'),
               onClick: () => {
                 // A group's bound shapes and pictures, every one
                 for (const layer of layers) {
@@ -2226,7 +2235,7 @@ export function Canvas({
             });
             items.push({
               id: 'weight-paint',
-              label: 'Weight Paint',
+              label: t('Weight Paint'),
               onClick: () => {
                 useEditorStore.getState().setActiveTool('weight-paint');
               },
@@ -2238,7 +2247,7 @@ export function Canvas({
         { type: 'separator' },
         {
           id: 'toggle-visibility',
-          label: 'Show/Hide',
+          label: tf('menu.canvas.show-hide'),
           onClick: () => {
             for (const id of selectedNodeIds) {
               const node = sceneGraph.getNode(id);
@@ -2248,7 +2257,7 @@ export function Canvas({
         },
         {
           id: 'toggle-lock',
-          label: 'Lock/Unlock',
+          label: tf('menu.canvas.lock-unlock'),
           onClick: () => {
             for (const id of selectedNodeIds) {
               const node = sceneGraph.getNode(id);
@@ -2259,7 +2268,7 @@ export function Canvas({
         { type: 'separator' },
         {
           id: 'delete',
-          label: 'Delete',
+          label: t('Delete'),
           shortcut: 'Del',
           danger: true,
           onClick: () => deleteSelection(sceneGraph),
@@ -2270,14 +2279,14 @@ export function Canvas({
     return [
       {
         id: 'paste',
-        label: 'Paste',
+        label: t('Paste'),
         shortcut: 'Ctrl+V',
         onClick: pasteFromMenus,
       },
       { type: 'separator' },
       {
         id: 'select-all',
-        label: 'Select All',
+        label: t('Select All'),
         shortcut: 'Ctrl+A',
         onClick: () => selectAll(sceneGraph),
       },
@@ -2598,7 +2607,7 @@ export function Canvas({
     >
       {isFileDragOver && (
         <div className={styles.fileDropOverlay} role="status" aria-live="polite">
-          Drop an image, SVG, video, sound, or project file to import
+          {t('Drop an image, SVG, video, sound, or project file to import')}
         </div>
       )}
       {/* Symbol editing banner */}
@@ -2636,7 +2645,8 @@ export function Canvas({
               }
             }}
           >
-            Editing Symbol: {symDef?.name ?? 'Unknown'} — Click or press Escape to exit
+            {t('Editing Symbol:')} {symDef?.name ?? t('Unknown')}
+            {t(' — Click or press Escape to exit')}
           </div>
         );
       })()}
@@ -2644,7 +2654,7 @@ export function Canvas({
         ref={canvasRef}
         className={styles.canvas}
         tabIndex={editingTextNodeId ? -1 : 0}
-        aria-label="Drawing canvas"
+        aria-label={t('Drawing canvas')}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}

@@ -28,6 +28,7 @@ import { isPosingScene } from '../../stores/scenePosing';
 import { ContextMenu } from '../common/ContextMenu';
 import type { ContextMenuEntry } from '../common/ContextMenu';
 import styles from './LayerPanel.module.css';
+import { t, tf } from '../../i18n';
 
 /**
  * Base array-order insert index for a layer drop, before the same-parent
@@ -321,8 +322,8 @@ function LayerRow({
           <span
             className={styles.maskSourceBadge}
             role="img"
-            aria-label="Mask source"
-            title="Mask source: this layer masks the rest of its group"
+            aria-label={t("Mask source")}
+            title={t("Mask source: this layer masks the rest of its group")}
             data-testid={`mask-source-badge-${node.id}`}
           >
             <Contrast size={12} aria-hidden="true" />
@@ -330,7 +331,7 @@ function LayerRow({
         )}
         {node.type === 'group' && node.maskNodeId && (
           <span className={styles.maskBadge} data-testid={`mask-badge-${node.id}`}>
-            {node.maskMode === 'luminance' ? 'Luma' : node.maskMode === 'alpha' ? 'Alpha' : 'Clip'}
+            {node.maskMode === 'luminance' ? 'Luma' : node.maskMode === 'alpha' ? t("Alpha") : 'Clip'}
           </span>
         )}
         <div className={styles.layerActions}>
@@ -341,7 +342,7 @@ function LayerRow({
               onToggleVisibility(node.id);
             }}
             onPointerDown={(e) => e.stopPropagation()}
-            title="Toggle visibility"
+            title={t("Toggle visibility")}
             aria-label={node.visible ? 'Hide layer' : 'Show layer'}
           >
             <svg
@@ -363,7 +364,7 @@ function LayerRow({
               onToggleLock(node.id);
             }}
             onPointerDown={(e) => e.stopPropagation()}
-            title="Toggle lock"
+            title={t("Toggle lock")}
             aria-label={node.locked ? 'Unlock layer' : 'Lock layer'}
           >
             <svg
@@ -622,18 +623,18 @@ export function LayerPanel() {
       return [
         {
           id: 'rename',
-          label: 'Rename',
+          label: t("Rename"),
           disabled: true,
           onClick: () => {},
         },
         {
           id: 'duplicate',
-          label: `Duplicate ${count} Layers`,
+          label: tf('menu.layer.duplicate-count', { count }),
           onClick: () => duplicateSelection(sceneGraph),
         },
         {
           id: 'delete',
-          label: `Delete ${count} Layers`,
+          label: tf('menu.layer.delete-count', { count }),
           shortcut: 'Del',
           danger: true,
           onClick: () => deleteSelection(sceneGraph),
@@ -641,31 +642,31 @@ export function LayerPanel() {
         { type: 'separator' },
         {
           id: 'group',
-          label: `Group ${count} Layers`,
+          label: tf('menu.layer.group-count', { count }),
           shortcut: 'Ctrl+G',
           onClick: () => groupSelection(sceneGraph),
         },
         {
           id: 'create-clip-mask',
-          label: 'Create Clip Mask',
+          label: tf('menu.layer.create-clip-mask'),
           disabled: !canCreateMask,
           onClick: () => createMask(sceneGraph, 'clip'),
         },
         {
           id: 'create-alpha-mask',
-          label: 'Create Alpha Mask',
+          label: tf('menu.layer.create-alpha-mask'),
           disabled: !canCreateMask,
           onClick: () => createMask(sceneGraph, 'alpha'),
         },
         {
           id: 'create-luminance-mask',
-          label: 'Create Luminance Mask',
+          label: tf('menu.layer.create-luminance-mask'),
           disabled: !canCreateMask,
           onClick: () => createMask(sceneGraph, 'luminance'),
         },
         {
           id: 'ungroup',
-          label: 'Ungroup',
+          label: t("Ungroup"),
           shortcut: 'Ctrl+Shift+G',
           disabled: !hasGroup,
           onClick: () => ungroupSelection(sceneGraph),
@@ -673,32 +674,34 @@ export function LayerPanel() {
         { type: 'separator' },
         {
           id: 'bring-to-front',
-          label: 'Bring to Front',
+          label: t("Bring to Front"),
           shortcut: 'Ctrl+Shift+]',
           onClick: () => bringToFront(sceneGraph),
         },
         {
           id: 'bring-forward',
-          label: 'Bring Forward',
+          label: t("Bring Forward"),
           shortcut: 'Ctrl+]',
           onClick: () => bringForward(sceneGraph),
         },
         {
           id: 'send-backward',
-          label: 'Send Backward',
+          label: t("Send Backward"),
           shortcut: 'Ctrl+[',
           onClick: () => sendBackward(sceneGraph),
         },
         {
           id: 'send-to-back',
-          label: 'Send to Back',
+          label: t("Send to Back"),
           shortcut: 'Ctrl+Shift+[',
           onClick: () => sendToBack(sceneGraph),
         },
         { type: 'separator' },
         {
           id: 'toggle-visibility',
-          label: allVisible ? `Hide ${count} Layers` : `Show ${count} Layers`,
+          label: allVisible
+            ? tf('menu.layer.hide-count', { count })
+            : tf('menu.layer.show-count', { count }),
           onClick: () => {
             pushUndo(sceneGraph);
             const newVisible = !allVisible;
@@ -709,7 +712,9 @@ export function LayerPanel() {
         },
         {
           id: 'toggle-lock',
-          label: allLocked ? `Unlock ${count} Layers` : `Lock ${count} Layers`,
+          label: allLocked
+            ? tf('menu.layer.unlock-count', { count })
+            : tf('menu.layer.lock-count', { count }),
           onClick: () => {
             pushUndo(sceneGraph);
             const newLocked = !allLocked;
@@ -728,17 +733,17 @@ export function LayerPanel() {
     return [
       {
         id: 'rename',
-        label: 'Rename',
+        label: t("Rename"),
         onClick: () => setRenamingNodeId(nodeId),
       },
       {
         id: 'duplicate',
-        label: 'Duplicate',
+        label: t("Duplicate"),
         onClick: () => duplicateSelection(sceneGraph),
       },
       {
         id: 'delete',
-        label: 'Delete',
+        label: t("Delete"),
         shortcut: 'Del',
         danger: true,
         onClick: () => deleteSelection(sceneGraph),
@@ -746,14 +751,14 @@ export function LayerPanel() {
       { type: 'separator' },
       {
         id: 'group',
-        label: 'Group',
+        label: t("Group"),
         shortcut: 'Ctrl+G',
         disabled: true,
         onClick: () => {},
       },
       {
         id: 'ungroup',
-        label: 'Ungroup',
+        label: t("Ungroup"),
         shortcut: 'Ctrl+Shift+G',
         disabled: !isGroup,
         onClick: () => ungroupSelection(sceneGraph),
@@ -763,18 +768,19 @@ export function LayerPanel() {
             { type: 'separator' as const },
             ...(
               [
-                ['clip', 'Set Clip Mask'] as const,
-                ['alpha', 'Set Alpha Mask'] as const,
-                ['luminance', 'Set Luminance Mask'] as const,
+                ['clip', 'menu.layer.set-clip-mask'] as const,
+                ['alpha', 'menu.layer.set-alpha-mask'] as const,
+                ['luminance', 'menu.layer.set-luminance-mask'] as const,
               ] satisfies Array<[MaskMode, string]>
-            ).map(([mode, label]) => ({
+            ).map(([mode, labelKey]) => ({
               id: `mask-mode-${mode}`,
-              label: maskGroup?.maskMode === mode ? `${label} ✓` : label,
+              label:
+                maskGroup?.maskMode === mode ? `${tf(labelKey)} ✓` : tf(labelKey),
               onClick: () => setMaskMode(sceneGraph, nodeId, mode),
             })),
             {
               id: 'remove-mask',
-              label: 'Remove Mask',
+              label: tf('menu.layer.remove-mask'),
               onClick: () => removeMask(sceneGraph, nodeId),
             },
           ]
@@ -782,37 +788,37 @@ export function LayerPanel() {
       { type: 'separator' },
       {
         id: 'bring-to-front',
-        label: 'Bring to Front',
+        label: t("Bring to Front"),
         shortcut: 'Ctrl+Shift+]',
         onClick: () => bringToFront(sceneGraph),
       },
       {
         id: 'bring-forward',
-        label: 'Bring Forward',
+        label: t("Bring Forward"),
         shortcut: 'Ctrl+]',
         onClick: () => bringForward(sceneGraph),
       },
       {
         id: 'send-backward',
-        label: 'Send Backward',
+        label: t("Send Backward"),
         shortcut: 'Ctrl+[',
         onClick: () => sendBackward(sceneGraph),
       },
       {
         id: 'send-to-back',
-        label: 'Send to Back',
+        label: t("Send to Back"),
         shortcut: 'Ctrl+Shift+[',
         onClick: () => sendToBack(sceneGraph),
       },
       { type: 'separator' },
       {
         id: 'toggle-visibility',
-        label: node.visible ? 'Hide' : 'Show',
+        label: node.visible ? tf('menu.layer.hide') : tf('menu.layer.show'),
         onClick: () => handleToggleVisibility(nodeId),
       },
       {
         id: 'toggle-lock',
-        label: node.locked ? 'Unlock' : 'Lock',
+        label: node.locked ? tf('menu.layer.unlock') : tf('menu.layer.lock'),
         onClick: () => handleToggleLock(nodeId),
       },
     ];
@@ -1024,7 +1030,7 @@ export function LayerPanel() {
   return (
     <div className={styles.panel}>
       <div className={styles.header}>
-        <h3 className={styles.title}>Layers</h3>
+        <h3 className={styles.title}>{t("Layers")}</h3>
       </div>
       {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions -- drag container needs pointer events */}
       <div
@@ -1036,7 +1042,7 @@ export function LayerPanel() {
       >
         {rootNodes.length === 0 ? (
           <div className={styles.emptyState} data-testid="layer-empty">
-            No layers yet
+            {t("No layers yet")}
           </div>
         ) : (
           rootNodes.map((node: Node) => (

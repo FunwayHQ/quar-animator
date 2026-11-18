@@ -15,6 +15,7 @@ import { createPortal } from 'react-dom';
 import type { Color } from '@quar/types';
 import { hexToColor, rgbToHex } from '@quar/core';
 import styles from './ColorPicker.module.css';
+import { t } from '../../i18n';
 
 // ============================================================================
 // Color conversion utilities
@@ -400,12 +401,12 @@ export function ColorPicker({
             <div
               className={styles.previewNew}
               style={{ backgroundColor: currentHex }}
-              title="New color"
+              title={t("New color")}
             />
             <div
               className={styles.previewOld}
               style={{ backgroundColor: initialHex }}
-              title="Original color"
+              title={t("Original color")}
             />
           </div>
 
@@ -452,7 +453,7 @@ export function ColorPicker({
               spellCheck={false}
               data-testid="hex-input"
             />
-            <span className={styles.inputFieldLabel}>Hex</span>
+            <span className={styles.inputFieldLabel}>{t("Hex")}</span>
           </div>
 
           {inputMode === 'rgb' ? (

@@ -24,6 +24,7 @@ import {
   useHelpPanel,
 } from './helpPanel';
 import styles from './HelpWindow.module.css';
+import { t } from '../../i18n';
 
 const STORAGE_KEY = 'quar-animator-help-window';
 const MIN_WIDTH = 320;
@@ -263,7 +264,7 @@ export function HelpWindow() {
     <div
       className={`${styles.window} ${dragging ? styles.dragging : ''}`}
       role="dialog"
-      aria-label="User Guide"
+      aria-label={t("User Guide")}
       style={{ left: rect.x, top: rect.y, width: rect.width, height: rect.height }}
       onKeyDown={handleKeyDown}
       data-own-keys
@@ -275,13 +276,13 @@ export function HelpWindow() {
           className={styles.iconButton}
           onClick={goBack}
           disabled={!canGoBack}
-          aria-label="Back"
-          title="Back"
+          aria-label={t("Back")}
+          title={t("Back")}
         >
           <ArrowLeft size={14} />
         </button>
         <span className={styles.title}>
-          User Guide
+          {t("User Guide")}
           {pageTitle && pageTitle !== 'Quar Animator User Guide' && (
             <span className={styles.pageTitle} data-testid="help-page-title">
               {pageTitle}
@@ -292,8 +293,8 @@ export function HelpWindow() {
           type="button"
           className={styles.iconButton}
           onClick={() => openHelp(HELP_CONTENTS)}
-          aria-label="Contents"
-          title="Contents"
+          aria-label={t("Contents")}
+          title={t("Contents")}
         >
           <BookOpen size={14} />
         </button>
@@ -301,8 +302,8 @@ export function HelpWindow() {
           type="button"
           className={styles.iconButton}
           onClick={openInTab}
-          aria-label="Open in a new tab"
-          title="Open in a new tab"
+          aria-label={t("Open in a new tab")}
+          title={t("Open in a new tab")}
         >
           <ExternalLink size={14} />
         </button>
@@ -310,8 +311,8 @@ export function HelpWindow() {
           type="button"
           className={styles.iconButton}
           onClick={closeHelp}
-          aria-label="Close the User Guide"
-          title="Close (Esc)"
+          aria-label={t("Close the User Guide")}
+          title={t("Close (Esc)")}
         >
           <X size={14} />
         </button>
@@ -320,7 +321,7 @@ export function HelpWindow() {
         ref={frameRef}
         className={styles.frame}
         src={initialSrc}
-        title="User Guide"
+        title={t("User Guide")}
         onLoad={handleFrameLoad}
         data-testid="help-frame"
       />

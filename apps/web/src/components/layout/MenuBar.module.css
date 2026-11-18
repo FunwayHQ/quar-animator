@@ -145,7 +145,30 @@
   box-shadow: var(--shadow-xl);
   padding: 4px 0;
   z-index: 100;
+  max-height: calc(100vh - 56px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border-default) transparent;
   animation: dropdownIn 0.12s var(--easing-default) both;
+}
+
+/* Long menus (e.g. Edit) scroll instead of running off the viewport. */
+.dropdown::-webkit-scrollbar {
+  width: 6px;
+}
+
+.dropdown::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.dropdown::-webkit-scrollbar-thumb {
+  background: var(--color-border-default);
+  border-radius: var(--radius-full);
+}
+
+.dropdown::-webkit-scrollbar-thumb:hover {
+  background: var(--color-border-strong);
 }
 
 @keyframes dropdownIn {

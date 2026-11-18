@@ -29,6 +29,7 @@ import { SocialLinks } from '../components/common/SocialLinks';
 import { PRIVACY_URL, TERMS_URL } from '../components/common/legalLinks';
 import { QuarLogo } from '../components/common/QuarLogo';
 import { helpUrl } from '../components/help/helpPanel';
+import { t } from '../i18n';
 
 // ============================================================================
 // Helpers
@@ -261,7 +262,7 @@ export function Projects() {
             <div
               className={styles.cardName}
               onDoubleClick={(e) => handleRenameStart(e, project)}
-              title="Double-click to rename"
+              title={t("Double-click to rename")}
             >
               {project.name}
             </div>
@@ -276,7 +277,7 @@ export function Projects() {
               ? `Confirm delete ${project.name}`
               : `Delete ${project.name}`
           }
-          title={pendingDeleteId === project.id ? 'Click again to confirm' : 'Delete'}
+          title={pendingDeleteId === project.id ? 'Click again to confirm' : t("Delete")}
           data-testid={`delete-${project.id}`}
         >
           <Trash2 size={14} />
@@ -318,7 +319,7 @@ export function Projects() {
             data-testid="import-button"
           >
             <Upload size={14} />
-            Import .quar
+            {t("Import .quar")}
           </button>
         </div>
       </header>
@@ -329,19 +330,19 @@ export function Projects() {
           /* Empty state */
           <div className={styles.emptyState} data-testid="empty-state">
             <Film size={48} />
-            <p>No projects yet. Create your first animation or import an existing .quar file.</p>
+            <p>{t("No projects yet. Create your first animation or import an existing .quar file.")}</p>
             <button
               className={styles.emptyCtaButton}
               onClick={handleNewProject}
               data-testid="empty-new-button"
             >
               <Plus size={16} />
-              New Project
+              {t("New Project")}
             </button>
           </div>
         ) : (
           <>
-            <h2 className={styles.sectionTitle}>Your Projects</h2>
+            <h2 className={styles.sectionTitle}>{t("Your Projects")}</h2>
             <div className={styles.grid} data-testid="projects-grid">
               {/* New project card */}
               <button
@@ -352,7 +353,7 @@ export function Projects() {
                 <div className={styles.newCardIcon}>
                   <Plus size={24} />
                 </div>
-                <span className={styles.newCardLabel}>New Project</span>
+                <span className={styles.newCardLabel}>{t("New Project")}</span>
               </button>
 
               {/* Existing project cards */}
@@ -361,7 +362,7 @@ export function Projects() {
 
             {tutorialProjects.length > 0 && (
               <>
-                <h2 className={`${styles.sectionTitle} ${styles.tutorialsTitle}`}>Tutorials</h2>
+                <h2 className={`${styles.sectionTitle} ${styles.tutorialsTitle}`}>{t("Tutorials")}</h2>
                 <div className={styles.grid} data-testid="tutorials-grid">
                   {tutorialProjects.map(renderCard)}
                 </div>
@@ -373,15 +374,15 @@ export function Projects() {
 
       <footer className={styles.footer}>
         <a href={helpUrl()} target="_blank" rel="noopener noreferrer" data-testid="user-guide-link">
-          User Guide
+          {t("User Guide")}
         </a>
         <span aria-hidden="true">·</span>
         <a href={PRIVACY_URL} target="_blank" rel="noopener noreferrer">
-          Privacy Policy
+          {t("Privacy Policy")}
         </a>
         <span aria-hidden="true">·</span>
         <a href={TERMS_URL} target="_blank" rel="noopener noreferrer">
-          Terms of Service
+          {t("Terms of Service")}
         </a>
       </footer>
     </div>

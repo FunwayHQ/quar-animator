@@ -8,6 +8,7 @@ import { PageTabs } from '../components/layout/PageTabs';
 import SymbolLibraryPanel from '../components/layout/SymbolLibraryPanel';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 import { ExportDialogHost } from '../components/common/ExportDialog';
+import { PreferencesDialogHost } from '../components/common/PreferencesDialog';
 import { PresentationHost } from '../components/presentation/PresentationPlayer';
 import { AnimationSequenceWindow } from '../components/common/AnimationSequenceWindow';
 import { SceneGraphProvider } from '../contexts/SceneGraphContext';
@@ -95,6 +96,7 @@ export function Editor() {
       <>
         <EditorInner />
         <ExportDialogHost />
+        <PreferencesDialogHost />
         <PresentationHost />
       </>
     </SceneGraphProvider>

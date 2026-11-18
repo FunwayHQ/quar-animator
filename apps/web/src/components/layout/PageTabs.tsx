@@ -8,6 +8,7 @@ import { Plus, X } from 'lucide-react';
 import { usePages, useActivePageId, useEditorStore } from '../../stores/editorStore';
 import { useSceneGraph } from '../../contexts/SceneGraphContext';
 import styles from './PageTabs.module.css';
+import { t } from '../../i18n';
 
 export function PageTabs() {
   const pages = usePages();
@@ -178,7 +179,7 @@ export function PageTabs() {
         <button
           className={styles.addButton}
           onClick={handleAddPage}
-          title="Add page"
+          title={t("Add page")}
           data-testid="add-page-button"
         >
           <Plus size={14} />
@@ -195,13 +196,13 @@ export function PageTabs() {
             className={styles.contextMenuItem}
             onClick={() => handleStartRename(contextMenu.pageId)}
           >
-            Rename
+            {t("Rename")}
           </button>
           <button
             className={styles.contextMenuItem}
             onClick={() => handleDuplicatePage(contextMenu.pageId)}
           >
-            Duplicate
+            {t("Duplicate")}
           </button>
           {pages.length > 1 && (
             <button
@@ -211,7 +212,7 @@ export function PageTabs() {
                 setContextMenu(null);
               }}
             >
-              Delete
+              {t("Delete")}
             </button>
           )}
         </div>

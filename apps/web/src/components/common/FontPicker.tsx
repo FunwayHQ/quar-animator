@@ -41,6 +41,7 @@ import {
 import { addRecentFont, getRecentFonts } from '../../services/recentFonts';
 import { ensureGoogleFontsConsent, hasGoogleFontsConsent } from './ConsentBanner';
 import styles from './FontPicker.module.css';
+import { t } from '../../i18n';
 
 const POPUP_WIDTH = 296;
 const POPUP_MAX_HEIGHT = 420;
@@ -97,7 +98,7 @@ export function FontPicker({
   onChange,
   documentFamilies,
   id,
-  'aria-label': ariaLabel = 'Font',
+  'aria-label': ariaLabel = t("Font"),
 }: FontPickerProps) {
   const baseId = useId();
   const listboxId = `${baseId}-listbox`;
@@ -446,7 +447,7 @@ export function FontPicker({
             }
             onMouseDown={(event) => event.preventDefault()}
           >
-            <div className={styles.categories} role="radiogroup" aria-label="Font category">
+            <div className={styles.categories} role="radiogroup" aria-label={t("Font category")}>
               {FONT_CATEGORY_FILTERS.map((filter) => (
                 <button
                   key={filter.id}
@@ -470,7 +471,7 @@ export function FontPicker({
               ref={listRef}
               id={listboxId}
               role="listbox"
-              aria-label="Fonts"
+              aria-label={t("Fonts")}
               className={styles.list}
             >
               {sections.map((section) => (
@@ -525,7 +526,7 @@ export function FontPicker({
                             {option.category ? CATEGORY_TAGS[option.category] : ''}
                           </span>
                         ) : (
-                          <span className={styles.tag}>Missing</span>
+                          <span className={styles.tag}>{t("Missing")}</span>
                         )}
                         <span className={styles.check} aria-hidden="true">
                           {isCurrent && <Check size={12} />}
@@ -537,16 +538,16 @@ export function FontPicker({
               ))}
               {options.length === 0 && (
                 <div className={styles.empty}>
-                  No fonts match <span className={styles.emptyQuery}>“{query.trim()}”</span>
+                  {t("No fonts match")} <span className={styles.emptyQuery}>“{query.trim()}”</span>
                   {category !== 'all' ? ' in this category' : ''}
                 </div>
               )}
             </div>
             {!previewsAllowed && (
               <div className={styles.footer}>
-                <span>Names show in their own font once Google Fonts are allowed.</span>
+                <span>{t("Names show in their own font once Google Fonts are allowed.")}</span>
                 <button type="button" className={styles.allow} onClick={allowPreviews}>
-                  Allow
+                  {t("Allow")}
                 </button>
               </div>
             )}

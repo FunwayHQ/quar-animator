@@ -8,6 +8,7 @@ import type { Matrix3, TextNode } from '@quar/types';
 import type { Camera } from '@quar/core';
 import { getTextBox, getTextLocalBounds, mat3 } from '@quar/core';
 import styles from './TextEditOverlay.module.css';
+import { t } from '../../i18n';
 
 export interface TextEditOverlayProps {
   node: TextNode;
@@ -153,7 +154,7 @@ export function TextEditOverlay({ node, camera, worldTransform, onCommit }: Text
           }),
         }}
         defaultValue={node.content}
-        placeholder="Type something..."
+        placeholder={t("Type something...")}
         onKeyDown={handleKeyDown}
         onBlur={handleBlur}
         onInput={handleInput}

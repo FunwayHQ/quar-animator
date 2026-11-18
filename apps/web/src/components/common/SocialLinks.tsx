@@ -5,6 +5,7 @@
  */
 
 import styles from './SocialLinks.module.css';
+import { t } from '../../i18n';
 
 interface SocialLink {
   label: string;
@@ -33,7 +34,7 @@ export const SOCIAL_LINKS: SocialLink[] = [
 /** The links as icon buttons, each opening in a new tab. */
 export function SocialLinks() {
   return (
-    <nav className={styles.links} aria-label="Quar Animator elsewhere">
+    <nav className={styles.links} aria-label={t("Quar Animator elsewhere")}>
       {SOCIAL_LINKS.map(({ label, href, path }) => (
         <a
           key={label}

@@ -8,6 +8,7 @@
 
 import type { CSSProperties } from 'react';
 import styles from './PresentationPlayer.module.css';
+import { t } from '../../i18n';
 
 /** How much of one kind of thing is ready, of how much. */
 export interface Part {
@@ -68,13 +69,13 @@ export function PresentationLoader({ preparing, first, count, leaving }: LoaderP
           <span className={styles.corner} data-at="bottom-right" />
           <span className={styles.slateName}>{first.name}</span>
           <span className={styles.slateCount}>
-            {count} {count === 1 ? 'slide' : 'slides'}
+            {count} {count === 1 ? t('slide') : t('slides')}
           </span>
         </div>
         <div
           className={styles.meter}
           role="progressbar"
-          aria-label="Getting the slides ready"
+          aria-label={t('Getting the slides ready')}
           aria-valuemin={0}
           aria-valuemax={100}
           aria-valuenow={percent}
@@ -82,7 +83,7 @@ export function PresentationLoader({ preparing, first, count, leaving }: LoaderP
           <span className={styles.meterFill} style={{ width: `${percent}%` }} />
         </div>
         <div className={styles.status}>
-          <span role="status">Getting the slides ready</span>
+          <span role="status">{t('Getting the slides ready')}</span>
           <span className={styles.percent}>{percent}%</span>
         </div>
         <ul className={styles.parts}>
@@ -100,7 +101,7 @@ export function PresentationLoader({ preparing, first, count, leaving }: LoaderP
         </ul>
       </div>
       <p className={styles.leave}>
-        <kbd>Esc</kbd> leaves
+        <kbd>Esc</kbd> {t('leaves')}
       </p>
     </div>
   );

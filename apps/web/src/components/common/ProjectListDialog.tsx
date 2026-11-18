@@ -8,6 +8,7 @@ import { createPortal } from 'react-dom';
 import { Trash2, FolderOpen } from 'lucide-react';
 import type { ProjectListItem } from '../../services/projectStorage';
 import styles from './ProjectListDialog.module.css';
+import { t } from '../../i18n';
 
 // ============================================================================
 // Types
@@ -81,14 +82,14 @@ export function ProjectListDialog({ projects, onOpen, onDelete, onClose }: Proje
         ref={dialogRef}
         className={styles.dialog}
         role="dialog"
-        aria-label="Open Project"
+        aria-label={t("Open Project")}
         tabIndex={-1}
         onKeyDown={handleKeyDown}
         data-testid="project-list-dialog"
       >
         <div className={styles.header}>
-          <h2 className={styles.title}>Open Project</h2>
-          <button className={styles.closeButton} onClick={onClose} aria-label="Close">
+          <h2 className={styles.title}>{t("Open Project")}</h2>
+          <button className={styles.closeButton} onClick={onClose} aria-label={t("Close")}>
             &times;
           </button>
         </div>
@@ -97,7 +98,7 @@ export function ProjectListDialog({ projects, onOpen, onDelete, onClose }: Proje
           {projects.length === 0 ? (
             <div className={styles.emptyState} data-testid="project-list-empty">
               <FolderOpen size={32} />
-              <p>No saved projects yet</p>
+              <p>{t("No saved projects yet")}</p>
             </div>
           ) : (
             <ul className={styles.list}>

@@ -35,6 +35,7 @@ import type {
 } from '@quar/types';
 import { useEditorStore } from '../../stores/editorStore';
 import styles from './PropertiesPanel.module.css';
+import { t } from '../../i18n';
 
 export const TRANSITION_LABELS: Record<SlideTransitionType, string> = {
   fade: 'Fade',
@@ -95,7 +96,7 @@ export function SlideSection({
   return (
     <div className={styles.section} data-testid="slide-section">
       <div className={styles.sectionHeader}>
-        <span className={styles.sectionTitle}>Slide</span>
+        <span className={styles.sectionTitle}>{t("Slide")}</span>
         <span className={styles.slideNumber} data-testid="slide-number">
           {number > 0 ? `${number} / ${slides.length}` : 'Hidden'}
         </span>
@@ -103,7 +104,7 @@ export function SlideSection({
       <div className={styles.sectionContent}>
         <div className={styles.propertyRow}>
           <label className={styles.propertyLabel} htmlFor="slide-transition">
-            Transition in
+            {t("Transition in")}
           </label>
           <div className={styles.propertyInputs}>
             <select
@@ -119,7 +120,7 @@ export function SlideSection({
               }}
               data-testid="slide-transition"
             >
-              <option value="none">None</option>
+              <option value="none">{t("None")}</option>
               {SLIDE_TRANSITION_TYPES.map((type) => (
                 <option key={type} value={type}>
                   {TRANSITION_LABELS[type]}
@@ -136,11 +137,11 @@ export function SlideSection({
 
         {moves && (
           <div className={styles.propertyRow}>
-            <span className={styles.propertyLabel}>Direction</span>
+            <span className={styles.propertyLabel}>{t("Direction")}</span>
             <div
               className={`${styles.alignToggle} ${styles.slideDirections}`}
               role="group"
-              aria-label="Direction"
+              aria-label={t("Direction")}
               data-testid="slide-direction"
             >
               {SLIDE_TRANSITION_DIRECTIONS.map((way) => {
@@ -168,7 +169,7 @@ export function SlideSection({
         {transition && (
           <div className={styles.propertyRow}>
             <label className={styles.propertyLabel} htmlFor="slide-transition-duration">
-              Duration
+              {t("Duration")}
             </label>
             <div className={styles.propertyInputs}>
               <SecondsField
@@ -183,7 +184,7 @@ export function SlideSection({
         {transition && (
           <div className={styles.propertyRow}>
             <label className={styles.propertyLabel} htmlFor="slide-transition-easing">
-              Easing
+              {t("Easing")}
             </label>
             <div className={styles.propertyInputs}>
               <select
@@ -224,16 +225,16 @@ export function SlideSection({
           data-testid="slide-transition-apply-all"
         >
           <CopyCheck size={12} />
-          Apply to all slides
+          {t("Apply to all slides")}
         </button>
 
         {first && (
           <p className={styles.slideNote} data-testid="slide-first-note">
-            The first slide opens the show: no transition plays into it.
+            {t("The first slide opens the show: no transition plays into it.")}
           </p>
         )}
         {number === 0 && (
-          <p className={styles.slideNote}>Hidden artboards aren’t played as slides.</p>
+          <p className={styles.slideNote}>{t("Hidden artboards aren’t played as slides.")}</p>
         )}
       </div>
     </div>

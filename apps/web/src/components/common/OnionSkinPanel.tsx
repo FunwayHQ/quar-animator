@@ -5,6 +5,7 @@
 import { useRef } from 'react';
 import { useEditorStore, useOnionSkin } from '../../stores/editorStore';
 import styles from './OnionSkinPanel.module.css';
+import { t } from '../../i18n';
 
 export function OnionSkinPanel() {
   const onionSkin = useOnionSkin();
@@ -23,7 +24,7 @@ export function OnionSkinPanel() {
   return (
     <div className={styles.panel} data-testid="onion-skin-panel">
       <div className={styles.header}>
-        <span className={styles.title}>Onion Skinning</span>
+        <span className={styles.title}>{t("Onion Skinning")}</span>
         <label className={styles.checkbox}>
           <input
             type="checkbox"
@@ -31,13 +32,13 @@ export function OnionSkinPanel() {
             onChange={(e) => setOnionSkinEnabled(e.target.checked)}
             data-testid="onion-skin-toggle"
           />
-          <span>Enable</span>
+          <span>{t("Enable")}</span>
         </label>
       </div>
 
       {/* Before Frames */}
       <div className={styles.row}>
-        <span className={styles.label}>Before</span>
+        <span className={styles.label}>{t("Before")}</span>
         <div className={styles.stepper}>
           <button
             className={styles.stepperButton}
@@ -61,7 +62,7 @@ export function OnionSkinPanel() {
           className={styles.colorSwatch}
           style={{ background: onionSkin.beforeColor }}
           onClick={() => beforeColorRef.current?.click()}
-          aria-label="Before color"
+          aria-label={t("Before color")}
         >
           <input
             ref={beforeColorRef}
@@ -75,7 +76,7 @@ export function OnionSkinPanel() {
 
       {/* After Frames */}
       <div className={styles.row}>
-        <span className={styles.label}>After</span>
+        <span className={styles.label}>{t("After")}</span>
         <div className={styles.stepper}>
           <button
             className={styles.stepperButton}
@@ -95,7 +96,7 @@ export function OnionSkinPanel() {
           className={styles.colorSwatch}
           style={{ background: onionSkin.afterColor }}
           onClick={() => afterColorRef.current?.click()}
-          aria-label="After color"
+          aria-label={t("After color")}
         >
           <input
             ref={afterColorRef}
@@ -109,7 +110,7 @@ export function OnionSkinPanel() {
 
       {/* Opacity */}
       <div className={styles.row}>
-        <span className={styles.label}>Opacity</span>
+        <span className={styles.label}>{t("Opacity")}</span>
         <input
           type="range"
           className={styles.slider}
@@ -124,7 +125,7 @@ export function OnionSkinPanel() {
 
       {/* Falloff */}
       <div className={styles.row}>
-        <span className={styles.label}>Falloff</span>
+        <span className={styles.label}>{t("Falloff")}</span>
         <input
           type="range"
           className={styles.slider}
@@ -143,7 +144,7 @@ export function OnionSkinPanel() {
           checked={onionSkin.showDuringPlayback}
           onChange={(e) => setOnionSkinShowDuringPlayback(e.target.checked)}
         />
-        <span>Show during playback</span>
+        <span>{t("Show during playback")}</span>
       </label>
     </div>
   );

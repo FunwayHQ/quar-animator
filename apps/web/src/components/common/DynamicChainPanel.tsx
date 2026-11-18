@@ -10,6 +10,7 @@ import { useEditorStore } from '../../stores/editorStore';
 import { useSceneGraph } from '../../contexts/SceneGraphContext';
 import type { DynamicChain } from '@quar/types';
 import styles from './SmartBonePanel.module.css';
+import { t } from '../../i18n';
 
 interface DynamicChainPanelProps {
   boneId: string;
@@ -32,17 +33,17 @@ export function DynamicChainPanel({ boneId }: DynamicChainPanelProps) {
     return (
       <div className={styles.container}>
         <div className={styles.header}>
-          <span className={styles.title}>Dynamic Chain</span>
+          <span className={styles.title}>{t('Dynamic Chain')}</span>
           <button
             onClick={() => createDynamicChain(sceneGraph, boneId)}
             className={styles.addActionButton}
             data-testid="create-dynamic-chain"
           >
-            + Chain
+            {t('+ Chain')}
           </button>
         </div>
         <div className={styles.emptyMessage} data-testid="no-dynamic-chain-message">
-          No dynamic chain on this bone
+          {t('No dynamic chain on this bone')}
         </div>
       </div>
     );
@@ -51,13 +52,13 @@ export function DynamicChainPanel({ boneId }: DynamicChainPanelProps) {
   return (
     <div className={styles.container}>
       <div className={styles.header}>
-        <span className={styles.title}>Dynamic Chain</span>
+        <span className={styles.title}>{t('Dynamic Chain')}</span>
         <button
           onClick={() => removeDynamicChain(sceneGraph, chain.id)}
           className={styles.deleteButton}
           style={{ opacity: 0.6 }}
           data-testid="remove-dynamic-chain"
-          title="Remove dynamic chain"
+          title={t('Remove dynamic chain')}
         >
           ×
         </button>
@@ -66,12 +67,12 @@ export function DynamicChainPanel({ boneId }: DynamicChainPanelProps) {
       <div className={styles.actionCard} data-testid="dynamic-chain-settings">
         {/* Header: toggle + name */}
         <div className={styles.actionHeader}>
-          <label className={styles.toggle} title="Enable/disable">
+          <label className={styles.toggle} title={t('Enable/disable')}>
             <input
               type="checkbox"
               checked={chain.enabled}
               onChange={(e) => setDynamicChainEnabled(sceneGraph, chain.id, e.target.checked)}
-              aria-label="Enable dynamic chain"
+              aria-label={t('Enable dynamic chain')}
             />
             <span className={styles.toggleTrack} />
           </label>
@@ -83,7 +84,7 @@ export function DynamicChainPanel({ boneId }: DynamicChainPanelProps) {
 
         {/* Stiffness */}
         <SliderRow
-          label="Stiffness"
+          label={t('Stiffness')}
           value={chain.stiffness}
           min={0}
           max={1}
@@ -94,7 +95,7 @@ export function DynamicChainPanel({ boneId }: DynamicChainPanelProps) {
 
         {/* Damping */}
         <SliderRow
-          label="Damping"
+          label={t('Damping')}
           value={chain.damping}
           min={0}
           max={1}
@@ -105,7 +106,7 @@ export function DynamicChainPanel({ boneId }: DynamicChainPanelProps) {
 
         {/* Gravity */}
         <SliderRow
-          label="Gravity"
+          label={t('Gravity')}
           value={chain.gravity}
           min={0}
           max={500}
@@ -116,7 +117,7 @@ export function DynamicChainPanel({ boneId }: DynamicChainPanelProps) {
 
         {/* Gravity Angle */}
         <SliderRow
-          label="Grav Angle"
+          label={t('Grav Angle')}
           value={chain.gravityAngle}
           min={-180}
           max={180}
@@ -128,7 +129,7 @@ export function DynamicChainPanel({ boneId }: DynamicChainPanelProps) {
 
         {/* Wind Influence */}
         <SliderRow
-          label="Wind"
+          label={t('Wind')}
           value={chain.windInfluence}
           min={0}
           max={2}
@@ -139,7 +140,7 @@ export function DynamicChainPanel({ boneId }: DynamicChainPanelProps) {
 
         {/* Elasticity */}
         <SliderRow
-          label="Elasticity"
+          label={t('Elasticity')}
           value={chain.elasticity}
           min={0}
           max={1}
@@ -151,7 +152,7 @@ export function DynamicChainPanel({ boneId }: DynamicChainPanelProps) {
         {/* Freeze Axis */}
         <div className={styles.driverRow}>
           <span className={styles.driverLabel} style={{ width: 'auto', minWidth: 52 }}>
-            Freeze
+            {t('Freeze')}
           </span>
           <div className={styles.driverInputGroup} style={{ flex: 1 }}>
             <select
@@ -180,9 +181,9 @@ export function DynamicChainPanel({ boneId }: DynamicChainPanelProps) {
               }}
               data-testid="freeze-axis"
             >
-              <option value="none">None</option>
-              <option value="x">X Axis</option>
-              <option value="y">Y Axis</option>
+              <option value="none">{t('None')}</option>
+              <option value="x">{t('X Axis')}</option>
+              <option value="y">{t('Y Axis')}</option>
             </select>
           </div>
         </div>
