@@ -8,16 +8,30 @@ import { useSyncExternalStore } from 'react';
  * default so the editor keeps its original look until the user opts in.
  */
 
-export type Locale = 'en' | 'zh-CN';
+export type Locale = 'en' | 'zh-CN' | 'zh-TW' | 'ja';
+
+/** Every locale the editor ships a dictionary for, in menu order. */
+export const LOCALES: readonly Locale[] = ['en', 'zh-CN', 'zh-TW', 'ja'];
+
+/** `<html lang>` plus the meta description each locale uses. */
+const DOCUMENT_LANG: Record<Locale, { description: string }> = {
+  en: { description: 'QUAR Animator - Free, open-source 2D animation platform' },
+  'zh-CN': { description: 'QUAR Animator - 免费、开源的 2D 动画平台' },
+  'zh-TW': { description: 'QUAR Animator - 免費、開源的 2D 動畫平台' },
+  ja: { description: 'QUAR Animator - 無料・オープンソースの 2D アニメーションツール' },
+};
 
 const STORAGE_KEY = 'quar-animator-locale';
 const listeners = new Set<() => void>();
 
+function isLocale(value: string | null): value is Locale {
+  return value !== null && (LOCALES as readonly string[]).includes(value);
+}
+
 function readSavedLocale(): Locale {
   try {
-    if (typeof window !== 'undefined' && window.localStorage.getItem(STORAGE_KEY) === 'zh-CN') {
-      return 'zh-CN';
-    }
+    const saved = window.localStorage.getItem(STORAGE_KEY);
+    if (isLocale(saved)) return saved;
   } catch {
     // Storage may be unavailable; fall back to the default.
   }
@@ -32,12 +46,7 @@ export function applyDocumentLocale(locale: Locale): void {
   document.documentElement.lang = locale;
   const description = document.querySelector('meta[name="description"]');
   if (description) {
-    description.setAttribute(
-      'content',
-      locale === 'zh-CN'
-        ? 'QUAR Animator - 免费、开源的 2D 动画平台'
-        : 'QUAR Animator - Free, open-source 2D animation platform'
-    );
+    description.setAttribute('content', DOCUMENT_LANG[locale].description);
   }
 }
 
@@ -80,7 +89,8 @@ export function subscribeLocale(listener: (locale: Locale) => void): () => void 
 }
 
 export function toggleLocale(): void {
-  setLocale(currentLocale === 'en' ? 'zh-CN' : 'en');
+  const index = LOCALES.indexOf(currentLocale);
+  setLocale(LOCALES[(index + 1) % LOCALES.length]!);
 }
 
 export function useLocale(): Locale {

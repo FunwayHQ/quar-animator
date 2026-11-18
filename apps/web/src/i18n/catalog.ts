@@ -15,8 +15,10 @@
 
 import en from './locales/en.json';
 import zhCN from './locales/zh-CN.json';
+import zhTW from './locales/zh-TW.json';
+import ja from './locales/ja.json';
 import keyMapJson from './locales/keys.json';
-import type { Locale } from './store';
+import { LOCALES, type Locale } from './store';
 
 export type Dictionary = Record<string, string>;
 
@@ -25,6 +27,8 @@ const STORAGE_KEY = 'quar-animator-i18n-catalogs';
 const BUILTIN: Record<Locale, Dictionary> = {
   en: en as Dictionary,
   'zh-CN': zhCN as Dictionary,
+  'zh-TW': zhTW as Dictionary,
+  ja: ja as Dictionary,
 };
 
 /** English source text → namespaced dictionary key. */
@@ -40,7 +44,7 @@ function readImported(): Partial<Record<Locale, Dictionary>> {
     const parsed: unknown = JSON.parse(raw);
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
     const result: Partial<Record<Locale, Dictionary>> = {};
-    for (const locale of ['en', 'zh-CN'] as Locale[]) {
+    for (const locale of LOCALES) {
       const value = (parsed as Record<string, unknown>)[locale];
       if (isDictionary(value)) result[locale] = value;
     }

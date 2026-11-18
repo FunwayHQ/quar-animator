@@ -1,16 +1,40 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { getLocale, setLocale } from './store';
+import { getLocale, setLocale, LOCALES } from './store';
 import { translateText, translateTree, installI18n, uninstallI18n } from './translator';
 
 describe('i18n dictionaries', () => {
   it('keeps every locale key in lockstep and uses namespaced keys', async () => {
     const en = (await import('./locales/en.json')).default;
-    const zh = (await import('./locales/zh-CN.json')).default;
-    expect(Object.keys(en).sort()).toEqual(Object.keys(zh).sort());
-    for (const key of Object.keys(en)) {
-      expect(key).toMatch(/^[a-z0-9-]+\.[a-z0-9-]+\.[a-z0-9-]+$/);
-      expect(typeof zh[key]).toBe('string');
-      expect((zh[key] as string).length).toBeGreaterThan(0);
+    const dictionaries = await Promise.all(
+      LOCALES.filter((locale) => locale !== 'en').map(async (locale) => ({
+        locale,
+        dictionary: (await import(`./locales/${locale}.json`)).default as Record<string, string>,
+      }))
+    );
+    expect(dictionaries.map((entry) => entry.locale)).toEqual(['zh-CN', 'zh-TW', 'ja']);
+
+    for (const { locale, dictionary } of dictionaries) {
+      expect(Object.keys(dictionary).sort(), locale).toEqual(Object.keys(en).sort());
+      for (const key of Object.keys(en)) {
+        expect(key).toMatch(/^[a-z0-9-]+\.[a-z0-9-]+\.[a-z0-9-]+$/);
+        expect(typeof dictionary[key], `${locale}:${key}`).toBe('string');
+        expect((dictionary[key] as string).length, `${locale}:${key}`).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it('keeps every {placeholder} of the English source', async () => {
+    const en = (await import('./locales/en.json')).default as Record<string, string>;
+    for (const locale of LOCALES.filter((entry) => entry !== 'en')) {
+      const dictionary = (await import(`./locales/${locale}.json`)).default as Record<
+        string,
+        string
+      >;
+      for (const key of Object.keys(en)) {
+        const expected = (en[key]!.match(/\{\w+\}/g) ?? []).slice().sort();
+        const actual = (dictionary[key]!.match(/\{\w+\}/g) ?? []).slice().sort();
+        expect(actual, `${locale}:${key}`).toEqual(expected);
+      }
     }
   });
 

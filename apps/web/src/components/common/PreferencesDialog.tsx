@@ -63,7 +63,9 @@ const TABS: { id: Tab; label: string }[] = [{ id: 'general', label: 'general' }]
 
 const LANGUAGES: { id: Locale; label: string }[] = [
   { id: 'en', label: 'English' },
-  { id: 'zh-CN', label: '中文 (Chinese)' },
+  { id: 'zh-CN', label: '中文（简体）' },
+  { id: 'zh-TW', label: '中文（繁體）' },
+  { id: 'ja', label: '日本語' },
 ];
 
 export function PreferencesDialogHost() {
