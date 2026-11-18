@@ -56,11 +56,24 @@ describe('PreferencesDialog', () => {
     await waitFor(() => expect(screen.queryByTestId('preferences-dialog')).toBeNull());
   });
 
-  it('switches language from the select', () => {
+  it('switches language from the custom dropdown', () => {
     open();
-    const select = screen.getByTestId('preferences-language') as HTMLSelectElement;
-    fireEvent.change(select, { target: { value: 'zh-CN' } });
+    fireEvent.click(screen.getByTestId('preferences-language'));
+    expect(screen.getByTestId('preferences-language-list')).toBeTruthy();
+    fireEvent.mouseDown(screen.getByTestId('preferences-language-option-zh-CN'));
     expect(i18n.getLocale()).toBe('zh-CN');
+    expect(screen.getByTestId('preferences-language').textContent).toContain('中文');
+    expect(screen.queryByTestId('preferences-language-list')).toBeNull();
+  });
+
+  it('closes the language popup before the dialog on Escape', () => {
+    open();
+    fireEvent.click(screen.getByTestId('preferences-language'));
+    fireEvent.keyDown(screen.getByTestId('preferences-dialog'), { key: 'Escape' });
+    expect(screen.queryByTestId('preferences-language-list')).toBeNull();
+    expect(screen.getByTestId('preferences-dialog')).toBeTruthy();
+    fireEvent.keyDown(screen.getByTestId('preferences-dialog'), { key: 'Escape' });
+    return waitFor(() => expect(screen.queryByTestId('preferences-dialog')).toBeNull());
   });
 
   it('rejects an invalid JSON import with an error status', async () => {
@@ -76,8 +89,8 @@ describe('PreferencesDialog', () => {
 
   it('imports a valid dictionary and shows success', async () => {
     open();
-    const select = screen.getByTestId('preferences-language') as HTMLSelectElement;
-    fireEvent.change(select, { target: { value: 'zh-CN' } });
+    fireEvent.click(screen.getByTestId('preferences-language'));
+    fireEvent.mouseDown(screen.getByTestId('preferences-language-option-zh-CN'));
     const key = i18n.resolveKey('Save')!;
     const input = screen.getByTestId('preferences-file-input') as HTMLInputElement;
     const file = new File([JSON.stringify({ [key]: '存储' })], 'dict.json', {

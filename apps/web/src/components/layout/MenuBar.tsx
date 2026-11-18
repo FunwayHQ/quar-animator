@@ -26,7 +26,7 @@ import { showExportDialog } from '../common/ExportDialog';
 import { toast } from '../common/Toast';
 import { restoreTutorials } from '../../tutorials/seedTutorials';
 import { setUiTheme, useUiTheme } from '../../hooks/useUiTheme';
-import { setLocale, t, useLocale } from '../../i18n';
+import { t } from '../../i18n';
 import { showPreferences } from '../common/PreferencesDialog';
 import { BetaBadge, REPORT_ISSUES_URL } from '../common/BetaBadge';
 import { PRIVACY_URL, TERMS_URL } from '../common/legalLinks';
@@ -181,7 +181,6 @@ function SectionHeader({ label }: { label: string }) {
 
 export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
   const uiTheme = useUiTheme();
-  const locale = useLocale();
   const projectName = useProjectName();
   const isDirty = useIsDirty();
   const [openMenu, setOpenMenu] = useState<MenuId>(null);
@@ -647,6 +646,15 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
               {openMenu === 'edit' && (
                 <div className={styles.dropdown} role="menu" data-testid="edit-menu-dropdown">
                   <MenuItem
+                    label={t('Preferences')}
+                    shortcut="Ctrl+,"
+                    onClick={() => {
+                      closeMenu();
+                      showPreferences();
+                    }}
+                  />
+                  <Separator />
+                  <MenuItem
                     label={t('Undo')}
                     shortcut={KEYS.undo}
                     disabled={!canUndo}
@@ -936,15 +944,6 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                       useEditorStore.getState().detachInstance(sceneGraph);
                     }}
                   />
-                  <Separator />
-                  <MenuItem
-                    label={t('Preferences')}
-                    shortcut="Ctrl+,"
-                    onClick={() => {
-                      closeMenu();
-                      showPreferences();
-                    }}
-                  />
                 </div>
               )}
             </div>
@@ -1055,14 +1054,6 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                     onClick={() => {
                       closeMenu();
                       setUiTheme(uiTheme === 'light' ? 'dark' : 'light');
-                    }}
-                  />
-                  <MenuItem
-                    label="中文 (Chinese)"
-                    checked={locale === 'zh-CN'}
-                    onClick={() => {
-                      closeMenu();
-                      setLocale(locale === 'zh-CN' ? 'en' : 'zh-CN');
                     }}
                   />
                 </div>

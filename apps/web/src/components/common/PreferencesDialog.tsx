@@ -12,8 +12,9 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
-import { Download, Upload, RotateCcw, X } from 'lucide-react';
+import { Check, ChevronDown, Download, Upload, RotateCcw, X } from 'lucide-react';
 import {
   t,
   type Locale,
@@ -60,6 +61,11 @@ function usePreferencesState(): boolean {
 
 const TABS: { id: Tab; label: string }[] = [{ id: 'general', label: 'general' }];
 
+const LANGUAGES: { id: Locale; label: string }[] = [
+  { id: 'en', label: 'English' },
+  { id: 'zh-CN', label: '中文 (Chinese)' },
+];
+
 export function PreferencesDialogHost() {
   const open = usePreferencesState();
   return open ? <PreferencesDialog /> : null;
@@ -70,7 +76,15 @@ function PreferencesDialog() {
   const [locale, setLocaleState] = useState<Locale>(getLocale());
   const [status, setStatus] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
   const [exiting, setExiting] = useState(false);
+  const [languageOpen, setLanguageOpen] = useState(false);
+  const [activeLanguage, setActiveLanguage] = useState(() =>
+    Math.max(
+      0,
+      LANGUAGES.findIndex((item) => item.id === locale)
+    )
+  );
   const fileRef = useRef<HTMLInputElement>(null);
+  const languageRef = useRef<HTMLDivElement>(null);
   const closeTimer = useRef<ReturnType<typeof setTimeout>>();
 
   const close = useCallback(() => {
@@ -89,17 +103,88 @@ function PreferencesDialog() {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         event.preventDefault();
+        // The language popup swallows Escape first; a second press closes the dialog.
+        if (languageOpen) {
+          setLanguageOpen(false);
+          return;
+        }
         close();
       }
     };
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [close]);
+  }, [close, languageOpen]);
+
+  useEffect(() => {
+    if (!languageOpen) return;
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!languageRef.current?.contains(event.target as Node)) setLanguageOpen(false);
+    };
+    document.addEventListener('mousedown', handlePointerDown);
+    return () => document.removeEventListener('mousedown', handlePointerDown);
+  }, [languageOpen]);
 
   const handleLocaleChange = (next: Locale) => {
     setLocale(next);
     setLocaleState(next);
     setStatus(null);
+  };
+
+  const currentLanguage = LANGUAGES.find((item) => item.id === locale)?.label ?? 'English';
+
+  const pickLanguage = (next: Locale) => {
+    setLanguageOpen(false);
+    handleLocaleChange(next);
+  };
+
+  const toggleLanguageList = () => {
+    if (languageOpen) {
+      setLanguageOpen(false);
+      return;
+    }
+    setActiveLanguage(
+      Math.max(
+        0,
+        LANGUAGES.findIndex((item) => item.id === locale)
+      )
+    );
+    setLanguageOpen(true);
+  };
+
+  const handleLanguageKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (!languageOpen) {
+      if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        event.preventDefault();
+        toggleLanguageList();
+      }
+      return;
+    }
+    switch (event.key) {
+      case 'ArrowDown':
+        event.preventDefault();
+        setActiveLanguage((index) => (index + 1) % LANGUAGES.length);
+        break;
+      case 'ArrowUp':
+        event.preventDefault();
+        setActiveLanguage((index) => (index - 1 + LANGUAGES.length) % LANGUAGES.length);
+        break;
+      case 'Home':
+        event.preventDefault();
+        setActiveLanguage(0);
+        break;
+      case 'End':
+        event.preventDefault();
+        setActiveLanguage(LANGUAGES.length - 1);
+        break;
+      case 'Enter':
+      case ' ':
+        event.preventDefault();
+        pickLanguage(LANGUAGES[activeLanguage]?.id ?? locale);
+        break;
+      case 'Tab':
+        setLanguageOpen(false);
+        break;
+    }
   };
 
   const handleExport = () => {
@@ -173,68 +258,118 @@ function PreferencesDialog() {
           <div className={styles.content} data-testid="preferences-content">
             <section className={styles.section}>
               <h4 className={styles.sectionTitle}>{t('Appearance')}</h4>
-              <div className={styles.row}>
-                <label className={styles.rowLabel} htmlFor="preferences-language">
-                  {t('Language')}
-                </label>
-                <select
-                  id="preferences-language"
-                  className={styles.select}
-                  value={locale}
-                  onChange={(e) => handleLocaleChange(e.target.value as Locale)}
-                  data-testid="preferences-language"
-                >
-                  <option value="en">English</option>
-                  <option value="zh-CN">中文 (Chinese)</option>
-                </select>
+              <div className={styles.field}>
+                <div className={styles.row}>
+                  <label className={styles.rowLabel} htmlFor="preferences-language">
+                    {t('Language')}
+                  </label>
+                  <div
+                    className={styles.selectWrap}
+                    ref={languageRef}
+                    onKeyDown={handleLanguageKeyDown}
+                  >
+                    <button
+                      id="preferences-language"
+                      type="button"
+                      className={`${styles.select} ${languageOpen ? styles.selectOpen : ''}`}
+                      aria-haspopup="listbox"
+                      aria-expanded={languageOpen}
+                      onClick={toggleLanguageList}
+                      data-testid="preferences-language"
+                    >
+                      <span className={styles.selectValue}>{currentLanguage}</span>
+                      <ChevronDown
+                        size={14}
+                        className={`${styles.selectChevron} ${
+                          languageOpen ? styles.selectChevronOpen : ''
+                        }`}
+                      />
+                    </button>
+                    {languageOpen && (
+                      <ul
+                        className={styles.selectList}
+                        role="listbox"
+                        aria-label={t('Language')}
+                        data-testid="preferences-language-list"
+                      >
+                        {LANGUAGES.map((item, index) => (
+                          <li
+                            key={item.id}
+                            role="option"
+                            aria-selected={item.id === locale}
+                            data-active={index === activeLanguage ? '' : undefined}
+                            className={styles.selectOption}
+                            onMouseEnter={() => setActiveLanguage(index)}
+                            onMouseDown={(event) => {
+                              event.preventDefault();
+                              pickLanguage(item.id);
+                            }}
+                            data-testid={`preferences-language-option-${item.id}`}
+                          >
+                            <span className={styles.selectCheck}>
+                              {item.id === locale && <Check size={13} />}
+                            </span>
+                            {item.label}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                </div>
+                <p className={styles.hint}>{t('Choose the language used by the interface.')}</p>
               </div>
-              <p className={styles.hint}>{t('Choose the language used by the interface.')}</p>
             </section>
 
             <section className={styles.section}>
               <h4 className={styles.sectionTitle}>{t('Translation dictionary')}</h4>
-              <p className={styles.hint}>
-                {t(
-                  'Export a JSON template to edit translations, then import it back. Missing entries fall back to the English original.'
-                )}
-              </p>
-              <div className={styles.actions}>
-                <button className={styles.button} onClick={handleExport} data-testid="preferences-export">
-                  <Download size={14} /> {t('Export JSON template')}
-                </button>
-                <button
-                  className={styles.button}
-                  onClick={() => fileRef.current?.click()}
-                  data-testid="preferences-import"
-                >
-                  <Upload size={14} /> {t('Import JSON')}
-                </button>
-                <input
-                  ref={fileRef}
-                  className={styles.fileInput}
-                  type="file"
-                  accept="application/json,.json"
-                  onChange={(e) => handleImportFile(e.target.files?.[0])}
-                  data-testid="preferences-file-input"
-                />
-                <button
-                  className={styles.buttonGhost}
-                  onClick={handleReset}
-                  disabled={!isImported(locale)}
-                  data-testid="preferences-reset"
-                >
-                  <RotateCcw size={14} /> {t('Reset to default')}
-                </button>
-              </div>
-              {status && (
-                <p
-                  className={status.kind === 'ok' ? styles.statusOk : styles.statusError}
-                  role="status"
-                  data-testid="preferences-status"
-                >
-                  {status.text}
+              <div className={styles.field}>
+                <p className={styles.hintLead}>
+                  {t(
+                    'Export a JSON template to edit translations, then import it back. Missing entries fall back to the English original.'
+                  )}
                 </p>
-              )}
+                <div className={styles.actions}>
+                  <button
+                    className={styles.button}
+                    onClick={handleExport}
+                    data-testid="preferences-export"
+                  >
+                    <Download size={14} /> {t('Export JSON template')}
+                  </button>
+                  <button
+                    className={styles.button}
+                    onClick={() => fileRef.current?.click()}
+                    data-testid="preferences-import"
+                  >
+                    <Upload size={14} /> {t('Import JSON')}
+                  </button>
+                  <input
+                    ref={fileRef}
+                    className={styles.fileInput}
+                    type="file"
+                    accept="application/json,.json"
+                    onChange={(e) => handleImportFile(e.target.files?.[0])}
+                    data-testid="preferences-file-input"
+                  />
+                  <button
+                    className={styles.buttonGhost}
+                    onClick={handleReset}
+                    disabled={!isImported(locale)}
+                    data-testid="preferences-reset"
+                  >
+                    <RotateCcw size={14} /> {t('Reset to default')}
+                  </button>
+                </div>
+                {status && (
+                  <p
+                    className={status.kind === 'ok' ? styles.statusOk : styles.statusError}
+                    role="status"
+                    data-testid="preferences-status"
+                  >
+                    {status.text}
+                  </p>
+                )}
+              </div>
             </section>
           </div>
         </div>
