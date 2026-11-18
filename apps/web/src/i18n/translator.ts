@@ -17,7 +17,7 @@
  * numbers, font names) is left untouched.
  */
 
-import { lookup, reverseLookup } from './catalog';
+import { lookup, reverseLookup, translateKey } from './catalog';
 import { getLocale, subscribeLocale, type Locale } from './store';
 
 /** Element attributes that contain user-visible text. */
@@ -49,6 +49,19 @@ export function t(text: string, locale: Locale = getLocale()): string {
     }
   }
   return text;
+}
+
+/**
+ * Translate a dotted key with `{name}` placeholders. Use it for sentences whose
+ * word order differs per language; pass the locale you got from `useLocale()`
+ * so the component re-renders when the language changes.
+ */
+export function tf(
+  key: string,
+  params?: Record<string, string | number>,
+  locale: Locale = getLocale()
+): string {
+  return translateKey(key, locale, params);
 }
 
 /** Backwards-compatible alias used in tests and by callers. */
@@ -115,7 +128,10 @@ function processNode(node: Node, locale: Locale): void {
 }
 
 /** Translate everything currently under `root` (used on install and refresh). */
-export function translateTree(root: ParentNode = document.body, locale: Locale = getLocale()): void {
+export function translateTree(
+  root: ParentNode = document.body,
+  locale: Locale = getLocale()
+): void {
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT);
   let current: Node | null = walker.nextNode();
   while (current) {

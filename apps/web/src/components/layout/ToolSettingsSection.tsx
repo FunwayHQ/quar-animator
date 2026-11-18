@@ -34,30 +34,30 @@ function BrushSettings() {
   return (
     <div className={styles.section} data-testid="brush-settings">
       <div className={styles.sectionHeader}>
-        <span className={styles.sectionTitle}>{t("Brush")}</span>
+        <span className={styles.sectionTitle}>{t('Brush')}</span>
       </div>
       <div className={styles.sectionContent}>
         <StrokePreview size={size} smoothing={smoothing} />
         <SliderRow
           id="brush-size"
-          label={t("Size")}
+          label={t('Size')}
           value={size}
           min={1}
           max={100}
           onChange={setSize}
-          title="The stroke’s width where a pen presses hardest"
+          title={t('The stroke’s width where a pen presses hardest')}
         />
         <SliderRow
           id="brush-smoothing"
-          label={t("Smoothing")}
+          label={t('Smoothing')}
           value={smoothing}
           min={0}
           max={100}
           onChange={setSmoothing}
-          title={t("How much a shaky hand is smoothed: 0 follows the pointer exactly")}
+          title={t('How much a shaky hand is smoothed: 0 follows the pointer exactly')}
         />
         <p className={styles.slideNote}>
-          {t("Size is the width where a pen presses hardest. A mouse paints about half as wide.")}
+          {t('Size is the width where a pen presses hardest. A mouse paints about half as wide.')}
         </p>
       </div>
     </div>
@@ -141,15 +141,15 @@ function EraserSettings() {
   return (
     <div className={styles.section} data-testid="eraser-settings">
       <div className={styles.sectionHeader}>
-        <span className={styles.sectionTitle}>{t("Eraser")}</span>
+        <span className={styles.sectionTitle}>{t('Eraser')}</span>
       </div>
       <div className={styles.sectionContent}>
         <div className={styles.propertyRow}>
-          <span className={styles.propertyLabel}>{t("Mode")}</span>
+          <span className={styles.propertyLabel}>{t('Mode')}</span>
           <div
             className={`${styles.alignToggle} ${own.modes}`}
             role="group"
-            aria-label={t("Eraser mode")}
+            aria-label={t('Eraser mode')}
           >
             {ERASER_MODES.map(({ mode: option, label, Icon }) => (
               <button
@@ -173,12 +173,14 @@ function EraserSettings() {
         </div>
         <SliderRow
           id="eraser-size"
-          label={t("Size")}
+          label={t('Size')}
           value={size}
           min={1}
           max={100}
           onChange={setSize}
-          title={t("How far round the pointer it reaches, the same on screen at any zoom ([ and ])")}
+          title={t(
+            'How far round the pointer it reaches, the same on screen at any zoom ([ and ])'
+          )}
           keys
         />
       </div>
@@ -218,7 +220,7 @@ function SliderRow({
           {label}
         </label>
         {keys && (
-          <span className={own.keys} title={t("[ and ] make it smaller and bigger")}>
+          <span className={own.keys} title={t('[ and ] make it smaller and bigger')}>
             <kbd className={own.key}>[</kbd>
             <kbd className={own.key}>]</kbd>
           </span>

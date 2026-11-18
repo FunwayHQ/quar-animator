@@ -525,10 +525,10 @@ function DocumentProperties() {
   return (
     <div className={styles.section} data-testid="document-section">
       <div className={styles.sectionHeader}>
-        <span className={styles.sectionTitle}>{t("Document")}</span>
+        <span className={styles.sectionTitle}>{t('Document')}</span>
       </div>
       <div className={styles.propertyRow}>
-        <span className={styles.propertyLabel}>{t("Background")}</span>
+        <span className={styles.propertyLabel}>{t('Background')}</span>
         <div className={styles.propertyInputs}>
           <div
             ref={swatchRef}
@@ -550,7 +550,7 @@ function DocumentProperties() {
             type="text"
             className={styles.input}
             value={hex}
-            aria-label={t("Background color")}
+            aria-label={t('Background color')}
             data-testid="document-background-input"
             onChange={(e) => {
               const color = hexToColor(e.target.value);
@@ -1476,48 +1476,48 @@ export function PropertiesPanel() {
   const booleanOpsSection = multiShapeSelected ? (
     <div className={styles.section} data-testid="boolean-ops-section">
       <div className={styles.sectionHeader}>
-        <span className={styles.sectionTitle}>{t("Boolean Operations")}</span>
+        <span className={styles.sectionTitle}>{t('Boolean Operations')}</span>
       </div>
       <div className={styles.booleanOpsRow}>
         <button
           className={styles.booleanOpButton}
           onClick={() => booleanUnion(sceneGraph)}
           title={`Union (${formatShortcut(KEYS.union)})`}
-          aria-label={t("Boolean union")}
+          aria-label={t('Boolean union')}
           data-testid="boolean-union"
         >
           <Merge size={14} />
-          <span>{t("Union")}</span>
+          <span>{t('Union')}</span>
         </button>
         <button
           className={styles.booleanOpButton}
           onClick={() => booleanSubtract(sceneGraph)}
           title={`Subtract (${formatShortcut(KEYS.subtract)})`}
-          aria-label={t("Boolean subtract")}
+          aria-label={t('Boolean subtract')}
           data-testid="boolean-subtract"
         >
           <Minus size={14} />
-          <span>{t("Subtract")}</span>
+          <span>{t('Subtract')}</span>
         </button>
         <button
           className={styles.booleanOpButton}
           onClick={() => booleanIntersect(sceneGraph)}
           title={`Intersect (${formatShortcut(KEYS.intersect)})`}
-          aria-label={t("Boolean intersect")}
+          aria-label={t('Boolean intersect')}
           data-testid="boolean-intersect"
         >
           <Combine size={14} />
-          <span>{t("Intersect")}</span>
+          <span>{t('Intersect')}</span>
         </button>
         <button
           className={styles.booleanOpButton}
           onClick={() => booleanExclude(sceneGraph)}
           title={`Exclude (${formatShortcut(KEYS.exclude)})`}
-          aria-label={t("Boolean exclude")}
+          aria-label={t('Boolean exclude')}
           data-testid="boolean-exclude"
         >
           <Diff size={14} />
-          <span>{t("Exclude")}</span>
+          <span>{t('Exclude')}</span>
         </button>
       </div>
     </div>
@@ -1527,7 +1527,7 @@ export function PropertiesPanel() {
     return (
       <div className={styles.panel} {...editHandlers}>
         <div className={styles.header}>
-          <h3 className={styles.title}>{t("Properties")}</h3>
+          <h3 className={styles.title}>{t('Properties')}</h3>
         </div>
         <div className={styles.content}>
           <ToolSettingsSection />
@@ -1536,7 +1536,7 @@ export function PropertiesPanel() {
             <>
               {selectedNodeIds.size === 0 && <DocumentProperties />}
               <div className={styles.emptyState} data-testid="properties-empty">
-                {t("Select an object to view properties")}
+                {t('Select an object to view properties')}
               </div>
             </>
           )}
@@ -1645,7 +1645,7 @@ export function PropertiesPanel() {
   return (
     <div className={styles.panel} {...editHandlers}>
       <div className={styles.header}>
-        <h3 className={styles.title}>{t("Properties")}</h3>
+        <h3 className={styles.title}>{t('Properties')}</h3>
         <span className={styles.nodeTypeLabel}>{nodeTypeLabel}</span>
       </div>
       <div className={styles.content}>
@@ -1659,7 +1659,7 @@ export function PropertiesPanel() {
             return (
               <div className={styles.section}>
                 <div className={styles.sectionHeader}>
-                  <span className={styles.sectionTitle}>{t("Symbol")}</span>
+                  <span className={styles.sectionTitle}>{t('Symbol')}</span>
                 </div>
                 <div className={styles.row}>
                   <span className={styles.label} style={{ flex: 1 }}>
@@ -1674,22 +1674,22 @@ export function PropertiesPanel() {
                         useEditorStore.getState().enterSymbolEdit(symInst.symbolId, sceneGraph);
                       }
                     }}
-                    title={t("Edit Symbol")}
+                    title={t('Edit Symbol')}
                     data-testid="edit-symbol-button"
                   >
                     <Pencil size={14} />
-                    <span>{t("Edit Symbol")}</span>
+                    <span>{t('Edit Symbol')}</span>
                   </button>
                   <button
                     className={styles.booleanOpButton}
                     onClick={() => {
                       useEditorStore.getState().detachInstance(sceneGraph);
                     }}
-                    title={t("Detach Instance")}
+                    title={t('Detach Instance')}
                     data-testid="detach-instance-button"
                   >
                     <Unlink size={14} />
-                    <span>{t("Detach")}</span>
+                    <span>{t('Detach')}</span>
                   </button>
                   {/* No Reset (overrides) yet: nothing can make an instance differ from its symbol */}
                 </div>
@@ -1699,7 +1699,7 @@ export function PropertiesPanel() {
         {booleanOpsSection}
         <div className={styles.section}>
           <div className={styles.sectionHeader}>
-            <span className={styles.sectionTitle}>{t("Transform")}</span>
+            <span className={styles.sectionTitle}>{t('Transform')}</span>
             <button
               className={`${styles.snapButton} ${snapToGrid ? styles.snapButtonActive : ''}`}
               onClick={handleToggleSnap}
@@ -1714,7 +1714,7 @@ export function PropertiesPanel() {
             <div className={styles.propertyRow}>
               <div className={styles.propertyHeader}>
                 <label className={styles.propertyLabel} htmlFor="prop-pos-x">
-                  {t("Position")}
+                  {t('Position')}
                 </label>
                 <KeyframeIndicator
                   state={getGroupKeyframeState(
@@ -1776,7 +1776,7 @@ export function PropertiesPanel() {
               <div className={styles.propertyRow}>
                 <div className={styles.propertyHeader}>
                   <label className={styles.propertyLabel} htmlFor="prop-size-w">
-                    {t("Size")}
+                    {t('Size')}
                   </label>
                   {/* Text's size is its box: keyframing it as scale would stretch the glyphs */}
                   {node.type !== 'text' && (
@@ -1862,7 +1862,7 @@ export function PropertiesPanel() {
                   return (
                     <div className={styles.propertyRow} data-testid="corner-radius-section">
                       <div className={styles.propertyHeader}>
-                        <span className={styles.propertyLabel}>{t("Corner Radius")}</span>
+                        <span className={styles.propertyLabel}>{t('Corner Radius')}</span>
                         <KeyframeIndicator
                           state={getGroupKeyframeState(
                             timeline,
@@ -1900,8 +1900,8 @@ export function PropertiesPanel() {
                           <button
                             className={`${styles.lockButton} ${styles.lockButtonActive}`}
                             onClick={() => setCornerRadiusLocked(false)}
-                            title={t("Unlock per-corner editing")}
-                            aria-label={t("Unlock per-corner editing")}
+                            title={t('Unlock per-corner editing')}
+                            aria-label={t('Unlock per-corner editing')}
                             data-testid="corner-radius-lock"
                           >
                             <Lock size={12} />
@@ -1951,8 +1951,8 @@ export function PropertiesPanel() {
                             <button
                               className={styles.lockButton}
                               onClick={() => setCornerRadiusLocked(true)}
-                              title={t("Lock corners together")}
-                              aria-label={t("Lock corners together")}
+                              title={t('Lock corners together')}
+                              aria-label={t('Lock corners together')}
                               data-testid="corner-radius-lock"
                             >
                               <Unlock size={12} />
@@ -2010,7 +2010,7 @@ export function PropertiesPanel() {
                 return (
                   <div className={styles.propertyRow} data-testid="corner-radius-section">
                     <div className={styles.propertyHeader}>
-                      <span className={styles.propertyLabel}>{t("Corner Radius")}</span>
+                      <span className={styles.propertyLabel}>{t('Corner Radius')}</span>
                       <KeyframeIndicator
                         state={getKeyframeState(timeline, nodeId, 'cornerRadius', currentFrame)}
                         onToggle={() => toggleKeyframe('cornerRadius', polyRadius)}
@@ -2048,7 +2048,7 @@ export function PropertiesPanel() {
                   <>
                     <div className={styles.propertyRow}>
                       <div className={styles.propertyHeader}>
-                        <span className={styles.propertyLabel}>{t("Sides")}</span>
+                        <span className={styles.propertyLabel}>{t('Sides')}</span>
                         <KeyframeIndicator
                           state={getKeyframeState(timeline, nodeId, 'sides', currentFrame)}
                           onToggle={() => toggleKeyframe('sides', poly.sides)}
@@ -2081,7 +2081,7 @@ export function PropertiesPanel() {
                     </div>
                     <div className={styles.propertyRow}>
                       <div className={styles.propertyHeader}>
-                        <span className={styles.propertyLabel}>{t("Inner Radius")}</span>
+                        <span className={styles.propertyLabel}>{t('Inner Radius')}</span>
                         <KeyframeIndicator
                           state={getKeyframeState(timeline, nodeId, 'innerRadius', currentFrame)}
                           onToggle={() => toggleKeyframe('innerRadius', polygonInnerRadius(poly))}
@@ -2144,7 +2144,7 @@ export function PropertiesPanel() {
                   <>
                     <div className={styles.propertyRow}>
                       <div className={styles.propertyHeader}>
-                        <span className={styles.propertyLabel}>{t("Length")}</span>
+                        <span className={styles.propertyLabel}>{t('Length')}</span>
                         <KeyframeIndicator
                           state={getKeyframeState(timeline, nodeId, 'length', currentFrame)}
                           onToggle={() => toggleKeyframe('length', bone.length)}
@@ -2195,7 +2195,7 @@ export function PropertiesPanel() {
                       </div>
                     </div>
                     <div className={styles.propertyRow}>
-                      <span className={styles.propertyLabel}>{t("Style")}</span>
+                      <span className={styles.propertyLabel}>{t('Style')}</span>
                       <div className={styles.propertyInputs}>
                         <select
                           className={styles.select}
@@ -2207,13 +2207,13 @@ export function PropertiesPanel() {
                             } as Partial<BoneNode>);
                           }}
                         >
-                          <option value="octahedral">{t("Octahedral")}</option>
-                          <option value="stick">{t("Stick")}</option>
+                          <option value="octahedral">{t('Octahedral')}</option>
+                          <option value="stick">{t('Stick')}</option>
                         </select>
                       </div>
                     </div>
                     <div className={styles.propertyRow}>
-                      <span className={styles.propertyLabel}>{t("Color")}</span>
+                      <span className={styles.propertyLabel}>{t('Color')}</span>
                       <div className={styles.propertyInputs}>
                         <div className={styles.inputGroup}>
                           <div
@@ -2276,9 +2276,9 @@ export function PropertiesPanel() {
                 const chain = ikChains.find((c) => c.id === ikTarget.ikChainId);
                 return (
                   <>
-                    <div className={styles.sectionTitle}>{t("IK Chain")}</div>
+                    <div className={styles.sectionTitle}>{t('IK Chain')}</div>
                     <div className={styles.propertyRow}>
-                      <span className={styles.propertyLabel}>{t("Chain")}</span>
+                      <span className={styles.propertyLabel}>{t('Chain')}</span>
                       <div className={styles.propertyInputs}>
                         <span style={{ fontSize: '11px', color: '#aaa' }}>
                           {chain?.name ?? 'Unknown'}
@@ -2286,7 +2286,7 @@ export function PropertiesPanel() {
                       </div>
                     </div>
                     <div className={styles.propertyRow}>
-                      <span className={styles.propertyLabel}>{t("Type")}</span>
+                      <span className={styles.propertyLabel}>{t('Type')}</span>
                       <div className={styles.propertyInputs}>
                         <span style={{ fontSize: '11px', color: '#aaa' }}>
                           {ikTarget.targetType === 'effector' ? 'End Effector' : 'Pole Target'}
@@ -2295,7 +2295,7 @@ export function PropertiesPanel() {
                     </div>
                     {chain && (
                       <div className={styles.propertyRow}>
-                        <span className={styles.propertyLabel}>{t("Enabled")}</span>
+                        <span className={styles.propertyLabel}>{t('Enabled')}</span>
                         <div className={styles.propertyInputs}>
                           <input
                             type="checkbox"
@@ -2335,9 +2335,9 @@ export function PropertiesPanel() {
                 const boneCount = boneIds.length;
                 return (
                   <>
-                    <div className={styles.sectionTitle}>{t("Rigging")}</div>
+                    <div className={styles.sectionTitle}>{t('Rigging')}</div>
                     <div className={styles.propertyRow}>
-                      <span className={styles.propertyLabel}>{t("Bound")}</span>
+                      <span className={styles.propertyLabel}>{t('Bound')}</span>
                       <div className={styles.propertyInputs}>
                         <span style={{ fontSize: '11px', color: '#aaa' }}>
                           {boneCount} bone{boneCount !== 1 ? 's' : ''}
@@ -2345,7 +2345,7 @@ export function PropertiesPanel() {
                       </div>
                     </div>
                     <div className={styles.propertyRow}>
-                      <span className={styles.propertyLabel}>{t("Bone")}</span>
+                      <span className={styles.propertyLabel}>{t('Bone')}</span>
                       <div className={styles.propertyInputs}>
                         <select
                           className={styles.select}
@@ -2354,7 +2354,7 @@ export function PropertiesPanel() {
                             setWeightPaintBoneId(e.target.value || null);
                           }}
                         >
-                          <option value="">{t("Select bone...")}</option>
+                          <option value="">{t('Select bone...')}</option>
                           {boneIds.map((bId: string) => {
                             const bNode = sceneGraph.getNode(bId);
                             return (
@@ -2369,12 +2369,12 @@ export function PropertiesPanel() {
                     {activeTool === 'weight-paint' && (
                       <>
                         <div className={styles.propertyRow}>
-                          <span className={styles.propertyLabel}>{t("Brush")}</span>
+                          <span className={styles.propertyLabel}>{t('Brush')}</span>
                           <div className={styles.propertyInputs}>
                             <input
                               type="range"
                               className={styles.slider}
-                              aria-label={t("Brush size")}
+                              aria-label={t('Brush size')}
                               min="5"
                               max="200"
                               value={weightPaintBrushSize}
@@ -2384,12 +2384,12 @@ export function PropertiesPanel() {
                           </div>
                         </div>
                         <div className={styles.propertyRow}>
-                          <span className={styles.propertyLabel}>{t("Strength")}</span>
+                          <span className={styles.propertyLabel}>{t('Strength')}</span>
                           <div className={styles.propertyInputs}>
                             <input
                               type="range"
                               className={styles.slider}
-                              aria-label={t("Brush strength")}
+                              aria-label={t('Brush strength')}
                               min="1"
                               max="100"
                               value={Math.round(weightPaintBrushStrength * 100)}
@@ -2403,7 +2403,7 @@ export function PropertiesPanel() {
                           </div>
                         </div>
                         <div className={styles.propertyRow}>
-                          <span className={styles.propertyLabel}>{t("Paint")}</span>
+                          <span className={styles.propertyLabel}>{t('Paint')}</span>
                           <div className={styles.propertyInputs} style={{ gap: '4px' }}>
                             {(['add', 'subtract'] as const).map((mode) => (
                               <button
@@ -2426,7 +2426,7 @@ export function PropertiesPanel() {
                                     weightPaintMode === mode ? '#fff' : 'var(--color-text-primary)',
                                 }}
                               >
-                                {mode === 'add' ? 'Add' : t("Subtract")}
+                                {mode === 'add' ? 'Add' : t('Subtract')}
                               </button>
                             ))}
                           </div>
@@ -2455,7 +2455,7 @@ export function PropertiesPanel() {
                             store.setActiveTool('weight-paint');
                           }}
                         >
-                          {t("Weight Paint")}
+                          {t('Weight Paint')}
                         </button>
                         <button
                           style={{
@@ -2481,7 +2481,7 @@ export function PropertiesPanel() {
                             }
                           }}
                         >
-                          {t("Unbind")}
+                          {t('Unbind')}
                         </button>
                       </div>
                     </div>
@@ -2501,7 +2501,7 @@ export function PropertiesPanel() {
                 return (
                   <>
                     <div className={styles.propertyRow}>
-                      <span className={styles.propertyLabel}>{t("Font")}</span>
+                      <span className={styles.propertyLabel}>{t('Font')}</span>
                       <div className={styles.propertyInputs}>
                         <FontPicker
                           value={textNode.fontFamily}
@@ -2541,7 +2541,7 @@ export function PropertiesPanel() {
                     </div>
                     <div className={styles.propertyRow}>
                       <div className={styles.propertyHeader}>
-                        <span className={styles.propertyLabel}>{t("Font Size")}</span>
+                        <span className={styles.propertyLabel}>{t('Font Size')}</span>
                         <KeyframeIndicator
                           state={getKeyframeState(timeline, nodeId, 'fontSize', currentFrame)}
                           onToggle={() => toggleKeyframe('fontSize', textNode.fontSize)}
@@ -2591,7 +2591,7 @@ export function PropertiesPanel() {
                       </div>
                     </div>
                     <div className={styles.propertyRow}>
-                      <span className={styles.propertyLabel}>{t("Weight")}</span>
+                      <span className={styles.propertyLabel}>{t('Weight')}</span>
                       <div className={styles.propertyInputs}>
                         <select
                           className={styles.select}
@@ -2647,7 +2647,7 @@ export function PropertiesPanel() {
                       </div>
                     </div>
                     <div className={styles.propertyRow}>
-                      <span className={styles.propertyLabel}>{t("Align")}</span>
+                      <span className={styles.propertyLabel}>{t('Align')}</span>
                       <div className={styles.propertyInputs} style={{ display: 'flex', gap: 4 }}>
                         {(['left', 'center', 'right'] as const).map((align) => (
                           <button
@@ -2671,7 +2671,7 @@ export function PropertiesPanel() {
                       </div>
                     </div>
                     <div className={styles.propertyRow}>
-                      <span className={styles.propertyLabel}>{t("Resize")}</span>
+                      <span className={styles.propertyLabel}>{t('Resize')}</span>
                       <div className={styles.propertyInputs} style={{ display: 'flex', gap: 4 }}>
                         {TEXT_RESIZE_MODES.map(({ mode, label, icon: Icon }) => {
                           const active = (textNode.textResize ?? 'auto-width') === mode;
@@ -2701,7 +2701,7 @@ export function PropertiesPanel() {
                     </div>
                     <div className={styles.propertyRow}>
                       <div className={styles.propertyHeader}>
-                        <span className={styles.propertyLabel}>{t("Line Height")}</span>
+                        <span className={styles.propertyLabel}>{t('Line Height')}</span>
                         <KeyframeIndicator
                           state={getKeyframeState(timeline, nodeId, 'lineHeight', currentFrame)}
                           onToggle={() => toggleKeyframe('lineHeight', textNode.lineHeight)}
@@ -2743,7 +2743,7 @@ export function PropertiesPanel() {
                     </div>
                     <div className={styles.propertyRow}>
                       <div className={styles.propertyHeader}>
-                        <span className={styles.propertyLabel}>{t("Letter Spacing")}</span>
+                        <span className={styles.propertyLabel}>{t('Letter Spacing')}</span>
                         <KeyframeIndicator
                           state={getKeyframeState(timeline, nodeId, 'letterSpacing', currentFrame)}
                           onToggle={() => toggleKeyframe('letterSpacing', textNode.letterSpacing)}
@@ -2793,7 +2793,7 @@ export function PropertiesPanel() {
               <div className={styles.propertyRow}>
                 <div className={styles.propertyHeader}>
                   <label className={styles.propertyLabel} htmlFor="prop-rotation">
-                    {t("Rotation")}
+                    {t('Rotation')}
                   </label>
                   <KeyframeIndicator
                     state={getKeyframeState(timeline, nodeId, 'transform.rotation', currentFrame)}
@@ -2830,7 +2830,7 @@ export function PropertiesPanel() {
             {node.type === 'path' && (
               <div className={styles.propertyRow} data-testid="shape-tween-row">
                 <div className={styles.propertyHeader}>
-                  <span className={styles.propertyLabel}>{t("Shape")}</span>
+                  <span className={styles.propertyLabel}>{t('Shape')}</span>
                   <KeyframeIndicator
                     state={getKeyframeState(timeline, nodeId, 'points', currentFrame)}
                     onToggle={() => toggleKeyframe('points', pathShapeOf(node))}
@@ -2855,7 +2855,7 @@ export function PropertiesPanel() {
         {isBooleanGroup(node) && (
           <div className={styles.section} data-testid="boolean-group-section">
             <div className={styles.sectionHeader}>
-              <span className={styles.sectionTitle}>{t("Boolean Operation")}</span>
+              <span className={styles.sectionTitle}>{t('Boolean Operation')}</span>
             </div>
             <div className={styles.sectionContent}>
               <div className={styles.propertyRow}>
@@ -2865,32 +2865,32 @@ export function PropertiesPanel() {
                   onChange={(e) => changeBooleanOp(sceneGraph, e.target.value as BooleanOp)}
                   data-testid="boolean-op-select"
                 >
-                  <option value="union">{t("Union")}</option>
-                  <option value="subtract">{t("Subtract")}</option>
-                  <option value="intersect">{t("Intersect")}</option>
-                  <option value="exclude">{t("Exclude")}</option>
+                  <option value="union">{t('Union')}</option>
+                  <option value="subtract">{t('Subtract')}</option>
+                  <option value="intersect">{t('Intersect')}</option>
+                  <option value="exclude">{t('Exclude')}</option>
                 </select>
               </div>
               <div className={styles.booleanOpsRow}>
                 <button
                   className={styles.booleanOpButton}
                   onClick={() => flattenBooleanGroup(sceneGraph)}
-                  title={t("Flatten Boolean: make the result one path")}
-                  aria-label={t("Flatten Boolean")}
+                  title={t('Flatten Boolean: make the result one path')}
+                  aria-label={t('Flatten Boolean')}
                   data-testid="boolean-flatten"
                 >
                   <Combine size={14} />
-                  <span>{t("Flatten Boolean")}</span>
+                  <span>{t('Flatten Boolean')}</span>
                 </button>
                 <button
                   className={styles.booleanOpButton}
                   onClick={() => releaseBooleanGroup(sceneGraph)}
-                  title={t("Release Boolean: the shapes, separate again")}
-                  aria-label={t("Release Boolean")}
+                  title={t('Release Boolean: the shapes, separate again')}
+                  aria-label={t('Release Boolean')}
                   data-testid="boolean-release"
                 >
                   <Diff size={14} />
-                  <span>{t("Release Boolean")}</span>
+                  <span>{t('Release Boolean')}</span>
                 </button>
               </div>
             </div>
@@ -3083,7 +3083,7 @@ export function PropertiesPanel() {
             return (
               <div className={styles.section}>
                 <div className={styles.sectionHeader}>
-                  <span className={styles.sectionTitle}>{t("Vertex")}</span>
+                  <span className={styles.sectionTitle}>{t('Vertex')}</span>
                 </div>
                 <div className={styles.sectionContent}>
                   <div className={styles.propertyRow}>
@@ -3169,11 +3169,11 @@ export function PropertiesPanel() {
                     </div>
                   </div>
                   <div className={styles.propertyRow}>
-                    <span className={styles.propertyLabel}>{t("Type")}</span>
+                    <span className={styles.propertyLabel}>{t('Type')}</span>
                     <div
                       className={`${styles.alignToggle} ${styles.pointTypeToggle}`}
                       role="group"
-                      aria-label={t("Point type")}
+                      aria-label={t('Point type')}
                       data-testid="vertex-type"
                     >
                       {(
@@ -3198,7 +3198,10 @@ export function PropertiesPanel() {
                   </div>
                   {handleRows.map(([handle, label, offset]) => (
                     <div className={styles.propertyRow} key={handle}>
-                      <span className={styles.propertyLabel}>Handle {label.toLowerCase()}</span>
+                      <span className={styles.propertyLabel}>
+                        {t('Handle ')}
+                        {label.toLowerCase()}
+                      </span>
                       <div className={styles.twoColumnRow}>
                         {(['x', 'y'] as const).map((axis) => (
                           <div
@@ -3283,14 +3286,14 @@ export function PropertiesPanel() {
         {node.type === 'path' && node.brushData && (
           <div className={styles.section}>
             <div className={styles.sectionHeader}>
-              <span className={styles.sectionTitle}>{t("Brush Stroke")}</span>
+              <span className={styles.sectionTitle}>{t('Brush Stroke')}</span>
             </div>
             <div className={styles.sectionContent}>
               <div className={styles.propertyRow}>
                 <div className={`${styles.inputGroup} ${styles.inputGroupFlex}`}>
                   <ScrubLabel
                     onScrubStart={handleScrubStart}
-                    label={t("Width")}
+                    label={t('Width')}
                     value={Math.round(
                       node.brushData?.baseWidth ?? Math.max(...(node.brushData?.widths ?? [10]))
                     )}
@@ -3335,7 +3338,7 @@ export function PropertiesPanel() {
               </div>
               <div className={styles.propertyRow}>
                 <label className={styles.propertyLabel} htmlFor="brush-stroke-profile">
-                  {t("Profile")}
+                  {t('Profile')}
                 </label>
                 <select
                   id="brush-stroke-profile"
@@ -3366,11 +3369,11 @@ export function PropertiesPanel() {
             return (
               <div className={styles.section}>
                 <div className={styles.sectionHeader}>
-                  <span className={styles.sectionTitle}>{t("Artboard")}</span>
+                  <span className={styles.sectionTitle}>{t('Artboard')}</span>
                 </div>
                 <div className={styles.sectionContent}>
                   <div className={styles.propertyRow}>
-                    <span className={styles.propertyLabel}>{t("Clip Content")}</span>
+                    <span className={styles.propertyLabel}>{t('Clip Content')}</span>
                     <div className={styles.propertyInputs}>
                       <input
                         type="checkbox"
@@ -3399,7 +3402,7 @@ export function PropertiesPanel() {
 
         <div className={styles.section}>
           <div className={styles.sectionHeader}>
-            <span className={styles.sectionTitle}>{t("Appearance")}</span>
+            <span className={styles.sectionTitle}>{t('Appearance')}</span>
           </div>
           <div className={styles.sectionContent}>
             {/* Fills list */}
@@ -3407,7 +3410,7 @@ export function PropertiesPanel() {
               <>
                 <div className={styles.propertyRow}>
                   <div className={styles.propertyHeader}>
-                    <span className={styles.propertyLabel}>{t("Fill")}</span>
+                    <span className={styles.propertyLabel}>{t('Fill')}</span>
                   </div>
                   {fills.map((fill, index) => {
                     const fillHex =
@@ -3488,7 +3491,7 @@ export function PropertiesPanel() {
                             className={styles.opacityInput}
                             value={`${Math.round(fill.opacity * 100)}%`}
                             onChange={(e) => handleFillOpacityChange(index, e.target.value)}
-                            title={t("Fill opacity")}
+                            title={t('Fill opacity')}
                             aria-label={`Fill opacity: ${Math.round(fill.opacity * 100)}%`}
                             data-testid={`fill-opacity-${index}`}
                             {...numericInputProps(
@@ -3499,8 +3502,8 @@ export function PropertiesPanel() {
                           <button
                             className={styles.removeButton}
                             onClick={() => handleRemoveFill(index)}
-                            title="Remove fill"
-                            aria-label="Remove fill"
+                            title={t('Remove fill')}
+                            aria-label={t('Remove fill')}
                             data-testid={`fill-remove-${index}`}
                           >
                             <X size={12} />
@@ -3527,19 +3530,19 @@ export function PropertiesPanel() {
                   <button
                     className={styles.addButton}
                     onClick={handleAddFill}
-                    title={t("Add fill")}
-                    aria-label={t("Add fill")}
+                    title={t('Add fill')}
+                    aria-label={t('Add fill')}
                     data-testid="add-fill"
                   >
-                    <Plus size={12} /> {t("Add Fill")}
+                    <Plus size={12} /> {t('Add Fill')}
                   </button>
                   {node.type === 'path' && (
                     <div className={styles.inputGroup}>
                       <span
                         className={styles.propertyLabel}
-                        title={t("Where contours overlap or cross")}
+                        title={t('Where contours overlap or cross')}
                       >
-                        {t("Fill rule")}
+                        {t('Fill rule')}
                       </span>
                       <select
                         className={styles.select}
@@ -3552,11 +3555,11 @@ export function PropertiesPanel() {
                               e.target.value as 'nonzero' | 'evenodd'
                             )
                         }
-                        aria-label={t("Fill rule")}
+                        aria-label={t('Fill rule')}
                         data-testid="path-fill-rule"
                       >
-                        <option value="nonzero">{t("Nonzero (overlaps filled)")}</option>
-                        <option value="evenodd">{t("Even-odd (overlaps make holes)")}</option>
+                        <option value="nonzero">{t('Nonzero (overlaps filled)')}</option>
+                        <option value="evenodd">{t('Even-odd (overlaps make holes)')}</option>
                       </select>
                     </div>
                   )}
@@ -3565,7 +3568,7 @@ export function PropertiesPanel() {
                 {/* Strokes list */}
                 <div className={styles.propertyRow}>
                   <div className={styles.propertyHeader}>
-                    <span className={styles.propertyLabel}>{t("Stroke")}</span>
+                    <span className={styles.propertyLabel}>{t('Stroke')}</span>
                   </div>
                   {strokes.map((stroke, index) => {
                     const strokeHex = colorToHex(stroke.color);
@@ -3646,7 +3649,7 @@ export function PropertiesPanel() {
                             className={styles.opacityInput}
                             value={`${Math.round(stroke.opacity * 100)}%`}
                             onChange={(e) => handleStrokeOpacityChange(index, e.target.value)}
-                            title={t("Stroke opacity")}
+                            title={t('Stroke opacity')}
                             aria-label={`Stroke opacity: ${Math.round(stroke.opacity * 100)}%`}
                             data-testid={`stroke-opacity-${index}`}
                             {...numericInputProps(
@@ -3657,8 +3660,8 @@ export function PropertiesPanel() {
                           <button
                             className={styles.removeButton}
                             onClick={() => handleRemoveStroke(index)}
-                            title="Remove stroke"
-                            aria-label="Remove stroke"
+                            title={t('Remove stroke')}
+                            aria-label={t('Remove stroke')}
                             data-testid={`stroke-remove-${index}`}
                           >
                             <X size={12} />
@@ -3730,11 +3733,11 @@ export function PropertiesPanel() {
                   <button
                     className={styles.addButton}
                     onClick={handleAddStroke}
-                    title={t("Add stroke")}
-                    aria-label={t("Add stroke")}
+                    title={t('Add stroke')}
+                    aria-label={t('Add stroke')}
                     data-testid="add-stroke"
                   >
-                    <Plus size={12} /> {t("Add Stroke")}
+                    <Plus size={12} /> {t('Add Stroke')}
                   </button>
                 </div>
               </>
@@ -3742,7 +3745,7 @@ export function PropertiesPanel() {
             <div className={styles.propertyRow}>
               <div className={styles.propertyHeader}>
                 <label className={styles.propertyLabel} htmlFor="prop-opacity">
-                  {t("Opacity")}
+                  {t('Opacity')}
                 </label>
                 <KeyframeIndicator
                   state={getKeyframeState(timeline, nodeId, 'opacity', currentFrame)}
@@ -3790,13 +3793,13 @@ export function PropertiesPanel() {
         {/* Effects Section */}
         <div className={styles.section} data-testid="effects-section">
           <div className={styles.sectionHeader}>
-            <span className={styles.sectionTitle}>{t("Effects")}</span>
+            <span className={styles.sectionTitle}>{t('Effects')}</span>
             <div className={styles.effectAddWrapper}>
               <button
                 className={styles.effectAddButton}
                 onClick={() => setShowEffectDropdown(!showEffectDropdown)}
-                title={t("Add effect")}
-                aria-label={t("Add effect")}
+                title={t('Add effect')}
+                aria-label={t('Add effect')}
                 data-testid="add-effect-button"
               >
                 <Plus size={12} />
@@ -3815,7 +3818,7 @@ export function PropertiesPanel() {
                       setShowEffectDropdown(false);
                     }}
                   >
-                    {t("Drop Shadow")}
+                    {t('Drop Shadow')}
                   </button>
                   <button
                     className={styles.effectDropdownItem}
@@ -3829,7 +3832,7 @@ export function PropertiesPanel() {
                       setShowEffectDropdown(false);
                     }}
                   >
-                    {t("Inner Shadow")}
+                    {t('Inner Shadow')}
                   </button>
                   <button
                     className={styles.effectDropdownItem}
@@ -3843,7 +3846,7 @@ export function PropertiesPanel() {
                       setShowEffectDropdown(false);
                     }}
                   >
-                    {t("Layer Blur")}
+                    {t('Layer Blur')}
                   </button>
                 </div>
               )}
@@ -3874,10 +3877,10 @@ export function PropertiesPanel() {
                   </button>
                   <span className={styles.effectTypeLabel}>
                     {effect.type === 'drop-shadow'
-                      ? t("Drop Shadow")
+                      ? t('Drop Shadow')
                       : effect.type === 'inner-shadow'
-                        ? t("Inner Shadow")
-                        : t("Layer Blur")}
+                        ? t('Inner Shadow')
+                        : t('Layer Blur')}
                   </span>
                   <button
                     className={styles.removeButton}
@@ -3889,8 +3892,8 @@ export function PropertiesPanel() {
                           index
                         );
                     }}
-                    title="Remove effect"
-                    aria-label="Remove effect"
+                    title={t('Remove effect')}
+                    aria-label={t('Remove effect')}
                   >
                     <X size={14} />
                   </button>
@@ -4230,7 +4233,7 @@ export function PropertiesPanel() {
                             <div className={styles.inputGroup}>
                               <ScrubLabel
                                 onScrubStart={handleScrubStart}
-                                label={t("Blur")}
+                                label={t('Blur')}
                                 value={shadow.blur}
                                 onChange={(v) => {
                                   if (selectedId) {
@@ -4321,7 +4324,7 @@ export function PropertiesPanel() {
                             <div className={styles.inputGroup}>
                               <ScrubLabel
                                 onScrubStart={handleScrubStart}
-                                label={t("Spread")}
+                                label={t('Spread')}
                                 value={shadow.spread}
                                 onChange={(v) => {
                                   if (selectedId) {
@@ -4421,7 +4424,7 @@ export function PropertiesPanel() {
                           <div className={styles.inputGroup}>
                             <ScrubLabel
                               onScrubStart={handleScrubStart}
-                              label={t("Radius")}
+                              label={t('Radius')}
                               value={blur.radius}
                               onChange={(v) => {
                                 if (selectedId) {
@@ -4537,7 +4540,7 @@ export function PropertiesPanel() {
             return (
               <div className={styles.section} data-testid="easing-section">
                 <div className={styles.sectionHeader}>
-                  <span className={styles.sectionTitle}>{t("Easing")}</span>
+                  <span className={styles.sectionTitle}>{t('Easing')}</span>
                 </div>
                 <div className={styles.sectionContent}>
                   {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions */}
@@ -4578,7 +4581,7 @@ export function PropertiesPanel() {
         {/* Blend Mode */}
         <div className={styles.section} data-testid="blend-mode-section">
           <div className={styles.sectionHeader}>
-            <span className={styles.sectionTitle}>{t("Blend Mode")}</span>
+            <span className={styles.sectionTitle}>{t('Blend Mode')}</span>
           </div>
           <div className={styles.sectionContent}>
             <select
@@ -4594,22 +4597,22 @@ export function PropertiesPanel() {
               }}
               data-testid="blend-mode-select"
             >
-              <option value="normal">{t("Normal")}</option>
-              <option value="multiply">{t("Multiply")}</option>
-              <option value="screen">{t("Screen")}</option>
-              <option value="overlay">{t("Overlay")}</option>
-              <option value="darken">{t("Darken")}</option>
-              <option value="lighten">{t("Lighten")}</option>
-              <option value="color-dodge">{t("Color Dodge")}</option>
-              <option value="color-burn">{t("Color Burn")}</option>
-              <option value="hard-light">{t("Hard Light")}</option>
-              <option value="soft-light">{t("Soft Light")}</option>
-              <option value="difference">{t("Difference")}</option>
-              <option value="exclusion">{t("Exclusion")}</option>
-              <option value="hue">{t("Hue")}</option>
-              <option value="saturation">{t("Saturation")}</option>
-              <option value="color">{t("Color")}</option>
-              <option value="luminosity">{t("Luminosity")}</option>
+              <option value="normal">{t('Normal')}</option>
+              <option value="multiply">{t('Multiply')}</option>
+              <option value="screen">{t('Screen')}</option>
+              <option value="overlay">{t('Overlay')}</option>
+              <option value="darken">{t('Darken')}</option>
+              <option value="lighten">{t('Lighten')}</option>
+              <option value="color-dodge">{t('Color Dodge')}</option>
+              <option value="color-burn">{t('Color Burn')}</option>
+              <option value="hard-light">{t('Hard Light')}</option>
+              <option value="soft-light">{t('Soft Light')}</option>
+              <option value="difference">{t('Difference')}</option>
+              <option value="exclusion">{t('Exclusion')}</option>
+              <option value="hue">{t('Hue')}</option>
+              <option value="saturation">{t('Saturation')}</option>
+              <option value="color">{t('Color')}</option>
+              <option value="luminosity">{t('Luminosity')}</option>
             </select>
           </div>
         </div>
@@ -4706,12 +4709,12 @@ function ExportSection({
   return (
     <div className={styles.section} data-testid="export-section">
       <div className={styles.sectionHeader}>
-        <span className={styles.sectionTitle}>{t("Export")}</span>
+        <span className={styles.sectionTitle}>{t('Export')}</span>
         <button
           className={styles.exportAddButton}
           onClick={addExport}
-          title={t("Add export")}
-          aria-label={t("Add export")}
+          title={t('Add export')}
+          aria-label={t('Add export')}
           data-testid="add-export-button"
         >
           <Plus size={12} />
@@ -4765,8 +4768,8 @@ function ExportSection({
                   <button
                     className={styles.exportRemoveButton}
                     onClick={() => removeExport(index)}
-                    title="Remove export"
-                    aria-label="Remove export"
+                    title={t('Remove export')}
+                    aria-label={t('Remove export')}
                     data-testid="remove-export-button"
                   >
                     <Minus size={12} />
@@ -4781,7 +4784,7 @@ function ExportSection({
                         updateExport(index, { ...setting, includeBackground: e.target.checked })
                       }
                     />
-                    {t("Include background")}
+                    {t('Include background')}
                   </label>
                 )}
               </div>

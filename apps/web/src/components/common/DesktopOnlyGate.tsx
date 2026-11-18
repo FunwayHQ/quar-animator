@@ -27,17 +27,18 @@ export function DesktopOnlyGate({ children }: { children: ReactNode }) {
           <div className={styles.icon} aria-hidden="true">
             <Monitor size={24} strokeWidth={1.7} />
           </div>
-          <p className={styles.eyebrow}>{t("Desktop only")}</p>
+          <p className={styles.eyebrow}>{t('Desktop only')}</p>
           <h1 className={styles.title} id="desktop-only-title">
-            {t("QUAR Animator needs a larger screen")}
+            {t('QUAR Animator needs a larger screen')}
           </h1>
           <p className={styles.description}>
-            The full animation workspace needs more room than this screen provides. Open QUAR
-            Animator on a desktop or laptop to work on your projects.
+            {t(
+              'The full animation workspace needs more room than this screen provides. Open QUAR Animator on a desktop or laptop to work on your projects.'
+            )}
           </p>
           <div className={styles.deviceHint}>
             <Monitor size={14} aria-hidden="true" />
-            <span>{t("Designed for desktop browsers")}</span>
+            <span>{t('Designed for desktop browsers')}</span>
           </div>
         </section>
       </main>

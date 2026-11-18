@@ -136,7 +136,7 @@ function ProjectNameField({
         className={styles.projectNameInput}
         value={draft}
         maxLength={100}
-        aria-label={t("Project name")}
+        aria-label={t('Project name')}
         data-testid="project-name-input"
         onChange={(e) => setDraft(e.target.value)}
         onBlur={commit}
@@ -158,7 +158,7 @@ function ProjectNameField({
       type="button"
       className={styles.projectNameDisplay}
       data-testid="project-name"
-      title={t("Click to rename")}
+      title={t('Click to rename')}
       onClick={() => setDraft(projectName)}
     >
       {isDirty && <span className={styles.dirtyDot} data-testid="dirty-indicator" />}
@@ -452,7 +452,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
     try {
       const restored = await restoreTutorials();
       if (restored.length === 0) {
-        toast.info(t("All the tutorials are already in your projects"));
+        toast.info(t('All the tutorials are already in your projects'));
       } else {
         const quoted = restored.map((tutorial) => `“${tutorial.name}”`);
         // “A”, “A and B”, “A, B and C”
@@ -594,8 +594,8 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
             type="button"
             className={styles.logo}
             onClick={() => void handleBackToProjects()}
-            title={t("Back to your projects")}
-            aria-label={t("Back to your projects")}
+            title={t('Back to your projects')}
+            aria-label={t('Back to your projects')}
             data-testid="back-to-projects"
           >
             <QuarLogo className={styles.logoImage} />
@@ -605,46 +605,49 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
           <nav className={styles.menus}>
             {/* ====== FILE MENU ====== */}
             <div className={styles.menuContainer}>
-              {menuButton('file', t("File"), 'menu-file')}
+              {menuButton('file', t('File'), 'menu-file')}
               {openMenu === 'file' && (
                 <div className={styles.dropdown} role="menu" data-testid="file-menu-dropdown">
-                  <MenuItem label={t("Back to Projects")} onClick={() => void handleBackToProjects()} />
+                  <MenuItem
+                    label={t('Back to Projects')}
+                    onClick={() => void handleBackToProjects()}
+                  />
                   <Separator />
                   <MenuItem
-                    label={t("New Project")}
+                    label={t('New Project')}
                     shortcut={KEYS.newProject}
                     onClick={() => void handleNew()}
                   />
                   <MenuItem
-                    label={t("Open Project...")}
+                    label={t('Open Project...')}
                     shortcut={KEYS.openProject}
                     onClick={() => void handleOpen()}
                   />
                   <Separator />
-                  <MenuItem label={t("Save")} shortcut={KEYS.save} onClick={handleSave} />
-                  <MenuItem label={t("Save As...")} shortcut={KEYS.saveAs} onClick={handleSaveAs} />
+                  <MenuItem label={t('Save')} shortcut={KEYS.save} onClick={handleSave} />
+                  <MenuItem label={t('Save As...')} shortcut={KEYS.saveAs} onClick={handleSaveAs} />
                   <Separator />
-                  <MenuItem label={t("Download as .quar")} onClick={handleDownload} />
-                  <MenuItem label={t("Import .quar...")} onClick={() => void handleImport()} />
+                  <MenuItem label={t('Download as .quar')} onClick={handleDownload} />
+                  <MenuItem label={t('Import .quar...')} onClick={() => void handleImport()} />
                   <MenuItem
-                    label={t("Import SVG...")}
+                    label={t('Import SVG...')}
                     shortcut={KEYS.importSvg}
                     onClick={handleImportSvg}
                   />
-                  <MenuItem label={t("Import Image...")} onClick={handleImportImage} />
-                  <MenuItem label={t("Import Sound...")} onClick={handleImportSound} />
-                  <MenuItem label={t("Import Video...")} onClick={handleImportVideo} />
+                  <MenuItem label={t('Import Image...')} onClick={handleImportImage} />
+                  <MenuItem label={t('Import Sound...')} onClick={handleImportSound} />
+                  <MenuItem label={t('Import Video...')} onClick={handleImportVideo} />
                 </div>
               )}
             </div>
 
             {/* ====== EDIT MENU ====== */}
             <div className={styles.menuContainer}>
-              {menuButton('edit', t("Edit"), 'menu-edit')}
+              {menuButton('edit', t('Edit'), 'menu-edit')}
               {openMenu === 'edit' && (
                 <div className={styles.dropdown} role="menu" data-testid="edit-menu-dropdown">
                   <MenuItem
-                    label={t("Undo")}
+                    label={t('Undo')}
                     shortcut={KEYS.undo}
                     disabled={!canUndo}
                     onClick={() => {
@@ -653,7 +656,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                     }}
                   />
                   <MenuItem
-                    label={t("Redo")}
+                    label={t('Redo')}
                     shortcut={KEYS.redo}
                     disabled={!canRedo}
                     onClick={() => {
@@ -663,7 +666,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                   />
                   <Separator />
                   <MenuItem
-                    label={t("Cut")}
+                    label={t('Cut')}
                     shortcut={KEYS.cut}
                     disabled={!hasSelection}
                     onClick={() => {
@@ -672,7 +675,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                     }}
                   />
                   <MenuItem
-                    label={t("Copy")}
+                    label={t('Copy')}
                     shortcut={KEYS.copy}
                     disabled={!hasSelection}
                     onClick={() => {
@@ -681,7 +684,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                     }}
                   />
                   <MenuItem
-                    label={t("Paste")}
+                    label={t('Paste')}
                     shortcut={KEYS.paste}
                     // What was copied here, or maybe what was copied elsewhere
                     disabled={!clipboard && !canReadSystemClipboard()}
@@ -691,7 +694,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                     }}
                   />
                   <MenuItem
-                    label={t("Duplicate")}
+                    label={t('Duplicate')}
                     shortcut={KEYS.duplicate}
                     disabled={!hasSelection}
                     onClick={() => {
@@ -700,7 +703,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                     }}
                   />
                   <MenuItem
-                    label={t("Delete")}
+                    label={t('Delete')}
                     shortcut={KEYS.delete}
                     disabled={!hasSelection}
                     onClick={() => {
@@ -709,7 +712,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                     }}
                   />
                   <MenuItem
-                    label={t("Select All")}
+                    label={t('Select All')}
                     shortcut={KEYS.selectAll}
                     onClick={() => {
                       closeMenu();
@@ -717,9 +720,9 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                     }}
                   />
                   <Separator />
-                  <SectionHeader label={t("Arrange")} />
+                  <SectionHeader label={t('Arrange')} />
                   <MenuItem
-                    label={t("Group")}
+                    label={t('Group')}
                     shortcut={KEYS.group}
                     disabled={!hasMultipleSelected}
                     onClick={() => {
@@ -728,7 +731,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                     }}
                   />
                   <MenuItem
-                    label={t("Ungroup")}
+                    label={t('Ungroup')}
                     shortcut={KEYS.ungroup}
                     disabled={!hasGroupSelected}
                     onClick={() => {
@@ -738,7 +741,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                   />
                   <Separator />
                   <MenuItem
-                    label={t("Bring Forward")}
+                    label={t('Bring Forward')}
                     shortcut={KEYS.bringForward}
                     disabled={!hasSelection}
                     onClick={() => {
@@ -747,7 +750,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                     }}
                   />
                   <MenuItem
-                    label={t("Bring to Front")}
+                    label={t('Bring to Front')}
                     shortcut={KEYS.bringToFront}
                     disabled={!hasSelection}
                     onClick={() => {
@@ -756,7 +759,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                     }}
                   />
                   <MenuItem
-                    label={t("Send Backward")}
+                    label={t('Send Backward')}
                     shortcut={KEYS.sendBackward}
                     disabled={!hasSelection}
                     onClick={() => {
@@ -765,7 +768,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                     }}
                   />
                   <MenuItem
-                    label={t("Send to Back")}
+                    label={t('Send to Back')}
                     shortcut={KEYS.sendToBack}
                     disabled={!hasSelection}
                     onClick={() => {
@@ -775,7 +778,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                   />
                   <Separator />
                   <MenuItem
-                    label={t("Flip Horizontal")}
+                    label={t('Flip Horizontal')}
                     shortcut={KEYS.flipHorizontal}
                     disabled={!hasSelection}
                     onClick={() => {
@@ -784,7 +787,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                     }}
                   />
                   <MenuItem
-                    label={t("Flip Vertical")}
+                    label={t('Flip Vertical')}
                     shortcut={KEYS.flipVertical}
                     disabled={!hasSelection}
                     onClick={() => {
@@ -793,9 +796,9 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                     }}
                   />
                   <Separator />
-                  <SectionHeader label={t("Boolean")} />
+                  <SectionHeader label={t('Boolean')} />
                   <MenuItem
-                    label={t("Union")}
+                    label={t('Union')}
                     shortcut={KEYS.union}
                     disabled={!hasMultipleSelected}
                     onClick={() => {
@@ -804,7 +807,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                     }}
                   />
                   <MenuItem
-                    label={t("Subtract")}
+                    label={t('Subtract')}
                     shortcut={KEYS.subtract}
                     disabled={!hasMultipleSelected}
                     onClick={() => {
@@ -813,7 +816,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                     }}
                   />
                   <MenuItem
-                    label={t("Intersect")}
+                    label={t('Intersect')}
                     shortcut={KEYS.intersect}
                     disabled={!hasMultipleSelected}
                     onClick={() => {
@@ -822,7 +825,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                     }}
                   />
                   <MenuItem
-                    label={t("Exclude")}
+                    label={t('Exclude')}
                     shortcut={KEYS.exclude}
                     disabled={!hasMultipleSelected}
                     onClick={() => {
@@ -831,7 +834,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                     }}
                   />
                   <MenuItem
-                    label={t("Flatten Boolean")}
+                    label={t('Flatten Boolean')}
                     disabled={!hasBooleanGroupSelected}
                     onClick={() => {
                       closeMenu();
@@ -839,7 +842,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                     }}
                   />
                   <MenuItem
-                    label={t("Release Boolean")}
+                    label={t('Release Boolean')}
                     disabled={!hasBooleanGroupSelected}
                     onClick={() => {
                       closeMenu();
@@ -847,9 +850,9 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                     }}
                   />
                   <Separator />
-                  <SectionHeader label={t("Path")} />
+                  <SectionHeader label={t('Path')} />
                   <MenuItem
-                    label={t("Reverse Path")}
+                    label={t('Reverse Path')}
                     disabled={selectedPathNodes.length === 0}
                     onClick={() => {
                       closeMenu();
@@ -857,7 +860,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                     }}
                   />
                   <MenuItem
-                    label={t("Simplify Path")}
+                    label={t('Simplify Path')}
                     disabled={selectedPathNodes.length === 0}
                     onClick={() => {
                       closeMenu();
@@ -873,7 +876,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                     }}
                   />
                   <MenuItem
-                    label={t("Join")}
+                    label={t('Join')}
                     shortcut={KEYS.join}
                     disabled={!selectedPathNodes.some((path) => !path.closed)}
                     onClick={() => {
@@ -890,9 +893,9 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                     }}
                   />
                   <Separator />
-                  <SectionHeader label={t("Convert")} />
+                  <SectionHeader label={t('Convert')} />
                   <MenuItem
-                    label={t("Convert to Path")}
+                    label={t('Convert to Path')}
                     shortcut={KEYS.convertToPath}
                     disabled={!hasConvertibleSelected}
                     onClick={() => {
@@ -901,7 +904,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                     }}
                   />
                   <MenuItem
-                    label={t("Outline Stroke")}
+                    label={t('Outline Stroke')}
                     shortcut={KEYS.outlineStroke}
                     disabled={!hasStrokeSelected}
                     onClick={() => {
@@ -910,9 +913,9 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                     }}
                   />
                   <Separator />
-                  <SectionHeader label={t("Symbols")} />
+                  <SectionHeader label={t('Symbols')} />
                   <MenuItem
-                    label={t("Create Symbol")}
+                    label={t('Create Symbol')}
                     shortcut={KEYS.createSymbol}
                     disabled={selectedNodeIds.size === 0}
                     onClick={() => {
@@ -921,7 +924,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                     }}
                   />
                   <MenuItem
-                    label={t("Detach Instance")}
+                    label={t('Detach Instance')}
                     disabled={(() => {
                       if (selectedNodeIds.size !== 1) return true;
                       const selId = [...selectedNodeIds][0]!;
@@ -935,7 +938,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                   />
                   <Separator />
                   <MenuItem
-                    label={t("Preferences")}
+                    label={t('Preferences')}
                     shortcut="Ctrl+,"
                     onClick={() => {
                       closeMenu();
@@ -948,11 +951,11 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
 
             {/* ====== VIEW MENU ====== */}
             <div className={styles.menuContainer}>
-              {menuButton('view', t("View"), 'menu-view')}
+              {menuButton('view', t('View'), 'menu-view')}
               {openMenu === 'view' && (
                 <div className={styles.dropdown} role="menu" data-testid="view-menu-dropdown">
                   <MenuItem
-                    label={t("Zoom In")}
+                    label={t('Zoom In')}
                     shortcut={KEYS.zoomIn}
                     onClick={() => {
                       closeMenu();
@@ -960,7 +963,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                     }}
                   />
                   <MenuItem
-                    label={t("Zoom Out")}
+                    label={t('Zoom Out')}
                     shortcut={KEYS.zoomOut}
                     onClick={() => {
                       closeMenu();
@@ -968,7 +971,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                     }}
                   />
                   <MenuItem
-                    label={t("Zoom to 100%")}
+                    label={t('Zoom to 100%')}
                     shortcut={KEYS.zoom100}
                     onClick={() => {
                       closeMenu();
@@ -976,7 +979,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                     }}
                   />
                   <MenuItem
-                    label={t("Fit to Window")}
+                    label={t('Fit to Window')}
                     shortcut={KEYS.fitToWindow}
                     onClick={() => {
                       closeMenu();
@@ -985,7 +988,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                   />
                   <Separator />
                   <MenuItem
-                    label={t("Show Rulers")}
+                    label={t('Show Rulers')}
                     shortcut={KEYS.rulers}
                     checked={showRulers}
                     onClick={() => {
@@ -994,7 +997,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                     }}
                   />
                   <MenuItem
-                    label={t("Snap to Grid")}
+                    label={t('Snap to Grid')}
                     checked={snapToGrid}
                     onClick={() => {
                       closeMenu();
@@ -1003,7 +1006,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                   />
                   <Separator />
                   <MenuItem
-                    label={t("Show Guides")}
+                    label={t('Show Guides')}
                     shortcut={KEYS.guides}
                     checked={showGuides}
                     onClick={() => {
@@ -1012,7 +1015,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                     }}
                   />
                   <MenuItem
-                    label={t("Snap to Guides")}
+                    label={t('Snap to Guides')}
                     checked={snapToGuides}
                     onClick={() => {
                       closeMenu();
@@ -1020,7 +1023,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                     }}
                   />
                   <MenuItem
-                    label={t("Clear All Guides")}
+                    label={t('Clear All Guides')}
                     onClick={() => {
                       closeMenu();
                       clearGuidesAction();
@@ -1028,7 +1031,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                   />
                   <Separator />
                   <MenuItem
-                    label={t("Onion Skinning")}
+                    label={t('Onion Skinning')}
                     shortcut={KEYS.onionSkin}
                     checked={onionSkinEnabled}
                     onClick={() => {
@@ -1037,7 +1040,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                     }}
                   />
                   <MenuItem
-                    label={t("Animation Sequence")}
+                    label={t('Animation Sequence')}
                     shortcut={KEYS.animationSequence}
                     checked={sequenceWindowOpen}
                     onClick={() => {
@@ -1047,7 +1050,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                   />
                   <Separator />
                   <MenuItem
-                    label={t("Light Appearance")}
+                    label={t('Light Appearance')}
                     checked={uiTheme === 'light'}
                     onClick={() => {
                       closeMenu();
@@ -1068,7 +1071,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
 
             {/* ====== ANIMATION MENU ====== */}
             <div className={styles.menuContainer}>
-              {menuButton('animation', t("Animation"), 'menu-animation')}
+              {menuButton('animation', t('Animation'), 'menu-animation')}
               {openMenu === 'animation' && (
                 <div className={styles.dropdown} role="menu" data-testid="animation-menu-dropdown">
                   <MenuItem
@@ -1081,7 +1084,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                   />
                   <Separator />
                   <MenuItem
-                    label={t("Previous Frame")}
+                    label={t('Previous Frame')}
                     shortcut={KEYS.previousFrame}
                     disabled={isPlaying}
                     onClick={() => {
@@ -1091,7 +1094,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                     }}
                   />
                   <MenuItem
-                    label={t("Next Frame")}
+                    label={t('Next Frame')}
                     shortcut={KEYS.nextFrame}
                     disabled={isPlaying}
                     onClick={() => {
@@ -1102,7 +1105,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                     }}
                   />
                   <MenuItem
-                    label={t("Jump Backward 10")}
+                    label={t('Jump Backward 10')}
                     shortcut={KEYS.back10}
                     disabled={isPlaying}
                     onClick={() => {
@@ -1112,7 +1115,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                     }}
                   />
                   <MenuItem
-                    label={t("Jump Forward 10")}
+                    label={t('Jump Forward 10')}
                     shortcut={KEYS.forward10}
                     disabled={isPlaying}
                     onClick={() => {
@@ -1123,7 +1126,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                   />
                   <Separator />
                   <MenuItem
-                    label={t("Go to Start")}
+                    label={t('Go to Start')}
                     shortcut={KEYS.goToStart}
                     onClick={() => {
                       closeMenu();
@@ -1133,7 +1136,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                     }}
                   />
                   <MenuItem
-                    label={t("Go to End")}
+                    label={t('Go to End')}
                     shortcut="End"
                     onClick={() => {
                       closeMenu();
@@ -1144,7 +1147,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                   />
                   <Separator />
                   <MenuItem
-                    label={t("Loop Playback")}
+                    label={t('Loop Playback')}
                     shortcut={KEYS.loop}
                     checked={isLooping}
                     onClick={() => {
@@ -1153,7 +1156,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                     }}
                   />
                   <MenuItem
-                    label={t("Auto-Keyframe")}
+                    label={t('Auto-Keyframe')}
                     shortcut={KEYS.autoKeyframe}
                     checked={autoKeyframe}
                     onClick={() => {
@@ -1167,11 +1170,11 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
 
             {/* ====== RIGGING MENU ====== */}
             <div className={styles.menuContainer}>
-              {menuButton('rigging', t("Rigging"), 'menu-rigging')}
+              {menuButton('rigging', t('Rigging'), 'menu-rigging')}
               {openMenu === 'rigging' && (
                 <div className={styles.dropdown} role="menu" data-testid="rigging-menu-dropdown">
                   <MenuItem
-                    label={t("Bone Tool")}
+                    label={t('Bone Tool')}
                     shortcut={KEYS.boneTool}
                     checked={activeTool === 'bone'}
                     onClick={() => {
@@ -1180,7 +1183,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                     }}
                   />
                   <MenuItem
-                    label={t("Weight Paint Tool")}
+                    label={t('Weight Paint Tool')}
                     shortcut={KEYS.weightPaintTool}
                     checked={activeTool === 'weight-paint'}
                     onClick={() => {
@@ -1190,7 +1193,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                   />
                   <Separator />
                   <MenuItem
-                    label={t("Bind Selection to Bones")}
+                    label={t('Bind Selection to Bones')}
                     disabled={!hasBindableSelected || !hasBoneNodes}
                     onClick={() => {
                       closeMenu();
@@ -1198,7 +1201,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                     }}
                   />
                   <MenuItem
-                    label={t("Unbind Mesh")}
+                    label={t('Unbind Mesh')}
                     disabled={!hasSkinnedSelected}
                     onClick={() => {
                       closeMenu();
@@ -1207,7 +1210,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                   />
                   <Separator />
                   <MenuItem
-                    label={t("Create IK Chain")}
+                    label={t('Create IK Chain')}
                     disabled={!hasBoneSelected}
                     onClick={() => {
                       closeMenu();
@@ -1215,7 +1218,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                     }}
                   />
                   <MenuItem
-                    label="Remove IK Chain"
+                    label={t('Remove IK Chain')}
                     disabled={!hasBoneOrIKTargetSelected}
                     onClick={() => {
                       closeMenu();
@@ -1224,7 +1227,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                   />
                   <Separator />
                   <MenuItem
-                    label={t("Create Smart Bone Action")}
+                    label={t('Create Smart Bone Action')}
                     disabled={!hasBoneSelected}
                     onClick={() => {
                       closeMenu();
@@ -1237,7 +1240,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                     data-testid="create-smart-bone-action-menu"
                   />
                   <MenuItem
-                    label={t("Delete Smart Bone Action")}
+                    label={t('Delete Smart Bone Action')}
                     disabled={!hasSmartBoneActionsForSelected}
                     onClick={() => {
                       closeMenu();
@@ -1258,7 +1261,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                   />
                   <Separator />
                   <MenuItem
-                    label={t("Create Vitruvian Controller")}
+                    label={t('Create Vitruvian Controller')}
                     disabled={!hasBoneSelected}
                     onClick={() => {
                       closeMenu();
@@ -1267,7 +1270,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                     data-testid="create-vitruvian-menu"
                   />
                   <MenuItem
-                    label="Remove Vitruvian Controller"
+                    label={t('Remove Vitruvian Controller')}
                     disabled={vitruvianControllers.length === 0}
                     onClick={() => {
                       closeMenu();
@@ -1283,7 +1286,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                   />
                   <Separator />
                   <MenuItem
-                    label={t("Create Dynamic Chain")}
+                    label={t('Create Dynamic Chain')}
                     disabled={!hasBoneSelected}
                     onClick={() => {
                       closeMenu();
@@ -1296,7 +1299,7 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                     data-testid="create-dynamic-chain-menu"
                   />
                   <MenuItem
-                    label="Remove Dynamic Chain"
+                    label={t('Remove Dynamic Chain')}
                     disabled={!hasDynamicChainForSelected}
                     onClick={() => {
                       closeMenu();
@@ -1321,32 +1324,32 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
 
             {/* ====== EXPORT MENU ====== */}
             <div className={styles.menuContainer}>
-              {menuButton('export', t("Export"), 'menu-export')}
+              {menuButton('export', t('Export'), 'menu-export')}
               {openMenu === 'export' && (
                 <div className={styles.dropdown} role="menu" data-testid="export-menu-dropdown">
                   <MenuItem
-                    label={t("Export as PNG Sequence...")}
+                    label={t('Export as PNG Sequence...')}
                     onClick={() => {
                       closeMenu();
                       showExportDialog('png-sequence');
                     }}
                   />
                   <MenuItem
-                    label={t("Export as GIF...")}
+                    label={t('Export as GIF...')}
                     onClick={() => {
                       closeMenu();
                       showExportDialog('gif');
                     }}
                   />
                   <MenuItem
-                    label={t("Export as MP4...")}
+                    label={t('Export as MP4...')}
                     onClick={() => {
                       closeMenu();
                       showExportDialog('mp4');
                     }}
                   />
                   <MenuItem
-                    label={t("Export as WebM...")}
+                    label={t('Export as WebM...')}
                     onClick={() => {
                       closeMenu();
                       showExportDialog('webm');
@@ -1354,28 +1357,28 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                   />
                   <Separator />
                   <MenuItem
-                    label={t("Export as Lottie JSON...")}
+                    label={t('Export as Lottie JSON...')}
                     onClick={() => {
                       closeMenu();
                       showExportDialog('lottie');
                     }}
                   />
                   <MenuItem
-                    label={t("Export as Sprite Sheet...")}
+                    label={t('Export as Sprite Sheet...')}
                     onClick={() => {
                       closeMenu();
                       showExportDialog('sprite-sheet');
                     }}
                   />
                   <MenuItem
-                    label={t("Export as SVG...")}
+                    label={t('Export as SVG...')}
                     onClick={() => {
                       closeMenu();
                       showExportDialog('svg');
                     }}
                   />
                   <MenuItem
-                    label={t("Export as PDF...")}
+                    label={t('Export as PDF...')}
                     onClick={() => {
                       closeMenu();
                       showExportDialog('pdf');
@@ -1387,11 +1390,11 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
 
             {/* ====== HELP MENU ====== */}
             <div className={styles.menuContainer}>
-              {menuButton('help', t("Help"), 'menu-help')}
+              {menuButton('help', t('Help'), 'menu-help')}
               {openMenu === 'help' && (
                 <div className={styles.dropdown} role="menu" data-testid="help-menu-dropdown">
                   <MenuItem
-                    label={t("User Guide")}
+                    label={t('User Guide')}
                     shortcut={KEYS.userGuide}
                     onClick={() => {
                       closeMenu();
@@ -1399,21 +1402,21 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                     }}
                   />
                   <MenuItem
-                    label={t("Keyboard Shortcuts")}
+                    label={t('Keyboard Shortcuts')}
                     onClick={() => {
                       closeMenu();
                       setShowShortcutsDialog(true);
                     }}
                   />
                   <MenuItem
-                    label={t("Restore Tutorials")}
+                    label={t('Restore Tutorials')}
                     onClick={() => {
                       closeMenu();
                       void handleRestoreTutorials();
                     }}
                   />
                   <MenuItem
-                    label={t("Use Google Fonts")}
+                    label={t('Use Google Fonts')}
                     checked={hasGoogleFontsConsent()}
                     onClick={() => {
                       closeMenu();
@@ -1428,28 +1431,28 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                   />
                   <Separator />
                   <MenuItem
-                    label={t("About Quar Animator")}
+                    label={t('About Quar Animator')}
                     onClick={() => {
                       closeMenu();
                       setShowAboutDialog(true);
                     }}
                   />
                   <MenuItem
-                    label={t("Privacy Policy")}
+                    label={t('Privacy Policy')}
                     onClick={() => {
                       closeMenu();
                       window.open(PRIVACY_URL, '_blank', 'noopener');
                     }}
                   />
                   <MenuItem
-                    label={t("Terms of Service")}
+                    label={t('Terms of Service')}
                     onClick={() => {
                       closeMenu();
                       window.open(TERMS_URL, '_blank', 'noopener');
                     }}
                   />
                   <MenuItem
-                    label={t("Report Issues")}
+                    label={t('Report Issues')}
                     onClick={() => {
                       closeMenu();
                       window.open(REPORT_ISSUES_URL, '_blank', 'noopener');
@@ -1493,10 +1496,10 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
           <div
             className={styles.saveAsDialog}
             role="dialog"
-            aria-label={t("Save As")}
+            aria-label={t('Save As')}
             data-testid="save-as-dialog"
           >
-            <h3 className={styles.saveAsTitle}>{t("Save As")}</h3>
+            <h3 className={styles.saveAsTitle}>{t('Save As')}</h3>
             <input
               className={styles.saveAsInput}
               type="text"
@@ -1506,20 +1509,20 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
                 if (e.key === 'Enter') handleSaveAsConfirm();
                 if (e.key === 'Escape') setShowSaveAsPrompt(false);
               }}
-              placeholder={t("Project name")}
+              placeholder={t('Project name')}
               autoFocus // eslint-disable-line jsx-a11y/no-autofocus
               data-testid="save-as-input"
             />
             <div className={styles.saveAsActions}>
               <button className={styles.saveAsCancel} onClick={() => setShowSaveAsPrompt(false)}>
-                {t("Cancel")}
+                {t('Cancel')}
               </button>
               <button
                 className={styles.saveAsConfirm}
                 onClick={handleSaveAsConfirm}
                 disabled={!saveAsName.trim()}
               >
-                {t("Save")}
+                {t('Save')}
               </button>
             </div>
           </div>
@@ -1531,12 +1534,16 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
         <>
           {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions */}
           <div className={styles.saveAsOverlay} onClick={() => setShowShortcutsDialog(false)} />
-          <div className={styles.shortcutsDialog} role="dialog" aria-label={t("Keyboard Shortcuts")}>
+          <div
+            className={styles.shortcutsDialog}
+            role="dialog"
+            aria-label={t('Keyboard Shortcuts')}
+          >
             <div className={styles.shortcutsHeader}>
-              <h3 className={styles.saveAsTitle}>{t("Keyboard Shortcuts")}</h3>
+              <h3 className={styles.saveAsTitle}>{t('Keyboard Shortcuts')}</h3>
               <button
                 className={styles.shortcutsClose}
-                aria-label={t("Close")}
+                aria-label={t('Close')}
                 onClick={() => setShowShortcutsDialog(false)}
               >
                 &times;
@@ -1561,16 +1568,20 @@ export function MenuBar({ projectActions, toolbar }: MenuBarProps) {
         <>
           {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions */}
           <div className={styles.saveAsOverlay} onClick={() => setShowAboutDialog(false)} />
-          <div className={styles.saveAsDialog} role="dialog" aria-label={t("About")}>
-            <h3 className={styles.saveAsTitle}>{t("About Quar Animator")}</h3>
-            <p className={styles.aboutText}>{t("Free, open-source, web-native 2D animation platform.")}</p>
+          <div className={styles.saveAsDialog} role="dialog" aria-label={t('About')}>
+            <h3 className={styles.saveAsTitle}>{t('About Quar Animator')}</h3>
             <p className={styles.aboutText}>
-              {t("Part of the QUAR Suite — alongside Quar Editor (3D) and Quar Vector (2D illustration).")}
+              {t('Free, open-source, web-native 2D animation platform.')}
             </p>
-            <p className={styles.aboutVersion}>{t("Version 0.14.0")}</p>
+            <p className={styles.aboutText}>
+              {t(
+                'Part of the QUAR Suite — alongside Quar Editor (3D) and Quar Vector (2D illustration).'
+              )}
+            </p>
+            <p className={styles.aboutVersion}>{t('Version 0.14.0')}</p>
             <div className={styles.saveAsActions}>
               <button className={styles.saveAsConfirm} onClick={() => setShowAboutDialog(false)}>
-                {t("Close")}
+                {t('Close')}
               </button>
             </div>
           </div>

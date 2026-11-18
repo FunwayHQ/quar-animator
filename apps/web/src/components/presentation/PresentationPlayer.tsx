@@ -544,7 +544,7 @@ function PresentationPlayer({
       style={{ background: `rgb(${r} ${g} ${b})` }}
       role="dialog"
       aria-modal="true"
-      aria-label={t("Presentation")}
+      aria-label={t('Presentation')}
       tabIndex={-1}
       data-own-keys
       data-idle={idle || undefined}
@@ -571,10 +571,10 @@ function PresentationPlayer({
         <div className={styles.hint} aria-hidden="true">
           <kbd>↑</kbd>
           <kbd>↓</kbd>
-          <span>slides</span>
+          <span>{t('slides')}</span>
           <span className={styles.dot} />
           <kbd>Esc</kbd>
-          <span>leaves</span>
+          <span>{t('leaves')}</span>
         </div>
       )}
     </div>,

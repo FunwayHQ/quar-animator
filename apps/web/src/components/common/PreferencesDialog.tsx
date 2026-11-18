@@ -66,7 +66,7 @@ export function PreferencesDialogHost() {
 }
 
 function PreferencesDialog() {
-  const [tab] = useState<Tab>('general');
+  const [tab, setTab] = useState<Tab>('general');
   const [locale, setLocaleState] = useState<Locale>(getLocale());
   const [status, setStatus] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
   const [exiting, setExiting] = useState(false);
@@ -85,15 +85,16 @@ function PreferencesDialog() {
 
   useEffect(() => () => clearTimeout(closeTimer.current), []);
 
-  const handleKeyDown = useCallback(
-    (event: React.KeyboardEvent) => {
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         event.preventDefault();
         close();
       }
-    },
-    [close]
-  );
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [close]);
 
   const handleLocaleChange = (next: Locale) => {
     setLocale(next);
@@ -149,7 +150,6 @@ function PreferencesDialog() {
         aria-modal="true"
         aria-label={t('Preferences')}
         data-testid="preferences-dialog"
-        onKeyDown={handleKeyDown}
       >
         <div className={styles.header}>
           <h3 className={styles.title}>{t('Preferences')}</h3>

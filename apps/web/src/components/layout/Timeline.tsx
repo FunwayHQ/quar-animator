@@ -360,7 +360,7 @@ export function Timeline({ playback }: TimelineProps = {}) {
 
   const durationControl = (
     <label className={styles.durationControl}>
-      <span>{t("Frames")}</span>
+      <span>{t('Frames')}</span>
       <input
         className={styles.durationInput}
         type="number"
@@ -377,7 +377,7 @@ export function Timeline({ playback }: TimelineProps = {}) {
             setDurationDraft(String(duration));
           }
         }}
-        aria-label={t("Timeline duration in frames")}
+        aria-label={t('Timeline duration in frames')}
         data-testid="timeline-duration-input"
       />
     </label>
@@ -388,7 +388,9 @@ export function Timeline({ playback }: TimelineProps = {}) {
   const fpsControl = (
     <label
       className={styles.durationControl}
-      title="Frames per second, for the whole document. Keyframes keep their frames, so the animation plays faster or slower."
+      title={t(
+        'Frames per second, for the whole document. Keyframes keep their frames, so the animation plays faster or slower.'
+      )}
     >
       <span>FPS</span>
       <input
@@ -407,7 +409,7 @@ export function Timeline({ playback }: TimelineProps = {}) {
             setFpsDraft(String(frameRate));
           }
         }}
-        aria-label={t("Frames per second")}
+        aria-label={t('Frames per second')}
         data-testid="timeline-fps-input"
       />
     </label>
@@ -418,16 +420,16 @@ export function Timeline({ playback }: TimelineProps = {}) {
       <div
         className={styles.zoomControl}
         role="group"
-        aria-label={t("Timeline zoom controls")}
-        title={t("Hold Shift while scrolling to pan horizontally")}
+        aria-label={t('Timeline zoom controls')}
+        title={t('Hold Shift while scrolling to pan horizontally')}
       >
         <button
           className={styles.zoomButton}
           type="button"
           onClick={() => setZoomPercent((zoom) => Math.max(25, zoom - 25))}
           disabled={zoomPercent <= 25}
-          title={t("Zoom out timeline")}
-          aria-label={t("Zoom out timeline")}
+          title={t('Zoom out timeline')}
+          aria-label={t('Zoom out timeline')}
         >
           −
         </button>
@@ -439,8 +441,8 @@ export function Timeline({ playback }: TimelineProps = {}) {
           type="button"
           onClick={() => setZoomPercent((zoom) => Math.min(800, zoom + 25))}
           disabled={zoomPercent >= 800}
-          title={t("Zoom in timeline")}
-          aria-label={t("Zoom in timeline")}
+          title={t('Zoom in timeline')}
+          aria-label={t('Zoom in timeline')}
         >
           +
         </button>
@@ -1296,8 +1298,8 @@ export function Timeline({ playback }: TimelineProps = {}) {
           <button
             className={styles.expandButton}
             onClick={toggleTimelineExpanded}
-            title={t("Expand timeline")}
-            aria-label={t("Expand timeline")}
+            title={t('Expand timeline')}
+            aria-label={t('Expand timeline')}
           >
             <svg
               width="14"
@@ -1314,7 +1316,7 @@ export function Timeline({ playback }: TimelineProps = {}) {
           <button
             className={`${styles.controlButton} ${styles.playButton}`}
             onClick={togglePlay}
-            title={t("Play/Pause (Space)")}
+            title={t('Play/Pause (Space)')}
             aria-label={isPlaying ? 'Pause' : 'Play'}
           >
             {isPlaying ? (
@@ -1355,8 +1357,8 @@ export function Timeline({ playback }: TimelineProps = {}) {
           <button
             className={`${styles.optionButton} ${isLooping ? styles.active : ''}`}
             onClick={toggleLoop}
-            title={t("Toggle loop (L)")}
-            aria-label={t("Toggle loop")}
+            title={t('Toggle loop (L)')}
+            aria-label={t('Toggle loop')}
           >
             <svg
               width="16"
@@ -1403,11 +1405,11 @@ export function Timeline({ playback }: TimelineProps = {}) {
         className={`${styles.resizeHandle} ${isResizing ? styles.resizing : ''}`}
         role="separator"
         aria-orientation="horizontal"
-        aria-label={t("Resize timeline")}
+        aria-label={t('Resize timeline')}
         aria-valuenow={timelineHeight}
         aria-valuemin={MIN_TIMELINE_HEIGHT}
         tabIndex={0}
-        title={t("Drag to resize the timeline (double-click to reset)")}
+        title={t('Drag to resize the timeline (double-click to reset)')}
         onPointerDown={handleResizePointerDown}
         onPointerMove={handleResizePointerMove}
         onPointerUp={handleResizePointerUp}
@@ -1422,8 +1424,8 @@ export function Timeline({ playback }: TimelineProps = {}) {
         <button
           className={styles.collapseButton}
           onClick={toggleTimelineExpanded}
-          title={t("Collapse timeline")}
-          aria-label={t("Collapse timeline")}
+          title={t('Collapse timeline')}
+          aria-label={t('Collapse timeline')}
         >
           <svg
             width="14"
@@ -1441,8 +1443,8 @@ export function Timeline({ playback }: TimelineProps = {}) {
           <button
             className={styles.controlButton}
             onClick={goToStart}
-            title={t("Go to start (Home)")}
-            aria-label={t("Go to start")}
+            title={t('Go to start (Home)')}
+            aria-label={t('Go to start')}
           >
             <svg
               width="16"
@@ -1459,8 +1461,8 @@ export function Timeline({ playback }: TimelineProps = {}) {
           <button
             className={styles.controlButton}
             onClick={() => stepFrame(-1)}
-            title={t("Previous frame (,)")}
-            aria-label={t("Previous frame")}
+            title={t('Previous frame (,)')}
+            aria-label={t('Previous frame')}
           >
             <svg
               width="16"
@@ -1476,7 +1478,7 @@ export function Timeline({ playback }: TimelineProps = {}) {
           <button
             className={`${styles.controlButton} ${styles.playButton}`}
             onClick={togglePlay}
-            title={t("Play/Pause (Space)")}
+            title={t('Play/Pause (Space)')}
             aria-label={isPlaying ? 'Pause' : 'Play'}
           >
             {isPlaying ? (
@@ -1507,8 +1509,8 @@ export function Timeline({ playback }: TimelineProps = {}) {
           <button
             className={styles.controlButton}
             onClick={() => stepFrame(1)}
-            title={t("Next frame (.)")}
-            aria-label={t("Next frame")}
+            title={t('Next frame (.)')}
+            aria-label={t('Next frame')}
           >
             <svg
               width="16"
@@ -1524,8 +1526,8 @@ export function Timeline({ playback }: TimelineProps = {}) {
           <button
             className={styles.controlButton}
             onClick={goToEnd}
-            title={t("Go to end (End)")}
-            aria-label={t("Go to end")}
+            title={t('Go to end (End)')}
+            aria-label={t('Go to end')}
           >
             <svg
               width="16"
@@ -1555,8 +1557,8 @@ export function Timeline({ playback }: TimelineProps = {}) {
           <button
             className={`${styles.optionButton} ${autoKeyframe ? styles.active : ''}`}
             onClick={toggleAutoKeyframe}
-            title={t("Toggle auto-keyframe (K)")}
-            aria-label={t("Toggle auto-keyframe")}
+            title={t('Toggle auto-keyframe (K)')}
+            aria-label={t('Toggle auto-keyframe')}
             data-testid="auto-keyframe-toggle"
           >
             <svg
@@ -1575,8 +1577,8 @@ export function Timeline({ playback }: TimelineProps = {}) {
           <button
             className={`${styles.optionButton} ${isLooping ? styles.active : ''}`}
             onClick={toggleLoop}
-            title={t("Toggle loop (L)")}
-            aria-label={t("Toggle loop")}
+            title={t('Toggle loop (L)')}
+            aria-label={t('Toggle loop')}
           >
             <svg
               width="16"
@@ -1596,7 +1598,7 @@ export function Timeline({ playback }: TimelineProps = {}) {
             className={`${styles.optionButton} ${workAreaEnabled ? styles.active : ''}`}
             onClick={toggleWorkArea}
             title={`Toggle work area (${formatShortcut(KEYS.workArea)})`}
-            aria-label={t("Toggle work area")}
+            aria-label={t('Toggle work area')}
             data-testid="work-area-toggle"
           >
             <svg
@@ -1616,8 +1618,8 @@ export function Timeline({ playback }: TimelineProps = {}) {
           <button
             className={`${styles.optionButton} ${timelineViewMode === 'graph' ? styles.active : ''}`}
             onClick={toggleTimelineViewMode}
-            title={t("Toggle graph editor (G)")}
-            aria-label={t("Toggle graph editor")}
+            title={t('Toggle graph editor (G)')}
+            aria-label={t('Toggle graph editor')}
             data-testid="graph-editor-toggle"
           >
             <svg
@@ -1635,7 +1637,7 @@ export function Timeline({ playback }: TimelineProps = {}) {
             className={`${styles.optionButton} ${sequenceWindowOpen ? styles.active : ''}`}
             onClick={toggleSequenceWindow}
             title={`Animation Sequence (${formatShortcut(KEYS.animationSequence)})`}
-            aria-label={t("Toggle Animation Sequence window")}
+            aria-label={t('Toggle Animation Sequence window')}
             aria-pressed={sequenceWindowOpen}
             data-testid="sequence-window-toggle"
           >
@@ -1661,7 +1663,7 @@ export function Timeline({ playback }: TimelineProps = {}) {
             <button
               className={`${styles.optionButton} ${onionSkinEnabled ? styles.active : ''}`}
               title={`Onion skin settings (right-click turns it on or off, ${formatShortcut(KEYS.onionSkin)})`}
-              aria-label={t("Onion skin settings")}
+              aria-label={t('Onion skin settings')}
               onClick={() => setShowOnionSkinPanel(!showOnionSkinPanel)}
               onContextMenu={(e) => {
                 e.preventDefault();
@@ -1701,8 +1703,10 @@ export function Timeline({ playback }: TimelineProps = {}) {
                   className={styles.scopeSelect}
                   value={timelineScope ?? ''}
                   onChange={(e) => setTimelineScope(e.target.value || null)}
-                  aria-label={t("Timeline")}
-                  title="Each artboard has a timeline of its own; the page's is for layers outside them"
+                  aria-label={t('Timeline')}
+                  title={t(
+                    "Each artboard has a timeline of its own; the page's is for layers outside them"
+                  )}
                   data-testid="timeline-scope"
                 >
                   {artboards.map((board) => (
@@ -1710,7 +1714,7 @@ export function Timeline({ playback }: TimelineProps = {}) {
                       {board.name}
                     </option>
                   ))}
-                  <option value="">{t("Page (outside artboards)")}</option>
+                  <option value="">{t('Page (outside artboards)')}</option>
                 </select>
               )}
             </div>
@@ -1726,7 +1730,7 @@ export function Timeline({ playback }: TimelineProps = {}) {
                 </div>
               ))
             ) : (
-              <div className={styles.layerLabel}>{t("No layers")}</div>
+              <div className={styles.layerLabel}>{t('No layers')}</div>
             )}
             <SoundLaneLabel />
           </div>
@@ -1753,7 +1757,7 @@ export function Timeline({ playback }: TimelineProps = {}) {
                 aria-valuenow={useEditorStore.getState().currentFrame}
                 aria-valuemin={0}
                 aria-valuemax={duration - 1}
-                aria-label={t("Timeline scrubber. Drag to select a looping range.")}
+                aria-label={t('Timeline scrubber. Drag to select a looping range.')}
                 tabIndex={0}
                 data-testid="timeline-ruler"
               >

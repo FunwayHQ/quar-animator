@@ -31,7 +31,7 @@ const BUILTIN: Record<Locale, Dictionary> = {
 const KEY_MAP = keyMapJson as Record<string, string>;
 
 /** Imported dictionaries, keyed by locale. Undefined means "use built-in". */
-let imported: Partial<Record<Locale, Dictionary>> = readImported();
+const imported: Partial<Record<Locale, Dictionary>> = readImported();
 
 function readImported(): Partial<Record<Locale, Dictionary>> {
   try {
@@ -83,6 +83,19 @@ export function resolveKey(text: string): string | undefined {
 }
 
 /** Translate an exact source string. Missing keys fall back to English. */
+/** Translate a dotted key directly, with optional `{name}` interpolation. */
+export function translateKey(
+  key: string,
+  locale: Locale,
+  params?: Record<string, string | number>
+): string {
+  const template = getDictionary(locale)[key] ?? key;
+  if (!params) return template;
+  return template.replace(/\{(\w+)\}/g, (match, name: string) =>
+    name in params ? String(params[name]) : match
+  );
+}
+
 export function lookup(text: string, locale: Locale): string {
   if (!text) return text;
   const key = resolveKey(text) ?? text;

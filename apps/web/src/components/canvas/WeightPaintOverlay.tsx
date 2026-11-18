@@ -86,8 +86,8 @@ export const WeightPaintOverlay: React.FC<WeightPaintOverlayProps> = ({
           fontSize={11}
           fontFamily="var(--font-family-ui)"
         >
-          Weight Paint: {boneName} · {mode === 'add' ? 'Add' : t("Subtract")} · [ ] size · X
-          add/subtract
+          {t('Weight Paint:')} {boneName} · {mode === 'add' ? t('Add') : t('Subtract')}
+          {t(' · [ ] size · X add/subtract')}
         </text>
       )}
     </svg>

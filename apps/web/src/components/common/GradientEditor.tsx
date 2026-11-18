@@ -299,7 +299,7 @@ export function GradientEditor({
         onPointerUp={handleStopPointerUp}
         onKeyDown={handleKeyDown}
         role="slider"
-        aria-label={t("Gradient stops")}
+        aria-label={t('Gradient stops')}
         aria-valuenow={selectedStop ? Math.round(selectedStop.offset * 100) : 0}
         aria-valuemin={0}
         aria-valuemax={100}
@@ -349,7 +349,7 @@ export function GradientEditor({
               className={styles.removeStopButton}
               onClick={handleRemoveStop}
               disabled={gradient.stops.length <= 2}
-              title="Remove stop"
+              title={t('Remove stop')}
               data-testid="remove-stop"
             >
               &times;
@@ -367,7 +367,7 @@ export function GradientEditor({
               max={100}
               data-testid="stop-offset"
             />
-            <span className={styles.paramLabel}>{t("Pos %")}</span>
+            <span className={styles.paramLabel}>{t('Pos %')}</span>
           </div>
 
           {/* Angle (linear/conic) */}
@@ -380,7 +380,7 @@ export function GradientEditor({
                 type="number"
                 data-testid="gradient-angle"
               />
-              <span className={styles.paramLabel}>{t("Angle")}</span>
+              <span className={styles.paramLabel}>{t('Angle')}</span>
             </div>
           )}
         </div>
@@ -402,7 +402,7 @@ export function GradientEditor({
             }}
             disabled={gradient.stops.length <= 2}
           >
-            {t("Delete Stop")}
+            {t('Delete Stop')}
           </button>
         </div>
       )}

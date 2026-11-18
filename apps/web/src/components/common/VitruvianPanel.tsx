@@ -49,17 +49,17 @@ export function VitruvianPanel({ boneId }: VitruvianPanelProps) {
     return (
       <div className={styles.container}>
         <div className={styles.header}>
-          <span className={styles.title}>{t("Vitruvian Bones")}</span>
+          <span className={styles.title}>{t('Vitruvian Bones')}</span>
           <button
             onClick={() => createVitruvianController(sceneGraph)}
             className={styles.addActionButton}
             data-testid="create-vitruvian-controller"
           >
-            + Controller
+            {t('+ Controller')}
           </button>
         </div>
         <div className={styles.emptyMessage} data-testid="no-vitruvian-message">
-          {t("No controllers defined")}
+          {t('No controllers defined')}
         </div>
       </div>
     );
@@ -71,7 +71,7 @@ export function VitruvianPanel({ boneId }: VitruvianPanelProps) {
   return (
     <div className={styles.container}>
       <div className={styles.header}>
-        <span className={styles.title}>{t("Vitruvian Bones")}</span>
+        <span className={styles.title}>{t('Vitruvian Bones')}</span>
         <button
           onClick={() => createVitruvianController(sceneGraph)}
           className={styles.addActionButton}
@@ -144,12 +144,12 @@ function VitruvianControllerItem({
     <div className={styles.actionCard} data-testid="vitruvian-controller">
       {/* Header: toggle + name + delete */}
       <div className={styles.actionHeader}>
-        <label className={styles.toggle} title={t("Enable/disable")}>
+        <label className={styles.toggle} title={t('Enable/disable')}>
           <input
             type="checkbox"
             checked={controller.enabled}
             onChange={(e) => onToggleEnabled(e.target.checked)}
-            aria-label={t("Enable controller")}
+            aria-label={t('Enable controller')}
           />
           <span className={styles.toggleTrack} />
         </label>
@@ -158,7 +158,7 @@ function VitruvianControllerItem({
           onClick={onRemove}
           className={styles.deleteButton}
           data-testid="remove-vitruvian-controller"
-          title={t("Delete controller")}
+          title={t('Delete controller')}
         >
           ×
         </button>
@@ -168,7 +168,7 @@ function VitruvianControllerItem({
       {controller.groups.length > 0 && (
         <div className={styles.driverRow}>
           <span className={styles.driverLabel} style={{ width: 'auto' }}>
-            {t("Active")}
+            {t('Active')}
           </span>
           <div className={styles.driverInputGroup} style={{ flex: 1 }}>
             <select
@@ -200,7 +200,7 @@ function VitruvianControllerItem({
 
       {/* Groups section */}
       <div className={styles.targetsHeader}>
-        <span className={styles.targetsLabel}>{t("Groups")}</span>
+        <span className={styles.targetsLabel}>{t('Groups')}</span>
         <button
           onClick={onAddGroup}
           className={styles.addTargetButton}
@@ -224,7 +224,7 @@ function VitruvianControllerItem({
               checked={group.boneIds.includes(boneId)}
               onChange={(e) => onSetMembership(group.id, e.target.checked)}
               aria-label={`Selected bone in ${group.name}`}
-              title={t("The selected bone is in this group")}
+              title={t('The selected bone is in this group')}
               data-testid="vitruvian-group-member"
             />
             <div className={styles.targetInfo}>
@@ -237,9 +237,9 @@ function VitruvianControllerItem({
               onClick={() => onCaptureSkin(group.id)}
               className={styles.recordButton}
               data-testid="capture-skin"
-              title={t("Capture skin snapshots for this group")}
+              title={t('Capture skin snapshots for this group')}
             >
-              {t("Snap")}
+              {t('Snap')}
             </button>
             <button
               onClick={() => onRemoveGroup(group.id)}

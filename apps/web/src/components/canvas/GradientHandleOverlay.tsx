@@ -327,8 +327,8 @@ export function GradientHandleOverlay({
         >
           <title>
             {focal
-              ? t("Center: drag to move the gradient")
-              : t("Center: drag to move the gradient, Shift-drag to pull out a focal point")}
+              ? t('Center: drag to move the gradient')
+              : t('Center: drag to move the gradient, Shift-drag to pull out a focal point')}
           </title>
         </circle>
         <circle
@@ -351,7 +351,7 @@ export function GradientHandleOverlay({
             data-testid="gradient-handle-focal"
           >
             <title>
-              Focal point: where the gradient starts. Drop it on the center to remove it
+              {t('Focal point: where the gradient starts. Drop it on the center to remove it')}
             </title>
           </rect>
         )}

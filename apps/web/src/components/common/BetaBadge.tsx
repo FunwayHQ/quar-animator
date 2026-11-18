@@ -38,8 +38,8 @@ export type BetaStorageNote = () => ReactElement | null;
 function LocalStorageNote(): ReactElement {
   return (
     <>
-      Your projects live in this browser. Keep a copy of work you care about:{' '}
-      <span className={styles.path}>{t("File ▸ Download as .quar")}</span>
+      {t('Your projects live in this browser. Keep a copy of work you care about:')}{' '}
+      <span className={styles.path}>{t('File ▸ Download as .quar')}</span>
     </>
   );
 }
@@ -130,13 +130,13 @@ export function BetaBadge() {
         aria-expanded={open}
         aria-controls={cardId}
         aria-haspopup="dialog"
-        aria-label={t("Beta — what that means")}
-        title={t("Quar Animator is in beta")}
+        aria-label={t('Beta — what that means')}
+        title={t('Quar Animator is in beta')}
         onClick={toggle}
         data-testid="beta-badge"
       >
         <span className={styles.signal} aria-hidden="true" />
-        {t("Beta")}
+        {t('Beta')}
       </button>
       {open && (
         <div
@@ -149,23 +149,24 @@ export function BetaBadge() {
           data-testid="beta-notice"
         >
           <div className={styles.header}>
-            <span className={styles.eyebrow}>{t("Public beta")}</span>
+            <span className={styles.eyebrow}>{t('Public beta')}</span>
             <button
               type="button"
               className={styles.close}
               onClick={close}
-              aria-label={t("Close")}
+              aria-label={t('Close')}
               data-testid="beta-notice-close"
             >
               <X size={14} />
             </button>
           </div>
           <h2 id={titleId} className={styles.title}>
-            {t("Quar Animator is in beta")}
+            {t('Quar Animator is in beta')}
           </h2>
           <p className={styles.lead}>
-            It’s ready to use and changing fast — features may move, and now and then something may
-            break.
+            {t(
+              'It’s ready to use and changing fast — features may move, and now and then something may break.'
+            )}
           </p>
           <ul className={styles.points}>
             <li>
@@ -180,7 +181,7 @@ export function BetaBadge() {
               <span className={styles.pointIcon} aria-hidden="true">
                 <Bug size={15} />
               </span>
-              <span>{t("Something broken or odd? Tell us — it helps more than you’d think.")}</span>
+              <span>{t('Something broken or odd? Tell us — it helps more than you’d think.')}</span>
             </li>
           </ul>
           <div className={styles.actions}>
@@ -191,7 +192,7 @@ export function BetaBadge() {
               rel="noopener noreferrer"
               data-testid="beta-notice-report"
             >
-              {t("Report an issue")}
+              {t('Report an issue')}
             </a>
             <button
               ref={doneRef}
@@ -200,7 +201,7 @@ export function BetaBadge() {
               onClick={close}
               data-testid="beta-notice-done"
             >
-              {t("Got it")}
+              {t('Got it')}
             </button>
           </div>
         </div>

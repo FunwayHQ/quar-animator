@@ -310,11 +310,11 @@ export function EasingEditor({ easing, onChange, anchorX, anchorY, onClose }: Ea
       >
         {/* Header */}
         <div className={styles.header}>
-          <span className={styles.headerTitle}>{t("Easing Editor")}</span>
+          <span className={styles.headerTitle}>{t('Easing Editor')}</span>
           <button
             className={styles.closeButton}
             onClick={onClose}
-            aria-label={t("Close easing editor")}
+            aria-label={t('Close easing editor')}
             data-testid="easing-editor-close"
           >
             <svg
@@ -460,8 +460,10 @@ export function EasingEditor({ easing, onChange, anchorX, anchorY, onClose }: Ea
         </div>
         {!isCubicBezier && (
           <p className={styles.inputsNote} data-testid="easing-no-points">
-            {getEasingDisplayName(currentEasing)} isn’t one cubic bezier, so it has no points to
-            edit. Pick a curve with handles to start from.
+            {getEasingDisplayName(currentEasing)}
+            {t(
+              ' isn’t one cubic bezier, so it has no points to edit. Pick a curve with handles to start from.'
+            )}
           </p>
         )}
 

@@ -13,6 +13,7 @@ export {
   uninstallI18n,
   refreshI18n,
   t,
+  tf,
   translateText,
   translateTree,
 } from './translator';
