@@ -7,6 +7,7 @@ import { useActiveTool, useEditorStore, useSetActiveTool } from '../../stores/ed
 import { isPosingScene } from '../../stores/scenePosing';
 import { startPresentation } from '../presentation/presentation';
 import styles from './Toolbar.module.css';
+import { t } from '../../i18n';
 
 interface ToolButtonProps {
   tool: ToolType;
@@ -254,8 +255,8 @@ function PresentButton() {
         type="button"
         className={`${styles.toolButton} ${styles.present}`}
         onClick={startPresentation}
-        title="Present: play the artboards full screen (↑ ↓ to move between them, Esc to leave)"
-        aria-label="Present"
+        title={t("Present: play the artboards full screen (↑ ↓ to move between them, Esc to leave)")}
+        aria-label={t("Present")}
         data-testid="present-button"
       >
         <Play />

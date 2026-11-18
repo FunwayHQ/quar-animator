@@ -10,6 +10,7 @@ import { useEditorStore } from '../../stores/editorStore';
 import { useSceneGraph } from '../../contexts/SceneGraphContext';
 import type { SmartBoneAction, MorphTarget } from '@quar/types';
 import styles from './SmartBonePanel.module.css';
+import { t } from '../../i18n';
 
 interface SmartBonePanelProps {
   boneId: string;
@@ -39,7 +40,7 @@ export function SmartBonePanel({ boneId }: SmartBonePanelProps) {
   return (
     <div className={styles.container}>
       <div className={styles.header}>
-        <span className={styles.title}>Smart Bones</span>
+        <span className={styles.title}>{t("Smart Bones")}</span>
         <button
           onClick={() => createSmartBoneAction(sceneGraph, boneId)}
           disabled={isRecording}
@@ -52,7 +53,7 @@ export function SmartBonePanel({ boneId }: SmartBonePanelProps) {
 
       {boneActions.length === 0 && (
         <div className={styles.emptyMessage} data-testid="no-actions-message">
-          No actions defined
+          {t("No actions defined")}
         </div>
       )}
 
@@ -127,12 +128,12 @@ function SmartBoneActionItem({
     <div className={cardClass} data-testid="smart-bone-action">
       {/* Header: toggle + name + delete */}
       <div className={styles.actionHeader}>
-        <label className={styles.toggle} title="Enable/disable">
+        <label className={styles.toggle} title={t("Enable/disable")}>
           <input
             type="checkbox"
             checked={action.enabled}
             onChange={(e) => onToggleEnabled(e.target.checked)}
-            aria-label="Enable action"
+            aria-label={t("Enable action")}
           />
           <span className={styles.toggleTrack} />
         </label>
@@ -141,7 +142,7 @@ function SmartBoneActionItem({
           onClick={onRemove}
           className={styles.deleteButton}
           data-testid="remove-action"
-          title="Delete action"
+          title={t("Delete action")}
         >
           ×
         </button>
@@ -149,7 +150,7 @@ function SmartBoneActionItem({
 
       {/* Driver range: Min° — Max° */}
       <div className={styles.driverRow}>
-        <span className={styles.driverLabel}>Min</span>
+        <span className={styles.driverLabel}>{t("Min")}</span>
         <div className={styles.driverInputGroup}>
           <input
             type="number"
@@ -164,7 +165,7 @@ function SmartBoneActionItem({
           <span className={styles.driverSuffix}>°</span>
         </div>
         <span className={styles.driverSeparator}>—</span>
-        <span className={styles.driverLabel}>Max</span>
+        <span className={styles.driverLabel}>{t("Max")}</span>
         <div className={styles.driverInputGroup}>
           <input
             type="number"
@@ -182,7 +183,7 @@ function SmartBoneActionItem({
 
       {/* Targets section */}
       <div className={styles.targetsHeader}>
-        <span className={styles.targetsLabel}>Targets</span>
+        <span className={styles.targetsLabel}>{t("Targets")}</span>
         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
           <div className={styles.driverInputGroup} style={{ width: 52 }}>
             <input
@@ -232,7 +233,7 @@ function SmartBoneActionItem({
                 className={styles.stopButton}
                 data-testid="stop-recording"
               >
-                Stop
+                {t("Stop")}
               </button>
             ) : (
               <button

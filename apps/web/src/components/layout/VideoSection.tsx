@@ -25,6 +25,7 @@ import type { SceneGraphLike } from '../../stores/editorStore';
 import { useEditorStore } from '../../stores/editorStore';
 import { withClipLoop } from '../../stores/videoClipActions';
 import styles from './PropertiesPanel.module.css';
+import { t } from '../../i18n';
 
 /** Seconds as a length: m:ss.s, and h:mm:ss.s from an hour. */
 export function formatVideoLength(seconds: number): string {
@@ -63,7 +64,7 @@ export function VideoSection({
   return (
     <div className={styles.section} data-testid="video-section">
       <div className={styles.sectionHeader}>
-        <span className={styles.sectionTitle}>Video</span>
+        <span className={styles.sectionTitle}>{t("Video")}</span>
       </div>
       <div className={styles.sectionContent}>
         {still && (
@@ -77,24 +78,24 @@ export function VideoSection({
 
         {!video && (
           <p className={styles.slideNote} data-testid="video-missing">
-            Its video isn’t in this document.
+            {t("Its video isn’t in this document.")}
           </p>
         )}
 
         {video && (
           <dl className={styles.videoFacts}>
             <div className={styles.videoFact}>
-              <dt>File</dt>
+              <dt>{t("File")}</dt>
               <dd className={styles.videoFileName} title={video.name} data-testid="video-name">
                 {video.name}
               </dd>
             </div>
             <div className={styles.videoFact}>
-              <dt>Length</dt>
+              <dt>{t("Length")}</dt>
               <dd data-testid="video-length">{formatVideoLength(video.duration)}</dd>
             </div>
             <div className={styles.videoFact}>
-              <dt>Size</dt>
+              <dt>{t("Size")}</dt>
               <dd data-testid="video-size">
                 {video.width} × {video.height}
                 <span className={styles.videoFactUnit}> px</span>
@@ -102,10 +103,10 @@ export function VideoSection({
             </div>
             {video.hasAlpha && (
               <div className={styles.videoFact}>
-                <dt>Alpha</dt>
+                <dt>{t("Alpha")}</dt>
                 <dd className={styles.videoTransparent} data-testid="video-transparent">
                   <span className={styles.videoAlphaChip} aria-hidden="true" />
-                  Transparent
+                  {t("Transparent")}
                 </dd>
               </div>
             )}
@@ -115,7 +116,7 @@ export function VideoSection({
         <div className={`${styles.videoClip} ${video ? styles.videoFactClip : ''}`}>
           <div className={styles.videoClipRow}>
             <label className={styles.videoClipLabel} htmlFor="video-clip-start-field">
-              Starts
+              {t("Starts")}
             </label>
             <ClipField
               id="video-clip-start-field"
@@ -125,7 +126,7 @@ export function VideoSection({
               step={1}
               bigStep={10}
               unit="frame"
-              label="The frame it starts on"
+              label={t("The frame it starts on")}
               onCommit={(frame) => change((c) => movedVideoClip(c, frame))}
               testId="video-clip-start"
             />
@@ -133,10 +134,10 @@ export function VideoSection({
 
           <div className={styles.videoClipRow}>
             <label className={styles.videoClipLabel} htmlFor="video-clip-speed-field">
-              Speed
+              {t("Speed")}
             </label>
             <div className={styles.videoSpeed}>
-              <div className={styles.alignToggle} role="group" aria-label="Speeds">
+              <div className={styles.alignToggle} role="group" aria-label={t("Speeds")}>
                 {SPEED_PRESETS.map((preset) => (
                   <button
                     key={preset}
@@ -158,7 +159,7 @@ export function VideoSection({
                 step={0.05}
                 bigStep={0.25}
                 unit="×"
-                label="How fast it plays: 2 is twice as fast, 0.5 half"
+                label={t("How fast it plays: 2 is twice as fast, 0.5 half")}
                 onCommit={(next) => change((c) => withClipSpeed(c, next))}
                 testId="video-section-speed"
               />
@@ -176,7 +177,7 @@ export function VideoSection({
                 }}
                 data-testid="video-section-loop"
               />
-              Loop
+              {t("Loop")}
             </label>
             <label className={styles.videoClipToggle}>
               <input
@@ -188,13 +189,13 @@ export function VideoSection({
                 }}
                 data-testid="video-section-hold"
               />
-              Hold last frame
+              {t("Hold last frame")}
             </label>
           </div>
 
           <dl className={styles.videoFacts}>
             <div className={styles.videoFact}>
-              <dt>Plays</dt>
+              <dt>{t("Plays")}</dt>
               <dd data-testid="video-clip-length">
                 {formatVideoLength(clipSeconds(clip))}
                 <span className={styles.videoFactUnit}>
@@ -204,10 +205,10 @@ export function VideoSection({
               </dd>
             </div>
             <div className={styles.videoFact}>
-              <dt>Part</dt>
+              <dt>{t("Part")}</dt>
               <dd
                 data-testid="video-clip-part"
-                title="The part of the video it plays: drag the ends of its bar on the timeline to trim it"
+                title={t("The part of the video it plays: drag the ends of its bar on the timeline to trim it")}
               >
                 {formatVideoLength(clip.offset)} – {formatVideoLength(clip.offset + clip.duration)}
                 <span className={styles.videoFactUnit}>

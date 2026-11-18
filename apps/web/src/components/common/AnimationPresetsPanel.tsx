@@ -16,6 +16,7 @@ import { useSceneGraph } from '../../contexts/SceneGraphContext';
 import { useEditorStore } from '../../stores/editorStore';
 import { lengthenedToFit } from '../../stores/timelineLength';
 import styles from './AnimationPresetsPanel.module.css';
+import { t } from '../../i18n';
 
 const CATEGORIES: AnimationPresetCategory[] = ['Entrance', 'Emphasis', 'Loop', 'Exit'];
 const DURATION_OPTIONS = [0.4, 0.8, 1.2, 1.6];
@@ -104,19 +105,19 @@ export function AnimationPresetsPanel({ nodeIds }: AnimationPresetsPanelProps) {
   return (
     <section
       className={styles.panel}
-      aria-label="Animation presets"
+      aria-label={t("Animation presets")}
       data-testid="animation-presets"
     >
       <button
         type="button"
         className={styles.header}
         onClick={() => setIsExpanded((expanded) => !expanded)}
-        aria-label="Animation presets"
+        aria-label={t("Animation presets")}
         aria-expanded={isExpanded}
         aria-controls="animation-presets-content"
         data-testid="animation-presets-toggle"
       >
-        <span className={styles.title}>Animation</span>
+        <span className={styles.title}>{t("Animation")}</span>
         <span className={styles.headerActions}>
           <span className={styles.selectionCount}>
             {sequenceWindowOpen
@@ -135,9 +136,9 @@ export function AnimationPresetsPanel({ nodeIds }: AnimationPresetsPanelProps) {
       {isExpanded && (
         <div id="animation-presets-content">
           <label className={styles.durationRow}>
-            <span>Duration</span>
+            <span>{t("Duration")}</span>
             <select
-              aria-label="Animation duration"
+              aria-label={t("Animation duration")}
               value={durationSeconds}
               onChange={(event) => setDurationSeconds(Number(event.target.value))}
             >
@@ -150,27 +151,27 @@ export function AnimationPresetsPanel({ nodeIds }: AnimationPresetsPanelProps) {
           </label>
           <div className={styles.presetOptions}>
             <label className={styles.optionControl}>
-              <span>Direction</span>
+              <span>{t("Direction")}</span>
               <select
-                aria-label="Animation direction"
+                aria-label={t("Animation direction")}
                 value={direction}
                 onChange={(event) => setDirection(event.target.value as AnimationPresetDirection)}
               >
-                <option value="auto">Auto</option>
-                <option value="left">Left</option>
-                <option value="right">Right</option>
-                <option value="top">Top</option>
-                <option value="bottom">Bottom</option>
+                <option value="auto">{t("Auto")}</option>
+                <option value="left">{t("Left")}</option>
+                <option value="right">{t("Right")}</option>
+                <option value="top">{t("Top")}</option>
+                <option value="bottom">{t("Bottom")}</option>
               </select>
             </label>
             <label className={styles.optionControl}>
               <span className={styles.intensityLabel}>
-                <span>Intensity</span>
+                <span>{t("Intensity")}</span>
                 <output>{Math.round(intensity * 100)}%</output>
               </span>
               <input
                 type="range"
-                aria-label="Animation intensity"
+                aria-label={t("Animation intensity")}
                 min="0.5"
                 max="2"
                 step="0.25"
@@ -180,9 +181,9 @@ export function AnimationPresetsPanel({ nodeIds }: AnimationPresetsPanelProps) {
             </label>
             {nodeIds.length > 1 && (
               <label className={`${styles.optionControl} ${styles.staggerControl}`}>
-                <span>Stagger per object</span>
+                <span>{t("Stagger per object")}</span>
                 <select
-                  aria-label="Animation stagger delay per object"
+                  aria-label={t("Animation stagger delay per object")}
                   value={staggerSeconds}
                   onChange={(event) => setStaggerSeconds(Number(event.target.value))}
                 >
@@ -196,7 +197,7 @@ export function AnimationPresetsPanel({ nodeIds }: AnimationPresetsPanelProps) {
             )}
           </div>
           <p className={styles.optionsHint}>
-            Direction affects directional presets. Stagger is available with multiple objects.
+            {t("Direction affects directional presets. Stagger is available with multiple objects.")}
           </p>
           {CATEGORIES.map((category) => (
             <div className={styles.category} key={category}>

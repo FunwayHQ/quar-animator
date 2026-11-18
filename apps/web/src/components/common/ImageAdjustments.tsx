@@ -7,6 +7,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { RotateCcw } from 'lucide-react';
 import type { ImageAdjustments as ImageAdjustmentsType } from '@quar/types';
 import styles from './ImageAdjustments.module.css';
+import { t } from '../../i18n';
 
 // ============================================================================
 // Types
@@ -77,17 +78,17 @@ export function ImageAdjustments({
   return (
     <div className={styles.container} data-testid="image-adjustments">
       <div className={styles.header}>
-        <span className={styles.title}>Adjustments</span>
+        <span className={styles.title}>{t("Adjustments")}</span>
         {hasModifications && (
           <button
             className={styles.resetAll}
             onClick={onResetAll}
-            title="Reset all adjustments"
-            aria-label="Reset all adjustments"
+            title={t("Reset all adjustments")}
+            aria-label={t("Reset all adjustments")}
             data-testid="image-adjustments-reset-all"
           >
             <RotateCcw size={9} />
-            Reset
+            {t("Reset")}
           </button>
         )}
       </div>

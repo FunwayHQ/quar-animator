@@ -17,6 +17,7 @@ import { useEditorStore } from '../../stores/editorStore';
 import type { SequenceStepPatch } from '../../stores/sequenceActions';
 import { KEYS, formatShortcut } from './shortcuts';
 import styles from './AnimationSequenceWindow.module.css';
+import { t } from '../../i18n';
 
 const STORAGE_KEY = 'quar-animator-sequence-window';
 const MIN_WIDTH = 340;
@@ -286,7 +287,7 @@ function StepRow({
             type="button"
             className={styles.objectName}
             onClick={onSelect}
-            title="Select the object and jump to this step"
+            title={t("Select the object and jump to this step")}
           >
             {nodeName}
           </button>
@@ -294,7 +295,7 @@ function StepRow({
             {label.name}
             <span className={styles.category}>{label.category}</span>
           </span>
-          <span className={styles.timing} title="Start – end">
+          <span className={styles.timing} title={t("Start – end")}>
             {formatSeconds(entry.start, frameRate)}–{formatSeconds(entry.end, frameRate)}
           </span>
           <button
@@ -314,8 +315,8 @@ function StepRow({
             value={triggerValue(step)}
             onChange={(e) => onUpdate(triggerPatch(e.target.value))}
           >
-            <option value="afterPrevious">After previous</option>
-            <option value="withPrevious">With previous</option>
+            <option value="afterPrevious">{t("After previous")}</option>
+            <option value="withPrevious">{t("With previous")}</option>
             {earlierSteps.map((earlier, earlierIndex) => (
               <option key={`after-${earlier.id}`} value={`after:${earlier.id}`}>
                 After #{earlierIndex + 1}
@@ -328,14 +329,14 @@ function StepRow({
             ))}
           </select>
           <SecondsField
-            label="Delay"
+            label={t("Delay")}
             frames={step.delay}
             frameRate={frameRate}
             minFrames={0}
             onCommit={(delay) => onUpdate({ delay })}
           />
           <SecondsField
-            label="Duration"
+            label={t("Duration")}
             frames={step.duration}
             frameRate={frameRate}
             minFrames={1}
@@ -357,7 +358,7 @@ function StepRow({
                   {count}×
                 </option>
               ))}
-              <option value="untilEnd">Until end</option>
+              <option value="untilEnd">{t("Until end")}</option>
             </select>
           )}
         </div>
@@ -573,7 +574,7 @@ export function AnimationSequenceWindow() {
     <div
       className={styles.window}
       role="dialog"
-      aria-label="Animation Sequence"
+      aria-label={t("Animation Sequence")}
       style={{ left: rect.x, top: rect.y, width: rect.width, height: rect.height }}
       onKeyDown={(e) => {
         if (e.key === 'Escape') close();
@@ -581,7 +582,7 @@ export function AnimationSequenceWindow() {
       data-testid="animation-sequence-window"
     >
       <header className={styles.titleBar} onPointerDown={handleTitlePointerDown}>
-        <span className={styles.title}>Animation Sequence</span>
+        <span className={styles.title}>{t("Animation Sequence")}</span>
         <span className={styles.summary}>
           {sequence.steps.length} {sequence.steps.length === 1 ? 'step' : 'steps'}
           {totalFrames > 0 && ` · ${formatSeconds(totalFrames, frameRate)}`}
@@ -590,7 +591,7 @@ export function AnimationSequenceWindow() {
           type="button"
           className={styles.iconButton}
           onClick={close}
-          aria-label="Close Animation Sequence"
+          aria-label={t("Close Animation Sequence")}
           title={`Close (${formatShortcut(KEYS.animationSequence)})`}
         >
           <X size={14} />
@@ -599,14 +600,14 @@ export function AnimationSequenceWindow() {
 
       <div className={styles.body}>
         {editingSymbol ? (
-          <p className={styles.empty}>Exit symbol editing to edit this page’s sequence.</p>
+          <p className={styles.empty}>{t("Exit symbol editing to edit this page’s sequence.")}</p>
         ) : sequence.steps.length === 0 ? (
           <p className={styles.empty}>
             No steps yet. Select one or more objects and add an effect below. While this window is
             open, the effect buttons in Properties → Animation add steps too.
           </p>
         ) : (
-          <ol className={styles.steps} aria-label="Sequence steps" ref={listRef}>
+          <ol className={styles.steps} aria-label={t("Sequence steps")} ref={listRef}>
             {sequence.steps.map((step, index) => {
               const entry = schedule[index]!;
               return (
@@ -664,13 +665,13 @@ export function AnimationSequenceWindow() {
       <footer className={styles.footer}>
         <select
           className={styles.effectPicker}
-          aria-label="Effect to add"
+          aria-label={t("Effect to add")}
           value={effectivePreset}
           onChange={(e) => setPresetToAdd(e.target.value as EffectChoice)}
           disabled={editingSymbol}
         >
-          <optgroup label="Hand-made">
-            <option value={OWN_KEYFRAMES}>Own keyframes</option>
+          <optgroup label={t("Hand-made")}>
+            <option value={OWN_KEYFRAMES}>{t("Own keyframes")}</option>
           </optgroup>
           {CATEGORIES.map((category) => (
             <optgroup key={category} label={category}>
@@ -699,8 +700,8 @@ export function AnimationSequenceWindow() {
           className={styles.playButton}
           onClick={playFromStart}
           disabled={sequence.steps.length === 0}
-          aria-label="Play from start"
-          title="Play from start"
+          aria-label={t("Play from start")}
+          title={t("Play from start")}
         >
           <Play size={13} />
         </button>

@@ -1,4 +1,5 @@
 import { Component, type ReactNode, type ErrorInfo } from 'react';
+import { t } from '../i18n';
 
 interface ErrorBoundaryProps {
   children: ReactNode;
@@ -52,7 +53,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
           }}
         >
           <h2 style={{ color: 'var(--color-text-primary, #fff)', margin: 0 }}>
-            Something went wrong
+            {t("Something went wrong")}
           </h2>
           <p style={{ margin: 0, maxWidth: '400px' }}>
             {this.props.message ??
@@ -87,7 +88,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
               fontSize: '0.875rem',
             }}
           >
-            Retry
+            {t("Retry")}
           </button>
         </div>
       );

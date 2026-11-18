@@ -6,6 +6,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useEditorStore } from '../../stores/editorStore';
 import { useSceneGraph } from '../../contexts/SceneGraphContext';
 import type { Camera } from '@quar/core';
+import { t } from '../../i18n';
 
 interface WeightPaintOverlayProps {
   camera: Camera;
@@ -85,7 +86,7 @@ export const WeightPaintOverlay: React.FC<WeightPaintOverlayProps> = ({
           fontSize={11}
           fontFamily="var(--font-family-ui)"
         >
-          Weight Paint: {boneName} · {mode === 'add' ? 'Add' : 'Subtract'} · [ ] size · X
+          Weight Paint: {boneName} · {mode === 'add' ? 'Add' : t("Subtract")} · [ ] size · X
           add/subtract
         </text>
       )}

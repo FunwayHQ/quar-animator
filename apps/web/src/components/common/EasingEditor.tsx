@@ -21,6 +21,7 @@ import {
 import { EasingCurvePreview } from './EasingCurvePreview';
 import { useEditGestures } from '../../hooks/useUndoableEdits';
 import styles from './EasingEditor.module.css';
+import { t } from '../../i18n';
 
 export interface EasingEditorProps {
   easing: EasingFunction;
@@ -309,11 +310,11 @@ export function EasingEditor({ easing, onChange, anchorX, anchorY, onClose }: Ea
       >
         {/* Header */}
         <div className={styles.header}>
-          <span className={styles.headerTitle}>Easing Editor</span>
+          <span className={styles.headerTitle}>{t("Easing Editor")}</span>
           <button
             className={styles.closeButton}
             onClick={onClose}
-            aria-label="Close easing editor"
+            aria-label={t("Close easing editor")}
             data-testid="easing-editor-close"
           >
             <svg

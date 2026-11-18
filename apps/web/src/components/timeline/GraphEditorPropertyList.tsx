@@ -6,6 +6,7 @@
 import type { Timeline } from '@quar/types';
 import { getTrackColor } from '@quar/animation';
 import styles from './GraphEditor.module.css';
+import { t } from '../../i18n';
 
 interface GraphEditorPropertyListProps {
   timeline: Timeline;
@@ -60,9 +61,9 @@ export function GraphEditorPropertyList({
   if (tracksByNode.size === 0) {
     return (
       <div className={styles.propertyList} data-testid="graph-property-list">
-        <div className={styles.propertyListHeader}>Properties</div>
+        <div className={styles.propertyListHeader}>{t("Properties")}</div>
         <div style={{ padding: '8px', fontSize: '10px', color: 'var(--color-text-disabled)' }}>
-          No animated properties
+          {t("No animated properties")}
         </div>
       </div>
     );
@@ -70,7 +71,7 @@ export function GraphEditorPropertyList({
 
   return (
     <div className={styles.propertyList} data-testid="graph-property-list">
-      <div className={styles.propertyListHeader}>Properties</div>
+      <div className={styles.propertyListHeader}>{t("Properties")}</div>
       {Array.from(tracksByNode.entries()).map(([nodeId, tracks]) => (
         <div key={nodeId}>
           <div className={styles.propertyNode}>{nodeNames.get(nodeId) ?? nodeId}</div>

@@ -8,6 +8,7 @@ import { useEditorStore } from '../../stores/editorStore';
 import type { Camera } from '@quar/core';
 import type { PointMagnetTool } from '@quar/core';
 import type { ToolManager } from '@quar/core';
+import { t } from '../../i18n';
 
 interface PointMagnetOverlayProps {
   camera: Camera;
@@ -89,7 +90,7 @@ export const PointMagnetOverlay: React.FC<PointMagnetOverlayProps> = ({
           fontSize={11}
           fontFamily="var(--font-family-ui)"
         >
-          Smart Bone Recording
+          {t("Smart Bone Recording")}
         </text>
       )}
     </svg>

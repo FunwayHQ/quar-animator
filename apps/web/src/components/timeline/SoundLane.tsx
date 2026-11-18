@@ -48,6 +48,7 @@ import { importVideoFiles, isVideoFile } from '../../services/videoImport';
 import { ContextMenu } from '../common/ContextMenu';
 import type { ContextMenuEntry } from '../common/ContextMenu';
 import styles from './SoundLane.module.css';
+import { t } from '../../i18n';
 
 /** A row of the lane, in pixels (clips playing together take a row each). */
 export const SOUND_ROW_HEIGHT = 32;
@@ -90,12 +91,12 @@ export function SoundLaneLabel() {
       data-testid="sound-lane-label"
     >
       <Music className={styles.labelIcon} aria-hidden="true" />
-      <span className={styles.labelText}>Sound</span>
+      <span className={styles.labelText}>{t("Sound")}</span>
       <button
         type="button"
         className={`${styles.addButton} ${scrubSounds ? styles.scrubOn : ''}`}
         onClick={() => setScrubSounds(!scrubSounds)}
-        aria-label="Hear sounds while scrubbing"
+        aria-label={t("Hear sounds while scrubbing")}
         aria-pressed={scrubSounds}
         title={
           scrubSounds
@@ -110,8 +111,8 @@ export function SoundLaneLabel() {
         type="button"
         className={styles.addButton}
         onClick={() => chooseSoundFiles((files) => void importSoundFiles(sceneGraph, files))}
-        aria-label="Import sound"
-        title="Import sound files onto the timeline, at the playhead"
+        aria-label={t("Import sound")}
+        title={t("Import sound files onto the timeline, at the playhead")}
         data-testid="sound-lane-import"
       >
         <Plus aria-hidden="true" />
@@ -365,7 +366,7 @@ export function SoundLaneTrack({
       },
       {
         id: 'mute',
-        label: clip.muted ? 'Unmute' : 'Mute',
+        label: clip.muted ? 'Unmute' : t("Mute"),
         shortcut: 'M',
         onClick: () => change(clip.id, (c) => ({ ...c, muted: !c.muted })),
       },
@@ -381,7 +382,7 @@ export function SoundLaneTrack({
       { type: 'separator' },
       {
         id: 'delete',
-        label: 'Delete',
+        label: t("Delete"),
         shortcut: 'Del',
         danger: true,
         onClick: () => store().removeSoundClip(sceneGraph, clip.id),
@@ -414,7 +415,7 @@ export function SoundLaneTrack({
     >
       {clips.length === 0 && dropFrame === null && (
         <span className={styles.hint} aria-hidden="true">
-          Drop sound files here, or File › Import Sound
+          {t("Drop sound files here, or File › Import Sound")}
         </span>
       )}
       {clips.map((clip) => (
@@ -446,7 +447,7 @@ export function SoundLaneTrack({
           style={{ left: `${(dropFrame / duration) * 100}%` }}
           data-testid="sound-drop-marker"
         >
-          <span>Frame {dropFrame}</span>
+          <span>{t("Frame")} {dropFrame}</span>
         </div>
       )}
       {menu && (
@@ -711,7 +712,7 @@ const SoundClipBar = memo(function SoundClipBar({
         className={`${styles.fadeHandle} ${fadeIn > 0 ? styles.fadeSet : ''}`}
         style={{ left: `${inAt}%` }}
         data-edge="fade-in"
-        title="Drag to fade in"
+        title={t("Drag to fade in")}
         aria-hidden="true"
         data-testid={`sound-clip-fade-in-${clip.id}`}
       />
@@ -719,7 +720,7 @@ const SoundClipBar = memo(function SoundClipBar({
         className={`${styles.fadeHandle} ${styles.fadeOutHandle} ${fadeOut > 0 ? styles.fadeSet : ''}`}
         style={{ left: `${outAt}%` }}
         data-edge="fade-out"
-        title="Drag to fade out"
+        title={t("Drag to fade out")}
         aria-hidden="true"
         data-testid={`sound-clip-fade-out-${clip.id}`}
       />
@@ -791,7 +792,7 @@ function SoundClipSettings({ clip, sound, frameRate, x, y, onClose }: SoundClipS
           <div className={styles.settingsTitle}>
             <strong>{sound?.name ?? 'Missing sound'}</strong>
             <span>
-              Frames {clip.start}–{lastFrame} · plays {seconds(clip.offset)}–
+              {t("Frames")} {clip.start}–{lastFrame} · plays {seconds(clip.offset)}–
               {seconds(clip.offset + clip.duration)}
               {sound ? ` of ${seconds(sound.duration)}` : ''}
             </span>
@@ -808,8 +809,8 @@ function SoundClipSettings({ clip, sound, frameRate, x, y, onClose }: SoundClipS
           </div>
         </div>
         <div className={styles.speedRow}>
-          <span>Speed</span>
-          <div className={styles.speedPresets} role="group" aria-label="Speeds">
+          <span>{t("Speed")}</span>
+          <div className={styles.speedPresets} role="group" aria-label={t("Speeds")}>
             {SPEED_PRESETS.map((preset) => (
               <button
                 type="button"
@@ -826,7 +827,7 @@ function SoundClipSettings({ clip, sound, frameRate, x, y, onClose }: SoundClipS
           <SpeedField value={speed} onCommit={(value) => update((c) => withClipSpeed(c, value))} />
         </div>
         <label className={styles.volumeRow}>
-          <span>Volume</span>
+          <span>{t("Volume")}</span>
           <input
             type="range"
             min={0}
@@ -848,13 +849,13 @@ function SoundClipSettings({ clip, sound, frameRate, x, y, onClose }: SoundClipS
         </label>
         <div className={styles.fadeRow}>
           <FadeField
-            label="Fade in"
+            label={t("Fade in")}
             value={clipFades(clip).fadeIn}
             onCommit={(fadeIn) => update((c) => fadedClip(c, { fadeIn }))}
             testId="sound-clip-fade-in"
           />
           <FadeField
-            label="Fade out"
+            label={t("Fade out")}
             value={clipFades(clip).fadeOut}
             onCommit={(fadeOut) => update((c) => fadedClip(c, { fadeOut }))}
             testId="sound-clip-fade-out"
@@ -871,7 +872,7 @@ function SoundClipSettings({ clip, sound, frameRate, x, y, onClose }: SoundClipS
               }}
               data-testid="sound-clip-mute"
             />
-            Mute
+            {t("Mute")}
           </label>
           <label className={styles.muteToggle}>
             <input
@@ -883,7 +884,7 @@ function SoundClipSettings({ clip, sound, frameRate, x, y, onClose }: SoundClipS
               }}
               data-testid="sound-clip-loop"
             />
-            Loop
+            {t("Loop")}
           </label>
           <button
             type="button"
@@ -934,7 +935,7 @@ function SpeedField({ value, onCommit }: { value: number; onCommit: (speed: numb
         onKeyDown={(event) => {
           if (event.key === 'Enter') commit();
         }}
-        aria-label="Speed, from 0.25× to 4×"
+        aria-label={t("Speed, from 0.25× to 4×")}
         data-testid="sound-clip-speed-field"
       />
       <span className={styles.fadeUnit}>×</span>

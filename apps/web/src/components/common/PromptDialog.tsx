@@ -24,6 +24,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import styles from './PromptDialog.module.css';
+import { t } from '../../i18n';
 
 // ============================================================================
 // Types
@@ -57,7 +58,7 @@ export function PromptDialog({
   placeholder = '',
   defaultValue = '',
   confirmLabel = 'Create',
-  cancelLabel = 'Cancel',
+  cancelLabel = t("Cancel"),
   onConfirm,
   onCancel,
 }: PromptDialogProps) {

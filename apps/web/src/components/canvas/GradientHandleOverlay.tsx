@@ -24,6 +24,7 @@ import { mat3 } from '@quar/core';
 import type { SceneGraph } from '@quar/core';
 import { useEditorStore } from '../../stores/editorStore';
 import styles from './GradientHandleOverlay.module.css';
+import { t } from '../../i18n';
 
 // ============================================================================
 // Types
@@ -326,8 +327,8 @@ export function GradientHandleOverlay({
         >
           <title>
             {focal
-              ? 'Center: drag to move the gradient'
-              : 'Center: drag to move the gradient, Shift-drag to pull out a focal point'}
+              ? t("Center: drag to move the gradient")
+              : t("Center: drag to move the gradient, Shift-drag to pull out a focal point")}
           </title>
         </circle>
         <circle

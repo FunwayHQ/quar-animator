@@ -47,6 +47,7 @@ import {
 } from '../../services/exportScene';
 import { KEYS, formatShortcut } from './shortcuts';
 import styles from './ExportDialog.module.css';
+import { t } from '../../i18n';
 
 // ============================================================================
 // Types
@@ -168,7 +169,7 @@ function TimingFields({
     <>
       <div className={styles.formRow}>
         <label className={styles.label} htmlFor={`export-${format}-fps`}>
-          Frame rate
+          {t("Frame rate")}
         </label>
         <select
           id={`export-${format}-fps`}
@@ -186,7 +187,7 @@ function TimingFields({
       </div>
       <div className={styles.formRow}>
         <label className={styles.label} htmlFor={`export-${format}-speed`}>
-          Speed
+          {t("Speed")}
         </label>
         <select
           id={`export-${format}-speed`}
@@ -197,7 +198,7 @@ function TimingFields({
         >
           {PLAYBACK_SPEEDS.map((choice) => (
             <option key={choice} value={choice}>
-              {choice === 1 ? '1× (normal)' : `${choice}×`}
+              {choice === 1 ? t("1× (normal)") : `${choice}×`}
             </option>
           ))}
         </select>
@@ -231,7 +232,7 @@ function SoundField({
 }) {
   return (
     <div className={styles.formRow}>
-      <span className={styles.label}>Sound</span>
+      <span className={styles.label}>{t("Sound")}</span>
       <label className={styles.checkbox}>
         <input
           type="checkbox"
@@ -998,12 +999,12 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
         className={styles.dialog}
         role="dialog"
         aria-modal="true"
-        aria-label="Export Animation"
+        aria-label={t("Export Animation")}
         data-testid="export-dialog"
       >
         {/* Header */}
         <div className={styles.header}>
-          <h3 className={styles.title}>Export Animation</h3>
+          <h3 className={styles.title}>{t("Export Animation")}</h3>
           <button
             className={styles.closeBtn}
             onClick={requestClose}
@@ -1056,7 +1057,7 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
               }}
               data-testid="export-cancel"
             >
-              Cancel
+              {t("Cancel")}
             </button>
           </div>
         ) : (
@@ -1064,7 +1065,7 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
             {/* Common settings */}
             {state.tab !== 'svg' && state.tab !== 'pdf' && (
               <div className={styles.formRow}>
-                <span className={styles.label}>Size</span>
+                <span className={styles.label}>{t("Size")}</span>
                 <input
                   className={styles.inputSmall}
                   type="number"
@@ -1118,7 +1119,7 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
               <>
                 <div className={styles.formRow}>
                   <label className={styles.label} htmlFor="export-svg-frame">
-                    Frame
+                    {t("Frame")}
                   </label>
                   <input
                     id="export-svg-frame"
@@ -1145,7 +1146,7 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
               </p>
             ) : slidesExport ? null : (
               <div className={styles.formRow}>
-                <span className={styles.label}>Frame Range</span>
+                <span className={styles.label}>{t("Frame Range")}</span>
                 <input
                   className={styles.inputSmall}
                   type="number"
@@ -1176,7 +1177,7 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
             {state.tab === 'png-sequence' && (
               <>
                 <div className={styles.formRow}>
-                  <span className={styles.label}>Multiplier</span>
+                  <span className={styles.label}>{t("Multiplier")}</span>
                   <select
                     className={styles.select}
                     value={state.pngMultiplier}
@@ -1192,7 +1193,7 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
                   </select>
                 </div>
                 <div className={styles.formRow}>
-                  <span className={styles.label}>Background</span>
+                  <span className={styles.label}>{t("Background")}</span>
                   <label className={styles.checkbox}>
                     <input
                       type="checkbox"
@@ -1200,11 +1201,11 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
                       onChange={(e) => update('pngTransparent', e.target.checked)}
                       data-testid="export-png-transparent"
                     />
-                    <span>Transparent</span>
+                    <span>{t("Transparent")}</span>
                   </label>
                 </div>
                 <div className={styles.formRow}>
-                  <span className={styles.label}>Pattern</span>
+                  <span className={styles.label}>{t("Pattern")}</span>
                   <input
                     className={styles.input}
                     type="text"
@@ -1220,7 +1221,7 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
             {state.tab === 'gif' && (
               <>
                 <div className={styles.formRow}>
-                  <span className={styles.label}>Background</span>
+                  <span className={styles.label}>{t("Background")}</span>
                   <label className={styles.checkbox}>
                     <input
                       type="checkbox"
@@ -1228,7 +1229,7 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
                       onChange={(e) => update('gifTransparent', e.target.checked)}
                       data-testid="export-gif-transparent"
                     />
-                    <span>Transparent</span>
+                    <span>{t("Transparent")}</span>
                   </label>
                 </div>
                 <TimingFields
@@ -1251,7 +1252,7 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
                 />
                 <div className={styles.formRow}>
                   <label className={styles.label} htmlFor="export-gif-compression">
-                    Compression
+                    {t("Compression")}
                   </label>
                   <input
                     id="export-gif-compression"
@@ -1306,7 +1307,7 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
             {state.tab === 'webm' && (
               <>
                 <div className={styles.formRow}>
-                  <span className={styles.label}>Background</span>
+                  <span className={styles.label}>{t("Background")}</span>
                   <label className={styles.checkbox}>
                     <input
                       type="checkbox"
@@ -1314,7 +1315,7 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
                       onChange={(e) => update('webmTransparent', e.target.checked)}
                       data-testid="export-webm-transparent"
                     />
-                    <span>Transparent</span>
+                    <span>{t("Transparent")}</span>
                   </label>
                 </div>
                 {soundClipCount > 0 && (
@@ -1348,33 +1349,33 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
             {state.tab === 'sprite-sheet' && (
               <>
                 <div className={styles.formRow}>
-                  <span className={styles.label}>Layout</span>
+                  <span className={styles.label}>{t("Layout")}</span>
                   <select
                     className={styles.select}
                     value={state.spriteLayout}
                     onChange={(e) => update('spriteLayout', e.target.value as 'grid' | 'packed')}
                     data-testid="export-sprite-layout"
                   >
-                    <option value="grid">Grid</option>
+                    <option value="grid">{t("Grid")}</option>
                     <option value="packed">Packed</option>
                   </select>
                 </div>
                 {state.spriteLayout === 'grid' && (
                   <div className={styles.formRow}>
-                    <span className={styles.label}>Columns</span>
+                    <span className={styles.label}>{t("Columns")}</span>
                     <input
                       className={styles.inputSmall}
                       type="number"
                       value={state.spriteColumns}
                       onChange={(e) => update('spriteColumns', parseInt(e.target.value) || 0)}
                       min={0}
-                      placeholder="Auto"
+                      placeholder={t("Auto")}
                       data-testid="export-sprite-columns"
                     />
                   </div>
                 )}
                 <div className={styles.formRow}>
-                  <span className={styles.label}>Padding</span>
+                  <span className={styles.label}>{t("Padding")}</span>
                   <input
                     className={styles.inputSmall}
                     type="number"
@@ -1386,14 +1387,14 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
                   />
                 </div>
                 <div className={styles.formRow}>
-                  <span className={styles.label}>Options</span>
+                  <span className={styles.label}>{t("Options")}</span>
                   <label className={styles.checkbox}>
                     <input
                       type="checkbox"
                       checked={state.spritePowerOfTwo}
                       onChange={(e) => update('spritePowerOfTwo', e.target.checked)}
                     />
-                    <span>Power of Two</span>
+                    <span>{t("Power of Two")}</span>
                   </label>
                   <label className={styles.checkbox}>
                     <input
@@ -1401,7 +1402,7 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
                       checked={state.spriteIncludeMetadata}
                       onChange={(e) => update('spriteIncludeMetadata', e.target.checked)}
                     />
-                    <span>Include JSON</span>
+                    <span>{t("Include JSON")}</span>
                   </label>
                 </div>
               </>
@@ -1410,7 +1411,7 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
             {state.tab === 'lottie' && lottieAnalysis && (
               <>
                 <div className={styles.formRow}>
-                  <span className={styles.label}>Supported</span>
+                  <span className={styles.label}>{t("Supported")}</span>
                   <span style={{ fontSize: 11, color: '#a1a1aa' }}>
                     {lottieAnalysis.supportedCount} nodes
                   </span>
@@ -1463,7 +1464,7 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
                 <AlertTriangle size={14} className={styles.warningIcon} />
                 <span className={styles.warningText}>
                   {stillVideoCount === 1
-                    ? '1 video layer will show as a still picture'
+                    ? t("1 video layer will show as a still picture")
                     : `${stillVideoCount} video layers will show as still pictures`}
                   : {stillVideoFormat} doesn’t play video. MP4, WebM, GIF, PNG Sequence and Sprite
                   Sheet play {stillVideoCount === 1 ? 'it' : 'them'}.
@@ -1499,14 +1500,14 @@ function ExportDialog({ initialTab, onClose }: { initialTab: ExportTab; onClose:
         {!state.exporting && (
           <div className={styles.footer}>
             <button className={styles.btnCancel} onClick={close} data-testid="export-dialog-cancel">
-              {state.videoProblems.length > 0 ? 'Close' : 'Cancel'}
+              {state.videoProblems.length > 0 ? t("Close") : t("Cancel")}
             </button>
             <button
               className={styles.btnPrimary}
               onClick={() => void handleExport()}
               data-testid="export-dialog-export"
             >
-              Export
+              {t("Export")}
             </button>
           </div>
         )}
