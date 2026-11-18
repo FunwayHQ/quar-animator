@@ -1703,8 +1703,8 @@ export function PropertiesPanel() {
             <button
               className={`${styles.snapButton} ${snapToGrid ? styles.snapButtonActive : ''}`}
               onClick={handleToggleSnap}
-              title={snapToGrid ? 'Disable snap to grid' : 'Enable snap to grid'}
-              aria-label={snapToGrid ? 'Disable snap to grid' : 'Enable snap to grid'}
+              title={t(snapToGrid ? 'Disable snap to grid' : 'Enable snap to grid')}
+              aria-label={t(snapToGrid ? 'Disable snap to grid' : 'Enable snap to grid')}
               data-testid="snap-to-grid-toggle"
             >
               <Grid3X3 size={12} />
@@ -1821,8 +1821,8 @@ export function PropertiesPanel() {
                   <button
                     className={`${styles.lockButton} ${aspectRatioLocked ? styles.lockButtonActive : ''}`}
                     onClick={toggleAspectRatioLock}
-                    title={aspectRatioLocked ? 'Unlock aspect ratio' : 'Lock aspect ratio'}
-                    aria-label={aspectRatioLocked ? 'Unlock aspect ratio' : 'Lock aspect ratio'}
+                    title={t(aspectRatioLocked ? 'Unlock aspect ratio' : 'Lock aspect ratio')}
+                    aria-label={t(aspectRatioLocked ? 'Unlock aspect ratio' : 'Lock aspect ratio')}
                     data-testid="aspect-ratio-lock"
                   >
                     {aspectRatioLocked ? <Lock size={12} /> : <Unlock size={12} />}
@@ -2410,7 +2410,7 @@ export function PropertiesPanel() {
                                 key={mode}
                                 type="button"
                                 aria-pressed={weightPaintMode === mode}
-                                title={mode === 'add' ? 'Add weight (X)' : 'Remove weight (X)'}
+                                title={t(mode === 'add' ? 'Add weight (X)' : 'Remove weight (X)')}
                                 onClick={() => setWeightPaintMode(mode)}
                                 style={{
                                   fontSize: '11px',
@@ -3432,8 +3432,8 @@ export function PropertiesPanel() {
                           <button
                             className={styles.visibilityToggle}
                             onClick={() => handleToggleFillVisibility(index)}
-                            title={fill.visible ? 'Hide fill' : 'Show fill'}
-                            aria-label={fill.visible ? 'Hide fill' : 'Show fill'}
+                            title={t(fill.visible ? 'Hide fill' : 'Show fill')}
+                            aria-label={t(fill.visible ? 'Hide fill' : 'Show fill')}
                             data-testid={`fill-visibility-${index}`}
                           >
                             {fill.visible ? <Eye size={12} /> : <EyeOff size={12} />}
@@ -3588,8 +3588,8 @@ export function PropertiesPanel() {
                           <button
                             className={styles.visibilityToggle}
                             onClick={() => handleToggleStrokeVisibility(index)}
-                            title={stroke.visible ? 'Hide stroke' : 'Show stroke'}
-                            aria-label={stroke.visible ? 'Hide stroke' : 'Show stroke'}
+                            title={t(stroke.visible ? 'Hide stroke' : 'Show stroke')}
+                            aria-label={t(stroke.visible ? 'Hide stroke' : 'Show stroke')}
                             data-testid={`stroke-visibility-${index}`}
                           >
                             {stroke.visible ? <Eye size={12} /> : <EyeOff size={12} />}
@@ -3870,8 +3870,8 @@ export function PropertiesPanel() {
                           index
                         );
                     }}
-                    title={effect.visible ? 'Hide effect' : 'Show effect'}
-                    aria-label={effect.visible ? 'Hide effect' : 'Show effect'}
+                    title={t(effect.visible ? 'Hide effect' : 'Show effect')}
+                    aria-label={t(effect.visible ? 'Hide effect' : 'Show effect')}
                   >
                     {effect.visible ? <Eye size={12} /> : <EyeOff size={12} />}
                   </button>

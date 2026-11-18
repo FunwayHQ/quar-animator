@@ -532,5 +532,17 @@
   "Handle ": "layout.properties-panel.handle",
   "Entrance": "ui.presets.entrance",
   "Emphasis": "ui.presets.emphasis",
-  "Exit": "ui.presets.exit"
+  "Exit": "ui.presets.exit",
+  "Disable snap to grid": "layout.properties-panel.disable-snap-to-grid",
+  "Enable snap to grid": "layout.properties-panel.enable-snap-to-grid",
+  "Unlock aspect ratio": "layout.properties-panel.unlock-aspect-ratio",
+  "Lock aspect ratio": "layout.properties-panel.lock-aspect-ratio",
+  "Add weight (X)": "layout.properties-panel.add-weight",
+  "Remove weight (X)": "layout.properties-panel.remove-weight",
+  "Hide fill": "layout.properties-panel.hide-fill",
+  "Show fill": "layout.properties-panel.show-fill",
+  "Hide stroke": "layout.properties-panel.hide-stroke",
+  "Show stroke": "layout.properties-panel.show-stroke",
+  "Hide effect": "layout.properties-panel.hide-effect",
+  "Show effect": "layout.properties-panel.show-effect"
 }

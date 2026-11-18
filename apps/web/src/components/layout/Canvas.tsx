@@ -77,7 +77,7 @@ import { promptDialog } from '../common/PromptDialog';
 import { toast } from '../common/Toast';
 import styles from './Canvas.module.css';
 import { releaseVideoFrames } from '../../services/videoFrames';
-import { t } from '../../i18n';
+import { t, tf } from '../../i18n';
 
 // ============================================================================
 // Constants
@@ -1879,7 +1879,10 @@ export function Canvas({
       return [
         {
           id: 'cut-at-point',
-          label: pointCount === 1 ? 'Cut Path Here' : `Cut Path at ${pointCount} Points`,
+          label:
+            pointCount === 1
+              ? tf('menu.canvas.cut-path-here')
+              : tf('menu.canvas.cut-path-count', { count: pointCount }),
           onClick: () => useEditorStore.getState().cutPathsAtSelectedPoints(sceneGraph),
         },
         {
@@ -1891,7 +1894,10 @@ export function Canvas({
         { type: 'separator' },
         {
           id: 'delete-point',
-          label: pointCount === 1 ? 'Delete Point' : `Delete ${pointCount} Points`,
+          label:
+            pointCount === 1
+              ? tf('menu.canvas.delete-point')
+              : tf('menu.canvas.delete-point-count', { count: pointCount }),
           shortcut: 'Del',
           danger: true,
           onClick: () => deleteDirectSelectionPoints(),
@@ -2072,7 +2078,9 @@ export function Canvas({
               },
               {
                 id: 'close-path',
-                label: pathsClosed ? 'Open Path' : 'Close Path',
+                label: pathsClosed
+                  ? tf('menu.canvas.open-path')
+                  : tf('menu.canvas.close-path'),
                 onClick: () =>
                   useEditorStore.getState().setSelectedPathsClosed(sceneGraph, !pathsClosed),
               },
@@ -2128,12 +2136,12 @@ export function Canvas({
           return [
             {
               id: 'create-brush-profile',
-              label: 'Create Profile from Selection',
+              label: tf('menu.canvas.create-profile'),
               onClick: () => {
                 void promptDialog({
-                  title: 'New Brush Profile',
+                  title: tf('menu.canvas.new-brush-profile'),
                   placeholder: t('Profile name'),
-                  confirmLabel: 'Create',
+                  confirmLabel: tf('menu.canvas.create'),
                 }).then((profileName) => {
                   if (profileName) {
                     createBrushProfileFromSelection(sceneGraph, profileName);
@@ -2165,7 +2173,7 @@ export function Canvas({
             } else {
               items.push({
                 id: 'remove-ik-chain',
-                label: 'Remove IK Chain',
+                label: tf('menu.canvas.remove-ik-chain'),
                 onClick: () => removeIKChain(sceneGraph, existingChain.id),
               });
             }
@@ -2179,7 +2187,7 @@ export function Canvas({
               { type: 'separator' },
               {
                 id: 'remove-ik-chain',
-                label: 'Remove IK Chain',
+                label: tf('menu.canvas.remove-ik-chain'),
                 onClick: () => removeIKChain(sceneGraph, chainId),
               },
             ];
@@ -2203,7 +2211,7 @@ export function Canvas({
           if (!hasSkinData && boneIds.length > 0) {
             items.push({
               id: 'bind-to-bones',
-              label: 'Bind to Bones',
+              label: tf('menu.canvas.bind-to-bones'),
               onClick: () =>
                 bindLayersToBones(
                   sceneGraph,
@@ -2239,7 +2247,7 @@ export function Canvas({
         { type: 'separator' },
         {
           id: 'toggle-visibility',
-          label: 'Show/Hide',
+          label: tf('menu.canvas.show-hide'),
           onClick: () => {
             for (const id of selectedNodeIds) {
               const node = sceneGraph.getNode(id);
@@ -2249,7 +2257,7 @@ export function Canvas({
         },
         {
           id: 'toggle-lock',
-          label: 'Lock/Unlock',
+          label: tf('menu.canvas.lock-unlock'),
           onClick: () => {
             for (const id of selectedNodeIds) {
               const node = sceneGraph.getNode(id);

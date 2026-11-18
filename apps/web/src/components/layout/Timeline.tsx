@@ -27,21 +27,21 @@ import {
   useTimelineHeight,
 } from '../../hooks/useTimelineHeight';
 import styles from './Timeline.module.css';
-import { t } from '../../i18n';
+import { t, tf } from '../../i18n';
 
 // ============================================================================
 // Easing presets for the context menu
 // ============================================================================
 
-const EASING_PRESETS: Array<{ label: string; value: EasingFunction }> = [
-  { label: 'Linear', value: 'linear' },
-  { label: 'Ease In', value: 'easeInCubic' },
-  { label: 'Ease Out', value: 'easeOutCubic' },
-  { label: 'Ease In/Out', value: 'easeInOutCubic' },
-  { label: 'Ease In Back', value: 'easeInBack' },
-  { label: 'Ease Out Back', value: 'easeOutBack' },
-  { label: 'Ease Out Bounce', value: 'easeOutBounce' },
-  { label: 'Ease Out Elastic', value: 'easeOutElastic' },
+const EASING_PRESETS: Array<{ labelKey: string; value: EasingFunction }> = [
+  { labelKey: 'menu.timeline.easing-linear', value: 'linear' },
+  { labelKey: 'menu.timeline.easing-in', value: 'easeInCubic' },
+  { labelKey: 'menu.timeline.easing-out', value: 'easeOutCubic' },
+  { labelKey: 'menu.timeline.easing-in-out', value: 'easeInOutCubic' },
+  { labelKey: 'menu.timeline.easing-in-back', value: 'easeInBack' },
+  { labelKey: 'menu.timeline.easing-out-back', value: 'easeOutBack' },
+  { labelKey: 'menu.timeline.easing-out-bounce', value: 'easeOutBounce' },
+  { labelKey: 'menu.timeline.easing-out-elastic', value: 'easeOutElastic' },
 ];
 
 /** Space always left above the timeline so the canvas stays usable. */
@@ -1051,8 +1051,8 @@ export function Timeline({ playback }: TimelineProps = {}) {
         id: 'delete-layer-animation',
         label:
           animatedIds.length > 1
-            ? `Delete Animation (${animatedIds.length} Layers)`
-            : 'Delete Animation',
+            ? tf('menu.timeline.delete-animation-count', { count: animatedIds.length })
+            : tf('menu.timeline.delete-animation'),
         danger: true,
         disabled: animatedIds.length === 0,
         onClick: () => deleteLayerAnimation(sceneGraph, animatedIds),
@@ -1066,7 +1066,7 @@ export function Timeline({ playback }: TimelineProps = {}) {
       const items: ContextMenuEntry[] = [
         {
           id: 'select-layer-keyframes',
-          label: 'Select Keyframes',
+          label: tf('menu.timeline.select-keyframes'),
           disabled: keyframeIds.length === 0,
           onClick: () => setSelectedKeyframeIds(keyframeIds),
         },
@@ -1074,7 +1074,7 @@ export function Timeline({ playback }: TimelineProps = {}) {
       if (keyframeClipboard) {
         items.push({
           id: 'paste-layer-keyframes',
-          label: `Paste Keyframes at Frame ${contextMenu.frame}`,
+          label: tf('menu.timeline.paste-keyframes-at', { frame: contextMenu.frame }),
           onClick: () => pasteKeyframes(nodeId, contextMenu.frame, sceneGraph),
         });
       }
@@ -1105,7 +1105,9 @@ export function Timeline({ playback }: TimelineProps = {}) {
         if (isActive) anyPresetMatch = true;
         items.push({
           id: `easing-${typeof preset.value === 'string' ? preset.value : 'custom'}`,
-          label: isActive ? `\u2713 ${preset.label}` : `\u2003${preset.label}`,
+          label: isActive
+            ? `\u2713 ${tf(preset.labelKey)}`
+            : `\u2003${tf(preset.labelKey)}`,
           // All the selected keyframes, as one undo step
           onClick: () => setSelectedKeyframesEasing(preset.value, sceneGraph),
         });
@@ -1115,7 +1117,7 @@ export function Timeline({ playback }: TimelineProps = {}) {
       const customPrefix = !anyPresetMatch && currentKfEasing !== 'linear' ? '\u2713 ' : '';
       items.push({
         id: 'custom-easing',
-        label: `${customPrefix}Custom Easing\u2026`,
+        label: `${customPrefix}${tf('menu.timeline.custom-easing')}`,
         onClick: () => {
           setEasingEditor({
             x: contextMenu.x,
@@ -1129,14 +1131,14 @@ export function Timeline({ playback }: TimelineProps = {}) {
 
       items.push({
         id: 'copy-keyframes',
-        label: 'Copy Keyframes',
+        label: tf('menu.timeline.copy-keyframes'),
         shortcut: 'Ctrl+C',
         onClick: () => copySelectedKeyframes(keyframeMap),
       });
 
       items.push({
         id: 'delete-keyframes',
-        label: 'Delete Keyframes',
+        label: tf('menu.timeline.delete-keyframes'),
         shortcut: 'Del',
         danger: true,
         onClick: () => removeSelectedKeyframes(keyframeMap, sceneGraph),
@@ -1155,13 +1157,13 @@ export function Timeline({ playback }: TimelineProps = {}) {
         ? [
             {
               id: 'video-clip-settings',
-              label: 'Clip Settings...',
+              label: tf('menu.timeline.clip-settings'),
               shortcut: 'Enter',
               onClick: () => openVideoClipSettings(videoId, contextMenu.x, contextMenu.y),
             },
             {
               id: 'video-clip-stop',
-              label: 'Stop Clip at Playhead',
+              label: tf('menu.timeline.stop-clip'),
               // Only where the clip plays: its picture there is held
               disabled: !(
                 videoNode?.type === 'video' && videoClipPlaysOn(videoNode.clip, playhead, rate)
@@ -1173,12 +1175,12 @@ export function Timeline({ playback }: TimelineProps = {}) {
         : []),
       {
         id: 'go-to-frame',
-        label: `Go To Frame ${contextMenu.frame}`,
+        label: tf('menu.timeline.go-to-frame', { frame: contextMenu.frame }),
         onClick: () => setCurrentFrame(contextMenu.frame),
       },
       {
         id: 'add-opacity-keyframe',
-        label: `Add Opacity Keyframe at Frame ${contextMenu.frame}`,
+        label: tf('menu.timeline.add-opacity-keyframe', { frame: contextMenu.frame }),
         disabled: selectedNodeIds.size === 0,
         onClick: () => {
           setCurrentFrame(contextMenu.frame);
@@ -1192,21 +1194,21 @@ export function Timeline({ playback }: TimelineProps = {}) {
       { type: 'separator' },
       {
         id: 'go-to-start',
-        label: 'Go To Start',
+        label: tf('menu.timeline.go-to-start'),
         shortcut: 'Home',
         // What Home and the Go to start button do: the work area's start while it's on
         onClick: goToStart,
       },
       {
         id: 'go-to-end',
-        label: 'Go To End',
+        label: tf('menu.timeline.go-to-end'),
         shortcut: 'End',
         // What End and the Go to end button do: the end of the animation
         onClick: goToEnd,
       },
       {
         id: 'go-to-last-frame',
-        label: 'Go To Last Frame',
+        label: tf('menu.timeline.go-to-last-frame'),
         // The timeline's own last frame, past the animation's end (to key after it)
         onClick: () => {
           setIsPlaying(false);
@@ -1219,7 +1221,7 @@ export function Timeline({ playback }: TimelineProps = {}) {
     items.push({ type: 'separator' });
     items.push({
       id: 'set-work-area-start',
-      label: `Set Work Area Start (${contextMenu.frame})`,
+      label: tf('menu.timeline.set-work-area-start', { frame: contextMenu.frame }),
       shortcut: 'I',
       onClick: () => {
         setWorkAreaStart(contextMenu.frame);
@@ -1228,7 +1230,7 @@ export function Timeline({ playback }: TimelineProps = {}) {
     });
     items.push({
       id: 'set-work-area-end',
-      label: `Set Work Area End (${contextMenu.frame})`,
+      label: tf('menu.timeline.set-work-area-end', { frame: contextMenu.frame }),
       shortcut: 'Shift+I',
       onClick: () => {
         setWorkAreaEnd(contextMenu.frame);
@@ -1238,7 +1240,7 @@ export function Timeline({ playback }: TimelineProps = {}) {
     if (workAreaEnabled) {
       items.push({
         id: 'clear-work-area',
-        label: 'Clear Work Area',
+        label: tf('menu.timeline.clear-work-area'),
         onClick: () => clearWorkArea(),
       });
     }
@@ -1249,7 +1251,7 @@ export function Timeline({ playback }: TimelineProps = {}) {
       items.push({ type: 'separator' });
       items.push({
         id: 'paste-keyframes',
-        label: 'Paste Keyframes',
+        label: tf('menu.timeline.paste-keyframes'),
         shortcut: 'Ctrl+V',
         onClick: () => pasteKeyframes(pasteTargetId, contextMenu.frame, sceneGraph),
       });

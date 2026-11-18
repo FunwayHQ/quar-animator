@@ -211,7 +211,7 @@ export function AnimationPresetsPanel({ nodeIds }: AnimationPresetsPanelProps) {
                       className={styles.presetButton}
                       key={preset.id}
                       onClick={() => applyPreset(preset.id)}
-                      title={t(preset.description)}
+                      title={tf(`ui.presets.desc.${preset.id}`, undefined, locale)}
                       aria-label={tf('ui.presets.apply-animation', {
                         name: tf(`ui.presets.${preset.id}`, undefined, locale),
                         category: t(category),
